@@ -1037,21 +1037,31 @@ def test_test_candidates_keep_explicit_delete_control():
     assert "remove.title = 'Remove this Test candidate';" in block
     assert "row.appendChild(remove);" in block
 
-def test_test_generations_can_generate_wildcard_prompt_from_set_captions():
+def test_test_generations_can_generate_and_edit_wildcard_prompt_in_modal():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert 'id="test-generations-wildcard-btn"' in html
     assert 'id="test-generations-wildcard-model"' in html
+    assert 'id="test-generations-wildcard-modal"' in html
+    assert 'role="dialog" aria-modal="true" aria-labelledby="test-generations-wildcard-title"' in html
+    assert 'id="test-generations-wildcard-focus"' in html
     assert 'id="test-generations-wildcard-analysis"' in html
-    assert "function generateWildcardFromSet()" in script
-    assert "folder: owningSetFolder(launchFolder" in script
     assert 'id="test-generations-wildcard-output"' in html
+    assert 'id="test-generations-wildcard-dimension-list"' in html
+    assert 'id="test-generations-wildcard-preview"' in html
+    assert 'id="test-generations-wildcard-shuffle"' in html
+    assert 'id="test-generations-wildcard-regenerate"' in html
     assert 'id="test-generations-wildcard-use-btn"' in html
-    assert "function useGeneratedWildcard()" in script
-    assert "Wildcard generated. Review it before using it." in script
+
+    assert "function openWildcardBuilder()" in script
+    assert "function generateWildcardFromSet()" in script
+    assert "function parseWildcardGroups(value)" in script
+    assert "function renderWildcardDimensions()" in script
+    assert "function shuffleWildcardPreview(index)" in script
+    assert "focus: focus" in script
     assert "prompt.value = value;" in script
-    assert "saveTestPromptDraft(value);" in script
+    assert "saveTestWorkspacePrompt(value);" in script
     assert "requestFolder" in script
 
 
@@ -1084,14 +1094,19 @@ def test_test_wildcard_uses_current_set_without_source_owner_gate():
     assert "button.disabled = wildcardDirector.busy || !wildcardDirector.modelId;" in render_block
     assert "Generate a wildcard prompt from this Set's captions" in render_block
 
-def test_generated_wildcard_variations_are_collapsed_by_default():
+def test_generated_wildcard_review_uses_modal_and_derived_dimension_controls():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    assert '<details class="test-generations-wildcard-variations">' in html
-    assert '<summary>Varies</summary>' in html
-    assert '<details class="test-generations-wildcard-variations" open>' not in html
-    assert ".test-generations-wildcard-variations > summary" in css
+    assert 'class="keep-lora-modal test-generations-wildcard-modal hidden"' in html
+    assert 'data-escape-close-id="test-generations-wildcard-close"' in html
+    assert ".test-generations-wildcard-dialog" in css
+    assert ".test-generations-wildcard-dimension-row" in css
+    assert "#test-generations-wildcard-preview" in css
+    assert "group.options.length + ' options'" in script
+    assert "reroll.dataset.wildcardReroll" in script
+    assert "Derived from the wildcard text; edit the text freely." in html
 
 
 def test_test_results_media_and_ratings_use_session_identity_not_fs_root_navigation():

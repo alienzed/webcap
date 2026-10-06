@@ -42,3 +42,48 @@ def test_caption_wildcard_result_is_normalized_before_ui():
         "stableTerms": ["subject"],
         "variationGroups": [{"label": "pose", "options": ["standing", "sitting"]}],
     }
+
+
+def test_caption_wildcard_contract_prioritizes_primary_concept_without_dropping_secondary_dimensions():
+    request = build_request(
+        [
+            "A woman poses wearing a black micro bikini with yellow trim, studio lighting, front view.",
+            "A woman poses wearing a white ruched micro bikini with red trim, natural lighting, rear view.",
+        ],
+        set_name="micro_bikini_set",
+        focus="bikini",
+    )
+
+    prompt = request["prompt"]
+    assert "Set name: micro_bikini_set" in prompt
+    assert "Explicit focus: bikini" in prompt
+    assert "primary concept should receive the richest decomposition" in prompt
+    assert "physical appearance, background, and lighting are valid and useful" in prompt
+    assert "separate color, pattern, trim, top shape, and bottom shape" in prompt
+    assert "Never emit category placeholders" in prompt
+
+
+def test_caption_wildcard_result_rejects_generic_placeholder_options():
+    import pytest
+
+    with pytest.raises(ValueError, match="generic placeholder"):
+        normalize_result({
+            "wildcard": "wearing a {micro bikini|various bikini styles}",
+            "stableTerms": ["wearing"],
+            "variationGroups": [
+                {"label": "style", "options": ["micro bikini", "various bikini styles"]},
+            ],
+        })
+
+
+def test_caption_wildcard_result_allows_optional_empty_alternative():
+    result = normalize_result({
+        "wildcard": "wearing a {black|white} {ruched|} micro bikini",
+        "stableTerms": ["micro bikini"],
+        "variationGroups": [
+            {"label": "color", "options": ["black", "white"]},
+            {"label": "texture", "options": ["ruched", ""]},
+        ],
+    })
+
+    assert result["variationGroups"][1]["options"] == ["ruched", ""]

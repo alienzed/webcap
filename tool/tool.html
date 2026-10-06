@@ -1117,35 +1117,6 @@
                                         <button id="test-generations-wildcard-btn" type="button" class="review-captions-btn" title="Analyze this Set's captions and build a wildcard prompt from their common terms and observed variation.">Generate Wildcard</button>
                                         <span id="test-generations-wildcard-status" class="test-generations-wildcard-status" aria-live="polite"></span>
                                     </div>
-                                    <aside id="test-generations-director-activity" class="test-generations-director-activity hidden" aria-live="polite">
-                                        <strong>Director</strong>
-                                        <span id="test-generations-director-activity-phase">Preparing…</span>
-                                        <span id="test-generations-director-activity-detail"></span>
-                                        <div id="test-generations-director-model-load" class="director-model-load hidden" aria-live="polite">
-                                            <div class="director-model-load-copy"><span>Model</span><strong id="test-generations-director-model-load-label"></strong></div>
-                                            <div class="director-model-load-track" role="progressbar" aria-label="Approximate Director model load" aria-valuemin="0" aria-valuemax="100"><span id="test-generations-director-model-load-fill"></span></div>
-                                        </div>
-                                        <button id="test-generations-director-prompt-copy" type="button" class="director-prompt-copy-btn hidden"></button>
-                                        <div id="test-generations-director-activity-trend" class="director-activity-trend" role="img" aria-label="System history, waiting for samples">
-                                            <div class="director-activity-trend-legend"><span><i class="director-activity-trend-ram"></i>RAM</span><span><i class="director-activity-trend-vram"></i>VRAM</span><span><i class="director-activity-trend-gpu"></i>GPU</span><span><i class="director-activity-trend-thermal"></i>°C</span><small>last minute</small></div>
-                                            <svg viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path class="director-activity-trend-grid" d="M0 7.5H120 M0 15H120 M0 22.5H120"></path><path class="director-activity-trend-ram-line"></path><path class="director-activity-trend-vram-line"></path><path class="director-activity-trend-gpu-line"></path><path class="director-activity-trend-thermal-line"></path></svg>
-                                        </div>
-                                        <button id="test-generations-director-stop" type="button" class="director-stop-btn hidden">Stop</button>
-                                    </aside>
-                                    <div id="test-generations-wildcard-analysis" class="test-generations-wildcard-analysis hidden">
-                                        <label class="test-generations-wildcard-output">
-                                            <span>Generated wildcard</span>
-                                            <textarea id="test-generations-wildcard-output" rows="3"></textarea>
-                                        </label>
-                                        <div><strong>Common</strong><span id="test-generations-wildcard-stable"></span></div>
-                                        <details class="test-generations-wildcard-variations">
-                                            <summary>Varies</summary>
-                                            <span id="test-generations-wildcard-variations"></span>
-                                        </details>
-                                        <div class="test-generations-wildcard-apply">
-                                            <button id="test-generations-wildcard-use-btn" type="button" class="review-captions-btn" disabled>Use as Prompt</button>
-                                        </div>
-                                    </div>
                                     <div class="test-generations-setup-options">
                                         <div class="test-generations-settings-grid">
                                             <label id="test-generations-aspect-field" class="training-run-option"><span>Aspect ratio</span><select id="test-generations-aspect"></select></label>
@@ -1702,6 +1673,65 @@
             </div>
         </div>
         <div id="app-overlay-root" class="app-overlay-root" aria-label="Application overlays">
+            <div id="test-generations-wildcard-modal" class="keep-lora-modal test-generations-wildcard-modal hidden" aria-hidden="true" data-escape-close-id="test-generations-wildcard-close">
+                <section class="keep-lora-dialog test-generations-wildcard-dialog" role="dialog" aria-modal="true" aria-labelledby="test-generations-wildcard-title">
+                    <header class="keep-lora-header">
+                        <div>
+                            <h2 id="test-generations-wildcard-title">Wildcard Builder</h2>
+                            <p id="test-generations-wildcard-set" class="keep-lora-source">Mine concrete, composable variation from this Set's captions.</p>
+                        </div>
+                        <button id="test-generations-wildcard-close" type="button" class="training-review-modal-close" aria-label="Close Wildcard Builder">&times;</button>
+                    </header>
+                    <div class="keep-lora-content test-generations-wildcard-content">
+                        <label class="test-generations-wildcard-focus">
+                            <span>Focus <small>optional</small></span>
+                            <input id="test-generations-wildcard-focus" type="text" autocomplete="off" placeholder="Auto - infer from Set name and captions">
+                            <small>Use this to make one concept primary. Pose, appearance, view, lighting, and background can still be mined as secondary dimensions.</small>
+                        </label>
+                        <aside id="test-generations-director-activity" class="test-generations-director-activity hidden" aria-live="polite">
+                            <strong>Director</strong>
+                            <span id="test-generations-director-activity-phase">Preparing…</span>
+                            <span id="test-generations-director-activity-detail"></span>
+                            <div id="test-generations-director-model-load" class="director-model-load hidden" aria-live="polite">
+                                <div class="director-model-load-copy"><span>Model</span><strong id="test-generations-director-model-load-label"></strong></div>
+                                <div class="director-model-load-track" role="progressbar" aria-label="Approximate Director model load" aria-valuemin="0" aria-valuemax="100"><span id="test-generations-director-model-load-fill"></span></div>
+                            </div>
+                            <button id="test-generations-director-prompt-copy" type="button" class="director-prompt-copy-btn hidden"></button>
+                            <div id="test-generations-director-activity-trend" class="director-activity-trend" role="img" aria-label="System history, waiting for samples">
+                                <div class="director-activity-trend-legend"><span><i class="director-activity-trend-ram"></i>RAM</span><span><i class="director-activity-trend-vram"></i>VRAM</span><span><i class="director-activity-trend-gpu"></i>GPU</span><span><i class="director-activity-trend-thermal"></i>°C</span><small>last minute</small></div>
+                                <svg viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path class="director-activity-trend-grid" d="M0 7.5H120 M0 15H120 M0 22.5H120"></path><path class="director-activity-trend-ram-line"></path><path class="director-activity-trend-vram-line"></path><path class="director-activity-trend-gpu-line"></path><path class="director-activity-trend-thermal-line"></path></svg>
+                            </div>
+                            <button id="test-generations-director-stop" type="button" class="director-stop-btn hidden">Stop</button>
+                        </aside>
+                        <div id="test-generations-wildcard-analysis" class="test-generations-wildcard-analysis hidden">
+                            <label class="test-generations-wildcard-output">
+                                <span>Wildcard prompt</span>
+                                <textarea id="test-generations-wildcard-output" rows="7" spellcheck="false"></textarea>
+                            </label>
+                            <div class="test-generations-wildcard-common"><strong>Common</strong><span id="test-generations-wildcard-stable"></span></div>
+                            <section class="test-generations-wildcard-dimensions">
+                                <div class="test-generations-wildcard-dimensions-heading">
+                                    <div><strong>Dimensions</strong><span>Derived from the wildcard text; edit the text freely.</span></div>
+                                    <button id="test-generations-wildcard-shuffle" type="button" class="review-captions-btn">Shuffle preview</button>
+                                </div>
+                                <div id="test-generations-wildcard-dimension-list" class="test-generations-wildcard-dimension-list"></div>
+                                <div class="test-generations-wildcard-preview-wrap">
+                                    <span>Combination preview</span>
+                                    <pre id="test-generations-wildcard-preview"></pre>
+                                </div>
+                            </section>
+                        </div>
+                        <div id="test-generations-wildcard-modal-status" class="test-generations-wildcard-modal-status" aria-live="polite"></div>
+                    </div>
+                    <footer class="test-generations-wildcard-footer">
+                        <button id="test-generations-wildcard-regenerate" type="button" class="review-captions-btn">Regenerate</button>
+                        <div class="test-generations-wildcard-footer-actions">
+                            <button id="test-generations-wildcard-dismiss" type="button" class="review-captions-btn">Close</button>
+                            <button id="test-generations-wildcard-use-btn" type="button" class="storyboard-primary-btn" disabled>Use as Prompt</button>
+                        </div>
+                    </footer>
+                </section>
+            </div>
             <div id="editor-caption-candidate" class="editor-caption-candidate hidden" aria-live="polite">
                 <section class="editor-caption-candidate-dialog" role="dialog" aria-modal="true" aria-label="AI caption candidate">
                     <div id="editor-caption-candidate-omissions" class="editor-caption-candidate-omissions hidden"></div>

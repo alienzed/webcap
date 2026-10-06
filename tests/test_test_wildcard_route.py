@@ -31,6 +31,7 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     response = client.post("/fs/test_generations/wildcard", json={
         "folder": "set",
         "directorModel": "director.gguf",
+        "focus": "shirt",
     })
 
     assert response.status_code == 202
@@ -40,6 +41,10 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     assert seen["contract"]["operation"] == "analyze_caption_wildcard"
     assert "subject standing in a kitchen" in seen["contract"]["prompt"]
     assert "subject sitting on a couch" in seen["contract"]["prompt"]
+    assert "Explicit focus: shirt" in seen["contract"]["prompt"]
+    assert "Set name: set" in seen["contract"]["prompt"]
+    assert response.get_json()["focus"] == "shirt"
+    assert response.get_json()["setName"] == "set"
 
 
 def test_test_wildcard_route_counts_only_nonempty_captions(tmp_path, monkeypatch):

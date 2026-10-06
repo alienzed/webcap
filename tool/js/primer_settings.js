@@ -256,7 +256,7 @@ function syncCaptionAssistCandidateUi() {
   var missingGroups = visible && Array.isArray(candidate.missingGroups) ? candidate.missingGroups : [];
   panel.classList.toggle('hidden', !visible);
   missingEl.classList.toggle('hidden', !missingGroups.length);
-  missingEl.textContent = missingGroups.length ? ('Missing annotations: ' + missingGroups.join(' · ')) : '';
+  missingEl.textContent = missingGroups.length ? ('Still unreviewed: ' + missingGroups.join(' · ')) : '';
   textEl.textContent = visible ? candidate.text : '';
 }
 
@@ -514,7 +514,11 @@ function getCaptionAssistMissingGroups(mediaKey) {
   });
   return (Array.isArray(checklistItems) ? checklistItems : []).filter(function (label) {
     var key = String(label || '').trim().toLowerCase();
-    return !!key && !assigned[key];
+    if (!key || assigned[key]) return false;
+    var reviewed = (typeof isChecklistRequirementCheckedForMediaKey === 'function')
+      ? isChecklistRequirementCheckedForMediaKey(mediaKey, label)
+      : false;
+    return !reviewed;
   });
 }
 

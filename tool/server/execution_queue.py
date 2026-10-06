@@ -198,6 +198,11 @@ def _record_recent(lane, job, keep=80):
     receipt = _public_job(job)
     if not isinstance(receipt, dict):
         return
+    if str(receipt.get("lane") or "") == "inference":
+        # Durable inference state exists only for unfinished restartable work.
+        # Terminal delivery receipts are process-local and must not accumulate on disk.
+        lane["recent"] = []
+        return
     recent = lane.setdefault("recent", [])
     recent.append(receipt)
     if len(recent) > keep:

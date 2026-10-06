@@ -147,8 +147,8 @@ def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
     assert "request.assignments" in primer
     assert "Candidate omitted selected annotations: " in primer
     assert "Caption Assist candidate failed annotation validation." in primer
-    assert "useBtn.textContent = omittedAssignments.length ? 'Use anyway' : 'Use';" in primer
-    assert "regenerateBtn.textContent = omittedAssignments.length ? 'Regenerate' : '\\u21bb';" in primer
+    assert "useBtn.textContent = useArmed ? 'Press Enter again' : 'Apply Caption';" in primer
+    assert "regenerateBtn.textContent = '\\u21bb';" in primer
     assert "regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);" in primer
     assert ".editor-caption-candidate-omissions {" in css
     assert ".editor-caption-candidate-regenerate.is-primary {" in css
@@ -357,7 +357,7 @@ def test_focus_caption_enhancements_do_not_change_normal_caption_assist_contract
     assert "var focusOpen = isFocusedCaptionOpen();" in primer
     assert "var focusVisible = !!(focusOpen && mediaKey);" in primer
     assert "titleEl.textContent = focusOpen ? 'Focus Caption' : 'Caption Assist';" in primer
-    assert "dismissBtn.textContent = focusOpen ? 'Exit' : '\\u00d7';" in primer
+    assert "dismissBtn.textContent = '\\u00d7';" in primer
     assert "if (!isFocusedCaptionOpen()) return runCaptionAssist();" in primer
     assert "if (isFocusedCaptionOpen()) {\n        regenerateFocusedCaption();" in primer
     assert "if (isFocusedCaptionOpen()) {\n        event.preventDefault();" in primer
@@ -396,3 +396,27 @@ def test_caption_vision_enablement_is_runtime_sticky_and_shared_with_caption_ass
     model_change = vision[model_start:model_end]
     assert "if (!captionVisionEnabled || !captionAssistCandidate) return false;" in model_change
     assert "if (!captionVisionEnabled || !captionAssistCandidate || !isFocusedCaptionOpen())" not in model_change
+
+
+def test_focus_caption_visual_pass_is_theme_aware_and_compact():
+    html = _read("tool/tool.html")
+    css = _read("tool/css/styles.css")
+    primer = _read("tool/js/primer_settings.js")
+
+    assert 'id="editor-caption-focus-shortcuts"' not in html
+    assert 'class="editor-caption-candidate-close"' in html
+    assert html.index('id="editor-caption-candidate-dismiss"') < html.index('id="editor-caption-candidate-text"')
+    assert 'class="editor-caption-candidate-actions-left"' in html
+    assert 'class="editor-caption-candidate-actions-right"' in html
+    assert '<span>Vision</span>' in html
+    assert 'Enable Vision' not in html
+    assert '>Apply Caption</button>' in html
+
+    assert "background: color-mix(in srgb, var(--panel) 98%, transparent);" in css
+    assert ".editor-caption-candidate-close {" in css
+    assert "min-height: 37px;" in css
+    assert ".editor-caption-focus-shortcuts {" not in css
+    assert 'html[data-theme="dark"] .editor-caption-candidate-missing' in css
+
+    assert "useBtn.textContent = useArmed ? 'Press Enter again' : 'Apply Caption';" in primer
+    assert "Regenerate caption and recheck Vision" in primer

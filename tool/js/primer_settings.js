@@ -259,14 +259,13 @@ function syncCaptionAssistCandidateUi() {
   var omissionsEl = document.getElementById('editor-caption-candidate-omissions');
   var missingEl = document.getElementById('editor-caption-candidate-missing');
   var textEl = document.getElementById('editor-caption-candidate-text');
-  var shortcutsEl = document.getElementById('editor-caption-focus-shortcuts');
   var prevBtn = document.getElementById('editor-caption-focus-prev');
   var nextBtn = document.getElementById('editor-caption-focus-next');
   var cancelBtn = document.getElementById('editor-caption-focus-cancel');
   var useBtn = document.getElementById('editor-caption-candidate-use');
   var regenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
   var dismissBtn = document.getElementById('editor-caption-candidate-dismiss');
-  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !omissionsEl || !missingEl || !textEl || !shortcutsEl || !prevBtn || !nextBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
+  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !omissionsEl || !missingEl || !textEl || !prevBtn || !nextBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
     throw new Error('Caption Assist candidate markup is incomplete.');
   }
 
@@ -286,7 +285,6 @@ function syncCaptionAssistCandidateUi() {
 
   progressEl.classList.toggle('hidden', !focusOpen);
   progressEl.textContent = focusOpen ? getFocusedCaptionProgressText() : '';
-  shortcutsEl.classList.toggle('hidden', !focusOpen);
 
   loadingEl.classList.toggle('hidden', !focusOpen || visible);
   if (focusOpen && !visible) {
@@ -325,13 +323,16 @@ function syncCaptionAssistCandidateUi() {
   regenerateBtn.classList.toggle('hidden', focusOpen && !visible);
   var useArmed = focusOpen && visible && isFocusedCaptionUseArmedForCandidate(candidate);
   useBtn.classList.toggle('is-armed', !!useArmed);
-  useBtn.textContent = useArmed
-    ? 'Press Enter again'
-    : (omittedAssignments.length ? 'Use anyway' : 'Use');
-  regenerateBtn.textContent = omittedAssignments.length ? 'Regenerate' : '\u21bb';
-  regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);
+  useBtn.textContent = useArmed ? 'Press Enter again' : 'Apply Caption';
 
-  dismissBtn.textContent = focusOpen ? 'Exit' : '\u00d7';
+  regenerateBtn.textContent = '\u21bb';
+  regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);
+  regenerateBtn.title = focusOpen && captionVisionEnabled
+    ? 'Regenerate caption and recheck Vision'
+    : 'Generate another caption candidate';
+  regenerateBtn.setAttribute('aria-label', regenerateBtn.title);
+
+  dismissBtn.textContent = '\u00d7';
   dismissBtn.title = focusOpen ? 'Exit Focus Caption' : 'Dismiss candidate and stay on this item';
   dismissBtn.setAttribute('aria-label', dismissBtn.title);
 

@@ -782,6 +782,9 @@ def _server_signature(settings):
         str(settings["models_dir"]),
         int(settings["port"]),
         settings["context_size"],
+        str(Path(app_config.FS_ROOT).resolve()),
+        LOCAL_MODEL_RESIDENT_LIMIT,
+        LOCAL_MODEL_FIT_TARGET_MIB,
     )
 
 

@@ -45,6 +45,8 @@ def test_qa_focus_inspection_reuses_existing_focus_set_round_trip():
     assert "selectByFileName(clean[0], clean, source || 'Quality Assurance', 'qa'" in qa
     assert "function returnToQaWorkbenchFromFocusSet()" in qa
     assert "state.focusSet = parent ? qaCloneFocusSet(parent) : null;" in qa
+    return_block = qa.split("function returnToQaWorkbenchFromFocusSet()", 1)[1].split("function qaHandleAction", 1)[0]
+    assert return_block.index("qaWorkbenchState.view = returnToFinding ? 'browse' : 'overview';") < return_block.index("setWorkspaceSurface('reviewOutput');")
     assert "if (reportType === 'qa')" in review
     assert "returnToQaWorkbenchFromFocusSet();" in review
     assert "if (reportType === 'duplicateCandidates')" in review

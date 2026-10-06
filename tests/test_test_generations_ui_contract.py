@@ -1110,6 +1110,16 @@ def test_test_wildcard_uses_current_set_without_source_owner_gate():
     assert "button.disabled = wildcardDirector.busy || !wildcardDirector.modelId;" in render_block
     assert "Generate a wildcard prompt from this Set's captions" in render_block
 
+def test_wildcard_builder_footer_buttons_stay_compact_and_single_line():
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert ".test-generations-wildcard-footer > button" in css
+    assert ".test-generations-wildcard-footer-actions > button" in css
+    assert "width: auto;" in css
+    assert "white-space: nowrap;" in css
+    assert "#test-generations-wildcard-use-btn" in css
+
+
 def test_generated_wildcard_review_uses_modal_and_derived_dimension_controls():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

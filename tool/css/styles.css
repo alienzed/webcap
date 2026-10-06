@@ -2981,9 +2981,28 @@ iframe {
   padding: 12px 16px;
   border-top: 1px solid var(--border);
 }
+.test-generations-wildcard-footer > button,
+.test-generations-wildcard-footer-actions > button {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 34px;
+  padding: 6px 12px;
+  justify-content: center;
+  white-space: nowrap;
+}
+.test-generations-wildcard-footer > button {
+  min-width: 92px;
+}
 .test-generations-wildcard-footer-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+#test-generations-wildcard-dismiss {
+  min-width: 72px;
+}
+#test-generations-wildcard-use-btn {
+  min-width: 112px;
 }
 @media (max-width: 720px) {
   .test-generations-wildcard-dialog {

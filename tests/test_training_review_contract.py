@@ -9,7 +9,7 @@ from tool.server import app as app_module
 from tool.server import training_review
 from tool.server import h3_probe
 from tool.server.dataset_config import build_video_blocks
-from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN22_PROFILE_ID, profile_for_mode
+from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN22_PROFILE_ID, resolved_profile
 from tool.server.training_setup import ensure_training_setup
 
 
@@ -232,8 +232,8 @@ def test_detail_requires_native_target_fit_without_changing_other_video_roles(tm
     folder.mkdir()
     Image.new("RGB", (512, 512)).save(folder / "setup.png")
     (folder / "setup.txt").write_text("setup", encoding="utf-8")
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal")
-    setup = training_review._setup_for_run(profile_for_mode(MINIMAX_H3_PROFILE_ID), MINIMAX_H3_PROFILE_ID, "train")
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID)
+    setup = training_review._setup_for_run(resolved_profile(MINIMAX_H3_PROFILE_ID), MINIMAX_H3_PROFILE_ID, "train")
     review = training_review._build_review_plan(folder, MINIMAX_H3_PROFILE_ID, setup, manifest, plan)
     detail_entries = [entry for entry in review["stages"]["h3"]["datasetEntries"] if entry["role"] == "detail"]
     assert len(detail_entries) == 1

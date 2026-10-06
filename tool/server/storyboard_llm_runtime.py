@@ -21,6 +21,8 @@ LLAMA_HOST = "127.0.0.1"
 DEFAULT_PORT = 8189
 DEFAULT_CONTEXT_SIZE = None
 DEFAULT_MAX_TOKENS = None
+LOCAL_MODEL_RESIDENT_LIMIT = 2
+LOCAL_MODEL_FIT_TARGET_MIB = 1024
 COMFY_BASE_URL = "http://127.0.0.1:8188"
 
 
@@ -828,7 +830,7 @@ def _ensure_server():
         command = [
             executable,
             "--models-dir", str(models_dir),
-            "--models-max", "1",
+            "--models-max", str(LOCAL_MODEL_RESIDENT_LIMIT),
             "--no-models-autoload",
             "--media-path", str(Path(app_config.FS_ROOT).resolve()),
             "--host", LLAMA_HOST,
@@ -841,7 +843,8 @@ def _ensure_server():
         if settings["context_size"] is not None:
             command.extend(["--ctx-size", str(settings["context_size"])])
         command.extend([
-            "--n-gpu-layers", "all",
+            "--fit", "on",
+            "--fit-target", str(LOCAL_MODEL_FIT_TARGET_MIB),
             "--parallel", "1",
             "--image-min-tokens", "1024",
             "--jinja",
@@ -1264,10 +1267,19 @@ def _ensure_local_model_loaded(model_id):
         "loading_model",
         model_size_bytes=_model_file_size(selected),
     )
-    for model in models:
-        if model["id"] == model_id or model["status"] == "unloaded":
-            continue
-        _unload_model(model["id"])
+
+    resident = [
+        model for model in models
+        if model["id"] != model_id and model["status"] != "unloaded"
+    ]
+    slots_to_free = max(0, len(resident) - (LOCAL_MODEL_RESIDENT_LIMIT - 1))
+    if slots_to_free:
+        resident.sort(
+            key=lambda model: int(model.get("sizeBytes") or 0),
+            reverse=True,
+        )
+        for model in resident[:slots_to_free]:
+            _unload_model(model["id"])
 
     _load_model(model_id)
     return True

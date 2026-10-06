@@ -885,7 +885,7 @@ def test_storyboard_story_context_has_persisted_local_collapsible_sections():
     assert "continuity: false" in storyboard
     assert "defaults: false" in storyboard
     assert "function initStorySections()" in storyboard
-    assert "'webcap.storyboard.storySection.' + sectionName" in storyboard
+    assert "section.open = STORY_SECTION_DEFAULTS[sectionName];" in storyboard
     assert ".storyboard-story-section:not([open]) > .storyboard-story-section-body" in css
 
     overview_surface = html.split('id="storyboard-story-overview"', 1)[1].split('</div>\n\n                            <details class="storyboard-story-section storyboard-scene-defaults', 1)[0]

@@ -508,6 +508,10 @@ def _advance_queue():
             _release_gpu()
 
         try:
+            if local_gpu:
+                from .gpu_prep import prepare_gpu_for
+                if not prepare_gpu_for(GPU_RESERVATION_OWNER):
+                    return None
             from .storyboard_llm_runtime import clear_stop_request
             clear_stop_request()
             claimed = execution_claim_next(
@@ -527,9 +531,6 @@ def _advance_queue():
         release_gpu = local_gpu
         terminal = None
         try:
-            if local_gpu:
-                from .gpu_prep import prepare_gpu_for
-                prepare_gpu_for(GPU_RESERVATION_OWNER)
             terminal = _execute_claimed(job_id, gpu_reserved=local_gpu)
         except Exception as exc:
             current = execution_get_job(job_id)

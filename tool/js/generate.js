@@ -30,7 +30,7 @@
       jobId: '',
       requestDiagnostic: null
     },
-    trackedJobIds: loadTrackedGenerateJobs(),
+    trackedJobIds: [],
     results: [],
     viewMode: 'create',
     activeResultKey: '',
@@ -106,40 +106,31 @@
     status.title = tone === 'error' ? 'See Console for details.' : '';
   }
 
-  function loadTrackedGenerateJobs() {
-    try {
-      var parsed = JSON.parse(window.localStorage.getItem('webcap.generate.trackedJobs') || '[]');
-      return Array.isArray(parsed)
-        ? parsed.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
-        : [];
-    } catch (_err) {
-      return [];
-    }
-  }
-
-  function saveTrackedGenerateJobs() {
-    window.localStorage.setItem('webcap.generate.trackedJobs', JSON.stringify(generateState.trackedJobIds || []));
-  }
-
   function trackGenerateJob(jobId) {
     var id = String(jobId || '').trim();
     if (!id || generateState.trackedJobIds.indexOf(id) !== -1) return;
     generateState.trackedJobIds.push(id);
-    saveTrackedGenerateJobs();
   }
 
   function untrackGenerateJob(jobId) {
     var id = String(jobId || '').trim();
-    var before = generateState.trackedJobIds.length;
     generateState.trackedJobIds = generateState.trackedJobIds.filter(function (value) { return value !== id; });
-    if (generateState.trackedJobIds.length !== before) saveTrackedGenerateJobs();
+  }
+
+  function adoptGenerateJobsFromQueue(queue) {
+    var jobs = queue && Array.isArray(queue.jobs) ? queue.jobs : [];
+    jobs.forEach(function (job) {
+      if (String(job && job.client || '') !== 'generate') return;
+      var status = String(job.status || '');
+      if (['queued', 'backlog', 'starting', 'running', 'stopping'].indexOf(status) === -1) return;
+      trackGenerateJob(job.jobId);
+    });
   }
 
   function queuedGenerateJobs(queue) {
-    var tracked = generateState.trackedJobIds || [];
     var jobs = queue && Array.isArray(queue.jobs) ? queue.jobs : [];
     return jobs.filter(function (job) {
-      return tracked.indexOf(String(job.jobId || '')) !== -1 &&
+      return String(job && job.client || '') === 'generate' &&
         ['queued', 'backlog'].indexOf(String(job.status || '')) !== -1;
     });
   }
@@ -1417,6 +1408,7 @@
 
 
   function refreshTrackedGenerateJobs(queue) {
+    adoptGenerateJobsFromQueue(queue);
     var ids = (generateState.trackedJobIds || []).slice();
     if (!ids.length) return Promise.resolve([]);
 

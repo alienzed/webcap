@@ -5,7 +5,8 @@ var captionVisionCapabilities = {
   defaultModel: ''
 };
 var captionVisionEnabled = false;
-var captionVisionPendingJobId = '';
+var captionVisionActiveTask = null;
+var captionVisionTaskSequence = 0;
 var captionVisionResult = null;
 var captionVisionError = '';
 
@@ -44,13 +45,25 @@ function getCaptionVisionModelId() {
 
 function buildCaptionVisionGroups(mediaKey) {
   return (Array.isArray(checklistItems) ? checklistItems : []).map(function (group) {
+    var groupName = String(group || '').trim();
+    var selected = getChecklistAssignedTagsForMediaKey(mediaKey, group).slice();
     return {
-      group: String(group || '').trim(),
+      group: groupName,
       options: getChecklistKeywordTermsForRequirement(group).slice(),
-      selected: getChecklistAssignedTagsForMediaKey(mediaKey, group).slice()
+      selected: selected,
+      reviewed: isChecklistRequirementCheckedForMediaKey(mediaKey, group)
     };
   }).filter(function (entry) {
-    return !!entry.group && entry.options.length > 0;
+    if (!entry.group) return false;
+    // Selected groups are relevant for mismatch detection. Unreviewed groups are
+    // relevant for omissions. Fully reviewed empty groups add prompt noise only.
+    return entry.selected.length > 0 || !entry.reviewed;
+  }).map(function (entry) {
+    return {
+      group: entry.group,
+      options: entry.options,
+      selected: entry.selected
+    };
   });
 }
 
@@ -110,17 +123,61 @@ function clearCaptionVisionResult() {
   syncCaptionVisionUi();
 }
 
+function createCaptionVisionTask(mediaItem, captionText) {
+  var task = {
+    id: ++captionVisionTaskSequence,
+    mediaKey: String(mediaItem && mediaItem.key || ''),
+    captionText: String(captionText || '').trim(),
+    jobId: '',
+    cancelled: false,
+    result: null,
+    promise: null
+  };
+
+  task.promise = requestCaptionVisionCandidate(mediaItem, captionText, {
+    onJob: function (job) {
+      task.jobId = String(job.jobId || '');
+      if (!task.cancelled) return null;
+      return cancelCaptionAssistJob(task.jobId).catch(function (err) {
+        reportConsoleWarning(
+          'Caption Vision',
+          'Could not cancel a superseded vision job: ' + String(err && err.message ? err.message : err)
+        );
+        return false;
+      });
+    }
+  }).then(function (result) {
+    if (task.cancelled) return null;
+    task.result = result;
+    return result;
+  });
+
+  return task;
+}
+
+function cancelCaptionVisionTask(task, label) {
+  if (!task) return Promise.resolve(false);
+  task.cancelled = true;
+  var jobId = String(task.jobId || '');
+  if (!jobId) return Promise.resolve(true);
+  return cancelCaptionAssistJob(jobId).catch(function (err) {
+    reportConsoleWarning(
+      label || 'Caption Vision',
+      'Could not cancel vision job: ' + String(err && err.message ? err.message : err)
+    );
+    return false;
+  });
+}
+
 function cancelCurrentCaptionVision() {
-  var jobId = String(captionVisionPendingJobId || '');
-  captionVisionPendingJobId = '';
-  if (!jobId || jobId === 'prefetch') {
+  var task = captionVisionActiveTask;
+  if (!task) {
     syncCaptionVisionUi();
     return Promise.resolve(false);
   }
-  return cancelCaptionAssistJob(jobId).catch(function (err) {
-    reportConsoleWarning('Caption Vision', 'Could not cancel current vision job: ' + String(err && err.message ? err.message : err));
-    return false;
-  }).then(function (result) {
+  captionVisionActiveTask = null;
+  syncCaptionVisionUi();
+  return cancelCaptionVisionTask(task, 'Caption Vision').then(function (result) {
     syncCaptionVisionUi();
     return result;
   });
@@ -135,37 +192,61 @@ function isCaptionVisionCandidateCurrent(candidate) {
   );
 }
 
-function runCaptionVisionForCandidate(candidate) {
-  if (!captionVisionEnabled || !candidate || !isFocusedCaptionOpen()) return Promise.resolve(false);
-  if (!state.currentItem || state.currentItem.key !== candidate.mediaKey) return Promise.resolve(false);
-  if (!isCaptionVisionSupportedMedia(state.currentItem.fileName)) return Promise.resolve(false);
-
-  captionVisionResult = null;
+function bindCaptionVisionTaskToCandidate(task, candidate) {
+  if (!task || !candidate) return Promise.resolve(false);
+  captionVisionActiveTask = task;
+  captionVisionResult = task.result || null;
   captionVisionError = '';
-  captionVisionPendingJobId = 'submitting';
   syncCaptionVisionUi();
 
-  return requestCaptionVisionCandidate(state.currentItem, candidate.text, {
-    onJob: function (job) {
-      captionVisionPendingJobId = String(job.jobId || '');
-      syncCaptionVisionUi();
+  return task.promise.then(function (result) {
+    if (
+      task.cancelled ||
+      captionVisionActiveTask !== task ||
+      !captionVisionEnabled ||
+      !isCaptionVisionCandidateCurrent(candidate)
+    ) {
+      return false;
     }
-  }).then(function (result) {
-    if (!isCaptionVisionCandidateCurrent(candidate)) return false;
+    if (!result) return false;
     captionVisionResult = result;
     captionVisionError = '';
     return true;
   }).catch(function (err) {
-    if (captionVisionEnabled && isCaptionVisionCandidateCurrent(candidate)) {
+    if (
+      !task.cancelled &&
+      captionVisionActiveTask === task &&
+      captionVisionEnabled &&
+      isCaptionVisionCandidateCurrent(candidate)
+    ) {
       captionVisionError = String(err && err.message ? err.message : err);
       reportConsoleError('Caption Vision', err);
     }
     return false;
   }).then(function (ok) {
-    captionVisionPendingJobId = '';
-    syncCaptionVisionUi();
+    if (captionVisionActiveTask === task) {
+      captionVisionActiveTask = null;
+      syncCaptionVisionUi();
+    }
     return ok;
   });
+}
+
+function runCaptionVisionForCandidate(candidate) {
+  if (!captionVisionEnabled || !candidate || !isFocusedCaptionOpen()) return Promise.resolve(false);
+  if (!state.currentItem || state.currentItem.key !== candidate.mediaKey) return Promise.resolve(false);
+  if (!isCaptionVisionSupportedMedia(state.currentItem.fileName)) return Promise.resolve(false);
+
+  var previous = captionVisionActiveTask;
+  if (previous) {
+    captionVisionActiveTask = null;
+    cancelCaptionVisionTask(previous, 'Caption Vision');
+  }
+
+  captionVisionResult = null;
+  captionVisionError = '';
+  var task = createCaptionVisionTask(state.currentItem, candidate.text);
+  return bindCaptionVisionTaskToCandidate(task, candidate);
 }
 
 function maybeRunCaptionVisionForCandidate(candidate) {
@@ -178,37 +259,15 @@ function maybeRunCaptionVisionForCandidate(candidate) {
 
 function adoptCaptionVisionPrefetch(prefetch, candidate) {
   if (!captionVisionEnabled || !prefetch || !candidate) return Promise.resolve(false);
-  if (!prefetch.visionPromise) return runCaptionVisionForCandidate(candidate);
+  var task = prefetch.visionTask;
+  if (!task) return runCaptionVisionForCandidate(candidate);
 
-  captionVisionResult = prefetch.visionResult || null;
-  captionVisionError = '';
-  if (prefetch.visionResult) {
-    captionVisionPendingJobId = '';
-    syncCaptionVisionUi();
-    return Promise.resolve(true);
+  var previous = captionVisionActiveTask;
+  if (previous && previous !== task) {
+    captionVisionActiveTask = null;
+    cancelCaptionVisionTask(previous, 'Caption Vision');
   }
-
-  captionVisionPendingJobId = prefetch.visionJobId || 'prefetch';
-  syncCaptionVisionUi();
-  return prefetch.visionPromise.then(function (result) {
-    if (!isCaptionVisionCandidateCurrent(candidate)) return false;
-    if (!result) return false;
-    captionVisionResult = result;
-    captionVisionError = '';
-    return true;
-  }).catch(function (err) {
-    if (captionVisionEnabled && isCaptionVisionCandidateCurrent(candidate)) {
-      captionVisionError = String(err && err.message ? err.message : err);
-      reportConsoleError('Caption Vision', err);
-    }
-    return false;
-  }).then(function (ok) {
-    if (isCaptionVisionCandidateCurrent(candidate)) {
-      captionVisionPendingJobId = '';
-      syncCaptionVisionUi();
-    }
-    return ok;
-  });
+  return bindCaptionVisionTaskToCandidate(task, candidate);
 }
 
 function applyCaptionVisionKnownTag(finding) {
@@ -228,8 +287,9 @@ function applyCaptionVisionKnownTag(finding) {
   setStatus('Selected ' + group + ': ' + term + '. Refreshing caption suggestion...');
   captionVisionResult = null;
   captionVisionError = '';
-  cancelCurrentCaptionVision();
-  cancelFocusedCaptionPrefetch().then(function () {
+  cancelCurrentCaptionVision().then(function () {
+    return cancelFocusedCaptionPrefetch();
+  }).then(function () {
     captionAssistCandidate = null;
     syncCaptionAssistCandidateUi();
     return runCaptionAssist();
@@ -303,7 +363,7 @@ function syncCaptionVisionUi() {
 
   if (!candidateVisible || !captionVisionEnabled || !supported) return;
 
-  if (captionVisionPendingJobId) {
+  if (captionVisionActiveTask) {
     status.textContent = 'Vision checking image…';
     status.classList.remove('hidden');
     return;
@@ -371,3 +431,6 @@ window.captionVisionRequestFingerprint = captionVisionRequestFingerprint;
 window.adoptCaptionVisionPrefetch = adoptCaptionVisionPrefetch;
 window.isCaptionVisionSupportedMedia = isCaptionVisionSupportedMedia;
 window.getCaptionVisionModelId = getCaptionVisionModelId;
+
+window.createCaptionVisionTask = createCaptionVisionTask;
+window.cancelCaptionVisionTask = cancelCaptionVisionTask;

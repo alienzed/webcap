@@ -224,8 +224,9 @@ def test_focus_caption_vision_is_opt_in_actionable_and_one_deep():
     assert "requestCaptionVisionCandidate" in vision
     assert "assignChecklistTagToMediaKey(mediaKey, group, term)" in vision
     assert "Refreshing caption suggestion" in vision
-    assert "visionJobId" in focus
-    assert "visionPromise" in focus
+    assert "visionTask" in focus
+    assert "createCaptionVisionTask" in focus
+    assert "cancelCaptionVisionTask" in focus
     assert "beginFocusedCaptionPrefetchVision" in focus
     assert "adoptCaptionVisionPrefetch" in focus
     assert "loadCaptionVisionCapabilities();" in focus
@@ -240,3 +241,27 @@ def test_caption_vision_has_no_browser_persistence_or_new_setting():
     assert "sessionStorage" not in vision
     assert "vision_model" not in settings
     assert "caption_vision" not in settings
+
+
+def test_caption_vision_lifecycle_is_request_scoped_and_transition_safe():
+    vision = _read("tool/js/caption_vision.js")
+    focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
+
+    assert "var captionVisionActiveTask = null;" in vision
+    assert "var captionVisionTaskSequence = 0;" in vision
+    assert "task.cancelled = true;" in vision
+    assert "captionVisionActiveTask !== task" in vision
+    assert "if (task.cancelled) return cancelCaptionAssistJob(task.jobId)" not in vision
+    assert "if (!task.cancelled) return null;" in vision
+    assert "prefetch.visionTask" in focus
+    assert "cancelCaptionVisionTask(prefetch.visionTask, 'Focus Caption Vision')" in focus
+    assert "return cancelCurrentCaptionVision().then(function ()" in primer
+    assert "candidateRegenerateBtn.addEventListener('click', function () {" in primer
+
+
+def test_caption_vision_only_sends_selected_or_unreviewed_groups():
+    vision = _read("tool/js/caption_vision.js")
+
+    assert "reviewed: isChecklistRequirementCheckedForMediaKey(mediaKey, group)" in vision
+    assert "return entry.selected.length > 0 || !entry.reviewed;" in vision

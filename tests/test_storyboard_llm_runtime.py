@@ -2054,6 +2054,28 @@ def test_passive_local_discovery_recognizes_multimodal_subfolder(monkeypatch, tm
     assert "mmproj-q8" not in by_id
 
 
+def test_passive_local_discovery_keeps_multishard_subfolder(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    models_dir.mkdir()
+    shard_dir = models_dir / "large-model"
+    shard_dir.mkdir()
+    (shard_dir / "large-model-00001-of-00003.gguf").write_bytes(b"a" * 10)
+    (shard_dir / "large-model-00002-of-00003.gguf").write_bytes(b"b" * 10)
+    (shard_dir / "large-model-00003-of-00003.gguf").write_bytes(b"c" * 10)
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_runtime_settings",
+        lambda runtime_id="": {"models_dir": models_dir, "mode": "local"},
+    )
+
+    models = storyboard_llm_runtime._list_local_models_passive()
+    by_id = {model["id"]: model for model in models}
+
+    assert by_id["large-model"]["path"].endswith("large-model-00001-of-00003.gguf")
+    assert by_id["large-model"]["inputModalities"] == ["text"]
+
+
 def test_normalize_freeform_messages_preserves_safe_multimodal_parts():
     result = storyboard_llm_runtime.normalize_freeform_messages([{
         "role": "user",

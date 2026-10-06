@@ -87,8 +87,9 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "function restoreDirectorPrompt()" in script
     assert "generateState.director.previousPrompt = previousPrompt;" in script
     assert "generateState.director.previousPrompt = null;" in script
-    assert "Storyboard prompt is injected at runtime." in script
-    assert "window.localStorage.removeItem(promptStorageKey)" in script
+    assert "function resetGeneratePromptScratch()" in script
+    assert "if (!wasOpen) resetGeneratePromptScratch();" in script
+    assert "localStorage" not in script
     assert '"defaultPrompt": ""' in generation
 
 def test_generate_prompt_assistant_uses_shared_llm_queue():
@@ -123,7 +124,7 @@ def test_generate_prompt_assistant_protects_prompt_consumers_while_pending():
     assert "Wait for Prompt Assistant to finish before restoring a generation configuration." in script
     assert "var requestModelId = String(generateState.modelId || '');" in script
     assert "modelId: requestModelId" in script
-    assert "window.localStorage.setItem('webcap.generate.prompt.' + requestModelId, promptNode.value);" in script
+    assert "generateState.director.previousPrompt = previousPrompt;" in script
     assert "button.dataset.generateSubmitBusy = '1';" in script
     assert "delete button.dataset.generateSubmitBusy;" in script
 
@@ -280,7 +281,7 @@ def test_generate_library_open_does_not_overwrite_current_model_prompt_when_save
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
 
     assert "prompt.dataset.modelId = resultModelId || String(generateState.modelId || '');" in script
-    assert "window.localStorage.setItem('webcap.generate.prompt.' + resultModelId, prompt.value);" in script
+    assert "localStorage" not in script
 
 
 def test_generate_library_open_restores_saved_generation_configuration():

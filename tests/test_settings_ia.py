@@ -65,3 +65,24 @@ def test_theme_is_config_backed_not_browser_persistent():
     assert 'html.replace("__WEBCAP_THEME__", theme)' in app
     assert "base.theme = typeof getCurrentAppTheme" in settings
     assert "Stored in WebCap settings." in html
+
+
+def test_director_model_preference_is_config_backed_not_browser_persistent():
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
+    settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert "APP_CONFIG.director_model" in common
+    assert "'/app/config/director_model'" in common
+    assert "out.director_model = String(out.director_model || '').trim();" in settings
+    assert '@app.route("/app/config/director_model", methods=["POST"])' in app
+
+    for obsolete in (
+        "DIRECTOR_MODEL_STORAGE_KEY",
+        "webcap.director.model",
+        "webcap.storyboard.directorModel",
+        "webcap.generate.directorModel",
+        "webcap.testGenerations.directorModel",
+        "webcap.directorChat.model",
+    ):
+        assert obsolete not in common

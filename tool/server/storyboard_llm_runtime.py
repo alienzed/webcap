@@ -414,8 +414,18 @@ def _remote_native_url(path):
     return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, native_path, "", ""))
 
 
-def _remote_native_http_json(path, timeout=5):
-    request = urllib.request.Request(_remote_native_url(path), method="GET")
+def _remote_native_http_json(path, timeout=5, method="GET", payload=None):
+    data = None
+    headers = {}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(
+        _remote_native_url(path),
+        data=data,
+        headers=headers,
+        method=method,
+    )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read()
@@ -1098,7 +1108,7 @@ def _ollama_model_capabilities(model_id):
     model_id = str(model_id or "").strip()
     if not model_id:
         return []
-    payload = _remote_native_http_json("/api/show?model=" + urllib.parse.quote(model_id, safe=""), timeout=5)
+    payload = _remote_native_http_json("/api/show", timeout=5, method="POST", payload={"model": model_id})
     capabilities = payload.get("capabilities") if isinstance(payload, dict) else None
     if not isinstance(capabilities, list):
         return []

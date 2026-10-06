@@ -3077,12 +3077,9 @@
 
   function testStatusHasPendingWork(status) {
     if (!status) return false;
-    var state = String(status.status || '').toLowerCase();
-    if (['complete', 'stopped', 'failed', 'interrupted'].indexOf(state) !== -1) return false;
-    if (['starting', 'queued', 'running', 'stopping'].indexOf(state) !== -1) return true;
-    var total = Number(status.total || 0);
-    var processed = Number(status.completed || 0) + Number(status.failed || 0);
-    return total > processed;
+    return ['starting', 'queued', 'running', 'stopping'].indexOf(
+      String(status.status || '').toLowerCase()
+    ) !== -1;
   }
 
   function pollStatus() {

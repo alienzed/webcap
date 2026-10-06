@@ -32,6 +32,10 @@ def test_qa_reuses_exact_training_selection_and_keeps_session_state_ephemeral():
     assert "var qaWorkbenchState = {" in qa
     assert "dispositions: {}" in qa
     assert "trainingFocus: ''" in qa
+    assert "folderKey: ''" in qa
+    assert "scopeChanged" in qa
+    assert "qaWorkbenchState.dispositions = {};" in qa
+    assert "qaWorkbenchState.trainingFocus = '';" in qa
     assert "localStorage" not in qa
     assert "sessionStorage" not in qa
     assert "fetch(" not in qa
@@ -64,6 +68,9 @@ def test_qa_deep_scan_is_explicit_and_uses_training_focus_plus_annotations():
     assert "GROUPED TAGS:" in assistant
     assert "Training focus:" in assistant
     assert "function bindReviewAssistantButton()" in assistant
+    assert "if (!button) throw new Error('QA Deep Scan button is missing.');" in assistant
+    assert "typeof getChecklistAssignmentEntriesForMediaKey" not in assistant
+    assert "typeof getTagsForMediaKey" not in assistant
 
 
 def test_qa_isolated_styles_keep_large_editorial_typography():
@@ -78,3 +85,12 @@ def test_qa_isolated_styles_keep_large_editorial_typography():
     assert ".qa-section-title" in css
     assert ".qa-evidence-strip" in css
     assert "overflow-x: auto;" in css
+
+
+def test_qa_only_consumes_prune_and_duplicate_results_for_exact_current_scope():
+    qa = _read("tool/js/qa_workbench.js")
+
+    assert "state.pruneCandidatesScopeKey !== pruneCandidateScopeKey(scopeFiles)" in qa
+    assert "state.duplicateCandidatesScopeKey !== duplicateCandidateScopeKey(scopeFiles)" in qa
+    assert "state.pruneCandidatesFolder !== String(state.folder || '')" in qa
+    assert "state.duplicateCandidatesFolder !== String(state.folder || '')" in qa

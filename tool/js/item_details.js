@@ -1612,6 +1612,12 @@ function refreshMediaResolutionCache(options) {
         var rows = JSON.parse(xhr.responseText);
         var generatedCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Generated') || 0);
         var checkedCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Checked') || 0);
+        var pendingCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Pending') || 0);
+        var metadataTimingHeader = xhr.getResponseHeader('X-WebCap-Metadata-Timing') || '';
+        var metadataTiming = null;
+        if (metadataTimingHeader) {
+          try { metadataTiming = JSON.parse(metadataTimingHeader); } catch (_metadataTimingParseFailure) {}
+        }
         var optionalWarningsHeader = xhr.getResponseHeader('X-WebCap-Optional-Analysis-Warnings') || '';
         if (optionalWarningsHeader) {
           var optionalWarnings = JSON.parse(optionalWarningsHeader);
@@ -1646,7 +1652,19 @@ function refreshMediaResolutionCache(options) {
           setStatus(buildSelectedMediaStatus(state.currentItem));
           renderItemMetadataPanel();
         }
-        resolve({ ok: true, folder: requestFolder, rows: rows, generated: generatedCount, checked: checkedCount });
+        resolve({
+          ok: true,
+          folder: requestFolder,
+          rows: rows,
+          generated: generatedCount,
+          checked: checkedCount,
+          diagnostics: {
+            checked: checkedCount,
+            pending: pendingCount,
+            generated: generatedCount,
+            serverTimingMs: metadataTiming
+          }
+        });
       } catch (e) {
         mediaMetadataLoading = false;
         clearMetadataCache();

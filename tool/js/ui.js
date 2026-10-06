@@ -337,6 +337,7 @@ function completeFolderLoadPipeline(path, loadSequence, metadataResult) {
 function refreshCurrentDirectory() {
   var path = state.folder || '';
   var loadSequence = ++folderLoadSequence;
+  var folderLoadStartedAt = performance.now();
   state.folderStateWritable = false;
   invalidatePruneCandidates();
   invalidateDuplicateCandidates();
@@ -380,6 +381,7 @@ function refreshCurrentDirectory() {
   clearEditorAndPreview();
   var xhr = new XMLHttpRequest();
   xhr.open('GET', url);
+  var describeRequestStartedAt = performance.now();
   xhr.onreadystatechange = function () {
     if (xhr.readyState === 4) {
       if (loadSequence !== folderLoadSequence || String(state.folder || '') !== String(path || '')) {
@@ -387,6 +389,7 @@ function refreshCurrentDirectory() {
       }
       if (xhr.status === 200) {
         try {
+          var describeFinishedAt = performance.now();
           var resp = JSON.parse(xhr.responseText);
           // resp.folders: array of {name, ...}
           // resp.files: array of {name, extension, ...}
@@ -430,6 +433,7 @@ function refreshCurrentDirectory() {
             state.reviewedSet = state.reviewedSet || new Set();
             renderFileList(ui.filterEl.value);
             prepareFocusSetMetadataForCurrentFolder();
+            var folderApplyFinishedAt = performance.now();
           
           // --- Static header toggling (display only, wiring in main.js) ---
           if (ui.upBtn) {
@@ -461,7 +465,17 @@ function refreshCurrentDirectory() {
             if (pendingSelectFileName) {
               state.pendingSelectFileName = undefined;
             }
+            var metadataRequestStartedAt = performance.now();
             refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {
+              var metadataFinishedAt = performance.now();
+              console.info('[Folder Load Timing]', {
+                folder: path || ROOT_FOLDER_LABEL,
+                describeMs: Math.round((describeFinishedAt - describeRequestStartedAt) * 10) / 10,
+                applyAndRenderMs: Math.round((folderApplyFinishedAt - describeFinishedAt) * 10) / 10,
+                metadataMs: Math.round((metadataFinishedAt - metadataRequestStartedAt) * 10) / 10,
+                totalToMetadataMs: Math.round((metadataFinishedAt - folderLoadStartedAt) * 10) / 10,
+                metadata: metadataResult && metadataResult.diagnostics ? metadataResult.diagnostics : null
+              });
               completeFolderLoadPipeline(path, loadSequence, metadataResult);
               if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
               refreshTrainingWorkspace();

@@ -603,9 +603,14 @@ def _session_status(session_directory):
         visible["modelId"] = str(visible.get("model") or get_test_model().PROFILE_ID)
     if not visible.get("resultFolder"):
         visible["resultFolder"] = _session_result_folder(session_directory)
-    visible["wildcardValues"] = _resolved_wildcard_values(
-        visible.get("sourcePrompt"),
-        visible.get("resolvedPrompt") or visible.get("prompt"),
+    stored_wildcard_values = visible.get("wildcardValues")
+    visible["wildcardValues"] = (
+        list(stored_wildcard_values)
+        if isinstance(stored_wildcard_values, list) and stored_wildcard_values
+        else _resolved_wildcard_values(
+            visible.get("sourcePrompt"),
+            visible.get("resolvedPrompt") or visible.get("prompt"),
+        )
     )
     return visible
 
@@ -1056,53 +1061,60 @@ def handle_request(folder_path, mode, selection_criteria=None):
 SHARED_EXECUTION_LANE = "inference"
 
 
-def _wildcard_literal_pattern(value, boundary_whitespace_optional=False):
-    parts = re.split(r"(\s+)", str(value or ""))
-    pattern = []
-    for index, part in enumerate(parts):
-        if not part:
-            continue
-        if part.isspace():
-            is_boundary = index == 1 or index == len(parts) - 2
-            pattern.append(r"\s*" if boundary_whitespace_optional and is_boundary else r"\s+")
-        else:
-            pattern.append(re.escape(part))
-    return "".join(pattern)
+def _normalize_wildcard_text(value):
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _consume_wildcard_fragment(text, position, fragment):
+    fragment = _normalize_wildcard_text(fragment)
+    while position < len(text) and text[position].isspace():
+        position += 1
+    if fragment:
+        if not text.startswith(fragment, position):
+            return None
+        position += len(fragment)
+    while position < len(text) and text[position].isspace():
+        position += 1
+    return position
 
 
 def _resolved_wildcard_values(source_prompt, resolved_prompt):
-    source = str(source_prompt or "").strip()
-    resolved = str(resolved_prompt or "").strip()
+    source = str(source_prompt or "")
+    resolved = _normalize_wildcard_text(resolved_prompt)
     matches = list(re.finditer(r"\{([^{}]*\|[^{}]*)\}", source))
     if not matches:
         return []
 
-    pattern = []
+    literals = []
+    groups = []
     cursor = 0
     for match in matches:
+        literals.append(source[cursor:match.start()])
         options = [option.strip() for option in match.group(1).split("|")]
         if len(options) < 2:
             return []
-        pattern.append(_wildcard_literal_pattern(source[cursor:match.start()], boundary_whitespace_optional=True))
-        pattern.append(
-            "("
-            + "|".join(_wildcard_literal_pattern(option) for option in options)
-            + ")"
-        )
+        groups.append(options)
         cursor = match.end()
-    pattern.append(_wildcard_literal_pattern(source[cursor:], boundary_whitespace_optional=True))
+    literals.append(source[cursor:])
 
-    resolved_match = re.fullmatch("".join(pattern), resolved, flags=re.DOTALL)
-    if not resolved_match:
-        return []
+    def match_from(group_index, position):
+        position = _consume_wildcard_fragment(resolved, position, literals[group_index])
+        if position is None:
+            return None
+        if group_index >= len(groups):
+            return [] if position == len(resolved) else None
 
-    values = []
-    for value in resolved_match.groups():
-        value = str(value or "").strip()
-        if value and value.casefold() not in {existing.casefold() for existing in values}:
-            values.append(value)
-    return values
+        for option in groups[group_index]:
+            next_position = _consume_wildcard_fragment(resolved, position, option)
+            if next_position is None:
+                continue
+            tail = match_from(group_index + 1, next_position)
+            if tail is not None:
+                return ([option] if option else []) + tail
+        return None
 
+    values = match_from(0, 0)
+    return values if values is not None else []
 
 
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
@@ -1431,9 +1443,14 @@ def _sync_inference_session(session_directory):
         visible["running"] = 1 if active is not None else 0
         visible["session"] = Path(session_directory).name
         visible["resultFolder"] = visible.get("resultFolder") or _session_result_folder(session_directory)
-        visible["wildcardValues"] = _resolved_wildcard_values(
-            visible.get("sourcePrompt"),
-            visible.get("resolvedPrompt") or visible.get("prompt"),
+        stored_wildcard_values = visible.get("wildcardValues")
+        visible["wildcardValues"] = (
+            list(stored_wildcard_values)
+            if isinstance(stored_wildcard_values, list) and stored_wildcard_values
+            else _resolved_wildcard_values(
+                visible.get("sourcePrompt"),
+                visible.get("resolvedPrompt") or visible.get("prompt"),
+            )
         )
 
         if active is not None:
@@ -1588,6 +1605,21 @@ def execute_inference(job_id, request, context):
         if not prompt:
             raise ValueError("Test inference job has no resolved prompt.")
 
+        wildcard_values = _resolved_wildcard_values(
+            request.get("sourcePrompt"),
+            prompt,
+        )
+        execution_update_job(
+            str(job_id),
+            details={"wildcardValues": list(wildcard_values)},
+        )
+        with _status_lock:
+            status_payload = _read_status(session_directory) or {}
+            status_payload["resolvedPrompt"] = prompt
+            status_payload["prompt"] = prompt
+            status_payload["wildcardValues"] = list(wildcard_values)
+            _atomic_write_json(_status_path(session_directory), status_payload)
+
         comfy_lora_name = None
         if lora_file is not None:
             comfy_lora_name = inference_runtime.resolve_name(
@@ -1712,6 +1744,10 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         }
         for path in loras
     )
+    wildcard_values = _resolved_wildcard_values(
+        request.get("sourcePrompt"),
+        request.get("prompt"),
+    )
     payload = {
         "status": "queued",
         "modelId": model.PROFILE_ID,
@@ -1722,6 +1758,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "sourcePrompt": str(request.get("sourcePrompt") or ""),
         "resolvedPrompt": str(request.get("prompt") or ""),
         "prompt": str(request.get("prompt") or ""),
+        "wildcardValues": list(wildcard_values),
         "total": len(candidates),
         "completed": 0,
         "failed": 0,
@@ -1770,10 +1807,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 "candidateIndex": index,
                 "candidateProvenance": dict(candidate.get("provenance") or {}),
                 "candidateStrength": candidate.get("strength"),
-                "wildcardValues": _resolved_wildcard_values(
-                    request.get("sourcePrompt"),
-                    request.get("prompt"),
-                ),
+                "wildcardValues": list(wildcard_values),
             }
             job = enqueue_test(request, context, label=label, deferred=True)
             queued_ids.append(job["jobId"])

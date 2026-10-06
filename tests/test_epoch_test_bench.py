@@ -125,6 +125,20 @@ def test_resolved_wildcard_values_supports_optional_empty_choice():
     ) == ["white"]
 
 
+def test_resolved_wildcard_values_preserves_duplicate_choices_in_source_order():
+    assert bench._resolved_wildcard_values(
+        "wearing {white|red} with {white|black} trim",
+        "wearing white with white trim",
+    ) == ["white", "white"]
+
+
+def test_resolved_wildcard_values_handles_shared_prefix_options():
+    assert bench._resolved_wildcard_values(
+        "wearing a {micro|micro triangle} top",
+        "wearing a micro triangle top",
+    ) == ["micro triangle"]
+
+
 def test_session_status_projects_resolved_wildcard_values(tmp_path):
     session = tmp_path / "session"
     session.mkdir()

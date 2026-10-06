@@ -111,7 +111,7 @@ function statsGetPrimerOptionsFromDom() {
 var debouncedSaveFolderState = debounceCreate(600);
 var primerResetUndoState = null; // { mediaKey, text }
 var captionAssistPendingJobId = '';
-var captionAssistCandidate = null; // { mediaKey, text, missingGroups }
+var captionAssistCandidate = null; // { mediaKey, text, missingGroups, omittedAssignments }
 var primerTemplateAssistPendingJobId = '';
 
 function isCaptionAssistRunning() {
@@ -247,16 +247,29 @@ function clearCaptionApplyConfirmation() {
 
 function syncCaptionAssistCandidateUi() {
   var panel = document.getElementById('editor-caption-candidate');
+  var omissionsEl = document.getElementById('editor-caption-candidate-omissions');
   var missingEl = document.getElementById('editor-caption-candidate-missing');
   var textEl = document.getElementById('editor-caption-candidate-text');
-  if (!panel || !missingEl || !textEl) throw new Error('Caption Assist candidate markup is incomplete.');
+  var useBtn = document.getElementById('editor-caption-candidate-use');
+  var regenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
+  if (!panel || !omissionsEl || !missingEl || !textEl || !useBtn || !regenerateBtn) {
+    throw new Error('Caption Assist candidate markup is incomplete.');
+  }
   var mediaKey = state && state.currentItem && state.currentItem.key;
   var candidate = captionAssistCandidate;
   var visible = !!(candidate && mediaKey && candidate.mediaKey === mediaKey && candidate.text);
+  var omittedAssignments = visible && Array.isArray(candidate.omittedAssignments) ? candidate.omittedAssignments : [];
   var missingGroups = visible && Array.isArray(candidate.missingGroups) ? candidate.missingGroups : [];
   panel.classList.toggle('hidden', !visible);
+  omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
+  omissionsEl.textContent = omittedAssignments.length
+    ? ('Candidate omitted selected annotations: ' + omittedAssignments.join(' · '))
+    : '';
   missingEl.classList.toggle('hidden', !missingGroups.length);
   missingEl.textContent = missingGroups.length ? ('Still unreviewed: ' + missingGroups.join(' · ')) : '';
+  useBtn.textContent = omittedAssignments.length ? 'Use anyway' : 'Use';
+  regenerateBtn.textContent = omittedAssignments.length ? 'Regenerate' : '↻';
+  regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);
   textEl.textContent = visible ? candidate.text : '';
 }
 
@@ -522,6 +535,23 @@ function getCaptionAssistMissingGroups(mediaKey) {
   });
 }
 
+function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments) {
+  var seen = {};
+  var omitted = [];
+  (Array.isArray(assignments) ? assignments : []).forEach(function (entry) {
+    var group = String(entry && entry.group || '').trim();
+    var term = String(entry && entry.term || '').trim();
+    if (!term) return;
+    if (checklistGroupTermAppearsInCaptionText(group, term, mediaKey, captionText)) return;
+    var label = group ? (group + ' — ' + term) : term;
+    var key = label.toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    omitted.push(label);
+  });
+  return omitted;
+}
+
 function buildCaptionAssistRequest(mediaItem) {
   var mediaKey = mediaItem && mediaItem.key;
   if (!mediaKey) throw new Error('Caption Assist requires a selected media item.');
@@ -622,13 +652,23 @@ function runCaptionAssist() {
       setStatus('Caption Assist finished, but the selected media item changed; result was not applied.');
       return false;
     }
+    var omittedAssignments = getCaptionAssistOmittedAssignments(
+      sourceMediaKey,
+      nextCaption,
+      request.assignments
+    );
     captionAssistCandidate = {
       mediaKey: sourceMediaKey,
       text: nextCaption,
-      missingGroups: missingGroups
+      missingGroups: missingGroups,
+      omittedAssignments: omittedAssignments
     };
     syncCaptionAssistCandidateUi();
-    setStatus('AI caption candidate ready.');
+    setStatus(
+      omittedAssignments.length
+        ? 'Caption Assist candidate failed annotation validation.'
+        : 'AI caption candidate ready.'
+    );
     return true;
   }).catch(function (err) {
     setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));

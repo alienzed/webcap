@@ -490,3 +490,26 @@ def test_requirement_configuration_changes_invalidate_all_incomplete_progress():
     assert "invalidateChecklistRequirementConfiguration();" in keyword_setter
     assert "invalidateChecklistRequirementConfiguration();" in config_refresh
     assert "invalidateChecklistRequirementConfiguration();" in group_refresh
+
+
+def test_runtime_requirements_config_changes_invalidate_incomplete_cache():
+    common = _read("tool/js/common.js")
+
+    setter = common.split("function setRuntimeAppConfig", 1)[1].split(
+        "// Load config.json synchronously", 1
+    )[0]
+    assert "previousRequirementsJson" in setter
+    assert "nextRequirementsJson" in setter
+    assert "invalidateChecklistRequirementConfiguration();" in setter
+
+
+def test_adding_checklist_group_uses_central_configuration_refresh():
+    main = _read("tool/js/main.js")
+
+    block = main.split("addBtn.onclick = function()", 1)[1].split(
+        "addInput.addEventListener", 1
+    )[0]
+    assert "checklistItems.push(val);" in block
+    assert "refreshChecklistGroupConfigurationUi();" in block
+    assert "syncReviewedFromChecklistAll();" not in block
+    assert "saveChecklistToFolderState();" not in block

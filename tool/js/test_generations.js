@@ -187,6 +187,7 @@
     if (!wildcardDirector.available || !wildcardDirector.modelId) {
       button.disabled = true;
       regenerate.disabled = true;
+      button.classList.remove('is-working');
       button.title = 'Director unavailable';
       return;
     }

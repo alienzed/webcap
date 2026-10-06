@@ -441,7 +441,7 @@ textarea:focus, input:focus {
 }
 
 .editor-caption-candidate-dialog {
-  width: min(760px, calc(100vw - 32px));
+  width: min(860px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   overflow: hidden;
   display: flex;
@@ -476,10 +476,10 @@ textarea:focus, input:focus {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 40px;
-  padding: 8px 14px;
+  min-height: 54px;
+  padding: 13px 18px;
   border-bottom: 1px solid var(--border-soft);
-  font-size: 14px;
+  font-size: 19px;
 }
 
 .editor-caption-candidate-heading {
@@ -509,7 +509,7 @@ textarea:focus, input:focus {
 
 .editor-caption-focus-progress {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -536,51 +536,6 @@ textarea:focus, input:focus {
 
 @keyframes focused-caption-spin {
   to { transform: rotate(360deg); }
-}
-
-.editor-caption-candidate.is-focus-caption .editor-caption-candidate-header {
-  min-height: 54px;
-  padding: 13px 18px;
-  font-size: 19px;
-}
-
-.editor-caption-candidate.is-focus-caption .editor-caption-focus-progress {
-  font-size: 14px;
-}
-
-.editor-caption-candidate.is-focus-caption .editor-caption-candidate-omissions,
-.editor-caption-candidate.is-focus-caption .editor-caption-candidate-missing,
-.editor-caption-candidate.is-focus-caption .editor-caption-vision-status {
-  padding: 14px 20px;
-  font-size: 15px;
-}
-
-.editor-caption-candidate.is-focus-caption .editor-caption-vision-findings {
-  max-height: 260px;
-  padding: 14px 18px;
-}
-
-.editor-caption-candidate.is-focus-caption .caption-vision-finding-text {
-  font-size: 14px;
-}
-
-.editor-caption-candidate.is-focus-caption .editor-caption-candidate-text {
-  max-height: min(52vh, 600px);
-  padding: 24px;
-  font-size: 18px;
-  line-height: 1.6;
-}
-
-.editor-caption-candidate.is-focus-caption .editor-caption-candidate-actions {
-  gap: 12px;
-  padding: 12px 18px 14px;
-}
-
-.editor-caption-candidate.is-focus-caption .editor-caption-candidate-actions button {
-  min-height: 37px;
-  padding: 7px 13px;
-  font-size: 14px;
-  font-weight: 700;
 }
 
 .editor-caption-candidate-use.is-armed,
@@ -624,11 +579,11 @@ textarea:focus, input:focus {
 }
 
 .editor-caption-vision-status {
-  padding: 9px 14px;
+  padding: 14px 20px;
   border-bottom: 1px solid color-mix(in srgb, #0891b2 28%, var(--border));
   background: color-mix(in srgb, #0891b2 10%, var(--panel));
   color: color-mix(in srgb, #0891b2 74%, var(--text));
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -636,9 +591,9 @@ textarea:focus, input:focus {
   display: flex;
   flex-direction: column;
   gap: 7px;
-  max-height: 220px;
+  max-height: 260px;
   overflow: auto;
-  padding: 10px 14px;
+  padding: 14px 18px;
   border-bottom: 1px solid var(--border-soft);
   background: color-mix(in srgb, var(--panel-soft) 90%, transparent);
 }
@@ -670,7 +625,7 @@ textarea:focus, input:focus {
 
 .caption-vision-finding-text {
   color: var(--text);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.35;
 }
 
@@ -711,11 +666,11 @@ textarea:focus, input:focus {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 16px;
+  padding: 14px 20px;
   border-bottom: 1px solid rgba(220, 38, 38, 0.28);
   background: rgba(220, 38, 38, 0.10);
   color: #991b1b;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
 }
@@ -732,11 +687,11 @@ textarea:focus, input:focus {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 14px 20px;
   border-bottom: 1px solid rgba(217, 119, 6, 0.22);
   background: rgba(245, 158, 11, 0.09);
   color: #92400e;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
 }
@@ -777,13 +732,13 @@ textarea:focus, input:focus {
 
 .editor-caption-candidate-text {
   min-height: 0;
-  max-height: min(58vh, 560px);
+  max-height: min(52vh, 600px);
   overflow: auto;
   overflow-wrap: anywhere;
-  padding: 16px;
+  padding: 24px;
   white-space: pre-wrap;
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 18px;
+  line-height: 1.6;
   text-align: left;
 }
 
@@ -792,7 +747,7 @@ textarea:focus, input:focus {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px 12px;
+  padding: 12px 18px 14px;
   border-top: 1px solid var(--border-soft);
 }
 
@@ -809,8 +764,10 @@ textarea:focus, input:focus {
 }
 
 .editor-caption-candidate-actions button {
-  padding: 5px 10px;
-  font-size: 12px;
+  min-height: 37px;
+  padding: 7px 13px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .editor-caption-candidate-regenerate.is-primary {

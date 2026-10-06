@@ -124,7 +124,7 @@ def test_focus_caption_progress_is_visible_without_new_workspace_surface():
     assert "setWorkspaceSurface(" not in focus
 
 
-def test_caption_assist_candidate_becomes_right_side_focus_panel_and_owns_escape():
+def test_caption_assist_and_focus_caption_share_the_same_large_modal_presentation():
     html = _read("tool/tool.html")
     css = _read("tool/css/styles.css")
     primer = _read("tool/js/primer_settings.js")
@@ -138,13 +138,24 @@ def test_caption_assist_candidate_becomes_right_side_focus_panel_and_owns_escape
     assert 'id="editor-caption-vision-findings"' in html
 
     candidate_css = css.split(".editor-caption-candidate {", 1)[1].split("}", 1)[0]
+    dialog_css = css.split(".editor-caption-candidate-dialog {", 1)[1].split("}", 1)[0]
     focus_css = css.split(".editor-caption-candidate.is-focus-caption {", 1)[1].split("}", 1)[0]
+    header_css = css.split(".editor-caption-candidate-header {", 1)[1].split("}", 1)[0]
     text_css = css.split(".editor-caption-candidate-text {", 1)[1].split("}", 1)[0]
+    actions_css = css.split(".editor-caption-candidate-actions button {", 1)[1].split("}", 1)[0]
     assert "position: fixed;" in candidate_css
+    assert "width: min(860px, calc(100vw - 32px));" in dialog_css
+    assert "min-height: 54px;" in header_css
+    assert "font-size: 19px;" in header_css
+    assert "font-size: 18px;" in text_css
+    assert "line-height: 1.6;" in text_css
+    assert "min-height: 37px;" in actions_css
+    assert "font-size: 14px;" in actions_css
     assert "left: var(--focus-caption-left);" in focus_css
     assert "width: var(--focus-caption-width);" in focus_css
     assert "height: var(--focus-caption-height);" in focus_css
     assert "overflow: auto;" in text_css
+    assert ".editor-caption-candidate.is-focus-caption .editor-caption-candidate-text" not in css
     assert "panel.classList.toggle('is-focus-caption'" in primer
 
     assert "if (event.target !== candidatePanel) return;" in primer
@@ -366,7 +377,8 @@ def test_focus_caption_is_immediate_cancelable_keyboard_driven_and_focus_only():
     assert "if (nextSurface !== 'default' && isFocusedCaptionOpen())" in shell
     assert "if (isFocusedCaptionOpen()) stopFocusedCaption('Focus Caption ended.');" in shell
     assert "--focus-caption-left" in css
-    assert ".editor-caption-candidate.is-focus-caption .editor-caption-candidate-text" in css
+    assert ".editor-caption-candidate-text {" in css
+    assert ".editor-caption-candidate.is-focus-caption .editor-caption-candidate-text" not in css
 
 
 def test_focus_caption_enhancements_do_not_change_normal_caption_assist_contract():

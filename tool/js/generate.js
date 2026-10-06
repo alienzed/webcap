@@ -8,7 +8,7 @@
     unavailableModels: [],
     modelId: window.localStorage.getItem('webcap.generate.model') || '',
     lorasByModel: {},
-    loraMode: window.localStorage.getItem('webcap.generate.loraMode') === 'sweep' ? 'sweep' : 'selected',
+    loraMode: 'selected',
     sweepFolderByModel: {},
     sweepSelections: {},
     sweepSubmissionSerial: 0,
@@ -32,10 +32,10 @@
     },
     trackedJobIds: loadTrackedGenerateJobs(),
     results: [],
-    viewMode: window.localStorage.getItem('webcap.generate.viewMode') === 'library' ? 'library' : 'create',
+    viewMode: 'create',
     activeResultKey: '',
     activePendingJobId: '',
-    takesCollapsed: window.localStorage.getItem('webcap.generate.takesCollapsed') === '1',
+    takesCollapsed: false,
     takesVisibleCount: TAKE_BATCH_SIZE,
     open: false
   };
@@ -213,8 +213,7 @@
     var id = String(modelId || '');
     var available = Array.isArray(folders) ? folders : [];
     if (!Object.prototype.hasOwnProperty.call(generateState.sweepFolderByModel, id)) {
-      var saved = window.localStorage.getItem('webcap.generate.sweepFolder.' + id);
-      generateState.sweepFolderByModel[id] = saved === null ? '' : String(saved);
+      generateState.sweepFolderByModel[id] = '';
     }
     var selected = String(generateState.sweepFolderByModel[id] || '');
     if (available.indexOf(selected) === -1) selected = available.length ? available[0] : '';
@@ -359,7 +358,6 @@
   function setLoraMode(mode) {
     var selectedMode = mode === 'sweep' ? 'sweep' : 'selected';
     generateState.loraMode = selectedMode;
-    window.localStorage.setItem('webcap.generate.loraMode', selectedMode);
 
     var selectedTab = el('generate-lora-selected-tab');
     var sweepTab = el('generate-lora-sweep-tab');
@@ -1060,7 +1058,6 @@
   function setGenerateViewMode(mode) {
     mode = mode === 'library' ? 'library' : 'create';
     generateState.viewMode = mode;
-    window.localStorage.setItem('webcap.generate.viewMode', mode);
     var createView = el('generate-create-view');
     var libraryView = el('generate-library-view');
     var createButton = el('generate-create-mode-btn');
@@ -1078,7 +1075,6 @@
 
   function setTakesCollapsed(collapsed) {
     generateState.takesCollapsed = !!collapsed;
-    window.localStorage.setItem('webcap.generate.takesCollapsed', generateState.takesCollapsed ? '1' : '0');
     var createView = el('generate-create-view');
     var button = el('generate-takes-collapse-btn');
     if (!createView || !button) throw new Error('Generations Takes controls are missing.');
@@ -2396,7 +2392,6 @@
     el('generate-lora-sweep-tab').onclick = function () { setLoraMode('sweep'); };
     el('generate-sweep-folder').addEventListener('change', function () {
       generateState.sweepFolderByModel[generateState.modelId] = this.value;
-      window.localStorage.setItem('webcap.generate.sweepFolder.' + generateState.modelId, this.value);
       el('generate-sweep-filter').value = '';
       renderSweep();
     });

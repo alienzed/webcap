@@ -7,6 +7,43 @@ from .caption_ops import _resolve_folder, _validate_media_name
 
 VISION_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
 
+CAPTION_VISION_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "findings": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "description": {"type": "string"},
+                    "type": {"type": "string", "enum": ["omitted", "incorrect"]},
+                    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+                    "knownTag": {
+                        "anyOf": [
+                            {"type": "null"},
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "group": {"type": "string"},
+                                    "term": {"type": "string"},
+                                },
+                                "required": ["group", "term"],
+                                "additionalProperties": False,
+                            },
+                        ]
+                    },
+                },
+                "required": ["description", "type", "confidence", "knownTag"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["findings"],
+    "additionalProperties": False,
+}
+
+
 CAPTION_VISION_SYSTEM_PROMPT = (
     "You validate a training caption against one image. "
     "Look for visually meaningful repeatable attributes that are omitted or incorrect. "

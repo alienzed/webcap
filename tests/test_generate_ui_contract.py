@@ -96,7 +96,8 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "input.value = '';" in script
     assert "generateState.modelId = getGenerateModelPreference();" in script
     assert "setPromptLibraryOpen(false);" in script
-    assert "if (promptSearch) promptSearch.value = '';" in script
+    assert "if (!promptSearch) throw new Error('Generate prompt library search is missing.');" in script
+    assert "if (!instruction) throw new Error('Generate Director instruction input is missing.');" in script
     assert "localStorage" not in script
     assert '"defaultPrompt": ""' in generation
 

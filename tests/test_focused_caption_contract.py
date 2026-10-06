@@ -34,10 +34,28 @@ def test_caption_assist_surfaces_only_unreviewed_empty_groups_with_candidate():
     assert "isChecklistRequirementCheckedForMediaKey(mediaKey, label)" in primer
     assert "typeof isChecklistRequirementCheckedForMediaKey" not in primer
     assert "return !reviewed;" in primer
-    assert "Still unreviewed: " in primer
+    assert "var missingGroups = visible ? getCaptionAssistMissingGroups(mediaKey) : [];" in primer
+    assert "renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);" in primer
+    assert "label.textContent = 'Still unreviewed:';" in primer
+    assert "button.textContent = 'N/A';" in primer
     assert "Missing annotations: " not in primer
     assert "preferredCaptionSequence: getPreferredCaptionSequence()" in primer
     assert "renderAppSettingsCaptionSequenceGroups" in settings
+
+
+def test_caption_assist_unreviewed_na_uses_existing_review_state_without_regeneration():
+    primer = _read("tool/js/primer_settings.js")
+    css = _read("tool/css/styles.css")
+
+    start = primer.index("function markCaptionAssistGroupNotApplicable")
+    end = primer.index("function renderCaptionAssistMissingGroups", start)
+    action = primer[start:end]
+
+    assert "setChecklistRequirementCheckedForMediaKey(key, label, true);" in action
+    assert "captionAssistCandidate.missingGroups = getCaptionAssistMissingGroups(key);" in action
+    assert "syncCaptionAssistCandidateUi();" in action
+    assert "runCaptionAssist();" not in action
+    assert ".caption-assist-na-btn" in css
 
 
 def test_focus_caption_snapshots_current_visible_scope_once():

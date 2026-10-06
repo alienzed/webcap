@@ -250,6 +250,56 @@ function clearCaptionApplyConfirmation() {
   syncCaptionApplyConfirmationUi();
 }
 
+function markCaptionAssistGroupNotApplicable(mediaKey, requirementLabel) {
+  var key = String(mediaKey || '').trim();
+  var label = String(requirementLabel || '').trim();
+  if (!key || !label) return false;
+  setChecklistRequirementCheckedForMediaKey(key, label, true);
+  if (captionAssistCandidate && captionAssistCandidate.mediaKey === key) {
+    captionAssistCandidate.missingGroups = getCaptionAssistMissingGroups(key);
+  }
+  syncCaptionAssistCandidateUi();
+  setStatus('Marked ' + label + ' N/A.');
+  return true;
+}
+
+function renderCaptionAssistMissingGroups(container, mediaKey, missingGroups) {
+  var groups = Array.isArray(missingGroups) ? missingGroups : [];
+  container.innerHTML = '';
+  container.classList.toggle('hidden', !groups.length);
+  if (!groups.length) return;
+
+  var label = document.createElement('span');
+  label.className = 'caption-assist-missing-label';
+  label.textContent = 'Still unreviewed:';
+  container.appendChild(label);
+
+  var list = document.createElement('span');
+  list.className = 'caption-assist-missing-groups';
+  groups.forEach(function (group) {
+    var item = document.createElement('span');
+    item.className = 'caption-assist-missing-group';
+
+    var name = document.createElement('span');
+    name.className = 'caption-assist-missing-group-name';
+    name.textContent = group;
+    item.appendChild(name);
+
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn caption-assist-na-btn';
+    button.textContent = 'N/A';
+    button.title = 'Mark ' + group + ' reviewed with no applicable tag';
+    button.setAttribute('aria-label', 'Mark ' + group + ' not applicable');
+    button.addEventListener('click', function () {
+      markCaptionAssistGroupNotApplicable(mediaKey, group);
+    });
+    item.appendChild(button);
+    list.appendChild(item);
+  });
+  container.appendChild(list);
+}
+
 function syncCaptionAssistCandidateUi() {
   var panel = document.getElementById('editor-caption-candidate');
   var titleEl = document.getElementById('editor-caption-candidate-title');
@@ -277,7 +327,7 @@ function syncCaptionAssistCandidateUi() {
   var panelVisible = visible || focusVisible;
   var pending = focusOpen && isCaptionAssistRunning();
   var omittedAssignments = visible && Array.isArray(candidate.omittedAssignments) ? candidate.omittedAssignments : [];
-  var missingGroups = visible && Array.isArray(candidate.missingGroups) ? candidate.missingGroups : [];
+  var missingGroups = visible ? getCaptionAssistMissingGroups(mediaKey) : [];
 
   panel.classList.toggle('hidden', !panelVisible);
   panel.classList.toggle('is-focus-caption', focusVisible);
@@ -308,8 +358,7 @@ function syncCaptionAssistCandidateUi() {
     omissionsEl.appendChild(fixOmissionsBtn);
   }
 
-  missingEl.classList.toggle('hidden', !missingGroups.length);
-  missingEl.textContent = missingGroups.length ? ('Still unreviewed: ' + missingGroups.join(' · ')) : '';
+  renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);
   textEl.classList.toggle('hidden', focusOpen && !visible);
   textEl.textContent = visible ? candidate.text : '';
 

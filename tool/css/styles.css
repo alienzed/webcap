@@ -728,6 +728,10 @@ textarea:focus, input:focus {
 }
 
 .editor-caption-candidate-missing {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: 10px 16px;
   border-bottom: 1px solid rgba(217, 119, 6, 0.22);
   background: rgba(245, 158, 11, 0.09);
@@ -735,6 +739,40 @@ textarea:focus, input:focus {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.caption-assist-missing-label {
+  flex: 0 0 auto;
+}
+
+.caption-assist-missing-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.caption-assist-missing-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 4px 3px 7px;
+  border: 1px solid rgba(217, 119, 6, 0.24);
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.caption-assist-na-btn {
+  padding: 2px 6px;
+  border-color: currentColor;
+  background: rgba(245, 158, 11, 0.08);
+  color: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.caption-assist-na-btn:hover {
+  background: rgba(245, 158, 11, 0.18);
 }
 
 .editor-caption-candidate-text {

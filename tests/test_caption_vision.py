@@ -68,8 +68,8 @@ def test_caption_vision_route_queues_normalized_multimodal_caption_job(monkeypat
     captured = {}
     monkeypatch.setattr(
         app_module,
-        "list_local_vision_models",
-        lambda: [{"id": "local::vision"}],
+        "list_vision_models",
+        lambda reload=False: [{"id": "local::vision"}],
     )
     monkeypatch.setattr(
         app_module,
@@ -109,3 +109,40 @@ def test_caption_vision_route_queues_normalized_multimodal_caption_job(monkeypat
     assert captured["contract"]["messages"][1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
     assert captured["context"]["runtimeOverrides"]["maxTokens"] == 320
     assert captured["context"]["visionGroups"][0]["group"] == "Connector"
+
+
+def test_caption_vision_route_accepts_remote_ollama_vision_model(monkeypatch):
+    from tool.server import app as app_module
+
+    captured = {}
+    monkeypatch.setattr(
+        app_module,
+        "list_vision_models",
+        lambda reload=False: [
+            {"id": "workstation::huihui_ai/qwen3-vl-abliterated:8b"},
+        ],
+    )
+    monkeypatch.setattr(
+        app_module,
+        "resolve_caption_vision_media",
+        lambda folder, media: "bikini/" + media,
+    )
+
+    def enqueue(client, model, contract, context=None, label=""):
+        captured.update(model=model, contract=contract)
+        return {"jobId": "remote-vision-test"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
+
+    with app_module.app.test_client() as client:
+        response = client.post("/caption/vision-check", json={
+            "model": "workstation::huihui_ai/qwen3-vl-abliterated:8b",
+            "folder": "bikini",
+            "media": "item.jpg",
+            "caption": "a bikini",
+            "groups": [],
+        })
+
+    assert response.status_code == 202
+    assert captured["model"] == "workstation::huihui_ai/qwen3-vl-abliterated:8b"
+    assert captured["contract"]["messages"][1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"

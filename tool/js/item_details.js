@@ -176,7 +176,7 @@ function mergeTagsIntoMediaKey(mediaKey, rawTags) {
     return { added: 0, alreadyPresent: alreadyPresent };
   }
   captionItemTagsByMedia[key] = next;
-  saveItemTagsToFolderState();
+  saveItemTagsToFolderState(key);
   refreshTagDrivenPanelsForMediaKey(key);
   if (shouldSyncTemplate) {
     syncEditorToCurrentTemplatePreview();
@@ -222,7 +222,7 @@ function pasteClipboardTagsToMediaKey(mediaKey) {
     });
   });
   if (assigned) {
-    saveChecklistToFolderState();
+    saveMediaAnnotationState(key);
     refreshTagDrivenPanelsForMediaKey(key);
     if (shouldLiveSyncEditorToTemplateForMediaKey(key)) syncEditorToCurrentTemplatePreview();
   }
@@ -1148,11 +1148,10 @@ function renderItemAnalysisPanel() {
   }
 }
 
-function saveItemTagsToFolderState() {
-  var capturedSave = captureCurrentFolderStateSave();
-  if (!capturedSave) return Promise.resolve(false);
-  capturedSave.snapshot.caption_tags_by_media = JSON.parse(JSON.stringify(captionItemTagsByMedia || {}));
-  return writeCapturedFolderState(capturedSave);
+function saveItemTagsToFolderState(mediaKey) {
+  var key = String(mediaKey || (state.currentItem && state.currentItem.key) || '').trim();
+  if (!key) return Promise.reject(new Error('Tag save requires a media key.'));
+  return saveMediaAnnotationState(key);
 }
 
 function shouldLiveSyncEditorToTemplateForMediaKey(mediaKey) {
@@ -1193,7 +1192,7 @@ function updateTagOrderForMediaKey(mediaKey, nextTags) {
   if (!key || !next.length) return false;
   var shouldSyncTemplate = shouldLiveSyncEditorToTemplateForMediaKey(key);
   captionItemTagsByMedia[key] = next;
-  saveItemTagsToFolderState();
+  saveItemTagsToFolderState(key);
   refreshTagDrivenPanelsForMediaKey(key);
   if (shouldSyncTemplate) {
     refreshCurrentPrimerDerivedUi();
@@ -1250,7 +1249,7 @@ function addTagToMediaKey(mediaKey, tagText, options) {
   captionItemTagsByMedia[key] = current;
   ensureCaptionHelperPhraseInCatalog(tag, !opts.skipSave);
   if (!opts.skipSave) {
-    saveItemTagsToFolderState();
+    saveItemTagsToFolderState(key);
   }
   if (!opts.skipRefresh) {
     refreshTagDrivenPanelsForMediaKey(key);
@@ -1328,7 +1327,7 @@ function consumeUnscopedTagForMediaKey(mediaKey, tagText, options) {
       nextValue: false
     });
   }
-  if (!opts.skipSave) saveItemTagsToFolderState();
+  if (!opts.skipSave) saveItemTagsToFolderState(key);
   if (!opts.skipRefresh) refreshTagDrivenPanelsForMediaKey(key);
   return true;
 }

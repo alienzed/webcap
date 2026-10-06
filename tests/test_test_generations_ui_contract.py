@@ -464,12 +464,26 @@ def test_test_polling_keeps_active_worker_status_separate_from_selected_preview(
     assert "else if (selectedPreviewLive)" in poll
     assert "renderStatus(selectedStatus);" in poll
     assert "selectedPreviewLive" in poll
+    assert "testStatusHasPendingWork(currentStatus)" in poll
+    assert "testStatusHasPendingWork(status) || testStatusHasPendingWork(currentStatus)" in poll
 
     assert "refreshActivityButtonIfDue(15000);" in poll
     assert "refreshSessionsIfDue(10000).catch(showError);" in poll
     assert "pollTimer = setTimeout(pollStatus, 4000);" in poll
     assert "function refreshActivityButtonIfDue(intervalMs)" in script
     assert "function refreshSessionsIfDue(intervalMs)" in script
+
+
+def test_test_preview_polling_survives_inter_job_queued_state():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    helper = script.split("function testStatusHasPendingWork(status)", 1)[1].split("function pollStatus()", 1)[0]
+    assert "'starting', 'queued', 'running', 'stopping'" in helper
+    assert "'complete', 'stopped', 'failed', 'interrupted'" in helper
+    assert "total > processed" in helper
+
+    open_session = script.split("function openSession(sessionName)", 1)[1].split("function removeDeletedSessionRow", 1)[0]
+    assert "if (testStatusHasPendingWork(status)) pollStatus();" in open_session
 
 
 def test_active_test_card_is_separate_from_selected_session_results():

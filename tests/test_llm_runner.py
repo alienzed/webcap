@@ -296,6 +296,38 @@ def test_local_llm_failure_terminalizes_without_uncertainty_pause(llm_root, monk
     assert execution_queue.resource_owner() == ""
 
 
+def test_local_llm_waits_without_claiming_when_shared_gpu_prep_is_busy(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)
+    prep_results = iter([False, True])
+    monkeypatch.setattr(gpu_prep, "prepare_gpu_for", lambda _owner: next(prep_results))
+    calls = []
+    monkeypatch.setattr(
+        llm_runner,
+        "_execute_claimed",
+        lambda job_id, gpu_reserved=False: (
+            calls.append((job_id, gpu_reserved)),
+            llm_runner.execution_finish_job_transient(job_id, status="completed"),
+        )[1],
+    )
+
+    job = llm_runner.enqueue(
+        "generate",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "Prompt.", "output": "text"},
+    )
+
+    assert llm_runner._advance_queue() is None
+    assert llm_runner.job_status(job["jobId"])["status"] == "queued"
+    assert execution_queue.resource_owner() == "llm"
+    assert calls == []
+
+    llm_runner._advance_queue()
+
+    assert llm_runner.job_status(job["jobId"])["status"] == "completed"
+    assert execution_queue.resource_owner() == ""
+    assert calls == [(job["jobId"], True)]
+
+
 def test_local_llm_uses_shared_gpu_prep_before_execution(llm_root, monkeypatch):
     calls = []
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: True)

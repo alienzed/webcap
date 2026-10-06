@@ -228,6 +228,11 @@ def validate_config_payload(payload):
         raise ValueError("Config.director_model must be a string.")
     out["director_model"] = director_model.strip()
 
+    generate_model = out.get("generate_model", "")
+    if not isinstance(generate_model, str):
+        raise ValueError("Config.generate_model must be a string.")
+    out["generate_model"] = generate_model.strip()
+
     training = out.get("training")
     if training is None:
         training = {}

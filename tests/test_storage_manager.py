@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -539,7 +540,6 @@ def test_workspace_scan_prunes_stale_measurements_but_preserves_concurrent_updat
     stale = _generation(tmp_path, job_id="job-stale")
     storage_manager.measure("generate", "2026-09-23/job-live")
     storage_manager.measure("generate", "2026-09-23/job-stale")
-    shutil = __import__("shutil")
     shutil.rmtree(stale)
 
     cache_path = storage_manager._cache_path()
@@ -579,7 +579,6 @@ def test_workspace_scan_prunes_unchanged_stale_measurements(monkeypatch, tmp_pat
     stale = _generation(tmp_path, job_id="job-stale")
     storage_manager.measure("generate", "2026-09-23/job-live")
     storage_manager.measure("generate", "2026-09-23/job-stale")
-    shutil = __import__("shutil")
     shutil.rmtree(stale)
 
     stale_key = storage_manager._cache_key("generate", "2026-09-23/job-stale", "")

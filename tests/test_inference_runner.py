@@ -813,7 +813,8 @@ def test_inference_snapshot_projects_test_rendition_context(inference_root):
         {
             "modelId": "krea2_raw",
             "mediaKind": "image",
-            "prompt": "Prompt",
+            "sourcePrompt": "person wearing {black dress|red dress} in a {studio|rooftop}, {front|side} view",
+            "prompt": "person wearing red dress in a rooftop, side view",
         },
         {
             "folder": "sets/subject",
@@ -822,7 +823,6 @@ def test_inference_snapshot_projects_test_rendition_context(inference_root):
             "candidateFile": "",
             "candidateLabel": "Base",
             "candidateIndex": 1,
-            "wildcardValues": ["red dress", "rooftop", "side"],
         },
         label="Comparison · Base",
     )
@@ -836,6 +836,9 @@ def test_inference_snapshot_projects_test_rendition_context(inference_root):
     assert job["folder"] == "sets/subject"
     assert job["candidateKind"] == "base"
     assert job["wildcardValues"] == ["red dress", "rooftop", "side"]
+    stored = execution_queue.get_job(queued["jobId"], include_payload=True)
+    assert "wildcardValues" not in stored["metadata"]
+    assert "wildcardValues" not in stored["payload"]["clientContext"]
     assert job["label"] == "Comparison · Base"
 
 

@@ -416,6 +416,62 @@ def test_sessions_list_open_and_delete_are_scoped_to_current_set(tmp_path):
 
 
 
+def test_workspace_prompt_is_disk_backed_per_set_and_model(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    output = tmp_path / "output"
+    set_folder = root / "sets" / "subject"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(bench.app_config, "output_root", lambda: output)
+
+    initial = bench.workspace_prompt(set_folder, "minimax_h3")
+    assert initial == {"modelId": "minimax_h3", "present": False, "prompt": ""}
+
+    bench.save_workspace_prompt(set_folder, "minimax_h3", "first prompt")
+    bench.save_workspace_prompt(set_folder, "krea2_raw", "")
+
+    workspace = bench._workspace_root(set_folder)
+    state = json.loads((workspace / bench.TEST_WORKSPACE_STATE_FILE).read_text(encoding="utf-8"))
+    assert workspace.parent == output / bench.TEST_RESULTS_DIR / bench.TEST_WORKSPACES_DIR
+    assert state["ownerFolder"] == "sets/subject"
+    assert state["promptByModel"] == {
+        "minimax_h3": "first prompt",
+        "krea2_raw": "",
+    }
+    assert bench.workspace_prompt(set_folder, "minimax_h3")["prompt"] == "first prompt"
+    assert bench.workspace_prompt(set_folder, "krea2_raw") == {
+        "modelId": "krea2_raw",
+        "present": True,
+        "prompt": "",
+    }
+
+
+def test_new_sessions_live_inside_set_workspace_and_clear_removes_workspace(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    output = tmp_path / "output"
+    set_folder = root / "sets" / "subject"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(bench.app_config, "output_root", lambda: output)
+
+    bench.save_workspace_prompt(set_folder, "minimax_h3", "draft")
+    session = bench._new_session_directory(set_folder, bench.get_test_model("minimax_h3"))
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "ownerFolder": "sets/subject",
+        "results": [],
+    })
+
+    assert session.parent == bench._workspace_sessions_root(set_folder)
+    assert [item["session"] for item in bench.list_sessions(set_folder)] == [session.name]
+    workspace = bench._workspace_root(set_folder)
+    assert workspace.exists()
+
+    assert bench.clear_sessions(set_folder) == 1
+    assert not workspace.exists()
+
+
 def test_session_cleanup_status_is_passive_and_clear_sessions_removes_completed_history(tmp_path):
     first = tmp_path / bench.TEST_RESULTS_DIR / "session-a"
     second = tmp_path / bench.TEST_RESULTS_DIR / "session-b"

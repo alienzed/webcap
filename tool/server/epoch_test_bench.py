@@ -31,9 +31,14 @@ from .execution_queue import (
 
 TEMPLATE_PATH = get_test_model().TEMPLATE_PATH
 TEST_RESULTS_DIR = "test-generations"
+TEST_WORKSPACES_DIR = "sets"
+TEST_WORKSPACE_STATE_FILE = "workspace.json"
+TEST_WORKSPACE_SESSIONS_DIR = "sessions"
+TEST_WORKSPACE_VERSION = 1
 LEGACY_EXECUTION_LANE = "test-generations"
 TEST_ASPECT_RATIO_OPTIONS = tuple(getattr(get_test_model(), "ASPECT_RATIO_OPTIONS", ()))
 _status_lock = threading.RLock()
+_workspace_lock = threading.RLock()
 _recent_sets_cache = {"expires": 0.0, "items": []}
 _recent_prompts_cache = {"expires": 0.0, "items": [], "root": None}
 _reconcile_lock = threading.Lock()
@@ -121,18 +126,19 @@ def recent_test_sets(limit=8):
 
     recent_by_key = {}
     seen_sessions = set()
-    for central_root in (_central_session_root(), _legacy_central_session_root()):
+    for central_root in _recent_session_roots():
         if not central_root.is_dir() or central_root.is_symlink():
             continue
         for session in central_root.iterdir():
-            if session.name in seen_sessions:
-                continue
             if session.is_symlink() or not session.is_dir() or not (session / "test.json").is_file():
                 continue
-            seen_sessions.add(session.name)
             payload = _read_status(session) or {}
             model_id = str(payload.get("modelId") or payload.get("model") or "").strip()
             owner_folder = str(payload.get("ownerFolder") or "").strip()
+            session_key = (owner_folder, session.name)
+            if session_key in seen_sessions:
+                continue
+            seen_sessions.add(session_key)
             key = (owner_folder, model_id)
             try:
                 modified = (session / "test.json").stat().st_mtime
@@ -167,7 +173,7 @@ def recent_test_sets(limit=8):
 def recent_test_prompts(limit=8):
     """Return recent distinct source prompts from Test sessions."""
     now = time.monotonic()
-    root_key = tuple(str(path) for path in (_central_session_root(), _legacy_central_session_root()))
+    root_key = tuple(str(path) for path in _recent_session_roots())
     cached_items = _recent_prompts_cache.get("items") if isinstance(_recent_prompts_cache.get("items"), list) else []
     if _recent_prompts_cache.get("root") == root_key and now < float(_recent_prompts_cache.get("expires") or 0):
         return [dict(item) for item in cached_items[:max(1, int(limit or 8))]]
@@ -176,15 +182,18 @@ def recent_test_prompts(limit=8):
     seen_prompts = set()
     sessions = []
     seen_sessions = set()
-    for central_root in (_central_session_root(), _legacy_central_session_root()):
+    for central_root in _recent_session_roots():
         if not central_root.is_dir() or central_root.is_symlink():
             continue
         for session in central_root.iterdir():
-            if session.name in seen_sessions:
-                continue
             if session.is_symlink() or not session.is_dir() or not (session / "test.json").is_file():
                 continue
-            seen_sessions.add(session.name)
+            payload = _read_status(session) or {}
+            owner_folder = str(payload.get("ownerFolder") or "").strip()
+            session_key = (owner_folder, session.name)
+            if session_key in seen_sessions:
+                continue
+            seen_sessions.add(session_key)
             try:
                 modified = (session / "test.json").stat().st_mtime
             except OSError:
@@ -366,8 +375,122 @@ def _central_session_root():
     return root
 
 
+def _workspace_sets_root():
+    root = _central_session_root() / TEST_WORKSPACES_DIR
+    if root.is_symlink():
+        raise RuntimeError("Test Generations workspace root cannot be symlinked.")
+    if root.exists() and not root.is_dir():
+        raise RuntimeError("Test Generations workspace root is not a directory.")
+    return root
+
+
+def _workspace_name(folder_path):
+    owner = _owning_set_directory(folder_path)
+    relative = _relative_set_folder(owner)
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", owner.name.lower()).strip(".-_")[:48].strip(".-_") or "set"
+    digest = hashlib.sha256(relative.encode("utf-8")).hexdigest()[:12]
+    return slug + "--" + digest
+
+
+def _workspace_root(folder_path):
+    root = _workspace_sets_root() / _workspace_name(folder_path)
+    if root.is_symlink():
+        raise RuntimeError("Test Generations Set workspace cannot be symlinked.")
+    if root.exists() and not root.is_dir():
+        raise RuntimeError("Test Generations Set workspace is not a directory.")
+    return root
+
+
+def _workspace_sessions_root(folder_path):
+    root = _workspace_root(folder_path) / TEST_WORKSPACE_SESSIONS_DIR
+    if root.is_symlink():
+        raise RuntimeError("Test Generations session workspace cannot be symlinked.")
+    if root.exists() and not root.is_dir():
+        raise RuntimeError("Test Generations session workspace is not a directory.")
+    return root
+
+
+def _workspace_state_path(folder_path):
+    return _workspace_root(folder_path) / TEST_WORKSPACE_STATE_FILE
+
+
+def _empty_workspace_state(folder_path):
+    return {
+        "version": TEST_WORKSPACE_VERSION,
+        "ownerFolder": _relative_set_folder(folder_path),
+        "promptByModel": {},
+    }
+
+
+def _read_workspace_state(folder_path):
+    path = _workspace_state_path(folder_path)
+    if not path.exists():
+        return _empty_workspace_state(folder_path)
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError("Test Generations workspace state is not a regular file.")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Test Generations workspace state is unreadable.") from exc
+    if not isinstance(payload, dict) or payload.get("version") != TEST_WORKSPACE_VERSION:
+        raise RuntimeError("Test Generations workspace state has an unsupported format.")
+    expected_owner = _relative_set_folder(folder_path)
+    if str(payload.get("ownerFolder") or "") != expected_owner:
+        raise RuntimeError("Test Generations workspace state belongs to a different Set.")
+    prompts = payload.get("promptByModel")
+    if not isinstance(prompts, dict):
+        raise RuntimeError("Test Generations workspace prompt state is invalid.")
+    payload["promptByModel"] = {str(key): str(value) for key, value in prompts.items()}
+    return payload
+
+
+def workspace_prompt(folder_path, model_id=None):
+    model = get_test_model(model_id)
+    state = _read_workspace_state(folder_path)
+    prompts = state["promptByModel"]
+    return {
+        "modelId": model.PROFILE_ID,
+        "present": model.PROFILE_ID in prompts,
+        "prompt": str(prompts.get(model.PROFILE_ID, "")),
+    }
+
+
+def save_workspace_prompt(folder_path, model_id, prompt):
+    model = get_test_model(model_id)
+    with _workspace_lock:
+        state = _read_workspace_state(folder_path)
+        state["promptByModel"][model.PROFILE_ID] = str(prompt if prompt is not None else "")
+        root = _workspace_root(folder_path)
+        root.mkdir(parents=True, exist_ok=True)
+        _atomic_write_json(_workspace_state_path(folder_path), state)
+    return {
+        "modelId": model.PROFILE_ID,
+        "prompt": state["promptByModel"][model.PROFILE_ID],
+    }
+
+
+def _recent_session_roots():
+    roots = [_central_session_root(), _legacy_central_session_root()]
+    sets_root = _workspace_sets_root()
+    if sets_root.is_dir():
+        for workspace in sets_root.iterdir():
+            if workspace.is_symlink() or not workspace.is_dir():
+                continue
+            sessions = workspace / TEST_WORKSPACE_SESSIONS_DIR
+            if sessions.is_symlink():
+                raise RuntimeError("Test Generations session workspace cannot be symlinked.")
+            if sessions.is_dir():
+                roots.append(sessions)
+    return roots
+
+
 def _session_roots(folder_path):
-    roots = [_central_session_root(), _legacy_central_session_root(), _session_root(folder_path)]
+    roots = [
+        _workspace_sessions_root(folder_path),
+        _central_session_root(),
+        _legacy_central_session_root(),
+        _session_root(folder_path),
+    ]
     unique = []
     seen = set()
     for root in roots:
@@ -381,6 +504,10 @@ def _session_roots(folder_path):
 
 def _session_belongs_to_folder(folder_path, session_directory, payload=None):
     session = Path(session_directory).resolve()
+    workspace_root = _workspace_sessions_root(folder_path).resolve()
+    if session.parent == workspace_root:
+        return True
+
     legacy_root = _session_root(folder_path).resolve()
     if session.parent == legacy_root:
         return True
@@ -440,7 +567,7 @@ def _session_directory(folder_path, session_name):
 
 def _new_session_directory(folder_path, model=None):
     selected_model = model or get_test_model()
-    root = _central_session_root()
+    root = _workspace_sessions_root(folder_path)
     root.mkdir(parents=True, exist_ok=True)
     base = datetime.now().strftime("%Y-%m-%d_%H%M-") + selected_model.SESSION_SLUG
     candidate = root / base
@@ -796,6 +923,7 @@ def supported_models():
 def prepare(folder_path, model_id=None):
     model = get_test_model(model_id)
     template = model.load_template()
+    prompt_state = workspace_prompt(folder_path, model.PROFILE_ID)
     try:
         loras = _staged_loras_for_set(folder_path, model)
     except ValueError:
@@ -819,6 +947,8 @@ def prepare(folder_path, model_id=None):
         "settings": list(model.settings),
         "settingOptions": setting_options,
         "warnings": prepare_warnings,
+        "workspacePromptPresent": bool(prompt_state["present"]),
+        "workspacePrompt": str(prompt_state["prompt"]),
         "defaultPrompt": model.default_prompt(template),
         "defaults": defaults,
         "defaultStrength": float(defaults.get("strength", 1)),
@@ -838,6 +968,13 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_prepare":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return prepare(folder_path, model_id=criteria.get("modelId"))
+    if operation == "test_save_workspace_prompt":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        saved = save_workspace_prompt(folder_path, criteria.get("modelId"), criteria.get("prompt"))
+        return {
+            "operation": "test_save_workspace_prompt",
+            **saved,
+        }
     if operation == "test_status":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return status(folder_path, model_id=criteria.get("modelId"))
@@ -891,6 +1028,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
         )
     if operation == "test_enqueue":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        save_workspace_prompt(folder_path, criteria.get("modelId"), criteria.get("prompt"))
         return enqueue(
             folder_path,
             criteria.get("prompt"),
@@ -2067,7 +2205,16 @@ def clear_sessions(folder_path):
         )
     for session in sessions:
         shutil.rmtree(session)
-    if sessions:
+
+    workspace = _workspace_root(folder_path)
+    workspace_removed = False
+    if workspace.exists():
+        if workspace.is_symlink() or not workspace.is_dir():
+            raise RuntimeError("Test Generations Set workspace is invalid.")
+        shutil.rmtree(workspace)
+        workspace_removed = True
+
+    if sessions or workspace_removed:
         _invalidate_recent_session_caches()
     return len(sessions)
 

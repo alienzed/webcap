@@ -24,7 +24,8 @@
   var pendingTestCompletionChecks = Object.create(null);
   var showSessionError = false;
   var reportedFailureKeys = new Set();
-  var debouncedPromptSave = debounceCreate(500);
+  var debouncedWorkspacePromptSave = debounceCreate(500);
+  var debouncedTestBenchStateSave = debounceCreate(500);
   var wildcardDirector = {
     models: [],
     modelId: '',
@@ -232,8 +233,8 @@
     var value = String(output && output.value || '').trim();
     if (!value) throw new Error('No generated wildcard is available.');
     prompt.value = value;
-    saveTestPromptDraft(value);
-    saveTestBenchState(value);
+    saveTestWorkspacePrompt(value);
+    saveTestBenchState();
     el('test-generations-wildcard-status').textContent = 'Wildcard copied to Prompt.';
   }
 
@@ -704,24 +705,17 @@
     return String(getWorkingModelProfileId() || '');
   }
 
-  function testPromptDraftKey() {
+  function saveTestWorkspacePrompt(prompt) {
     var modelId = currentTestModelId();
     var folder = String(owningSetFolder(launchFolder || (state && state.folder) || ''));
-    if (!modelId || !folder) return '';
-    return 'webcap.test.promptDraft.' + encodeURIComponent(modelId) + '.' + encodeURIComponent(folder);
-  }
-
-  function loadTestPromptDraft() {
-    var key = testPromptDraftKey();
-    if (!key) return null;
-    var value = window.localStorage.getItem(key);
-    return value === null ? null : String(value);
-  }
-
-  function saveTestPromptDraft(prompt) {
-    var key = testPromptDraftKey();
-    if (!key) return;
-    window.localStorage.setItem(key, String(prompt == null ? '' : prompt));
+    if (!modelId || !folder) return;
+    var value = String(prompt == null ? '' : prompt);
+    debouncedWorkspacePromptSave(function () {
+      requestForFolder(folder, 'test_save_workspace_prompt', {
+        modelId: modelId,
+        prompt: value
+      }).catch(showError);
+    });
   }
 
   function savedTestModelState() {
@@ -732,7 +726,6 @@
     var saved = byModel[modelId];
     if (saved && typeof saved === 'object') {
       return {
-        prompt: String(saved.prompt || ''),
         settings: saved.settings && typeof saved.settings === 'object'
           ? saved.settings
           : {}
@@ -741,13 +734,12 @@
     var model = supportedTestModels[modelId] || {};
     if (model.default === true) {
       return {
-        prompt: String(state && state.testGenerationPrompt || ''),
         settings: state && state.testGenerationSettings && typeof state.testGenerationSettings === 'object'
           ? state.testGenerationSettings
           : {}
       };
     }
-    return { prompt: '', settings: {} };
+    return { settings: {} };
   }
 
   function currentPersistedSettings() {
@@ -764,7 +756,7 @@
     };
   }
 
-  function captureTestBenchSave(prompt) {
+  function captureTestBenchSave() {
     if (!state || String(state.folder || '') !== String(launchFolder || '')) return null;
     var modelId = currentTestModelId();
     var settings = currentPersistedSettings();
@@ -775,7 +767,6 @@
         var supported = supportedTestModels[supportedId] || {};
         if (supported.default !== true || state.testGenerationByModel[supportedId]) return false;
         state.testGenerationByModel[supportedId] = {
-          prompt: String(state.testGenerationPrompt || ''),
           settings: state.testGenerationSettings && typeof state.testGenerationSettings === 'object'
             ? JSON.parse(JSON.stringify(state.testGenerationSettings))
             : {}
@@ -784,25 +775,22 @@
       });
     }
     state.testGenerationByModel[modelId] = {
-      prompt: String(prompt || ''),
       settings: JSON.parse(JSON.stringify(settings))
     };
     if (currentModel.default === true) {
-      state.testGenerationPrompt = String(prompt || '');
       state.testGenerationSettings = settings;
     }
     var capturedSave = captureCurrentFolderStateSave();
     if (!capturedSave) return null;
-    capturedSave.snapshot.test_generation_prompt = state.testGenerationPrompt;
     capturedSave.snapshot.test_generation_settings = JSON.parse(JSON.stringify(state.testGenerationSettings));
     capturedSave.snapshot.test_generation_by_model = JSON.parse(JSON.stringify(state.testGenerationByModel));
     return capturedSave;
   }
 
-  function saveTestBenchState(prompt) {
-    var capturedSave = captureTestBenchSave(prompt);
+  function saveTestBenchState() {
+    var capturedSave = captureTestBenchSave();
     if (!capturedSave) return;
-    debouncedPromptSave(function () {
+    debouncedTestBenchStateSave(function () {
       writeCapturedFolderState(capturedSave);
     });
   }
@@ -880,8 +868,8 @@
     if (!prompt) throw new Error('Recent Test prompt is empty.');
     var field = el('test-generations-prompt');
     field.value = prompt;
-    saveTestPromptDraft(prompt);
-    saveTestBenchState(prompt);
+    saveTestWorkspacePrompt(prompt);
+    saveTestBenchState();
     field.focus();
   }
 
@@ -1232,7 +1220,7 @@
     baseInclude.title = 'Include the Base rendition in the next Test run';
     baseInclude.setAttribute('aria-label', 'Include Base rendition in next Test run');
     baseInclude.addEventListener('change', function () {
-      saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || '').trim());
+      saveTestBenchState();
     });
 
     var baseCopy = document.createElement('div');
@@ -3040,10 +3028,9 @@
     }
     if (seed) seed.value = String(defaults.seed || '');
     if (prompt) {
-      var draftPrompt = loadTestPromptDraft();
-      prompt.value = draftPrompt !== null
-        ? draftPrompt
-        : (saved.prompt.trim() ? saved.prompt : String(payload.defaultPrompt || ''));
+      prompt.value = payload.workspacePromptPresent === true
+        ? String(payload.workspacePrompt || '')
+        : String(payload.defaultPrompt || '');
     }
   }
 
@@ -3182,8 +3169,8 @@
       }
       selectedStrengths[strengthFile] = strengthValue;
     }
-    saveTestPromptDraft(prompt);
-    saveTestBenchState(prompt);
+    saveTestWorkspacePrompt(prompt);
+    saveTestBenchState();
     var runBtn = el('test-generations-run-btn');
     var errorEl = el('test-generations-error');
     if (runBtn) runBtn.disabled = true;
@@ -3407,7 +3394,7 @@
           return;
         }
         candidateStrengths[strengthFile] = strengthValue;
-        saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
+        saveTestBenchState();
         return;
       }
       var checkbox = event.target.closest('[data-candidate-select]');
@@ -3416,7 +3403,7 @@
       if (checkbox.checked) selectedCandidates.add(fileName);
       else selectedCandidates.delete(fileName);
       syncCandidateMasterSelect(prepared && Array.isArray(prepared.files) ? prepared.files : []);
-      saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
+      saveTestBenchState();
       syncActiveRunControls(currentStatus);
     });
     el('test-generations-master-select').addEventListener('change', function () {
@@ -3426,7 +3413,7 @@
       });
       selectedCandidates = allSelected ? new Set() : new Set(files);
       renderStagedFiles(prepared || { files: [], count: 0, candidateScores: {} });
-      saveTestBenchState(String(el('test-generations-prompt') && el('test-generations-prompt').value || ''));
+      saveTestBenchState();
       syncActiveRunControls(currentStatus);
     });
     el('test-generations-files').onclick = function (event) {
@@ -3543,12 +3530,11 @@
       }
     };
     el('test-generations-prompt').addEventListener('input', function () {
-      saveTestPromptDraft(this.value);
-      saveTestBenchState(this.value);
+      saveTestWorkspacePrompt(this.value);
     });
     ['test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-dimensions'].forEach(function (id) {
       el(id).addEventListener('change', function () {
-        saveTestBenchState(String(el('test-generations-prompt').value || ''));
+        saveTestBenchState();
       });
     });
     el('test-generations-info-btn').onclick = function () {

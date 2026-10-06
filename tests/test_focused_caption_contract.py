@@ -147,3 +147,16 @@ def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
     assert "regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);" in primer
     assert ".editor-caption-candidate-omissions {" in css
     assert ".editor-caption-candidate-regenerate.is-primary {" in css
+
+
+def test_caption_assist_offscreen_request_uses_target_item_draft():
+    primer = _read("tool/js/primer_settings.js")
+    media = _read("tool/js/media.js")
+
+    assert "function getCaptionAssistDraftForMediaItem(mediaItem)" in primer
+    assert "state.currentItem.key === mediaKey && ui && ui.editorEl" in primer
+    assert "var savedCaption = String(mediaItem.caption || '');" in primer
+    assert "buildAutoPrimer(mediaItem.fileName, mediaKey)" in primer
+    assert "draft: getCaptionAssistDraftForMediaItem(mediaItem)" in primer
+    assert "function captionAssistRequestFingerprint(request)" in primer
+    assert "ui.editorEl.value = nextEditorValue;" in media

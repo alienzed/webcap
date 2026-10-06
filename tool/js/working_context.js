@@ -2,10 +2,6 @@ var workingContextState = {
   modelProfileId: 'wan22_t2v'
 };
 
-function workingModelProfileStorageKey(folder) {
-  return 'webcap.trainingProfile.' + String(folder || '');
-}
-
 function getWorkingModelProfileId() {
   return String(workingContextState.modelProfileId || 'wan22_t2v');
 }
@@ -27,37 +23,26 @@ function hasWorkingModelProfile(profiles, profileId) {
   });
 }
 
-function syncWorkingModelProfileForFolder(folder, profiles) {
+function syncWorkingModelProfile(profiles) {
   var availableProfiles = Array.isArray(profiles) ? profiles : [];
-  var stored = '';
-  try { stored = localStorage.getItem(workingModelProfileStorageKey(folder)) || ''; } catch (err) {}
-
   var current = getWorkingModelProfileId();
-  var next = hasWorkingModelProfile(availableProfiles, stored)
-    ? stored
-    : (hasWorkingModelProfile(availableProfiles, current)
-      ? current
-      : (availableProfiles.length ? String(availableProfiles[0].id || '') : current));
+  var next = hasWorkingModelProfile(availableProfiles, current)
+    ? current
+    : (availableProfiles.length ? String(availableProfiles[0].id || '') : current);
 
   var previousProfileId = getWorkingModelProfileId();
   workingContextState.modelProfileId = next || 'wan22_t2v';
-  try {
-    localStorage.setItem(workingModelProfileStorageKey(folder), workingContextState.modelProfileId);
-  } catch (err) {}
   notifyWorkingModelChanged(previousProfileId);
   return workingContextState.modelProfileId;
 }
 
-function setWorkingModelProfileId(profileId, folder) {
+function setWorkingModelProfileId(profileId) {
   var previousProfileId = getWorkingModelProfileId();
   workingContextState.modelProfileId = String(profileId || 'wan22_t2v');
-  try {
-    localStorage.setItem(workingModelProfileStorageKey(folder), workingContextState.modelProfileId);
-  } catch (err) {}
   notifyWorkingModelChanged(previousProfileId);
   return workingContextState.modelProfileId;
 }
 
 window.getWorkingModelProfileId = getWorkingModelProfileId;
 window.setWorkingModelProfileId = setWorkingModelProfileId;
-window.syncWorkingModelProfileForFolder = syncWorkingModelProfileForFolder;
+window.syncWorkingModelProfile = syncWorkingModelProfile;

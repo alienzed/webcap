@@ -286,3 +286,12 @@ def test_training_presentation_is_owned_by_training_surface():
     detail = workspace[detail_start:detail_end]
     assert "editorWrapper.classList.toggle('hidden'" not in detail
 
+
+
+def test_training_workspace_mode_is_not_browser_persistent():
+    script = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+
+    assert "trainingModeStorageKey" not in script
+    assert "webcap.trainingMode." not in script
+    assert "localStorage" not in script
+    assert "trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);" in script

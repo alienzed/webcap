@@ -1647,7 +1647,7 @@ def normalize_freeform_messages(messages):
         normalized.append({"role": role, "content": content})
     return normalized
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False):
+def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None):
     normalized = normalize_freeform_messages(messages)
 
     operation = "freeform_chat"
@@ -1675,6 +1675,7 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, c
             result = chat(
                 model_id,
                 normalized,
+                response_schema=response_schema,
                 max_tokens=max_tokens,
                 context_size=context_size,
                 gpu_reserved=bool(gpu_reserved),

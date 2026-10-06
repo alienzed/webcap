@@ -1,5 +1,8 @@
 import atexit
+import base64
+import mimetypes
 import contextlib
+import copy
 import http.client
 import json
 import logging
@@ -38,6 +41,7 @@ _request_lock = threading.RLock()
 _remote_request_lock = threading.Lock()
 _active_remote_connection = None
 _remote_provider_cache = {}
+_ollama_capabilities_cache = {}
 _runtime_context = threading.local()
 _activity_lock = threading.Lock()
 _log_relay_lock = threading.Lock()
@@ -411,8 +415,18 @@ def _remote_native_url(path):
     return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, native_path, "", ""))
 
 
-def _remote_native_http_json(path, timeout=5):
-    request = urllib.request.Request(_remote_native_url(path), method="GET")
+def _remote_native_http_json(path, timeout=5, method="GET", payload=None):
+    data = None
+    headers = {}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(
+        _remote_native_url(path),
+        data=data,
+        headers=headers,
+        method=method,
+    )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read()
@@ -1091,6 +1105,142 @@ def list_local_vision_models():
     return models
 
 
+def _ollama_model_capabilities(model_id, refresh=False):
+    model_id = str(model_id or "").strip()
+    if not model_id:
+        return []
+    settings = _director_config()
+    endpoint = str(settings.get("endpoint") or "").rstrip("/")
+    cache_key = (endpoint, model_id)
+    if not refresh and cache_key in _ollama_capabilities_cache:
+        return list(_ollama_capabilities_cache[cache_key])
+
+    payload = _remote_native_http_json("/api/show", timeout=5, method="POST", payload={"model": model_id})
+    capabilities = payload.get("capabilities") if isinstance(payload, dict) else None
+    normalized = (
+        [str(value).strip().lower() for value in capabilities if str(value or "").strip()]
+        if isinstance(capabilities, list)
+        else []
+    )
+    _ollama_capabilities_cache[cache_key] = list(normalized)
+    return normalized
+
+
+def list_vision_models(reload=False):
+    models = []
+    warnings = []
+
+    try:
+        models.extend(list_local_vision_models())
+    except Exception as exc:
+        warnings.append({"runtimeId": "local", "runtimeName": "Local", "error": str(exc)})
+
+    base = _director_base_config()
+    for endpoint in base["remote_endpoints"]:
+        runtime_id = endpoint["id"]
+        runtime_name = endpoint["name"]
+        try:
+            with _use_runtime(runtime_id):
+                if not _remote_is_ollama(refresh=reload):
+                    continue
+                payload = _remote_native_http_json("/api/tags", timeout=5)
+                raw_models = payload.get("models") if isinstance(payload, dict) else None
+                if not isinstance(raw_models, list):
+                    raise RuntimeError("Ollama did not return a model list from /api/tags.")
+                for entry in raw_models:
+                    if not isinstance(entry, dict):
+                        continue
+                    model_id = str(entry.get("name") or entry.get("model") or "").strip()
+                    if not model_id:
+                        continue
+                    try:
+                        capabilities = _ollama_model_capabilities(model_id, refresh=reload)
+                    except Exception as exc:
+                        _logger.info("Could not inspect Ollama model capabilities for %s: %s", model_id, exc)
+                        continue
+                    if "vision" not in capabilities:
+                        continue
+                    try:
+                        size_bytes = max(0, int(entry.get("size") or 0))
+                    except (TypeError, ValueError):
+                        size_bytes = 0
+                    models.append({
+                        "id": _model_ref(runtime_id, model_id),
+                        "runtimeId": runtime_id,
+                        "runtimeName": runtime_name,
+                        "modelId": model_id,
+                        "label": model_id,
+                        "path": "",
+                        "status": "remote",
+                        "sizeBytes": size_bytes,
+                        "architecture": {"input_modalities": ["text", "image"]},
+                        "inputModalities": ["text", "image"],
+                    })
+        except Exception as exc:
+            warnings.append({
+                "runtimeId": runtime_id,
+                "runtimeName": runtime_name,
+                "endpoint": endpoint["endpoint"],
+                "error": str(exc),
+            })
+
+    models.sort(key=lambda model: (
+        0 if model.get("runtimeId") == "local" else 1,
+        str(model.get("runtimeName") or "").casefold(),
+        int(model.get("sizeBytes") or 0),
+        str(model.get("label") or "").casefold(),
+    ))
+    list_vision_models.last_warnings = warnings
+    return models
+
+
+list_vision_models.last_warnings = []
+
+
+def encode_media_data_url(relative_media_path):
+    relative = str(relative_media_path or "").strip().replace("\\", "/")
+    if not relative:
+        raise ValueError("Vision media path is required.")
+    root = Path(app_config.FS_ROOT).resolve()
+    path = (root / relative).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("Vision media must be inside the configured dataset root.") from exc
+    if not path.is_file():
+        raise FileNotFoundError("Vision media file not found.")
+    mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return "data:" + mime_type + ";base64," + encoded
+
+
+def prepare_caption_vision_messages(model_ref, messages):
+    runtime_id, _model_id = _split_model_ref(model_ref)
+    if runtime_id == "local":
+        return copy.deepcopy(messages)
+
+    with _use_runtime(runtime_id):
+        if not _remote_is_ollama():
+            raise ValueError("Remote Vision currently requires an Ollama runtime.")
+
+    prepared = copy.deepcopy(messages)
+    for message in prepared if isinstance(prepared, list) else []:
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if not isinstance(part, dict) or str(part.get("type") or "").strip().lower() != "image_url":
+                continue
+            image_url = part.get("image_url") if isinstance(part.get("image_url"), dict) else {}
+            url = str(image_url.get("url") or "").strip()
+            if not url.startswith("file://") or url.startswith("file:///"):
+                raise ValueError("Vision image reference is invalid.")
+            relative = url[len("file://"):]
+            image_url["url"] = encode_media_data_url(relative)
+            part["image_url"] = image_url
+    return prepared
+
+
 def list_models(reload=False, probe_local_runtime=False):
     models = []
     warnings = []
@@ -1635,7 +1785,7 @@ def _completion_result(response, model_id, allow_truncated=False, assessment_evi
     }
 
 
-def normalize_freeform_messages(messages):
+def normalize_freeform_messages(messages, allow_image_data_urls=False):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director Chat messages are required.")
 
@@ -1664,6 +1814,9 @@ def normalize_freeform_messages(messages):
                     image_url = part.get("image_url")
                     image_url = image_url if isinstance(image_url, dict) else {}
                     url = str(image_url.get("url") or "").strip()
+                    if allow_image_data_urls and url.startswith("data:image/"):
+                        parts.append({"type": "image_url", "image_url": {"url": url}})
+                        continue
                     if not url.startswith("file://") or url.startswith("file:///"):
                         raise ValueError("Local multimodal images must use a relative file:// URL.")
                     relative = url[len("file://"):]
@@ -1689,8 +1842,8 @@ def normalize_freeform_messages(messages):
         normalized.append({"role": role, "content": content})
     return normalized
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None):
-    normalized = normalize_freeform_messages(messages)
+def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None, allow_image_data_urls=False):
+    normalized = normalize_freeform_messages(messages, allow_image_data_urls=allow_image_data_urls)
 
     operation = "freeform_chat"
     with _request_lock:

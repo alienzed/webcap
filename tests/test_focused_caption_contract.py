@@ -233,14 +233,22 @@ def test_focus_caption_vision_is_opt_in_actionable_and_one_deep():
     assert "maybeRunCaptionVisionForCandidate(candidate)" in primer
 
 
-def test_caption_vision_has_no_browser_persistence_or_new_setting():
+def test_caption_vision_preference_is_config_backed_not_browser_persistent():
+    html = _read("tool/tool.html")
     vision = _read("tool/js/caption_vision.js")
+    common = _read("tool/js/common.js")
     settings = _read("tool/js/app_settings.js")
+    app = _read("tool/server/app.py")
 
     assert "localStorage" not in vision
     assert "sessionStorage" not in vision
-    assert "vision_model" not in settings
-    assert "caption_vision" not in settings
+    assert 'id="app-header-vision-model"' in html
+    assert 'id="app-settings-vision-model"' in html
+    assert "getVisionModelPreference()" in vision
+    assert "APP_CONFIG.vision_model" in common
+    assert "'/app/config/vision_model'" in common
+    assert "out.vision_model = String(out.vision_model || '').trim();" in settings
+    assert '@app.route("/app/config/vision_model", methods=["POST"])' in app
 
 
 def test_caption_vision_lifecycle_is_request_scoped_and_transition_safe():
@@ -265,3 +273,17 @@ def test_caption_vision_only_sends_selected_or_unreviewed_groups():
 
     assert "reviewed: isChecklistRequirementCheckedForMediaKey(mediaKey, group)" in vision
     assert "return entry.selected.length > 0 || !entry.reviewed;" in vision
+
+
+def test_global_vision_selector_is_separate_from_focus_enable_toggle():
+    html = _read("tool/tool.html")
+    shell = _read("tool/js/workspace_shell.js")
+    vision = _read("tool/js/caption_vision.js")
+
+    assert html.index('id="app-header-director-control"') < html.index('id="app-header-vision-control"')
+    assert 'id="editor-caption-vision-toggle"' in html
+    assert "refreshApplicationVisionModels" in shell
+    assert "setVisionModelPreference(String(this.value || ''))" in shell
+    assert "webcap:vision-model-changed" in vision
+    assert "cancelFocusedCaptionPrefetch()" in vision
+    assert "runCaptionVisionForCandidate(captionAssistCandidate)" in vision

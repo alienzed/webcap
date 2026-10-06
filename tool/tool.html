@@ -54,6 +54,12 @@
                         </select>
                         <button id="app-header-director-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
                     </label>
+                    <label id="app-header-vision-control" class="app-header-vision-control hidden">
+                        <span class="app-header-vision-label">Vision</span>
+                        <select id="app-header-vision-model" aria-label="Vision model">
+                            <option value="">Loading vision models...</option>
+                        </select>
+                    </label>
                 </div>
                 <div id="app-header-workspace-actions" class="app-header-workspace-actions hidden" aria-label="Workspace controls">
                     <button id="storyboard-story-toggle" type="button" class="review-captions-btn hidden" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Overview</button>
@@ -1744,7 +1750,7 @@
                 <section class="editor-caption-candidate-dialog" role="dialog" aria-modal="true" aria-label="AI caption candidate">
                     <div class="editor-caption-candidate-header">
                         <strong>Caption Assist</strong>
-                        <label id="editor-caption-vision-toggle-wrap" class="editor-caption-vision-toggle hidden" title="Attempt to scan for incorrect or omitted visual details using the configured local vision model.">
+                        <label id="editor-caption-vision-toggle-wrap" class="editor-caption-vision-toggle hidden" title="Scan for incorrect or omitted visual details using the selected Vision model.">
                             <input id="editor-caption-vision-toggle" type="checkbox">
                             <span>Enable Vision</span>
                         </label>
@@ -2152,6 +2158,13 @@
                                 <div class="app-settings-section-title">Caption Assist</div>
                                 <div class="app-settings-section-copy">Control how LLM-written captions are ordered. Annotation group order and Caption Primer order do not affect this setting.</div>
                             </div>
+                            <label class="app-settings-field app-settings-field-wide">
+                                <span class="app-settings-field-label">Preferred Vision model</span>
+                                <select id="app-settings-vision-model">
+                                    <option value="">No Vision model selected</option>
+                                </select>
+                                <span class="app-settings-note">Used by Focus Caption when Vision is enabled. Options come from the local llama.cpp runtime and enabled remote Ollama runtimes that report vision capability.</span>
+                            </label>
                             <label class="app-settings-field app-settings-field-wide">
                                 <span class="app-settings-field-label">Preferred caption sequence</span>
                                 <textarea id="app-settings-caption-sequence" class="app-settings-caption-sequence" rows="10" spellcheck="false" placeholder="Leave blank for natural caption ordering"></textarea>

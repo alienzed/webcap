@@ -533,6 +533,45 @@ function refreshApplicationDirectorModels() {
   });
 }
 
+function refreshApplicationVisionModels(forceReload) {
+  var control = document.getElementById('app-header-vision-control');
+  var select = document.getElementById('app-header-vision-model');
+  if (!control || !select) return Promise.resolve();
+
+  select.disabled = true;
+  select.innerHTML = '<option value="">Loading vision models...</option>';
+  var url = '/caption/vision-capabilities' + (forceReload ? '?reload=1' : '');
+
+  return fetch(url).then(function (response) {
+    return response.json().then(function (payload) {
+      if (!response.ok || !payload || payload.ok === false) {
+        throw new Error(payload && payload.error ? payload.error : 'Could not load Vision models.');
+      }
+      var models = Array.isArray(payload.models) ? payload.models : [];
+      if (!payload.available || !models.length) {
+        control.classList.add('hidden');
+        select.innerHTML = '<option value="">Vision unavailable</option>';
+        select.disabled = true;
+        window.dispatchEvent(new CustomEvent('webcap:vision-capabilities-refreshed', { detail: payload }));
+        return;
+      }
+
+      var preferred = getVisionModelPreference();
+      var selected = renderDirectorModelOptions(select, models, preferred || payload.defaultModel);
+      select.value = selected;
+      select.disabled = false;
+      control.classList.remove('hidden');
+      window.dispatchEvent(new CustomEvent('webcap:vision-capabilities-refreshed', { detail: payload }));
+    });
+  }).catch(function (err) {
+    control.classList.add('hidden');
+    select.innerHTML = '<option value="">Vision unavailable</option>';
+    select.disabled = true;
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Vision', err);
+  });
+}
+
+
 function renderApplicationSetSelector() {
   var control = document.getElementById('app-header-set-control');
   var select = document.getElementById('app-header-set-select');
@@ -1036,6 +1075,7 @@ function wireWorkspaceHeaderUi() {
   wireShellMoreMenuUi();
   var directorSelect = document.getElementById('app-header-director-model');
   var directorRefresh = document.getElementById('app-header-director-refresh');
+  var visionSelect = document.getElementById('app-header-vision-model');
   if (directorSelect && !directorSelect.__directorWired) {
     directorSelect.__directorWired = true;
     directorSelect.onchange = function () {
@@ -1052,7 +1092,24 @@ function wireWorkspaceHeaderUi() {
   }
   if (directorRefresh && !directorRefresh.__directorWired) {
     directorRefresh.__directorWired = true;
-    directorRefresh.onclick = refreshApplicationDirectorModels;
+    directorRefresh.onclick = function () {
+      refreshApplicationDirectorModels();
+      refreshApplicationVisionModels(true);
+    };
+  }
+  if (visionSelect && !visionSelect.__visionWired) {
+    visionSelect.__visionWired = true;
+    visionSelect.onchange = function () {
+      setVisionModelPreference(String(this.value || ''));
+    };
+    window.addEventListener('webcap:vision-model-changed', function (event) {
+      var selected = String(event && event.detail && event.detail.modelId || '');
+      if (!selected || selected === String(visionSelect.value || '')) return;
+      if (Array.prototype.some.call(visionSelect.options, function (option) { return option.value === selected; })) {
+        visionSelect.value = selected;
+      }
+    });
+    refreshApplicationVisionModels(false);
   }
 
   var setSelect = document.getElementById('app-header-set-select');

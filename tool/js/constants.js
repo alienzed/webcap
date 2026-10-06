@@ -168,6 +168,7 @@ ui = {
   appSettingsEnableMediaPipeAnalysisEl: document.getElementById('app-settings-enable-mediapipe-analysis'),
   appSettingsPrimerTemplateEl: document.getElementById('app-settings-primer-template'),
   appSettingsCaptionSequenceEl: document.getElementById('app-settings-caption-sequence'),
+  appSettingsVisionModelEl: document.getElementById('app-settings-vision-model'),
   appSettingsCaptionSequenceGroupsEl: document.getElementById('app-settings-caption-sequence-groups'),
   appSettingsDebugEl: document.getElementById('app-settings-debug'),
   appSettingsJsonEl: document.getElementById('app-settings-json'),

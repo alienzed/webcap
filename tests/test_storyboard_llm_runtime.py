@@ -2218,3 +2218,143 @@ def test_normalize_freeform_messages_rejects_absolute_local_image():
                 {"type": "image_url", "image_url": {"url": "file:///tmp/item.jpg"}},
             ],
         }])
+
+
+def test_ollama_model_capabilities_uses_native_show_post(monkeypatch):
+    captured = {}
+
+    def native(path, timeout=5, method="GET", payload=None):
+        captured.update(path=path, timeout=timeout, method=method, payload=payload)
+        return {"capabilities": ["completion", "vision"]}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_native_http_json", native)
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"endpoint": "http://workstation:11434/v1", "mode": "remote"},
+    )
+    capabilities = storyboard_llm_runtime._ollama_model_capabilities(
+        "huihui_ai/qwen3-vl-abliterated:8b",
+        refresh=True,
+    )
+
+    assert capabilities == ["completion", "vision"]
+    assert captured["path"] == "/api/show"
+    assert captured["method"] == "POST"
+    assert captured["payload"] == {"model": "huihui_ai/qwen3-vl-abliterated:8b"}
+
+
+def test_list_vision_models_includes_only_remote_ollama_models_with_vision(monkeypatch):
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "list_local_vision_models",
+        lambda: [{"id": "local::vision", "runtimeId": "local", "runtimeName": "Local", "label": "vision", "sizeBytes": 1}],
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_base_config",
+        lambda: {
+            "remote_endpoints": [{
+                "id": "workstation",
+                "name": "Work PC",
+                "endpoint": "http://workstation:11434/v1",
+            }]
+        },
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda refresh=False: True)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_remote_native_http_json",
+        lambda path, timeout=5, method="GET", payload=None: {
+            "models": [
+                {"name": "vision:8b", "size": 6_000},
+                {"name": "text:8b", "size": 5_000},
+            ]
+        } if path == "/api/tags" else {},
+    )
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_ollama_model_capabilities",
+        lambda model_id, refresh=False: ["completion", "vision"] if model_id == "vision:8b" else ["completion"],
+    )
+
+    models = storyboard_llm_runtime.list_vision_models()
+
+    assert [model["id"] for model in models] == [
+        "local::vision",
+        "workstation::vision:8b",
+    ]
+    assert models[1]["runtimeName"] == "Work PC"
+    assert models[1]["inputModalities"] == ["text", "image"]
+
+
+def test_prepare_caption_vision_messages_keeps_local_file_reference(monkeypatch):
+    messages = [{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "inspect"},
+            {"type": "image_url", "image_url": {"url": "file://bikini/item.jpg"}},
+        ],
+    }]
+
+    prepared = storyboard_llm_runtime.prepare_caption_vision_messages("local::vision", messages)
+
+    assert prepared[0]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
+    assert prepared is not messages
+
+
+def test_prepare_caption_vision_messages_materializes_remote_ollama_image(monkeypatch):
+    messages = [{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "inspect"},
+            {"type": "image_url", "image_url": {"url": "file://bikini/item.jpg"}},
+        ],
+    }]
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_base_config",
+        lambda: {
+            "legacy_mode": "local",
+            "remote_endpoints": [{
+                "id": "workstation",
+                "name": "Work PC",
+                "endpoint": "http://workstation:11434/v1",
+            }],
+            "models_dir": None,
+            "port": 8189,
+            "context_size": None,
+            "max_tokens": None,
+            "llama_server": "",
+        },
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda refresh=False: True)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "encode_media_data_url",
+        lambda relative: "data:image/jpeg;base64,AAAA" if relative == "bikini/item.jpg" else "",
+    )
+
+    prepared = storyboard_llm_runtime.prepare_caption_vision_messages("workstation::vision:8b", messages)
+
+    assert prepared[0]["content"][1]["image_url"]["url"] == "data:image/jpeg;base64,AAAA"
+
+
+def test_normalize_freeform_messages_rejects_data_urls_by_default_and_allows_trusted_vision():
+    messages = [{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "inspect"},
+            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,AAAA"}},
+        ],
+    }]
+
+    with pytest.raises(ValueError, match="relative file"):
+        storyboard_llm_runtime.normalize_freeform_messages(messages)
+
+    normalized = storyboard_llm_runtime.normalize_freeform_messages(
+        messages,
+        allow_image_data_urls=True,
+    )
+    assert normalized[0]["content"][1]["image_url"]["url"] == "data:image/jpeg;base64,AAAA"

@@ -182,7 +182,8 @@
 }
 
 .app-header-model-control,
-.app-header-director-control {
+.app-header-director-control,
+.app-header-vision-control {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -191,26 +192,30 @@
 }
 
 .app-header-model-control,
-.app-header-director-control {
+.app-header-director-control,
+.app-header-vision-control {
   margin-left: 4px;
   padding-left: 12px;
   border-left: 1px solid var(--border);
 }
 
 .app-header-model-label,
-.app-header-director-label {
+.app-header-director-label,
+.app-header-vision-label {
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.app-header-model-control.hidden {
+.app-header-model-control.hidden,
+.app-header-vision-control.hidden {
   display: none;
 }
 
 .app-header-model-control select,
-.app-header-director-control select {
+.app-header-director-control select,
+.app-header-vision-control select {
   width: auto;
   max-width: 180px;
   min-height: 26px;
@@ -2736,4 +2741,9 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .storyboard-director-model-tools,
 .director-chat-model-tools {
   display: none !important;
+}
+
+
+.app-header-vision-control select {
+  max-width: 220px;
 }

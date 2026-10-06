@@ -435,12 +435,16 @@ def _execute_claimed(job_id, gpu_reserved):
                 chat_kwargs["max_tokens"] = overrides["maxTokens"]
             if "contextSize" in overrides:
                 chat_kwargs["context_size"] = overrides["contextSize"]
+            messages = contract.get("messages")
             if client == "caption" and str(contract.get("operation") or "").strip() == "caption_vision_validate":
                 from .caption_vision import CAPTION_VISION_RESPONSE_SCHEMA
+                from .storyboard_llm_runtime import prepare_caption_vision_messages
                 chat_kwargs["response_schema"] = CAPTION_VISION_RESPONSE_SCHEMA
+                chat_kwargs["allow_image_data_urls"] = True
+                messages = prepare_caption_vision_messages(model_id, messages)
             llm_result = run_freeform_chat(
                 model_id,
-                contract.get("messages"),
+                messages,
                 **chat_kwargs,
             )
         else:

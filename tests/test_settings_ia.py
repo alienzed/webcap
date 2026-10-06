@@ -108,3 +108,18 @@ def test_generate_base_model_preference_is_config_backed():
     assert "webcap.generate.model" not in script
     assert "out.generate_model = String(out.generate_model || '').trim();" in settings_script
     assert '@app.route("/app/config/generate_model", methods=["POST"])' in app
+
+
+def test_vision_model_preference_is_config_backed_and_visible_in_director_settings():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
+    settings = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert 'id="app-settings-vision-model"' in html
+    assert "Preferred Vision model" in html
+    assert "APP_CONFIG.vision_model" in common
+    assert "'/app/config/vision_model'" in common
+    assert "base.vision_model = ui.appSettingsVisionModelEl" in settings
+    assert "renderUnavailableVisionPreference" in settings
+    assert '@app.route("/app/config/vision_model", methods=["POST"])' in app

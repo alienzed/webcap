@@ -1,7 +1,6 @@
 var trainingWorkspaceState = {
   configFiles: [],
   profiles: [],
-  selectedMode: 'normal',
   runnerJobs: [],
   runnerActiveJobId: '',
   runnerSelectedJobId: '',

@@ -4,7 +4,7 @@ import pytest
 from tool.server import config as app_config
 from tool.server import training_history
 from tool.server.training_action import allocate_action, managed_actions_for_folder, read_action, set_root_name
-from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, profile_for_mode
+from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, resolved_profile
 
 def _configure_root(monkeypatch, root): monkeypatch.setattr(app_config, "FS_ROOT", root)
 def _write_h3_config(path, output_root, model="minimax-h3", epochs=3):
@@ -14,7 +14,7 @@ def _checkpoint(root, name, config_text, tag="global_step12"):
 def _set(tmp_path, name="subject"):
     folder = tmp_path / "sets" / name; folder.mkdir(parents=True); return folder
 def _action(folder, name="managed"):
-    return allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",), name)
+    return allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",), name)
 
 def test_set_roots_have_global_prefixes_and_action_ids_are_nested(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)

@@ -49,3 +49,41 @@ def test_advanced_filter_panel_open_state_is_transient_while_filter_values_persi
     assert "stars:" in state
     assert "flags:" in state
     assert "panel_expanded" not in state
+
+
+def test_folder_load_reuses_single_sanitized_state_object():
+    ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+    folder_state = (ROOT / "tool" / "js" / "folder_state.js").read_text(encoding="utf-8")
+
+    assert "var cleanFolderState = applyFolderStateToDom(folderState);" in ui
+    assert "loadChecklistFromFolderState(cleanFolderState);" in ui
+    assert "loadCaptionHelpersFromFolderState(cleanFolderState);" in ui
+    assert "loadItemTagsFromFolderState(cleanFolderState);" in ui
+    assert "return clean;" in folder_state
+
+
+def test_media_selection_does_not_rebuild_entire_file_list():
+    media = (ROOT / "tool" / "js" / "media.js").read_text(encoding="utf-8")
+
+    selection = media.split("function selectPathMedia", 1)[1].split(
+        "// Move through captionless items", 1
+    )[0]
+    assert "var visibleMedia = getFilteredMediaItems(false);" in selection
+    assert "renderChecklistPanel({ skipItemDetailRefresh: true });" in selection
+    assert "renderItemMetadataPanel({ skipHeader: true });" in selection
+    assert "syncMediaListActiveRow(mediaItem.key);" in selection
+    assert "renderFileList();" not in selection
+
+
+def test_render_file_list_reuses_filtered_items_for_header_and_grid_visibility():
+    media = (ROOT / "tool" / "js" / "media.js").read_text(encoding="utf-8")
+    grid = (ROOT / "tool" / "js" / "media_grid_actions.js").read_text(encoding="utf-8")
+    details = (ROOT / "tool" / "js" / "item_details.js").read_text(encoding="utf-8")
+
+    render = media.split("async function renderFileList", 1)[1].split(
+        "function updateFlagDotForItem", 1
+    )[0]
+    assert "mediaGridUpdateEntryVisibility(mediaItems, { skipHeader: true });" in render
+    assert "updatePreviewActionControls(mediaItems);" in render
+    assert "function mediaGridUpdateEntryVisibility(visibleItems, options)" in grid
+    assert "function renderPreviewHeaderMeta(visibleMediaOverride)" in details

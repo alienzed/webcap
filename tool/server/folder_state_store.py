@@ -27,6 +27,7 @@ def set_media_annotation_state(
     unscoped_tags,
     checked_requirements,
     descriptors,
+    descriptor_snapshot,
     reviewed,
 ):
     key = str(media_key or "").strip()
@@ -58,6 +59,13 @@ def set_media_annotation_state(
         set_map_entry("caption_tags_by_media", unscoped_tags)
         set_map_entry("caption_requirements_checked", checked_requirements)
         set_map_entry("caption_group_term_descriptors_by_media", descriptors)
+
+        snapshot_keys = state.get("caption_group_term_descriptor_snapshot_media_keys")
+        snapshot_keys = [str(value or "").strip() for value in snapshot_keys] if isinstance(snapshot_keys, list) else []
+        snapshot_keys = [value for value in snapshot_keys if value and value != key]
+        if descriptor_snapshot:
+            snapshot_keys.append(key)
+        state["caption_group_term_descriptor_snapshot_media_keys"] = snapshot_keys
 
         reviewed_keys = state.get("reviewedKeys")
         reviewed_keys = [str(value or "").strip() for value in reviewed_keys] if isinstance(reviewed_keys, list) else []

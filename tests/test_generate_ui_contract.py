@@ -94,6 +94,9 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "generateState.sweepFolderByModel = {};" in script
     assert "generateState.sweepSelections = {};" in script
     assert "input.value = '';" in script
+    assert "generateState.modelId = getGenerateModelPreference();" in script
+    assert "setPromptLibraryOpen(false);" in script
+    assert "if (promptSearch) promptSearch.value = '';" in script
     assert "localStorage" not in script
     assert '"defaultPrompt": ""' in generation
 

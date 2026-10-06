@@ -311,13 +311,15 @@
     var output = el('test-generations-wildcard-output');
     var stable = el('test-generations-wildcard-stable');
     var use = el('test-generations-wildcard-use-btn');
-    if (!panel || !output || !stable || !use) throw new Error('Wildcard Builder analysis markup is missing.');
+    var regenerate = el('test-generations-wildcard-regenerate');
+    if (!panel || !output || !stable || !use || !regenerate) throw new Error('Wildcard Builder analysis markup is missing.');
     if (!analysis) {
       panel.classList.add('hidden');
       output.value = '';
       stable.textContent = '';
       wildcardDirector.previewSelections = [];
       use.disabled = true;
+      regenerate.textContent = 'Generate';
       renderWildcardDimensions();
       return;
     }
@@ -325,6 +327,7 @@
     output.value = String(analysis.wildcard || '');
     stable.textContent = stableTerms.length ? stableTerms.join(' · ') : 'No strong stable terms identified.';
     wildcardDirector.previewSelections = [];
+    regenerate.textContent = 'Regenerate';
     renderWildcardDimensions();
     panel.classList.remove('hidden');
   }

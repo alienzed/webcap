@@ -81,8 +81,8 @@ def test_test_results_header_promotes_view_tabs_without_legacy_rate_action():
     assert 'class="test-generations-view-tabs" role="tablist"' in html
     assert 'id="test-generations-view-grid-btn"' in html
     assert 'id="test-generations-view-compare-btn"' in html
-    assert 'class="test-generations-results-actions"' in html
-    assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);" in css
+    assert 'class="test-generations-results-actions"' not in html
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in css
     assert ".test-generations-view-tab.active" in css
     assert "border-bottom-color: var(--accent);" in css
     assert "setAttribute('aria-selected'" in script
@@ -666,11 +666,12 @@ def test_compare_videos_start_muted():
 
 
 def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
     assert "Next run" in script
-    assert "test-generations-session-meta" in script
+    assert "test-generations-session-meta" not in html
     assert "test-generations-session-info-btn" in script
     assert "test-generations-session-details" in script
     assert "function sessionMetaText(status)" in script
@@ -1162,9 +1163,10 @@ def test_test_results_header_surfaces_resolved_wildcard_choices():
     assert 'id="test-generations-wildcard-tagline"' in html
     assert "Array.isArray(status.wildcardValues)" in script
     assert "wildcardValues.join(' · ')" in script
-    assert ".test-generations-results-title-copy > strong" in css
-    assert "font-size: 22px;" in css
+    assert "<strong>Results</strong>" not in html
     assert ".test-generations-wildcard-tagline" in css
+    assert "font-size: 18px !important;" in css
+    assert "font-weight: 400;" in css
 
 
 def test_test_results_media_and_ratings_use_session_identity_not_fs_root_navigation():

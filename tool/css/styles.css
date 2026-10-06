@@ -457,8 +457,8 @@ textarea:focus, input:focus {
   border-bottom: 1px solid rgba(220, 38, 38, 0.28);
   background: rgba(220, 38, 38, 0.10);
   color: #991b1b;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -3043,33 +3043,26 @@ iframe {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
-}
-.test-generations-results-title-copy {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-.test-generations-results-title-copy > strong {
-  font-size: 22px;
-  line-height: 1.05;
+  gap: 12px;
 }
 .test-generations-wildcard-tagline {
-  max-width: min(52vw, 720px);
+  min-width: 0;
   overflow: hidden;
   color: var(--text) !important;
-  font-size: 13px !important;
-  font-weight: 650;
+  font-size: 18px !important;
+  font-weight: 400;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .test-generations-session-info-btn {
+  flex: 0 0 auto;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--accent);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1.2;
   text-decoration: none;
 }
@@ -3083,14 +3076,6 @@ iframe {
   font-size: 18px;
   font-weight: 400;
   text-decoration: none;
-}
-.test-generations-session-meta {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .test-generations-session-details {
   flex: 0 0 auto;
@@ -3646,17 +3631,15 @@ iframe {
 .test-generations-results-heading {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: end;
-  gap: 16px;
-  margin-bottom: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 12px;
 }
-.test-generations-results-heading span { color: var(--muted); font-size: 12px; }
 .test-generations-view-tabs {
   display: flex;
-  align-self: stretch;
-  justify-self: center;
-  align-items: end;
+  justify-self: end;
+  align-items: center;
   gap: 16px;
 }
 .test-generations-view-tab {
@@ -3668,8 +3651,8 @@ iframe {
   background: transparent;
   color: var(--muted);
   box-shadow: none;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
 }
 .test-generations-view-tab:hover,
@@ -3680,14 +3663,6 @@ iframe {
 .test-generations-view-tab.active {
   border-bottom-color: var(--accent);
   color: var(--text);
-}
-.test-generations-results-actions {
-  display: flex;
-  justify-self: end;
-  align-items: center;
-}
-.test-generations-results-actions .review-captions-btn {
-  width: auto;
 }
 .test-generations-results {
   display: grid;

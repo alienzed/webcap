@@ -19,6 +19,8 @@ def test_director_runtime_dir_uses_app_cache(monkeypatch, tmp_path):
 def test_director_capacity_defaults_defer_to_runtime():
     assert storyboard_llm_runtime.DEFAULT_CONTEXT_SIZE is None
     assert storyboard_llm_runtime.DEFAULT_MAX_TOKENS is None
+    assert storyboard_llm_runtime.LOCAL_MODEL_RESIDENT_LIMIT == 2
+    assert storyboard_llm_runtime.LOCAL_MODEL_FIT_TARGET_MIB == 1024
 
 
 def test_slot_snapshot_exposes_live_generation_progress(monkeypatch):
@@ -348,7 +350,7 @@ def test_loading_activity_exposes_selected_model_size(monkeypatch, tmp_path):
     model_path.write_bytes(b"x" * 4096)
     monkeypatch.setattr(
         storyboard_llm_runtime,
-        "list_models",
+        "_list_models_for_current_runtime",
         lambda reload=False: [{
             "id": "director",
             "status": "unloaded",
@@ -458,7 +460,7 @@ def test_ensure_local_model_loaded_reuses_loaded_selection(monkeypatch):
     calls = []
     monkeypatch.setattr(
         storyboard_llm_runtime,
-        "list_models",
+        "_list_models_for_current_runtime",
         lambda reload=False: [
             {"id": "qwen-large", "status": "loaded"},
             {"id": "qwen-small", "status": "unloaded"},
@@ -471,21 +473,41 @@ def test_ensure_local_model_loaded_reuses_loaded_selection(monkeypatch):
     assert calls == []
 
 
-def test_ensure_local_model_loaded_switches_models(monkeypatch):
+def test_ensure_local_model_loaded_keeps_second_model_resident(monkeypatch):
     calls = []
     monkeypatch.setattr(
         storyboard_llm_runtime,
-        "list_models",
+        "_list_models_for_current_runtime",
         lambda reload=False: [
-            {"id": "qwen-large", "status": "loaded"},
-            {"id": "qwen-small", "status": "unloaded"},
+            {"id": "qwen-large", "status": "loaded", "sizeBytes": 20_000},
+            {"id": "qwen-small", "status": "unloaded", "sizeBytes": 2_000},
         ],
     )
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_file_size", lambda _model: 2_000)
     monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: calls.append("load:" + model_id))
     monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append("unload:" + model_id))
 
     assert storyboard_llm_runtime._ensure_local_model_loaded("qwen-small") is True
-    assert calls == ["unload:qwen-large", "load:qwen-small"]
+    assert calls == ["load:qwen-small"]
+
+
+def test_ensure_local_model_loaded_frees_only_excess_resident_slot(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_list_models_for_current_runtime",
+        lambda reload=False: [
+            {"id": "large", "status": "loaded", "sizeBytes": 20_000},
+            {"id": "small", "status": "loaded", "sizeBytes": 2_000},
+            {"id": "vision", "status": "unloaded", "sizeBytes": 1_000},
+        ],
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_model_file_size", lambda _model: 1_000)
+    monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: calls.append("load:" + model_id))
+    monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append("unload:" + model_id))
+
+    assert storyboard_llm_runtime._ensure_local_model_loaded("vision") is True
+    assert calls == ["unload:large", "load:vision"]
 
 def test_local_model_load_uses_cancellable_transport(monkeypatch):
     calls = []

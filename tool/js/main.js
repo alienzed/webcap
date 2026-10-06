@@ -292,9 +292,7 @@ function wireAllUi() {
       for (var k in checklistCheckedByMedia) {
         if (checklistCheckedByMedia[k]) checklistCheckedByMedia[k][val] = false;
       }
-      syncReviewedFromChecklistAll();
-      saveChecklistToFolderState();
-      renderChecklistPanel();
+      refreshChecklistGroupConfigurationUi();
       addInput.value = '';
     };
     addInput.addEventListener('keydown', function(e) {

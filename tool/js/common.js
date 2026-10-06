@@ -117,10 +117,24 @@ function getConfiguredPrimerTemplate(requirements) {
 }
 
 function setRuntimeAppConfig(cfg) {
+  var previousRequirementsJson = JSON.stringify(
+    APP_CONFIG && typeof APP_CONFIG === 'object' && APP_CONFIG.requirements && typeof APP_CONFIG.requirements === 'object'
+      ? APP_CONFIG.requirements
+      : {}
+  );
   var next = (cfg && typeof cfg === 'object') ? JSON.parse(JSON.stringify(cfg)) : {};
+  var nextRequirementsJson = JSON.stringify(
+    next.requirements && typeof next.requirements === 'object' ? next.requirements : {}
+  );
   APP_CONFIG = next;
   window.APP_CONFIG = next;
   DEBUG = !!(next && next.debug);
+  if (
+    previousRequirementsJson !== nextRequirementsJson &&
+    typeof invalidateChecklistRequirementConfiguration === 'function'
+  ) {
+    invalidateChecklistRequirementConfiguration();
+  }
 }
 
 // Load config.json synchronously and set ROOT_FOLDER_LABEL

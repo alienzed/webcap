@@ -14,22 +14,22 @@ var APP_CONFIG = {};
     scripts.sort(function (a, b) {
       return Number(b.duration || 0) - Number(a.duration || 0);
     });
-    console.warn('[Performance] Long animation frame', {
-      durationMs: roundMs(entry.duration),
-      blockingDurationMs: roundMs(entry.blockingDuration),
-      startTimeMs: roundMs(entry.startTime),
-      scripts: scripts.slice(0, 8).map(function (script) {
-        return {
-          durationMs: roundMs(script.duration),
-          pauseDurationMs: roundMs(script.pauseDuration),
-          forcedStyleAndLayoutDurationMs: roundMs(script.forcedStyleAndLayoutDuration),
-          functionName: String(script.sourceFunctionName || ''),
-          source: String(script.sourceURL || ''),
-          invokerType: String(script.invokerType || ''),
-          invoker: String(script.invoker || '')
-        };
-      })
+    var details = scripts.slice(0, 8).map(function (script) {
+      return {
+        durationMs: roundMs(script.duration),
+        pauseDurationMs: roundMs(script.pauseDuration),
+        forcedStyleAndLayoutDurationMs: roundMs(script.forcedStyleAndLayoutDuration),
+        functionName: String(script.sourceFunctionName || ''),
+        source: String(script.sourceURL || ''),
+        invokerType: String(script.invokerType || ''),
+        invoker: String(script.invoker || '')
+      };
     });
+    console.warn(
+      '[Performance] Long animation frame ' +
+      roundMs(entry.duration) + 'ms; blocking=' + roundMs(entry.blockingDuration) + 'ms; scripts=' +
+      JSON.stringify(details)
+    );
   }
 
   try {

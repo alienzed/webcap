@@ -842,6 +842,7 @@ def _ensure_server():
         command.extend([
             "--n-gpu-layers", "all",
             "--parallel", "1",
+            "--image-min-tokens", "1024",
             "--jinja",
             "--cache-prompt",
         ])
@@ -899,12 +900,25 @@ def _normalize_models(payload):
             size_bytes = max(0, int(size_value or 0))
         except (TypeError, ValueError):
             size_bytes = 0
+        architecture = entry.get("architecture") if isinstance(entry.get("architecture"), dict) else {}
+        input_modalities = architecture.get("input_modalities")
+        if not isinstance(input_modalities, list):
+            input_modalities = ["text"]
+        input_modalities = [
+            str(value).strip().lower()
+            for value in input_modalities
+            if str(value or "").strip()
+        ] or ["text"]
         models.append({
             "id": model_id,
             "label": Path(path or model_id).name,
             "path": path,
             "status": str(status.get("value") or ("remote" if not path else "unloaded")),
             "sizeBytes": size_bytes,
+            "architecture": {
+                "input_modalities": input_modalities,
+            },
+            "inputModalities": input_modalities,
         })
     models.sort(key=lambda model: model["label"].casefold())
     return models
@@ -923,7 +937,8 @@ def _model_file_size(model):
     if models_dir is None:
         raise RuntimeError("Director models directory is unavailable.")
 
-    path = Path(models_dir) / filename
+    raw_local_path = Path(raw_path).expanduser() if raw_path else None
+    path = raw_local_path if raw_local_path is not None and raw_local_path.is_absolute() and raw_local_path.is_file() else Path(models_dir) / filename
     try:
         return int(path.stat().st_size)
     except OSError as exc:
@@ -973,27 +988,56 @@ def _list_local_models_passive():
     if not models_dir.is_dir():
         raise NotADirectoryError("Director models directory is not a directory: " + str(models_dir))
 
-    models = []
-    for path in models_dir.iterdir():
-        if path.suffix.casefold() != ".gguf":
-            continue
+    def is_sidecar(path):
+        name = path.name.casefold()
+        return (
+            "mmproj" in name
+            or name.startswith("mtp-")
+            or name.startswith("dspark-")
+            or name.startswith("dflash-")
+        )
+
+    def record(model_id, model_path, multimodal=False):
         try:
-            if not path.is_file():
-                continue
-            size_bytes = int(path.stat().st_size)
+            size_bytes = int(model_path.stat().st_size)
         except OSError as exc:
-            _logger.info("Skipping unavailable local Director model %s: %s", path.name, exc)
-            continue
-        models.append({
-            "id": path.stem,
-            "label": path.name,
-            "path": str(path),
+            _logger.info("Skipping unavailable local Director model %s: %s", model_path.name, exc)
+            return None
+        input_modalities = ["text", "image"] if multimodal else ["text"]
+        return {
+            "id": str(model_id),
+            "label": model_path.name,
+            "path": str(model_path),
             "status": "unloaded",
             "sizeBytes": max(0, size_bytes),
-        })
+            "architecture": {"input_modalities": input_modalities},
+            "inputModalities": input_modalities,
+        }
+
+    models = []
+    for path in models_dir.iterdir():
+        if path.is_file() and path.suffix.casefold() == ".gguf" and not is_sidecar(path):
+            model = record(path.stem, path, multimodal=False)
+            if model is not None:
+                models.append(model)
+            continue
+        if not path.is_dir():
+            continue
+
+        ggufs = [
+            entry for entry in path.iterdir()
+            if entry.is_file() and entry.suffix.casefold() == ".gguf"
+        ]
+        main_files = [entry for entry in ggufs if not is_sidecar(entry)]
+        mmproj_files = [entry for entry in ggufs if "mmproj" in entry.name.casefold()]
+        if len(main_files) != 1:
+            continue
+        model = record(path.name, main_files[0], multimodal=bool(mmproj_files))
+        if model is not None:
+            models.append(model)
+
     models.sort(key=lambda model: model["label"].casefold())
     return models
-
 
 def list_models(reload=False, probe_local_runtime=False):
     models = []

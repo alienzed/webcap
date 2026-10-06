@@ -276,6 +276,13 @@ function adoptCaptionVisionPrefetch(prefetch, candidate) {
   return bindCaptionVisionTaskToCandidate(task, candidate);
 }
 
+function isCaptionVisionKnownTagSelected(mediaKey, group, term) {
+  var wanted = String(term || '').trim().toLowerCase();
+  return getChecklistAssignedTagsForMediaKey(mediaKey, group).some(function (value) {
+    return String(value || '').trim().toLowerCase() === wanted;
+  });
+}
+
 function applyCaptionVisionKnownTag(finding) {
   if (!finding || !finding.knownTag || !state.currentItem || !captionAssistCandidate) return;
   var mediaKey = state.currentItem.key;
@@ -283,23 +290,22 @@ function applyCaptionVisionKnownTag(finding) {
   var term = String(finding.knownTag.term || '');
   if (!group || !term) return;
 
-  var changed = assignChecklistTagToMediaKey(mediaKey, group, term);
-  if (!changed) {
-    setStatus('Vision suggestion is already selected.');
-    syncCaptionVisionUi();
-    return;
+  var alreadySelected = isCaptionVisionKnownTagSelected(mediaKey, group, term);
+  if (!alreadySelected) {
+    assignChecklistTagToMediaKey(mediaKey, group, term);
   }
 
-  setStatus('Selected ' + group + ': ' + term + '. Refreshing caption suggestion...');
+  setStatus(
+    (alreadySelected ? 'Revising caption for ' : 'Selected ' + group + ': ' + term + '. Revising caption for ')
+    + group + ': ' + term + '...'
+  );
   captionVisionResult = null;
   captionVisionError = '';
-  cancelCurrentCaptionVision().then(function () {
-    return cancelFocusedCaptionPrefetch();
-  }).then(function () {
-    captionAssistCandidate = null;
-    syncCaptionAssistCandidateUi();
-    return runCaptionAssist();
-  });
+  repairCaptionAssistCandidate([{
+    group: group,
+    term: term,
+    note: String(finding.description || '').trim()
+  }]);
 }
 
 function renderCaptionVisionFinding(finding) {
@@ -319,11 +325,17 @@ function renderCaptionVisionFinding(finding) {
   row.appendChild(copy);
 
   if (finding.knownTag) {
+    var group = String(finding.knownTag.group || '');
+    var term = String(finding.knownTag.term || '');
+    var mediaKey = state && state.currentItem ? state.currentItem.key : '';
+    var selected = !!(mediaKey && isCaptionVisionKnownTagSelected(mediaKey, group, term));
     var button = document.createElement('button');
     button.type = 'button';
     button.className = 'caption-vision-tag-action';
-    button.textContent = String(finding.knownTag.group || '') + ' · ' + String(finding.knownTag.term || '');
-    button.title = 'Select this existing tag and regenerate the caption suggestion';
+    button.textContent = selected ? 'Fix caption' : 'Apply + fix';
+    button.title = selected
+      ? ('Revise the caption to include ' + group + ': ' + term)
+      : ('Select ' + group + ': ' + term + ' and revise the caption');
     button.addEventListener('click', function () {
       applyCaptionVisionKnownTag(finding);
     });

@@ -1,0 +1,694 @@
+/* Quality Assurance workspace
+ *
+ * QA owns the editorial overview/recommendation UI. Existing Review artifacts
+ * remain in the workbench panel and are only shown when explicitly opened.
+ */
+
+.app.shell-revamp.workspace-surface-review-output {
+  grid-template-columns: minmax(0, var(--sidebar-width)) minmax(0, 1fr);
+  grid-template-areas: "sidebar preview";
+}
+
+.app.shell-revamp.workspace-surface-review-output.left-rail-collapsed,
+.app.shell-revamp.workspace-surface-review-output.sidebar-hidden {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "preview";
+}
+
+.app.shell-revamp.workspace-surface-review-output .preview-panel {
+  grid-area: preview;
+  display: flex;
+}
+
+.app.shell-revamp.workspace-surface-review-output .workbench-panel {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open {
+  grid-template-areas: "sidebar workbench";
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open.left-rail-collapsed,
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open.sidebar-hidden {
+  grid-template-areas: "workbench";
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open .preview-panel {
+  display: none;
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open .workbench-panel {
+  grid-area: workbench;
+  display: flex;
+}
+
+.app.shell-revamp.workspace-surface-review-output .review-output-surface {
+  width: 100%;
+  max-width: none;
+  padding: 24px clamp(22px, 3vw, 48px) 56px;
+  overflow: auto;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.app.shell-revamp .qa-workbench {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.app.shell-revamp .qa-workbench button {
+  min-height: 42px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.app.shell-revamp .qa-workbench button:hover,
+.app.shell-revamp .qa-workbench button:focus-visible {
+  border-color: var(--accent);
+  background: var(--hover);
+}
+
+.app.shell-revamp .qa-workbench button.qa-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 800;
+}
+
+.app.shell-revamp .qa-workbench button.qa-primary:hover,
+.app.shell-revamp .qa-workbench button.qa-primary:focus-visible {
+  background: var(--accent-dark);
+}
+
+.app.shell-revamp .qa-page-header,
+.app.shell-revamp .qa-hero,
+.app.shell-revamp .qa-report-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.app.shell-revamp .qa-page-header {
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.app.shell-revamp .qa-page-title {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(30px, 3vw, 38px);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.app.shell-revamp .qa-page-scope {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.app.shell-revamp .qa-page-actions,
+.app.shell-revamp .qa-hero-actions,
+.app.shell-revamp .qa-recommendation-actions,
+.app.shell-revamp .qa-recommendation-nav,
+.app.shell-revamp .qa-utility-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.app.shell-revamp .qa-training-focus {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 24px 0 8px;
+}
+
+.app.shell-revamp .qa-training-focus-label {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.app.shell-revamp .qa-training-focus-value {
+  color: var(--text);
+  font-size: 17px;
+}
+
+.app.shell-revamp .qa-training-focus-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.app.shell-revamp .qa-training-focus-editor {
+  display: flex;
+  flex: 1 1 520px;
+  align-items: center;
+  gap: 8px;
+}
+
+.app.shell-revamp .qa-training-focus-editor.hidden {
+  display: none;
+}
+
+.app.shell-revamp .qa-training-focus-editor input {
+  flex: 1 1 auto;
+  min-width: 220px;
+  min-height: 42px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 17px;
+}
+
+.app.shell-revamp .qa-hero {
+  align-items: flex-end;
+  padding: 28px 0 30px;
+}
+
+.app.shell-revamp .qa-hero-copy {
+  flex: 1 1 620px;
+}
+
+.app.shell-revamp .qa-hero h2,
+.app.shell-revamp .qa-section-title,
+.app.shell-revamp .qa-recommendation-title,
+.app.shell-revamp .qa-report-category-title {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(25px, 2.4vw, 32px);
+  font-weight: 800;
+  line-height: 1.14;
+  letter-spacing: -0.018em;
+}
+
+.app.shell-revamp .qa-hero p {
+  max-width: 760px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.app.shell-revamp .qa-hero-actions {
+  justify-content: flex-end;
+}
+
+.app.shell-revamp .qa-hero-actions .qa-primary {
+  min-height: 50px;
+  padding: 11px 18px;
+  font-size: 18px;
+}
+
+.app.shell-revamp .qa-deep-scan-wrap {
+  display: grid;
+  gap: 3px;
+}
+
+.app.shell-revamp .qa-deep-scan-note {
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.app.shell-revamp .qa-summary-line {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 18px 0 22px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.app.shell-revamp .qa-summary-line strong {
+  font-size: 21px;
+}
+
+.app.shell-revamp .qa-summary-line span {
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.app.shell-revamp .qa-section {
+  margin-top: 38px;
+}
+
+.app.shell-revamp .qa-section-title {
+  margin-bottom: 16px;
+  font-size: 26px;
+}
+
+.app.shell-revamp .qa-category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.app.shell-revamp .qa-category-card {
+  display: flex;
+  min-width: 0;
+  min-height: 104px;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  text-align: left;
+}
+
+.app.shell-revamp .qa-category-count {
+  min-width: 42px;
+  font-size: 32px;
+  font-weight: 850;
+  line-height: 1;
+  text-align: center;
+}
+
+.app.shell-revamp .qa-category-copy {
+  min-width: 0;
+}
+
+.app.shell-revamp .qa-category-copy strong {
+  display: block;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.app.shell-revamp .qa-category-copy span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.app.shell-revamp .qa-category-card[data-category="underrepresented"] .qa-category-count {
+  color: var(--warning, #d97706);
+}
+
+.app.shell-revamp .qa-category-card[data-category="overrepresented"] .qa-category-count {
+  color: #8b5cf6;
+}
+
+.app.shell-revamp .qa-category-card[data-category="prune"] .qa-category-count {
+  color: var(--danger, #dc2626);
+}
+
+.app.shell-revamp .qa-category-card[data-category="consistency"] .qa-category-count {
+  color: #2563eb;
+}
+
+.app.shell-revamp .qa-category-card[data-category="captioning"] .qa-category-count {
+  color: #059669;
+}
+
+.app.shell-revamp .qa-health-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.app.shell-revamp .qa-health-chip {
+  min-height: 38px !important;
+  padding: 7px 11px !important;
+  color: var(--muted) !important;
+  font-size: 15px !important;
+  font-weight: 650 !important;
+}
+
+.app.shell-revamp .qa-health-note,
+.app.shell-revamp .qa-muted {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.app.shell-revamp .qa-health-note {
+  margin-top: 9px;
+}
+
+.app.shell-revamp .qa-utility-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.app.shell-revamp .qa-utility-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.app.shell-revamp .qa-utility-card strong {
+  font-size: 19px;
+}
+
+.app.shell-revamp .qa-utility-card span {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.app.shell-revamp .qa-utility-card button {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.app.shell-revamp .qa-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 24px 0;
+}
+
+.app.shell-revamp .qa-progress strong {
+  font-size: 19px;
+}
+
+.app.shell-revamp .qa-progress-track {
+  flex: 1 1 220px;
+  max-width: 420px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-soft);
+}
+
+.app.shell-revamp .qa-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.app.shell-revamp .qa-recommendation {
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+
+.app.shell-revamp .qa-recommendation-eyebrow {
+  color: var(--warning, #d97706);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.app.shell-revamp .qa-recommendation-title {
+  margin-top: 10px;
+  font-size: clamp(28px, 3vw, 36px);
+}
+
+.app.shell-revamp .qa-recommendation-summary {
+  max-width: 920px;
+  margin: 12px 0 0;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1.45;
+}
+
+.app.shell-revamp .qa-recommendation-why {
+  max-width: 900px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.app.shell-revamp .qa-fact-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+
+.app.shell-revamp .qa-fact {
+  min-width: 130px;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-soft);
+}
+
+.app.shell-revamp .qa-fact strong {
+  display: block;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.app.shell-revamp .qa-fact span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.app.shell-revamp .qa-evidence-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 4px 0 11px;
+  flex-wrap: wrap;
+}
+
+.app.shell-revamp .qa-evidence-heading h3 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 800;
+}
+
+.app.shell-revamp .qa-evidence-heading span {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.app.shell-revamp .qa-evidence-strip {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 1px 1px 14px;
+  scroll-snap-type: x proximity;
+}
+
+.app.shell-revamp .qa-evidence-media {
+  flex: 0 0 220px;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+  scroll-snap-align: start;
+}
+
+.app.shell-revamp .qa-evidence-preview {
+  position: relative;
+  width: 100%;
+  height: 245px;
+  overflow: hidden;
+  background: var(--hover);
+}
+
+.app.shell-revamp .qa-evidence-preview img,
+.app.shell-revamp .qa-evidence-preview video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app.shell-revamp .qa-evidence-file {
+  padding: 10px 11px 12px;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app.shell-revamp .qa-recommendation-actions {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.app.shell-revamp .qa-recommendation-nav {
+  margin-left: auto;
+}
+
+.app.shell-revamp .qa-recommendation-status {
+  min-height: 25px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.app.shell-revamp .qa-empty {
+  padding: 34px 0;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.app.shell-revamp .qa-report-header {
+  align-items: flex-end;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.app.shell-revamp .qa-report-copy {
+  max-width: 760px;
+}
+
+.app.shell-revamp .qa-report-copy p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.app.shell-revamp .qa-report-category {
+  padding: 32px 0 8px;
+}
+
+.app.shell-revamp .qa-report-category-title {
+  margin-bottom: 12px;
+  font-size: 26px;
+}
+
+.app.shell-revamp .qa-report-finding {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  padding: 19px 0;
+  border-top: 1px solid var(--border);
+}
+
+.app.shell-revamp .qa-report-finding:first-of-type {
+  border-top: 0;
+}
+
+.app.shell-revamp .qa-report-finding.is-disposed {
+  opacity: 0.72;
+}
+
+.app.shell-revamp .qa-report-finding h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.app.shell-revamp .qa-report-finding p {
+  max-width: 780px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.app.shell-revamp .qa-report-meta {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.app.shell-revamp .qa-report-meta span {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.app.shell-revamp .qa-report-disposition {
+  color: #15803d !important;
+  font-weight: 750;
+}
+
+.app.shell-revamp .qa-other-observations {
+  margin-top: 32px;
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.app.shell-revamp .qa-other-observations summary {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.app.shell-revamp .qa-other-observations-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 15px;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.app.shell-revamp .qa-view.hidden {
+  display: none !important;
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open .review-detail-surface {
+  padding: 18px 22px;
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open .workspace-artifact-tabs {
+  gap: 8px;
+  padding-bottom: 12px;
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open .workspace-artifact-tab {
+  min-height: 38px;
+  padding: 7px 10px;
+  font-size: 15px;
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open .review-output-column-title {
+  font-size: 20px;
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open .review-output-column-subtitle {
+  font-size: 15px;
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open .caption-sheet-summary {
+  font-size: 14px;
+}
+
+.app.shell-revamp.workspace-surface-review-output.qa-utility-open .caption-sheet-text {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .app.shell-revamp .qa-category-grid,
+  .app.shell-revamp .qa-utility-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app.shell-revamp .qa-hero-actions {
+    justify-content: flex-start;
+  }
+
+  .app.shell-revamp .qa-report-finding {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app.shell-revamp .qa-recommendation-nav {
+    width: 100%;
+    margin-left: 0;
+  }
+}

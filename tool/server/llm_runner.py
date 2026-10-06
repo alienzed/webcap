@@ -511,6 +511,7 @@ def _advance_queue():
             if local_gpu:
                 from .gpu_prep import prepare_gpu_for
                 if not prepare_gpu_for(GPU_RESERVATION_OWNER):
+                    _release_gpu()
                     return None
             from .storyboard_llm_runtime import clear_stop_request
             clear_stop_request()

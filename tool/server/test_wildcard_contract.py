@@ -3,7 +3,10 @@ from collections import Counter
 
 
 _GENERIC_WILDCARD_OPTION = re.compile(
-    r"\b(?:various|different|assorted|miscellaneous|multiple|several|other\s+(?:style|styles|background|backgrounds|pose|poses|view|views|color|colors|colour|colours|option|options))\b",
+    r"\\b(?:(?:various|different|assorted|miscellaneous)\\s+"
+    r"(?:style|styles|background|backgrounds|pose|poses|view|views|color|colors|colour|colours|option|options|bikini\\s+styles)"
+    r"|other\\s+(?:style|styles|background|backgrounds|pose|poses|view|views|color|colors|colour|colours|option|options)"
+    r"|etc\\.?)\\b",
     re.IGNORECASE,
 )
 

@@ -129,3 +129,21 @@ def test_caption_assist_candidate_is_viewport_modal_and_owns_escape():
     assert "if (event.target === candidatePanel) dismissCaptionAssistCandidate();" in primer
     assert "event.stopImmediatePropagation();" in primer
     assert "}, true);" in primer
+
+
+def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
+    html = _read("tool/tool.html")
+    css = _read("tool/css/styles.css")
+    primer = _read("tool/js/primer_settings.js")
+
+    assert 'id="editor-caption-candidate-omissions"' in html
+    assert "function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments)" in primer
+    assert "checklistGroupTermAppearsInCaptionText(group, term, mediaKey, captionText)" in primer
+    assert "request.assignments" in primer
+    assert "Candidate omitted selected annotations: " in primer
+    assert "Caption Assist candidate failed annotation validation." in primer
+    assert "useBtn.textContent = omittedAssignments.length ? 'Use anyway' : 'Use';" in primer
+    assert "regenerateBtn.textContent = omittedAssignments.length ? 'Regenerate' : '\\u21bb';" in primer
+    assert "regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);" in primer
+    assert ".editor-caption-candidate-omissions {" in css
+    assert ".editor-caption-candidate-regenerate.is-primary {" in css

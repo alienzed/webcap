@@ -128,6 +128,39 @@ function setDirectorModelPreference(_storageKey, modelId) {
 window.getDirectorModelPreference = getDirectorModelPreference;
 window.setDirectorModelPreference = setDirectorModelPreference;
 
+function getVisionModelPreference() {
+  return String(APP_CONFIG && APP_CONFIG.vision_model || '').trim();
+}
+
+function setVisionModelPreference(modelId) {
+  var selected = String(modelId || '').trim();
+  if (!APP_CONFIG || typeof APP_CONFIG !== 'object') setRuntimeAppConfig({});
+  APP_CONFIG.vision_model = selected;
+  window.APP_CONFIG = APP_CONFIG;
+  window.dispatchEvent(new CustomEvent('webcap:vision-model-changed', { detail: { modelId: selected } }));
+
+  HttpModule.postJson('/app/config/vision_model', { modelId: selected }, function (status, responseText) {
+    if (status === 200) {
+      try {
+        var payload = JSON.parse(responseText);
+        if (payload && payload.config) setRuntimeAppConfig(payload.config);
+      } catch (_err) {}
+      return;
+    }
+    var message = 'Failed to save Vision model preference.';
+    try {
+      var failure = JSON.parse(responseText);
+      if (failure && failure.error) message = String(failure.error);
+    } catch (_err) {}
+    console.error(message);
+    if (typeof setStatus === 'function') setStatus(message);
+  });
+  return selected;
+}
+
+window.getVisionModelPreference = getVisionModelPreference;
+window.setVisionModelPreference = setVisionModelPreference;
+
 function formatDirectorModelLabel(model) {
   model = model && typeof model === 'object' ? model : {};
   var label = String(model.label || model.modelId || model.id || '').trim();

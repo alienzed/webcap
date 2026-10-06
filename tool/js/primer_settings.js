@@ -267,9 +267,21 @@ function syncCaptionAssistCandidateUi() {
   panel.classList.toggle('hidden', !visible);
   panel.classList.toggle('is-focus-caption', !!(visible && isFocusedCaptionOpen()));
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
-  omissionsEl.textContent = omittedAssignments.length
-    ? ('Candidate omitted selected annotations: ' + omittedAssignments.join(' · '))
-    : '';
+  omissionsEl.innerHTML = '';
+  if (omittedAssignments.length) {
+    var omissionText = document.createElement('span');
+    omissionText.textContent = 'Candidate omitted selected annotations: ' + omittedAssignments.join(' · ');
+    omissionsEl.appendChild(omissionText);
+    var fixOmissionsBtn = document.createElement('button');
+    fixOmissionsBtn.type = 'button';
+    fixOmissionsBtn.className = 'caption-assist-fix-btn';
+    fixOmissionsBtn.textContent = 'Fix';
+    fixOmissionsBtn.title = 'Revise this candidate to include the selected annotations';
+    fixOmissionsBtn.addEventListener('click', function () {
+      repairCaptionAssistCandidate(candidate.omittedCorrections || []);
+    });
+    omissionsEl.appendChild(fixOmissionsBtn);
+  }
   missingEl.classList.toggle('hidden', !missingGroups.length);
   missingEl.textContent = missingGroups.length ? ('Still unreviewed: ' + missingGroups.join(' · ')) : '';
   useBtn.textContent = omittedAssignments.length ? 'Use anyway' : 'Use';
@@ -541,7 +553,7 @@ function getCaptionAssistMissingGroups(mediaKey) {
   });
 }
 
-function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments) {
+function getCaptionAssistOmittedCorrections(mediaKey, captionText, assignments) {
   var seen = {};
   var omitted = [];
   (Array.isArray(assignments) ? assignments : []).forEach(function (entry) {
@@ -549,13 +561,22 @@ function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments) 
     var term = String(entry && entry.term || '').trim();
     if (!term) return;
     if (checklistGroupTermAppearsInCaptionText(group, term, mediaKey, captionText)) return;
-    var label = group ? (group + ' — ' + term) : term;
-    var key = label.toLowerCase();
+    var key = (group + '\n' + term).toLowerCase();
     if (seen[key]) return;
     seen[key] = true;
-    omitted.push(label);
+    omitted.push({
+      group: group,
+      term: term,
+      note: 'Selected annotation is missing from the current caption.'
+    });
   });
   return omitted;
+}
+
+function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments) {
+  return getCaptionAssistOmittedCorrections(mediaKey, captionText, assignments).map(function (entry) {
+    return entry.group ? (entry.group + ' — ' + entry.term) : entry.term;
+  });
 }
 
 function getCaptionAssistDraftForMediaItem(mediaItem) {
@@ -680,8 +701,94 @@ function requestCaptionAssistCandidate(mediaItem, request, options) {
         nextCaption,
         request.assignments
       ),
+      omittedCorrections: getCaptionAssistOmittedCorrections(
+        sourceMediaKey,
+        nextCaption,
+        request.assignments
+      ),
       requestFingerprint: captionAssistRequestFingerprint(mediaItem, request)
     };
+  });
+}
+
+function repairCaptionAssistCandidate(corrections) {
+  var mediaItem = getPrimerResetCurrentMediaItem();
+  var candidate = captionAssistCandidate;
+  var cleanCorrections = (Array.isArray(corrections) ? corrections : []).map(function (entry) {
+    return {
+      group: String(entry && entry.group || '').trim(),
+      term: String(entry && entry.term || '').trim(),
+      note: String(entry && entry.note || entry && entry.description || '').trim()
+    };
+  }).filter(function (entry) { return !!entry.term; });
+
+  if (!mediaItem || !candidate || candidate.mediaKey !== mediaItem.key || !cleanCorrections.length) {
+    setStatus('No caption correction is available.');
+    return Promise.resolve(false);
+  }
+  if (captionAssistPendingJobId) {
+    setStatus('Caption Assist is already running.');
+    return Promise.resolve(false);
+  }
+
+  var request = buildCaptionAssistRequest(mediaItem);
+  request.draft = String(candidate.text || '').trim();
+  request.corrections = cleanCorrections;
+  if (!request.model) {
+    setStatus('Select a Director model before revising the caption.');
+    return Promise.resolve(false);
+  }
+
+  var sourceMediaKey = mediaItem.key;
+  setStatus('Caption Assist revising candidate...');
+  return cancelCurrentCaptionVision().then(function () {
+    return cancelFocusedCaptionPrefetch();
+  }).then(function () {
+    return requestCaptionAssistCandidate(mediaItem, request, {
+      onJob: function (job) {
+        captionAssistPendingJobId = String(job.jobId || '');
+        updatePrimerCaptionResetUi();
+        setStatus(job.status === 'queued' ? 'Caption repair waiting in the LLM queue...' : 'Caption Assist revising...');
+      }
+    });
+  }).then(function (nextCandidate) {
+    if (!state.currentItem || state.currentItem.key !== sourceMediaKey) {
+      setStatus('Caption repair finished, but the selected media item changed; result was not applied.');
+      return false;
+    }
+    captionAssistCandidate = nextCandidate;
+    syncCaptionAssistCandidateUi();
+    setStatus(
+      nextCandidate.omittedAssignments.length
+        ? 'Caption repair still omits selected annotations.'
+        : 'Caption repaired.'
+    );
+    if (isFocusedCaptionOpen()) {
+      if (captionVisionEnabled) {
+        return maybeRunCaptionVisionForCandidate(nextCandidate).then(function () {
+          if (isFocusedCaptionOpen() && state.currentItem && state.currentItem.key === sourceMediaKey) {
+            return startFocusedCaptionPrefetch(sourceMediaKey);
+          }
+          return true;
+        });
+      }
+      return startFocusedCaptionPrefetch(sourceMediaKey);
+    }
+    return true;
+  }).catch(function (err) {
+    setStatus('Caption repair failed: ' + String(err && err.message ? err.message : err));
+    reportConsoleError('Caption Assist', err);
+    return false;
+  }).then(function (result) {
+    captionAssistPendingJobId = '';
+    updatePrimerCaptionResetUi();
+    syncFocusedCaptionAfterAssist(sourceMediaKey);
+    return result;
+  }, function (err) {
+    captionAssistPendingJobId = '';
+    updatePrimerCaptionResetUi();
+    syncFocusedCaptionAfterAssist(sourceMediaKey);
+    throw err;
   });
 }
 
@@ -749,6 +856,8 @@ function runCaptionAssist() {
     throw err;
   });
 }
+
+window.repairCaptionAssistCandidate = repairCaptionAssistCandidate;
 
 function runCaptionAssistFromUi() {
   if (!isFocusedCaptionOpen()) return runCaptionAssist();

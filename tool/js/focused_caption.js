@@ -650,10 +650,11 @@ function wireFocusedCaption() {
     document.__focusedCaptionOutsideClickBound = true;
     document.addEventListener('pointerdown', function (event) {
       if (!focusedCaptionState.open || !event || !event.target) return;
-      var dialog = document.querySelector('#editor-caption-candidate .editor-caption-candidate-dialog');
-      if (dialog && dialog.contains(event.target)) return;
+      var panel = document.getElementById('editor-caption-candidate');
+      if (panel && panel.contains(event.target)) return;
       if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-focus-caption-skip-btn')) return;
       stopFocusedCaption('Focus Caption ended.');
+      renderFileList();
     }, true);
   }
   if (!window.__focusedCaptionResizeBound) {

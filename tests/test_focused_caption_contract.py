@@ -46,7 +46,7 @@ def test_focus_caption_snapshots_current_visible_scope_once():
     assert "getFilteredMediaItems(false)" in focus
     assert "focusedCaptionState.itemKeys = itemKeys;" in focus
     assert "focusedCaptionState.itemKey = itemKeys[0];" in focus
-    assert "return navigateFocusedCaptionToIndex(focusedCaptionState.itemIndex + 1);" in focus
+    assert "return moveFocusedCaption(1);" in focus
     assert "getFilteredMediaItems(false)" not in focus.split("function advanceFocusedCaption()", 1)[1]
 
 
@@ -80,7 +80,8 @@ def test_focus_caption_candidate_actions_preserve_normal_editor_behavior():
     dismiss_candidate = primer[dismiss_start:dismiss_end]
     assert "if (isFocusedCaptionOpen())" in dismiss_candidate
     assert "return advanceFocusedCaption();" not in dismiss_candidate
-    assert "Regenerate, edit, or Skip" in dismiss_candidate
+    assert "stopFocusedCaption('Focus Caption ended.');" in dismiss_candidate
+    assert "renderFileList();" in dismiss_candidate
     assert "AI caption candidate dismissed." in dismiss_candidate
 
 
@@ -99,7 +100,7 @@ def test_focus_caption_progress_is_visible_without_new_workspace_surface():
     focus = _read("tool/js/focused_caption.js")
 
     assert "'Exit \\u00b7 ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length" in focus
-    assert "event.key !== 'Escape'" in focus
+    assert "if (key === 'Escape')" in focus
     assert ".preview-workflow-actions .review-captions-btn.active" in css
     assert ".review-captions-btn.active .preview-header-btn-label" in css
     assert "setWorkspaceSurface(" not in focus
@@ -361,3 +362,15 @@ def test_focus_caption_enhancements_do_not_change_normal_caption_assist_contract
     assert "if (isFocusedCaptionOpen()) {\n        regenerateFocusedCaption();" in primer
     assert "if (isFocusedCaptionOpen()) {\n        event.preventDefault();" in primer
     assert "applyEditorTextAndTriggerInput(nextCaption);" in primer
+
+
+def test_focus_caption_outside_click_refreshes_list_without_double_handling_backdrop():
+    focus = _read("tool/js/focused_caption.js")
+
+    assert "var panel = document.getElementById('editor-caption-candidate');" in focus
+    assert "if (panel && panel.contains(event.target)) return;" in focus
+    outside_start = focus.index("if (!document.__focusedCaptionOutsideClickBound)")
+    outside_end = focus.index("if (!window.__focusedCaptionResizeBound)", outside_start)
+    outside = focus[outside_start:outside_end]
+    assert "stopFocusedCaption('Focus Caption ended.');" in outside
+    assert "renderFileList();" in outside

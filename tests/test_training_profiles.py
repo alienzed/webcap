@@ -7,6 +7,7 @@ from tool.server.training_profiles import (
     WAN22_PROFILE_ID,
     profile,
     profile_run,
+    profiles,
 )
 
 
@@ -42,3 +43,11 @@ def test_training_profiles_expose_only_their_valid_runs_and_artifacts():
     assert tuple(h3["datasetFiles"]) == ("dataset.h3.toml",)
     assert tuple(profile_run(MINIMAX_H3_PROFILE_ID, "train")[1]["stages"]) == ("h3",)
     assert tuple(h3["configs"][0]["modelIdentityKeys"]) == ("type", "diffusion_model")
+
+
+def test_training_profiles_have_no_setup_mode_layer():
+    for item in profiles():
+        assert "mode" not in item
+        assert "setups" not in item
+        assert isinstance(item["configs"], list)
+        assert isinstance(item["datasetFiles"], list)

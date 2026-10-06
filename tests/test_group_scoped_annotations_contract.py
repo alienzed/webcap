@@ -363,3 +363,64 @@ def test_groups_helper_popup_dismisses_when_anchor_moves_and_hide_reviewed_belon
     assert "var groupWorkbenchHideReviewed = false;" in workbench
     assert "if (useVisibilityFilter && groupWorkbenchHideReviewed && isReviewed) continue;" in workbench
     assert "No unreviewed groups." in workbench
+
+
+def test_per_item_annotation_edits_use_targeted_folder_state_persistence():
+    checklist = _read("tool/js/checklist_state.js")
+    details = _read("tool/js/item_details.js")
+    common = _read("tool/js/common.js")
+    folder_state = _read("tool/js/folder_state.js")
+
+    assert "function saveMediaAnnotationState(mediaKey)" in folder_state
+
+    assign_block = checklist.split("function assignChecklistTagToMediaKey", 1)[1].split(
+        "function unassignChecklistTagFromMediaKey", 1
+    )[0]
+    unassign_block = checklist.split("function unassignChecklistTagFromMediaKey", 1)[1].split(
+        "function moveChecklistAssignedTagForRequirement", 1
+    )[0]
+    checked_block = checklist.split("function setChecklistRequirementCheckedForMediaKey", 1)[1].split(
+        "function toggleChecklistRequirementCheckedForMediaKey", 1
+    )[0]
+    assert "saveMediaAnnotationState(key)" in assign_block
+    assert "saveChecklistToFolderState()" not in assign_block
+    assert "saveMediaAnnotationState(key)" in unassign_block
+    assert "saveChecklistToFolderState()" not in unassign_block
+    assert "saveMediaAnnotationState(key)" in checked_block
+    assert "saveChecklistToFolderState()" not in checked_block
+
+    item_save = details.split("function saveItemTagsToFolderState", 1)[1].split(
+        "function shouldLiveSyncEditorToTemplateForMediaKey", 1
+    )[0]
+    assert "saveMediaAnnotationState(key)" in item_save
+    assert "snapshotFolderStateFromDom" not in item_save
+
+    caption_save = common.split("function saveCaptionDirect", 1)[1].split(
+        "// Save config file directly", 1
+    )[0]
+    assert "saveMediaAnnotationState(updatedKey)" in caption_save
+    assert "saveChecklistToFolderState()" not in caption_save
+
+
+def test_descriptor_snapshots_compact_empty_entries_without_changing_saved_caption_semantics():
+    checklist = _read("tool/js/checklist_state.js")
+    folder_state = _read("tool/js/folder_state.js")
+
+    assert "var checklistTermDescriptorSnapshotMediaKeys = new Set()" in checklist
+    effective = checklist.split("function getChecklistEffectiveGroupTermDescriptor", 1)[1].split(
+        "function getChecklistGroupTermAffixes", 1
+    )[0]
+    assert "checklistTermDescriptorSnapshotMediaKeys.has(resolvedMediaKey)" in effective
+    assert "return { prefix: '', suffix: '' };" in effective
+
+    setter = checklist.split("function setChecklistGroupTermDescriptorForMediaKey", 1)[1].split(
+        "function commitChecklistGroupDescriptorSnapshotForMediaKey", 1
+    )[0]
+    assert "{ allowEmpty: true }" not in setter
+
+    sanitizer = folder_state.split("var descriptorSnapshotMediaKeys = new Set", 1)[1].split(
+        "var mediaFilterStars", 1
+    )[0]
+    assert "descriptorSnapshotMediaKeys.add(key);" in sanitizer
+    assert "sanitizeGroupAffixMap(src.caption_group_term_descriptors_by_media[mediaKey], false)" in sanitizer
+    assert "caption_group_term_descriptor_snapshot_media_keys" in folder_state

@@ -22,7 +22,7 @@ def test_focus_caption_reuses_single_item_ui_and_existing_caption_assist():
     assert "saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key" in primer
 
 
-def test_caption_assist_surfaces_missing_groups_only_with_candidate():
+def test_caption_assist_surfaces_only_unreviewed_empty_groups_with_candidate():
     html = _read("tool/tool.html")
     primer = _read("tool/js/primer_settings.js")
     settings = _read("tool/js/app_settings.js")
@@ -31,7 +31,10 @@ def test_caption_assist_surfaces_missing_groups_only_with_candidate():
     assert 'id="app-settings-caption-sequence"' in html
     assert 'id="app-settings-caption-sequence-groups"' in html
     assert "getCaptionAssistMissingGroups" in primer
-    assert "Missing annotations: " in primer
+    assert "isChecklistRequirementCheckedForMediaKey(mediaKey, label)" in primer
+    assert "return !reviewed;" in primer
+    assert "Still unreviewed: " in primer
+    assert "Missing annotations: " not in primer
     assert "preferredCaptionSequence: getPreferredCaptionSequence()" in primer
     assert "renderAppSettingsCaptionSequenceGroups" in settings
 

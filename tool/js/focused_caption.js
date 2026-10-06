@@ -237,6 +237,55 @@ function setFocusedCaptionVisionPhraseResult(result) {
   syncFocusedCaptionVisionPhrasesUi();
 }
 
+function syncFocusedCaptionVisionPhrasePrefetch() {
+  if (!focusedCaptionVisionPhrases.enabled || !focusedCaptionPrefetch) return Promise.resolve(false);
+  var mediaItem = findFocusedCaptionMediaItemByKey(focusedCaptionPrefetch.itemKey);
+  return beginFocusedCaptionPrefetchPhrases(focusedCaptionPrefetch, mediaItem);
+}
+
+function loadFocusedCaptionVisionPhrases() {
+  if (!focusedCaptionState.open || !state.currentItem || !captionAssistCandidate) return Promise.resolve(false);
+  var mediaItem = state.currentItem;
+  if (captionAssistCandidate.mediaKey !== mediaItem.key) return Promise.resolve(false);
+
+  focusedCaptionVisionPhrases.enabled = true;
+  if (
+    focusedCaptionVisionPhrases.mediaKey === mediaItem.key &&
+    focusedCaptionVisionPhrases.phrases.length
+  ) {
+    syncFocusedCaptionVisionPhrasesUi();
+    return syncFocusedCaptionVisionPhrasePrefetch().then(function () { return true; });
+  }
+  if (
+    focusedCaptionVisionPhrases.task &&
+    focusedCaptionVisionPhrases.task.mediaKey === mediaItem.key
+  ) {
+    return focusedCaptionVisionPhrases.task.promise;
+  }
+
+  clearFocusedCaptionVisionPhrases({ keepEnabled: true });
+  var task = createFocusedCaptionVisionPhraseTask(mediaItem);
+  focusedCaptionVisionPhrases.mediaKey = mediaItem.key;
+  focusedCaptionVisionPhrases.pending = true;
+  focusedCaptionVisionPhrases.task = task;
+  syncFocusedCaptionVisionPhrasesUi();
+
+  return task.promise.then(function (result) {
+    if (!result || !focusedCaptionState.open || !state.currentItem || state.currentItem.key !== mediaItem.key) return false;
+    setFocusedCaptionVisionPhraseResult(result);
+    return syncFocusedCaptionVisionPhrasePrefetch().then(function () { return true; });
+  }).catch(function (err) {
+    if (!task.cancelled && focusedCaptionState.open && state.currentItem && state.currentItem.key === mediaItem.key) {
+      focusedCaptionVisionPhrases.pending = false;
+      focusedCaptionVisionPhrases.task = null;
+      focusedCaptionVisionPhrases.error = String(err && err.message ? err.message : err);
+      syncFocusedCaptionVisionPhrasesUi();
+      reportConsoleError('Focus Caption Vision phrases', err);
+    }
+    return false;
+  });
+}
+
 function findFocusedCaptionMediaItemByKey(mediaKey) {
   var key = String(mediaKey || '').trim();
   if (!key || !state || !Array.isArray(state.items)) return null;
@@ -831,6 +880,7 @@ window.startFocusedCaptionPrefetch = startFocusedCaptionPrefetch;
 window.cancelFocusedCaptionPrefetch = cancelFocusedCaptionPrefetch;
 window.syncFocusedCaptionVisionPreference = syncFocusedCaptionVisionPreference;
 window.extractFocusedCaptionVisionPhrases = extractFocusedCaptionVisionPhrases;
+window.loadFocusedCaptionVisionPhrases = loadFocusedCaptionVisionPhrases;
 window.focusedCaptionVisionPhrases = focusedCaptionVisionPhrases;
 window.beginFocusedCaptionRequest = beginFocusedCaptionRequest;
 window.isFocusedCaptionRequestCurrent = isFocusedCaptionRequestCurrent;

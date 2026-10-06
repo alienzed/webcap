@@ -300,6 +300,138 @@ function renderCaptionAssistMissingGroups(container, mediaKey, missingGroups) {
   container.appendChild(list);
 }
 
+function getFocusedCaptionCandidateSelectionOffsets(textEl) {
+  var text = String(textEl && textEl.textContent || '');
+  var selection = window.getSelection();
+  if (!textEl || !selection || !selection.rangeCount) return { start: text.length, end: text.length };
+  var range = selection.getRangeAt(0);
+  if (!textEl.contains(range.startContainer) || !textEl.contains(range.endContainer)) {
+    return { start: text.length, end: text.length };
+  }
+  var before = document.createRange();
+  before.selectNodeContents(textEl);
+  before.setEnd(range.startContainer, range.startOffset);
+  var through = document.createRange();
+  through.selectNodeContents(textEl);
+  through.setEnd(range.endContainer, range.endOffset);
+  return { start: before.toString().length, end: through.toString().length };
+}
+
+function setFocusedCaptionCandidateCaretOffset(textEl, offset) {
+  var target = Math.max(0, Number(offset) || 0);
+  var walker = document.createTreeWalker(textEl, NodeFilter.SHOW_TEXT);
+  var node;
+  while ((node = walker.nextNode())) {
+    var length = node.nodeValue.length;
+    if (target <= length) {
+      var range = document.createRange();
+      range.setStart(node, target);
+      range.collapse(true);
+      var selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+    target -= length;
+  }
+  textEl.focus();
+}
+
+function insertFocusedCaptionVisionPhrase(phrase) {
+  if (!isFocusedCaptionOpen() || !captionAssistCandidate || !state.currentItem) return false;
+  if (captionAssistCandidate.mediaKey !== state.currentItem.key) return false;
+  var textEl = document.getElementById('editor-caption-candidate-text');
+  var value = String(phrase || '').trim();
+  if (!textEl || !value) return false;
+
+  var current = String(textEl.textContent || captionAssistCandidate.text || '');
+  var offsets = getFocusedCaptionCandidateSelectionOffsets(textEl);
+  var start = Math.max(0, Math.min(current.length, offsets.start));
+  var end = Math.max(start, Math.min(current.length, offsets.end));
+  var left = current.slice(0, start);
+  var right = current.slice(end);
+  var prefix = left && !/[\s([{"'/-]$/.test(left) ? ' ' : '';
+  var suffix = right && !/^[\s.,;:!?)}\]"'/-]/.test(right) ? ' ' : '';
+  var inserted = prefix + value + suffix;
+  var next = left + inserted + right;
+
+  captionAssistCandidate.text = next;
+  resetFocusedCaptionUseArm();
+  textEl.textContent = next;
+  textEl.focus();
+  setFocusedCaptionCandidateCaretOffset(textEl, left.length + inserted.length);
+  setStatus('Inserted Vision phrase.');
+  return true;
+}
+
+function syncFocusedCaptionVisionPhrasesUi() {
+  var row = document.getElementById('editor-caption-vision-phrases');
+  var trigger = document.getElementById('editor-caption-vision-phrases-btn');
+  if (!row || !trigger) throw new Error('Focus Caption Vision phrase controls are missing.');
+
+  var focusOpen = isFocusedCaptionOpen();
+  var mediaKey = state && state.currentItem && state.currentItem.key;
+  var candidateReady = !!(
+    focusOpen &&
+    captionAssistCandidate &&
+    mediaKey &&
+    captionAssistCandidate.mediaKey === mediaKey
+  );
+  trigger.classList.toggle('hidden', !candidateReady);
+  trigger.classList.toggle('is-pending', !!focusedCaptionVisionPhrases.pending);
+  trigger.disabled = !candidateReady || !!focusedCaptionVisionPhrases.pending;
+  trigger.textContent = focusedCaptionVisionPhrases.pending
+    ? 'Vision phrases…'
+    : (focusedCaptionVisionPhrases.phrases.length ? 'Refresh phrases' : 'Vision phrases');
+
+  row.innerHTML = '';
+  var phrases = candidateReady && focusedCaptionVisionPhrases.mediaKey === mediaKey
+    ? focusedCaptionVisionPhrases.phrases
+    : [];
+  if (!phrases.length) {
+    row.classList.add('hidden');
+    return;
+  }
+
+  var label = document.createElement('span');
+  label.className = 'caption-vision-phrases-label';
+  label.textContent = 'Vision';
+  row.appendChild(label);
+
+  phrases.forEach(function (phrase) {
+    var chip = document.createElement('span');
+    chip.className = 'caption-vision-phrase';
+
+    var insertBtn = document.createElement('button');
+    insertBtn.type = 'button';
+    insertBtn.className = 'caption-vision-phrase-insert';
+    insertBtn.textContent = phrase;
+    insertBtn.title = 'Insert this phrase at the caption cursor';
+    insertBtn.addEventListener('pointerdown', function (event) {
+      event.preventDefault();
+    });
+    insertBtn.addEventListener('click', function () {
+      insertFocusedCaptionVisionPhrase(phrase);
+    });
+    chip.appendChild(insertBtn);
+
+    var blendBtn = document.createElement('button');
+    blendBtn.type = 'button';
+    blendBtn.className = 'caption-vision-phrase-blend';
+    blendBtn.textContent = 'Blend';
+    blendBtn.title = 'Ask Caption Assist to blend this visual detail into the candidate';
+    blendBtn.addEventListener('pointerdown', function (event) {
+      event.preventDefault();
+    });
+    blendBtn.addEventListener('click', function () {
+      blendFocusedCaptionVisionPhrase(phrase);
+    });
+    chip.appendChild(blendBtn);
+    row.appendChild(chip);
+  });
+  row.classList.remove('hidden');
+}
+
 function syncCaptionAssistCandidateUi() {
   var panel = document.getElementById('editor-caption-candidate');
   var titleEl = document.getElementById('editor-caption-candidate-title');
@@ -308,6 +440,8 @@ function syncCaptionAssistCandidateUi() {
   var loadingTextEl = document.getElementById('editor-caption-focus-loading-text');
   var omissionsEl = document.getElementById('editor-caption-candidate-omissions');
   var missingEl = document.getElementById('editor-caption-candidate-missing');
+  var phrasesEl = document.getElementById('editor-caption-vision-phrases');
+  var phrasesBtn = document.getElementById('editor-caption-vision-phrases-btn');
   var textEl = document.getElementById('editor-caption-candidate-text');
   var prevBtn = document.getElementById('editor-caption-focus-prev');
   var nextBtn = document.getElementById('editor-caption-focus-next');
@@ -315,7 +449,7 @@ function syncCaptionAssistCandidateUi() {
   var useBtn = document.getElementById('editor-caption-candidate-use');
   var regenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
   var dismissBtn = document.getElementById('editor-caption-candidate-dismiss');
-  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !omissionsEl || !missingEl || !textEl || !prevBtn || !nextBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
+  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !omissionsEl || !missingEl || !phrasesEl || !phrasesBtn || !textEl || !prevBtn || !nextBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
     throw new Error('Caption Assist candidate markup is incomplete.');
   }
 
@@ -360,7 +494,13 @@ function syncCaptionAssistCandidateUi() {
 
   renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);
   textEl.classList.toggle('hidden', focusOpen && !visible);
-  textEl.textContent = visible ? candidate.text : '';
+  textEl.setAttribute('contenteditable', focusOpen && visible ? 'true' : 'false');
+  textEl.setAttribute('role', focusOpen && visible ? 'textbox' : 'document');
+  var candidateText = visible ? String(candidate.text || '') : '';
+  if (document.activeElement !== textEl || String(textEl.textContent || '') !== candidateText) {
+    textEl.textContent = candidateText;
+  }
+  syncFocusedCaptionVisionPhrasesUi();
 
   prevBtn.classList.toggle('hidden', !focusOpen);
   nextBtn.classList.toggle('hidden', !focusOpen);
@@ -1000,13 +1140,32 @@ function wirePrimerCaptionResetUi() {
   var captionWandBtn = document.getElementById('editor-caption-wand-btn');
   var candidatePanel = document.getElementById('editor-caption-candidate');
   var candidateUseBtn = document.getElementById('editor-caption-candidate-use');
+  var candidateTextEl = document.getElementById('editor-caption-candidate-text');
+  var visionPhrasesBtn = document.getElementById('editor-caption-vision-phrases-btn');
   var candidateRegenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
   var candidateDismissBtn = document.getElementById('editor-caption-candidate-dismiss');
   var focusPrevBtn = document.getElementById('editor-caption-focus-prev');
   var focusNextBtn = document.getElementById('editor-caption-focus-next');
   var focusCancelBtn = document.getElementById('editor-caption-focus-cancel');
-  if (!resetBtn || !undoBtn || !captionWandBtn || !candidatePanel || !candidateUseBtn || !candidateRegenerateBtn || !candidateDismissBtn || !focusPrevBtn || !focusNextBtn || !focusCancelBtn) {
+  if (!resetBtn || !undoBtn || !captionWandBtn || !candidatePanel || !candidateUseBtn || !candidateTextEl || !visionPhrasesBtn || !candidateRegenerateBtn || !candidateDismissBtn || !focusPrevBtn || !focusNextBtn || !focusCancelBtn) {
     throw new Error('Caption Assist controls are missing.');
+  }
+
+  if (!candidateTextEl.__focusedCaptionEditBound) {
+    candidateTextEl.__focusedCaptionEditBound = true;
+    candidateTextEl.addEventListener('input', function () {
+      if (!isFocusedCaptionOpen() || !captionAssistCandidate || !state.currentItem) return;
+      if (captionAssistCandidate.mediaKey !== state.currentItem.key) return;
+      captionAssistCandidate.text = String(candidateTextEl.textContent || '');
+      resetFocusedCaptionUseArm();
+    });
+  }
+
+  if (!visionPhrasesBtn.__focusedCaptionPhrasesBound) {
+    visionPhrasesBtn.__focusedCaptionPhrasesBound = true;
+    visionPhrasesBtn.addEventListener('click', function () {
+      loadFocusedCaptionVisionPhrases();
+    });
   }
 
   if (!candidateUseBtn.__captionAssistBound) {

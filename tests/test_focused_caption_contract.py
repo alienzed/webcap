@@ -297,6 +297,33 @@ def test_standalone_vision_caption_is_preview_adjacent_and_requires_explicit_edi
     assert 'caption_operation in {"caption_vision_validate", "vision_image_caption"}' in runner
 
 
+def test_focus_caption_vision_phrases_are_ephemeral_editable_and_one_deep_prefetched():
+    html = _read("tool/tool.html")
+    focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
+    css = _read("tool/css/styles.css")
+
+    assert 'id="editor-caption-vision-phrases"' in html
+    assert 'id="editor-caption-vision-phrases-btn"' in html
+    assert "var focusedCaptionVisionPhrases = {" in focus
+    assert "function extractFocusedCaptionVisionPhrases(text)" in focus
+    assert "function createFocusedCaptionVisionPhraseTask(mediaItem)" in focus
+    assert "function loadFocusedCaptionVisionPhrases()" in focus
+    assert "phraseTask: null" in focus
+    assert "beginFocusedCaptionPrefetchPhrases(prefetch, target.item)" in focus
+    assert "cancelFocusedCaptionVisionPhraseTask(prefetch.phraseTask" in focus
+    assert "focusedCaptionVisionPhrases.enabled = false;" in focus
+    assert "localStorage" not in focus
+    assert "sessionStorage" not in focus
+
+    assert "textEl.setAttribute('contenteditable', focusOpen && visible ? 'true' : 'false');" in primer
+    assert "function insertFocusedCaptionVisionPhrase(phrase)" in primer
+    assert "captionAssistCandidate.text = next;" in primer
+    assert "insertBtn.addEventListener('pointerdown'" in primer
+    assert "loadFocusedCaptionVisionPhrases();" in primer
+    assert ".caption-vision-phrase-insert" in css
+
+
 def test_caption_vision_preference_is_config_backed_not_browser_persistent():
     html = _read("tool/tool.html")
     vision = _read("tool/js/caption_vision.js")

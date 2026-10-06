@@ -465,6 +465,17 @@ def test_new_sessions_live_inside_set_workspace_and_clear_removes_workspace(tmp_
 
     assert session.parent == bench._workspace_sessions_root(set_folder)
     assert [item["session"] for item in bench.list_sessions(set_folder)] == [session.name]
+
+    mismatched = bench._workspace_sessions_root(set_folder) / "wrong-owner"
+    mismatched.mkdir()
+    bench._atomic_write_json(mismatched / "test.json", {
+        "status": "complete",
+        "modelId": "minimax_h3",
+        "ownerFolder": "sets/someone-else",
+        "results": [],
+    })
+    assert bench._session_belongs_to_folder(set_folder, mismatched) is False
+
     workspace = bench._workspace_root(set_folder)
     assert workspace.exists()
 

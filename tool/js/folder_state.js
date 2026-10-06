@@ -315,7 +315,11 @@ function saveMediaAnnotationState(mediaKey) {
   var previousWrite = folderStateWriteChains[targetFolder] || Promise.resolve();
   var queuedWrite = previousWrite.catch(function () {
     return false;
-  }).then(performWrite);
+  }).then(performWrite).catch(function (err) {
+    console.error('[webcap] MEDIA ANNOTATION STATE SAVE FAILED:', err);
+    setStatus('MEDIA ANNOTATION STATE SAVE FAILED: ' + (err && err.message ? err.message : err));
+    return false;
+  });
   folderStateWriteChains[targetFolder] = queuedWrite;
   queuedWrite.then(function () {
     if (folderStateWriteChains[targetFolder] === queuedWrite) {

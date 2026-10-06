@@ -1499,14 +1499,9 @@ def _resolved_wildcard_summary(source_prompt, resolved_prompt, owner_folder=""):
 
 def _project_wildcard_fields(payload):
     visible = payload
-    stored_wildcard_values = visible.get("wildcardValues")
-    visible["wildcardValues"] = (
-        list(stored_wildcard_values)
-        if isinstance(stored_wildcard_values, list) and stored_wildcard_values
-        else _resolved_wildcard_values(
-            visible.get("sourcePrompt"),
-            visible.get("resolvedPrompt") or visible.get("prompt"),
-        )
+    visible["wildcardValues"] = _resolved_wildcard_values(
+        visible.get("sourcePrompt"),
+        visible.get("resolvedPrompt") or visible.get("prompt"),
     )
     visible["wildcardSummary"] = _resolved_wildcard_summary(
         visible.get("sourcePrompt"),
@@ -2008,7 +2003,6 @@ def execute_inference(job_id, request, context):
             status_payload = _read_status(session_directory) or {}
             status_payload["resolvedPrompt"] = prompt
             status_payload["prompt"] = prompt
-            status_payload["wildcardValues"] = list(wildcard_values)
             _atomic_write_json(_status_path(session_directory), status_payload)
 
         comfy_lora_name = None
@@ -2135,10 +2129,6 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         }
         for path in loras
     )
-    wildcard_values = _resolved_wildcard_values(
-        request.get("sourcePrompt"),
-        request.get("prompt"),
-    )
     payload = {
         "status": "queued",
         "modelId": model.PROFILE_ID,
@@ -2149,7 +2139,6 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "sourcePrompt": str(request.get("sourcePrompt") or ""),
         "resolvedPrompt": str(request.get("prompt") or ""),
         "prompt": str(request.get("prompt") or ""),
-        "wildcardValues": list(wildcard_values),
         "total": len(candidates),
         "completed": 0,
         "failed": 0,
@@ -2199,7 +2188,6 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 "candidateIndex": index,
                 "candidateProvenance": dict(candidate.get("provenance") or {}),
                 "candidateStrength": candidate.get("strength"),
-                "wildcardValues": list(wildcard_values),
             }
             job = enqueue_test(request, context, label=label, deferred=True)
             queued_ids.append(job["jobId"])

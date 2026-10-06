@@ -12,6 +12,7 @@ var checklistTermDescriptorDefaultsByKey = {}; // Legacy unscoped descriptor def
 var checklistTermWrappersByGroup = {}; // { requirement: { termLower: { prefix: "", suffix: "" } } }
 var checklistTermDescriptorDefaultsByGroup = {}; // { requirement: { termLower: { prefix: "", suffix: "" } } }
 var checklistTermDescriptorsByMedia = {}; // { mediaKey: { requirement: { termLower: { prefix: "", suffix: "" } } } }
+var checklistTermDescriptorSnapshotMediaKeys = new Set(); // Saved captions with frozen descriptor semantics.
 var checklistTermAffixesByKey = {}; // Legacy mirror of unscoped wrappers.
 var checklistExpandedRequirements = {};
 var checklistHiddenRequirements = {}; // { requirement: true } persisted per folder/set
@@ -544,6 +545,9 @@ function getChecklistEffectiveGroupTermDescriptor(requirementLabel, termText, me
   if (resolvedMediaKey && mediaKeyHasSavedCaption(resolvedMediaKey)) {
     var mediaDescriptor = getChecklistGroupTermDescriptorForMediaKey(resolvedMediaKey, requirementLabel, termText);
     if (mediaDescriptor) return mediaDescriptor;
+    if (checklistTermDescriptorSnapshotMediaKeys.has(resolvedMediaKey)) {
+      return { prefix: '', suffix: '' };
+    }
   }
   return getChecklistGroupTermDescriptorDefault(requirementLabel, termText);
 }
@@ -652,7 +656,7 @@ function setChecklistGroupTermDescriptorForMediaKey(mediaKey, requirementLabel, 
   if (!mediaMap || typeof mediaMap !== 'object') mediaMap = {};
   var groupMap = mediaMap[requirement];
   if (!groupMap || typeof groupMap !== 'object') groupMap = {};
-  var changed = setChecklistTermAffixEntry(groupMap, termText, prefix, suffix, { allowEmpty: true });
+  var changed = setChecklistTermAffixEntry(groupMap, termText, prefix, suffix);
   if (Object.keys(groupMap).length) mediaMap[requirement] = groupMap;
   else delete mediaMap[requirement];
   if (Object.keys(mediaMap).length) checklistTermDescriptorsByMedia[resolvedMediaKey] = mediaMap;
@@ -661,11 +665,13 @@ function setChecklistGroupTermDescriptorForMediaKey(mediaKey, requirementLabel, 
 }
 
 function commitChecklistGroupDescriptorSnapshotForMediaKey(mediaKey, requirementLabel, termText, sourceDescriptor) {
+  var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
   var term = normalizeChecklistTerm(termText);
-  if (!term) return false;
+  if (!resolvedMediaKey || !term) return false;
+  checklistTermDescriptorSnapshotMediaKeys.add(resolvedMediaKey);
   var descriptor = sourceDescriptor || getChecklistGroupTermDescriptorDefault(requirementLabel, term);
   return setChecklistGroupTermDescriptorForMediaKey(
-    mediaKey,
+    resolvedMediaKey,
     requirementLabel,
     term,
     descriptor && typeof descriptor === 'object' ? descriptor.prefix : '',
@@ -722,9 +728,16 @@ function setChecklistTermDescriptorDefault(termText, prefix, suffix) {
 
 function clearChecklistDescriptorSnapshotsForMediaKey(mediaKey) {
   var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
-  if (!resolvedMediaKey || !checklistTermDescriptorsByMedia[resolvedMediaKey]) return false;
-  delete checklistTermDescriptorsByMedia[resolvedMediaKey];
-  return true;
+  if (!resolvedMediaKey) return false;
+  var changed = false;
+  if (checklistTermDescriptorsByMedia[resolvedMediaKey]) {
+    delete checklistTermDescriptorsByMedia[resolvedMediaKey];
+    changed = true;
+  }
+  if (checklistTermDescriptorSnapshotMediaKeys.delete(resolvedMediaKey)) {
+    changed = true;
+  }
+  return changed;
 }
 
 function normalizeChecklistRequirementKey(requirementLabel) {
@@ -1172,6 +1185,11 @@ function loadChecklistFromFolderState(folderState) {
   checklistTermDescriptorsByMedia = (folderState.caption_group_term_descriptors_by_media && typeof folderState.caption_group_term_descriptors_by_media === 'object')
     ? folderState.caption_group_term_descriptors_by_media
     : {};
+  checklistTermDescriptorSnapshotMediaKeys = new Set(
+    Array.isArray(folderState.caption_group_term_descriptor_snapshot_media_keys)
+      ? folderState.caption_group_term_descriptor_snapshot_media_keys
+      : []
+  );
   syncChecklistLegacyAffixesMirror();
 
   syncReviewedFromChecklistAll({ skipRowClass: true });

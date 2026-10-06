@@ -1034,9 +1034,17 @@ def _list_local_models_passive():
         ]
         main_files = [entry for entry in ggufs if not is_sidecar(entry)]
         mmproj_files = [entry for entry in ggufs if "mmproj" in entry.name.casefold()]
-        if len(main_files) != 1:
+        first_shards = [
+            entry for entry in main_files
+            if "-00001-of-" in entry.name.casefold()
+        ]
+        if first_shards:
+            model_path = sorted(first_shards, key=lambda entry: entry.name.casefold())[0]
+        elif len(main_files) == 1:
+            model_path = main_files[0]
+        else:
             continue
-        model = record(path.name, main_files[0], multimodal=bool(mmproj_files))
+        model = record(path.name, model_path, multimodal=bool(mmproj_files))
         if model is not None:
             models.append(model)
 

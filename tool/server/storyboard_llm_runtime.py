@@ -2,6 +2,7 @@ import atexit
 import base64
 import mimetypes
 import contextlib
+import copy
 import http.client
 import json
 import logging
@@ -1192,6 +1193,33 @@ def encode_media_data_url(relative_media_path):
     return "data:" + mime_type + ";base64," + encoded
 
 
+def prepare_caption_vision_messages(model_ref, messages):
+    runtime_id, _model_id = _split_model_ref(model_ref)
+    if runtime_id == "local":
+        return copy.deepcopy(messages)
+
+    with _use_runtime(runtime_id):
+        if not _remote_is_ollama():
+            raise ValueError("Remote Vision currently requires an Ollama runtime.")
+
+    prepared = copy.deepcopy(messages)
+    for message in prepared if isinstance(prepared, list) else []:
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if not isinstance(part, dict) or str(part.get("type") or "").strip().lower() != "image_url":
+                continue
+            image_url = part.get("image_url") if isinstance(part.get("image_url"), dict) else {}
+            url = str(image_url.get("url") or "").strip()
+            if not url.startswith("file://") or url.startswith("file:///"):
+                raise ValueError("Vision image reference is invalid.")
+            relative = url[len("file://"):]
+            image_url["url"] = encode_media_data_url(relative)
+            part["image_url"] = image_url
+    return prepared
+
+
 def list_models(reload=False, probe_local_runtime=False):
     models = []
     warnings = []
@@ -1765,11 +1793,8 @@ def normalize_freeform_messages(messages):
                     image_url = part.get("image_url")
                     image_url = image_url if isinstance(image_url, dict) else {}
                     url = str(image_url.get("url") or "").strip()
-                    if url.startswith("data:image/"):
-                        parts.append({"type": "image_url", "image_url": {"url": url}})
-                        continue
                     if not url.startswith("file://") or url.startswith("file:///"):
-                        raise ValueError("Multimodal images must use a safe relative file:// URL or image data URL.")
+                        raise ValueError("Local multimodal images must use a relative file:// URL.")
                     relative = url[len("file://"):]
                     if (
                         not relative

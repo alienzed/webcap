@@ -16,11 +16,9 @@ from .permissions import normalize_path_permissions
 from .training_profiles import (
     KREA2_PROFILE_ID,
     MINIMAX_H3_PROFILE_ID,
-    TRAINING_MODES,
     WAN21_PROFILE_ID,
     WAN22_PROFILE_ID,
     config_for_stage,
-    normalize_mode,
     profile,
 )
 
@@ -38,8 +36,8 @@ LEGACY_TRAINING_CONFIG_TEMPLATE_NAMES = (
     WAN21_CONFIG_NAME,
     H3_CONFIG_NAME,
 )
-MODE_TRAINING_CONFIG_TEMPLATE_NAMES = tuple(
-    config_for_stage(profile_id, stage, mode)["file"]
+PROFILE_TRAINING_CONFIG_TEMPLATE_NAMES = tuple(
+    config_for_stage(profile_id, stage)["file"]
     for profile_id, stage in (
         (WAN22_PROFILE_ID, "hi"),
         (WAN22_PROFILE_ID, "lo"),
@@ -47,11 +45,10 @@ MODE_TRAINING_CONFIG_TEMPLATE_NAMES = tuple(
         (WAN21_PROFILE_ID, "wan21"),
         (MINIMAX_H3_PROFILE_ID, "h3"),
     )
-    for mode in TRAINING_MODES
 )
-TRAINING_CONFIG_TEMPLATE_NAMES = (
-    LEGACY_TRAINING_CONFIG_TEMPLATE_NAMES + MODE_TRAINING_CONFIG_TEMPLATE_NAMES
-)
+TRAINING_CONFIG_TEMPLATE_NAMES = tuple(dict.fromkeys(
+    LEGACY_TRAINING_CONFIG_TEMPLATE_NAMES + PROFILE_TRAINING_CONFIG_TEMPLATE_NAMES
+))
 
 _EPOCHS_TEXT_PATTERN = re.compile(r"^\s*epochs\s*=\s*(\d+)\s*(?:#.*)?$", re.MULTILINE)
 _OUTPUT_DIR_TEXT_PATTERN = re.compile(r'^\s*output_dir\s*=\s*["\']([^"\']+)["\']\s*(?:#.*)?$', re.MULTILINE)
@@ -149,7 +146,7 @@ def _profile_for_stage(stage):
     raise ValueError("Unknown training configuration stage: " + stage)
 
 
-def training_config_path(folder_path: Path, stage: str, profile_id=None, mode="normal"):
+def training_config_path(folder_path: Path, stage: str, profile_id=None):
     if profile_id is None:
         legacy_name = {
             "hi": HI_CONFIG_NAME,
@@ -162,11 +159,11 @@ def training_config_path(folder_path: Path, stage: str, profile_id=None, mode="n
         if legacy_name and legacy_path.is_file():
             return legacy_path
     selected_profile = profile_id or _profile_for_stage(stage)
-    return Path(folder_path) / config_for_stage(selected_profile, stage, mode)["file"]
+    return Path(folder_path) / config_for_stage(selected_profile, stage)["file"]
 
 
-def output_dir_from_config(folder_path: Path, stage: str, profile_id=None, mode="normal"):
-    config_path = training_config_path(folder_path, stage, profile_id=profile_id, mode=mode)
+def output_dir_from_config(folder_path: Path, stage: str, profile_id=None):
+    config_path = training_config_path(folder_path, stage, profile_id=profile_id)
     try:
         config_text = config_path.read_text(encoding="utf-8")
     except OSError:
@@ -367,9 +364,8 @@ def apply_captured_initializer(config_text, initializer_dir, force_constant_lr=N
     return source
 
 
-def _render_mode_config(folder, profile_id, stage, mode, reset=False):
-    selected_mode = normalize_mode(mode)
-    config = config_for_stage(profile_id, stage, selected_mode)
+def _render_profile_config(folder, profile_id, stage, reset=False):
+    config = config_for_stage(profile_id, stage)
     destination = folder / config["file"]
     if destination.is_file() and not reset:
         text = destination.read_text(encoding="utf-8")
@@ -387,7 +383,7 @@ def _render_mode_config(folder, profile_id, stage, mode, reset=False):
     return with_dataset_path(text, dataset_value)
 
 
-def ensure_training_config_files(folder_path: Path, profile_id=None, mode=None, reset=False):
+def ensure_training_config_files(folder_path: Path, profile_id=None, reset=False):
     """Create missing per-set configs, or explicitly reset one profile's files."""
     folder = Path(folder_path)
     if folder.name in ("originals", "auto_dataset"):
@@ -396,69 +392,54 @@ def ensure_training_config_files(folder_path: Path, profile_id=None, mode=None, 
     if not media_files:
         return []
 
-    if mode is None:
-        selected_profiles = [profile(profile_id)] if profile_id else [
-            profile(WAN22_PROFILE_ID),
-            profile(KREA2_PROFILE_ID),
-            profile(WAN21_PROFILE_ID),
-            profile(MINIMAX_H3_PROFILE_ID),
-        ]
-        written = []
-        for selected_profile in selected_profiles:
-            for base in selected_profile["configs"]:
-                destination = folder / base["file"]
-                if destination.exists() and not reset:
-                    # Existing set files are authoritative.  Reading them now
-                    # makes corruption visible instead of silently replacing it.
-                    tomllib.loads(destination.read_text(encoding="utf-8"))
-                    continue
-                _write_set_toml_atomic(destination, render_training_config_template(base["file"], folder))
-                written.append(destination)
-        return written
-
-    selected_profile = profile(profile_id or WAN22_PROFILE_ID)
+    selected_profiles = [profile(profile_id)] if profile_id else [
+        profile(WAN22_PROFILE_ID),
+        profile(KREA2_PROFILE_ID),
+        profile(WAN21_PROFILE_ID),
+        profile(MINIMAX_H3_PROFILE_ID),
+    ]
     written = []
-    for base in selected_profile["configs"]:
-        resolved = config_for_stage(selected_profile["id"], base["id"], mode)
-        dest = folder / resolved["file"]
-        if dest.exists() and not reset:
-            existing = dest.read_text(encoding="utf-8")
-            parsed = tomllib.loads(existing)
-            rendered = existing
-            current_dataset = parsed.get("dataset")
-            if (
-                resolved["dataset"] in ("dataset.h3.toml", "dataset.wan21.toml")
-                and isinstance(current_dataset, str)
-                and Path(current_dataset).name == "dataset.train.toml"
-            ):
-                dataset_value = str(Path(current_dataset).with_name(resolved["dataset"])).replace("\\", "/")
-                rendered = with_dataset_path(existing, dataset_value)
-            if rendered != existing:
-                _write_set_toml_atomic(dest, rendered)
-                written.append(dest)
-            continue
-        rendered = _render_mode_config(folder, selected_profile["id"], base["id"], mode, reset=reset)
-        _write_set_toml_atomic(dest, rendered)
-        written.append(dest)
+    for selected_profile in selected_profiles:
+        for base in selected_profile["configs"]:
+            resolved = config_for_stage(selected_profile["id"], base["id"])
+            destination = folder / resolved["file"]
+            if destination.exists() and not reset:
+                existing = destination.read_text(encoding="utf-8")
+                parsed = tomllib.loads(existing)
+                rendered = existing
+                current_dataset = parsed.get("dataset")
+                if (
+                    resolved["dataset"] in ("dataset.h3.toml", "dataset.wan21.toml")
+                    and isinstance(current_dataset, str)
+                    and Path(current_dataset).name == "dataset.train.toml"
+                ):
+                    dataset_value = str(Path(current_dataset).with_name(resolved["dataset"])).replace("\\", "/")
+                    rendered = with_dataset_path(existing, dataset_value)
+                if rendered != existing:
+                    _write_set_toml_atomic(destination, rendered)
+                    written.append(destination)
+                continue
+            rendered = _render_profile_config(folder, selected_profile["id"], base["id"], reset=reset)
+            _write_set_toml_atomic(destination, rendered)
+            written.append(destination)
     return written
 
-
-def reset_training_config_file(folder_path: Path, filename: str, profile_id=None, mode=None):
+def reset_training_config_file(folder_path: Path, filename: str, profile_id=None):
     """Explicitly restore one config from its resolved template."""
     folder = Path(folder_path)
     name = str(filename or "").strip()
-    if mode is None:
+    if profile_id is None:
         if name not in TRAINING_CONFIG_TEMPLATE_NAMES:
             raise ValueError("Unknown training config: " + name)
         destination = folder / name
         _write_set_toml_atomic(destination, render_training_config_template(name, folder))
         return destination
-    selected = profile(profile_id or WAN22_PROFILE_ID)
-    matches = [config_for_stage(selected["id"], item["id"], mode) for item in selected["configs"]]
+    selected = profile(profile_id)
+    matches = [config_for_stage(selected["id"], item["id"]) for item in selected["configs"]]
     resolved = next((item for item in matches if item["file"] == name), None)
     if resolved is None:
         raise ValueError("Unknown training config: " + name)
     destination = folder / name
-    rendered = _render_mode_config(folder, selected["id"], resolved["id"], mode, reset=True)
+    rendered = _render_profile_config(folder, selected["id"], resolved["id"], reset=True)
     _write_set_toml_atomic(destination, rendered)
     return destination

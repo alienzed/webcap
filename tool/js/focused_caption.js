@@ -407,7 +407,6 @@ function stopFocusedCaption(message) {
   focusedCaptionState.itemKeys = [];
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = '';
-  captionVisionEnabled = false;
   captionAssistPendingJobId = '';
   if (pendingJobId && pendingJobId !== 'submitting' && pendingJobId !== 'prefetch') {
     cancelCaptionAssistJob(pendingJobId).catch(function (err) {

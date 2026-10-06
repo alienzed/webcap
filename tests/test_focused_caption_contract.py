@@ -374,3 +374,25 @@ def test_focus_caption_outside_click_refreshes_list_without_double_handling_back
     outside = focus[outside_start:outside_end]
     assert "stopFocusedCaption('Focus Caption ended.');" in outside
     assert "renderFileList();" in outside
+
+
+def test_caption_vision_enablement_is_runtime_sticky_and_shared_with_caption_assist():
+    vision = _read("tool/js/caption_vision.js")
+    focus = _read("tool/js/focused_caption.js")
+
+    assert "var captionVisionEnabled = false;" in vision
+    assert "captionVisionEnabled = false;" not in focus
+    assert "captionAssistCandidate.mediaKey === mediaItem.key" in vision
+    assert "captionAssistCandidate.mediaKey === mediaItem.key &&\n    isFocusedCaptionOpen()" not in vision
+
+    run_start = vision.index("function runCaptionVisionForCandidate(candidate)")
+    run_end = vision.index("function maybeRunCaptionVisionForCandidate(candidate)", run_start)
+    run_vision = vision[run_start:run_end]
+    assert "!candidate || !isFocusedCaptionOpen()" not in run_vision
+    assert "!captionVisionEnabled || !candidate" in run_vision
+
+    model_start = vision.index("function handleCaptionVisionModelChange()")
+    model_end = vision.index("function wireCaptionVisionUi()", model_start)
+    model_change = vision[model_start:model_end]
+    assert "if (!captionVisionEnabled || !captionAssistCandidate) return false;" in model_change
+    assert "if (!captionVisionEnabled || !captionAssistCandidate || !isFocusedCaptionOpen())" not in model_change

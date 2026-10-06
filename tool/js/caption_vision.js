@@ -239,7 +239,7 @@ function bindCaptionVisionTaskToCandidate(task, candidate) {
 }
 
 function runCaptionVisionForCandidate(candidate) {
-  if (!captionVisionEnabled || !candidate || !isFocusedCaptionOpen()) return Promise.resolve(false);
+  if (!captionVisionEnabled || !candidate) return Promise.resolve(false);
   if (!state.currentItem || state.currentItem.key !== candidate.mediaKey) return Promise.resolve(false);
   if (!isCaptionVisionSupportedMedia(state.currentItem.fileName)) return Promise.resolve(false);
 
@@ -361,8 +361,7 @@ function syncCaptionVisionUi() {
   var candidateVisible = !!(
     captionAssistCandidate &&
     mediaItem &&
-    captionAssistCandidate.mediaKey === mediaItem.key &&
-    isFocusedCaptionOpen()
+    captionAssistCandidate.mediaKey === mediaItem.key
   );
   var supported = !!(
     captionVisionCapabilities.models.length &&
@@ -444,7 +443,7 @@ function handleCaptionVisionModelChange() {
     }
     return false;
   }).then(function () {
-    if (!captionVisionEnabled || !captionAssistCandidate || !isFocusedCaptionOpen()) return false;
+    if (!captionVisionEnabled || !captionAssistCandidate) return false;
     return runCaptionVisionForCandidate(captionAssistCandidate);
   }).then(function () {
     if (

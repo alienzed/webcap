@@ -79,7 +79,7 @@ function beginFocusedCaptionPrefetchVision(prefetch, mediaItem, candidate) {
     prefetch.visionResult = result;
     return result;
   }).catch(function (err) {
-    if (!prefetch.discarded) reportConsoleError('Focus Caption Vision', err);
+    if (!prefetch.discarded && captionVisionEnabled) reportConsoleError('Focus Caption Vision', err);
     return null;
   });
   return prefetch.visionPromise;

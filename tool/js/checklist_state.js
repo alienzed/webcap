@@ -1107,7 +1107,8 @@ function setReviewedRowClass(mediaKey, reviewed) {
   row.classList.toggle('reviewed', !!reviewed);
 }
 
-function syncReviewedFromChecklist(mediaKey) {
+function syncReviewedFromChecklist(mediaKey, options) {
+  var opts = options || {};
   if (!mediaKey) return;
   if (!state.reviewedSet || !(state.reviewedSet instanceof Set)) {
     state.reviewedSet = new Set();
@@ -1115,38 +1116,25 @@ function syncReviewedFromChecklist(mediaKey) {
   var reviewed = checklistAllCheckedForMedia(mediaKey);
   if (reviewed) state.reviewedSet.add(mediaKey);
   else state.reviewedSet.delete(mediaKey);
-  setReviewedRowClass(mediaKey, reviewed);
+  if (!opts.skipRowClass) setReviewedRowClass(mediaKey, reviewed);
   return false;
 }
 
-function syncReviewedFromChecklistAll() {
+function syncReviewedFromChecklistAll(options) {
+  var opts = options || {};
   var changed = false;
   if (!state || !Array.isArray(state.items)) return changed;
   for (var i = 0; i < state.items.length; i++) {
     var item = state.items[i];
     if (!item || !item.key) continue;
-    changed = syncReviewedFromChecklist(item.key) || changed;
+    changed = syncReviewedFromChecklist(item.key, opts) || changed;
   }
   return changed;
 }
 
 
 function saveChecklistToFolderState() {
-  var snapshot = snapshotFolderStateFromDom();
-  snapshot.caption_requirements = checklistItems.slice();
-  snapshot.caption_hidden_requirements = getChecklistHiddenRequirements();
-  snapshot.caption_group_primer_separators = JSON.parse(JSON.stringify(checklistPrimerSeparatorsByGroup));
-  snapshot.caption_group_primer_precedence = JSON.parse(JSON.stringify(checklistPrimerPrecedenceByGroup));
-  snapshot.caption_requirements_checked = JSON.parse(JSON.stringify(checklistCheckedByMedia));
-  snapshot.caption_requirement_keywords = JSON.parse(JSON.stringify(checklistKeywordsByItem));
-  snapshot.caption_term_wrappers = JSON.parse(JSON.stringify(checklistTermWrappersByKey));
-  snapshot.caption_term_affixes = JSON.parse(JSON.stringify(checklistTermAffixesByKey));
-  snapshot.caption_term_descriptor_defaults = JSON.parse(JSON.stringify(checklistTermDescriptorDefaultsByKey));
-  snapshot.caption_group_tags_by_media = JSON.parse(JSON.stringify(checklistAssignmentsByMedia));
-  snapshot.caption_group_term_wrappers = JSON.parse(JSON.stringify(checklistTermWrappersByGroup));
-  snapshot.caption_group_term_descriptor_defaults = JSON.parse(JSON.stringify(checklistTermDescriptorDefaultsByGroup));
-  snapshot.caption_group_term_descriptors_by_media = JSON.parse(JSON.stringify(checklistTermDescriptorsByMedia));
-  writeFolderStateFile(state.folder, snapshot);
+  writeFolderStateFile(state.folder, snapshotFolderStateFromDom());
 }
 
 function loadChecklistFromFolderState(folderState) {
@@ -1160,27 +1148,33 @@ function loadChecklistFromFolderState(folderState) {
   checklistHiddenRequirements = sanitizeChecklistHiddenRequirements(folderState.caption_hidden_requirements);
   checklistPrimerSeparatorsByGroup = sanitizeChecklistPrimerSeparators(folderState.caption_group_primer_separators);
   checklistPrimerPrecedenceByGroup = sanitizeChecklistPrimerPrecedence(folderState.caption_group_primer_precedence);
-  if (folderState.caption_requirements_checked && typeof folderState.caption_requirements_checked === 'object') {
-    checklistCheckedByMedia = JSON.parse(JSON.stringify(folderState.caption_requirements_checked));
-  } else {
-    checklistCheckedByMedia = {};
-  }
-  if (folderState.caption_requirement_keywords && typeof folderState.caption_requirement_keywords === 'object') {
-    checklistKeywordsByItem = JSON.parse(JSON.stringify(folderState.caption_requirement_keywords));
-  } else {
-    checklistKeywordsByItem = {};
-  }
-  checklistTermWrappersByKey = sanitizeChecklistTermAffixesMap(
-    folderState.caption_term_wrappers || folderState.caption_term_affixes
-  );
-  checklistTermDescriptorDefaultsByKey = sanitizeChecklistTermAffixesMap(folderState.caption_term_descriptor_defaults);
-  checklistAssignmentsByMedia = sanitizeChecklistAssignmentsByMedia(folderState.caption_group_tags_by_media);
-  checklistTermWrappersByGroup = sanitizeChecklistGroupTermAffixesMap(folderState.caption_group_term_wrappers, false);
-  checklistTermDescriptorDefaultsByGroup = sanitizeChecklistGroupTermAffixesMap(folderState.caption_group_term_descriptor_defaults, false);
-  checklistTermDescriptorsByMedia = sanitizeChecklistGroupTermDescriptorsByMedia(folderState.caption_group_term_descriptors_by_media);
+  checklistCheckedByMedia = (folderState.caption_requirements_checked && typeof folderState.caption_requirements_checked === 'object')
+    ? folderState.caption_requirements_checked
+    : {};
+  checklistKeywordsByItem = (folderState.caption_requirement_keywords && typeof folderState.caption_requirement_keywords === 'object')
+    ? folderState.caption_requirement_keywords
+    : {};
+  checklistTermWrappersByKey = (folderState.caption_term_wrappers && typeof folderState.caption_term_wrappers === 'object')
+    ? folderState.caption_term_wrappers
+    : {};
+  checklistTermDescriptorDefaultsByKey = (folderState.caption_term_descriptor_defaults && typeof folderState.caption_term_descriptor_defaults === 'object')
+    ? folderState.caption_term_descriptor_defaults
+    : {};
+  checklistAssignmentsByMedia = (folderState.caption_group_tags_by_media && typeof folderState.caption_group_tags_by_media === 'object')
+    ? folderState.caption_group_tags_by_media
+    : {};
+  checklistTermWrappersByGroup = (folderState.caption_group_term_wrappers && typeof folderState.caption_group_term_wrappers === 'object')
+    ? folderState.caption_group_term_wrappers
+    : {};
+  checklistTermDescriptorDefaultsByGroup = (folderState.caption_group_term_descriptor_defaults && typeof folderState.caption_group_term_descriptor_defaults === 'object')
+    ? folderState.caption_group_term_descriptor_defaults
+    : {};
+  checklistTermDescriptorsByMedia = (folderState.caption_group_term_descriptors_by_media && typeof folderState.caption_group_term_descriptors_by_media === 'object')
+    ? folderState.caption_group_term_descriptors_by_media
+    : {};
   syncChecklistLegacyAffixesMirror();
 
-  syncReviewedFromChecklistAll();
+  syncReviewedFromChecklistAll({ skipRowClass: true });
   renderChecklistPanel();
 }
 

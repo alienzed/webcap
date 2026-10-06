@@ -120,6 +120,15 @@ def test_grid_initializes_after_all_classic_scripts_are_loaded():
     assert "addEventListener('DOMContentLoaded', initMediaGrid);" in actions
 
 
+def test_media_text_filter_matches_only_from_token_boundaries():
+    script = _read("tool/js/media.js")
+
+    assert "function mediaFilterTermMatches(haystack, term)" in script
+    assert "haystack.indexOf(term, searchFrom)" in script
+    assert "!/[a-z0-9]/.test(haystack.charAt(index - 1))" in script
+    assert "return mediaFilterTermMatches(haystack, term);" in script
+
+
 def test_grid_delete_exclusively_uses_the_batch_prune_snapshot():
     actions = _read("tool/js/media_grid_actions.js")
     main = _read("tool/js/main.js")

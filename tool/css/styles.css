@@ -3039,7 +3039,25 @@ iframe {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+.test-generations-results-title-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.test-generations-results-title-copy > strong {
+  font-size: 17px;
+  line-height: 1.1;
+}
+.test-generations-wildcard-tagline {
+  max-width: min(52vw, 720px);
+  overflow: hidden;
+  color: var(--text) !important;
+  font-size: 13px !important;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .test-generations-session-info-btn {
   padding: 0;

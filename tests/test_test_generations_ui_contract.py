@@ -1123,6 +1123,30 @@ def test_generated_wildcard_review_uses_modal_and_derived_dimension_controls():
     assert "Derived from the wildcard text; edit the text freely." in html
 
 
+def test_wildcard_builder_can_close_while_analysis_runs_and_does_not_mislabel_edited_groups():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    close_block = script.split("function closeWildcardBuilder()", 1)[1].split("function shuffleWildcardPreview", 1)[0]
+    assert "wildcardDirector.busy" not in close_block
+
+    label_block = script.split("function wildcardGroupLabel", 1)[1].split("function resolveWildcardPreview", 1)[0]
+    assert "sameOptions" in label_block
+    assert "semanticOptions.every" in label_block
+
+
+def test_test_results_header_surfaces_resolved_wildcard_choices():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-wildcard-tagline"' in html
+    assert "Array.isArray(status.wildcardValues)" in script
+    assert "wildcardValues.join(' · ')" in script
+    assert ".test-generations-results-title-copy > strong" in css
+    assert "font-size: 17px;" in css
+    assert ".test-generations-wildcard-tagline" in css
+
+
 def test_test_results_media_and_ratings_use_session_identity_not_fs_root_navigation():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")

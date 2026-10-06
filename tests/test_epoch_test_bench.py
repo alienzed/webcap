@@ -118,6 +118,27 @@ def test_resolved_wildcard_values_ignores_plain_or_unmatched_prompts():
     ) == []
 
 
+def test_resolved_wildcard_values_supports_optional_empty_choice():
+    assert bench._resolved_wildcard_values(
+        "person wearing a {black|white} {ruched|} bikini",
+        "person wearing a white  bikini",
+    ) == ["white"]
+
+
+def test_session_status_projects_resolved_wildcard_values(tmp_path):
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "test.json").write_text(json.dumps({
+        "status": "complete",
+        "sourcePrompt": "person in {studio|rooftop}, {front|side} view",
+        "resolvedPrompt": "person in rooftop, side view",
+    }), encoding="utf-8")
+
+    status = bench._session_status(session)
+
+    assert status["wildcardValues"] == ["rooftop", "side"]
+
+
 
 def test_staged_candidates_follow_test_folder_not_source_provenance(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)

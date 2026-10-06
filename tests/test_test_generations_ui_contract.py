@@ -65,6 +65,14 @@ def test_test_seed_uses_shared_32_bit_range():
     assert "return values[0];" in script
 
 
+def test_test_wildcard_tagline_is_required_app_wiring():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-wildcard-tagline"' in html
+    assert "if (!wildcardTagline) throw new Error('Test wildcard tagline is missing.');" in script
+
+
 def test_test_results_header_promotes_view_tabs_without_legacy_rate_action():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

@@ -5,7 +5,7 @@ from flask import Response, stream_with_context
 from . import config as app_config
 from .training_action import action_id_for_root, allocate_action, update_action
 from .training_history import resolve_managed_resume, validate_resumable_run_for_path
-from .training_profiles import config_for_stage, normalize_mode, profile_run
+from .training_profiles import config_for_stage, profile_run
 from .training_bundle import materialize_training_bundle
 from .training_commands import build_h3_command_plan, build_training_command_plan
 from .training_review import prepare_training_review, resolve_saved_initializer
@@ -22,7 +22,6 @@ def train_run_response(
     run_name="",
     profile_id="",
     run_id="",
-    mode="normal",
     selected_media=None,
     fallback_captions=None,
     selection_criteria=None,
@@ -46,7 +45,6 @@ def train_run_response(
         if not folder_path.exists() or not folder_path.is_dir():
             return Response(f"[ERROR] Folder does not exist: {folder}\n", status=404, mimetype="text/plain")
         selected_profile, selected_run = profile_run(profile_id, run_id)
-        selected_mode = normalize_mode(mode)
         stages = selected_run["stages"][0]
         stage_names = (stages,)
         requested_config_settings = dict(config_settings) if isinstance(config_settings, dict) else {}
@@ -93,7 +91,7 @@ def train_run_response(
         if managed_action_root is not None:
             action_root, action = managed_action_root, managed_action
         else:
-            action_root, action = allocate_action(folder_path, selected_profile, selected_mode, stage_names, run_name)
+            action_root, action = allocate_action(folder_path, selected_profile, stage_names, run_name)
         output_dirs = {}
         for stage in stage_names:
             stage_output = action_root / "output"
@@ -104,7 +102,6 @@ def train_run_response(
             folder_path,
             action_root,
             selected_profile["id"],
-            selected_mode,
             stages,
             selected_media,
             fallback_captions=fallback_captions,

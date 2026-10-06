@@ -161,6 +161,51 @@ def test_resolved_wildcard_values_supports_nested_groups_from_real_test_prompts(
     ]
 
 
+def test_resolved_wildcard_summary_prioritizes_set_specific_groups_with_context():
+    source = (
+        "A beautiful {Swedish|Australian} woman is standing wearing a "
+        "{purple|white} {striped|floral|} micro bikini "
+        "{with {pink|blue} trim|}, featuring a {bandeau|teardrop} top and a micro "
+        "{ruched|teardrop} {v-front|} bottom "
+        "{on a breathtaking tropical beach|in her bedroom}. "
+        "She has long {dirty blonde|black} hair{ in {a high ponytail|braids}|} "
+        "{with glistening skin|} and seems to have {small|large} breasts. "
+        "She is {slowly rotating to show all sides|stretching her arms upwards}, "
+        "initial {front|three-quarter} cowboy shot view, "
+        "non_diegetic_music: An {k-pop music|dance music} beat."
+    )
+    resolved = (
+        "A beautiful Swedish woman is standing wearing a purple striped micro bikini "
+        "with pink trim, featuring a bandeau top and a micro ruched v-front bottom "
+        "on a breathtaking tropical beach. She has long dirty blonde hair in a high ponytail "
+        "with glistening skin and seems to have small breasts. "
+        "She is slowly rotating to show all sides, initial three-quarter cowboy shot view, "
+        "non_diegetic_music: An k-pop music beat."
+    )
+
+    assert bench._resolved_wildcard_summary(
+        source,
+        resolved,
+        "sets/micro_bikini",
+    ) == [
+        "purple striped micro bikini",
+        "pink trim",
+        "bandeau top",
+        "ruched v-front bottom",
+    ]
+
+
+def test_resolved_wildcard_summary_promotes_generic_category_when_it_is_the_set_concept():
+    source = "portrait in {soft|neon} lighting, {front|side} view"
+    resolved = "portrait in neon lighting, side view"
+
+    assert bench._resolved_wildcard_summary(
+        source,
+        resolved,
+        "sets/lighting",
+    )[0] == "neon lighting"
+
+
 def test_session_status_projects_resolved_wildcard_values(tmp_path):
     session = tmp_path / "session"
     session.mkdir()

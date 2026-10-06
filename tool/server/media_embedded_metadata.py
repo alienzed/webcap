@@ -136,7 +136,7 @@ def _read_png(path):
             continue
         parts = chunk_data.split(b"\x00", 5)
         if len(parts) == 6 and parts[0] == _PNG_KEY:
-            if parts[1] != b"\x00":
+            if parts[1] != b"":
                 raise RuntimeError("Compressed WebCap PNG metadata is unsupported.")
             found = parts[5]
     return found

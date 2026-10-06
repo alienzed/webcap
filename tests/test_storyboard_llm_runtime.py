@@ -2229,7 +2229,15 @@ def test_ollama_model_capabilities_uses_native_show_post(monkeypatch):
 
     monkeypatch.setattr(storyboard_llm_runtime, "_remote_native_http_json", native)
 
-    capabilities = storyboard_llm_runtime._ollama_model_capabilities("huihui_ai/qwen3-vl-abliterated:8b")
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_config",
+        lambda: {"endpoint": "http://workstation:11434/v1", "mode": "remote"},
+    )
+    capabilities = storyboard_llm_runtime._ollama_model_capabilities(
+        "huihui_ai/qwen3-vl-abliterated:8b",
+        refresh=True,
+    )
 
     assert capabilities == ["completion", "vision"]
     assert captured["path"] == "/api/show"
@@ -2268,7 +2276,7 @@ def test_list_vision_models_includes_only_remote_ollama_models_with_vision(monke
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "_ollama_model_capabilities",
-        lambda model_id: ["completion", "vision"] if model_id == "vision:8b" else ["completion"],
+        lambda model_id, refresh=False: ["completion", "vision"] if model_id == "vision:8b" else ["completion"],
     )
 
     models = storyboard_llm_runtime.list_vision_models()
@@ -2304,6 +2312,23 @@ def test_prepare_caption_vision_messages_materializes_remote_ollama_image(monkey
             {"type": "image_url", "image_url": {"url": "file://bikini/item.jpg"}},
         ],
     }]
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_base_config",
+        lambda: {
+            "legacy_mode": "local",
+            "remote_endpoints": [{
+                "id": "workstation",
+                "name": "Work PC",
+                "endpoint": "http://workstation:11434/v1",
+            }],
+            "models_dir": None,
+            "port": 8189,
+            "context_size": None,
+            "max_tokens": None,
+            "llama_server": "",
+        },
+    )
     monkeypatch.setattr(storyboard_llm_runtime, "_remote_is_ollama", lambda refresh=False: True)
     monkeypatch.setattr(
         storyboard_llm_runtime,

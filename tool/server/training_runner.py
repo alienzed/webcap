@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .training_commands import build_h3_command_plan, build_training_command_plan
-from .training_profiles import config_for_stage, normalize_mode, profile, profile_for_mode, profile_run, profiles as training_profiles
+from .training_profiles import config_for_stage, profile, resolved_profile, profile_run, profiles as training_profiles
 from .training_bundle import materialize_training_bundle
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets
@@ -2464,7 +2464,7 @@ def _public_job(job):
             payload["sourceUnavailable"] = "Set folder is currently unavailable; this job remains queued."
     return payload
 
-def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", mode="normal", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None, resume_checkpoint_tag=""):
+def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage="", resume_action_id="", resume_output_id="", profile_id="", run_id="", selected_media=None, fallback_captions=None, selection_criteria=None, total_media_count=None, resume_checkpoint_tag=""):
     try:
         _, selected_run = profile_run(profile_id, run_id)
         stages = selected_run["stages"][0]
@@ -2476,7 +2476,6 @@ def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage
         if resume_path and requested_resume:
             raise ValueError("Choose either a managed checkpoint or a filesystem checkpoint, not both.")
         resume_stage = _normalize_resume_stage(stages, resume_path or ("managed" if requested_resume else ""), resume_stage)
-        selected_mode = normalize_mode(mode)
         _, folder_path = _resolve_folder(folder)
         resume = resolve_managed_resume(folder_path, resume_action_id, resume_output_id, resume_stage) if requested_resume else (
             validate_resumable_run_for_path(folder_path, resume_stage, resume_path) if resume_path else None
@@ -2485,7 +2484,7 @@ def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage
             if not requested_resume or resume is None:
                 raise ValueError("A previous saved resume point requires a managed checkpoint.")
             _validated_resume_checkpoint(resume["runPath"], resume_checkpoint_tag)
-        payload = _preflight_payload(folder, stages, profile_id=profile_id, mode=selected_mode)
+        payload = _preflight_payload(folder, stages, profile_id=profile_id)
         settings = payload.pop("settings")
         artifacts = {key: Path(value) for key, value in payload.pop("artifacts").items()}
         blockers = [item for item in payload["checks"] if item["severity"] == "blocker" and not item["ok"]]
@@ -2542,7 +2541,6 @@ def _new_job(
     parent_job_id="",
     profile_id="",
     run_id="",
-    mode="normal",
     action_root=None,
     run_name="",
     resume_action_id="",
@@ -2554,8 +2552,7 @@ def _new_job(
     _, folder_path = _resolve_folder(folder)
     stages = _normalize_training_stages(stages)
     selected_profile, _ = profile_run(profile_id, run_id)
-    selected_mode = normalize_mode(mode)
-    config_meta = config_for_stage(selected_profile["id"], stages, selected_mode)
+    config_meta = config_for_stage(selected_profile["id"], stages)
     output_slug = config_meta["outputSlug"]
     resume_path = str(resume_from_checkpoint or "").strip()
     distribution = _training_settings()["wslDistribution"]
@@ -2577,12 +2574,10 @@ def _new_job(
         "stages": stages,
         "profileId": selected_profile["id"],
         "profileLabel": selected_profile["label"],
-        "mode": selected_mode,
         "runId": action_run_id,
         "actionRunId": action_run_id,
         "modelLabel": model["label"],
         "model": model,
-        "datasetTarget": selected_mode,
         "input": input_evidence,
         "resumeFromCheckpoint": resume_path,
         "resumeStage": _normalize_resume_stage(stages, resume_path, resume_stage),
@@ -2621,9 +2616,9 @@ def _new_job(
     }
 
 
-def _bundle_from_action(action_id, profile_id, mode, stages):
+def _bundle_from_action(action_id, profile_id, stages):
     path, record_root, input_root, action = action_paths(action_id)
-    selected = profile_for_mode(profile_id, mode)
+    selected = resolved_profile(profile_id)
     stage_names = (stages,)
     artifacts = {
         "manifest": input_root / "dataset_manifest.json",
@@ -2651,7 +2646,7 @@ def _bundle_from_action(action_id, profile_id, mode, stages):
     return {"path": path, "recordPath": record_root, "inputPath": input_root, "artifacts": artifacts, "summary": summary, "capturedItemCount": len(rows), "action": action}
 
 
-def _bundle_from_recorded_capture(action_id, capture_path, folder_path, profile_id, mode, stages):
+def _bundle_from_recorded_capture(action_id, capture_path, folder_path, profile_id, stages):
     """Reuse a known action capture for Recent Runs and paused-resume launches."""
     action_root, action = read_action(action_id)
     expected_folder = Path(folder_path).resolve().relative_to(Path(app_config.FS_ROOT).resolve()).as_posix()
@@ -2669,7 +2664,7 @@ def _bundle_from_recorded_capture(action_id, capture_path, folder_path, profile_
         raise ValueError("The recorded training capture is outside its action folder.") from exc
     if not capture.is_dir() or capture.is_symlink():
         raise FileNotFoundError("The recorded training capture is unavailable: " + str(capture))
-    selected = profile_for_mode(profile_id, mode)
+    selected = resolved_profile(profile_id)
     stage_names = (stages,)
     artifacts = {}
     for stage in stage_names:
@@ -2716,7 +2711,6 @@ def start_response(
     resume_output_id="",
     profile_id="",
     run_id="",
-    mode="normal",
     selected_media=None,
     fallback_captions=None,
     selection_criteria=None,
@@ -2733,7 +2727,6 @@ def start_response(
 ):
     try:
         selected_profile, selected_run = profile_run(profile_id, run_id)
-        selected_mode = normalize_mode(mode)
         stages = _normalize_training_stages(selected_run["stages"][0])
         requested_config_settings = dict(config_settings) if isinstance(config_settings, dict) else {}
         resume_stage = _normalize_resume_stage(stages, resume_from_checkpoint or resume_output_id, resume_stage)
@@ -2823,20 +2816,20 @@ def start_response(
             action_root, action = read_action(str(reuse_capture_action_id).strip())
             bundle = _bundle_from_recorded_capture(
                 str(reuse_capture_action_id).strip(), reuse_capture_path, folder_path,
-                selected_profile["id"], selected_mode, stages,
+                selected_profile["id"], stages,
             )
         elif resume_action is not None:
             action_root = resume_action
             action = read_action(action_id_for_root(action_root))[1]
         else:
-            action_root, action = allocate_action(folder_path, selected_profile, selected_mode, (stages,), run_name)
+            action_root, action = allocate_action(folder_path, selected_profile, (stages,), run_name)
         distribution = _training_settings()["wslDistribution"]
         output_root = action_root / "output"
         output_root.mkdir(parents=True, exist_ok=True)
         output_dir = _to_wsl_path(output_root, distribution)
         if not reuse_capture:
             bundle = materialize_training_bundle(
-                folder_path, action_root, selected_profile["id"], selected_mode, stages, selected_media,
+                folder_path, action_root, selected_profile["id"], stages, selected_media,
                 fallback_captions=fallback_captions, selection_criteria=selection_criteria,
                 total_media_count=total_media_count, output_dirs={stages: output_dir},
                 distribution=distribution, review=review if not review.get("customDataset") else None,
@@ -2853,7 +2846,7 @@ def start_response(
         preflight = {"checks": [], "summary": {"blockers": 0, "warnings": 0}}
         job = _new_job(
             str(folder).strip(), preflight, stages, bundle, output_root, output_dir,
-            resume_path, resume_stage, "", selected_profile["id"], selected_run["id"], selected_mode,
+            resume_path, resume_stage, "", selected_profile["id"], selected_run["id"],
             action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, 0,
             resume_checkpoint_tag=resume_checkpoint_tag,
         )

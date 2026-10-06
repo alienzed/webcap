@@ -222,7 +222,7 @@ function clearFocusedCaptionVisionPhrases(options) {
   focusedCaptionVisionPhrases.error = '';
   focusedCaptionVisionPhrases.task = null;
   if (!opts.keepEnabled) focusedCaptionVisionPhrases.enabled = false;
-  if (typeof syncFocusedCaptionVisionPhrasesUi === 'function') syncFocusedCaptionVisionPhrasesUi();
+  syncFocusedCaptionVisionPhrasesUi();
 }
 
 function setFocusedCaptionVisionPhraseResult(result) {

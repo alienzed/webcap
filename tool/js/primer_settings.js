@@ -120,6 +120,8 @@ function isCaptionAssistRunning() {
 
 function clearCaptionAssistCandidate() {
   captionAssistCandidate = null;
+  cancelCurrentCaptionVision();
+  clearCaptionVisionResult();
   syncCaptionAssistCandidateUi();
 }
 

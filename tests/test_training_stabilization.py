@@ -11,7 +11,7 @@ from tool.server import app as app_module
 from tool.server import execution_queue, gpu_prep, h3_probe, inference_runtime, run_ops, storyboard_llm_runtime, training_archive, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
 from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
-from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, profile_for_mode
+from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, resolved_profile
 from tool.server.training_setup import ensure_training_setup
 
 
@@ -243,20 +243,20 @@ def test_training_proceeds_if_retained_director_cleanup_is_uncertain(tmp_path, m
     execution_queue.release_resource(training_runner.TRAINING_RESOURCE_OWNER)
 
 
-def test_canonical_set_tomls_are_materialized_resettable_and_never_mode_duplicated(tmp_path, monkeypatch):
+def test_canonical_set_tomls_are_materialized_resettable_without_setup_modes(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
 
-    result = ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "quality", selected_media=["one.png", "two.png"])
+    result = ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png", "two.png"])
 
-    assert result["mode"] == "normal"
+    assert "mode" not in result
     assert (folder / "config.h3.toml").is_file()
     assert (folder / "dataset.h3.toml").is_file()
     assert not list(folder.glob("config.h3.*.toml"))
     (folder / "config.h3.toml").write_text("not = [valid", encoding="utf-8")
     with pytest.raises(Exception):
-        ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
-    reset_training_config_file(folder, "config.h3.toml", profile_id=MINIMAX_H3_PROFILE_ID, mode="normal")
+        ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    reset_training_config_file(folder, "config.h3.toml", profile_id=MINIMAX_H3_PROFILE_ID)
     assert "output_dir" in (folder / "config.h3.toml").read_text(encoding="utf-8")
 
 
@@ -267,7 +267,7 @@ def test_legacy_shared_dataset_is_copied_to_each_model_specific_dataset_without_
     legacy_h3 = h3_folder / "dataset.train.toml"
     legacy_h3.write_text('enable_ar_bucket = true\n# preserve legacy edits\n', encoding="utf-8")
 
-    ensure_training_setup(h3_folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png", "two.png"])
+    ensure_training_setup(h3_folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png", "two.png"])
 
     assert (h3_folder / "dataset.h3.toml").read_text(encoding="utf-8") == legacy_h3.read_text(encoding="utf-8")
 
@@ -275,7 +275,7 @@ def test_legacy_shared_dataset_is_copied_to_each_model_specific_dataset_without_
     legacy_wan = wan_folder / "dataset.train.toml"
     legacy_wan.write_text('enable_ar_bucket = true\n# preserve legacy edits\n', encoding="utf-8")
 
-    ensure_training_setup(wan_folder, WAN21_PROFILE_ID, "normal", selected_media=["one.png", "two.png"])
+    ensure_training_setup(wan_folder, WAN21_PROFILE_ID, selected_media=["one.png", "two.png"])
 
     assert (wan_folder / "dataset.wan21.toml").read_text(encoding="utf-8") == legacy_wan.read_text(encoding="utf-8")
 
@@ -299,7 +299,7 @@ def test_review_is_toml_backed_inclusive_and_returns_distribution(tmp_path, monk
 def test_custom_valid_dataset_disables_wizard_but_does_not_block_training_review(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
     (folder / "dataset.h3.toml").write_text(
         '[[directory]]\npath = "custom"\nnum_repeats = 1\ngroup = "images"\nsize_buckets = [[512, 512, 1]]\nextra = true\n',
         encoding="utf-8",
@@ -315,11 +315,11 @@ def test_bundle_copies_source_bytes_into_a_distinct_capture(tmp_path, monkeypatc
     _configure_root(monkeypatch, tmp_path)
     _fake_runtime(monkeypatch)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
-    action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    action, _ = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
 
     bundle = training_bundle.materialize_training_bundle(
-        folder, action, MINIMAX_H3_PROFILE_ID, "normal", "h3", ["one.png"], output_dirs={"h3": str(action / "output" / "minimax-h3")},
+        folder, action, MINIMAX_H3_PROFILE_ID, "h3", ["one.png"], output_dirs={"h3": str(action / "output" / "minimax-h3")},
     )
 
     copied = Path(bundle["inputPath"]) / "media" / "square_img" / "one.png"
@@ -372,7 +372,7 @@ def test_managed_h3_review_capture_isolates_balanced_temporal_and_detail_directo
     folder = _set(tmp_path)
     (folder / "clip.mp4").write_bytes(b"captured-video")
     (folder / "clip.txt").write_text("clip caption", encoding="utf-8")
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
     manifest = {
         "version": 2, "images": [], "skipped": [], "selection": {},
         "videos": [{
@@ -381,11 +381,11 @@ def test_managed_h3_review_capture_isolates_balanced_temporal_and_detail_directo
         }],
     }
     monkeypatch.setattr(training_bundle, "build_dataset_manifest", lambda *_args, **_kwargs: manifest)
-    action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    action, _ = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
     review = {"review": {"stages": {"h3": _h3_video_review_stage()}}, "ladders": {}}
 
     bundle = training_bundle.materialize_training_bundle(
-        folder, action, MINIMAX_H3_PROFILE_ID, "normal", "h3", ["clip.mp4"],
+        folder, action, MINIMAX_H3_PROFILE_ID, "h3", ["clip.mp4"],
         output_dirs={"h3": str(action / "output")}, review=review,
     )
 
@@ -423,7 +423,7 @@ def test_manual_h3_command_materializes_the_managed_review_into_isolated_directo
     folder = _set(tmp_path)
     (folder / "clip.mp4").write_bytes(b"manual-video")
     (folder / "clip.txt").write_text("clip caption", encoding="utf-8")
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
     manifest = {
         "version": 2, "images": [], "skipped": [], "selection": {},
         "videos": [{
@@ -464,7 +464,7 @@ def test_queue_and_manual_pass_the_same_managed_review_to_materialization(tmp_pa
     _configure_root(monkeypatch, tmp_path)
     _fake_runtime(monkeypatch)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
     review = {"review": {"stages": {"h3": {"datasetEntries": []}}}, "ladders": {}, "customDataset": False}
     seen = []
 
@@ -569,15 +569,15 @@ def test_capture_rejects_an_invalid_managed_video_bucket(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     _fake_runtime(monkeypatch)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
-    action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    action, _ = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
     invalid_review = {"review": {"stages": {"h3": {"datasetEntries": [{
         "kind": "video", "role": "temporal", "bucket": [400, 400, 68], "sourceDir": "square_video",
     }]}}}}
 
     with pytest.raises(ValueError, match="outside the current managed policy"):
         training_bundle.materialize_training_bundle(
-            folder, action, MINIMAX_H3_PROFILE_ID, "normal", "h3", ["one.png"],
+            folder, action, MINIMAX_H3_PROFILE_ID, "h3", ["one.png"],
             output_dirs={"h3": str(action / "output" / "minimax-h3")}, review=invalid_review,
         )
 
@@ -627,7 +627,7 @@ def test_pre_layout_queue_state_uses_recorded_paths_without_action_resolution(tm
     _configure_root(monkeypatch, tmp_path)
     _fake_runtime(monkeypatch)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
     legacy_root = tmp_path / "output" / "runs" / "001-subject--h3"
     capture = legacy_root / "captures" / "old-capture"
     job_dir = legacy_root / "jobs" / "old-job"
@@ -733,7 +733,7 @@ def test_set_action_relocation_ignores_retired_job_history_files(tmp_path, monke
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
     action, action_data = allocate_action(
-        folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",)
+        folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",)
     )
     stale_job_dir = action / "jobs" / "stale"
     stale_job_dir.mkdir()
@@ -756,10 +756,10 @@ def test_recent_run_resume_reuses_its_recorded_capture(tmp_path, monkeypatch):
     _fake_runtime(monkeypatch)
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
-    action, action_data = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    action, action_data = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
     bundle = training_bundle.materialize_training_bundle(
-        folder, action, MINIMAX_H3_PROFILE_ID, "normal", "h3", ["one.png"], output_dirs={"h3": str(action / "output" / "minimax-h3")},
+        folder, action, MINIMAX_H3_PROFILE_ID, "h3", ["one.png"], output_dirs={"h3": str(action / "output" / "minimax-h3")},
     )
     resume_output = action / "output" / "minimax-h3" / "checkpoint-run"
     (resume_output / "global_step1").mkdir(parents=True)
@@ -799,8 +799,8 @@ def test_managed_resume_records_resume_run_as_current_output(tmp_path, monkeypat
     _fake_runtime(monkeypatch)
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
-    action, action_data = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    action, action_data = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
     resumed_run = action / "output" / "managed-run"
     (resumed_run / "global_step1").mkdir(parents=True)
     (resumed_run / "latest").write_text("global_step1\n", encoding="utf-8")
@@ -829,7 +829,7 @@ def test_custom_resume_creates_a_new_logical_run_without_writing_beside_source(t
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
     folder = _set(tmp_path)
     resumed_run = tmp_path / "external-output" / "20260831-120000"
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
     (resumed_run / "global_step1").mkdir(parents=True)
     (resumed_run / "latest").write_text("global_step1\n", encoding="utf-8")
     (resumed_run / "config.h3.toml").write_text((folder / "config.h3.toml").read_text(encoding="utf-8"), encoding="utf-8")
@@ -854,9 +854,9 @@ def test_custom_resume_creates_a_new_logical_run_without_writing_beside_source(t
 def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
     managed_action, managed_data = allocate_action(
-        folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",)
+        folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",)
     )
     managed_run = managed_action / "output" / "managed-run"
     (managed_run / "global_step1").mkdir(parents=True)
@@ -931,7 +931,7 @@ def test_manual_command_resolves_managed_resume_and_preserves_custom_resume(tmp_
 def test_managed_run_rejects_initializer_stage_outside_selected_run(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
 
     payload, status = training_runner.start_response(
         "sets/subject",
@@ -951,8 +951,8 @@ def test_managed_run_rejects_initializer_stage_outside_selected_run(tmp_path, mo
 def test_initializer_picker_lists_only_current_set_managed_epoch_exports(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
-    action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    action, _ = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
     run = action / "output" / "20260831-120000"
     (run / "global_step1").mkdir(parents=True)
     (run / "latest").write_text("global_step1\n", encoding="utf-8")
@@ -1675,15 +1675,14 @@ def test_training_bundle_applies_run_settings_without_mutating_set_config(tmp_pa
     _configure_root(monkeypatch, tmp_path)
     _fake_runtime(monkeypatch)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
     source_before = (folder / "config.h3.toml").read_text(encoding="utf-8")
-    action, _ = allocate_action(folder, profile_for_mode(MINIMAX_H3_PROFILE_ID), "normal", ("h3",))
+    action, _ = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
 
     bundle = training_bundle.materialize_training_bundle(
         folder,
         action,
         MINIMAX_H3_PROFILE_ID,
-        "normal",
         "h3",
         ["one.png"],
         output_dirs={"h3": str(action / "output" / "minimax-h3")},
@@ -1708,7 +1707,7 @@ def test_checkpoint_resume_forces_selected_learning_rate(tmp_path, monkeypatch):
     _fake_runtime(monkeypatch)
     monkeypatch.setattr(training_runner, "_ensure_monitor_started", lambda: None)
     folder = _set(tmp_path)
-    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, "normal", selected_media=["one.png"])
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
     resumed_run = tmp_path / "external-output" / "resume-run"
     (resumed_run / "global_step1").mkdir(parents=True)
     (resumed_run / "latest").write_text("global_step1\n", encoding="utf-8")

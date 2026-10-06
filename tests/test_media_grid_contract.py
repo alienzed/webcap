@@ -125,7 +125,7 @@ def test_media_text_filter_matches_only_from_token_boundaries():
 
     assert "function mediaFilterTermMatches(haystack, term)" in script
     assert "haystack.indexOf(term, searchFrom)" in script
-    assert "!/[a-z0-9]/.test(haystack.charAt(index - 1))" in script
+    assert "!/[a-z0-9]/i.test(haystack.charAt(index - 1))" in script
     assert "return mediaFilterTermMatches(haystack, term);" in script
 
 

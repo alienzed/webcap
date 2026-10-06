@@ -40,7 +40,13 @@ function loadCaptionVisionCapabilities() {
 }
 
 function getCaptionVisionModelId() {
-  return String(captionVisionCapabilities.defaultModel || '');
+  var preferred = typeof getVisionModelPreference === 'function'
+    ? String(getVisionModelPreference() || '')
+    : '';
+  var available = (captionVisionCapabilities.models || []).some(function (model) {
+    return String(model && model.id || '') === preferred;
+  });
+  return available ? preferred : String(captionVisionCapabilities.defaultModel || '');
 }
 
 function buildCaptionVisionGroups(mediaKey) {
@@ -88,7 +94,7 @@ function requestCaptionVisionCandidate(mediaItem, captionText, options) {
   var opts = options || {};
   return loadCaptionVisionCapabilities().then(function () {
     var request = buildCaptionVisionRequest(mediaItem, captionText);
-    if (!request.model) throw new Error('No local vision model is available.');
+    if (!request.model) throw new Error('No Vision model is available.');
     return captionAssistRequestJson('/caption/vision-check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -409,6 +415,38 @@ function setCaptionVisionEnabled(enabled) {
   });
 }
 
+function syncCaptionVisionCapabilitiesFromPayload(payload) {
+  payload = payload && typeof payload === 'object' ? payload : {};
+  captionVisionCapabilities.loaded = true;
+  captionVisionCapabilities.models = Array.isArray(payload.models) ? payload.models : [];
+  captionVisionCapabilities.defaultModel = String(payload.defaultModel || '');
+  captionVisionCapabilities.promise = null;
+  syncCaptionVisionUi();
+}
+
+function handleCaptionVisionModelChange() {
+  clearCaptionVisionResult();
+  return cancelCurrentCaptionVision().then(function () {
+    if (typeof cancelFocusedCaptionPrefetch === 'function') {
+      return cancelFocusedCaptionPrefetch();
+    }
+    return false;
+  }).then(function () {
+    if (!captionVisionEnabled || !captionAssistCandidate || !isFocusedCaptionOpen()) return false;
+    return runCaptionVisionForCandidate(captionAssistCandidate);
+  }).then(function () {
+    if (
+      captionVisionEnabled &&
+      isFocusedCaptionOpen() &&
+      state && state.currentItem &&
+      typeof startFocusedCaptionPrefetch === 'function'
+    ) {
+      return startFocusedCaptionPrefetch(state.currentItem.key);
+    }
+    return false;
+  });
+}
+
 function wireCaptionVisionUi() {
   var toggle = document.getElementById('editor-caption-vision-toggle');
   if (!toggle) throw new Error('Caption Vision toggle is missing.');
@@ -422,6 +460,16 @@ function wireCaptionVisionUi() {
 }
 
 wireCaptionVisionUi();
+
+window.addEventListener('webcap:vision-capabilities-refreshed', function (event) {
+  syncCaptionVisionCapabilitiesFromPayload(event && event.detail);
+});
+
+window.addEventListener('webcap:vision-model-changed', function () {
+  handleCaptionVisionModelChange().catch(function (err) {
+    reportConsoleError('Caption Vision', err);
+  });
+});
 
 window.loadCaptionVisionCapabilities = loadCaptionVisionCapabilities;
 window.syncCaptionVisionUi = syncCaptionVisionUi;

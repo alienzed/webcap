@@ -125,8 +125,7 @@ def test_resolved_wildcard_values_supports_optional_empty_choice():
     ) == ["white"]
 
 
-def test_session_status_projects_resolved_wildcard_values(tmp_path, monkeypatch):
-    monkeypatch.setattr(bench.app_config, "TEST_OUTPUT_ROOT", str(tmp_path / "output"))
+def test_session_status_projects_resolved_wildcard_values(tmp_path):
     session = tmp_path / "session"
     session.mkdir()
     (session / "test.json").write_text(json.dumps({

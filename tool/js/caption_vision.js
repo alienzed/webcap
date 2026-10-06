@@ -340,9 +340,12 @@ function setCaptionVisionEnabled(enabled) {
   }
 
   loadCaptionVisionCapabilities().then(function () {
-    syncFocusedCaptionVisionPreference();
-    if (captionAssistCandidate) return runCaptionVisionForCandidate(captionAssistCandidate);
-    return false;
+    if (captionAssistCandidate) {
+      return runCaptionVisionForCandidate(captionAssistCandidate).then(function () {
+        return syncFocusedCaptionVisionPreference();
+      });
+    }
+    return syncFocusedCaptionVisionPreference();
   });
 }
 

@@ -2,113 +2,175 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>WebCap QA Workbench — Feed-first mock</title>
+<title>WebCap QA — Overview mock</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-:root{color-scheme:dark;--bg:#15171a;--panel:#1d2024;--panel2:#24282d;--line:#343941;--text:#edf0f3;--muted:#9ba4ad;--accent:#b7c8ff;--warn:#ffd28a;--bad:#ff9a9a;--good:#9fdfb1}
-*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,sans-serif}
-button{font:inherit;color:inherit;background:#292e34;border:1px solid #3b424b;border-radius:7px;padding:7px 10px}
-button.primary{background:#34466d;border-color:#536da4}.app{max-width:1440px;margin:auto;min-height:100vh}
-header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(21,23,26,.96);z-index:2}
-h1{font-size:20px;margin:0}.scope{color:var(--muted)}.grow{flex:1}.actions{display:flex;gap:7px}
-main{padding:18px 20px 60px;max-width:1120px}.health,.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.health a,.chip{border:1px solid var(--line);background:#1a1d21;border-radius:999px;padding:6px 10px;color:var(--muted);text-decoration:none}
-.chip{color:var(--text);background:var(--panel)}.chip strong{margin-right:4px}
-.intro{display:flex;align-items:center;gap:10px;margin:18px 0 10px}.intro h2{font-size:16px;margin:0}.intro span{color:var(--muted)}
-.section{margin-top:20px}.section-head{display:flex;align-items:center;border-bottom:1px solid var(--line);padding:0 2px 8px;margin-bottom:9px}
-.section-head h3{margin:0;font-size:15px}.count{margin-left:7px;color:var(--muted)}
-.finding{display:grid;grid-template-columns:7px 1fr auto;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:8px 0;overflow:hidden}
-.bar{background:var(--warn)}.bar.bad{background:var(--bad)}.bar.ai{background:var(--accent)}.body{padding:13px 2px}
-.meta{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px}.title{font-weight:650;font-size:15px}
-.desc{margin-top:5px;color:#cbd1d7}.evidence{margin-top:7px;color:var(--muted);font-size:13px}.finding .act{display:flex;align-items:center;padding:12px}
-details{margin-top:8px}summary{cursor:pointer;color:var(--accent)}.quiet{color:var(--muted);font-size:12px}
-.footer-tools{margin-top:28px;border:1px dashed var(--line);border-radius:10px;padding:13px;display:flex;gap:10px;align-items:center;color:var(--muted)}
-@media(max-width:760px){header{align-items:flex-start;flex-wrap:wrap}.actions{width:100%;overflow:auto}.finding{grid-template-columns:6px 1fr}.finding .act{grid-column:2;padding:0 10px 12px;justify-content:flex-start}}
+:root{
+  color-scheme:dark;
+  --bg:#141619;--panel:#1b1f23;--panel2:#20252a;--line:#343a42;
+  --text:#f2f4f6;--muted:#aab2bc;--soft:#7f8994;--accent:#9fb7ff;
+  --accent-bg:#293858;--good:#9fd8ad;--warn:#f0c27b;--bad:#ef9a9a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+button{font:inherit;color:inherit;border:1px solid #424a54;background:#282d33;border-radius:10px;padding:12px 17px;cursor:pointer}
+button:hover{background:#30363d}
+button.primary{background:var(--accent-bg);border-color:#546da8;font-weight:700}
+button.ghost{background:transparent}
+a{color:inherit}
+.app{max-width:1280px;margin:0 auto;min-height:100vh}
+header{display:flex;align-items:center;gap:18px;padding:28px 34px 22px;border-bottom:1px solid var(--line)}
+.brand{min-width:0}
+h1{font-size:34px;line-height:1.08;margin:0 0 5px;letter-spacing:-.025em}
+.scope{color:var(--muted);font-size:16px}
+.header-actions{margin-left:auto;display:flex;gap:10px;flex-wrap:wrap}
+main{padding:38px 34px 70px;max-width:1160px}
+.training-focus{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:30px}
+.training-focus .label{font-weight:700}
+.training-focus .value{color:#d9dee4}
+.training-focus .edit{padding:8px 11px;font-size:15px}
+.hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:end;padding:8px 0 36px}
+.hero h2{font-size:31px;line-height:1.15;letter-spacing:-.02em;margin:0 0 12px}
+.hero p{margin:0;max-width:700px;color:var(--muted);font-size:18px}
+.hero-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.hero-actions .primary{padding:15px 22px;font-size:18px}
+.deep{display:flex;align-items:center;gap:8px}
+.deep small{display:block;color:var(--muted);font-size:13px}
+.deep button{padding:11px 14px}
+.summary-line{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:20px 0 26px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:38px}
+.summary-line strong{font-size:22px}
+.summary-line span{color:var(--muted)}
+.section{margin-top:34px}
+.section h2{font-size:27px;margin:0 0 18px;letter-spacing:-.015em}
+.categories{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.category{display:flex;align-items:center;gap:18px;min-height:108px;padding:21px 22px;border:1px solid var(--line);border-radius:14px;background:var(--panel);text-decoration:none}
+.category:hover{background:var(--panel2)}
+.category .count{font-size:34px;line-height:1;font-weight:750;min-width:48px}
+.category .copy{min-width:0}
+.category h3{font-size:20px;margin:0 0 3px}
+.category p{margin:0;color:var(--muted);font-size:15px}
+.category.under .count{color:var(--warn)}
+.category.over .count{color:#d9b2ff}
+.category.prune .count{color:var(--bad)}
+.category.consistency .count{color:var(--accent)}
+.category.caption .count{color:var(--good)}
+.health{display:flex;gap:10px;flex-wrap:wrap}
+.health a{border:1px solid var(--line);border-radius:999px;padding:9px 13px;text-decoration:none;color:var(--muted);font-size:15px}
+.health a:hover{color:var(--text);border-color:#4a535f}
+.utility-row{display:flex;gap:12px;flex-wrap:wrap}
+.utility{min-width:220px;flex:1;padding:18px 19px;border:1px solid var(--line);border-radius:13px;background:#181b1f}
+.utility strong{display:block;font-size:18px;margin-bottom:2px}
+.utility span{display:block;color:var(--muted);font-size:14px;margin-bottom:12px}
+.utility button{padding:9px 12px;font-size:15px}
+.subtle{color:var(--soft);font-size:14px;margin-top:12px}
+@media(max-width:820px){
+  header{align-items:flex-start;flex-wrap:wrap;padding:24px 20px}
+  .header-actions{margin-left:0;width:100%}
+  main{padding:28px 20px 55px}
+  .hero{grid-template-columns:1fr;align-items:start}
+  .hero-actions{justify-content:flex-start}
+  .categories{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
 <div class="app">
 <header>
-  <div><h1>Quality Assurance</h1><div class="scope">Bikini Set · 312 visible items</div></div>
-  <div class="grow"></div>
-  <div class="actions">
-    <button>Combined Captions</button><button>Metadata</button><button>Refresh</button><button class="primary">✦ Run Assistant</button>
+  <div class="brand">
+    <h1>Quality Assurance</h1>
+    <div class="scope">Bikini Styles · 312 items in current training selection</div>
+  </div>
+  <div class="header-actions">
+    <button class="ghost">Full Report</button>
   </div>
 </header>
+
 <main>
-  <div class="health">
-    <a href="#">0 captionless</a><a href="#">7 incomplete</a><a href="#">19 unreviewed</a><a href="#">3 tag mismatch</a><a href="#">0 invalid AR</a>
-  </div>
-  <div class="chips">
-    <span class="chip"><strong>12</strong> needs attention</span>
-    <span class="chip"><strong>4</strong> prune / duplicate</span>
-    <span class="chip"><strong>3</strong> consistency</span>
-    <span class="chip"><strong>2</strong> balance</span>
-    <span class="chip"><strong>3</strong> media</span>
+  <div class="training-focus">
+    <span class="label">Training focus</span>
+    <span class="value">Bikini styles and construction</span>
+    <button class="edit">Edit</button>
   </div>
 
-  <div class="intro"><h2>Highest-value checks</h2><span>Only findings likely to benefit from human attention.</span></div>
+  <section class="hero">
+    <div>
+      <h2>8 recommendations are worth your attention.</h2>
+      <p>WebCap found a few things that may weaken, confuse, or simply fail to train. Browse them one at a time instead of turning QA into a hundred-item chore list.</p>
+    </div>
+    <div class="hero-actions">
+      <button class="primary">Browse Recommendations</button>
+      <div class="deep">
+        <button>✦ Deep QA Scan</button>
+        <small>Optional · LLM / Vision</small>
+      </div>
+    </div>
+  </section>
+
+  <div class="summary-line">
+    <strong>2 high-impact</strong>
+    <span>6 normal-priority</span>
+    <span>3 already reviewed this session</span>
+  </div>
 
   <section class="section">
-    <div class="section-head"><h3>Prune & Redundancy</h3><span class="count">4</span></div>
-    <article class="finding">
-      <div class="bar bad"></div>
-      <div class="body"><div class="meta">Blocking · media</div><div class="title">Two files fall outside supported aspect buckets</div>
-      <div class="desc">These items will not behave like the rest of the set during normal bucketed workflows.</div>
-      <div class="evidence">2 / 312 items · 1000×1400, 1170×1300</div></div>
-      <div class="act"><button class="primary">Inspect 2</button></div>
-    </article>
-    <article class="finding">
-      <div class="bar"></div>
-      <div class="body"><div class="meta">Check · visual hash</div><div class="title">Three near-duplicate image pairs</div>
-      <div class="desc">Images are visually very similar despite different filenames.</div>
-      <div class="evidence">6 files · dHash + aspect-compatible match</div></div>
-      <div class="act"><button>Compare</button></div>
-    </article>
+    <h2>What deserves attention</h2>
+    <div class="categories">
+      <a class="category under" href="#">
+        <div class="count">3</div>
+        <div class="copy"><h3>Underrepresented</h3><p>Concepts too sparse to train reliably.</p></div>
+      </a>
+      <a class="category over" href="#">
+        <div class="count">2</div>
+        <div class="copy"><h3>Overrepresented</h3><p>Patterns that may crowd out useful variation.</p></div>
+      </a>
+      <a class="category prune" href="#">
+        <div class="count">1</div>
+        <div class="copy"><h3>Prune & Redundancy</h3><p>Likely duplicates or items with weak training value.</p></div>
+      </a>
+      <a class="category consistency" href="#">
+        <div class="count">1</div>
+        <div class="copy"><h3>Consistency</h3><p>Suspicious exceptions, relationships, or annotation drift.</p></div>
+      </a>
+      <a class="category caption" href="#">
+        <div class="count">1</div>
+        <div class="copy"><h3>Captioning</h3><p>Wording or vocabulary issues likely to matter in training.</p></div>
+      </a>
+    </div>
   </section>
 
   <section class="section">
-    <div class="section-head"><h3>Consistency</h3><span class="count">3</span></div>
-    <article class="finding">
-      <div class="bar"></div>
-      <div class="body"><div class="meta">Check · deterministic association</div><div class="title">One unusual ruched / v-string exception</div>
-      <div class="desc"><b>ruched</b> co-occurs with <b>v-string</b> on 17 of 18 tagged items. <b>IMG_184.webp</b> is the exception.</div>
-      <div class="evidence">Support 18 · conditional confidence 94%</div>
-      <details><summary>Evidence</summary><p class="quiet">17 matching items + 1 exception. Both terms come from configured annotation groups.</p></details></div>
-      <div class="act"><button class="primary">Inspect 18</button></div>
-    </article>
-    <article class="finding">
-      <div class="bar ai"></div>
-      <div class="body"><div class="meta">AI · high confidence</div><div class="title">Possible terminology drift: “ring connectors” vs “dual-ring”</div>
-      <div class="desc">These phrases appear to describe the same construction family but are used inconsistently across otherwise similar items.</div>
-      <div class="evidence">11 affected items · semantic review of captions + grouped tags</div></div>
-      <div class="act"><button>Inspect 11</button></div>
-    </article>
+    <h2>Dataset health</h2>
+    <div class="health">
+      <a href="#">0 captionless</a>
+      <a href="#">7 incomplete</a>
+      <a href="#">19 unreviewed</a>
+      <a href="#">3 tag mismatches</a>
+      <a href="#">0 invalid AR</a>
+    </div>
+    <div class="subtle">Useful status, intentionally quieter than training-impact recommendations.</div>
   </section>
 
   <section class="section">
-    <div class="section-head"><h3>Balance & Coverage</h3><span class="count">2</span></div>
-    <article class="finding">
-      <div class="bar"></div>
-      <div class="body"><div class="meta">Info · grouped tags</div><div class="title">Top shape is heavily concentrated in triangle</div>
-      <div class="desc">Triangle accounts for 71% of tagged tops; teardrop 18%, bandeau 8%, other 3%.</div>
-      <div class="evidence">This is a distribution observation, not a requirement to manufacture more examples.</div></div>
-      <div class="act"><button>Explore balance</button></div>
-    </article>
+    <h2>Utilities</h2>
+    <div class="utility-row">
+      <div class="utility">
+        <strong>Combined Captions</strong>
+        <span>Read or copy the set as one caption sheet.</span>
+        <button>Open</button>
+      </div>
+      <div class="utility">
+        <strong>Metadata Explorer</strong>
+        <span>Inspect resolution, aspect ratio, duration, pose and other media facts.</span>
+        <button>Open</button>
+      </div>
+      <div class="utility">
+        <strong>Existing Reports</strong>
+        <span>Prune candidates, duplicates and detailed caption analysis remain available.</span>
+        <button>Open Reports</button>
+      </div>
+    </div>
   </section>
-
-  <section class="section">
-    <div class="section-head"><h3>Media Composition</h3><span class="count">3</span></div>
-    <article class="finding">
-      <div class="bar"></div>
-      <div class="body"><div class="meta">Info · metadata cohort</div><div class="title">Tiny 9:16 aspect-ratio group</div>
-      <div class="desc">Only 3 of 312 items fall in the 9:16 bucket. The rest are concentrated in square, 4:3 and 3:4.</div>
-      <div class="evidence">Useful to inspect as a cohort; rarity alone is not a defect.</div></div>
-      <div class="act"><button class="primary">Inspect 3</button></div>
-    </article>
-  </section>
-
-  <div class="footer-tools"><strong>Reference tools</strong><span>Raw views stay available when you need them, without occupying the whole workspace.</span><div class="grow"></div><button>Combined Captions</button><button>Metadata Explorer</button></div>
 </main>
 </div>
-</body></html>
+</body>
+</html>

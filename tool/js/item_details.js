@@ -440,7 +440,7 @@ function renderPreviewHeaderMetadata(container, fileName, resolution, metadata) 
   return fields.map(function (field) { return field.text; }).join(' · ');
 }
 
-function renderPreviewHeaderMeta() {
+function renderPreviewHeaderMeta(visibleMediaOverride) {
   if (!ui || !ui.previewHeaderEl || !ui.previewHeaderPositionEl) return;
   var previewShellEl = document.getElementById('preview-shell');
   var positionEl = ui.previewHeaderPositionEl || document.getElementById('preview-header-position');
@@ -452,7 +452,9 @@ function renderPreviewHeaderMeta() {
   var gridOpen = typeof isMediaGridSurfaceOpen === 'function' && isMediaGridSurfaceOpen();
   var focusOpen = isFocusedAnnotationOpen();
   var captionFocusOpen = isFocusedCaptionOpen();
-  var visibleMedia = typeof getFilteredMediaItems === 'function' ? getFilteredMediaItems(false) : [];
+  var visibleMedia = Array.isArray(visibleMediaOverride)
+    ? visibleMediaOverride
+    : (typeof getFilteredMediaItems === 'function' ? getFilteredMediaItems(false) : []);
   var hasItem = !!(state.currentItem && state.currentItem.fileName);
   var sidebarCollapsed = !!(ui.appEl && ui.appEl.classList.contains('left-rail-collapsed'));
   function clearPreviewTooltip() {

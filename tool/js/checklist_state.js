@@ -19,6 +19,37 @@ var checklistHiddenRequirements = {}; // { requirement: true } persisted per fol
 var checklistPrimerSeparatorsByGroup = {}; // { requirement: separator }, default ", "
 var checklistPrimerPrecedenceByGroup = {}; // { requirement: { beforeTermLower: { afterTermLower: true } } }
 
+var checklistRequirementProgressCache = {}; // { mediaKey: { completed, total, missing } }
+var checklistConfiguredRequirementsCache = null; // { requirement: true } for groups that count without assignments.
+
+function invalidateChecklistRequirementProgress(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  if (key) {
+    delete checklistRequirementProgressCache[key];
+    return;
+  }
+  checklistRequirementProgressCache = {};
+}
+
+function invalidateChecklistRequirementConfiguration() {
+  checklistConfiguredRequirementsCache = null;
+  checklistRequirementProgressCache = {};
+}
+
+function getChecklistConfiguredRequirementsMap() {
+  if (checklistConfiguredRequirementsCache) return checklistConfiguredRequirementsCache;
+  var configured = {};
+  (Array.isArray(checklistItems) ? checklistItems : []).forEach(function (requirementLabel) {
+    var requirement = normalizeChecklistRequirementKey(requirementLabel);
+    if (!requirement) return;
+    if (getChecklistKeywordTermsForRequirement(requirement).length) {
+      configured[requirement] = true;
+    }
+  });
+  checklistConfiguredRequirementsCache = configured;
+  return checklistConfiguredRequirementsCache;
+}
+
 function checklistSort(a, b) {
   return String(a || '').toLowerCase().localeCompare(String(b || '').toLowerCase());
 }
@@ -766,6 +797,7 @@ function assignChecklistTagToMediaKey(mediaKey, requirementLabel, termText, opti
   terms.push(term);
   mediaMap[requirement] = terms;
   checklistAssignmentsByMedia[key] = mediaMap;
+  invalidateChecklistRequirementProgress(key);
 
   if (!opts.skipUndo) {
     recordUndoOperation({
@@ -810,6 +842,7 @@ function unassignChecklistTagFromMediaKey(mediaKey, requirementLabel, termText, 
   else delete mediaMap[requirement];
   if (Object.keys(mediaMap).length) checklistAssignmentsByMedia[key] = mediaMap;
   else delete checklistAssignmentsByMedia[key];
+  invalidateChecklistRequirementProgress(key);
 
   if (!opts.skipUndo) {
     recordUndoOperation({
@@ -885,6 +918,7 @@ function setChecklistSessionHiddenTermForRequirement(requirementLabel, termText,
   else delete map[termKey];
   if (Object.keys(map).length) checklistSessionHiddenTermsByRequirement[requirement] = map;
   else delete checklistSessionHiddenTermsByRequirement[requirement];
+  invalidateChecklistRequirementConfiguration();
   return true;
 }
 
@@ -975,6 +1009,7 @@ function moveChecklistItemByOffset(index, offset) {
 }
 
 function refreshChecklistGroupConfigurationUi() {
+  invalidateChecklistRequirementConfiguration();
   syncReviewedFromChecklistAll();
   saveChecklistToFolderState();
   renderChecklistPanel();
@@ -1190,6 +1225,7 @@ function loadChecklistFromFolderState(folderState) {
       ? folderState.caption_group_term_descriptor_snapshot_media_keys
       : []
   );
+  invalidateChecklistRequirementConfiguration();
   syncChecklistLegacyAffixesMirror();
 
   syncReviewedFromChecklistAll({ skipRowClass: true });
@@ -1298,7 +1334,9 @@ function setChecklistKeywordTermsForRequirement(requirementLabel, terms) {
   var previous = String(checklistKeywordsByItem[requirement] || '');
   if (next) checklistKeywordsByItem[requirement] = next;
   else delete checklistKeywordsByItem[requirement];
-  return previous !== next;
+  var changed = previous !== next;
+  if (changed) invalidateChecklistRequirementConfiguration();
+  return changed;
 }
 
 function applyChecklistKeywordTermsForRequirement(requirementLabel, terms) {
@@ -1501,6 +1539,7 @@ function normalizeRequirementLabelList(labels) {
 }
 
 function refreshChecklistConfigDrivenUi() {
+  invalidateChecklistRequirementConfiguration();
   refreshCurrentPrimerDerivedUi();
   renderAnnotateStrip();
   renderChecklistPanel();

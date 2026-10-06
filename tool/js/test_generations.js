@@ -822,7 +822,7 @@
   function openTestBenchSet(folder, modelId) {
     var targetFolder = String(folder || '');
     if (!targetFolder) return;
-    if (modelId) setWorkingModelProfileId(String(modelId), targetFolder);
+    if (modelId) setWorkingModelProfileId(String(modelId));
     openTestBenchFolder(targetFolder);
   }
 

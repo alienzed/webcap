@@ -533,6 +533,62 @@ def test_storage_ui_is_isolated_global_activity():
 
 
 
+def test_workspace_scan_prunes_stale_measurements_but_preserves_concurrent_updates(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    live = _generation(tmp_path, job_id="job-live")
+    stale = _generation(tmp_path, job_id="job-stale")
+    storage_manager.measure("generate", "2026-09-23/job-live")
+    storage_manager.measure("generate", "2026-09-23/job-stale")
+    shutil = __import__("shutil")
+    shutil.rmtree(stale)
+
+    cache_path = storage_manager._cache_path()
+    before = json.loads(cache_path.read_text(encoding="utf-8"))
+    stale_key = storage_manager._cache_key("generate", "2026-09-23/job-stale", "")
+    live_key = storage_manager._cache_key("generate", "2026-09-23/job-live", "")
+    assert stale_key in before["items"]
+    assert live_key in before["items"]
+
+    original_stats = storage_manager._safe_recursive_stats
+    updated = {"done": False}
+
+    def stats_with_concurrent_update(path, cancel_check=None, progress=None):
+        result = original_stats(path, cancel_check=cancel_check, progress=progress)
+        if not updated["done"]:
+            updated["done"] = True
+            storage_manager.register_usage(
+                "generate",
+                "2026-09-23/job-stale",
+                bytes_used=999,
+                file_count=1,
+                source="producer",
+            )
+        return result
+
+    monkeypatch.setattr(storage_manager, "_safe_recursive_stats", stats_with_concurrent_update)
+    storage_manager._scan_workspace("", cancel_check=lambda: False, progress=lambda event: None)
+
+    after = json.loads(cache_path.read_text(encoding="utf-8"))
+    assert live_key in after["items"]
+    assert after["items"][stale_key]["bytes"] == 999
+
+
+def test_workspace_scan_prunes_unchanged_stale_measurements(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    _generation(tmp_path, job_id="job-live")
+    stale = _generation(tmp_path, job_id="job-stale")
+    storage_manager.measure("generate", "2026-09-23/job-live")
+    storage_manager.measure("generate", "2026-09-23/job-stale")
+    shutil = __import__("shutil")
+    shutil.rmtree(stale)
+
+    stale_key = storage_manager._cache_key("generate", "2026-09-23/job-stale", "")
+    storage_manager._scan_workspace("", cancel_check=lambda: False, progress=lambda event: None)
+
+    after = json.loads(storage_manager._cache_path().read_text(encoding="utf-8"))
+    assert stale_key not in after["items"]
+
+
 def test_workspace_scan_discovers_historical_tests_and_records_usage(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     _generation(tmp_path, job_id="job-scan")

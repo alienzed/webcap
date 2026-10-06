@@ -666,6 +666,7 @@ def test_compare_videos_start_muted():
 
 
 def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 

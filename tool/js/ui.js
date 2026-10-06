@@ -421,18 +421,38 @@ function refreshCurrentDirectory() {
           }
           // --- Load and apply folder state fields ---
            var folderState = resp.folder_state || {};
+           var applyBreakdown = {};
+           var applyStageStartedAt = performance.now();
            applyFolderStateToDom(folderState);
+           applyBreakdown.applyFolderStateMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
+
+           applyStageStartedAt = performance.now();
            loadChecklistFromFolderState(folderState);
+           applyBreakdown.loadChecklistMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
+
+           applyStageStartedAt = performance.now();
            loadCaptionHelpersFromFolderState(folderState);
+           applyBreakdown.loadCaptionHelpersMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
+
+           applyStageStartedAt = performance.now();
            loadItemTagsFromFolderState(folderState);
+           applyBreakdown.loadItemTagsMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
+
            state.folderStateWritable = true;
            var captionErrors = Array.isArray(resp.caption_errors) ? resp.caption_errors : [];
            if (captionErrors.length) {
              console.error('[webcap] Caption read failures:', captionErrors);
            }
             state.reviewedSet = state.reviewedSet || new Set();
+
+            applyStageStartedAt = performance.now();
             renderFileList(ui.filterEl.value);
+            applyBreakdown.renderFileListMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
+
+            applyStageStartedAt = performance.now();
             prepareFocusSetMetadataForCurrentFolder();
+            applyBreakdown.prepareFocusSetMetadataMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
+
             var folderApplyFinishedAt = performance.now();
           
           // --- Static header toggling (display only, wiring in main.js) ---
@@ -472,6 +492,7 @@ function refreshCurrentDirectory() {
                 folder: path || ROOT_FOLDER_LABEL,
                 describeMs: Math.round((describeFinishedAt - describeRequestStartedAt) * 10) / 10,
                 applyAndRenderMs: Math.round((folderApplyFinishedAt - describeFinishedAt) * 10) / 10,
+                applyBreakdown: applyBreakdown,
                 metadataMs: Math.round((metadataFinishedAt - metadataRequestStartedAt) * 10) / 10,
                 totalToMetadataMs: Math.round((metadataFinishedAt - folderLoadStartedAt) * 10) / 10,
                 metadata: metadataResult && metadataResult.diagnostics ? metadataResult.diagnostics : null

@@ -23,6 +23,22 @@ def test_director_capacity_defaults_defer_to_runtime():
     assert storyboard_llm_runtime.LOCAL_MODEL_FIT_TARGET_MIB == 1024
 
 
+def test_server_signature_includes_media_root_and_local_router_policy(monkeypatch, tmp_path):
+    monkeypatch.setattr(storyboard_llm_runtime.app_config, "FS_ROOT", tmp_path / "training")
+    settings = {
+        "llama_server": "/bin/llama-server",
+        "models_dir": tmp_path / "models",
+        "port": 8189,
+        "context_size": None,
+    }
+
+    signature = storyboard_llm_runtime._server_signature(settings)
+
+    assert str((tmp_path / "training").resolve()) in signature
+    assert storyboard_llm_runtime.LOCAL_MODEL_RESIDENT_LIMIT in signature
+    assert storyboard_llm_runtime.LOCAL_MODEL_FIT_TARGET_MIB in signature
+
+
 def test_slot_snapshot_exposes_live_generation_progress(monkeypatch):
     monkeypatch.setattr(
         storyboard_llm_runtime,

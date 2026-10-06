@@ -23,6 +23,7 @@
     observations: [],
     dispositions: {},
     browseIndex: 0,
+    folderKey: '',
     scopeKey: '',
     parentFocusSet: undefined,
     returnFindingId: '',
@@ -354,7 +355,12 @@
   }
 
   function qaBuildPruneFindings(items) {
-    if (state.pruneCandidatesStatus !== 'ready') return [];
+    var scopeFiles = items.map(function (item) { return String(item.fileName || ''); }).filter(Boolean);
+    if (state.pruneCandidatesStatus !== 'ready'
+        || state.pruneCandidatesFolder !== String(state.folder || '')
+        || state.pruneCandidatesScopeKey !== pruneCandidateScopeKey(scopeFiles)) {
+      return [];
+    }
     var allow = {};
     items.forEach(function (item) { allow[item.fileName] = true; });
     var candidates = (state.pruneCandidates || []).filter(function (candidate) {
@@ -401,7 +407,12 @@
   }
 
   function qaBuildDuplicateFindings(items) {
-    if (state.duplicateCandidatesStatus !== 'ready') return [];
+    var scopeFiles = items.map(function (item) { return String(item.fileName || ''); }).filter(Boolean);
+    if (state.duplicateCandidatesStatus !== 'ready'
+        || state.duplicateCandidatesFolder !== String(state.folder || '')
+        || state.duplicateCandidatesScopeKey !== duplicateCandidateScopeKey(scopeFiles)) {
+      return [];
+    }
     var allow = {};
     items.forEach(function (item) { allow[item.fileName] = true; });
     var groups = (state.duplicateCandidateGroups || []).map(function (group) {
@@ -1035,8 +1046,24 @@
 
   function qaRefreshComputedState(force) {
     var items = qaGetTrainingItems();
+    var folderKey = String(state.folder || '');
     var scopeKey = qaBuildScopeKey(items);
-    if (!force && qaWorkbenchState.scopeKey === scopeKey && qaWorkbenchState.findings.length + qaWorkbenchState.observations.length > 0) {
+    var folderChanged = !!qaWorkbenchState.folderKey && qaWorkbenchState.folderKey !== folderKey;
+    var scopeChanged = !!qaWorkbenchState.scopeKey && qaWorkbenchState.scopeKey !== scopeKey;
+
+    if (folderChanged) {
+      qaWorkbenchState.trainingFocus = '';
+      qaWorkbenchState.parentFocusSet = undefined;
+      qaWorkbenchState.returnFindingId = '';
+    }
+    if (folderChanged || scopeChanged) {
+      qaWorkbenchState.dispositions = {};
+      qaWorkbenchState.browseIndex = 0;
+      qaWorkbenchState.statusMessage = '';
+    }
+
+    qaWorkbenchState.folderKey = folderKey;
+    if (!force && !scopeChanged && qaWorkbenchState.scopeKey === scopeKey && qaWorkbenchState.findings.length + qaWorkbenchState.observations.length > 0) {
       return { items: items, health: qaBuildHealth(items) };
     }
     qaWorkbenchState.scopeKey = scopeKey;
@@ -1066,7 +1093,7 @@
     } else {
       qaRenderOverview(root, data.items, data.health);
     }
-    if (typeof window.bindReviewAssistantButton === 'function') window.bindReviewAssistantButton();
+    window.bindReviewAssistantButton();
   }
 
   function qaStartBrowsing(category) {

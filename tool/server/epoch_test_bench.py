@@ -1056,6 +1056,20 @@ def handle_request(folder_path, mode, selection_criteria=None):
 SHARED_EXECUTION_LANE = "inference"
 
 
+def _wildcard_literal_pattern(value, boundary_whitespace_optional=False):
+    parts = re.split(r"(\s+)", str(value or ""))
+    pattern = []
+    for index, part in enumerate(parts):
+        if not part:
+            continue
+        if part.isspace():
+            is_boundary = index == 1 or index == len(parts) - 2
+            pattern.append(r"\s*" if boundary_whitespace_optional and is_boundary else r"\s+")
+        else:
+            pattern.append(re.escape(part))
+    return "".join(pattern)
+
+
 def _resolved_wildcard_values(source_prompt, resolved_prompt):
     source = str(source_prompt or "").strip()
     resolved = str(resolved_prompt or "").strip()
@@ -1069,10 +1083,14 @@ def _resolved_wildcard_values(source_prompt, resolved_prompt):
         options = [option.strip() for option in match.group(1).split("|")]
         if len(options) < 2:
             return []
-        pattern.append(re.escape(source[cursor:match.start()]))
-        pattern.append("(" + "|".join(re.escape(option) for option in options) + ")")
+        pattern.append(_wildcard_literal_pattern(source[cursor:match.start()], boundary_whitespace_optional=True))
+        pattern.append(
+            "("
+            + "|".join(_wildcard_literal_pattern(option) for option in options)
+            + ")"
+        )
         cursor = match.end()
-    pattern.append(re.escape(source[cursor:]))
+    pattern.append(_wildcard_literal_pattern(source[cursor:], boundary_whitespace_optional=True))
 
     resolved_match = re.fullmatch("".join(pattern), resolved, flags=re.DOTALL)
     if not resolved_match:

@@ -1040,6 +1040,26 @@ def _list_local_models_passive():
     models.sort(key=lambda model: model["label"].casefold())
     return models
 
+def list_local_vision_models():
+    models = []
+    with _use_runtime("local"):
+        for model in _list_local_models_passive():
+            modalities = model.get("inputModalities") if isinstance(model, dict) else []
+            if "image" not in (modalities or []):
+                continue
+            next_model = dict(model)
+            next_model["runtimeId"] = "local"
+            next_model["runtimeName"] = "Local"
+            next_model["modelId"] = next_model["id"]
+            next_model["id"] = _model_ref("local", next_model["id"])
+            models.append(next_model)
+    models.sort(key=lambda model: (
+        int(model.get("sizeBytes") or 0),
+        str(model.get("label") or "").casefold(),
+    ))
+    return models
+
+
 def list_models(reload=False, probe_local_runtime=False):
     models = []
     warnings = []

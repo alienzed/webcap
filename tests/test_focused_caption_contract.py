@@ -223,7 +223,7 @@ def test_focus_caption_vision_is_opt_in_actionable_and_one_deep():
     assert "var captionVisionEnabled = false;" in vision
     assert "requestCaptionVisionCandidate" in vision
     assert "assignChecklistTagToMediaKey(mediaKey, group, term)" in vision
-    assert "Refreshing caption suggestion" in vision
+    assert "Revising caption for " in vision
     assert "visionTask" in focus
     assert "createCaptionVisionTask" in focus
     assert "cancelCaptionVisionTask" in focus

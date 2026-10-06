@@ -453,17 +453,21 @@ textarea:focus, input:focus {
 }
 
 .editor-caption-candidate.is-focus-caption {
-  left: 50vw;
-  right: 0;
-  width: 50vw;
-  padding: 12px;
-  justify-content: flex-end;
-  background: rgba(0, 0, 0, 0.18);
+  inset: auto;
+  left: var(--focus-caption-left);
+  top: var(--focus-caption-top);
+  width: var(--focus-caption-width);
+  height: var(--focus-caption-height);
+  box-sizing: border-box;
+  padding: clamp(18px, 3vw, 34px);
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .editor-caption-candidate.is-focus-caption .editor-caption-candidate-dialog {
-  width: min(720px, calc(50vw - 24px));
-  max-height: calc(100vh - 24px);
+  width: min(860px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
 }
 
 .editor-caption-candidate-header {
@@ -475,6 +479,122 @@ textarea:focus, input:focus {
   padding: 8px 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.28);
   font-size: 14px;
+}
+
+.editor-caption-candidate-heading {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.editor-caption-focus-progress {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-caption-focus-loading {
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: #334155;
+  font-size: 17px;
+}
+
+.editor-caption-focus-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(100, 116, 139, 0.25);
+  border-top-color: #475569;
+  border-radius: 50%;
+  animation: focused-caption-spin 0.8s linear infinite;
+}
+
+@keyframes focused-caption-spin {
+  to { transform: rotate(360deg); }
+}
+
+.editor-caption-focus-shortcuts {
+  padding: 10px 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.editor-caption-candidate.is-focus-caption .editor-caption-candidate-header {
+  min-height: 54px;
+  padding: 13px 18px;
+  font-size: 19px;
+}
+
+.editor-caption-candidate.is-focus-caption .editor-caption-focus-progress {
+  font-size: 14px;
+}
+
+.editor-caption-candidate.is-focus-caption .editor-caption-candidate-omissions,
+.editor-caption-candidate.is-focus-caption .editor-caption-candidate-missing,
+.editor-caption-candidate.is-focus-caption .editor-caption-vision-status {
+  padding: 14px 20px;
+  font-size: 15px;
+}
+
+.editor-caption-candidate.is-focus-caption .editor-caption-vision-findings {
+  max-height: 260px;
+  padding: 14px 18px;
+}
+
+.editor-caption-candidate.is-focus-caption .caption-vision-finding-text {
+  font-size: 14px;
+}
+
+.editor-caption-candidate.is-focus-caption .editor-caption-candidate-text {
+  max-height: min(52vh, 600px);
+  padding: 24px;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.editor-caption-candidate.is-focus-caption .editor-caption-candidate-actions {
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 18px 16px;
+}
+
+.editor-caption-candidate.is-focus-caption .editor-caption-candidate-actions button {
+  min-height: 44px;
+  padding: 9px 15px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.editor-caption-candidate-use.is-armed,
+#editor-caption-candidate-use.is-armed {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.focused-caption-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  z-index: 1400;
+  transform: translateX(-50%);
+  padding: 11px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.28);
+  font-size: 14px;
+  font-weight: 700;
+  pointer-events: none;
 }
 
 .editor-caption-vision-toggle {
@@ -574,17 +694,6 @@ textarea:focus, input:focus {
 
 .caption-vision-confidence-low {
   opacity: 0.74;
-}
-
-@media (max-width: 900px) {
-  .editor-caption-candidate.is-focus-caption {
-    left: 42vw;
-    width: 58vw;
-  }
-
-  .editor-caption-candidate.is-focus-caption .editor-caption-candidate-dialog {
-    width: calc(58vw - 24px);
-  }
 }
 
 .editor-caption-candidate-omissions {

@@ -3,13 +3,134 @@ var focusedCaptionState = {
   folder: '',
   itemKeys: [],
   itemIndex: 0,
-  itemKey: ''
+  itemKey: '',
+  requestToken: 0,
+  useArmed: false,
+  useArmedText: ''
 };
 
 var focusedCaptionPrefetch = null; // one-deep speculative caption + optional vision assessment
 
 function isFocusedCaptionOpen() {
   return !!focusedCaptionState.open;
+}
+
+function resetFocusedCaptionUseArm() {
+  focusedCaptionState.useArmed = false;
+  focusedCaptionState.useArmedText = '';
+}
+
+function beginFocusedCaptionRequest(mediaKey) {
+  focusedCaptionState.requestToken += 1;
+  resetFocusedCaptionUseArm();
+  return {
+    token: focusedCaptionState.requestToken,
+    mediaKey: String(mediaKey || '')
+  };
+}
+
+function isFocusedCaptionRequestCurrent(mediaKey, requestToken) {
+  return !!(
+    focusedCaptionState.open &&
+    focusedCaptionState.requestToken === Number(requestToken || 0) &&
+    String(focusedCaptionState.itemKey || '') === String(mediaKey || '')
+  );
+}
+
+function invalidateFocusedCaptionRequest() {
+  focusedCaptionState.requestToken += 1;
+  resetFocusedCaptionUseArm();
+}
+
+function isFocusedCaptionUseArmedForCandidate(candidate) {
+  return !!(
+    focusedCaptionState.open &&
+    focusedCaptionState.useArmed &&
+    candidate &&
+    String(candidate.text || '') === String(focusedCaptionState.useArmedText || '')
+  );
+}
+
+function getFocusedCaptionProgressText() {
+  if (!focusedCaptionState.open) return '';
+  return 'Item ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length;
+}
+
+function canNavigateFocusedCaption(delta) {
+  if (!focusedCaptionState.open) return false;
+  var nextIndex = focusedCaptionState.itemIndex + (delta < 0 ? -1 : 1);
+  return nextIndex >= 0 && nextIndex < focusedCaptionState.itemKeys.length;
+}
+
+function syncFocusedCaptionPanelGeometry() {
+  var panel = document.getElementById('editor-caption-candidate');
+  if (!panel) return;
+  if (!focusedCaptionState.open) {
+    panel.style.removeProperty('--focus-caption-left');
+    panel.style.removeProperty('--focus-caption-top');
+    panel.style.removeProperty('--focus-caption-width');
+    panel.style.removeProperty('--focus-caption-height');
+    return;
+  }
+  var workbench = ui && ui.appEl ? ui.appEl.querySelector('.workbench-panel') : null;
+  if (!workbench) throw new Error('Focus Caption requires the Single Item workbench pane.');
+  var rect = workbench.getBoundingClientRect();
+  panel.style.setProperty('--focus-caption-left', rect.left + 'px');
+  panel.style.setProperty('--focus-caption-top', rect.top + 'px');
+  panel.style.setProperty('--focus-caption-width', rect.width + 'px');
+  panel.style.setProperty('--focus-caption-height', rect.height + 'px');
+}
+
+function showFocusedCaptionToast(message) {
+  var existing = document.getElementById('focused-caption-toast');
+  if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+  var toast = document.createElement('div');
+  toast.id = 'focused-caption-toast';
+  toast.className = 'focused-caption-toast';
+  toast.textContent = String(message || 'Focus Caption complete.');
+  document.body.appendChild(toast);
+  setTimeout(function () {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 2200);
+}
+
+function cancelFocusedCaptionCurrentRequest() {
+  if (!focusedCaptionState.open && !captionAssistPendingJobId) return Promise.resolve(false);
+  invalidateFocusedCaptionRequest();
+  var pendingJobId = String(captionAssistPendingJobId || '');
+  captionAssistPendingJobId = '';
+  updatePrimerCaptionResetUi();
+
+  if (
+    focusedCaptionPrefetch &&
+    (pendingJobId === 'prefetch' || pendingJobId === String(focusedCaptionPrefetch.jobId || ''))
+  ) {
+    return cancelFocusedCaptionPrefetch();
+  }
+  if (!pendingJobId || pendingJobId === 'submitting') return Promise.resolve(!!pendingJobId);
+  return cancelCaptionAssistJob(pendingJobId).catch(function (err) {
+    reportConsoleWarning('Focus Caption', 'Could not cancel active Caption Assist job: ' + String(err && err.message ? err.message : err));
+    return false;
+  });
+}
+
+function armOrUseFocusedCaptionCandidate() {
+  if (!focusedCaptionState.open) return Promise.resolve(false);
+  var candidate = captionAssistCandidate;
+  if (!candidate || !state.currentItem || candidate.mediaKey !== state.currentItem.key) {
+    setStatus(isCaptionAssistRunning() ? 'Focus Caption is still generating.' : 'No caption candidate is ready yet.');
+    return Promise.resolve(false);
+  }
+  if (isFocusedCaptionUseArmedForCandidate(candidate)) {
+    resetFocusedCaptionUseArm();
+    syncCaptionAssistCandidateUi();
+    return useCaptionAssistCandidate();
+  }
+  focusedCaptionState.useArmed = true;
+  focusedCaptionState.useArmedText = String(candidate.text || '');
+  syncCaptionAssistCandidateUi();
+  setStatus('Press Enter again to use this caption.');
+  return Promise.resolve(true);
 }
 
 function findFocusedCaptionMediaItemByKey(mediaKey) {
@@ -237,14 +358,8 @@ function syncFocusedCaptionControls() {
     focusedCaptionState.open &&
     (!hasItem || String(focusedCaptionState.folder || '') !== String((state && state.folder) || ''))
   ) {
-    focusedCaptionState.open = false;
-    focusedCaptionState.folder = '';
-    focusedCaptionState.itemKeys = [];
-    focusedCaptionState.itemIndex = 0;
-    focusedCaptionState.itemKey = '';
-    cancelFocusedCaptionPrefetch();
-    clearCaptionAssistCandidate();
-    captionVisionEnabled = false;
+    stopFocusedCaption('Focus Caption ended because the Single Item context changed.');
+    return;
   }
 
   if (!focusedCaptionState.open) {
@@ -270,7 +385,10 @@ function syncFocusedCaptionControls() {
     labelEl.textContent = 'Exit \u00b7 ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length;
   }
   skipBtn.classList.remove('hidden');
-  skipBtn.disabled = isCaptionAssistRunning();
+  skipBtn.disabled = false;
+  skipBtn.title = 'Next Focus Caption item (Right/Down/S)';
+  var skipLabel = skipBtn.querySelector('.preview-header-btn-label');
+  if (skipLabel) skipLabel.textContent = 'Next';
 }
 
 function syncFocusedCaptionAfterAssist(sourceMediaKey) {
@@ -282,16 +400,27 @@ function syncFocusedCaptionAfterAssist(sourceMediaKey) {
 
 function stopFocusedCaption(message) {
   if (!focusedCaptionState.open) return;
+  invalidateFocusedCaptionRequest();
+  var pendingJobId = String(captionAssistPendingJobId || '');
   focusedCaptionState.open = false;
   focusedCaptionState.folder = '';
   focusedCaptionState.itemKeys = [];
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = '';
   captionVisionEnabled = false;
+  captionAssistPendingJobId = '';
+  if (pendingJobId && pendingJobId !== 'submitting' && pendingJobId !== 'prefetch') {
+    cancelCaptionAssistJob(pendingJobId).catch(function (err) {
+      reportConsoleWarning('Focus Caption', 'Could not cancel active Caption Assist job while exiting: ' + String(err && err.message ? err.message : err));
+      return false;
+    });
+  }
   cancelFocusedCaptionPrefetch();
+  cancelCurrentCaptionVision();
   clearCaptionAssistCandidate();
   clearCaptionVisionResult();
   syncFocusedCaptionControls();
+  syncFocusedCaptionPanelGeometry();
   renderPreviewHeaderMeta();
   if (message) setStatus(message);
 }
@@ -306,8 +435,11 @@ function prepareFocusedCaptionCurrentItem() {
     return Promise.resolve(false);
   }
 
+  resetFocusedCaptionUseArm();
   clearCaptionAssistCandidate();
   syncFocusedCaptionControls();
+  syncCaptionAssistCandidateUi();
+  syncFocusedCaptionPanelGeometry();
   if (isCaptionAssistRunning()) {
     setStatus('Caption Assist is already running for this Focus Caption item.');
     return Promise.resolve(false);
@@ -331,47 +463,81 @@ function syncFocusedCaptionSelection(mediaKey) {
   prepareFocusedCaptionCurrentItem();
 }
 
-function navigateFocusedCaptionToIndex(index) {
+function finishFocusedCaption() {
+  var completedCount = focusedCaptionState.itemKeys.length;
+  stopFocusedCaption();
+  renderFileList();
+  showFocusedCaptionToast('Focus Caption complete · ' + completedCount + ' item' + (completedCount === 1 ? '' : 's'));
+  setStatus('Focus Caption complete.');
+  return Promise.resolve(false);
+}
+
+function navigateFocusedCaptionToIndex(index, direction) {
   if (!focusedCaptionState.open) return Promise.resolve(false);
-  if (index < 0 || index >= focusedCaptionState.itemKeys.length) {
-    stopFocusedCaption('Focus Caption complete.');
-    renderFileList();
+  var step = direction < 0 ? -1 : 1;
+  if (index < 0) {
+    setStatus('Focus Caption is already at the first item.');
     return Promise.resolve(false);
+  }
+  if (index >= focusedCaptionState.itemKeys.length) {
+    return finishFocusedCaption();
   }
 
   focusedCaptionState.itemIndex = index;
   focusedCaptionState.itemKey = focusedCaptionState.itemKeys[index];
+  resetFocusedCaptionUseArm();
   var targetItem = findFocusedCaptionMediaItemByKey(focusedCaptionState.itemKey);
   if (!targetItem) {
-    return navigateFocusedCaptionToIndex(index + 1);
+    return navigateFocusedCaptionToIndex(index + step, step);
   }
 
   if (state.currentItem && state.currentItem.key === targetItem.key) {
     return prepareFocusedCaptionCurrentItem();
   }
 
+  syncFocusedCaptionControls();
+  syncCaptionAssistCandidateUi();
+  syncFocusedCaptionPanelGeometry();
   return selectPathMedia(targetItem).then(function () {
     return true;
   }).catch(function (err) {
-    stopFocusedCaption('Focus Caption stopped: ' + String(err && err.message ? err.message : err));
+    var message = String(err && err.message ? err.message : err);
+    if (message.indexOf('outside the current filtered list') !== -1) {
+      return navigateFocusedCaptionToIndex(index + step, step);
+    }
+    stopFocusedCaption('Focus Caption stopped: ' + message);
     return false;
   });
 }
 
-function advanceFocusedCaption() {
+function moveFocusedCaption(delta) {
   if (!focusedCaptionState.open) return Promise.resolve(false);
-  return navigateFocusedCaptionToIndex(focusedCaptionState.itemIndex + 1);
+  var step = delta < 0 ? -1 : 1;
+  return cancelFocusedCaptionCurrentRequest().then(function () {
+    return cancelCurrentCaptionVision();
+  }).then(function () {
+    clearCaptionAssistCandidate();
+    return navigateFocusedCaptionToIndex(focusedCaptionState.itemIndex + step, step);
+  });
+}
+
+function advanceFocusedCaption() {
+  return moveFocusedCaption(1);
 }
 
 function skipFocusedCaptionItem() {
+  return moveFocusedCaption(1);
+}
+
+function regenerateFocusedCaption() {
   if (!focusedCaptionState.open) return Promise.resolve(false);
-  if (isCaptionAssistRunning()) {
-    setStatus('Caption Assist is still running; wait for this candidate before skipping.');
-    return Promise.resolve(false);
-  }
-  return cancelCurrentCaptionVision().then(function () {
+  var mediaKey = String(focusedCaptionState.itemKey || '');
+  return cancelFocusedCaptionCurrentRequest().then(function () {
+    return cancelFocusedCaptionPrefetch();
+  }).then(function () {
+    if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== mediaKey) return false;
     clearCaptionAssistCandidate();
-    return advanceFocusedCaption();
+    return prepareFocusedCaptionCurrentItem();
   });
 }
 
@@ -396,9 +562,12 @@ function startFocusedCaption(targetMediaKey) {
   focusedCaptionState.itemKeys = itemKeys;
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = itemKeys[0];
+  resetFocusedCaptionUseArm();
   syncFocusedCaptionControls();
   renderPreviewHeaderMeta();
-  navigateFocusedCaptionToIndex(0);
+  syncCaptionAssistCandidateUi();
+  syncFocusedCaptionPanelGeometry();
+  navigateFocusedCaptionToIndex(0, 1);
 }
 
 function startFocusedCaptionForMediaItem(mediaItem) {
@@ -438,13 +607,59 @@ function wireFocusedCaption() {
       skipFocusedCaptionItem();
     });
   }
-  if (!document.__focusedCaptionEscapeBound) {
-    document.__focusedCaptionEscapeBound = true;
+  if (!document.__focusedCaptionKeyboardBound) {
+    document.__focusedCaptionKeyboardBound = true;
     document.addEventListener('keydown', function (event) {
-      if (!focusedCaptionState.open || event.key !== 'Escape') return;
-      event.preventDefault();
+      if (!focusedCaptionState.open || !event || event.defaultPrevented || event.repeat) return;
+      if (typeof isEditableElement === 'function' && isEditableElement(document.activeElement)) return;
+      var key = String(event.key || '');
+      var lower = key.toLowerCase();
+      if (key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        stopFocusedCaption('Focus Caption ended.');
+        renderFileList();
+        return;
+      }
+      if (key === 'ArrowLeft' || key === 'ArrowUp') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        moveFocusedCaption(-1);
+        return;
+      }
+      if (key === 'ArrowRight' || key === 'ArrowDown' || lower === 's') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        moveFocusedCaption(1);
+        return;
+      }
+      if (lower === 'r') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        regenerateFocusedCaption();
+        return;
+      }
+      if (key === 'Enter') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        armOrUseFocusedCaptionCandidate();
+      }
+    }, true);
+  }
+  if (!document.__focusedCaptionOutsideClickBound) {
+    document.__focusedCaptionOutsideClickBound = true;
+    document.addEventListener('pointerdown', function (event) {
+      if (!focusedCaptionState.open || !event || !event.target) return;
+      var dialog = document.querySelector('#editor-caption-candidate .editor-caption-candidate-dialog');
+      if (dialog && dialog.contains(event.target)) return;
+      if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-focus-caption-skip-btn')) return;
       stopFocusedCaption('Focus Caption ended.');
-      renderFileList();
+    }, true);
+  }
+  if (!window.__focusedCaptionResizeBound) {
+    window.__focusedCaptionResizeBound = true;
+    window.addEventListener('resize', function () {
+      if (focusedCaptionState.open) syncFocusedCaptionPanelGeometry();
     });
   }
   syncFocusedCaptionControls();
@@ -463,3 +678,14 @@ window.advanceFocusedCaption = advanceFocusedCaption;
 window.startFocusedCaptionPrefetch = startFocusedCaptionPrefetch;
 window.cancelFocusedCaptionPrefetch = cancelFocusedCaptionPrefetch;
 window.syncFocusedCaptionVisionPreference = syncFocusedCaptionVisionPreference;
+window.beginFocusedCaptionRequest = beginFocusedCaptionRequest;
+window.isFocusedCaptionRequestCurrent = isFocusedCaptionRequestCurrent;
+window.isFocusedCaptionUseArmedForCandidate = isFocusedCaptionUseArmedForCandidate;
+window.getFocusedCaptionProgressText = getFocusedCaptionProgressText;
+window.canNavigateFocusedCaption = canNavigateFocusedCaption;
+window.syncFocusedCaptionPanelGeometry = syncFocusedCaptionPanelGeometry;
+window.cancelFocusedCaptionCurrentRequest = cancelFocusedCaptionCurrentRequest;
+window.moveFocusedCaption = moveFocusedCaption;
+window.regenerateFocusedCaption = regenerateFocusedCaption;
+window.armOrUseFocusedCaptionCandidate = armOrUseFocusedCaptionCandidate;
+window.resetFocusedCaptionUseArm = resetFocusedCaptionUseArm;

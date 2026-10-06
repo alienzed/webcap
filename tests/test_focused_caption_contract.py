@@ -122,12 +122,15 @@ def test_caption_assist_candidate_becomes_right_side_focus_panel_and_owns_escape
     focus_css = css.split(".editor-caption-candidate.is-focus-caption {", 1)[1].split("}", 1)[0]
     text_css = css.split(".editor-caption-candidate-text {", 1)[1].split("}", 1)[0]
     assert "position: fixed;" in candidate_css
-    assert "left: 50vw;" in focus_css
-    assert "width: 50vw;" in focus_css
+    assert "left: var(--focus-caption-left);" in focus_css
+    assert "width: var(--focus-caption-width);" in focus_css
+    assert "height: var(--focus-caption-height);" in focus_css
     assert "overflow: auto;" in text_css
     assert "panel.classList.toggle('is-focus-caption'" in primer
 
-    assert "if (event.target === candidatePanel) dismissCaptionAssistCandidate();" in primer
+    assert "if (event.target !== candidatePanel) return;" in primer
+    assert "if (isFocusedCaptionOpen()) {" in primer
+    assert "dismissCaptionAssistCandidate();" in primer
     assert "event.stopImmediatePropagation();" in primer
     assert "}, true);" in primer
 
@@ -320,3 +323,41 @@ def test_caption_fix_is_user_initiated_not_automatic():
     bind_start = vision.index("function bindCaptionVisionTaskToCandidate")
     bind_end = vision.index("function runCaptionVisionForCandidate", bind_start)
     assert "repairCaptionAssistCandidate(" not in vision[bind_start:bind_end]
+
+
+def test_focus_caption_is_immediate_cancelable_keyboard_driven_and_focus_only():
+    html = _read("tool/tool.html")
+    focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
+    shell = _read("tool/js/workspace_shell.js")
+    css = _read("tool/css/styles.css")
+
+    assert 'id="editor-caption-focus-loading"' in html
+    assert 'id="editor-caption-focus-cancel"' in html
+    assert 'id="editor-caption-focus-prev"' in html
+    assert 'id="editor-caption-focus-next"' in html
+    assert "syncCaptionAssistCandidateUi();\n  syncFocusedCaptionPanelGeometry();\n  navigateFocusedCaptionToIndex(0, 1);" in focus
+    assert "key === 'ArrowLeft' || key === 'ArrowUp'" in focus
+    assert "key === 'ArrowRight' || key === 'ArrowDown' || lower === 's'" in focus
+    assert "lower === 'r'" in focus
+    assert "armOrUseFocusedCaptionCandidate();" in focus
+    assert "Press Enter again to use this caption." in focus
+    assert "cancelFocusedCaptionCurrentRequest" in focus
+    assert "showFocusedCaptionToast('Focus Caption complete" in focus
+    assert "if (nextSurface !== 'default' && isFocusedCaptionOpen())" in shell
+    assert "if (isFocusedCaptionOpen()) stopFocusedCaption('Focus Caption ended.');" in shell
+    assert "--focus-caption-left" in css
+    assert ".editor-caption-candidate.is-focus-caption .editor-caption-candidate-text" in css
+
+
+def test_focus_caption_enhancements_do_not_change_normal_caption_assist_contract():
+    primer = _read("tool/js/primer_settings.js")
+
+    assert "var focusOpen = isFocusedCaptionOpen();" in primer
+    assert "var focusVisible = !!(focusOpen && mediaKey);" in primer
+    assert "titleEl.textContent = focusOpen ? 'Focus Caption' : 'Caption Assist';" in primer
+    assert "dismissBtn.textContent = focusOpen ? 'Exit' : '\\u00d7';" in primer
+    assert "if (!isFocusedCaptionOpen()) return runCaptionAssist();" in primer
+    assert "if (isFocusedCaptionOpen()) {\n        regenerateFocusedCaption();" in primer
+    assert "if (isFocusedCaptionOpen()) {\n        event.preventDefault();" in primer
+    assert "applyEditorTextAndTriggerInput(nextCaption);" in primer

@@ -922,6 +922,9 @@ function setWorkspaceSurface(surface, options) {
   var nextSurface = normalizeWorkspaceSurface(surface);
   var currentSurface = normalizeWorkspaceSurface(workspaceState.surface);
   var opts = options || {};
+  if (nextSurface !== 'default' && isFocusedCaptionOpen()) {
+    stopFocusedCaption('Focus Caption ended.');
+  }
   if (!opts.skipRemember && nextSurface !== currentSurface && nextSurface !== 'default') {
     workspaceState.previousSurface = currentSurface;
   }
@@ -948,6 +951,7 @@ function exitWorkspaceSurface(surfaceOverride) {
 
 function openTrainingSurface(mode, target) {
   target = target && typeof target === 'object' ? target : {};
+  if (isFocusedCaptionOpen()) stopFocusedCaption('Focus Caption ended.');
   if (typeof window !== 'undefined' && typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
   if (typeof window !== 'undefined' && typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
@@ -1118,6 +1122,7 @@ function wireWorkspaceHeaderUi() {
     setSelect.onchange = function () {
       var folder = String(this.value || '');
       if (!folder || folder === String(state && state.folder || '')) return;
+      if (isFocusedCaptionOpen()) stopFocusedCaption('Focus Caption ended.');
       setApplicationSetContext(folder);
     };
   }
@@ -1163,6 +1168,7 @@ function wireWorkspaceHeaderUi() {
   if (generateActivityBtn && !generateActivityBtn.__workspaceWired) {
     generateActivityBtn.__workspaceWired = true;
     generateActivityBtn.onclick = function () {
+      if (isFocusedCaptionOpen()) stopFocusedCaption('Focus Caption ended.');
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') stopFocusedAnnotation();
       if (typeof window.closeStorageActivity === 'function') window.closeStorageActivity();
       if (typeof window.openGenerateActivity !== 'function') throw new Error('Generate activity is not available.');
@@ -1180,6 +1186,7 @@ function wireWorkspaceHeaderUi() {
   if (testActivityBtn && !testActivityBtn.__workspaceWired) {
     testActivityBtn.__workspaceWired = true;
     testActivityBtn.onclick = function () {
+      if (isFocusedCaptionOpen()) stopFocusedCaption('Focus Caption ended.');
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
         stopFocusedAnnotation();
       }
@@ -1194,6 +1201,7 @@ function wireWorkspaceHeaderUi() {
   if (storyboardActivityBtn && !storyboardActivityBtn.__workspaceWired) {
     storyboardActivityBtn.__workspaceWired = true;
     storyboardActivityBtn.onclick = function () {
+      if (isFocusedCaptionOpen()) stopFocusedCaption('Focus Caption ended.');
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
         stopFocusedAnnotation();
       }
@@ -1207,6 +1215,7 @@ function wireWorkspaceHeaderUi() {
   if (storageActivityBtn && !storageActivityBtn.__workspaceWired) {
     storageActivityBtn.__workspaceWired = true;
     storageActivityBtn.onclick = function () {
+      if (isFocusedCaptionOpen()) stopFocusedCaption('Focus Caption ended.');
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') stopFocusedAnnotation();
       if (typeof window.openStorageActivity !== 'function') throw new Error('Storage activity is not available.');
       window.openStorageActivity();

@@ -161,11 +161,12 @@ function useCaptionAssistCandidate() {
 }
 
 function dismissCaptionAssistCandidate() {
-  clearCaptionAssistCandidate();
   if (isFocusedCaptionOpen()) {
-    setStatus('AI caption candidate dismissed. Regenerate, edit, or Skip when you are ready to move on.');
+    stopFocusedCaption('Focus Caption ended.');
+    renderFileList();
     return Promise.resolve(true);
   }
+  clearCaptionAssistCandidate();
   setStatus('AI caption candidate dismissed.');
   return Promise.resolve(true);
 }
@@ -251,21 +252,47 @@ function clearCaptionApplyConfirmation() {
 
 function syncCaptionAssistCandidateUi() {
   var panel = document.getElementById('editor-caption-candidate');
+  var titleEl = document.getElementById('editor-caption-candidate-title');
+  var progressEl = document.getElementById('editor-caption-focus-progress');
+  var loadingEl = document.getElementById('editor-caption-focus-loading');
+  var loadingTextEl = document.getElementById('editor-caption-focus-loading-text');
   var omissionsEl = document.getElementById('editor-caption-candidate-omissions');
   var missingEl = document.getElementById('editor-caption-candidate-missing');
   var textEl = document.getElementById('editor-caption-candidate-text');
+  var shortcutsEl = document.getElementById('editor-caption-focus-shortcuts');
+  var prevBtn = document.getElementById('editor-caption-focus-prev');
+  var nextBtn = document.getElementById('editor-caption-focus-next');
+  var cancelBtn = document.getElementById('editor-caption-focus-cancel');
   var useBtn = document.getElementById('editor-caption-candidate-use');
   var regenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
-  if (!panel || !omissionsEl || !missingEl || !textEl || !useBtn || !regenerateBtn) {
+  var dismissBtn = document.getElementById('editor-caption-candidate-dismiss');
+  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !omissionsEl || !missingEl || !textEl || !shortcutsEl || !prevBtn || !nextBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
     throw new Error('Caption Assist candidate markup is incomplete.');
   }
+
   var mediaKey = state && state.currentItem && state.currentItem.key;
   var candidate = captionAssistCandidate;
+  var focusOpen = isFocusedCaptionOpen();
   var visible = !!(candidate && mediaKey && candidate.mediaKey === mediaKey && candidate.text);
+  var focusVisible = !!(focusOpen && mediaKey);
+  var panelVisible = visible || focusVisible;
+  var pending = focusOpen && isCaptionAssistRunning();
   var omittedAssignments = visible && Array.isArray(candidate.omittedAssignments) ? candidate.omittedAssignments : [];
   var missingGroups = visible && Array.isArray(candidate.missingGroups) ? candidate.missingGroups : [];
-  panel.classList.toggle('hidden', !visible);
-  panel.classList.toggle('is-focus-caption', !!(visible && isFocusedCaptionOpen()));
+
+  panel.classList.toggle('hidden', !panelVisible);
+  panel.classList.toggle('is-focus-caption', focusVisible);
+  titleEl.textContent = focusOpen ? 'Focus Caption' : 'Caption Assist';
+
+  progressEl.classList.toggle('hidden', !focusOpen);
+  progressEl.textContent = focusOpen ? getFocusedCaptionProgressText() : '';
+  shortcutsEl.classList.toggle('hidden', !focusOpen);
+
+  loadingEl.classList.toggle('hidden', !focusOpen || visible);
+  if (focusOpen && !visible) {
+    loadingTextEl.textContent = pending ? 'Generating caption…' : 'Preparing caption…';
+  }
+
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
   omissionsEl.innerHTML = '';
   if (omittedAssignments.length) {
@@ -282,15 +309,35 @@ function syncCaptionAssistCandidateUi() {
     });
     omissionsEl.appendChild(fixOmissionsBtn);
   }
+
   missingEl.classList.toggle('hidden', !missingGroups.length);
   missingEl.textContent = missingGroups.length ? ('Still unreviewed: ' + missingGroups.join(' · ')) : '';
-  useBtn.textContent = omittedAssignments.length ? 'Use anyway' : 'Use';
-  regenerateBtn.textContent = omittedAssignments.length ? 'Regenerate' : '↻';
-  regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);
+  textEl.classList.toggle('hidden', focusOpen && !visible);
   textEl.textContent = visible ? candidate.text : '';
-  syncCaptionVisionUi();
-}
 
+  prevBtn.classList.toggle('hidden', !focusOpen);
+  nextBtn.classList.toggle('hidden', !focusOpen);
+  prevBtn.disabled = focusOpen && !canNavigateFocusedCaption(-1);
+  nextBtn.disabled = focusOpen && !canNavigateFocusedCaption(1);
+  cancelBtn.classList.toggle('hidden', !pending);
+
+  useBtn.classList.toggle('hidden', focusOpen && !visible);
+  regenerateBtn.classList.toggle('hidden', focusOpen && !visible);
+  var useArmed = focusOpen && visible && isFocusedCaptionUseArmedForCandidate(candidate);
+  useBtn.classList.toggle('is-armed', !!useArmed);
+  useBtn.textContent = useArmed
+    ? 'Press Enter again'
+    : (omittedAssignments.length ? 'Use anyway' : 'Use');
+  regenerateBtn.textContent = omittedAssignments.length ? 'Regenerate' : '\u21bb';
+  regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);
+
+  dismissBtn.textContent = focusOpen ? 'Exit' : '\u00d7';
+  dismissBtn.title = focusOpen ? 'Exit Focus Caption' : 'Dismiss candidate and stay on this item';
+  dismissBtn.setAttribute('aria-label', dismissBtn.title);
+
+  syncCaptionVisionUi();
+  if (focusOpen) syncFocusedCaptionPanelGeometry();
+}
 function updatePrimerCaptionResetUi() {
   var resetBtn = document.getElementById('primer-reset-caption-btn');
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
@@ -740,18 +787,28 @@ function repairCaptionAssistCandidate(corrections) {
   }
 
   var sourceMediaKey = mediaItem.key;
+  var focusRequest = isFocusedCaptionOpen() ? beginFocusedCaptionRequest(sourceMediaKey) : null;
+  if (focusRequest) {
+    captionAssistPendingJobId = 'submitting';
+    updatePrimerCaptionResetUi();
+  }
   setStatus('Caption Assist revising candidate...');
   return cancelCurrentCaptionVision().then(function () {
     return cancelFocusedCaptionPrefetch();
   }).then(function () {
     return requestCaptionAssistCandidate(mediaItem, request, {
       onJob: function (job) {
+        if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+          return cancelCaptionAssistJob(String(job.jobId || ''));
+        }
         captionAssistPendingJobId = String(job.jobId || '');
         updatePrimerCaptionResetUi();
         setStatus(job.status === 'queued' ? 'Caption repair waiting in the LLM queue...' : 'Caption Assist revising...');
+        return null;
       }
     });
   }).then(function (nextCandidate) {
+    if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
     if (!state.currentItem || state.currentItem.key !== sourceMediaKey) {
       setStatus('Caption repair finished, but the selected media item changed; result was not applied.');
       return false;
@@ -776,18 +833,23 @@ function repairCaptionAssistCandidate(corrections) {
     }
     return true;
   }).catch(function (err) {
+    if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
     setStatus('Caption repair failed: ' + String(err && err.message ? err.message : err));
     reportConsoleError('Caption Assist', err);
     return false;
   }).then(function (result) {
-    captionAssistPendingJobId = '';
-    updatePrimerCaptionResetUi();
-    syncFocusedCaptionAfterAssist(sourceMediaKey);
+    if (!focusRequest || isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+      captionAssistPendingJobId = '';
+      updatePrimerCaptionResetUi();
+      syncFocusedCaptionAfterAssist(sourceMediaKey);
+    }
     return result;
   }, function (err) {
-    captionAssistPendingJobId = '';
-    updatePrimerCaptionResetUi();
-    syncFocusedCaptionAfterAssist(sourceMediaKey);
+    if (!focusRequest || isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+      captionAssistPendingJobId = '';
+      updatePrimerCaptionResetUi();
+      syncFocusedCaptionAfterAssist(sourceMediaKey);
+    }
     throw err;
   });
 }
@@ -810,14 +872,24 @@ function runCaptionAssist() {
   }
 
   var sourceMediaKey = mediaItem.key;
+  var focusRequest = isFocusedCaptionOpen() ? beginFocusedCaptionRequest(sourceMediaKey) : null;
+  if (focusRequest) {
+    captionAssistPendingJobId = 'submitting';
+    updatePrimerCaptionResetUi();
+  }
   setStatus('Caption Assist queued...');
   return requestCaptionAssistCandidate(mediaItem, request, {
     onJob: function (job) {
+      if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+        return cancelCaptionAssistJob(String(job.jobId || ''));
+      }
       captionAssistPendingJobId = String(job.jobId || '');
       updatePrimerCaptionResetUi();
       setStatus(job.status === 'queued' ? 'Caption Assist waiting in the LLM queue...' : 'Caption Assist writing...');
+      return null;
     }
   }).then(function (candidate) {
+    if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
     if (!state.currentItem || state.currentItem.key !== sourceMediaKey) {
       setStatus('Caption Assist finished, but the selected media item changed; result was not applied.');
       return false;
@@ -842,17 +914,22 @@ function runCaptionAssist() {
     }
     return true;
   }).catch(function (err) {
+    if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
     setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));
     return false;
   }).then(function (result) {
-    captionAssistPendingJobId = '';
-    updatePrimerCaptionResetUi();
-    syncFocusedCaptionAfterAssist(sourceMediaKey);
+    if (!focusRequest || isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+      captionAssistPendingJobId = '';
+      updatePrimerCaptionResetUi();
+      syncFocusedCaptionAfterAssist(sourceMediaKey);
+    }
     return result;
   }, function (err) {
-    captionAssistPendingJobId = '';
-    updatePrimerCaptionResetUi();
-    syncFocusedCaptionAfterAssist(sourceMediaKey);
+    if (!focusRequest || isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+      captionAssistPendingJobId = '';
+      updatePrimerCaptionResetUi();
+      syncFocusedCaptionAfterAssist(sourceMediaKey);
+    }
     throw err;
   });
 }
@@ -875,13 +952,17 @@ function wirePrimerCaptionResetUi() {
   var candidateUseBtn = document.getElementById('editor-caption-candidate-use');
   var candidateRegenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
   var candidateDismissBtn = document.getElementById('editor-caption-candidate-dismiss');
-  if (!resetBtn || !undoBtn || !captionWandBtn || !candidatePanel || !candidateUseBtn || !candidateRegenerateBtn || !candidateDismissBtn) {
+  var focusPrevBtn = document.getElementById('editor-caption-focus-prev');
+  var focusNextBtn = document.getElementById('editor-caption-focus-next');
+  var focusCancelBtn = document.getElementById('editor-caption-focus-cancel');
+  if (!resetBtn || !undoBtn || !captionWandBtn || !candidatePanel || !candidateUseBtn || !candidateRegenerateBtn || !candidateDismissBtn || !focusPrevBtn || !focusNextBtn || !focusCancelBtn) {
     throw new Error('Caption Assist controls are missing.');
   }
 
   if (!candidateUseBtn.__captionAssistBound) {
     candidateUseBtn.__captionAssistBound = true;
     candidateUseBtn.addEventListener('click', function () {
+      if (isFocusedCaptionOpen()) resetFocusedCaptionUseArm();
       useCaptionAssistCandidate();
     });
   }
@@ -889,10 +970,39 @@ function wirePrimerCaptionResetUi() {
   if (!candidateRegenerateBtn.__captionAssistBound) {
     candidateRegenerateBtn.__captionAssistBound = true;
     candidateRegenerateBtn.addEventListener('click', function () {
+      if (isFocusedCaptionOpen()) {
+        regenerateFocusedCaption();
+        return;
+      }
       cancelCurrentCaptionVision().then(function () {
         captionAssistCandidate = null;
         syncCaptionAssistCandidateUi();
         return runCaptionAssistFromUi();
+      });
+    });
+  }
+
+  if (!focusPrevBtn.__captionAssistBound) {
+    focusPrevBtn.__captionAssistBound = true;
+    focusPrevBtn.addEventListener('click', function () {
+      if (isFocusedCaptionOpen()) moveFocusedCaption(-1);
+    });
+  }
+  if (!focusNextBtn.__captionAssistBound) {
+    focusNextBtn.__captionAssistBound = true;
+    focusNextBtn.addEventListener('click', function () {
+      if (isFocusedCaptionOpen()) moveFocusedCaption(1);
+    });
+  }
+  if (!focusCancelBtn.__captionAssistBound) {
+    focusCancelBtn.__captionAssistBound = true;
+    focusCancelBtn.addEventListener('click', function () {
+      if (!isFocusedCaptionOpen()) return;
+      cancelFocusedCaptionCurrentRequest().then(function () {
+        if (isFocusedCaptionOpen()) {
+          syncCaptionAssistCandidateUi();
+          setStatus('Focus Caption generation cancelled.');
+        }
       });
     });
   }
@@ -907,14 +1017,28 @@ function wirePrimerCaptionResetUi() {
   if (!candidatePanel.__captionAssistBackdropBound) {
     candidatePanel.__captionAssistBackdropBound = true;
     candidatePanel.addEventListener('click', function (event) {
-      if (event.target === candidatePanel) dismissCaptionAssistCandidate();
+      if (event.target !== candidatePanel) return;
+      if (isFocusedCaptionOpen()) {
+        stopFocusedCaption('Focus Caption ended.');
+        renderFileList();
+        return;
+      }
+      dismissCaptionAssistCandidate();
     });
   }
 
   if (!document.__captionAssistEscapeBound) {
     document.__captionAssistEscapeBound = true;
     document.addEventListener('keydown', function (event) {
-      if (event.key !== 'Escape' || !captionAssistCandidate) return;
+      if (event.key !== 'Escape') return;
+      if (isFocusedCaptionOpen()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        stopFocusedCaption('Focus Caption ended.');
+        renderFileList();
+        return;
+      }
+      if (!captionAssistCandidate) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       dismissCaptionAssistCandidate();

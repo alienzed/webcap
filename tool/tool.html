@@ -1749,20 +1749,31 @@
             <div id="editor-caption-candidate" class="editor-caption-candidate hidden" aria-live="polite">
                 <section class="editor-caption-candidate-dialog" role="dialog" aria-modal="true" aria-label="AI caption candidate">
                     <div class="editor-caption-candidate-header">
-                        <strong>Caption Assist</strong>
+                        <div class="editor-caption-candidate-heading">
+                            <strong id="editor-caption-candidate-title">Caption Assist</strong>
+                            <span id="editor-caption-focus-progress" class="editor-caption-focus-progress hidden"></span>
+                        </div>
                         <label id="editor-caption-vision-toggle-wrap" class="editor-caption-vision-toggle hidden" title="Scan for incorrect or omitted visual details using the selected Vision model.">
                             <input id="editor-caption-vision-toggle" type="checkbox">
                             <span>Enable Vision</span>
                         </label>
+                    </div>
+                    <div id="editor-caption-focus-loading" class="editor-caption-focus-loading hidden" role="status">
+                        <span class="editor-caption-focus-spinner" aria-hidden="true"></span>
+                        <strong id="editor-caption-focus-loading-text">Generating caption…</strong>
                     </div>
                     <div id="editor-caption-candidate-omissions" class="editor-caption-candidate-omissions hidden"></div>
                     <div id="editor-caption-candidate-missing" class="editor-caption-candidate-missing hidden"></div>
                     <div id="editor-caption-vision-status" class="editor-caption-vision-status hidden"></div>
                     <div id="editor-caption-vision-findings" class="editor-caption-vision-findings hidden"></div>
                     <div id="editor-caption-candidate-text" class="editor-caption-candidate-text"></div>
+                    <div id="editor-caption-focus-shortcuts" class="editor-caption-focus-shortcuts hidden">← / ↑ Previous · ↓ / → / S Next · R Regenerate · Enter twice to Use · Esc Exit</div>
                     <div class="editor-caption-candidate-actions">
+                        <button id="editor-caption-focus-prev" class="hidden" type="button">← Previous</button>
+                        <button id="editor-caption-focus-next" class="hidden" type="button">Next →</button>
                         <button id="editor-caption-candidate-use" type="button">Use</button>
                         <button id="editor-caption-candidate-regenerate" class="editor-caption-candidate-regenerate" type="button" title="Generate another candidate" aria-label="Generate another candidate">&#8635;</button>
+                        <button id="editor-caption-focus-cancel" class="hidden" type="button">Cancel generation</button>
                         <button id="editor-caption-candidate-dismiss" type="button" title="Dismiss candidate and stay on this item" aria-label="Dismiss candidate and stay on this item">&times;</button>
                     </div>
                 </section>

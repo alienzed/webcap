@@ -552,6 +552,21 @@ function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments) 
   return omitted;
 }
 
+function getCaptionAssistDraftForMediaItem(mediaItem) {
+  var mediaKey = mediaItem && mediaItem.key;
+  if (!mediaKey) throw new Error('Caption Assist requires a selected media item.');
+  if (state && state.currentItem && state.currentItem.key === mediaKey && ui && ui.editorEl) {
+    return String(ui.editorEl.value || '').trim();
+  }
+  var savedCaption = String(mediaItem.caption || '');
+  if (savedCaption.trim()) return savedCaption.trim();
+  return String(buildAutoPrimer(mediaItem.fileName, mediaKey) || '').trim();
+}
+
+function captionAssistRequestFingerprint(request) {
+  return JSON.stringify(request || {});
+}
+
 function buildCaptionAssistRequest(mediaItem) {
   var mediaKey = mediaItem && mediaItem.key;
   if (!mediaKey) throw new Error('Caption Assist requires a selected media item.');
@@ -576,7 +591,7 @@ function buildCaptionAssistRequest(mediaItem) {
     preferredCaptionSequence: getPreferredCaptionSequence(),
     template: primer.template,
     renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
-    draft: String((ui && ui.editorEl && ui.editorEl.value) || '').trim()
+    draft: getCaptionAssistDraftForMediaItem(mediaItem)
   };
 }
 

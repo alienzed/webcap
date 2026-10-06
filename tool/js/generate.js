@@ -421,14 +421,8 @@
     if (el('generate-seed')) el('generate-seed').value = '-1';
 
     var prompt = el('generate-prompt');
-    var promptStorageKey = 'webcap.generate.prompt.' + model.id;
-    var savedPrompt = window.localStorage.getItem(promptStorageKey);
-    if (savedPrompt === 'Storyboard prompt is injected at runtime.') {
-      window.localStorage.removeItem(promptStorageKey);
-      savedPrompt = null;
-    }
     if (prompt && (!prompt.value.trim() || prompt.dataset.modelId !== model.id)) {
-      prompt.value = savedPrompt !== null ? savedPrompt : String(model.defaultPrompt || '');
+      prompt.value = String(model.defaultPrompt || '');
       prompt.dataset.modelId = model.id;
     }
 
@@ -659,7 +653,7 @@
     prompt.value = String(result.sourcePrompt || result.resolvedPrompt || '');
     prompt.dataset.modelId = resultModelId || String(generateState.modelId || '');
     if (modelAvailable) {
-      window.localStorage.setItem('webcap.generate.prompt.' + resultModelId, prompt.value);
+
       var settings = result.settings && typeof result.settings === 'object' ? result.settings : {};
       [
         ['aspectRatio', 'generate-aspect'],
@@ -892,7 +886,7 @@
     if (!item) throw new Error('Saved prompt is missing from the Prompt Library.');
     var prompt = el('generate-prompt');
     prompt.value = String(item.prompt || '');
-    window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, prompt.value);
+
     generateState.promptLibrary.activeId = String(item.id || '');
     generateState.director.previousPrompt = null;
     setDirectorStatus('');
@@ -2189,7 +2183,7 @@
     var prompt = el('generate-prompt');
     prompt.value = generateState.director.previousPrompt;
     generateState.director.previousPrompt = null;
-    window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, prompt.value);
+
     setDirectorStatus('Previous prompt restored.');
     renderDirector();
   }
@@ -2220,7 +2214,7 @@
     }).then(function (payload) {
       promptNode.value = String(payload.result || '');
       generateState.director.previousPrompt = previousPrompt;
-      window.localStorage.setItem('webcap.generate.prompt.' + requestModelId, promptNode.value);
+
       if (operation === 'refine_prompt') el('generate-director-instruction').value = '';
       setDirectorStatus(operation === 'write_prompt' ? 'Prompt expanded.' : 'Prompt refined.');
     }).catch(function (err) {
@@ -2268,8 +2262,19 @@
     });
   }
 
+  function resetGeneratePromptScratch() {
+    var prompt = el('generate-prompt');
+    if (!prompt) throw new Error('Generate prompt editor is missing.');
+    prompt.value = '';
+    prompt.removeAttribute('data-model-id');
+    generateState.promptLibrary.activeId = '';
+    generateState.director.previousPrompt = null;
+    setDirectorStatus('');
+  }
+
   function openGenerateActivity(target) {
     target = target && typeof target === 'object' ? target : {};
+    var wasOpen = generateState.open;
     var targetJobId = String(target.jobId || '');
     if (targetJobId) {
       trackGenerateJob(targetJobId);
@@ -2281,6 +2286,7 @@
     if (!frame || !workspace) throw new Error('Generate workspace markup is missing.');
     if (typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
     if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
+    if (!wasOpen) resetGeneratePromptScratch();
     generateState.open = true;
     generateState.director.modelId = getDirectorModelPreference('webcap.generate.directorModel');
     frame.classList.add('workspace-generate-open');
@@ -2347,9 +2353,6 @@
       setGenerateModelPreference(this.value);
       renderModelForm();
       renderDirector();
-    });
-    el('generate-prompt').addEventListener('input', function () {
-      window.localStorage.setItem('webcap.generate.prompt.' + generateState.modelId, this.value);
     });
     el('generate-prompt-save').onclick = function () {
       try { saveCurrentPrompt(); } catch (err) { reportError(err, 'Save prompt failed'); }

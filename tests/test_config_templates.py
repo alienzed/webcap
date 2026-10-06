@@ -469,3 +469,25 @@ def test_director_model_is_validated_as_durable_config():
             "training": {},
             "director_model": 42,
         })
+
+
+def test_generate_model_is_validated_as_durable_config():
+    defaulted = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "training": {},
+    })
+    assert defaulted["generate_model"] == ""
+
+    selected = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "training": {},
+        "generate_model": "  minimax_h3  ",
+    })
+    assert selected["generate_model"] == "minimax_h3"
+
+    with pytest.raises(ValueError, match="Config.generate_model"):
+        config_module.validate_config_payload({
+            "filesystem": {"root": "C:/training", "models": ""},
+            "training": {},
+            "generate_model": 42,
+        })

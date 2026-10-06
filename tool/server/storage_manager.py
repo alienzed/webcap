@@ -1554,6 +1554,8 @@ def _persist_scan_discoveries(sets, tests):
 def _scan_workspace(folder="", cancel_check=None, progress=None):
     cancel_check = cancel_check or (lambda: False)
     progress = progress or (lambda event: None)
+    with _CACHE_LOCK:
+        initial_cache_items = dict((_read_cache().get("items") or {}))
     progress({"phase": "discovering", "current": "Discovering WebCap Sets and historical Test Sessions…"})
     sets, tests = _discover_workspace_sets(cancel_check=cancel_check, progress=progress)
     _scan_cancelled(cancel_check)
@@ -1562,12 +1564,17 @@ def _scan_workspace(folder="", cancel_check=None, progress=None):
     payload = overview(folder)
     items = []
     seen = set()
+    live_cache_keys = set()
     for area_rows in payload.get("items", {}).values():
         for item in area_rows or []:
-            key = (str(item.get("area") or ""), str(item.get("folder") or ""), str(item.get("id") or ""))
+            area = str(item.get("area") or "")
+            item_folder = str(item.get("folder") or "")
+            item_id = str(item.get("id") or "")
+            key = (area, item_folder, item_id)
             if key in seen:
                 continue
             seen.add(key)
+            live_cache_keys.add(_cache_key(area, item_id, item_folder))
             items.append(item)
 
     progress({"phase": "measuring", "itemsTotal": len(items), "current": "Measuring managed artifacts…"})
@@ -1603,8 +1610,25 @@ def _scan_workspace(folder="", cancel_check=None, progress=None):
         "itemsTotal": len(items),
         "errors": scan_errors,
     }
+    folder_key = _normalized_folder_key(folder)
+    unavailable = set((payload.get("unavailable") or {}).keys())
+    comfy_inventory_complete = inference_runtime.known_provider_root() is not None
     with _CACHE_LOCK:
         cache = _read_cache()
+        cache_items = cache.setdefault("items", {})
+        for key, initial_row in initial_cache_items.items():
+            if key in live_cache_keys:
+                continue
+            area = str(key).split(":", 1)[0]
+            if area not in MEASURABLE_AREAS or area in unavailable:
+                continue
+            if area == "staged":
+                if not folder_key or not str(key).startswith("staged:" + folder_key + ":"):
+                    continue
+            elif area == "comfy" and not comfy_inventory_complete:
+                continue
+            if cache_items.get(key) == initial_row:
+                cache_items.pop(key, None)
         cache["lastScan"] = summary
         _write_cache(cache)
     return summary

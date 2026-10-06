@@ -650,3 +650,32 @@ def test_execution_queue_inaccessible_state_is_not_treated_as_missing(queue_root
 
     with pytest.raises(execution_queue.ExecutionQueueStateError, match="cannot be inspected"):
         execution_queue.lane_snapshot("inference")
+
+
+def test_ephemeral_llm_targeted_cancel_leaves_other_jobs_intact(queue_root):
+    queue = execution_queue.ephemeral_lane("llm")
+    first = queue.enqueue({"request": {"prompt": "first"}})
+    second = queue.enqueue({"request": {"prompt": "second"}})
+
+    cancelled = queue.cancel_or_stop(second["id"])
+
+    assert cancelled["status"] == "cancelled"
+    snapshot = queue.lane_snapshot(include_terminal=False)
+    assert [job["id"] for job in snapshot["jobs"]] == [first["id"]]
+    assert execution_queue.transient_receipt(second["id"])["status"] == "cancelled"
+
+
+def test_ephemeral_llm_targeted_stop_marks_only_active_job(queue_root):
+    queue = execution_queue.ephemeral_lane("llm")
+    active = queue.enqueue({"request": {"prompt": "active"}})
+    queued = queue.enqueue({"request": {"prompt": "queued"}})
+    queue.claim_next(expected_job_id=active["id"])
+    queue.mark_running(active["id"])
+
+    stopping = queue.cancel_or_stop(active["id"])
+
+    assert stopping["status"] == "stopping"
+    assert stopping["requestedAction"] == "stop"
+    snapshot = queue.lane_snapshot(include_terminal=False)
+    assert [job["id"] for job in snapshot["jobs"]] == [active["id"], queued["id"]]
+    assert snapshot["jobs"][1]["status"] == "queued"

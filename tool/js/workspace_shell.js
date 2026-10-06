@@ -889,7 +889,7 @@ function setWorkspaceSurface(surface, options) {
   workspaceState.surface = nextSurface;
   workspaceState.sidebarHidden = !!opts.sidebarHidden || nextSurface === 'focus' || nextSurface === 'grid';
   if (nextSurface === 'reviewOutput' && currentSurface !== 'reviewOutput' && typeof setReviewDetailTab === 'function') {
-    setReviewDetailTab('metadata');
+    setReviewDetailTab('qa');
   }
   if (nextSurface === 'training' && currentSurface !== 'training' && typeof setTrainingDetailTab === 'function') {
     setTrainingDetailTab(trainingWorkspaceState.entryMode === 'global' ? 'run-log' : 'items');

@@ -174,3 +174,29 @@ def test_caption_assist_submission_is_reusable_for_prefetch():
     assert "if (isFocusedCaptionOpen()) startFocusedCaptionPrefetch(sourceMediaKey);" in primer
     assert "function runCaptionAssistFromUi()" in primer
     assert "return cancelFocusedCaptionPrefetch().then(function ()" in primer
+
+
+def test_focus_caption_prefetch_is_one_deep_request_validated_and_ephemeral():
+    focus = _read("tool/js/focused_caption.js")
+
+    assert "var focusedCaptionPrefetch = null;" in focus
+    assert "function getNextFocusedCaptionTarget(fromIndex)" in focus
+    assert "for (var index = start + 1; index < focusedCaptionState.itemKeys.length; index += 1)" in focus
+    assert "function startFocusedCaptionPrefetch(sourceMediaKey)" in focus
+    assert "function useFocusedCaptionPrefetchForCurrentItem()" in focus
+    assert "requestCaptionAssistCandidate(target.item, request" in focus
+    assert "captionAssistRequestFingerprint(target.item, request)" in focus
+    assert "captionAssistRequestFingerprint(state.currentItem, latestRequest) !== prefetch.fingerprint" in focus
+    assert "focusedCaptionPrefetch = null;" in focus
+    assert "localStorage" not in focus
+    assert "sessionStorage" not in focus
+
+
+def test_focus_caption_prefetch_is_cancelled_at_lifecycle_boundaries():
+    focus = _read("tool/js/focused_caption.js")
+
+    assert "function cancelFocusedCaptionPrefetch()" in focus
+    assert "return cancelCaptionAssistJob(prefetch.jobId)" in focus
+    assert "prefetch.discarded = true;" in focus
+    assert "if (prefetch.discarded) return cancelCaptionAssistJob(prefetch.jobId);" in focus
+    assert focus.count("cancelFocusedCaptionPrefetch();") >= 2

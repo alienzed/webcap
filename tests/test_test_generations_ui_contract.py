@@ -44,6 +44,18 @@ def test_base_model_selector_stays_available_and_reprepares_test_workspace():
     assert "Testing unavailable for selected Base Model." in script
 
 
+def test_test_generations_guards_shared_working_model_dependency():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert html.index('src="/static/js/working_context.js"') < html.index('src="/static/js/test_generations.js"')
+    assert "typeof window.getWorkingModelProfileId !== 'function'" in script
+    assert "return String(window.getWorkingModelProfileId() || '');" in script
+    assert "return supportedTestModelIds.indexOf(currentTestModelId()) !== -1;" in script
+    assert "modelId: getWorkingModelProfileId()" not in script
+    assert "String(getWorkingModelProfileId() || '')" not in script
+
+
 def test_test_seed_uses_shared_32_bit_range():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

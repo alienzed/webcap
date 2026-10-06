@@ -816,7 +816,10 @@ def cancel_job(job_id):
     if not job_id:
         raise ValueError("LLM job ID is required.")
     with _enqueue_lock:
-        result = execution_cancel_or_stop(job_id)
+        try:
+            result = execution_cancel_or_stop(job_id)
+        except FileNotFoundError:
+            result = execution_transient_receipt(job_id, consume=False)
         if str(result.get("status") or "") == "stopping":
             from .storyboard_llm_runtime import stop_active_request
             try:

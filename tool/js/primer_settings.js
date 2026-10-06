@@ -1044,6 +1044,91 @@ function repairCaptionAssistCandidate(corrections) {
   });
 }
 
+function blendFocusedCaptionVisionPhrase(phrase) {
+  var mediaItem = getPrimerResetCurrentMediaItem();
+  var candidate = captionAssistCandidate;
+  var detail = String(phrase || '').trim();
+  if (
+    !isFocusedCaptionOpen() ||
+    !mediaItem ||
+    !candidate ||
+    candidate.mediaKey !== mediaItem.key ||
+    !detail
+  ) {
+    setStatus('No Vision phrase is available to blend.');
+    return Promise.resolve(false);
+  }
+  if (captionAssistPendingJobId) {
+    setStatus('Caption Assist is already running.');
+    return Promise.resolve(false);
+  }
+
+  var request = buildCaptionAssistRequest(mediaItem);
+  var currentDraft = String(candidate.text || '').trim();
+  request.draft = currentDraft
+    ? (currentDraft + (/\s$/.test(currentDraft) ? '' : ' ') + detail)
+    : detail;
+  if (!request.model) {
+    setStatus('Select a Director model before blending the Vision phrase.');
+    return Promise.resolve(false);
+  }
+
+  var sourceMediaKey = mediaItem.key;
+  var focusRequest = beginFocusedCaptionRequest(sourceMediaKey);
+  captionAssistPendingJobId = 'submitting';
+  updatePrimerCaptionResetUi();
+  setStatus('Blending Vision phrase into caption...');
+
+  return cancelCurrentCaptionVision().then(function () {
+    return cancelFocusedCaptionPrefetch();
+  }).then(function () {
+    return requestCaptionAssistCandidate(mediaItem, request, {
+      onJob: function (job) {
+        if (!isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+          return cancelCaptionAssistJob(String(job.jobId || ''));
+        }
+        captionAssistPendingJobId = String(job.jobId || '');
+        updatePrimerCaptionResetUi();
+        setStatus(job.status === 'queued' ? 'Vision phrase blend waiting in the LLM queue...' : 'Blending Vision phrase...');
+        return null;
+      }
+    });
+  }).then(function (nextCandidate) {
+    if (!isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
+    if (!state.currentItem || state.currentItem.key !== sourceMediaKey) return false;
+    captionAssistCandidate = nextCandidate;
+    syncCaptionAssistCandidateUi();
+    setStatus('Vision phrase blended.');
+    if (captionVisionEnabled) {
+      return maybeRunCaptionVisionForCandidate(nextCandidate).then(function () {
+        if (isFocusedCaptionOpen() && state.currentItem && state.currentItem.key === sourceMediaKey) {
+          return startFocusedCaptionPrefetch(sourceMediaKey);
+        }
+        return true;
+      });
+    }
+    return startFocusedCaptionPrefetch(sourceMediaKey);
+  }).catch(function (err) {
+    if (isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+      setStatus('Vision phrase blend failed: ' + String(err && err.message ? err.message : err));
+      reportConsoleError('Caption Assist', err);
+    }
+    return false;
+  }).then(function (result) {
+    if (isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+      captionAssistPendingJobId = '';
+      updatePrimerCaptionResetUi();
+    }
+    return result;
+  }, function (err) {
+    if (isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+      captionAssistPendingJobId = '';
+      updatePrimerCaptionResetUi();
+    }
+    throw err;
+  });
+}
+
 function runCaptionAssist() {
   var mediaItem = getPrimerResetCurrentMediaItem();
   if (!mediaItem) {
@@ -1125,6 +1210,7 @@ function runCaptionAssist() {
 }
 
 window.repairCaptionAssistCandidate = repairCaptionAssistCandidate;
+window.blendFocusedCaptionVisionPhrase = blendFocusedCaptionVisionPhrase;
 
 function runCaptionAssistFromUi() {
   if (!isFocusedCaptionOpen()) return runCaptionAssist();

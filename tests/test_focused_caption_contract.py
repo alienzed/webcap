@@ -324,6 +324,19 @@ def test_focus_caption_vision_phrases_are_ephemeral_editable_and_one_deep_prefet
     assert ".caption-vision-phrase-insert" in css
 
 
+def test_focus_caption_vision_phrase_blend_reuses_caption_assist_without_tag_mutation():
+    primer = _read("tool/js/primer_settings.js")
+
+    start = primer.index("function blendFocusedCaptionVisionPhrase(phrase)")
+    end = primer.index("function runCaptionAssist()", start)
+    blend = primer[start:end]
+    assert "request.draft = currentDraft" in blend
+    assert "requestCaptionAssistCandidate(mediaItem, request" in blend
+    assert "assignChecklistTagToMediaKey" not in blend
+    assert "cancelFocusedCaptionPrefetch()" in blend
+    assert "startFocusedCaptionPrefetch(sourceMediaKey)" in blend
+
+
 def test_caption_vision_preference_is_config_backed_not_browser_persistent():
     html = _read("tool/tool.html")
     vision = _read("tool/js/caption_vision.js")

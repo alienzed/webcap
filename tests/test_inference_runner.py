@@ -838,6 +838,35 @@ def test_inference_snapshot_projects_test_rendition_context(inference_root):
     assert job["wildcardValues"] == ["red dress", "rooftop", "side"]
     assert job["label"] == "Comparison · Base"
 
+
+def test_inference_snapshot_prefers_resolved_wildcard_values_from_job_details(inference_root):
+    queued = inference_runner.enqueue_test(
+        {
+            "modelId": "krea2_raw",
+            "mediaKind": "image",
+            "prompt": "Prompt",
+        },
+        {
+            "folder": "sets/subject",
+            "sessionId": "session-1",
+            "candidateKind": "base",
+            "wildcardValues": [],
+        },
+        label="Comparison · Base",
+    )
+    execution_queue.update_job(
+        queued["jobId"],
+        {"wildcardValues": ["white", "ruched", "front"]},
+    )
+
+    job = next(
+        item for item in inference_runner.snapshot()["jobs"]
+        if item["jobId"] == queued["jobId"]
+    )
+
+    assert job["wildcardValues"] == ["white", "ruched", "front"]
+
+
 def test_inference_runner_pauses_without_consuming_queue_when_comfyui_is_unavailable(inference_root, monkeypatch):
     first = execution_queue.enqueue(
         inference_runner.EXECUTION_LANE,

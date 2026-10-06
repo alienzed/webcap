@@ -24,10 +24,6 @@ function fetchTrainingProfiles() {
   });
 }
 
-function trainingModeStorageKey(folder) {
-  return 'webcap.trainingMode.' + String(folder || '');
-}
-
 function getSelectedTrainingModelProfile() {
   var profiles = trainingWorkspaceState.profiles || [];
   var selectedProfileId = getWorkingModelProfileId();
@@ -69,9 +65,7 @@ function syncWorkingModelProfileSelect(folder) {
   select.value = selectedProfileId;
   if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
   if (isTrainingWorkspaceActive()) {
-    var storedMode = '';
-    try { storedMode = localStorage.getItem(trainingModeStorageKey(folder)) || ''; } catch (err) {}
-    trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(storedMode || trainingWorkspaceState.selectedMode);
+    trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);
     syncTrainingWorkspaceProfile();
     setManagedTrainingStages(trainingWorkspaceState.runStages);
   }
@@ -561,7 +555,6 @@ function switchTrainingSetup(profileId, mode) {
   savePromise.then(function () {
     if (profileId) setSelectedTrainingModelProfile(profileId);
     if (mode) trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(mode);
-    try { localStorage.setItem(trainingModeStorageKey(state.folder), trainingWorkspaceState.selectedMode); } catch (err) {}
 
     // Model-specific workspace state must never survive a model switch. The
     // next refresh may fail, and stale files/review from the previous model

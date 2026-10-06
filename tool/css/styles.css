@@ -588,6 +588,10 @@ textarea:focus, input:focus {
 }
 
 .editor-caption-candidate-omissions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 10px 16px;
   border-bottom: 1px solid rgba(220, 38, 38, 0.28);
   background: rgba(220, 38, 38, 0.10);
@@ -595,6 +599,13 @@ textarea:focus, input:focus {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.caption-assist-fix-btn {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .editor-caption-candidate-missing {

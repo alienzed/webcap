@@ -51,11 +51,8 @@ function cancelFocusedCaptionPrefetch() {
       return false;
     }));
   }
-  if (prefetch.visionJobId && !prefetch.visionResult) {
-    cancellations.push(cancelCaptionAssistJob(prefetch.visionJobId).catch(function (err) {
-      reportConsoleWarning('Focus Caption', 'Could not cancel speculative Caption Vision job: ' + String(err && err.message ? err.message : err));
-      return false;
-    }));
+  if (prefetch.visionTask && !prefetch.visionTask.result) {
+    cancellations.push(cancelCaptionVisionTask(prefetch.visionTask, 'Focus Caption Vision'));
   }
   if (!cancellations.length) return Promise.resolve(true);
   return Promise.all(cancellations).then(function () { return true; });
@@ -64,43 +61,31 @@ function cancelFocusedCaptionPrefetch() {
 function beginFocusedCaptionPrefetchVision(prefetch, mediaItem, candidate) {
   if (!captionVisionEnabled || !prefetch || !mediaItem || !candidate) return Promise.resolve(false);
   if (!isCaptionVisionSupportedMedia(mediaItem.fileName)) return Promise.resolve(false);
-  if (prefetch.visionPromise) return prefetch.visionPromise;
+  if (prefetch.visionTask) return prefetch.visionTask.promise;
 
-  prefetch.visionJobId = '';
-  prefetch.visionResult = null;
-  prefetch.visionPromise = requestCaptionVisionCandidate(mediaItem, candidate.text, {
-    onJob: function (job) {
-      prefetch.visionJobId = String(job.jobId || '');
-      if (prefetch.discarded) return cancelCaptionAssistJob(prefetch.visionJobId);
-      return null;
-    }
-  }).then(function (result) {
-    if (prefetch.discarded) return null;
-    prefetch.visionResult = result;
+  var task = createCaptionVisionTask(mediaItem, candidate.text);
+  prefetch.visionTask = task;
+  task.promise = task.promise.then(function (result) {
+    if (prefetch.discarded || focusedCaptionPrefetch !== prefetch) return null;
     return result;
   }).catch(function (err) {
-    if (!prefetch.discarded && captionVisionEnabled) reportConsoleError('Focus Caption Vision', err);
+    if (!prefetch.discarded && focusedCaptionPrefetch === prefetch && captionVisionEnabled) {
+      reportConsoleError('Focus Caption Vision', err);
+    }
     return null;
   });
-  return prefetch.visionPromise;
+  return task.promise;
 }
 
 function syncFocusedCaptionVisionPreference() {
   var prefetch = focusedCaptionPrefetch;
   if (!prefetch) return Promise.resolve(false);
   if (!captionVisionEnabled) {
-    if (prefetch.visionJobId && !prefetch.visionResult) {
-      var jobId = prefetch.visionJobId;
-      prefetch.visionJobId = '';
-      prefetch.visionPromise = null;
-      prefetch.visionResult = null;
-      return cancelCaptionAssistJob(jobId).catch(function (err) {
-        reportConsoleWarning('Focus Caption Vision', 'Could not cancel speculative vision job: ' + String(err && err.message ? err.message : err));
-        return false;
-      });
+    if (prefetch.visionTask) {
+      var task = prefetch.visionTask;
+      prefetch.visionTask = null;
+      return cancelCaptionVisionTask(task, 'Focus Caption Vision');
     }
-    prefetch.visionPromise = null;
-    prefetch.visionResult = null;
     return Promise.resolve(true);
   }
   if (!prefetch.candidate) return Promise.resolve(false);
@@ -137,9 +122,7 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
       jobId: '',
       promise: null,
       candidate: null,
-      visionJobId: '',
-      visionPromise: null,
-      visionResult: null,
+      visionTask: null,
       discarded: false
     };
     focusedCaptionPrefetch = prefetch;
@@ -307,10 +290,9 @@ function stopFocusedCaption(message) {
   focusedCaptionState.itemKeys = [];
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = '';
+  captionVisionEnabled = false;
   cancelFocusedCaptionPrefetch();
   clearCaptionAssistCandidate();
-  captionVisionEnabled = false;
-  cancelCurrentCaptionVision();
   clearCaptionVisionResult();
   syncFocusedCaptionControls();
   renderPreviewHeaderMeta();
@@ -390,8 +372,8 @@ function skipFocusedCaptionItem() {
     setStatus('Caption Assist is still running; wait for this candidate before skipping.');
     return Promise.resolve(false);
   }
-  clearCaptionAssistCandidate();
   return cancelCurrentCaptionVision().then(function () {
+    clearCaptionAssistCandidate();
     return advanceFocusedCaption();
   });
 }

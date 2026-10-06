@@ -7,6 +7,7 @@
   },
   "theme": "light",
   "director_model": "",
+  "generate_model": "",
   "training": {
     "diffusion_pipe_wsl": "/home/you/diffusion-pipe",
     "wsl_distribution": "Ubuntu",

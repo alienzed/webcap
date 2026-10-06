@@ -1992,3 +1992,65 @@ def test_status_keeps_pathology_warning_independent_from_output_capacity(monkeyp
     assert assessment["seriousWarning"] is True
     assert assessment["pathologies"] == ["looping"]
     assert assessment["fullStoryCapable"] is False
+
+
+def test_normalize_models_exposes_image_input_capability():
+    models = storyboard_llm_runtime._normalize_models({
+        "data": [{
+            "id": "vision",
+            "path": "/models/vision/model.gguf",
+            "status": {"value": "unloaded"},
+            "architecture": {"input_modalities": ["text", "image"]},
+        }]
+    })
+
+    assert models[0]["inputModalities"] == ["text", "image"]
+    assert models[0]["architecture"]["input_modalities"] == ["text", "image"]
+
+
+def test_passive_local_discovery_recognizes_multimodal_subfolder(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    models_dir.mkdir()
+    vision_dir = models_dir / "vision"
+    vision_dir.mkdir()
+    (vision_dir / "qwen-vl.gguf").write_bytes(b"x" * 10)
+    (vision_dir / "mmproj-q8.gguf").write_bytes(b"y" * 5)
+    (models_dir / "text-only.gguf").write_bytes(b"z" * 7)
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_runtime_settings",
+        lambda runtime_id="": {"models_dir": models_dir, "mode": "local"},
+    )
+
+    models = storyboard_llm_runtime._list_local_models_passive()
+    by_id = {model["id"]: model for model in models}
+
+    assert by_id["vision"]["inputModalities"] == ["text", "image"]
+    assert by_id["vision"]["path"].endswith("qwen-vl.gguf")
+    assert by_id["text-only"]["inputModalities"] == ["text"]
+    assert "mmproj-q8" not in by_id
+
+
+def test_normalize_freeform_messages_preserves_safe_multimodal_parts():
+    result = storyboard_llm_runtime.normalize_freeform_messages([{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "inspect"},
+            {"type": "image_url", "image_url": {"url": "file://set/item.jpg"}},
+        ],
+    }])
+
+    assert result[0]["content"][0] == {"type": "text", "text": "inspect"}
+    assert result[0]["content"][1]["image_url"]["url"] == "file://set/item.jpg"
+
+
+def test_normalize_freeform_messages_rejects_absolute_local_image():
+    with pytest.raises(ValueError, match="relative file"):
+        storyboard_llm_runtime.normalize_freeform_messages([{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "inspect"},
+                {"type": "image_url", "image_url": {"url": "file:///tmp/item.jpg"}},
+            ],
+        }])

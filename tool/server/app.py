@@ -131,14 +131,8 @@ def folder_state_save():
         reject_wholesale_state_map_clear(existing_state, state)
         # print("[folder_state_save] State to be written:", state)
         write_folder_state_atomic(state_path, state)
-        # print("[folder_state_save] State written to file.")
-        # Optionally, read back and print for verification
-        try:
-            with open(state_path, "r", encoding="utf-8") as f:
-                written = json.load(f)
-            # print("[folder_state_save] State read back from file:", written)
-        except Exception as e:
-            app_config.debug_print("[folder_state_save] Could not read back file:", e)
+        # Atomic replace is the successful write boundary; do not reread the
+        # entire folder-state document after every save.
         return jsonify({"ok": True})
     except FolderStateUnsafeWriteError as e:
         app.logger.error("FOLDER STATE SAVE REFUSED for %r: %s", rel_path, e)

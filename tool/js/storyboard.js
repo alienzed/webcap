@@ -17,12 +17,12 @@
     sequenceExport: null,
     sequenceEncodingWarnings: [],
     sequenceWarningsVisible: false,
-    sequenceCollapsed: window.localStorage.getItem('webcap.storyboard.sequenceCollapsed') === '1',
-    sceneViewMode: window.localStorage.getItem('webcap.storyboard.sceneView') || 'focus',
+    sequenceCollapsed: false,
+    sceneViewMode: 'focus',
     activeSceneId: '',
     openStoryRequestId: 0,
-    storyCollapsed: window.localStorage.getItem('webcap.storyboard.storyCollapsed') === '1',
-    storyLibraryCompact: window.localStorage.getItem('webcap.storyboard.storyLibraryCompact') === '1',
+    storyCollapsed: false,
+    storyLibraryCompact: false,
     storyAction: null,
     storyActionQueue: [],
     storyActionTimer: 0,
@@ -217,9 +217,6 @@
       .replace(/'/g, '&#039;');
   }
 
-  function storySectionStorageKey(sectionName) {
-    return 'webcap.storyboard.storySection.' + sectionName;
-  }
 
   function initStorySections() {
     var sections = document.querySelectorAll('#storyboard-story-authoring details[data-story-section]');
@@ -228,10 +225,8 @@
       if (!Object.prototype.hasOwnProperty.call(STORY_SECTION_DEFAULTS, sectionName)) {
         throw new Error('Unknown Storyboard Story section: ' + sectionName);
       }
-      var stored = window.localStorage.getItem(storySectionStorageKey(sectionName));
-      section.open = stored === null ? STORY_SECTION_DEFAULTS[sectionName] : stored === '1';
+      section.open = STORY_SECTION_DEFAULTS[sectionName];
       section.addEventListener('toggle', function () {
-        window.localStorage.setItem(storySectionStorageKey(sectionName), section.open ? '1' : '0');
         if (directorActivityActive()) positionDirectorActivity();
       });
     });
@@ -472,7 +467,6 @@
         if (insertedSceneId) {
           storyState.sceneViewMode = 'focus';
           storyState.activeSceneId = insertedSceneId;
-          window.localStorage.setItem('webcap.storyboard.sceneView', 'focus');
         }
         renderScenes();
         renderStoryReadiness();
@@ -2445,7 +2439,6 @@
 
   function setStoryCollapsed(collapsed) {
     storyState.storyCollapsed = !!collapsed;
-    window.localStorage.setItem('webcap.storyboard.storyCollapsed', storyState.storyCollapsed ? '1' : '0');
     var authoring = el('storyboard-story-authoring');
     var editor = el('storyboard-editor-content');
     var toggleButton = el('storyboard-story-toggle');
@@ -2681,7 +2674,6 @@
         clearSceneNewTakeCount(ensureActiveScene(order));
         if (sceneId && storyState.story) clearSceneDirectorCompletion(storyState.story.id, sceneId);
       }
-      window.localStorage.setItem('webcap.storyboard.sceneView', mode);
       renderScenes();
       renderSequencePreview();
       if (mode !== previousMode || sceneId) {
@@ -3115,7 +3107,6 @@
 
   function setStoryLibraryCompact(compact) {
     storyState.storyLibraryCompact = !!compact;
-    window.localStorage.setItem('webcap.storyboard.storyLibraryCompact', storyState.storyLibraryCompact ? '1' : '0');
     var workspace = el('storyboard-workspace');
     var button = el('storyboard-library-compact-toggle');
     if (workspace) workspace.classList.toggle('story-library-compact', storyState.storyLibraryCompact);
@@ -4485,7 +4476,6 @@
       storyState.story = payload.story;
       storyState.sceneViewMode = 'focus';
       storyState.activeSceneId = (payload.story.sceneOrder || []).slice(-1)[0] || '';
-      window.localStorage.setItem('webcap.storyboard.sceneView', 'focus');
       renderStory();
       setSaveState('Saved');
       refreshLibrary();
@@ -4577,7 +4567,6 @@
       var sourceIndex = duplicatedOrder.indexOf(sceneId);
       storyState.sceneViewMode = 'focus';
       storyState.activeSceneId = duplicatedOrder[sourceIndex + 1] || sceneId;
-      window.localStorage.setItem('webcap.storyboard.sceneView', 'focus');
       renderStory();
       setSaveState('Saved');
       refreshLibrary();
@@ -5628,7 +5617,6 @@
       }
       if (event.target.closest('[data-sequence-toggle]')) {
         storyState.sequenceCollapsed = !storyState.sequenceCollapsed;
-        window.localStorage.setItem('webcap.storyboard.sequenceCollapsed', storyState.sequenceCollapsed ? '1' : '0');
         renderSequencePreview();
       }
     });

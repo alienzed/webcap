@@ -156,7 +156,7 @@ function runCaptionVisionForCandidate(candidate) {
     captionVisionError = '';
     return true;
   }).catch(function (err) {
-    if (isCaptionVisionCandidateCurrent(candidate)) {
+    if (captionVisionEnabled && isCaptionVisionCandidateCurrent(candidate)) {
       captionVisionError = String(err && err.message ? err.message : err);
       reportConsoleError('Caption Vision', err);
     }
@@ -197,7 +197,7 @@ function adoptCaptionVisionPrefetch(prefetch, candidate) {
     captionVisionError = '';
     return true;
   }).catch(function (err) {
-    if (isCaptionVisionCandidateCurrent(candidate)) {
+    if (captionVisionEnabled && isCaptionVisionCandidateCurrent(candidate)) {
       captionVisionError = String(err && err.message ? err.message : err);
       reportConsoleError('Caption Vision', err);
     }

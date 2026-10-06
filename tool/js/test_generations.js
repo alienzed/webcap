@@ -2131,6 +2131,24 @@
     return remove;
   }
 
+  function testResultMegapixels(status) {
+    var settings = status && status.settings && typeof status.settings === 'object' ? status.settings : status;
+    var value = Number(settings && settings.megapixels);
+    return isFinite(value) && value > 0 ? value : null;
+  }
+
+  function testResultStrength(status, result) {
+    if (String(result && result.kind || '') === 'base' || String(result && result.sourceLoRA || '') === 'Base') return null;
+    var candidateFile = candidateFileForResult(result);
+    if (!candidateFile) return null;
+    var candidates = status && Array.isArray(status.candidates) ? status.candidates : [];
+    var candidate = candidates.find(function (item) {
+      return String(item && item.fileName || '') === candidateFile;
+    });
+    var value = Number(candidate && candidate.strength);
+    return isFinite(value) ? value : null;
+  }
+
   function buildResultFooter(result, options) {
     var opts = options || {};
     var footer = document.createElement('div');
@@ -2156,6 +2174,18 @@
       primaryRow.appendChild(timing);
     }
     copy.appendChild(primaryRow);
+
+    var metadata = [];
+    var megapixels = testResultMegapixels(opts.status);
+    var strength = testResultStrength(opts.status, result);
+    if (megapixels !== null) metadata.push(String(megapixels) + ' MP');
+    if (strength !== null) metadata.push('Strength ' + String(strength));
+    if (metadata.length) {
+      var metadataRow = document.createElement('div');
+      metadataRow.className = 'test-generations-result-metadata';
+      metadataRow.textContent = metadata.join(' · ');
+      copy.appendChild(metadataRow);
+    }
 
     var secondaryRow = document.createElement('div');
     secondaryRow.className = 'test-generations-result-secondary';
@@ -2403,7 +2433,7 @@
 
       var remove = buildResultRemoveButton(result);
       if (remove) item.appendChild(remove);
-      item.appendChild(buildResultFooter(result, { sessionName: sessionName }));
+      item.appendChild(buildResultFooter(result, { sessionName: sessionName, status: status }));
       stage.appendChild(item);
     });
 
@@ -2496,7 +2526,7 @@
 
       var remove = buildResultRemoveButton(result);
       if (remove) card.appendChild(remove);
-      card.appendChild(buildResultFooter(result, { sessionName: sessionName }));
+      card.appendChild(buildResultFooter(result, { sessionName: sessionName, status: status }));
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);
@@ -2535,7 +2565,7 @@
 
       var remove = buildResultRemoveButton(failure);
       if (remove) card.appendChild(remove);
-      card.appendChild(buildResultFooter(failure, { failed: true }));
+      card.appendChild(buildResultFooter(failure, { failed: true, status: status }));
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);

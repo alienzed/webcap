@@ -2,15 +2,6 @@ import re
 from collections import Counter
 
 
-_GENERIC_WILDCARD_OPTION = re.compile(
-    r"\b(?:(?:various|different|assorted|miscellaneous)\s+"
-    r"(?:style|styles|background|backgrounds|pose|poses|view|views|color|colors|colour|colours|option|options|bikini\s+styles)"
-    r"|other\s+(?:style|styles|background|backgrounds|pose|poses|view|views|color|colors|colour|colours|option|options)"
-    r"|etc\.?)\b",
-    re.IGNORECASE,
-)
-
-
 def _clean_caption(value):
     lines = [line.strip() for line in str(value or "").replace("\r\n", "\n").split("\n")]
     return "\n".join(line for line in lines if line)
@@ -127,13 +118,6 @@ def build_request(captions, set_name="", focus=""):
     }
 
 
-def _validate_concrete_option(value):
-    text = str(value or "").strip()
-    if text and _GENERIC_WILDCARD_OPTION.search(text):
-        raise ValueError("Wildcard analysis returned a generic placeholder option: " + text)
-    return text
-
-
 def normalize_result(data):
     if not isinstance(data, dict):
         raise ValueError("Wildcard analysis response must be an object.")
@@ -146,7 +130,7 @@ def normalize_result(data):
 
     for raw_group in re.findall(r"\{([^{}]*\|[^{}]*)\}", wildcard):
         for option in raw_group.split("|"):
-            _validate_concrete_option(option)
+            str(option or "").strip()
 
     stable_terms = data.get("stableTerms")
     if not isinstance(stable_terms, list):
@@ -167,7 +151,7 @@ def normalize_result(data):
         options = group.get("options")
         if not label or not isinstance(options, list):
             raise ValueError("Wildcard analysis response contains an invalid variation group.")
-        options = [_validate_concrete_option(value) for value in options]
+        options = [str(value or "").strip() for value in options]
         if len(options) < 2 or not any(options):
             raise ValueError("Wildcard analysis variation groups require at least two options and one concrete value.")
         normalized_groups.append({"label": label, "options": options})

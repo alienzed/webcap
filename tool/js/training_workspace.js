@@ -65,7 +65,6 @@ function setSelectedTrainingModelProfile(profileId) {
 }
 
 function refreshWorkingModelSelector() {
-  var folder = String(state && state.folder || '');
   return fetchTrainingProfiles().then(function () {
     syncWorkingModelProfileSelect();
     return getWorkingModelProfileId();

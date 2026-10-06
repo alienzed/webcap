@@ -9,8 +9,8 @@ def test_standalone_vision_caption_prompt_uses_image_only_without_annotation_ont
     messages = caption_vision.build_vision_image_caption_messages("bikini/item.jpg")
 
     assert "visual evidence alone" in caption_vision.VISION_IMAGE_CAPTION_SYSTEM_PROMPT
-    assert "independent of annotation vocabulary" in caption_vision.VISION_IMAGE_CAPTION_SYSTEM_PROMPT
-    assert "Do not use annotation tags" not in caption_vision.VISION_IMAGE_CAPTION_SYSTEM_PROMPT
+    assert "annotation" not in caption_vision.VISION_IMAGE_CAPTION_SYSTEM_PROMPT.lower()
+    assert "tag" not in caption_vision.VISION_IMAGE_CAPTION_SYSTEM_PROMPT.lower()
     assert messages[1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
     assert "groups" not in messages[1]["content"][0]["text"].lower()
 

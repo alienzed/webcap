@@ -50,8 +50,7 @@ VISION_IMAGE_CAPTION_SYSTEM_PROMPT = (
     "Prioritize the main subject or subjects, appearance and clothing, pose or action, distinctive objects and details, "
     "spatial relationships, setting or background, lighting, and camera viewpoint when those details are visually clear. "
     "Use specific colors, materials, and shapes when they are clear in the image. "
-    "Use natural descriptive prose grounded only in visible image evidence and independent of annotation vocabulary or hidden application context. "
-    "Describe people through visible appearance, clothing, pose, and action rather than inferred identity or demographics. "
+    "Describe people through visible appearance, clothing, pose, and action when relevant. "
     "Return only the caption text with no label, commentary, quotes, or markdown."
 )
 

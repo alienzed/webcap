@@ -39,11 +39,11 @@ function getWorkingModelProfileSelect() {
   return document.getElementById('app-header-model-profile-select');
 }
 
-function syncWorkingModelProfileSelect(folder) {
+function syncWorkingModelProfileSelect() {
   var select = getWorkingModelProfileSelect();
   if (!select) return;
   var profiles = trainingWorkspaceState.profiles || [];
-  var selectedProfileId = syncWorkingModelProfileForFolder(folder, profiles);
+  var selectedProfileId = syncWorkingModelProfile(profiles);
   select.innerHTML = profiles.map(function (profile) {
     return '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(profile.label) + '</option>';
   }).join('');
@@ -55,7 +55,7 @@ function syncWorkingModelProfileSelect(folder) {
 }
 
 function setSelectedTrainingModelProfile(profileId) {
-  setWorkingModelProfileId(profileId, state.folder);
+  setWorkingModelProfileId(profileId);
   trainingWorkspaceState.runConfigDraft = null;
   trainingWorkspaceState.runConfigStage = '';
   trainingWorkspaceState.runConfigTemplateSignature = '';
@@ -67,7 +67,7 @@ function setSelectedTrainingModelProfile(profileId) {
 function refreshWorkingModelSelector() {
   var folder = String(state && state.folder || '');
   return fetchTrainingProfiles().then(function () {
-    syncWorkingModelProfileSelect(folder);
+    syncWorkingModelProfileSelect();
     return getWorkingModelProfileId();
   }).catch(function (err) {
     var select = getWorkingModelProfileSelect();
@@ -463,7 +463,7 @@ function refreshTrainingWorkspace() {
   fetchTrainingProfiles()
     .then(function () {
       if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
-      syncWorkingModelProfileSelect(folder);
+      syncWorkingModelProfileSelect();
       if (!isTrainingSetRefreshCurrent(folder, requestVersion)) return null;
       return getVisibleMediaSelectionForTraining().length ? ensureSelectedTrainingSetup() : Promise.resolve(null);
     })
@@ -547,7 +547,7 @@ function switchTrainingSetup(profileId) {
     refreshTrainingWorkspace();
   }).catch(function (err) {
     setStatus('Could not save the open TOML before switching setup: ' + String(err && err.message ? err.message : err));
-    syncWorkingModelProfileSelect(state.folder);
+    syncWorkingModelProfileSelect();
   });
 }
 
@@ -595,7 +595,7 @@ function wireTrainingWorkspace() {
       switchTrainingSetup(modelProfileSelect.value);
       return;
     }
-    setWorkingModelProfileId(modelProfileSelect.value, state.folder);
+    setWorkingModelProfileId(modelProfileSelect.value);
   };
   stageButtons.forEach(function (button) {
     button.onclick = function () {

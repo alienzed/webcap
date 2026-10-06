@@ -71,6 +71,17 @@ vm.runInNewContext(readScript('caption_helpers_annotate.js'), sandbox, {
 
 assert.strictEqual(typeof sandbox.toggleAnnotateTag, 'function');
 assert.strictEqual(typeof sandbox.flushAnnotateStripDeferredFilterRefresh, 'function');
+assert.strictEqual(typeof sandbox.shouldDeferAnnotateStripFilterRefresh, 'function');
+
+sandbox.renderAnnotateStrip = function () {
+  sandbox.renderAnnotateStripCalls += 1;
+};
+
+assert.strictEqual(sandbox.shouldDeferAnnotateStripFilterRefresh({ shiftKey: true }), true);
+assert.strictEqual(sandbox.shouldDeferAnnotateStripFilterRefresh({ shiftKey: false }), false);
+sandbox.hasAnyActiveMediaFilter = function () { return false; };
+assert.strictEqual(sandbox.shouldDeferAnnotateStripFilterRefresh({ shiftKey: true }), false);
+sandbox.hasAnyActiveMediaFilter = function () { return true; };
 
 sandbox.toggleAnnotateTag('BT', 'ring', true);
 assert.strictEqual(sandbox.assignCalls.length, 1);

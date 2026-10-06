@@ -337,7 +337,6 @@ function completeFolderLoadPipeline(path, loadSequence, metadataResult) {
 function refreshCurrentDirectory() {
   var path = state.folder || '';
   var loadSequence = ++folderLoadSequence;
-  var folderLoadStartedAt = performance.now();
   state.folderStateWritable = false;
   invalidatePruneCandidates();
   invalidateDuplicateCandidates();
@@ -381,7 +380,6 @@ function refreshCurrentDirectory() {
   clearEditorAndPreview();
   var xhr = new XMLHttpRequest();
   xhr.open('GET', url);
-  var describeRequestStartedAt = performance.now();
   xhr.onreadystatechange = function () {
     if (xhr.readyState === 4) {
       if (loadSequence !== folderLoadSequence || String(state.folder || '') !== String(path || '')) {
@@ -389,7 +387,6 @@ function refreshCurrentDirectory() {
       }
       if (xhr.status === 200) {
         try {
-          var describeFinishedAt = performance.now();
           var resp = JSON.parse(xhr.responseText);
           // resp.folders: array of {name, ...}
           // resp.files: array of {name, extension, ...}
@@ -421,22 +418,10 @@ function refreshCurrentDirectory() {
           }
           // --- Load and apply folder state fields ---
            var folderState = resp.folder_state || {};
-           var applyBreakdown = {};
-           var applyStageStartedAt = performance.now();
            var cleanFolderState = applyFolderStateToDom(folderState);
-           applyBreakdown.applyFolderStateMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
-
-           applyStageStartedAt = performance.now();
            loadChecklistFromFolderState(cleanFolderState);
-           applyBreakdown.loadChecklistMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
-
-           applyStageStartedAt = performance.now();
            loadCaptionHelpersFromFolderState(cleanFolderState);
-           applyBreakdown.loadCaptionHelpersMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
-
-           applyStageStartedAt = performance.now();
            loadItemTagsFromFolderState(cleanFolderState);
-           applyBreakdown.loadItemTagsMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
 
            state.folderStateWritable = true;
            var captionErrors = Array.isArray(resp.caption_errors) ? resp.caption_errors : [];
@@ -445,15 +430,8 @@ function refreshCurrentDirectory() {
            }
             state.reviewedSet = state.reviewedSet || new Set();
 
-            applyStageStartedAt = performance.now();
             renderFileList(ui.filterEl.value);
-            applyBreakdown.renderFileListMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
-
-            applyStageStartedAt = performance.now();
             prepareFocusSetMetadataForCurrentFolder();
-            applyBreakdown.prepareFocusSetMetadataMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
-
-            var folderApplyFinishedAt = performance.now();
           
           // --- Static header toggling (display only, wiring in main.js) ---
           if (ui.upBtn) {
@@ -485,18 +463,7 @@ function refreshCurrentDirectory() {
             if (pendingSelectFileName) {
               state.pendingSelectFileName = undefined;
             }
-            var metadataRequestStartedAt = performance.now();
             refreshMediaResolutionCache({ folderLoadSequence: loadSequence, successStatus: folderStatus }).then(function (metadataResult) {
-              var metadataFinishedAt = performance.now();
-              console.info('[Folder Load Timing]', {
-                folder: path || ROOT_FOLDER_LABEL,
-                describeMs: Math.round((describeFinishedAt - describeRequestStartedAt) * 10) / 10,
-                applyAndRenderMs: Math.round((folderApplyFinishedAt - describeFinishedAt) * 10) / 10,
-                applyBreakdown: applyBreakdown,
-                metadataMs: Math.round((metadataFinishedAt - metadataRequestStartedAt) * 10) / 10,
-                totalToMetadataMs: Math.round((metadataFinishedAt - folderLoadStartedAt) * 10) / 10,
-                metadata: metadataResult && metadataResult.diagnostics ? metadataResult.diagnostics : null
-              });
               completeFolderLoadPipeline(path, loadSequence, metadataResult);
               if (folderLoadSequence !== loadSequence || String(state.folder || '') !== String(path || '')) return;
               refreshTrainingWorkspace();

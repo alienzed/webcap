@@ -32,6 +32,7 @@ def test_caption_assist_surfaces_only_unreviewed_empty_groups_with_candidate():
     assert 'id="app-settings-caption-sequence-groups"' in html
     assert "getCaptionAssistMissingGroups" in primer
     assert "isChecklistRequirementCheckedForMediaKey(mediaKey, label)" in primer
+    assert "typeof isChecklistRequirementCheckedForMediaKey" not in primer
     assert "return !reviewed;" in primer
     assert "Still unreviewed: " in primer
     assert "Missing annotations: " not in primer

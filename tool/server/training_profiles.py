@@ -12,10 +12,6 @@ WAN22_PROFILE_ID = "wan22_t2v"
 KREA2_PROFILE_ID = "krea2_raw"
 WAN21_PROFILE_ID = "wan21_t2v_14b"
 MINIMAX_H3_PROFILE_ID = "minimax_h3"
-# Keep a wire-compatible default for older requests, but stop creating
-# user-visible POC/Normal/Quality variants of the same set config.
-TRAINING_MODES = ("normal",)
-
 _PROFILE_SLUGS = {
     WAN22_PROFILE_ID: "wan22",
     KREA2_PROFILE_ID: "krea2",
@@ -106,19 +102,13 @@ _PROFILES = {
 
 PROFILE_IDS = tuple(_PROFILES)
 
-def normalize_mode(mode):
-    """Retain the request field without restoring mode-specific configs."""
-    return "normal"
-
-
 def profile_slug(profile_id):
     selected = profile(profile_id)
     return _PROFILE_SLUGS[selected["id"]]
 
 
-def resolved_config(profile_id, config_id, mode="normal"):
+def resolved_config(profile_id, config_id):
     selected = profile(profile_id)
-    selected_mode = normalize_mode(mode)
     base = None
     for item in selected["configs"]:
         if item["id"] == str(config_id or "").strip().lower():
@@ -129,17 +119,14 @@ def resolved_config(profile_id, config_id, mode="normal"):
     resolved = deepcopy(base)
     resolved["file"] = base["file"]
     resolved["dataset"] = base["dataset"]
-    resolved["mode"] = selected_mode
     return resolved
 
 
-def profile_for_mode(profile_id, mode="normal"):
+def resolved_profile(profile_id):
     selected = deepcopy(profile(profile_id))
-    selected_mode = normalize_mode(mode)
-    selected["mode"] = selected_mode
     selected["slug"] = profile_slug(profile_id)
     selected["configs"] = tuple(
-        resolved_config(profile_id, item["id"], selected_mode)
+        resolved_config(profile_id, item["id"])
         for item in selected["configs"]
     )
     selected["datasetFiles"] = tuple(item["dataset"] for item in selected["configs"])
@@ -151,14 +138,10 @@ def profiles():
     out = []
     for selected in _PROFILES.values():
         item = deepcopy(selected)
-        item["slug"] = profile_slug(selected["id"])
-        item["setups"] = {
-            mode: {
-                "configs": list(profile_for_mode(selected["id"], mode)["configs"]),
-                "datasetFiles": list(profile_for_mode(selected["id"], mode)["datasetFiles"]),
-            }
-            for mode in TRAINING_MODES
-        }
+        resolved = resolved_profile(selected["id"])
+        item["slug"] = resolved["slug"]
+        item["configs"] = list(resolved["configs"])
+        item["datasetFiles"] = list(resolved["datasetFiles"])
         out.append(item)
     return out
 
@@ -185,8 +168,8 @@ def profile_run(profile_id, run_id):
     return selected, run(profile_id, run_id)
 
 
-def config_for_stage(profile_id, stage, mode="normal"):
-    return resolved_config(profile_id, stage, mode)
+def config_for_stage(profile_id, stage):
+    return resolved_config(profile_id, stage)
 
 
 def config_for_id(config_id):
@@ -199,9 +182,9 @@ def config_for_id(config_id):
     raise ValueError("Unknown training configuration: " + str(config_id or ""))
 
 
-def profile_config_files(profile_id, mode="normal"):
-    return tuple(config["file"] for config in profile_for_mode(profile_id, mode)["configs"])
+def profile_config_files(profile_id):
+    return tuple(config["file"] for config in resolved_profile(profile_id)["configs"])
 
 
-def profile_dataset_files(profile_id, mode="normal"):
-    return tuple(profile_for_mode(profile_id, mode)["datasetFiles"])
+def profile_dataset_files(profile_id):
+    return tuple(resolved_profile(profile_id)["datasetFiles"])

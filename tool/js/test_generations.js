@@ -3034,10 +3034,14 @@
     var wildcardValues = hasSession && Array.isArray(status.wildcardValues)
       ? status.wildcardValues.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
       : [];
-    wildcardTagline.textContent = wildcardValues.join(' · ');
-    wildcardTagline.classList.toggle('hidden', !wildcardValues.length);
+    var wildcardSummary = hasSession && Array.isArray(status.wildcardSummary)
+      ? status.wildcardSummary.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
+      : [];
+    var wildcardHeader = wildcardSummary.length ? wildcardSummary : wildcardValues;
+    wildcardTagline.textContent = wildcardHeader.join(' · ');
+    wildcardTagline.classList.toggle('hidden', !wildcardHeader.length);
     wildcardTagline.title = wildcardValues.length
-      ? 'Resolved wildcard choices: ' + wildcardValues.join(' · ')
+      ? 'All resolved wildcard choices: ' + wildcardValues.join(' · ')
       : '';
     if (infoBtn) infoBtn.classList.toggle('hidden', !hasSession);
     if (!details) return;

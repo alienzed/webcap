@@ -2729,21 +2729,6 @@ iframe {
   gap: 10px;
   min-width: 0;
 }
-.test-generations-wildcard-tools {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 7px;
-}
-.test-generations-wildcard-tools select,
-.test-generations-wildcard-tools button {
-  min-height: 32px;
-}
-.test-generations-wildcard-tools .test-generations-wildcard-status {
-  grid-column: 1 / -1;
-  color: var(--muted);
-  font-size: 12px;
-}
 .test-generations-director-activity {
   position: relative;
   display: grid;

@@ -6,7 +6,7 @@
   var generateState = {
     models: [],
     unavailableModels: [],
-    modelId: window.localStorage.getItem('webcap.generate.model') || '',
+    modelId: getGenerateModelPreference(),
     lorasByModel: {},
     loraMode: 'selected',
     sweepFolderByModel: {},
@@ -59,6 +59,20 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {})
     });
+  }
+
+  function getGenerateModelPreference() {
+    return String(window.APP_CONFIG && window.APP_CONFIG.generate_model || '').trim();
+  }
+
+  function setGenerateModelPreference(modelId) {
+    var selected = String(modelId || '').trim();
+    if (!window.APP_CONFIG || typeof window.APP_CONFIG !== 'object') window.APP_CONFIG = {};
+    window.APP_CONFIG.generate_model = selected;
+    postJson('/app/config/generate_model', { modelId: selected }).catch(function (err) {
+      reportError(err, 'Could not save Base Model preference');
+    });
+    return selected;
   }
 
   function currentModel() {
@@ -166,20 +180,10 @@
     });
   }
 
-  function savedLoras(modelId) {
-    if (generateState.lorasByModel[modelId]) return generateState.lorasByModel[modelId];
-    try {
-      var parsed = JSON.parse(window.localStorage.getItem('webcap.generate.loras.' + modelId) || '[]');
-      generateState.lorasByModel[modelId] = Array.isArray(parsed) ? parsed : [];
-    } catch (_err) {
-      generateState.lorasByModel[modelId] = [];
-    }
-    return generateState.lorasByModel[modelId];
-  }
-
-  function saveLoras() {
-    var id = String(generateState.modelId || '');
-    window.localStorage.setItem('webcap.generate.loras.' + id, JSON.stringify(savedLoras(id)));
+  function selectedLoras(modelId) {
+    var id = String(modelId || '');
+    if (!Array.isArray(generateState.lorasByModel[id])) generateState.lorasByModel[id] = [];
+    return generateState.lorasByModel[id];
   }
 
   function loraFolder(name) {
@@ -201,7 +205,7 @@
   }
 
   function availableSweepLoras(model) {
-    var fixed = savedLoras(String(model && model.id || '')).map(function (item) {
+    var fixed = selectedLoras(String(model && model.id || '')).map(function (item) {
       return String(item.name || '').replace(/\\/g, '/').toLowerCase();
     });
     return (model && Array.isArray(model.loras) ? model.loras : []).filter(function (name) {
@@ -385,7 +389,7 @@
       : String((generateState.models.find(function (model) { return model.default; }) || generateState.models[0] || {}).id || '');
     generateState.modelId = selected;
     select.value = selected;
-    window.localStorage.setItem('webcap.generate.model', selected);
+    if (selected !== getGenerateModelPreference()) setGenerateModelPreference(selected);
     renderModelForm();
   }
 
@@ -458,7 +462,7 @@
   function renderLoras() {
     var host = el('generate-lora-list');
     if (!host) return;
-    var items = savedLoras(String(generateState.modelId || ''));
+    var items = selectedLoras(String(generateState.modelId || ''));
     host.innerHTML = items.length
       ? items.map(function (item, index) {
           return '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
@@ -520,7 +524,7 @@
     var model = currentModel();
     var needle = String(query || '').trim().toLowerCase();
     var selected = {};
-    savedLoras(String(model && model.id || '')).forEach(function (item) {
+    selectedLoras(String(model && model.id || '')).forEach(function (item) {
       selected[String(item.name || '').toLowerCase()] = true;
     });
     return (model && Array.isArray(model.loras) ? model.loras : []).filter(function (name) {
@@ -594,8 +598,7 @@
     }) || '';
     if (!selectedName) return;
 
-    savedLoras(generateState.modelId).push({ name: selectedName, strength: 0.9 });
-    saveLoras();
+    selectedLoras(generateState.modelId).push({ name: selectedName, strength: 0.9 });
     el('generate-lora-picker').value = '';
     closeGenerateLoraPicker();
     renderLoras();
@@ -652,7 +655,7 @@
     if (resultModelId && modelAvailable) {
       generateState.modelId = resultModelId;
       el('generate-model').value = resultModelId;
-      window.localStorage.setItem('webcap.generate.model', resultModelId);
+      setGenerateModelPreference(resultModelId);
       renderModelForm();
     } else if (resultModelId && typeof window.reportConsoleWarning === 'function') {
       window.reportConsoleWarning(
@@ -688,8 +691,7 @@
             };
           }).filter(function (item) { return item.name; })
         : [];
-      saveLoras();
-      renderLoras();
+        renderLoras();
     }
 
     generateState.promptLibrary.activeId = '';
@@ -944,7 +946,7 @@
         modelId: model.id,
         prompt: prompt,
         settings: collectSettings(),
-        loras: savedLoras(model.id),
+        loras: selectedLoras(model.id),
         references: references
       });
     }).then(function (payload) {
@@ -1000,7 +1002,7 @@
       modelId: String(model.id || ''),
       prompt: prompt,
       settings: Object.assign({}, frozenSweepSettings()),
-      fixedLoras: savedLoras(model.id).map(function (item) {
+      fixedLoras: selectedLoras(model.id).map(function (item) {
         return { name: item.name, strength: item.strength };
       }),
       strength: strength,
@@ -2350,7 +2352,7 @@
       generateState.promptLibrary.activeId = '';
       generateState.director.previousPrompt = null;
       setDirectorStatus('');
-      window.localStorage.setItem('webcap.generate.model', this.value);
+      setGenerateModelPreference(this.value);
       renderModelForm();
       renderDirector();
     });
@@ -2469,17 +2471,15 @@
       var input = event.target.closest('[data-generate-lora-strength]');
       if (!input) return;
       var index = Number(input.dataset.generateLoraStrength);
-      var items = savedLoras(generateState.modelId);
+      var items = selectedLoras(generateState.modelId);
       if (!items[index]) return;
       items[index].strength = Number(input.value);
-      saveLoras();
-    });
+      });
     el('generate-lora-list').addEventListener('click', function (event) {
       var button = event.target.closest('[data-generate-lora-remove]');
       if (!button) return;
-      savedLoras(generateState.modelId).splice(Number(button.dataset.generateLoraRemove), 1);
-      saveLoras();
-      renderLoras();
+      selectedLoras(generateState.modelId).splice(Number(button.dataset.generateLoraRemove), 1);
+        renderLoras();
     });
     window.addEventListener('webcap:inference-queue-snapshot', function (event) {
       var queue = event && event.detail && event.detail.queue;

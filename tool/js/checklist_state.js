@@ -773,7 +773,7 @@ function assignChecklistTagToMediaKey(mediaKey, requirementLabel, termText, opti
   });
   ensureCaptionHelperPhraseInCatalog(term, !opts.skipSave);
 
-  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipSave) saveMediaAnnotationState(key);
   if (!opts.skipRefresh) refreshTagDrivenPanelsForMediaKey(key);
   if (shouldLiveSyncEditorToTemplateForMediaKey(key)) syncEditorToCurrentTemplatePreview();
   return true;
@@ -919,7 +919,7 @@ function setChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel, i
     else delete checklistCheckedByMedia[key];
   }
   if (!opts.skipSync) syncReviewedFromChecklist(key);
-  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipSave) saveMediaAnnotationState(key);
   if (!opts.skipRender) renderChecklistPanel();
   if (!opts.skipRender) renderItemMetadataPanel();
   if (!opts.skipRender) renderAnnotateStrip();
@@ -1235,7 +1235,7 @@ function clearChecklistReviewedRequirementsForMediaKey(mediaKey, requirementLabe
   if (Object.keys(checkedMap).length) checklistCheckedByMedia[key] = checkedMap;
   else delete checklistCheckedByMedia[key];
   if (!opts.skipSync) syncReviewedFromChecklist(key);
-  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipSave) saveMediaAnnotationState(key);
   if (!opts.skipRender) renderChecklistPanel();
   if (!opts.skipRender) {
     renderItemMetadataPanel();

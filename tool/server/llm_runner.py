@@ -440,6 +440,7 @@ def _execute_claimed(job_id, gpu_reserved):
                 from .caption_vision import CAPTION_VISION_RESPONSE_SCHEMA
                 from .storyboard_llm_runtime import prepare_caption_vision_messages
                 chat_kwargs["response_schema"] = CAPTION_VISION_RESPONSE_SCHEMA
+                chat_kwargs["allow_image_data_urls"] = True
                 messages = prepare_caption_vision_messages(model_id, messages)
             llm_result = run_freeform_chat(
                 model_id,

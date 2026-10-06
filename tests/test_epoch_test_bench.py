@@ -1648,6 +1648,46 @@ def test_new_test_sessions_use_output_storage_and_freeze_candidate_provenance(tm
     assert payload["candidates"][0]["provenance"]["sourceEpoch"] == 10
     assert not (set_folder / bench.TEST_RESULTS_DIR).exists()
 
+def test_new_test_sessions_freeze_candidate_strength_for_result_cards(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    model = patch_default_test_model(
+        monkeypatch,
+        template={},
+        settings={"seed": 1},
+    )
+    staged = tmp_path / "staged"
+    staged.mkdir(parents=True)
+    candidate = staged / "epoch10.safetensors"
+    candidate.write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
+    monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="", deferred=False: {"jobId": "job-" + context["candidateKind"]})
+    monkeypatch.setattr(bench, "execution_promote_backlog", lambda job_id: {"id": job_id, "status": "queued"})
+    monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
+    monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
+
+    set_folder = tmp_path / "sets" / "demo"
+    set_folder.mkdir(parents=True)
+    request = {
+        "modelId": model.PROFILE_ID,
+        "mediaKind": model.MEDIA_KIND,
+        "name": "",
+        "sourcePrompt": "prompt",
+        "prompt": "prompt",
+        "settings": {"seed": 1, "megapixels": 0.6},
+        "candidateStrengths": {candidate.name: 0.85},
+        "workflow": {},
+        "workflowFile": "test.json",
+        "workflowSha256": "abc",
+    }
+
+    session = bench._enqueue_frozen_test_request(set_folder, request, [candidate], include_base=False)
+    path = tmp_path / "output" / bench.TEST_RESULTS_DIR / session["session"] / "test.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+
+    assert payload["settings"]["megapixels"] == 0.6
+    assert payload["candidates"][0]["strength"] == 0.85
+
+
 def test_new_output_test_root_wins_same_name_collision_with_legacy_central(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench.app_config, "output_root", lambda: tmp_path / "creative")

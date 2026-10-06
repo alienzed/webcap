@@ -1245,6 +1245,19 @@ def test_test_generations_exposes_training_candidates_link_from_unique_run_prove
     assert "options && typeof options.onClose === 'function'" in candidates
 
  
+def test_test_result_cards_show_frozen_megapixels_and_candidate_strength():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "function testResultMegapixels(status)" in script
+    assert "function testResultStrength(status, result)" in script
+    assert "metadata.push(String(megapixels) + ' MP');" in script
+    assert "metadata.push('Strength ' + String(strength));" in script
+    assert "buildResultFooter(result, { sessionName: sessionName, status: status })" in script
+    assert "buildResultFooter(failure, { failed: true, status: status })" in script
+    assert ".test-generations-result-metadata" in css
+
+
 def test_test_generations_strength_control_is_per_candidate_row():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

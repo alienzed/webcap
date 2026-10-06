@@ -1848,6 +1848,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 "fileName": candidate["file"],
                 "label": candidate["label"],
                 "provenance": dict(candidate.get("provenance") or {}),
+                "strength": candidate.get("strength") if candidate["kind"] == "lora" else None,
             }
             for candidate in candidates
         ],

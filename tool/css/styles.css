@@ -452,6 +452,16 @@ textarea:focus, input:focus {
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
 }
 
+.editor-caption-candidate-omissions {
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(220, 38, 38, 0.28);
+  background: rgba(220, 38, 38, 0.10);
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .editor-caption-candidate-missing {
   padding: 10px 16px;
   border-bottom: 1px solid rgba(217, 119, 6, 0.22);
@@ -485,6 +495,13 @@ textarea:focus, input:focus {
 .editor-caption-candidate-actions button {
   padding: 5px 10px;
   font-size: 12px;
+}
+
+.editor-caption-candidate-regenerate.is-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
 }
 
 textarea#editor {

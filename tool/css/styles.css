@@ -2729,21 +2729,6 @@ iframe {
   gap: 10px;
   min-width: 0;
 }
-.test-generations-wildcard-tools {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 7px;
-}
-.test-generations-wildcard-tools select,
-.test-generations-wildcard-tools button {
-  min-height: 32px;
-}
-.test-generations-wildcard-tools .test-generations-wildcard-status {
-  grid-column: 1 / -1;
-  color: var(--muted);
-  font-size: 12px;
-}
 .test-generations-director-activity {
   position: relative;
   display: grid;
@@ -3047,8 +3032,8 @@ iframe {
   min-width: 0;
 }
 .test-generations-results-title-copy > strong {
-  font-size: 17px;
-  line-height: 1.1;
+  font-size: 22px;
+  line-height: 1.05;
 }
 .test-generations-wildcard-tagline {
   max-width: min(52vw, 720px);
@@ -3530,9 +3515,37 @@ iframe {
   line-height: 1.2;
 }
 
+.test-generations-prompt-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
 .test-generations-prompt-heading .review-captions-btn {
   min-height: 24px;
   padding: 2px 8px;
+}
+.test-generations-prompt-heading .test-generations-wildcard-wand {
+  width: 28px;
+  min-width: 28px;
+  padding-left: 0;
+  padding-right: 0;
+  font-size: 14px;
+}
+.test-generations-prompt-heading .test-generations-wildcard-wand.is-working {
+  animation: test-generations-wand-pulse 900ms ease-in-out infinite alternate;
+}
+.test-generations-prompt-heading .test-generations-wildcard-status {
+  max-width: 150px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@keyframes test-generations-wand-pulse {
+  from { opacity: .5; transform: rotate(-8deg); }
+  to { opacity: 1; transform: rotate(8deg); }
 }
 
 .test-generations-prompt textarea {

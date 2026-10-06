@@ -178,31 +178,26 @@
   }
 
   function renderWildcardDirector() {
-    var select = el('test-generations-wildcard-model');
     var button = el('test-generations-wildcard-btn');
-    var refresh = el('test-generations-wildcard-refresh');
     var status = el('test-generations-wildcard-status');
     var regenerate = el('test-generations-wildcard-regenerate');
-    if (!select || !button || !refresh || !status || !regenerate) throw new Error('Test wildcard controls are missing.');
+    if (!button || !status || !regenerate) throw new Error('Test wildcard controls are missing.');
 
-    refresh.disabled = wildcardDirector.busy;
-
-    if (!wildcardDirector.available) {
-      select.innerHTML = '<option value="">Director unavailable</option>';
-      select.disabled = true;
+    wildcardDirector.modelId = getDirectorModelPreference('webcap.director.model');
+    if (!wildcardDirector.available || !wildcardDirector.modelId) {
       button.disabled = true;
       regenerate.disabled = true;
+      button.classList.remove('is-working');
+      button.title = 'Director unavailable';
       return;
     }
 
-    wildcardDirector.modelId = renderDirectorModelOptions(select, wildcardDirector.models, wildcardDirector.modelId);
-    if (wildcardDirector.modelId) setDirectorModelPreference('webcap.testGenerations.directorModel', wildcardDirector.modelId);
-    select.value = wildcardDirector.modelId;
-    select.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
-    button.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
-    regenerate.disabled = wildcardDirector.busy || !wildcardDirector.modelId;
-    button.textContent = wildcardDirector.busy ? 'Analyzing…' : 'Generate Wildcard';
-    button.title = 'Generate a wildcard prompt from this Set\'s captions';
+    button.disabled = wildcardDirector.busy;
+    regenerate.disabled = wildcardDirector.busy;
+    button.classList.toggle('is-working', wildcardDirector.busy);
+    button.title = wildcardDirector.busy
+      ? 'Analyzing Set captions…'
+      : 'Generate a wildcard prompt from this Set\'s captions';
   }
 
   function parseWildcardGroups(value) {
@@ -407,10 +402,16 @@
   }
 
   function refreshWildcardDirector() {
-    wildcardDirector.modelId = getDirectorModelPreference('webcap.testGenerations.directorModel');
+    wildcardDirector.modelId = getDirectorModelPreference('webcap.director.model');
     return wildcardRequestJson('/fs/test_generations/wildcard').then(function (payload) {
       wildcardDirector.available = !!payload.available;
       wildcardDirector.models = Array.isArray(payload.models) ? payload.models : [];
+      if (wildcardDirector.modelId && wildcardDirector.models.length) {
+        var found = wildcardDirector.models.some(function (model) {
+          return String(model && model.id || '') === wildcardDirector.modelId;
+        });
+        if (!found) wildcardDirector.modelId = '';
+      }
       renderWildcardDirector();
       return payload;
     });
@@ -3529,29 +3530,9 @@
         showError(err);
       }
     };
-    el('test-generations-wildcard-refresh').onclick = function () {
-      var button = this;
-      button.disabled = true;
-      refreshWildcardDirector().catch(function (err) {
-        wildcardDirector.available = false;
-        wildcardDirector.models = [];
-        renderWildcardDirector();
-        el('test-generations-wildcard-status').textContent = 'Director unavailable.';
-        reportConsoleError('Test Generations', err);
-      }).then(function () {
-        button.disabled = wildcardDirector.busy;
-      });
-    };
-    el('test-generations-wildcard-model').addEventListener('change', function () {
-      wildcardDirector.modelId = this.value;
-      setDirectorModelPreference('webcap.testGenerations.directorModel', this.value);
-    });
     window.addEventListener('webcap:director-model-changed', function (event) {
-      var selected = String(event && event.detail && event.detail.modelId || '');
-      if (!selected || selected === wildcardDirector.modelId) return;
-      wildcardDirector.modelId = selected;
-      var modelSelect = el('test-generations-wildcard-model');
-      if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) modelSelect.value = selected;
+      wildcardDirector.modelId = String(event && event.detail && event.detail.modelId || '');
+      renderWildcardDirector();
     });
     el('test-generations-director-stop').onclick = stopWildcardDirectorJob;
     el('test-generations-director-prompt-copy').onclick = function () {

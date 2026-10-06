@@ -121,7 +121,7 @@ def test_resolved_wildcard_values_ignores_plain_or_unmatched_prompts():
 def test_resolved_wildcard_values_supports_optional_empty_choice():
     assert bench._resolved_wildcard_values(
         "person wearing a {black|white} {ruched|} bikini",
-        "person wearing a white  bikini",
+        "person wearing a white bikini",
     ) == ["white"]
 
 

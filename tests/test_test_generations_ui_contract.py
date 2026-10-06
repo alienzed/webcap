@@ -1055,7 +1055,9 @@ def test_test_generations_can_generate_and_edit_wildcard_prompt_in_modal():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert 'id="test-generations-wildcard-btn"' in html
-    assert 'id="test-generations-wildcard-model"' in html
+    assert 'class="review-captions-btn test-generations-wildcard-wand"' in html
+    assert 'id="test-generations-wildcard-model"' not in html
+    assert 'id="test-generations-wildcard-refresh"' not in html
     assert 'id="test-generations-wildcard-modal"' in html
     assert 'role="dialog" aria-modal="true" aria-labelledby="test-generations-wildcard-title"' in html
     assert 'id="test-generations-wildcard-focus"' in html
@@ -1079,13 +1081,14 @@ def test_test_generations_can_generate_and_edit_wildcard_prompt_in_modal():
 
 
 
-def test_test_wildcard_model_selection_does_not_rebuild_its_select():
+def test_test_wildcard_uses_global_director_model_without_local_selector():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    change_block = script.split("el('test-generations-wildcard-model').addEventListener('change'", 1)[1].split("});", 1)[0]
-    assert "wildcardDirector.modelId = this.value;" in change_block
-    assert "setDirectorModelPreference('webcap.testGenerations.directorModel', this.value);" in change_block
-    assert "renderWildcardDirector();" not in change_block
+    assert 'id="test-generations-wildcard-model"' not in html
+    assert 'id="test-generations-wildcard-refresh"' not in html
+    assert "getDirectorModelPreference('webcap.director.model')" in script
+    assert "webcap:director-model-changed" in script
 
 
 def test_test_wildcard_helper_is_optional_and_stays_with_current_set():
@@ -1142,7 +1145,7 @@ def test_test_results_header_surfaces_resolved_wildcard_choices():
     assert "Array.isArray(status.wildcardValues)" in script
     assert "wildcardValues.join(' · ')" in script
     assert ".test-generations-results-title-copy > strong" in css
-    assert "font-size: 17px;" in css
+    assert "font-size: 22px;" in css
     assert ".test-generations-wildcard-tagline" in css
 
 
@@ -1260,7 +1263,7 @@ def test_global_director_model_control_lives_in_header():
     assert "webcap:director-model-changed" in shell
     assert ".app-header-director-control" in css
     assert "column-gap: 12px;" in css
-    assert ".test-generations-director-model-tools > select" in css
+    assert 'id="test-generations-wildcard-model"' not in html
     assert ".generate-director-model-tools > select" in css
     assert ".storyboard-director-model-tools" in css
     assert ".director-chat-model-tools" in css

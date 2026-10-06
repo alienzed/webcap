@@ -1107,15 +1107,13 @@
                                     <div class="training-run-option test-generations-prompt">
                                         <div class="test-generations-prompt-heading">
                                             <span>Prompt</span>
-                                            <button id="test-generations-recent-prompts-btn" type="button" class="review-captions-btn" title="Reuse a recent prompt">Recent</button>
+                                            <div class="test-generations-prompt-heading-actions">
+                                                <span id="test-generations-wildcard-status" class="test-generations-wildcard-status" aria-live="polite"></span>
+                                                <button id="test-generations-recent-prompts-btn" type="button" class="review-captions-btn" title="Reuse a recent prompt">Recent</button>
+                                                <button id="test-generations-wildcard-btn" type="button" class="review-captions-btn test-generations-wildcard-wand" title="Generate a wildcard prompt from this Set's captions" aria-label="Generate wildcard prompt">&#10024;</button>
+                                            </div>
                                         </div>
                                         <textarea id="test-generations-prompt" rows="5"></textarea>
-                                    </div>
-                                    <div class="test-generations-wildcard-tools test-generations-director-model-tools">
-                                        <select id="test-generations-wildcard-model" aria-label="Wildcard Director model"></select>
-                                        <button id="test-generations-wildcard-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
-                                        <button id="test-generations-wildcard-btn" type="button" class="review-captions-btn" title="Analyze this Set's captions and build a wildcard prompt from their common terms and observed variation.">Generate Wildcard</button>
-                                        <span id="test-generations-wildcard-status" class="test-generations-wildcard-status" aria-live="polite"></span>
                                     </div>
                                     <div class="test-generations-setup-options">
                                         <div class="test-generations-settings-grid">

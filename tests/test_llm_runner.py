@@ -1743,3 +1743,37 @@ def test_caption_client_runs_through_shared_llm_lane(llm_root, monkeypatch):
     assert finished["result"]["text"] == "A subject stands facing the camera."
     assert captured["messages"] == messages
     assert captured["max_tokens"] == 256
+
+
+def test_llm_targeted_cancel_does_not_reset_successors(llm_root, monkeypatch):
+    from tool.server import storyboard_llm_runtime
+
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "stop_active_request",
+        lambda: pytest.fail("Queued targeted cancel must not touch the runtime."),
+    )
+    first = llm_runner.enqueue("caption", {"operation": "chat", "model": "remote", "messages": []})
+    second = llm_runner.enqueue("caption", {"operation": "chat", "model": "remote", "messages": []})
+
+    result = llm_runner.action("cancel_job", job_id=second["jobId"])
+
+    assert result["job"]["status"] == "cancelled"
+    assert llm_runner.job_status(first["jobId"])["status"] == "queued"
+
+
+def test_llm_targeted_stop_interrupts_active_without_cancelling_successor(llm_root, monkeypatch):
+    from tool.server import storyboard_llm_runtime
+
+    calls = []
+    active = llm_runner.enqueue("caption", {"operation": "chat", "model": "remote", "messages": []})
+    queued = llm_runner.enqueue("caption", {"operation": "chat", "model": "remote", "messages": []})
+    llm_runner.execution_claim_next("llm", expected_job_id=active["jobId"])
+    llm_runner.execution_mark_running(active["jobId"])
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: calls.append("stop") or True)
+
+    result = llm_runner.action("cancel_job", job_id=active["jobId"])
+
+    assert result["job"]["status"] == "stopping"
+    assert llm_runner.job_status(queued["jobId"])["status"] == "queued"
+    assert calls == ["stop"]

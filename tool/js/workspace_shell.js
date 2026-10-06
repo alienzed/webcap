@@ -1341,6 +1341,9 @@ function clearEditorAndPreview() {
   state.currentItem = null;
   state.currentConfigFile = null;
   state.configLoadToken = Number(state.configLoadToken || 0) + 1;
+  if (typeof syncVisionImageCaptionSelection === 'function') {
+    syncVisionImageCaptionSelection('');
+  }
   if (typeof updatePrimerCaptionResetUi === 'function') {
     updatePrimerCaptionResetUi();
   }

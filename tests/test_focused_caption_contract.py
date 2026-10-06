@@ -289,7 +289,9 @@ def test_standalone_vision_caption_is_preview_adjacent_and_requires_explicit_edi
     assert "applyEditorTextAndTriggerInput(text);" in vision
     assert "function syncVisionImageCaptionSelection(mediaKey)" in vision
     media = _read("tool/js/media.js")
+    shell = _read("tool/js/workspace_shell.js")
     assert "syncVisionImageCaptionSelection(mediaItem.key);" in media
+    assert "syncVisionImageCaptionSelection('');" in shell
     assert 'caption_operation in {"caption_vision_validate", "vision_image_caption"}' in runner
 
 

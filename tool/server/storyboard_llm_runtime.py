@@ -933,8 +933,9 @@ def _normalize_models(payload):
 
 def _model_file_size(model):
     model = model if isinstance(model, dict) else {}
+    model_id = str(model.get("id") or "").strip()
     raw_path = str(model.get("path") or "").strip()
-    filename = PureWindowsPath(raw_path).name if raw_path else str(model.get("id") or "").strip()
+    filename = PureWindowsPath(raw_path).name if raw_path else model_id
     if not filename:
         raise FileNotFoundError("Director model filename is missing.")
     if not filename.casefold().endswith(".gguf"):
@@ -945,7 +946,23 @@ def _model_file_size(model):
         raise RuntimeError("Director models directory is unavailable.")
 
     raw_local_path = Path(raw_path).expanduser() if raw_path else None
-    path = raw_local_path if raw_local_path is not None and raw_local_path.is_absolute() and raw_local_path.is_file() else Path(models_dir) / filename
+    if raw_local_path is not None and raw_local_path.is_absolute() and raw_local_path.is_file():
+        path = raw_local_path
+    else:
+        # Unloaded llama.cpp router presets do not expose a file path in /models.
+        # Resolve the router model ID back to WebCap's passive filesystem
+        # discovery so subdirectory presets such as text_encoders/vision remain
+        # available before their first load.
+        passive = next(
+            (
+                item for item in _list_local_models_passive()
+                if str(item.get("id") or "") == model_id
+            ),
+            None,
+        )
+        passive_path = str((passive or {}).get("path") or "").strip()
+        path = Path(passive_path) if passive_path else Path(models_dir) / filename
+
     try:
         return int(path.stat().st_size)
     except OSError as exc:

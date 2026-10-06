@@ -123,3 +123,20 @@ def test_vision_model_preference_is_config_backed_and_visible_in_director_settin
     assert "base.vision_model = ui.appSettingsVisionModelEl" in settings
     assert "renderUnavailableVisionPreference" in settings
     assert '@app.route("/app/config/vision_model", methods=["POST"])' in app
+
+
+
+def test_header_uses_one_shared_refresh_for_director_and_vision_models():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
+
+    director_pos = html.index('id="app-header-director-control"')
+    vision_pos = html.index('id="app-header-vision-control"')
+    refresh_pos = html.index('id="app-header-models-refresh"')
+
+    assert director_pos < vision_pos < refresh_pos
+    assert 'id="app-header-director-refresh"' not in html
+    assert 'title="Refresh Director and Vision models"' in html
+    assert "function refreshApplicationHeaderModels()" in shell
+    assert "refreshApplicationDirectorModels()," in shell
+    assert "refreshApplicationVisionModels(true)" in shell

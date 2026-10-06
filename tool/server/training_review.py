@@ -30,7 +30,7 @@ from .training_profiles import (
     KREA2_PROFILE_ID,
     MINIMAX_H3_PROFILE_ID,
     WAN22_PROFILE_ID,
-    profile_for_mode,
+    resolved_profile,
     profile_run,
 )
 from .training_setup import DATASET_ROOT_PLACEHOLDER, ensure_training_setup
@@ -66,12 +66,11 @@ def _review_setup(folder, profile_id, selected_media, selection_criteria, total_
     ensure_training_setup(
         folder,
         profile_id,
-        "normal",
         selected_media=selected_media,
         selection_criteria=selection_criteria,
         total_media_count=total_media_count,
     )
-    return profile_for_mode(profile_id)
+    return resolved_profile(profile_id)
 
 
 def _setup_for_run(setup, profile_id, run_id):
@@ -155,7 +154,7 @@ def _cluster_targets(values, candidates):
 def _clustered_buckets(manifest, profile_id, role="", frames=1):
     by_aspect = {label: [] for label in ASPECT_RATIOS}
     key = "videos" if role else "images"
-    model_fps = profile_for_mode(profile_id).get("videoFps") if role else None
+    model_fps = resolved_profile(profile_id).get("videoFps") if role else None
     for row in manifest.get(key, []):
         if not isinstance(row, dict):
             continue
@@ -338,7 +337,7 @@ def _assign_images(rows, buckets):
 def _build_review_plan(folder, profile_id, setup, manifest, profile_plan):
     image_groups = _image_rows(manifest)
     video_groups = {ar: [] for ar in ASPECT_RATIOS}
-    profile = profile_for_mode(profile_id)
+    profile = resolved_profile(profile_id)
     model_fps = profile.get("videoFps")
     for row in manifest.get("videos", []):
         if not isinstance(row, dict):
@@ -723,7 +722,7 @@ def resolve_saved_initializer(folder, profile_id, stage, action_id, export_id):
 # canonical dataset TOML is now the only editable authority; these definitions
 # deliberately replace the older state-backed implementation above.
 def _set_toml_review(folder, profile_id, run_id, selected_media, selection_criteria, total_media_count):
-    expected_setup = profile_for_mode(profile_id)
+    expected_setup = resolved_profile(profile_id)
     missing_datasets = {
         item["dataset"] for item in expected_setup["configs"]
         if not (Path(folder) / item["dataset"]).is_file()
@@ -893,7 +892,7 @@ def _distribution_payload(manifest, plan):
         for band, count in group["impact"].items():
             output["impact"]["images"][band] += count
 
-    profile = profile_for_mode(str(plan.get("profileId") or "")) if plan.get("profileId") else None
+    profile = resolved_profile(str(plan.get("profileId") or "")) if plan.get("profileId") else None
     model_fps = profile.get("videoFps") if profile else None
     video_rows = {ar_label: [] for ar_label in ASPECT_RATIOS}
     for row in manifest.get("videos") or []:

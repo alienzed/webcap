@@ -23,6 +23,22 @@ def test_director_capacity_defaults_defer_to_runtime():
     assert storyboard_llm_runtime.LOCAL_MODEL_FIT_TARGET_MIB == 1024
 
 
+def test_server_signature_includes_media_root_and_local_router_policy(monkeypatch, tmp_path):
+    monkeypatch.setattr(storyboard_llm_runtime.app_config, "FS_ROOT", tmp_path / "training")
+    settings = {
+        "llama_server": "/bin/llama-server",
+        "models_dir": tmp_path / "models",
+        "port": 8189,
+        "context_size": None,
+    }
+
+    signature = storyboard_llm_runtime._server_signature(settings)
+
+    assert str((tmp_path / "training").resolve()) in signature
+    assert storyboard_llm_runtime.LOCAL_MODEL_RESIDENT_LIMIT in signature
+    assert storyboard_llm_runtime.LOCAL_MODEL_FIT_TARGET_MIB in signature
+
+
 def test_slot_snapshot_exposes_live_generation_progress(monkeypatch):
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -491,7 +507,7 @@ def test_ensure_local_model_loaded_keeps_second_model_resident(monkeypatch):
     assert calls == ["load:qwen-small"]
 
 
-def test_ensure_local_model_loaded_frees_only_excess_resident_slot(monkeypatch):
+def test_ensure_local_model_loaded_defers_resident_eviction_to_llama_router(monkeypatch):
     calls = []
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -504,10 +520,14 @@ def test_ensure_local_model_loaded_frees_only_excess_resident_slot(monkeypatch):
     )
     monkeypatch.setattr(storyboard_llm_runtime, "_model_file_size", lambda _model: 1_000)
     monkeypatch.setattr(storyboard_llm_runtime, "_load_model", lambda model_id: calls.append("load:" + model_id))
-    monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append("unload:" + model_id))
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_unload_model",
+        lambda model_id: pytest.fail("WebCap must not compete with llama.cpp's LRU eviction."),
+    )
 
     assert storyboard_llm_runtime._ensure_local_model_loaded("vision") is True
-    assert calls == ["unload:large", "load:vision"]
+    assert calls == ["load:vision"]
 
 def test_local_model_load_uses_cancellable_transport(monkeypatch):
     calls = []
@@ -644,19 +664,50 @@ def test_release_loaded_model_for_gpu_work_unloads_local_model(monkeypatch):
     assert calls == ["qwen-large"]
 
 
-def test_release_loaded_model_for_gpu_work_is_noop_for_remote_mode(monkeypatch):
-    monkeypatch.setattr(
-        storyboard_llm_runtime,
-        "_director_config",
-        lambda: {"mode": "remote"},
-    )
+def test_release_loaded_model_for_gpu_work_is_noop_without_owned_local_process(monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "_process", None)
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "_health_ok",
-        lambda: pytest.fail("Remote mode must not inspect a local llama.cpp runtime."),
+        lambda: pytest.fail("GPU handoff must not probe an unrelated local port without an owned process."),
     )
 
     assert storyboard_llm_runtime.release_loaded_model_for_gpu_work() is False
+
+
+def test_release_loaded_model_for_gpu_work_uses_local_runtime_even_when_director_preference_is_remote(monkeypatch):
+    calls = []
+
+    class FakeProcess:
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(storyboard_llm_runtime, "_process", FakeProcess())
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_director_base_config",
+        lambda: {
+            "legacy_mode": "remote",
+            "remote_endpoints": [{"id": "workstation", "name": "Workstation", "endpoint": "http://example"}],
+            "models_dir": object(),
+            "port": 8189,
+            "context_size": None,
+            "max_tokens": None,
+            "llama_server": "",
+        },
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_health_ok", lambda: True)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "_http_json",
+        lambda *args, **kwargs: {
+            "data": [{"id": "vision", "path": "/vision.gguf", "status": {"value": "loaded"}}]
+        },
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "_unload_model", lambda model_id: calls.append(model_id))
+
+    assert storyboard_llm_runtime.release_loaded_model_for_gpu_work() is True
+    assert calls == ["vision"]
 
 
 def test_release_loaded_model_for_gpu_work_ignores_remote_request_lock(monkeypatch):

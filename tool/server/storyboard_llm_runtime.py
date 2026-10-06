@@ -782,6 +782,9 @@ def _server_signature(settings):
         str(settings["models_dir"]),
         int(settings["port"]),
         settings["context_size"],
+        str(Path(app_config.FS_ROOT).resolve()),
+        LOCAL_MODEL_RESIDENT_LIMIT,
+        LOCAL_MODEL_FIT_TARGET_MIB,
     )
 
 
@@ -1276,28 +1279,14 @@ def _ensure_local_model_loaded(model_id):
         model_size_bytes=_model_file_size(selected),
     )
 
-    resident = [
-        model for model in models
-        if model["id"] != model_id and model["status"] != "unloaded"
-    ]
-    slots_to_free = max(0, len(resident) - (LOCAL_MODEL_RESIDENT_LIMIT - 1))
-    if slots_to_free:
-        resident.sort(
-            key=lambda model: int(model.get("sizeBytes") or 0),
-            reverse=True,
-        )
-        for model in resident[:slots_to_free]:
-            _unload_model(model["id"])
-
+    # llama.cpp owns the models_max/LRU policy. Do not maintain a competing
+    # eviction heuristic here; loading a third model will evict the router's
+    # least-recently-used idle model.
     _load_model(model_id)
     return True
 
 
 def release_loaded_model_for_gpu_work():
-    settings = _director_config()
-    if settings.get("mode", "local") == "remote":
-        return False
-
     with _activity_lock:
         active_model = (
             str(_activity.get("model") or "").strip()
@@ -1316,17 +1305,27 @@ def release_loaded_model_for_gpu_work():
         if process is not None and process.poll() is not None:
             stop_server()
             return False
-        if process is None and not _health_ok():
+        if process is None:
+            # No WebCap-owned local llama.cpp runtime exists. In particular,
+            # never reach into an unrelated server that merely occupies the
+            # configured local port.
             return False
 
-        models = _normalize_models(_http_json("/models", timeout=5))
-        released = False
-        for model in models:
-            if model["status"] == "unloaded":
-                continue
-            _unload_model(model["id"])
-            released = True
-        return released
+        with _use_runtime("local"):
+            if not _health_ok():
+                # The owned process exists but cannot service unload requests.
+                # Stopping it is a complete and deterministic GPU release.
+                stop_server()
+                return True
+
+            models = _normalize_models(_http_json("/models", timeout=5))
+            released = False
+            for model in models:
+                if model["status"] == "unloaded":
+                    continue
+                _unload_model(model["id"])
+                released = True
+            return released
     finally:
         if request_lock_acquired:
             _request_lock.release()

@@ -1079,6 +1079,12 @@
                     </section>
                     <div id="preview-stage" class="preview-stage">
                         <iframe id="preview" srcdoc="<!DOCTYPE html><html><head><meta charset='UTF-8'><style>html,body{margin:0;height:100%;}body{display:flex;align-items:center;justify-content:center;font-family:system-ui;padding:1rem;transition:background 120ms ease,color 120ms ease;}</style></head><body><div id='preview-empty-message'>Select a media file to preview.</div><script>(function(){function applyTheme(){try{var theme=(document.documentElement&&document.documentElement.getAttribute('data-theme'))||(window.parent&&window.parent.document&&window.parent.document.documentElement&&window.parent.document.documentElement.getAttribute('data-theme'))||'light';theme=String(theme).toLowerCase()==='dark'?'dark':'light';var dark=theme==='dark';document.documentElement.setAttribute('data-theme',theme);document.documentElement.style.colorScheme=theme;document.body.style.background=dark?'#0f172a':'#ffffff';document.body.style.color=dark?'#cbd5e1':'#666666';}catch(e){}}applyTheme();try{var parentRoot=window.parent&&window.parent.document&&window.parent.document.documentElement;if(parentRoot&&window.MutationObserver){new MutationObserver(applyTheme).observe(parentRoot,{attributes:true,attributeFilter:['data-theme']});}}catch(e){};})();</script></body></html>"></iframe>
+                        <button id="preview-inspect-toggle" type="button" class="preview-inspect-toggle" title="Expand preview" aria-label="Expand preview" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <circle cx="10.5" cy="10.5" r="5.75"></circle>
+                                <path d="M15 15l5 5"></path>
+                            </svg>
+                        </button>
                         <div id="preview-stage-status" class="preview-stage-status hidden" aria-label="Preview warning"></div>
                         <div id="balance-distribution-wheel" class="balance-distribution-wheel hidden" tabindex="0" aria-label="Balance distribution"></div>
                     </div>

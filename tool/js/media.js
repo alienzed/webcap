@@ -1,6 +1,48 @@
 // media.js
 // Global functions: selectPathMedia, navigateUp, renderPathPreview, reselectCurrentMediaFromPreview
 
+var previewInspectMode = false;
+
+function applyPreviewInspectMode() {
+  var btn = document.getElementById('preview-inspect-toggle');
+  if (!btn) throw new Error('Preview inspect toggle is missing from tool.html.');
+
+  var expanded = !!previewInspectMode;
+  var label = expanded ? 'Use natural preview size' : 'Expand preview';
+  btn.setAttribute('aria-pressed', expanded ? 'true' : 'false');
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+
+  if (!ui || !ui.previewEl) return;
+  var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
+  if (!doc) return;
+  var mediaEl = doc.querySelector('[data-preview-media="1"]');
+  if (!mediaEl) return;
+
+  mediaEl.style.width = expanded ? '100%' : '';
+  mediaEl.style.height = expanded ? '100%' : '';
+  mediaEl.style.maxWidth = '100%';
+  mediaEl.style.maxHeight = '100%';
+  mediaEl.style.objectFit = 'contain';
+}
+
+function wirePreviewInspectControl() {
+  var btn = document.getElementById('preview-inspect-toggle');
+  if (!btn) throw new Error('Preview inspect toggle is missing from tool.html.');
+  if (btn.__wired) {
+    applyPreviewInspectMode();
+    return;
+  }
+  btn.__wired = true;
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    previewInspectMode = !previewInspectMode;
+    applyPreviewInspectMode();
+  });
+  applyPreviewInspectMode();
+}
+
 function syncMediaListActiveRow(mediaKey) {
   if (!ui || !ui.mediaListEl) return;
   var targetKey = String(mediaKey || '');
@@ -185,6 +227,7 @@ function updatePreviewActionControls(visibleMedia) {
 }
 
 function wirePreviewActionControls() {
+  wirePreviewInspectControl();
   if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
   if (ui.previewActionsEl.__wired) return;
   ui.previewActionsEl.__wired = true;
@@ -713,11 +756,11 @@ function renderPreviewHtml(isImage, src, titleText) {
   }
   var tag = '';
   if (isImage) {
-    tag = '<img src="' + src + '" alt="preview"' + titleAttr + ' style="max-width:100%;max-height:100%;object-fit:contain;">';
+    tag = '<img data-preview-media="1" src="' + src + '" alt="preview"' + titleAttr + ' style="display:block;max-width:100%;max-height:100%;object-fit:contain;">';
   } else {
     tag = '' +
-      '<div id="video-wrap"' + titleAttr + ' style="max-width:100%;max-height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">' +
-      '  <video id="media-video" controls autoplay loop muted playsinline preload="metadata"' + titleAttr + ' style="max-width:100%;max-height:100%;">' +
+      '<div id="video-wrap"' + titleAttr + ' style="width:100%;height:100%;max-width:100%;max-height:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">' +
+      '  <video id="media-video" data-preview-media="1" controls autoplay loop muted playsinline preload="metadata"' + titleAttr + ' style="display:block;max-width:100%;max-height:100%;object-fit:contain;">' +
       '    <source src="' + src + '">' +
       '  </video>' +
       '  <div id="video-error" style="display:none;color:#ddd;font:13px system-ui;text-align:center;max-width:420px;">' +
@@ -729,7 +772,7 @@ function renderPreviewHtml(isImage, src, titleText) {
   var doc = ui.previewEl.contentDocument || ui.previewEl.contentdocument;
   doc.open();
   doc.write(
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body' + titleAttr + ' style="margin:0;display:flex;align-items:center;justify-content:center;background:#111;height:100vh;">' +
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body' + titleAttr + ' style="margin:0;width:100vw;height:100vh;overflow:hidden;box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:#111;">' +
     tag +
     '<script>\n' +
     'var video=document.getElementById("media-video");\n' +
@@ -743,6 +786,7 @@ function renderPreviewHtml(isImage, src, titleText) {
     '<\/script></body></html>'
   );
   doc.close();
+  applyPreviewInspectMode();
   // Bind preview interactions from the parent context so preview
   // clicks/wheel gestures use a single navigation path.
   try {

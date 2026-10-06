@@ -796,8 +796,10 @@
 }
 
 .app.shell-revamp .preview-stage {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
 }
 
 .app.shell-revamp .preview-stage > iframe {
@@ -807,8 +809,57 @@
   border:0;
 }
 
+.app.shell-revamp .preview-inspect-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 19;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.68);
+  color: #e2e8f0;
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.24);
+  opacity: 0.38;
+  cursor: pointer;
+  transition: opacity 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.app.shell-revamp .preview-shell:not(.preview-header-active) .preview-inspect-toggle {
+  display: none;
+}
+
+.app.shell-revamp .preview-stage:hover .preview-inspect-toggle,
+.app.shell-revamp .preview-inspect-toggle:hover,
+.app.shell-revamp .preview-inspect-toggle:focus-visible,
+.app.shell-revamp .preview-inspect-toggle[aria-pressed="true"] {
+  opacity: 1;
+}
+
+.app.shell-revamp .preview-inspect-toggle:hover,
+.app.shell-revamp .preview-inspect-toggle:focus-visible,
+.app.shell-revamp .preview-inspect-toggle[aria-pressed="true"] {
+  border-color: rgba(148, 163, 184, 0.58);
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.app.shell-revamp .preview-inspect-toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
 .app.shell-revamp .preview-stage-status {
   top: 10px;
+  right: 52px;
 }
 
 .app.shell-revamp .preview-workflow-actions {

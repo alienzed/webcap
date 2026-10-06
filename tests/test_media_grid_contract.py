@@ -177,3 +177,21 @@ def test_single_item_preview_header_renders_existing_media_metadata():
     assert "grid-template-columns: auto auto minmax(0, 1fr) auto;" in css
     assert ".preview-header-meta-resolution" in css
     assert "overflow: hidden;" in css
+
+
+
+def test_single_item_preview_has_session_only_inspect_toggle_and_containment():
+    html = _read("tool/tool.html")
+    script = _read("tool/js/media.js")
+    css = _read("tool/css/workspace_shell.css")
+
+    assert 'id="preview-inspect-toggle"' in html
+    assert 'aria-pressed="false"' in html
+    assert "var previewInspectMode = false;" in script
+    assert "previewInspectMode = !previewInspectMode;" in script
+    assert "mediaEl.style.width = expanded ? '100%' : '';" in script
+    assert "mediaEl.style.height = expanded ? '100%' : '';" in script
+    assert 'data-preview-media="1"' in script
+    assert "overflow:hidden;box-sizing:border-box" in script
+    assert ".preview-inspect-toggle" in css
+    assert '.preview-inspect-toggle[aria-pressed="true"]' in css

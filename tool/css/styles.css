@@ -3811,6 +3811,12 @@ iframe {
   font-size: 12px;
   white-space: nowrap;
 }
+.test-generations-result-metadata {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
 .test-generations-result-secondary {
   display: flex;
   min-width: 0;

@@ -12,6 +12,7 @@ import sys
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
+from .caption_vision import build_caption_vision_messages, resolve_caption_vision_media
 from .originals import copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
 from .file_ops import duplicate_folder_response, duplicate_media_response, open_in_explorer_response, open_path_in_explorer_response, open_in_vscode_response, rename_response
 from .media import color_suggestions_response, media_blur_background_response, media_convert_fps_response, media_convert_webp_png_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
@@ -43,7 +44,7 @@ from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
-from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, status as storyboard_director_status
+from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_local_vision_models, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
@@ -630,6 +631,57 @@ def caption_assist_route():
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:
         app.logger.exception("CAPTION ASSIST FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/caption/vision-capabilities", methods=["GET"])
+def caption_vision_capabilities_route():
+    try:
+        models = list_local_vision_models()
+        return jsonify({
+            "ok": True,
+            "available": bool(models),
+            "models": models,
+            "defaultModel": str((models[0] if models else {}).get("id") or ""),
+        })
+    except Exception as exc:
+        app.logger.exception("CAPTION VISION CAPABILITIES FAILED: %s", exc)
+        return jsonify({"ok": False, "available": False, "models": [], "error": str(exc)}), 400
+
+
+@app.route("/caption/vision-check", methods=["POST"])
+def caption_vision_check_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        model = str(data.get("model") or "").strip()
+        local_vision_ids = {str(item.get("id") or "") for item in list_local_vision_models()}
+        if not model or model not in local_vision_ids:
+            raise ValueError("Select an available local vision model.")
+        relative_media = resolve_caption_vision_media(
+            data.get("folder", ""),
+            data.get("media", ""),
+        )
+        messages, groups = build_caption_vision_messages(
+            data.get("caption", ""),
+            data.get("groups"),
+            relative_media,
+        )
+        job = enqueue_llm(
+            "caption",
+            model,
+            {
+                "operation": "caption_vision_validate",
+                "messages": messages,
+            },
+            context={
+                "runtimeOverrides": {"maxTokens": 320},
+                "visionGroups": groups,
+            },
+            label="Caption Vision",
+        )
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("CAPTION VISION FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

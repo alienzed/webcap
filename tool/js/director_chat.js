@@ -1,7 +1,7 @@
 (function () {
   var state = {
     open: false,
-    pinned: window.localStorage.getItem('webcap.directorChat.pinned') === '1',
+    pinned: false,
     pending: false,
     modelsLoaded: false,
     modelId: getDirectorModelPreference('webcap.directorChat.model'),
@@ -731,7 +731,6 @@
 
   function setPinned(pinned) {
     state.pinned = !!pinned;
-    window.localStorage.setItem('webcap.directorChat.pinned', state.pinned ? '1' : '0');
     syncPinnedUi();
   }
 
@@ -740,7 +739,6 @@
     state.open = !!open;
     if (!state.open && state.pinned) {
       state.pinned = false;
-      window.localStorage.setItem('webcap.directorChat.pinned', '0');
     }
     var drawer = el('director-chat-drawer');
     var toggle = el('director-chat-rail-btn');

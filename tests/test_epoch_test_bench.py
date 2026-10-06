@@ -153,6 +153,26 @@ def test_session_status_projects_resolved_wildcard_values(tmp_path):
     assert status["wildcardValues"] == ["rooftop", "side"]
 
 
+def test_enqueued_session_exposes_wildcard_values_immediately(tmp_path, monkeypatch):
+    _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
+    monkeypatch.setattr(
+        inference_runtime,
+        "resolve_wildcard_prompt",
+        lambda prompt, seed: "person in rooftop, side view",
+    )
+
+    payload = bench.enqueue(
+        tmp_path,
+        "person in {studio|rooftop}, {front|side} view",
+        selected_files=[candidates[0].name],
+        include_base=True,
+    )
+
+    assert payload["latest"]["wildcardValues"] == ["rooftop", "side"]
+    reopened = bench.open_session(tmp_path, payload["latest"]["session"])
+    assert reopened["wildcardValues"] == ["rooftop", "side"]
+
+
 
 def test_staged_candidates_follow_test_folder_not_source_provenance(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)

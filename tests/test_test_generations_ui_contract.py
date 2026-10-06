@@ -1296,3 +1296,20 @@ def test_primer_template_assistant_uses_existing_template_editor():
     assert "templateEl.dispatchEvent(new Event('input', { bubbles: true }))" in script
     assert "fetch(url, options || {})" in script
     assert "'/caption/template-assist'" in script
+
+
+def test_new_test_run_selects_returned_session_for_results_header():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    enqueue_block = script.split("request('test_enqueue'", 1)[1].split("function stopRun", 1)[0]
+    assert "var startedStatus = payload && payload.latest ? payload.latest : null;" in enqueue_block
+    assert "selectSessionStatus(startedStatus);" in enqueue_block
+    assert "if (currentSession === String(startedStatus.session || '')) renderStatus(startedStatus);" not in enqueue_block
+
+
+def test_results_header_renders_persisted_wildcard_values():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    meta_block = script.split("function renderSessionMeta(status)", 1)[1].split("function renderStatus(status)", 1)[0]
+    assert "Array.isArray(status.wildcardValues)" in meta_block
+    assert "wildcardTagline.textContent = wildcardValues.join(' · ');" in meta_block

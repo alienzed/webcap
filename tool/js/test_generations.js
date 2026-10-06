@@ -3395,7 +3395,7 @@
       refreshActivityButton();
       if (startedStatus && startedStatus.session) {
         showSessionError = true;
-        if (currentSession === String(startedStatus.session || '')) renderStatus(startedStatus);
+        selectSessionStatus(startedStatus);
       }
       var nextSeed = el('test-generations-seed');
       if (nextSeed) nextSeed.value = String(randomSeed());

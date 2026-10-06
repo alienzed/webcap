@@ -68,11 +68,14 @@ def test_media_selection_does_not_rebuild_entire_file_list():
     selection = media.split("function selectPathMedia", 1)[1].split(
         "// Move through captionless items", 1
     )[0]
+    success_refresh = selection.split("updatePreviewActionControls(visibleMedia);", 1)[1].split(
+        "scrollCurrentMediaRowIntoView();", 1
+    )[0]
     assert "var visibleMedia = getFilteredMediaItems(false);" in selection
-    assert "renderChecklistPanel({ skipItemDetailRefresh: true });" in selection
-    assert "renderItemMetadataPanel({ skipHeader: true });" in selection
-    assert "syncMediaListActiveRow(mediaItem.key);" in selection
-    assert "renderFileList();" not in selection
+    assert "renderChecklistPanel({ skipItemDetailRefresh: true });" in success_refresh
+    assert "renderItemMetadataPanel({ skipHeader: true });" in success_refresh
+    assert "syncMediaListActiveRow(mediaItem.key);" in success_refresh
+    assert "renderFileList();" not in success_refresh
 
 
 def test_render_file_list_reuses_filtered_items_for_header_and_grid_visibility():

@@ -737,9 +737,12 @@ function setRatingForMediaKey(mediaKey, rating) {
   }
 }
 
-function renderItemMetadataPanel() {
+function renderItemMetadataPanel(options) {
+  var opts = options || {};
   renderItemAnalysisPanel();
-  renderPreviewHeaderMeta();
+  if (!opts.skipHeader) {
+    renderPreviewHeaderMeta(opts.visibleMedia);
+  }
   var listEl = document.getElementById('item-metadata-list');
   if (!listEl) return;
   listEl.innerHTML = '';

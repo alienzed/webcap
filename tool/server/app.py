@@ -122,6 +122,7 @@ def folder_state_media_annotations():
             unscoped_tags=data.get("unscopedTags", []),
             checked_requirements=data.get("checkedRequirements", {}),
             descriptors=data.get("descriptors", {}),
+            descriptor_snapshot=bool(data.get("descriptorSnapshot")),
             reviewed=bool(data.get("reviewed")),
         )
         return jsonify({"ok": True, **saved})

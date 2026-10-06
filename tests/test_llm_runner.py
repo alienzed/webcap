@@ -1777,3 +1777,14 @@ def test_llm_targeted_stop_interrupts_active_without_cancelling_successor(llm_ro
     assert result["job"]["status"] == "stopping"
     assert llm_runner.job_status(queued["jobId"])["status"] == "queued"
     assert calls == ["stop"]
+
+
+def test_llm_targeted_cancel_accepts_already_finished_transient_receipt(llm_root):
+    job = llm_runner.enqueue("caption", {"operation": "chat", "model": "remote", "messages": []})
+    llm_runner.execution_claim_next("llm", expected_job_id=job["jobId"])
+    llm_runner.execution_mark_running(job["jobId"])
+    llm_runner.execution_finish_job_transient(job["jobId"], status="completed", result={"text": "done"})
+
+    result = llm_runner.action("cancel_job", job_id=job["jobId"])
+
+    assert result["job"]["status"] == "completed"

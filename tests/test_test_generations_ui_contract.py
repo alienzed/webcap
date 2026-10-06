@@ -1162,7 +1162,9 @@ def test_test_results_header_surfaces_resolved_wildcard_choices():
 
     assert 'id="test-generations-wildcard-tagline"' in html
     assert "Array.isArray(status.wildcardValues)" in script
-    assert "wildcardValues.join(' · ')" in script
+    assert "Array.isArray(status.wildcardSummary)" in script
+    assert "var wildcardHeader = wildcardSummary.length ? wildcardSummary : wildcardValues;" in script
+    assert "wildcardHeader.join(' · ')" in script
     assert "<strong>Results</strong>" not in html
     assert ".test-generations-wildcard-tagline" in css
     assert "font-size: 18px !important;" in css
@@ -1335,4 +1337,5 @@ def test_results_header_renders_persisted_wildcard_values():
 
     meta_block = script.split("function renderSessionMeta(status)", 1)[1].split("function renderStatus(status)", 1)[0]
     assert "Array.isArray(status.wildcardValues)" in meta_block
-    assert "wildcardTagline.textContent = wildcardValues.join(' · ');" in meta_block
+    assert "Array.isArray(status.wildcardSummary)" in meta_block
+    assert "wildcardTagline.textContent = wildcardHeader.join(' · ');" in meta_block

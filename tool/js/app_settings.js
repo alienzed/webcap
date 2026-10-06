@@ -161,9 +161,20 @@ function renderAppSettingsDirectorEndpoints(endpoints) {
   });
 }
 
+function renderUnavailableVisionPreference(select, configuredModel, label) {
+  var configured = String(configuredModel || '').trim();
+  select.innerHTML = '';
+  var option = document.createElement('option');
+  option.value = configured;
+  option.textContent = configured ? ((label || 'Unavailable') + ' · ' + configured) : (label || 'No Vision models available');
+  select.appendChild(option);
+  select.value = configured;
+}
+
 function refreshAppSettingsVisionModels(configuredModel) {
   var select = ui.appSettingsVisionModelEl;
   if (!select) return Promise.resolve();
+  var configured = String(configuredModel || '').trim();
   select.disabled = true;
   select.innerHTML = '<option value="">Loading vision models...</option>';
   return fetch('/caption/vision-capabilities').then(function (response) {
@@ -172,16 +183,28 @@ function refreshAppSettingsVisionModels(configuredModel) {
         throw new Error(payload && payload.error ? payload.error : 'Could not load Vision models.');
       }
       var models = Array.isArray(payload.models) ? payload.models : [];
+      var saved = configured || String(payload.configuredModel || '').trim();
       if (!models.length) {
-        select.innerHTML = '<option value="">No Vision models available</option>';
+        renderUnavailableVisionPreference(select, saved, 'Vision model unavailable');
         select.disabled = true;
         return;
       }
-      renderDirectorModelOptions(select, models, String(configuredModel || payload.configuredModel || payload.defaultModel || ''));
+
+      renderDirectorModelOptions(select, models, saved || payload.defaultModel);
+      var savedAvailable = !saved || models.some(function (model) {
+        return String(model && model.id || '') === saved;
+      });
+      if (saved && !savedAvailable) {
+        var unavailable = document.createElement('option');
+        unavailable.value = saved;
+        unavailable.textContent = 'Unavailable · ' + saved;
+        select.insertBefore(unavailable, select.firstChild);
+        select.value = saved;
+      }
       select.disabled = false;
     });
   }).catch(function (err) {
-    select.innerHTML = '<option value="">Vision models unavailable</option>';
+    renderUnavailableVisionPreference(select, configured, 'Vision models unavailable');
     select.disabled = true;
     if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Vision Settings', err);
   });

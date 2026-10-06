@@ -463,7 +463,7 @@ class EphemeralExecutionQueue:
             if isinstance(result, dict):
                 job.setdefault("result", {}).update(copy.deepcopy(result))
             receipt = _public_job(job)
-                lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+            lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
             if lane.get("activeJobId") == job["id"]:
                 lane["activeJobId"] = ""
             _refresh_positions(lane)
@@ -486,7 +486,7 @@ class EphemeralExecutionQueue:
                 job["updatedAt"] = now
                 job["requestedAction"] = ""
                 receipt = _public_job(job)
-                        lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+                lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
                 _refresh_positions(lane)
                 _remember_transient_receipt(receipt)
                 return receipt
@@ -512,7 +512,7 @@ class EphemeralExecutionQueue:
                     job["finishedAt"] = now
                     job["updatedAt"] = now
                     job["requestedAction"] = ""
-                                _remember_transient_receipt(_public_job(job))
+                    _remember_transient_receipt(_public_job(job))
                     continue
                 if active_id and str(job.get("id") or "") == active_id and status in ACTIVE_STATUSES:
                     job["status"] = "stopping"

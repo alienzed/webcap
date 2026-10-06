@@ -2274,11 +2274,13 @@
     generateState.promptLibrary.activeId = '';
     generateState.promptLibrary.query = '';
     var promptSearch = el('generate-prompt-library-search');
-    if (promptSearch) promptSearch.value = '';
+    if (!promptSearch) throw new Error('Generate prompt library search is missing.');
+    promptSearch.value = '';
     setPromptLibraryOpen(false);
     generateState.director.previousPrompt = null;
     var instruction = el('generate-director-instruction');
-    if (instruction) instruction.value = '';
+    if (!instruction) throw new Error('Generate Director instruction input is missing.');
+    instruction.value = '';
     ['first_frame', 'last_frame'].forEach(function (role) {
       var input = el('generate-reference-' + role);
       if (!input) throw new Error('Generate reference input is missing for ' + role + '.');

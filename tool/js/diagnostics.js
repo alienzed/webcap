@@ -65,6 +65,16 @@ function closeDiagnosticsModal() {
   if (!modal) throw new Error('Diagnostics modal markup is missing.');
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
+
+  // Diagnostics can contain very large model/evidence trees. Once the modal
+  // closes they provide no value to the active workspace, so release them.
+  ['director-model-assessment-models', 'director-model-assessment-history'].forEach(function (id) {
+    var host = diagnosticsEl(id);
+    if (host) host.replaceChildren();
+  });
+  if (typeof directorModelTestState !== 'undefined') {
+    directorModelTestState.loaded = false;
+  }
 }
 
 function refreshH3CalibrationSettings() {

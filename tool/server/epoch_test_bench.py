@@ -1078,43 +1078,111 @@ def _consume_wildcard_fragment(text, position, fragment):
     return position
 
 
+def _parse_wildcard_nodes(source):
+    text = str(source or "")
+
+    def parse_sequence(position, stop_chars=None):
+        stop_chars = stop_chars or set()
+        nodes = []
+        literal_start = position
+
+        while position < len(text):
+            char = text[position]
+            if char in stop_chars:
+                if literal_start < position:
+                    nodes.append(("literal", text[literal_start:position]))
+                return nodes, position
+
+            if char == "{":
+                if literal_start < position:
+                    nodes.append(("literal", text[literal_start:position]))
+                options, position = parse_group(position)
+                nodes.append(("group", options))
+                literal_start = position
+                continue
+
+            if char == "}":
+                raise ValueError("Unmatched wildcard closing brace.")
+
+            position += 1
+
+        if literal_start < position:
+            nodes.append(("literal", text[literal_start:position]))
+        return nodes, position
+
+    def parse_group(position):
+        position += 1
+        options = []
+        while True:
+            nodes, position = parse_sequence(position, {"|", "}"})
+            options.append(nodes)
+            if position >= len(text):
+                raise ValueError("Unclosed wildcard group.")
+            if text[position] == "|":
+                position += 1
+                continue
+            if len(options) < 2:
+                raise ValueError("Wildcard group must contain at least two options.")
+            return options, position + 1
+
+    nodes, position = parse_sequence(0)
+    if position != len(text):
+        raise ValueError("Wildcard prompt could not be parsed.")
+    return nodes
+
+
+def _wildcard_nodes_have_group(nodes):
+    return any(kind == "group" for kind, _value in nodes)
+
+
+def _match_wildcard_nodes(nodes, resolved, node_index=0, position=0):
+    if node_index >= len(nodes):
+        return position, []
+
+    kind, value = nodes[node_index]
+    if kind == "literal":
+        next_position = _consume_wildcard_fragment(resolved, position, value)
+        if next_position is None:
+            return None
+        return _match_wildcard_nodes(nodes, resolved, node_index + 1, next_position)
+
+    for option in value:
+        option_match = _match_wildcard_nodes(option, resolved, 0, position)
+        if option_match is None:
+            continue
+        option_position, nested_values = option_match
+        tail_match = _match_wildcard_nodes(nodes, resolved, node_index + 1, option_position)
+        if tail_match is None:
+            continue
+
+        tail_position, tail_values = tail_match
+        selected_text = _normalize_wildcard_text(resolved[position:option_position])
+        if _wildcard_nodes_have_group(option) and nested_values:
+            selected_values = nested_values
+        else:
+            selected_values = [selected_text] if selected_text else []
+        return tail_position, selected_values + tail_values
+
+    return None
+
+
 def _resolved_wildcard_values(source_prompt, resolved_prompt):
     source = str(source_prompt or "")
     resolved = _normalize_wildcard_text(resolved_prompt)
-    matches = list(re.finditer(r"\{([^{}]*\|[^{}]*)\}", source))
-    if not matches:
+    if "|" not in source or "{" not in source:
         return []
 
-    literals = []
-    groups = []
-    cursor = 0
-    for match in matches:
-        literals.append(source[cursor:match.start()])
-        options = [option.strip() for option in match.group(1).split("|")]
-        if len(options) < 2:
-            return []
-        groups.append(options)
-        cursor = match.end()
-    literals.append(source[cursor:])
+    try:
+        nodes = _parse_wildcard_nodes(source)
+    except ValueError:
+        return []
 
-    def match_from(group_index, position):
-        position = _consume_wildcard_fragment(resolved, position, literals[group_index])
-        if position is None:
-            return None
-        if group_index >= len(groups):
-            return [] if position == len(resolved) else None
+    matched = _match_wildcard_nodes(nodes, resolved)
+    if matched is None:
+        return []
 
-        for option in groups[group_index]:
-            next_position = _consume_wildcard_fragment(resolved, position, option)
-            if next_position is None:
-                continue
-            tail = match_from(group_index + 1, next_position)
-            if tail is not None:
-                return ([option] if option else []) + tail
-        return None
-
-    values = match_from(0, 0)
-    return values if values is not None else []
+    position, values = matched
+    return values if position == len(resolved) else []
 
 
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,

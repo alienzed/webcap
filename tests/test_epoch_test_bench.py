@@ -139,6 +139,28 @@ def test_resolved_wildcard_values_handles_shared_prefix_options():
     ) == ["micro triangle"]
 
 
+def test_resolved_wildcard_values_supports_nested_groups_from_real_test_prompts():
+    source = (
+        "A {Canadian|Australian} woman wearing a {black|white} {striped|floral|} micro bikini "
+        "{with {mauve|blue} trim|}. She has long {brown|black} hair"
+        "{ in {braids| swept bangs}|} {with glistening skin|}."
+    )
+    resolved = (
+        "A Australian woman wearing a white striped micro bikini with mauve trim. "
+        "She has long black hair in swept bangs with glistening skin."
+    )
+
+    assert bench._resolved_wildcard_values(source, resolved) == [
+        "Australian",
+        "white",
+        "striped",
+        "mauve",
+        "black",
+        "swept bangs",
+        "with glistening skin",
+    ]
+
+
 def test_session_status_projects_resolved_wildcard_values(tmp_path):
     session = tmp_path / "session"
     session.mkdir()

@@ -177,14 +177,14 @@ def test_existing_h3_and_wan21_configs_migrate_only_the_legacy_shared_dataset_na
     wan21 = folder / "config.wan21.toml"
     wan21.write_text('dataset = "/sets/lilly/dataset.train.toml"\n[model]\ntype = "wan"\n', encoding="utf-8")
 
-    training_config_files_module.ensure_training_config_files(folder, profile_id="minimax_h3", mode="normal")
-    training_config_files_module.ensure_training_config_files(folder, profile_id="wan21_t2v_14b", mode="normal")
+    training_config_files_module.ensure_training_config_files(folder, profile_id="minimax_h3")
+    training_config_files_module.ensure_training_config_files(folder, profile_id="wan21_t2v_14b")
 
     assert 'dataset = "/sets/lilly/dataset.h3.toml"' in h3.read_text(encoding="utf-8")
     assert 'dataset = "/sets/lilly/dataset.wan21.toml"' in wan21.read_text(encoding="utf-8")
 
     h3.write_text('dataset = "/custom/my-dataset.toml"\n[model]\ntype = "minimax_h3"\n', encoding="utf-8")
-    training_config_files_module.ensure_training_config_files(folder, profile_id="minimax_h3", mode="normal")
+    training_config_files_module.ensure_training_config_files(folder, profile_id="minimax_h3")
     assert 'dataset = "/custom/my-dataset.toml"' in h3.read_text(encoding="utf-8")
 
 def test_launch_group_sequence_advances_in_decimal(tmp_path, monkeypatch):

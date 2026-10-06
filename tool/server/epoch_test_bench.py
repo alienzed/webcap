@@ -504,9 +504,13 @@ def _session_roots(folder_path):
 
 def _session_belongs_to_folder(folder_path, session_directory, payload=None):
     session = Path(session_directory).resolve()
+    status = payload if isinstance(payload, dict) else (_read_status(session) or {})
+    owner_folder = str(status.get("ownerFolder") or "").replace("\\", "/").strip("/")
+    expected_owner = str(_relative_set_folder(folder_path) or "").replace("\\", "/").strip("/")
+
     workspace_root = _workspace_sessions_root(folder_path).resolve()
     if session.parent == workspace_root:
-        return True
+        return "ownerFolder" in status and owner_folder == expected_owner
 
     legacy_root = _session_root(folder_path).resolve()
     if session.parent == legacy_root:
@@ -519,9 +523,6 @@ def _session_belongs_to_folder(folder_path, session_directory, payload=None):
     if session.parent not in central_roots:
         return False
 
-    status = payload if isinstance(payload, dict) else (_read_status(session) or {})
-    owner_folder = str(status.get("ownerFolder") or "").replace("\\", "/").strip("/")
-    expected_owner = str(_relative_set_folder(folder_path) or "").replace("\\", "/").strip("/")
     return "ownerFolder" in status and owner_folder == expected_owner
 
 

@@ -292,6 +292,17 @@ function parseMediaFilterQuery(raw) {
   return out;
 }
 
+function mediaFilterTermMatches(haystack, term) {
+  var searchFrom = 0;
+  while (searchFrom <= haystack.length) {
+    var index = haystack.indexOf(term, searchFrom);
+    if (index === -1) return false;
+    if (index === 0 || !/[a-z0-9]/.test(haystack.charAt(index - 1))) return true;
+    searchFrom = index + 1;
+  }
+  return false;
+}
+
 function mediaItemMatchesFilterQuery(item, query, mode) {
   var label = String(item && item.label || '').toLowerCase();
   var fileName = String(item && item.fileName || '').toLowerCase();
@@ -299,7 +310,7 @@ function mediaItemMatchesFilterQuery(item, query, mode) {
   var tags = getTagsForMediaKey(item && item.key).join(' ').toLowerCase();
   var haystack = label + '\n' + fileName + '\n' + caption + '\n' + tags;
   var termMatches = function (term) {
-    return haystack.indexOf(term) !== -1;
+    return mediaFilterTermMatches(haystack, term);
   };
   for (var i = 0; i < query.negative.length; i += 1) {
     if (termMatches(query.negative[i])) return false;

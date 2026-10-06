@@ -44,15 +44,11 @@
   function buildReviewCorpus(items) {
     return (items || []).map(function (item) {
       var key = item && (item.key || item.fileName);
-      var grouped = typeof getChecklistAssignmentEntriesForMediaKey === 'function'
-        ? getChecklistAssignmentEntriesForMediaKey(key)
-        : [];
+      var grouped = getChecklistAssignmentEntriesForMediaKey(key);
       var groupedText = grouped.map(function (entry) {
         return String(entry.requirement || '') + ': ' + String(entry.term || '');
       }).filter(Boolean);
-      var allTags = typeof getTagsForMediaKey === 'function'
-        ? getTagsForMediaKey(key)
-        : (Array.isArray(item && item.tags) ? item.tags : []);
+      var allTags = getTagsForMediaKey(key);
       return [
         'FILE: ' + String(item && item.fileName || ''),
         'CAPTION: ' + String(item && item.caption || ''),
@@ -63,12 +59,8 @@
   }
 
   function buildPrompt(instruction) {
-    var items = typeof window.getQaTrainingItemsForAssistant === 'function'
-      ? window.getQaTrainingItemsForAssistant()
-      : getVisibleReviewItems();
-    var trainingFocus = typeof window.getQaTrainingFocus === 'function'
-      ? String(window.getQaTrainingFocus() || '').trim()
-      : '';
+    var items = window.getQaTrainingItemsForAssistant();
+    var trainingFocus = String(window.getQaTrainingFocus() || '').trim();
     return [
       'You are reviewing one WebCap training Set. This is analysis only: do not rewrite captions.',
       '',
@@ -150,12 +142,11 @@
 
   function bindReviewAssistantButton() {
     var button = document.getElementById('review-output-assistant-btn');
-    if (!button) return;
+    if (!button) throw new Error('QA Deep Scan button is missing.');
     button.onclick = function () {
       window.openAssistant({ mode: 'review-dataset' });
     };
   }
 
   window.bindReviewAssistantButton = bindReviewAssistantButton;
-  bindReviewAssistantButton();
 })();

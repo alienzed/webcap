@@ -198,11 +198,6 @@ def _record_recent(lane, job, keep=80):
     receipt = _public_job(job)
     if not isinstance(receipt, dict):
         return
-    if str(receipt.get("lane") or "") == "inference":
-        # Durable inference state exists only for unfinished restartable work.
-        # Terminal delivery receipts are process-local and must not accumulate on disk.
-        lane["recent"] = []
-        return
     recent = lane.setdefault("recent", [])
     recent.append(receipt)
     if len(recent) > keep:
@@ -468,8 +463,7 @@ class EphemeralExecutionQueue:
             if isinstance(result, dict):
                 job.setdefault("result", {}).update(copy.deepcopy(result))
             receipt = _public_job(job)
-            _record_recent(lane, job)
-            lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+                lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
             if lane.get("activeJobId") == job["id"]:
                 lane["activeJobId"] = ""
             _refresh_positions(lane)
@@ -492,8 +486,7 @@ class EphemeralExecutionQueue:
                 job["updatedAt"] = now
                 job["requestedAction"] = ""
                 receipt = _public_job(job)
-                _record_recent(lane, job)
-                lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+                        lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
                 _refresh_positions(lane)
                 _remember_transient_receipt(receipt)
                 return receipt
@@ -519,8 +512,7 @@ class EphemeralExecutionQueue:
                     job["finishedAt"] = now
                     job["updatedAt"] = now
                     job["requestedAction"] = ""
-                    _record_recent(lane, job)
-                    _remember_transient_receipt(_public_job(job))
+                                _remember_transient_receipt(_public_job(job))
                     continue
                 if active_id and str(job.get("id") or "") == active_id and status in ACTIVE_STATUSES:
                     job["status"] = "stopping"
@@ -805,7 +797,7 @@ def update_job(job_id, details):
 
 
 def requeue_active_and_pause(job_id, reason):
-    """Record the failed attempt, then return its frozen request to the paused queue."""
+    """Return the active frozen request to the paused queue for retry."""
     now = time.time()
     with _lock:
         state = _read_state()
@@ -815,14 +807,6 @@ def requeue_active_and_pause(job_id, reason):
         if job.get("status") not in ACTIVE_STATUSES:
             raise ValueError("Only active execution work can be returned to the queue.")
         lane = _lane(state, lane_name)
-
-        attempt = copy.deepcopy(job)
-        attempt["status"] = "failed"
-        attempt["finishedAt"] = now
-        attempt["updatedAt"] = now
-        attempt["error"] = str(reason or "Queue paused after an execution error.")
-        attempt["requestedAction"] = ""
-        _record_recent(lane, attempt)
 
         job["status"] = "queued"
         job["startedAt"] = None
@@ -974,10 +958,7 @@ def cancel_all_pending_transient(lane_name):
         _refresh_positions(lane)
         _write_state(state)
         for receipt in cancelled:
-            _record_recent(lane, receipt)
             _remember_transient_receipt(receipt)
-        if cancelled:
-            _write_state(state)
         return cancelled
 
 

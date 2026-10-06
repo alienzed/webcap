@@ -1119,16 +1119,16 @@
 
   function returnToQaWorkbenchFromFocusSet() {
     var parent = qaWorkbenchState.parentFocusSet;
+    var returnToFinding = !!qaWorkbenchState.returnFindingId;
     state.focusSet = parent ? qaCloneFocusSet(parent) : null;
     qaWorkbenchState.parentFocusSet = undefined;
+    qaWorkbenchState.view = returnToFinding ? 'browse' : 'overview';
     updateFocusSetUi();
     renderFileList(ui.filterEl.value);
     pruneCandidatesScopeChanged();
     duplicateCandidatesScopeChanged();
     setWorkspaceWorkflowMode('review');
     setWorkspaceSurface('reviewOutput');
-    setReviewDetailTab('qa');
-    qaWorkbenchState.view = qaWorkbenchState.returnFindingId ? 'browse' : 'overview';
     renderQaWorkbench(true);
   }
 

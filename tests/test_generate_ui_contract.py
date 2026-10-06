@@ -527,3 +527,20 @@ def test_generate_lora_catalog_refresh_is_explicit_and_preserves_form_state():
     assert "populateModelSelector();" not in refresh
     assert "renderModelForm();" not in refresh
     assert "el('generate-lora-refresh').onclick = refreshLoraCatalog;" in script
+
+
+def test_generate_ephemeral_ui_state_stays_in_memory():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "loraMode: 'selected'" in script
+    assert "viewMode: 'create'" in script
+    assert "takesCollapsed: false" in script
+    assert "generateState.sweepFolderByModel[id] = '';" in script
+
+    for obsolete in (
+        "webcap.generate.loraMode",
+        "webcap.generate.viewMode",
+        "webcap.generate.takesCollapsed",
+        "webcap.generate.sweepFolder.",
+    ):
+        assert obsolete not in script

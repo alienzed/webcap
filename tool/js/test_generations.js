@@ -3026,15 +3026,10 @@
   }
 
   function renderSessionMeta(status) {
-    var summary = el('test-generations-session-meta');
     var wildcardTagline = el('test-generations-wildcard-tagline');
     var infoBtn = el('test-generations-session-info-btn');
     var details = el('test-generations-session-details');
     var hasSession = !!(status && status.session);
-    if (summary) {
-      summary.textContent = hasSession ? sessionMetaText(status) : '';
-      summary.classList.toggle('hidden', !hasSession);
-    }
     if (!wildcardTagline) throw new Error('Test wildcard tagline is missing.');
     var wildcardValues = hasSession && Array.isArray(status.wildcardValues)
       ? status.wildcardValues.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
@@ -3061,8 +3056,11 @@
       var expanded = !details.classList.contains('hidden');
       infoBtn.textContent = expanded ? '×' : 'Details';
       infoBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-      infoBtn.title = expanded ? 'Close session details' : 'View frozen session settings and resolved prompt';
-      infoBtn.setAttribute('aria-label', infoBtn.title);
+      var sessionMeta = sessionMetaText(status);
+      infoBtn.title = expanded
+        ? 'Close session details'
+        : (sessionMeta ? sessionMeta + ' — View frozen session settings and resolved prompt' : 'View frozen session settings and resolved prompt');
+      infoBtn.setAttribute('aria-label', expanded ? 'Close session details' : 'View frozen session settings and resolved prompt');
     }
     var resolvedPrompt = String(status.resolvedPrompt || status.prompt || '');
     var sourcePrompt = String(status.sourcePrompt || '');

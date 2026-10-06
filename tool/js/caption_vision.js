@@ -516,6 +516,45 @@ function syncVisionImageCaptionSelection(mediaKey) {
   closeVisionImageCaption();
 }
 
+function requestVisionImageCaptionDescription(mediaItem, options) {
+  var opts = options || {};
+  if (!mediaItem || !mediaItem.key || !mediaItem.fileName) {
+    return Promise.reject(new Error('Vision Caption requires a selected image.'));
+  }
+  if (!isCaptionVisionSupportedMedia(mediaItem.fileName)) {
+    return Promise.reject(new Error('Vision Caption currently supports image files only.'));
+  }
+  return loadCaptionVisionCapabilities().then(function () {
+    var model = String(opts.model || getCaptionVisionModelId() || '');
+    if (!model) throw new Error('Select an available Vision model.');
+    return captionAssistRequestJson('/caption/vision-caption', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model,
+        folder: String((state && state.folder) || ''),
+        media: String(mediaItem.fileName || '')
+      })
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Vision Caption did not return a queued job.');
+      trackTransientLlmJob(payload.job);
+      var hookResult = opts.onJob ? opts.onJob(payload.job) : null;
+      return Promise.resolve(hookResult).then(function () {
+        return waitForCaptionAssistJob(payload.job);
+      });
+    }).then(function (job) {
+      var result = job.result && typeof job.result === 'object' ? job.result : {};
+      var text = String(result.text || '').trim();
+      if (!text) throw new Error('Vision model returned an empty caption.');
+      return {
+        mediaKey: String(mediaItem.key || ''),
+        text: text,
+        model: String(result.model || model)
+      };
+    });
+  });
+}
+
 function runVisionImageCaption() {
   var mediaItem = state && state.currentItem;
   if (!mediaItem || !mediaItem.key || !mediaItem.fileName) {
@@ -547,30 +586,21 @@ function runVisionImageCaption() {
     syncVisionImageCaptionModal();
     setStatus('Vision Caption starting...');
 
-    return captionAssistRequestJson('/caption/vision-caption', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: model,
-        folder: String((state && state.folder) || ''),
-        media: String(mediaItem.fileName || '')
-      })
-    }).then(function (payload) {
-      if (!payload.job || !payload.job.jobId) throw new Error('Vision Caption did not return a queued job.');
-      if (visionImageCaptionState.requestToken !== token || !visionImageCaptionState.open) {
-        return cancelCaptionAssistJob(String(payload.job.jobId || '')).then(function () { return null; });
+    return requestVisionImageCaptionDescription(mediaItem, {
+      model: model,
+      onJob: function (job) {
+        if (visionImageCaptionState.requestToken !== token || !visionImageCaptionState.open) {
+          return cancelCaptionAssistJob(String(job.jobId || ''));
+        }
+        visionImageCaptionState.jobId = String(job.jobId || '');
+        syncVisionImageCaptionModal();
+        return null;
       }
-      visionImageCaptionState.jobId = String(payload.job.jobId || '');
-      syncVisionImageCaptionModal();
-      return waitForCaptionAssistJob(payload.job);
-    }).then(function (job) {
-      if (!job || visionImageCaptionState.requestToken !== token || !visionImageCaptionState.open) return false;
-      var result = job.result && typeof job.result === 'object' ? job.result : {};
-      var text = String(result.text || '').trim();
-      if (!text) throw new Error('Vision model returned an empty caption.');
+    }).then(function (result) {
+      if (!result || visionImageCaptionState.requestToken !== token || !visionImageCaptionState.open) return false;
       visionImageCaptionState.jobId = '';
       visionImageCaptionState.pending = false;
-      visionImageCaptionState.text = text;
+      visionImageCaptionState.text = String(result.text || '');
       visionImageCaptionState.error = '';
       visionImageCaptionState.model = String(result.model || model);
       syncVisionImageCaptionModal();
@@ -758,6 +788,7 @@ window.getCaptionVisionModelId = getCaptionVisionModelId;
 window.syncVisionImageCaptionActionUi = syncVisionImageCaptionActionUi;
 window.syncVisionImageCaptionSelection = syncVisionImageCaptionSelection;
 window.runVisionImageCaption = runVisionImageCaption;
+window.requestVisionImageCaptionDescription = requestVisionImageCaptionDescription;
 
 window.createCaptionVisionTask = createCaptionVisionTask;
 window.cancelCaptionVisionTask = cancelCaptionVisionTask;

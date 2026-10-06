@@ -283,6 +283,8 @@ def test_standalone_vision_caption_is_preview_adjacent_and_requires_explicit_edi
     assert '>Copy</button>' in html
     assert '>Use in Editor</button>' in html
     assert "'/caption/vision-caption'" in vision
+    assert "function requestVisionImageCaptionDescription(mediaItem, options)" in vision
+    assert "window.requestVisionImageCaptionDescription = requestVisionImageCaptionDescription;" in vision
     run_start = vision.index("function runVisionImageCaption()")
     run_end = vision.index("function copyVisionImageCaption()", run_start)
     assert "assignChecklistTagToMediaKey" not in vision[run_start:run_end]

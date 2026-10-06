@@ -844,7 +844,6 @@ def finish_job(job_id, status="completed", result=None, error=""):
             job.setdefault("result", {}).update(copy.deepcopy(result))
         if lane.get("activeJobId") == job["id"]:
             lane["activeJobId"] = ""
-        _record_recent(lane, job)
         _prune_terminal(lane)
         _refresh_positions(lane)
         _write_state(state)
@@ -871,7 +870,6 @@ def finish_job_transient(job_id, status="completed", result=None, error=""):
         if isinstance(result, dict):
             job.setdefault("result", {}).update(copy.deepcopy(result))
         receipt = _public_job(job)
-        _record_recent(lane, job)
         lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
         if lane.get("activeJobId") == job["id"]:
             lane["activeJobId"] = ""
@@ -902,7 +900,6 @@ def resolve_job_transient(job_id, status="completed", result=None, error=""):
         if isinstance(result, dict):
             job.setdefault("result", {}).update(copy.deepcopy(result))
         receipt = _public_job(job)
-        _record_recent(lane, job)
         lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
         if lane.get("activeJobId") == job["id"]:
             lane["activeJobId"] = ""

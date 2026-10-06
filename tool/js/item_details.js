@@ -575,25 +575,32 @@ function parseRequirementProgressTerms(raw) {
 }
 
 function computeRequirementProgressForMediaKey(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  if (!key) return { completed: 0, total: 0, missing: [] };
+  if (checklistRequirementProgressCache[key]) {
+    return checklistRequirementProgressCache[key];
+  }
+
   var requirements = Array.isArray(checklistItems) ? checklistItems : [];
+  var configuredRequirements = getChecklistConfiguredRequirementsMap();
   var completed = 0;
   var total = 0;
   var missing = [];
   for (var i = 0; i < requirements.length; i++) {
     var requirementLabel = String(requirements[i] || '').trim();
     if (!requirementLabel) continue;
-    var terms = getChecklistAssignedTagsForMediaKey(mediaKey, requirementLabel);
-    var configuredTerms = getChecklistKeywordTermsForRequirement(requirementLabel);
-    if (!configuredTerms.length && !terms.length) continue;
+    var terms = getChecklistAssignedTagsForMediaKey(key, requirementLabel);
+    if (!configuredRequirements[requirementLabel] && !terms.length) continue;
     total += 1;
-    var hasMatch = terms.length > 0;
-    if (hasMatch) {
+    if (terms.length) {
       completed += 1;
     } else {
       missing.push(requirementLabel);
     }
   }
-  return { completed: completed, total: total, missing: missing };
+  var progress = { completed: completed, total: total, missing: missing };
+  checklistRequirementProgressCache[key] = progress;
+  return progress;
 }
 
 function computeReviewedProgressForMediaKey(mediaKey) {

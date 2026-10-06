@@ -810,7 +810,7 @@ function unassignChecklistTagFromMediaKey(mediaKey, requirementLabel, termText, 
     });
   }
 
-  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipSave) saveMediaAnnotationState(key);
   if (!opts.skipRefresh) refreshTagDrivenPanelsForMediaKey(key);
   if (shouldLiveSyncEditorToTemplateForMediaKey(key)) syncEditorToCurrentTemplatePreview();
   return true;

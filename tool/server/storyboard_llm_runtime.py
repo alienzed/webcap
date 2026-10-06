@@ -1774,7 +1774,7 @@ def _completion_result(response, model_id, allow_truncated=False, assessment_evi
     }
 
 
-def normalize_freeform_messages(messages):
+def normalize_freeform_messages(messages, allow_image_data_urls=False):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director Chat messages are required.")
 
@@ -1803,6 +1803,9 @@ def normalize_freeform_messages(messages):
                     image_url = part.get("image_url")
                     image_url = image_url if isinstance(image_url, dict) else {}
                     url = str(image_url.get("url") or "").strip()
+                    if allow_image_data_urls and url.startswith("data:image/"):
+                        parts.append({"type": "image_url", "image_url": {"url": url}})
+                        continue
                     if not url.startswith("file://") or url.startswith("file:///"):
                         raise ValueError("Local multimodal images must use a relative file:// URL.")
                     relative = url[len("file://"):]
@@ -1828,8 +1831,8 @@ def normalize_freeform_messages(messages):
         normalized.append({"role": role, "content": content})
     return normalized
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None):
-    normalized = normalize_freeform_messages(messages)
+def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None, allow_image_data_urls=False):
+    normalized = normalize_freeform_messages(messages, allow_image_data_urls=allow_image_data_urls)
 
     operation = "freeform_chat"
     with _request_lock:

@@ -51,6 +51,7 @@ function normalizeAppConfigShape(cfg) {
   if (typeof out.debug !== 'boolean') out.debug = !!out.debug;
   out.theme = String(out.theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
   out.director_model = String(out.director_model || '').trim();
+  out.vision_model = String(out.vision_model || '').trim();
   out.generate_model = String(out.generate_model || '').trim();
   if (!out.filesystem.root) out.filesystem.root = '';
   if (!out.filesystem.output_root) out.filesystem.output_root = '';
@@ -159,6 +160,33 @@ function renderAppSettingsDirectorEndpoints(endpoints) {
     ui.appSettingsDirectorEndpointsEl.appendChild(card);
   });
 }
+
+function refreshAppSettingsVisionModels(configuredModel) {
+  var select = ui.appSettingsVisionModelEl;
+  if (!select) return Promise.resolve();
+  select.disabled = true;
+  select.innerHTML = '<option value="">Loading vision models...</option>';
+  return fetch('/caption/vision-capabilities').then(function (response) {
+    return response.json().then(function (payload) {
+      if (!response.ok || !payload || payload.ok === false) {
+        throw new Error(payload && payload.error ? payload.error : 'Could not load Vision models.');
+      }
+      var models = Array.isArray(payload.models) ? payload.models : [];
+      if (!models.length) {
+        select.innerHTML = '<option value="">No Vision models available</option>';
+        select.disabled = true;
+        return;
+      }
+      renderDirectorModelOptions(select, models, String(configuredModel || payload.configuredModel || payload.defaultModel || ''));
+      select.disabled = false;
+    });
+  }).catch(function (err) {
+    select.innerHTML = '<option value="">Vision models unavailable</option>';
+    select.disabled = true;
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Vision Settings', err);
+  });
+}
+
 
 function collectAppSettingsDirectorEndpoints() {
   if (!ui.appSettingsDirectorEndpointsEl) return [];
@@ -284,6 +312,7 @@ function fillAppSettingsForm(cfg) {
   if (ui.appSettingsStoryboardMaxTokensEl) ui.appSettingsStoryboardMaxTokensEl.value = c.storyboard.director.max_tokens == null ? '' : c.storyboard.director.max_tokens;
   if (ui.appSettingsPrimerTemplateEl) ui.appSettingsPrimerTemplateEl.value = c.primer.template || '';
   if (ui.appSettingsCaptionSequenceEl) ui.appSettingsCaptionSequenceEl.value = c.caption_assist.preferred_sequence;
+  refreshAppSettingsVisionModels(c.vision_model);
   renderAppSettingsCaptionSequenceGroups();
   if (typeof applyAppTheme === 'function') applyAppTheme(c.theme);
   if (ui.appSettingsDebugEl) ui.appSettingsDebugEl.checked = !!c.debug;
@@ -327,6 +356,7 @@ function collectAppSettingsFormConfig() {
   base.storyboard.director.context_size = contextSizeValue === '' ? null : Number(contextSizeValue);
   base.storyboard.director.max_tokens = maxTokensValue === '' ? null : Number(maxTokensValue);
   base.primer.template = ui.appSettingsPrimerTemplateEl ? ui.appSettingsPrimerTemplateEl.value : '';
+  base.vision_model = ui.appSettingsVisionModelEl ? ui.appSettingsVisionModelEl.value : base.vision_model;
   base.caption_assist.preferred_sequence = ui.appSettingsCaptionSequenceEl ? ui.appSettingsCaptionSequenceEl.value : DEFAULT_CAPTION_ASSIST_SEQUENCE;
   base.analysis.enableFaceAnalysis = !!(ui.appSettingsEnableFaceAnalysisEl && ui.appSettingsEnableFaceAnalysisEl.checked);
   base.analysis.enableMediaPipeAnalysis = !!(ui.appSettingsEnableMediaPipeAnalysisEl && ui.appSettingsEnableMediaPipeAnalysisEl.checked);
@@ -411,6 +441,8 @@ function saveAppSettings(opts) {
     }
     appSettingsLoadedConfig = saved;
     setRuntimeAppConfig(saved);
+    window.dispatchEvent(new CustomEvent('webcap:vision-model-changed', { detail: { modelId: String(saved.vision_model || '') } }));
+    if (typeof refreshApplicationVisionModels === 'function') refreshApplicationVisionModels(false);
     fillAppSettingsForm(saved);
     setRootFolderLabelFromConfig(saved);
     syncUnsavedPrimerTemplateFromAppConfig();
@@ -636,6 +668,7 @@ function wireAppSettingsUi() {
     ui.appSettingsStoryboardMaxTokensEl,
     ui.appSettingsPrimerTemplateEl,
     ui.appSettingsCaptionSequenceEl,
+    ui.appSettingsVisionModelEl,
     ui.appSettingsEnableFaceAnalysisEl,
     ui.appSettingsEnableMediaPipeAnalysisEl,
     ui.appSettingsDebugEl,

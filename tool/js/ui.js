@@ -423,19 +423,19 @@ function refreshCurrentDirectory() {
            var folderState = resp.folder_state || {};
            var applyBreakdown = {};
            var applyStageStartedAt = performance.now();
-           applyFolderStateToDom(folderState);
+           var cleanFolderState = applyFolderStateToDom(folderState);
            applyBreakdown.applyFolderStateMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
 
            applyStageStartedAt = performance.now();
-           loadChecklistFromFolderState(folderState);
+           loadChecklistFromFolderState(cleanFolderState);
            applyBreakdown.loadChecklistMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
 
            applyStageStartedAt = performance.now();
-           loadCaptionHelpersFromFolderState(folderState);
+           loadCaptionHelpersFromFolderState(cleanFolderState);
            applyBreakdown.loadCaptionHelpersMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
 
            applyStageStartedAt = performance.now();
-           loadItemTagsFromFolderState(folderState);
+           loadItemTagsFromFolderState(cleanFolderState);
            applyBreakdown.loadItemTagsMs = Math.round((performance.now() - applyStageStartedAt) * 10) / 10;
 
            state.folderStateWritable = true;

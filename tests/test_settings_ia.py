@@ -86,3 +86,12 @@ def test_director_model_preference_is_config_backed_not_browser_persistent():
         "webcap.directorChat.model",
     ):
         assert obsolete not in common
+
+
+def test_director_chat_pin_is_ephemeral_ui_state():
+    script = (ROOT / "tool" / "js" / "director_chat.js").read_text(encoding="utf-8")
+
+    assert "pinned: false" in script
+    assert "webcap.directorChat.pinned" not in script
+    assert "localStorage" not in script
+    assert "state.pinned = false;" in script

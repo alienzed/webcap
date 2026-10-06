@@ -479,8 +479,7 @@ def test_test_preview_polling_survives_inter_job_queued_state():
 
     helper = script.split("function testStatusHasPendingWork(status)", 1)[1].split("function pollStatus()", 1)[0]
     assert "'starting', 'queued', 'running', 'stopping'" in helper
-    assert "'complete', 'stopped', 'failed', 'interrupted'" in helper
-    assert "total > processed" in helper
+    assert "total > processed" not in helper
 
     open_session = script.split("function openSession(sessionName)", 1)[1].split("function removeDeletedSessionRow", 1)[0]
     assert "if (testStatusHasPendingWork(status)) pollStatus();" in open_session

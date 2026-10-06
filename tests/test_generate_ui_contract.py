@@ -89,6 +89,11 @@ def test_generate_director_is_a_reversible_prompt_editor():
     assert "generateState.director.previousPrompt = null;" in script
     assert "function resetGeneratePromptScratch()" in script
     assert "if (!wasOpen) resetGeneratePromptScratch();" in script
+    assert "generateState.lorasByModel = {};" in script
+    assert "generateState.loraMode = 'selected';" in script
+    assert "generateState.sweepFolderByModel = {};" in script
+    assert "generateState.sweepSelections = {};" in script
+    assert "input.value = '';" in script
     assert "localStorage" not in script
     assert '"defaultPrompt": ""' in generation
 

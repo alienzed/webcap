@@ -1458,7 +1458,9 @@ def test_generations_wildcard_route():
             for media_name in list_media_files(folder)
         ]
         captions = [caption for caption in captions if caption]
-        contract = test_wildcard_build_request(captions)
+        focus = str(data.get("focus") or "").strip()
+        set_name = Path(folder.rstrip("/\\")).name or folder
+        contract = test_wildcard_build_request(captions, set_name=set_name, focus=focus)
         job = enqueue_llm(
             "test",
             str(data.get("directorModel") or "").strip(),
@@ -1469,6 +1471,8 @@ def test_generations_wildcard_route():
         return jsonify({
             "ok": True,
             "captionCount": len(captions),
+            "setName": set_name,
+            "focus": focus,
             "job": job,
         }), 202
     except Exception as exc:

@@ -1948,3 +1948,27 @@ def test_training_releases_owner_after_h3_runtime_ends(tmp_path, monkeypatch):
     training_runner._refresh_state(state)
 
     assert execution_queue.resource_owner() == ""
+
+
+def test_training_mode_retirement_keeps_only_legacy_read_compatibility():
+    old = {
+        "id": "legacy",
+        "folder": "sets/subject",
+        "mode": "quality",
+        "datasetTarget": "quality",
+        "status": "complete",
+    }
+    visible = training_runner._public_job(old)
+
+    assert visible["mode"] == "quality"
+    assert visible["datasetTarget"] == "quality"
+
+    current = {
+        "id": "current",
+        "folder": "sets/subject",
+        "profileId": MINIMAX_H3_PROFILE_ID,
+        "status": "queued",
+    }
+    visible_current = training_runner._public_job(current)
+    assert "mode" not in visible_current
+    assert "datasetTarget" not in visible_current

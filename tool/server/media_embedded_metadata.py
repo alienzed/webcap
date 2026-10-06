@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import struct
 import subprocess
 import tempfile

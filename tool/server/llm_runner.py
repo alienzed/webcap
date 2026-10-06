@@ -167,7 +167,7 @@ def _assert_storyboard_contract_current(context, frozen_contract):
 
 def _client_result(client, context, llm_result, job_id="", frozen_contract=None):
     if client in {"chat", "caption"}:
-        return {
+        result = {
             "text": llm_result["text"],
             "reasoning": llm_result.get("reasoning", ""),
             "model": llm_result["model"],
@@ -176,6 +176,14 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
             "contextSize": llm_result.get("contextSize"),
         }
+        operation = str((frozen_contract or {}).get("operation") or "").strip()
+        if client == "caption" and operation == "caption_vision_validate":
+            from .caption_vision import normalize_caption_vision_result
+            result["vision"] = normalize_caption_vision_result(
+                llm_result["text"],
+                context.get("visionGroups"),
+            )
+        return result
 
     if client == "generate":
         return {

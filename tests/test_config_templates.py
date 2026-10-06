@@ -491,3 +491,16 @@ def test_generate_model_is_validated_as_durable_config():
             "training": {},
             "generate_model": 42,
         })
+
+
+def test_vision_model_preference_defaults_blank_and_preserves_qualified_ref():
+    defaulted = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+    })
+    assert defaulted["vision_model"] == ""
+
+    configured = config_module.validate_config_payload({
+        "filesystem": {"root": "C:/training", "models": ""},
+        "vision_model": "workstation::huihui_ai/qwen3-vl-abliterated:8b",
+    })
+    assert configured["vision_model"] == "workstation::huihui_ai/qwen3-vl-abliterated:8b"

@@ -1055,7 +1055,10 @@ def director_job_route():
         data = request.get_json(silent=True) or {}
         return jsonify({
             "ok": True,
-            **llm_action(str(data.get("operation") or "").strip()),
+            **llm_action(
+                str(data.get("operation") or "").strip(),
+                job_id=str(data.get("jobId") or "").strip(),
+            ),
         })
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404

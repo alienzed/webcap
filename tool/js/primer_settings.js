@@ -261,6 +261,7 @@ function syncCaptionAssistCandidateUi() {
   var omittedAssignments = visible && Array.isArray(candidate.omittedAssignments) ? candidate.omittedAssignments : [];
   var missingGroups = visible && Array.isArray(candidate.missingGroups) ? candidate.missingGroups : [];
   panel.classList.toggle('hidden', !visible);
+  panel.classList.toggle('is-focus-caption', !!(visible && isFocusedCaptionOpen()));
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
   omissionsEl.textContent = omittedAssignments.length
     ? ('Candidate omitted selected annotations: ' + omittedAssignments.join(' · '))
@@ -271,6 +272,7 @@ function syncCaptionAssistCandidateUi() {
   regenerateBtn.textContent = omittedAssignments.length ? 'Regenerate' : '↻';
   regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);
   textEl.textContent = visible ? candidate.text : '';
+  syncCaptionVisionUi();
 }
 
 function updatePrimerCaptionResetUi() {
@@ -716,7 +718,17 @@ function runCaptionAssist() {
         ? 'Caption Assist candidate failed annotation validation.'
         : 'AI caption candidate ready.'
     );
-    if (isFocusedCaptionOpen()) startFocusedCaptionPrefetch(sourceMediaKey);
+    if (isFocusedCaptionOpen()) {
+      if (captionVisionEnabled) {
+        maybeRunCaptionVisionForCandidate(candidate).then(function () {
+          if (isFocusedCaptionOpen() && state.currentItem && state.currentItem.key === sourceMediaKey) {
+            startFocusedCaptionPrefetch(sourceMediaKey);
+          }
+        });
+      } else {
+        startFocusedCaptionPrefetch(sourceMediaKey);
+      }
+    }
     return true;
   }).catch(function (err) {
     setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));

@@ -223,7 +223,15 @@
 
   function wildcardGroupLabel(index, group, analysisGroups) {
     var semantic = Array.isArray(analysisGroups) ? analysisGroups[index] : null;
-    var label = semantic && String(semantic.label || '').trim();
+    var semanticOptions = semantic && Array.isArray(semantic.options)
+      ? semantic.options.map(function (option) { return String(option || '').trim(); })
+      : [];
+    var groupOptions = group && Array.isArray(group.options)
+      ? group.options.map(function (option) { return String(option || '').trim(); })
+      : [];
+    var sameOptions = semanticOptions.length === groupOptions.length &&
+      semanticOptions.every(function (option, optionIndex) { return option === groupOptions[optionIndex]; });
+    var label = sameOptions && semantic ? String(semantic.label || '').trim() : '';
     return label || ('Dimension ' + (index + 1));
   }
 
@@ -356,7 +364,6 @@
   function closeWildcardBuilder() {
     var modal = el('test-generations-wildcard-modal');
     if (!modal) throw new Error('Wildcard Builder modal markup is missing.');
-    if (wildcardDirector.busy) return;
     modal.classList.add('hidden');
     modal.setAttribute('aria-hidden', 'true');
     wildcardDirector.modalOpen = false;
@@ -2989,12 +2996,23 @@
 
   function renderSessionMeta(status) {
     var summary = el('test-generations-session-meta');
+    var wildcardTagline = el('test-generations-wildcard-tagline');
     var infoBtn = el('test-generations-session-info-btn');
     var details = el('test-generations-session-details');
     var hasSession = !!(status && status.session);
     if (summary) {
       summary.textContent = hasSession ? sessionMetaText(status) : '';
       summary.classList.toggle('hidden', !hasSession);
+    }
+    if (wildcardTagline) {
+      var wildcardValues = hasSession && Array.isArray(status.wildcardValues)
+        ? status.wildcardValues.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
+        : [];
+      wildcardTagline.textContent = wildcardValues.join(' · ');
+      wildcardTagline.classList.toggle('hidden', !wildcardValues.length);
+      wildcardTagline.title = wildcardValues.length
+        ? 'Resolved wildcard choices: ' + wildcardValues.join(' · ')
+        : '';
     }
     if (infoBtn) infoBtn.classList.toggle('hidden', !hasSession);
     if (!details) return;

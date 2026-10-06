@@ -206,13 +206,13 @@ def test_execution_queue_terminal_receipt_is_removed_when_consumed(queue_root):
         execution_queue.get_job(job["id"])
 
 
-def test_execution_queue_keeps_bounded_recent_receipt_after_terminal_delivery_is_consumed(queue_root):
-    job = execution_queue.enqueue("inference", {"n": 1}, metadata={"client": "generate"})
-    execution_queue.claim_next("inference")
+def test_execution_queue_keeps_bounded_recent_receipt_for_non_inference_lane(queue_root):
+    job = execution_queue.enqueue("takes", {"n": 1}, metadata={"client": "generate"})
+    execution_queue.claim_next("takes")
     execution_queue.finish_job(job["id"], status="completed", result={"ok": True})
     execution_queue.consume_terminal_job(job["id"])
 
-    recent = execution_queue.recent_snapshot("inference", limit=5)
+    recent = execution_queue.recent_snapshot("takes", limit=5)
 
     assert len(recent) == 1
     assert recent[0]["id"] == job["id"]
@@ -220,7 +220,7 @@ def test_execution_queue_keeps_bounded_recent_receipt_after_terminal_delivery_is
     assert recent[0]["metadata"]["client"] == "generate"
 
 
-def test_execution_queue_transient_finish_removes_durable_job_and_keeps_recent_history(queue_root):
+def test_execution_queue_transient_finish_removes_all_durable_terminal_history(queue_root):
     job = execution_queue.enqueue("inference", {"n": 1}, metadata={"client": "generate"})
     execution_queue.claim_next("inference")
 
@@ -233,17 +233,14 @@ def test_execution_queue_transient_finish_removes_durable_job_and_keeps_recent_h
     assert finished["status"] == "completed"
     with pytest.raises(FileNotFoundError):
         execution_queue.get_job(job["id"])
-    recent = execution_queue.recent_snapshot("inference")
-    assert len(recent) == 1
-    assert recent[0]["id"] == job["id"]
-    assert recent[0]["status"] == "completed"
+    assert execution_queue.recent_snapshot("inference") == []
     receipt = execution_queue.transient_receipt(job["id"], consume=True)
     assert receipt["result"] == {"mediaPath": "output/clip.mp4"}
     with pytest.raises(FileNotFoundError):
         execution_queue.transient_receipt(job["id"])
 
 
-def test_transient_cancel_keeps_recent_history(queue_root):
+def test_transient_cancel_does_not_persist_recent_history(queue_root):
     job = execution_queue.enqueue(
         "inference",
         {"request": {"prompt": "cancel me"}},
@@ -255,10 +252,7 @@ def test_transient_cancel_keeps_recent_history(queue_root):
     assert cancelled["status"] == "cancelled"
     with pytest.raises(FileNotFoundError):
         execution_queue.get_job(job["id"])
-    recent = execution_queue.recent_snapshot("inference")
-    assert len(recent) == 1
-    assert recent[0]["id"] == job["id"]
-    assert recent[0]["status"] == "cancelled"
+    assert execution_queue.recent_snapshot("inference") == []
 
 
 def test_execution_queue_can_resolve_committed_backlog_without_durable_history(queue_root):
@@ -278,10 +272,7 @@ def test_execution_queue_can_resolve_committed_backlog_without_durable_history(q
     assert resolved["status"] == "completed"
     with pytest.raises(FileNotFoundError):
         execution_queue.get_job(job["id"])
-    recent = execution_queue.recent_snapshot("inference")
-    assert len(recent) == 1
-    assert recent[0]["id"] == job["id"]
-    assert recent[0]["status"] == "completed"
+    assert execution_queue.recent_snapshot("inference") == []
     assert execution_queue.transient_receipt(job["id"])["result"]["mediaPath"] == "output/result.png"
 
 
@@ -343,14 +334,7 @@ def test_execution_queue_requeues_active_job_and_pauses_lane(queue_root):
     assert stored["payload"]["request"]["prompt"] == "first"
     assert stored["startedAt"] is None
     assert stored["details"] == {}
-    recent = execution_queue.recent_snapshot("inference")
-    assert recent[0]["id"] == first["id"]
-    assert recent[0]["status"] == "failed"
-    assert recent[0]["details"]["providerJobId"] == "provider-1"
-    assert recent[0]["details"]["providerStatus"] == "in_progress"
-    assert recent[0]["error"] == "Inference paused after an execution error: boom"
-    assert recent[0]["startedAt"] is not None
-    assert recent[0]["finishedAt"] is not None
+    assert execution_queue.recent_snapshot("inference") == []
     assert execution_queue.claim_next("inference") is None
 
 

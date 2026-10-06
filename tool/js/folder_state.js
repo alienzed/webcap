@@ -156,12 +156,22 @@ function sanitizeFolderState(data) {
       if (Object.keys(cleanBeforeMap).length) captionGroupPrimerPrecedence[group] = cleanBeforeMap;
     });
   }
+  var descriptorSnapshotMediaKeys = new Set(
+    Array.isArray(src.caption_group_term_descriptor_snapshot_media_keys)
+      ? src.caption_group_term_descriptor_snapshot_media_keys
+          .map(function (mediaKey) { return String(mediaKey || '').trim(); })
+          .filter(Boolean)
+      : []
+  );
   var captionGroupTermDescriptorsByMedia = {};
   if (src.caption_group_term_descriptors_by_media && typeof src.caption_group_term_descriptors_by_media === 'object') {
     Object.keys(src.caption_group_term_descriptors_by_media).forEach(function (mediaKey) {
       var key = String(mediaKey || '').trim();
       if (!key) return;
-      var cleanMap = sanitizeGroupAffixMap(src.caption_group_term_descriptors_by_media[mediaKey], true);
+      // Any legacy per-media descriptor map means this caption had an explicit
+      // descriptor snapshot, including maps whose entries were all empty.
+      descriptorSnapshotMediaKeys.add(key);
+      var cleanMap = sanitizeGroupAffixMap(src.caption_group_term_descriptors_by_media[mediaKey], false);
       if (Object.keys(cleanMap).length) captionGroupTermDescriptorsByMedia[key] = cleanMap;
     });
   }
@@ -203,6 +213,7 @@ function sanitizeFolderState(data) {
     caption_group_term_wrappers: captionGroupTermWrappers,
     caption_group_term_descriptor_defaults: captionGroupTermDescriptorDefaults,
     caption_group_term_descriptors_by_media: captionGroupTermDescriptorsByMedia,
+    caption_group_term_descriptor_snapshot_media_keys: Array.from(descriptorSnapshotMediaKeys),
     caption_group_primer_separators: captionGroupPrimerSeparators,
     caption_group_primer_precedence: captionGroupPrimerPrecedence,
     caption_set_notes: String(src.caption_set_notes || ''),
@@ -282,6 +293,7 @@ function saveMediaAnnotationState(mediaKey) {
     descriptors: (checklistTermDescriptorsByMedia[key] && typeof checklistTermDescriptorsByMedia[key] === 'object')
       ? checklistTermDescriptorsByMedia[key]
       : {},
+    descriptorSnapshot: checklistTermDescriptorSnapshotMediaKeys.has(key),
     reviewed: !!(state.reviewedSet && state.reviewedSet.has(key))
   };
 
@@ -478,6 +490,9 @@ function snapshotFolderStateFromDom() {
     caption_group_term_wrappers: (typeof window.checklistTermWrappersByGroup !== 'undefined') ? window.checklistTermWrappersByGroup : undefined,
     caption_group_term_descriptor_defaults: (typeof window.checklistTermDescriptorDefaultsByGroup !== 'undefined') ? window.checklistTermDescriptorDefaultsByGroup : undefined,
     caption_group_term_descriptors_by_media: (typeof window.checklistTermDescriptorsByMedia !== 'undefined') ? window.checklistTermDescriptorsByMedia : undefined,
+    caption_group_term_descriptor_snapshot_media_keys: (typeof window.checklistTermDescriptorSnapshotMediaKeys !== 'undefined')
+      ? Array.from(window.checklistTermDescriptorSnapshotMediaKeys)
+      : [],
     caption_group_primer_separators: (typeof window.checklistPrimerSeparatorsByGroup !== 'undefined') ? window.checklistPrimerSeparatorsByGroup : undefined,
     caption_group_primer_precedence: (typeof window.checklistPrimerPrecedenceByGroup !== 'undefined') ? window.checklistPrimerPrecedenceByGroup : undefined,
     caption_set_notes: String(window.captionHelperNotes || ''),

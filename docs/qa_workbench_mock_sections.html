@@ -2,48 +2,218 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>WebCap QA Workbench — Section-first mock</title>
+<title>WebCap QA — Full Report mock</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-:root{color-scheme:dark;--bg:#15171a;--panel:#1e2227;--panel2:#252a30;--line:#363c45;--text:#edf0f3;--muted:#9ca5af;--accent:#b9c8ff;--warn:#ffd18b}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,sans-serif}button{font:inherit;color:inherit;background:#292e35;border:1px solid #404751;border-radius:7px;padding:7px 10px}.primary{background:#34466d}
-.app{max-width:1380px;margin:auto}.top{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}h1{margin:0;font-size:20px}.sub{color:var(--muted)}.grow{flex:1}.top-actions{display:flex;gap:7px}
-main{padding:18px 20px}.overview{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:8px;margin-bottom:18px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}.stat b{font-size:21px;display:block}.stat span{color:var(--muted)}
-.health{font-size:12px;color:var(--muted);margin:-7px 0 16px}.health a{color:var(--accent);margin-right:14px}
-.qa-section{border:1px solid var(--line);background:var(--panel);border-radius:11px;margin:10px 0;overflow:hidden}.qa-section summary{padding:13px 15px;cursor:pointer;display:flex;align-items:center;gap:9px;list-style:none}.qa-section summary::-webkit-details-marker{display:none}.qa-section summary strong{font-size:15px}.badge{background:#2b3037;border:1px solid #3b424b;border-radius:999px;padding:2px 7px;color:var(--muted);font-size:12px}.summary-copy{color:var(--muted);margin-left:auto}
-.inside{border-top:1px solid var(--line);padding:5px 14px 14px}.row{display:grid;grid-template-columns:110px 1fr auto;gap:12px;padding:12px 3px;border-bottom:1px solid #2e333a}.row:last-child{border-bottom:0}.kind{font-size:11px;text-transform:uppercase;color:var(--warn);letter-spacing:.05em}.title{font-weight:650}.desc{color:#c8cfd6;margin-top:3px}.evidence{color:var(--muted);font-size:12px;margin-top:4px}
-.utility{margin-top:20px;padding:13px;background:#191c20;border:1px dashed var(--line);border-radius:10px;display:flex;gap:8px;align-items:center}.utility span{color:var(--muted)}
-@media(max-width:800px){.overview{grid-template-columns:repeat(2,1fr)}.top{flex-wrap:wrap;gap:10px}.top-actions{width:100%;overflow:auto}.row{grid-template-columns:1fr}.summary-copy{display:none}}
+:root{
+  color-scheme:dark;
+  --bg:#141619;--panel:#1b1f23;--panel2:#20252a;--line:#343b44;
+  --text:#f2f4f6;--muted:#aab3bd;--soft:#7f8994;--accent:#9fb7ff;
+  --accent-bg:#2a3959;--warn:#efc47f;--bad:#ef9a9a;--good:#9fd8ad;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+button{font:inherit;color:inherit;border:1px solid #434b55;background:#292f35;border-radius:10px;padding:11px 15px;cursor:pointer}
+button:hover{background:#323941}
+button.primary{background:var(--accent-bg);border-color:#566fa9;font-weight:700}
+button.ghost{background:transparent}
+.app{max-width:1280px;margin:0 auto;min-height:100vh}
+header{display:flex;align-items:flex-start;gap:18px;padding:27px 34px 24px;border-bottom:1px solid var(--line)}
+header h1{font-size:33px;line-height:1.08;margin:0 0 5px;letter-spacing:-.025em}
+.scope{color:var(--muted);font-size:15px}
+.header-actions{margin-left:auto;display:flex;gap:10px;flex-wrap:wrap}
+main{padding:36px 34px 80px;max-width:1160px}
+.report-intro{display:flex;align-items:end;justify-content:space-between;gap:22px;flex-wrap:wrap;padding-bottom:28px;border-bottom:1px solid var(--line)}
+.report-intro h2{font-size:27px;margin:0 0 7px}
+.report-intro p{color:var(--muted);margin:0;max-width:700px}
+.utility-buttons{display:flex;gap:9px;flex-wrap:wrap}
+.section{padding:36px 0 10px}
+.section-head{display:flex;align-items:baseline;gap:12px;margin-bottom:16px}
+.section-head h2{font-size:28px;margin:0;letter-spacing:-.015em}
+.section-head .count{font-size:17px;color:var(--muted)}
+.finding{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;padding:22px 0;border-top:1px solid var(--line)}
+.finding:first-of-type{border-top:0}
+.finding h3{font-size:21px;line-height:1.3;margin:0 0 6px}
+.finding p{margin:0;color:#d3d9df;max-width:760px}
+.meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:11px;color:var(--muted);font-size:14px}
+.tag{border:1px solid #424a54;border-radius:999px;padding:5px 9px}
+.tag.high{color:var(--warn)}
+.tag.kept{color:var(--good)}
+.finding-actions{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.finding-actions button{white-space:nowrap}
+.accepted{opacity:.72}
+.accepted h3{text-decoration:none}
+.note{margin-top:9px;color:var(--good);font-size:14px}
+details.other{margin-top:42px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:22px 0}
+details.other summary{cursor:pointer;font-size:21px;font-weight:700}
+details.other summary span{color:var(--muted);font-weight:400;font-size:15px;margin-left:8px}
+.other-list{padding:18px 0 4px;color:var(--muted)}
+.other-row{padding:12px 0;border-top:1px solid #2a3036}
+.health{margin-top:42px}
+.health h2{font-size:25px;margin:0 0 14px}
+.health-links{display:flex;gap:9px;flex-wrap:wrap}
+.health-links a{color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:9px 12px;font-size:15px}
+.utility-panel{margin-top:42px;padding-top:32px;border-top:1px solid var(--line)}
+.utility-panel h2{font-size:25px;margin:0 0 16px}
+.utility-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.utility{border:1px solid var(--line);border-radius:13px;background:var(--panel);padding:18px}
+.utility strong{display:block;font-size:18px;margin-bottom:3px}
+.utility span{display:block;color:var(--muted);font-size:14px;margin-bottom:12px}
+@media(max-width:800px){
+  header{padding:23px 19px;flex-wrap:wrap}
+  .header-actions{margin-left:0;width:100%}
+  main{padding:28px 19px 55px}
+  .finding{grid-template-columns:1fr}
+  .finding-actions{justify-content:flex-start}
+  .utility-grid{grid-template-columns:1fr}
+}
 </style>
-</head><body>
+</head>
+<body>
 <div class="app">
-<div class="top"><div><h1>Quality Assurance</h1><div class="sub">Bikini Set · 312 items</div></div><div class="grow"></div><div class="top-actions"><button>Combined Captions</button><button>Metadata</button><button>Refresh</button><button class="primary">✦ Intelligence</button></div></div>
+<header>
+  <div>
+    <h1>Full QA Report</h1>
+    <div class="scope">Bikini Styles · 312 items in current training selection</div>
+  </div>
+  <div class="header-actions">
+    <button class="ghost">← QA Overview</button>
+    <button class="primary">Browse Recommendations</button>
+  </div>
+</header>
+
 <main>
-<div class="overview">
- <div class="stat"><b>12</b><span>Needs attention</span></div><div class="stat"><b>4</b><span>Prune / duplicate</span></div><div class="stat"><b>3</b><span>Consistency</span></div><div class="stat"><b>2</b><span>Balance</span></div><div class="stat"><b>3</b><span>Media</span></div>
+  <div class="report-intro">
+    <div>
+      <h2>Everything QA knows, including what you already reviewed.</h2>
+      <p>This is the complete report. The recommendation browser is the attention queue; this view keeps the underlying findings visible instead of pretending they stopped existing.</p>
+    </div>
+    <div class="utility-buttons">
+      <button>Combined Captions</button>
+      <button>Metadata</button>
+      <button>✦ Deep QA Scan</button>
+    </div>
+  </div>
+
+  <section class="section">
+    <div class="section-head"><h2>Underrepresented</h2><span class="count">3 findings</span></div>
+
+    <article class="finding accepted">
+      <div>
+        <h3>center-ring bottom appears only once</h3>
+        <p>Too little support to expect reliable learning as a distinct bikini-style concept.</p>
+        <div class="meta"><span class="tag high">High confidence</span><span class="tag">1 / 312 items</span><span class="tag kept">Kept intentionally</span></div>
+        <div class="note">Reviewed this session. Still part of the report.</div>
+      </div>
+      <div class="finding-actions"><button>Inspect 1</button></div>
+    </article>
+
+    <article class="finding">
+      <div>
+        <h3>double-side-ring top has weak support</h3>
+        <p>Four examples may be enough to influence the model, but probably not enough for reliable control.</p>
+        <div class="meta"><span class="tag">4 / 312 items</span><span class="tag">Training relevance: high</span></div>
+      </div>
+      <div class="finding-actions"><button class="primary">Review</button><button>Inspect 4</button></div>
+    </article>
+
+    <article class="finding">
+      <div>
+        <h3>one trim style exists as a single visual outlier</h3>
+        <p>The image may be desirable, but the concept has no supporting examples elsewhere in the current set.</p>
+        <div class="meta"><span class="tag">1 item</span><span class="tag">Visual + tags</span></div>
+      </div>
+      <div class="finding-actions"><button class="primary">Review</button><button>Inspect</button></div>
+    </article>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>Overrepresented</h2><span class="count">2 findings</span></div>
+
+    <article class="finding">
+      <div>
+        <h3>one construction combination dominates the set</h3>
+        <p>42 items share the same top shape, bottom shape and trim combination. This matters because garment construction is the stated training focus.</p>
+        <div class="meta"><span class="tag">42 items</span><span class="tag">13.5% of set</span><span class="tag">Training-focus weighted</span></div>
+      </div>
+      <div class="finding-actions"><button class="primary">Review</button><button>Inspect 42</button></div>
+    </article>
+
+    <article class="finding">
+      <div>
+        <h3>front-facing examples outweigh useful construction variation</h3>
+        <p>The pose itself is not the concern; the issue is that many of those images repeat the same garment structure.</p>
+        <div class="meta"><span class="tag">Pattern-level</span><span class="tag">Not a generic “too many front views” warning</span></div>
+      </div>
+      <div class="finding-actions"><button class="primary">Review</button></div>
+    </article>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>Prune & Redundancy</h2><span class="count">1 finding</span></div>
+    <article class="finding">
+      <div>
+        <h3>three near-duplicate pairs add little new training information</h3>
+        <p>Visual similarity is high enough that these are worth comparing before keeping all six files.</p>
+        <div class="meta"><span class="tag high">High confidence</span><span class="tag">6 files</span><span class="tag">Existing duplicate detector</span></div>
+      </div>
+      <div class="finding-actions"><button class="primary">Review</button><button>Compare</button></div>
+    </article>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>Consistency</h2><span class="count">1 finding</span></div>
+    <article class="finding">
+      <div>
+        <h3>ruched → v-string has one unusual exception</h3>
+        <p>17 of 18 ruched items also use v-string. The exception may be correct, but it is strong enough to deserve a human check.</p>
+        <div class="meta"><span class="tag">94% association</span><span class="tag">18 supporting items</span><span class="tag">Deterministic</span></div>
+      </div>
+      <div class="finding-actions"><button class="primary">Review</button><button>Inspect 18</button></div>
+    </article>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><h2>Captioning</h2><span class="count">1 finding</span></div>
+    <article class="finding">
+      <div>
+        <h3>ring construction terminology may be drifting</h3>
+        <p>Similar examples use overlapping phrases that may teach the same visual idea with inconsistent wording.</p>
+        <div class="meta"><span class="tag">Deep scan</span><span class="tag">11 affected items</span><span class="tag">LLM interpretation</span></div>
+      </div>
+      <div class="finding-actions"><button class="primary">Review</button><button>Inspect 11</button></div>
+    </article>
+  </section>
+
+  <details class="other">
+    <summary>Other observations <span>interesting, lower training impact</span></summary>
+    <div class="other-list">
+      <div class="other-row">Three images form a tiny 9:16 aspect-ratio cohort.</div>
+      <div class="other-row">One uncommon background phrase appears only twice.</div>
+      <div class="other-row">A deep scan noticed an unusual hairstyle difference; training relevance appears low.</div>
+    </div>
+  </details>
+
+  <section class="health">
+    <h2>Dataset health</h2>
+    <div class="health-links">
+      <a href="#">0 captionless</a>
+      <a href="#">7 incomplete</a>
+      <a href="#">19 unreviewed</a>
+      <a href="#">3 tag mismatches</a>
+      <a href="#">0 invalid AR</a>
+    </div>
+  </section>
+
+  <section class="utility-panel">
+    <h2>Utilities & existing reports</h2>
+    <div class="utility-grid">
+      <div class="utility"><strong>Combined Captions</strong><span>Caption sheet remains available without owning the QA surface.</span><button>Open</button></div>
+      <div class="utility"><strong>Metadata Explorer</strong><span>Raw media facts and cohorts remain available for inspection.</span><button>Open</button></div>
+      <div class="utility"><strong>Prune / Duplicates / Caption Report</strong><span>Existing report capabilities remain reachable and can still round-trip through Focus Sets.</span><button>Open Reports</button></div>
+    </div>
+  </section>
+</main>
 </div>
-<div class="health"><a href="#">0 captionless</a><a href="#">7 incomplete</a><a href="#">19 unreviewed</a><a href="#">3 tag mismatch</a><a href="#">0 invalid AR</a></div>
-
-<details class="qa-section" open><summary><strong>Prune & Redundancy</strong><span class="badge">4</span><span class="summary-copy">Blocking media problems, duplicates, training redundancy</span></summary>
-<div class="inside">
- <div class="row"><div class="kind">Blocking</div><div><div class="title">2 unsupported aspect-ratio items</div><div class="desc">Technical media issue already confirmed by Prune Candidates.</div><div class="evidence">1000×1400 · 1170×1300</div></div><div><button class="primary">Inspect 2</button></div></div>
- <div class="row"><div class="kind">Check</div><div><div class="title">3 near-duplicate image pairs</div><div class="desc">Visual-hash similarity suggests redundant source material.</div></div><div><button>Compare</button></div></div>
-</div></details>
-
-<details class="qa-section" open><summary><strong>Consistency</strong><span class="badge">3</span><span class="summary-copy">Exceptions, terminology, likely annotation omissions</span></summary>
-<div class="inside">
- <div class="row"><div class="kind">Check</div><div><div class="title">ruched → v-string has one exception</div><div class="desc">17/18 ruched items also use v-string; IMG_184.webp does not.</div><div class="evidence">Deterministic association · support 18 · 94%</div></div><div><button class="primary">Inspect 18</button></div></div>
- <div class="row"><div class="kind">AI · High</div><div><div class="title">Possible terminology drift in ring construction</div><div class="desc">“ring connectors” and “dual-ring” appear semantically overlapping across similar examples.</div></div><div><button>Inspect 11</button></div></div>
-</div></details>
-
-<details class="qa-section"><summary><strong>Balance & Coverage</strong><span class="badge">2</span><span class="summary-copy">Configured + discovered dimensions</span></summary>
-<div class="inside"><div class="row"><div class="kind">Info</div><div><div class="title">Top Shape: triangle dominates at 71%</div><div class="desc">Structured group distribution; no implication that the dataset must be artificially balanced.</div></div><div><button>Explore</button></div></div></div></details>
-
-<details class="qa-section"><summary><strong>Media Composition</strong><span class="badge">3</span><span class="summary-copy">Tiny cohorts and metadata outliers</span></summary>
-<div class="inside"><div class="row"><div class="kind">Info</div><div><div class="title">Only 3 items are 9:16</div><div class="desc">Small AR cohort worth a quick visual check.</div></div><div><button>Inspect 3</button></div></div></div></details>
-
-<details class="qa-section"><summary><strong>Caption Quality</strong><span class="badge">2</span><span class="summary-copy">Typos, wording drift, length and copy residue</span></summary>
-<div class="inside"><div class="row"><div class="kind">AI · High</div><div><div class="title">Likely typo: “tringle”</div><div class="desc">Appears once; “triangle” appears 86 times in the same semantic context.</div></div><div><button>Open item</button></div></div></div></details>
-
-<div class="utility"><strong>Reference</strong><span>Need the raw corpus or table?</span><div class="grow"></div><button>Combined Captions</button><button>Metadata Explorer</button></div>
-</main></div></body></html>
+</body>
+</html>

@@ -12,6 +12,7 @@ var checklistTermDescriptorDefaultsByKey = {}; // Legacy unscoped descriptor def
 var checklistTermWrappersByGroup = {}; // { requirement: { termLower: { prefix: "", suffix: "" } } }
 var checklistTermDescriptorDefaultsByGroup = {}; // { requirement: { termLower: { prefix: "", suffix: "" } } }
 var checklistTermDescriptorsByMedia = {}; // { mediaKey: { requirement: { termLower: { prefix: "", suffix: "" } } } }
+var checklistTermDescriptorSnapshotMediaKeys = new Set(); // Saved captions with frozen descriptor semantics.
 var checklistTermAffixesByKey = {}; // Legacy mirror of unscoped wrappers.
 var checklistExpandedRequirements = {};
 var checklistHiddenRequirements = {}; // { requirement: true } persisted per folder/set
@@ -544,6 +545,9 @@ function getChecklistEffectiveGroupTermDescriptor(requirementLabel, termText, me
   if (resolvedMediaKey && mediaKeyHasSavedCaption(resolvedMediaKey)) {
     var mediaDescriptor = getChecklistGroupTermDescriptorForMediaKey(resolvedMediaKey, requirementLabel, termText);
     if (mediaDescriptor) return mediaDescriptor;
+    if (checklistTermDescriptorSnapshotMediaKeys.has(resolvedMediaKey)) {
+      return { prefix: '', suffix: '' };
+    }
   }
   return getChecklistGroupTermDescriptorDefault(requirementLabel, termText);
 }
@@ -652,7 +656,7 @@ function setChecklistGroupTermDescriptorForMediaKey(mediaKey, requirementLabel, 
   if (!mediaMap || typeof mediaMap !== 'object') mediaMap = {};
   var groupMap = mediaMap[requirement];
   if (!groupMap || typeof groupMap !== 'object') groupMap = {};
-  var changed = setChecklistTermAffixEntry(groupMap, termText, prefix, suffix, { allowEmpty: true });
+  var changed = setChecklistTermAffixEntry(groupMap, termText, prefix, suffix);
   if (Object.keys(groupMap).length) mediaMap[requirement] = groupMap;
   else delete mediaMap[requirement];
   if (Object.keys(mediaMap).length) checklistTermDescriptorsByMedia[resolvedMediaKey] = mediaMap;
@@ -661,11 +665,13 @@ function setChecklistGroupTermDescriptorForMediaKey(mediaKey, requirementLabel, 
 }
 
 function commitChecklistGroupDescriptorSnapshotForMediaKey(mediaKey, requirementLabel, termText, sourceDescriptor) {
+  var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
   var term = normalizeChecklistTerm(termText);
-  if (!term) return false;
+  if (!resolvedMediaKey || !term) return false;
+  checklistTermDescriptorSnapshotMediaKeys.add(resolvedMediaKey);
   var descriptor = sourceDescriptor || getChecklistGroupTermDescriptorDefault(requirementLabel, term);
   return setChecklistGroupTermDescriptorForMediaKey(
-    mediaKey,
+    resolvedMediaKey,
     requirementLabel,
     term,
     descriptor && typeof descriptor === 'object' ? descriptor.prefix : '',
@@ -722,9 +728,16 @@ function setChecklistTermDescriptorDefault(termText, prefix, suffix) {
 
 function clearChecklistDescriptorSnapshotsForMediaKey(mediaKey) {
   var resolvedMediaKey = resolveChecklistTermMediaKey(mediaKey);
-  if (!resolvedMediaKey || !checklistTermDescriptorsByMedia[resolvedMediaKey]) return false;
-  delete checklistTermDescriptorsByMedia[resolvedMediaKey];
-  return true;
+  if (!resolvedMediaKey) return false;
+  var changed = false;
+  if (checklistTermDescriptorsByMedia[resolvedMediaKey]) {
+    delete checklistTermDescriptorsByMedia[resolvedMediaKey];
+    changed = true;
+  }
+  if (checklistTermDescriptorSnapshotMediaKeys.delete(resolvedMediaKey)) {
+    changed = true;
+  }
+  return changed;
 }
 
 function normalizeChecklistRequirementKey(requirementLabel) {
@@ -773,7 +786,7 @@ function assignChecklistTagToMediaKey(mediaKey, requirementLabel, termText, opti
   });
   ensureCaptionHelperPhraseInCatalog(term, !opts.skipSave);
 
-  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipSave) saveMediaAnnotationState(key);
   if (!opts.skipRefresh) refreshTagDrivenPanelsForMediaKey(key);
   if (shouldLiveSyncEditorToTemplateForMediaKey(key)) syncEditorToCurrentTemplatePreview();
   return true;
@@ -810,7 +823,7 @@ function unassignChecklistTagFromMediaKey(mediaKey, requirementLabel, termText, 
     });
   }
 
-  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipSave) saveMediaAnnotationState(key);
   if (!opts.skipRefresh) refreshTagDrivenPanelsForMediaKey(key);
   if (shouldLiveSyncEditorToTemplateForMediaKey(key)) syncEditorToCurrentTemplatePreview();
   return true;
@@ -919,7 +932,7 @@ function setChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel, i
     else delete checklistCheckedByMedia[key];
   }
   if (!opts.skipSync) syncReviewedFromChecklist(key);
-  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipSave) saveMediaAnnotationState(key);
   if (!opts.skipRender) renderChecklistPanel();
   if (!opts.skipRender) renderItemMetadataPanel();
   if (!opts.skipRender) renderAnnotateStrip();
@@ -1107,7 +1120,8 @@ function setReviewedRowClass(mediaKey, reviewed) {
   row.classList.toggle('reviewed', !!reviewed);
 }
 
-function syncReviewedFromChecklist(mediaKey) {
+function syncReviewedFromChecklist(mediaKey, options) {
+  var opts = options || {};
   if (!mediaKey) return;
   if (!state.reviewedSet || !(state.reviewedSet instanceof Set)) {
     state.reviewedSet = new Set();
@@ -1115,38 +1129,25 @@ function syncReviewedFromChecklist(mediaKey) {
   var reviewed = checklistAllCheckedForMedia(mediaKey);
   if (reviewed) state.reviewedSet.add(mediaKey);
   else state.reviewedSet.delete(mediaKey);
-  setReviewedRowClass(mediaKey, reviewed);
+  if (!opts.skipRowClass) setReviewedRowClass(mediaKey, reviewed);
   return false;
 }
 
-function syncReviewedFromChecklistAll() {
+function syncReviewedFromChecklistAll(options) {
+  var opts = options || {};
   var changed = false;
   if (!state || !Array.isArray(state.items)) return changed;
   for (var i = 0; i < state.items.length; i++) {
     var item = state.items[i];
     if (!item || !item.key) continue;
-    changed = syncReviewedFromChecklist(item.key) || changed;
+    changed = syncReviewedFromChecklist(item.key, opts) || changed;
   }
   return changed;
 }
 
 
 function saveChecklistToFolderState() {
-  var snapshot = snapshotFolderStateFromDom();
-  snapshot.caption_requirements = checklistItems.slice();
-  snapshot.caption_hidden_requirements = getChecklistHiddenRequirements();
-  snapshot.caption_group_primer_separators = JSON.parse(JSON.stringify(checklistPrimerSeparatorsByGroup));
-  snapshot.caption_group_primer_precedence = JSON.parse(JSON.stringify(checklistPrimerPrecedenceByGroup));
-  snapshot.caption_requirements_checked = JSON.parse(JSON.stringify(checklistCheckedByMedia));
-  snapshot.caption_requirement_keywords = JSON.parse(JSON.stringify(checklistKeywordsByItem));
-  snapshot.caption_term_wrappers = JSON.parse(JSON.stringify(checklistTermWrappersByKey));
-  snapshot.caption_term_affixes = JSON.parse(JSON.stringify(checklistTermAffixesByKey));
-  snapshot.caption_term_descriptor_defaults = JSON.parse(JSON.stringify(checklistTermDescriptorDefaultsByKey));
-  snapshot.caption_group_tags_by_media = JSON.parse(JSON.stringify(checklistAssignmentsByMedia));
-  snapshot.caption_group_term_wrappers = JSON.parse(JSON.stringify(checklistTermWrappersByGroup));
-  snapshot.caption_group_term_descriptor_defaults = JSON.parse(JSON.stringify(checklistTermDescriptorDefaultsByGroup));
-  snapshot.caption_group_term_descriptors_by_media = JSON.parse(JSON.stringify(checklistTermDescriptorsByMedia));
-  writeFolderStateFile(state.folder, snapshot);
+  writeFolderStateFile(state.folder, snapshotFolderStateFromDom());
 }
 
 function loadChecklistFromFolderState(folderState) {
@@ -1160,27 +1161,38 @@ function loadChecklistFromFolderState(folderState) {
   checklistHiddenRequirements = sanitizeChecklistHiddenRequirements(folderState.caption_hidden_requirements);
   checklistPrimerSeparatorsByGroup = sanitizeChecklistPrimerSeparators(folderState.caption_group_primer_separators);
   checklistPrimerPrecedenceByGroup = sanitizeChecklistPrimerPrecedence(folderState.caption_group_primer_precedence);
-  if (folderState.caption_requirements_checked && typeof folderState.caption_requirements_checked === 'object') {
-    checklistCheckedByMedia = JSON.parse(JSON.stringify(folderState.caption_requirements_checked));
-  } else {
-    checklistCheckedByMedia = {};
-  }
-  if (folderState.caption_requirement_keywords && typeof folderState.caption_requirement_keywords === 'object') {
-    checklistKeywordsByItem = JSON.parse(JSON.stringify(folderState.caption_requirement_keywords));
-  } else {
-    checklistKeywordsByItem = {};
-  }
-  checklistTermWrappersByKey = sanitizeChecklistTermAffixesMap(
-    folderState.caption_term_wrappers || folderState.caption_term_affixes
+  checklistCheckedByMedia = (folderState.caption_requirements_checked && typeof folderState.caption_requirements_checked === 'object')
+    ? folderState.caption_requirements_checked
+    : {};
+  checklistKeywordsByItem = (folderState.caption_requirement_keywords && typeof folderState.caption_requirement_keywords === 'object')
+    ? folderState.caption_requirement_keywords
+    : {};
+  checklistTermWrappersByKey = (folderState.caption_term_wrappers && typeof folderState.caption_term_wrappers === 'object')
+    ? folderState.caption_term_wrappers
+    : {};
+  checklistTermDescriptorDefaultsByKey = (folderState.caption_term_descriptor_defaults && typeof folderState.caption_term_descriptor_defaults === 'object')
+    ? folderState.caption_term_descriptor_defaults
+    : {};
+  checklistAssignmentsByMedia = (folderState.caption_group_tags_by_media && typeof folderState.caption_group_tags_by_media === 'object')
+    ? folderState.caption_group_tags_by_media
+    : {};
+  checklistTermWrappersByGroup = (folderState.caption_group_term_wrappers && typeof folderState.caption_group_term_wrappers === 'object')
+    ? folderState.caption_group_term_wrappers
+    : {};
+  checklistTermDescriptorDefaultsByGroup = (folderState.caption_group_term_descriptor_defaults && typeof folderState.caption_group_term_descriptor_defaults === 'object')
+    ? folderState.caption_group_term_descriptor_defaults
+    : {};
+  checklistTermDescriptorsByMedia = (folderState.caption_group_term_descriptors_by_media && typeof folderState.caption_group_term_descriptors_by_media === 'object')
+    ? folderState.caption_group_term_descriptors_by_media
+    : {};
+  checklistTermDescriptorSnapshotMediaKeys = new Set(
+    Array.isArray(folderState.caption_group_term_descriptor_snapshot_media_keys)
+      ? folderState.caption_group_term_descriptor_snapshot_media_keys
+      : []
   );
-  checklistTermDescriptorDefaultsByKey = sanitizeChecklistTermAffixesMap(folderState.caption_term_descriptor_defaults);
-  checklistAssignmentsByMedia = sanitizeChecklistAssignmentsByMedia(folderState.caption_group_tags_by_media);
-  checklistTermWrappersByGroup = sanitizeChecklistGroupTermAffixesMap(folderState.caption_group_term_wrappers, false);
-  checklistTermDescriptorDefaultsByGroup = sanitizeChecklistGroupTermAffixesMap(folderState.caption_group_term_descriptor_defaults, false);
-  checklistTermDescriptorsByMedia = sanitizeChecklistGroupTermDescriptorsByMedia(folderState.caption_group_term_descriptors_by_media);
   syncChecklistLegacyAffixesMirror();
 
-  syncReviewedFromChecklistAll();
+  syncReviewedFromChecklistAll({ skipRowClass: true });
   renderChecklistPanel();
 }
 
@@ -1241,7 +1253,7 @@ function clearChecklistReviewedRequirementsForMediaKey(mediaKey, requirementLabe
   if (Object.keys(checkedMap).length) checklistCheckedByMedia[key] = checkedMap;
   else delete checklistCheckedByMedia[key];
   if (!opts.skipSync) syncReviewedFromChecklist(key);
-  if (!opts.skipSave) saveChecklistToFolderState();
+  if (!opts.skipSave) saveMediaAnnotationState(key);
   if (!opts.skipRender) renderChecklistPanel();
   if (!opts.skipRender) {
     renderItemMetadataPanel();

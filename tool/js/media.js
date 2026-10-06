@@ -1,6 +1,15 @@
 // media.js
 // Global functions: selectPathMedia, navigateUp, renderPathPreview, reselectCurrentMediaFromPreview
 
+function syncMediaListActiveRow(mediaKey) {
+  if (!ui || !ui.mediaListEl) return;
+  var targetKey = String(mediaKey || '');
+  var rows = ui.mediaListEl.querySelectorAll('.media-item[data-type="media"]');
+  for (var i = 0; i < rows.length; i += 1) {
+    rows[i].classList.toggle('active', rows[i].getAttribute('data-key') === targetKey);
+  }
+}
+
 function scrollCurrentMediaRowIntoView() {
   if (!ui || !ui.mediaListEl || !state || !state.currentItem || !state.currentItem.key) {
     return;
@@ -93,10 +102,10 @@ function runPreviewActionByLabel(label) {
   action.run();
 }
 
-function updatePreviewActionControls() {
+function updatePreviewActionControls(visibleMedia) {
   if (!ui || !ui.previewActionsEl || !ui.previewMutationIndicatorEl || !ui.previewPrimaryActionAEl || !ui.previewPrimaryActionBEl || !ui.previewMoreActionsEl) return;
   if (typeof renderPreviewHeaderMeta === 'function') {
-    renderPreviewHeaderMeta();
+    renderPreviewHeaderMeta(visibleMedia);
   }
 
   var hasRating = function () {
@@ -503,7 +512,11 @@ function getAdvancedFlagFilterValues() {
 }
 
 function selectPathMedia(mediaItem) {
-  if (!isMediaItemInCurrentFilteredList(mediaItem)) {
+  var visibleMedia = getFilteredMediaItems(false);
+  var isVisible = !!(mediaItem && mediaItem.key && visibleMedia.some(function (item) {
+    return item && item.key === mediaItem.key;
+  }));
+  if (!isVisible) {
     var label = mediaItem && (mediaItem.label || mediaItem.fileName || mediaItem.key);
     return Promise.reject(new Error('Cannot select an item outside the current filtered list: ' + String(label || 'unknown item')));
   }
@@ -580,13 +593,13 @@ function selectPathMedia(mediaItem) {
     ui.editorEl.value = nextEditorValue;
     renderPathPreview(state.folder, mediaItem.fileName);
     setStatus(buildSelectedMediaStatus(mediaItem));
-    updatePreviewActionControls();
-    renderChecklistPanel();
+    updatePreviewActionControls(visibleMedia);
+    renderChecklistPanel({ skipItemDetailRefresh: true });
     renderItemTagsPanel();
-    renderItemMetadataPanel();
+    renderItemMetadataPanel({ skipHeader: true });
+    renderAnnotateStrip();
     updatePrimerCaptionResetUi();
-    // Re-render list to show selection
-    renderFileList();
+    syncMediaListActiveRow(mediaItem.key);
     scrollCurrentMediaRowIntoView();
     updateBalanceDistributionWheel();
     if (isFocusedCaptionOpen()) {
@@ -824,7 +837,7 @@ async function renderFileList() {
     ui.createSetFromResultsBtn.classList.toggle('hidden', !showCreateSetBtn);
   }
   if (typeof mediaGridUpdateEntryVisibility === 'function') {
-    mediaGridUpdateEntryVisibility();
+    mediaGridUpdateEntryVisibility(mediaItems, { skipHeader: true });
   }
   if (typeof mediaGridRefreshFromCurrentFilters === 'function') {
     mediaGridRefreshFromCurrentFilters();
@@ -935,7 +948,7 @@ async function renderFileList() {
   });
 
   syncSelectionWithVisibleMedia(mediaItems);
-  updatePreviewActionControls();
+  updatePreviewActionControls(mediaItems);
   updateBalanceDistributionWheel();
   if (typeof updateFocusSetUi === 'function') {
     updateFocusSetUi();

@@ -87,9 +87,9 @@ function ensureCaptionHelperPhraseInCatalog(text, persistNow, skipRender) {
   if (hasCaptionHelperPhrase(term)) return false;
   captionHelperPhrases.push(term);
   captionHelperPhrases.sort(captionHelperSort);
-  if (persistNow) {
-    saveCaptionHelpersToFolderState();
-  }
+  // The phrase catalog is derived from configured vocabulary and saved item
+  // annotations; it is not itself persisted in folder state. Callers persist
+  // the owning annotation/config mutation explicitly.
   return true;
 }
 
@@ -102,9 +102,6 @@ function mergeCaptionHelperPhrasesFromTagsMap(tagsMap, persistNow) {
       changed = ensureCaptionHelperPhraseInCatalog(tag, false, true) || changed;
     });
   });
-  if (changed && persistNow) {
-    saveCaptionHelpersToFolderState();
-  }
   return changed;
 }
 

@@ -981,10 +981,9 @@ function saveCaptionDirect(folder, media, text, mediaKey, options) {
         if (
           updatesCurrentFolder &&
           updatedKey &&
-          (hasCaption || previousHasCaption) &&
-          typeof saveChecklistToFolderState === 'function'
+          (hasCaption || previousHasCaption)
         ) {
-          saveChecklistToFolderState();
+          saveMediaAnnotationState(updatedKey);
         }
         // Toggle class on row
         if (updatesCurrentFolder) {

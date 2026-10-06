@@ -19,6 +19,69 @@ class FolderStateUnsafeWriteError(RuntimeError):
 _folder_state_mutation_lock = threading.Lock()
 
 
+def set_media_annotation_state(
+    state_path,
+    media_key,
+    *,
+    group_tags,
+    unscoped_tags,
+    checked_requirements,
+    descriptors,
+    descriptor_snapshot,
+    reviewed,
+):
+    key = str(media_key or "").strip()
+    if not key:
+        raise ValueError("Media annotation save requires a media key.")
+    if not isinstance(group_tags, dict):
+        raise ValueError("groupTags must be an object.")
+    if not isinstance(unscoped_tags, list):
+        raise ValueError("unscopedTags must be an array.")
+    if not isinstance(checked_requirements, dict):
+        raise ValueError("checkedRequirements must be an object.")
+    if not isinstance(descriptors, dict):
+        raise ValueError("descriptors must be an object.")
+
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+
+        def set_map_entry(field, value):
+            current = state.get(field)
+            current = dict(current) if isinstance(current, dict) else {}
+            if value:
+                current[key] = value
+            else:
+                current.pop(key, None)
+            state[field] = current
+
+        set_map_entry("caption_group_tags_by_media", group_tags)
+        set_map_entry("caption_tags_by_media", unscoped_tags)
+        set_map_entry("caption_requirements_checked", checked_requirements)
+        set_map_entry("caption_group_term_descriptors_by_media", descriptors)
+
+        snapshot_keys = state.get("caption_group_term_descriptor_snapshot_media_keys")
+        snapshot_keys = [str(value or "").strip() for value in snapshot_keys] if isinstance(snapshot_keys, list) else []
+        snapshot_keys = [value for value in snapshot_keys if value and value != key]
+        if descriptor_snapshot:
+            snapshot_keys.append(key)
+        state["caption_group_term_descriptor_snapshot_media_keys"] = snapshot_keys
+
+        reviewed_keys = state.get("reviewedKeys")
+        reviewed_keys = [str(value or "").strip() for value in reviewed_keys] if isinstance(reviewed_keys, list) else []
+        reviewed_keys = [value for value in reviewed_keys if value and value != key]
+        if reviewed:
+            reviewed_keys.append(key)
+        state["reviewedKeys"] = reviewed_keys
+
+        write_folder_state_atomic(path, state)
+
+    return {
+        "mediaKey": key,
+        "reviewed": bool(reviewed),
+    }
+
+
 def set_media_rating(state_path, media_key, rating):
     key = str(media_key or "").strip()
     if not key:

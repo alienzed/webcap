@@ -43,6 +43,11 @@ function sanitizeFolderState(data) {
     : (typeof primer.mappings === 'string' ? String(primer.mappings) : []);
   var reviewedKeys = Array.isArray(src.reviewedKeys) ? src.reviewedKeys : [];
   reviewedKeys = reviewedKeys.map(function (key) { return String(key || ''); }).filter(Boolean);
+  var captionHiddenRequirements = Array.isArray(src.caption_hidden_requirements)
+    ? Array.from(new Set(src.caption_hidden_requirements
+        .map(function (label) { return String(label || '').trim(); })
+        .filter(Boolean)))
+    : [];
   function sanitizeStringListMap(rawMap) {
     var cleanMap = {};
     if (!rawMap || typeof rawMap !== 'object') return cleanMap;
@@ -151,12 +156,22 @@ function sanitizeFolderState(data) {
       if (Object.keys(cleanBeforeMap).length) captionGroupPrimerPrecedence[group] = cleanBeforeMap;
     });
   }
+  var descriptorSnapshotMediaKeys = new Set(
+    Array.isArray(src.caption_group_term_descriptor_snapshot_media_keys)
+      ? src.caption_group_term_descriptor_snapshot_media_keys
+          .map(function (mediaKey) { return String(mediaKey || '').trim(); })
+          .filter(Boolean)
+      : []
+  );
   var captionGroupTermDescriptorsByMedia = {};
   if (src.caption_group_term_descriptors_by_media && typeof src.caption_group_term_descriptors_by_media === 'object') {
     Object.keys(src.caption_group_term_descriptors_by_media).forEach(function (mediaKey) {
       var key = String(mediaKey || '').trim();
       if (!key) return;
-      var cleanMap = sanitizeGroupAffixMap(src.caption_group_term_descriptors_by_media[mediaKey], true);
+      // Any legacy per-media descriptor map means this caption had an explicit
+      // descriptor snapshot, including maps whose entries were all empty.
+      descriptorSnapshotMediaKeys.add(key);
+      var cleanMap = sanitizeGroupAffixMap(src.caption_group_term_descriptors_by_media[mediaKey], false);
       if (Object.keys(cleanMap).length) captionGroupTermDescriptorsByMedia[key] = cleanMap;
     });
   }
@@ -188,6 +203,7 @@ function sanitizeFolderState(data) {
     reviewedKeys: reviewedKeys,
     flags: (typeof src.flags === 'object' && src.flags) ? src.flags : {},
     caption_requirements: Array.isArray(src.caption_requirements) ? src.caption_requirements.slice() : getDefaultRequirementItems().slice(),
+    caption_hidden_requirements: captionHiddenRequirements,
     caption_requirements_checked: (typeof src.caption_requirements_checked === 'object' && src.caption_requirements_checked) ? JSON.parse(JSON.stringify(src.caption_requirements_checked)) : {},
     caption_requirement_keywords: (typeof src.caption_requirement_keywords === 'object' && src.caption_requirement_keywords) ? JSON.parse(JSON.stringify(src.caption_requirement_keywords)) : {},
     caption_term_wrappers: captionTermWrappers,
@@ -197,6 +213,7 @@ function sanitizeFolderState(data) {
     caption_group_term_wrappers: captionGroupTermWrappers,
     caption_group_term_descriptor_defaults: captionGroupTermDescriptorDefaults,
     caption_group_term_descriptors_by_media: captionGroupTermDescriptorsByMedia,
+    caption_group_term_descriptor_snapshot_media_keys: Array.from(descriptorSnapshotMediaKeys),
     caption_group_primer_separators: captionGroupPrimerSeparators,
     caption_group_primer_precedence: captionGroupPrimerPrecedence,
     caption_set_notes: String(src.caption_set_notes || ''),
@@ -257,6 +274,65 @@ function writeCapturedFolderState(capturedSave) {
     allowOffCurrentFolder: true
   });
 }
+
+function saveMediaAnnotationState(mediaKey) {
+  var targetFolder = String((state && state.folder) || '');
+  var key = String(mediaKey || '').trim();
+  if (!key) return Promise.reject(new Error('Media annotation save requires a media key.'));
+
+  var payload = {
+    folder: targetFolder,
+    mediaKey: key,
+    groupTags: (checklistAssignmentsByMedia[key] && typeof checklistAssignmentsByMedia[key] === 'object')
+      ? checklistAssignmentsByMedia[key]
+      : {},
+    unscopedTags: Array.isArray(captionItemTagsByMedia[key]) ? captionItemTagsByMedia[key] : [],
+    checkedRequirements: (checklistCheckedByMedia[key] && typeof checklistCheckedByMedia[key] === 'object')
+      ? checklistCheckedByMedia[key]
+      : {},
+    descriptors: (checklistTermDescriptorsByMedia[key] && typeof checklistTermDescriptorsByMedia[key] === 'object')
+      ? checklistTermDescriptorsByMedia[key]
+      : {},
+    descriptorSnapshot: checklistTermDescriptorSnapshotMediaKeys.has(key),
+    reviewed: !!(state.reviewedSet && state.reviewedSet.has(key))
+  };
+
+  var performWrite = function () {
+    return fetch('/fs/folder_state/media_annotations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (response) {
+      return response.json().then(function (result) {
+        if (!response.ok || !result || result.ok === false) {
+          throw new Error(result && result.error ? result.error : 'Failed to save media annotation state.');
+        }
+        return true;
+      });
+    });
+  };
+
+  var previousWrite = folderStateWriteChains[targetFolder] || Promise.resolve();
+  var queuedWrite = previousWrite.catch(function () {
+    return false;
+  }).then(performWrite).catch(function (err) {
+    console.error('[webcap] MEDIA ANNOTATION STATE SAVE FAILED:', err);
+    setStatus('MEDIA ANNOTATION STATE SAVE FAILED: ' + (err && err.message ? err.message : err));
+    return false;
+  });
+  folderStateWriteChains[targetFolder] = queuedWrite;
+  queuedWrite.then(function () {
+    if (folderStateWriteChains[targetFolder] === queuedWrite) {
+      delete folderStateWriteChains[targetFolder];
+    }
+  }, function () {
+    if (folderStateWriteChains[targetFolder] === queuedWrite) {
+      delete folderStateWriteChains[targetFolder];
+    }
+  });
+  return queuedWrite;
+}
+
 
 function setMediaRating(folderPath, mediaKey, rating) {
   var targetFolder = String(folderPath || '');
@@ -408,17 +484,21 @@ function snapshotFolderStateFromDom() {
     reviewedKeys: reviewedKeys,
     flags: flags,
     caption_requirements: (typeof window.checklistItems !== 'undefined') ? window.checklistItems.slice() : undefined,
-    caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistCheckedByMedia)) : undefined,
-    caption_requirement_keywords: (typeof window.checklistKeywordsByItem !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistKeywordsByItem)) : undefined,
-    caption_term_wrappers: (typeof window.checklistTermWrappersByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermWrappersByKey)) : undefined,
-    caption_term_affixes: (typeof window.checklistTermAffixesByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermAffixesByKey)) : undefined,
-    caption_term_descriptor_defaults: (typeof window.checklistTermDescriptorDefaultsByKey !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorDefaultsByKey)) : undefined,
-    caption_group_tags_by_media: (typeof window.checklistAssignmentsByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistAssignmentsByMedia)) : undefined,
-    caption_group_term_wrappers: (typeof window.checklistTermWrappersByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermWrappersByGroup)) : undefined,
-    caption_group_term_descriptor_defaults: (typeof window.checklistTermDescriptorDefaultsByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorDefaultsByGroup)) : undefined,
-    caption_group_term_descriptors_by_media: (typeof window.checklistTermDescriptorsByMedia !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistTermDescriptorsByMedia)) : undefined,
-    caption_group_primer_separators: (typeof window.checklistPrimerSeparatorsByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistPrimerSeparatorsByGroup)) : undefined,
-    caption_group_primer_precedence: (typeof window.checklistPrimerPrecedenceByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistPrimerPrecedenceByGroup)) : undefined,
+    caption_hidden_requirements: (typeof getChecklistHiddenRequirements === 'function') ? getChecklistHiddenRequirements() : [],
+    caption_requirements_checked: (typeof window.checklistCheckedByMedia !== 'undefined') ? window.checklistCheckedByMedia : undefined,
+    caption_requirement_keywords: (typeof window.checklistKeywordsByItem !== 'undefined') ? window.checklistKeywordsByItem : undefined,
+    caption_term_wrappers: (typeof window.checklistTermWrappersByKey !== 'undefined') ? window.checklistTermWrappersByKey : undefined,
+    caption_term_affixes: (typeof window.checklistTermAffixesByKey !== 'undefined') ? window.checklistTermAffixesByKey : undefined,
+    caption_term_descriptor_defaults: (typeof window.checklistTermDescriptorDefaultsByKey !== 'undefined') ? window.checklistTermDescriptorDefaultsByKey : undefined,
+    caption_group_tags_by_media: (typeof window.checklistAssignmentsByMedia !== 'undefined') ? window.checklistAssignmentsByMedia : undefined,
+    caption_group_term_wrappers: (typeof window.checklistTermWrappersByGroup !== 'undefined') ? window.checklistTermWrappersByGroup : undefined,
+    caption_group_term_descriptor_defaults: (typeof window.checklistTermDescriptorDefaultsByGroup !== 'undefined') ? window.checklistTermDescriptorDefaultsByGroup : undefined,
+    caption_group_term_descriptors_by_media: (typeof window.checklistTermDescriptorsByMedia !== 'undefined') ? window.checklistTermDescriptorsByMedia : undefined,
+    caption_group_term_descriptor_snapshot_media_keys: (typeof window.checklistTermDescriptorSnapshotMediaKeys !== 'undefined')
+      ? Array.from(window.checklistTermDescriptorSnapshotMediaKeys)
+      : [],
+    caption_group_primer_separators: (typeof window.checklistPrimerSeparatorsByGroup !== 'undefined') ? window.checklistPrimerSeparatorsByGroup : undefined,
+    caption_group_primer_precedence: (typeof window.checklistPrimerPrecedenceByGroup !== 'undefined') ? window.checklistPrimerPrecedenceByGroup : undefined,
     caption_set_notes: String(window.captionHelperNotes || ''),
     test_generation_settings: (state.testGenerationSettings && typeof state.testGenerationSettings === 'object')
       ? JSON.parse(JSON.stringify(state.testGenerationSettings))
@@ -540,6 +620,7 @@ function applyFolderStateToDom(folderState) {
   }
   updateSuperSetControls();
   // Add new field restoration logic here as needed
+  return clean;
 }
 
 /**

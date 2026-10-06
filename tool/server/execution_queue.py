@@ -471,6 +471,35 @@ class EphemeralExecutionQueue:
             _remember_transient_receipt(receipt)
             return receipt
 
+    def cancel_or_stop(self, job_id):
+        now = time.time()
+        with _lock:
+            lane = self._lane()
+            job = self._find_job(job_id)
+            if job is None:
+                raise FileNotFoundError("Execution queue job does not exist.")
+            status = str(job.get("status") or "")
+            if status in TERMINAL_STATUSES:
+                return _public_job(job)
+            if status in PENDING_STATUSES:
+                job["status"] = "cancelled"
+                job["finishedAt"] = now
+                job["updatedAt"] = now
+                job["requestedAction"] = ""
+                receipt = _public_job(job)
+                _record_recent(lane, job)
+                lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
+                _refresh_positions(lane)
+                _remember_transient_receipt(receipt)
+                return receipt
+            if status in ACTIVE_STATUSES:
+                job["status"] = "stopping"
+                job["updatedAt"] = now
+                job["requestedAction"] = "stop"
+                _refresh_positions(lane)
+                return _public_job(job)
+            raise ValueError("Unsupported execution job status: " + status)
+
     def reset_unfinished(self):
         """Stop the active job and cancel every queued job in this ephemeral lane."""
         now = time.time()

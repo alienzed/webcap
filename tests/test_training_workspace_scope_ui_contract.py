@@ -288,10 +288,19 @@ def test_training_presentation_is_owned_by_training_surface():
 
 
 
-def test_training_workspace_mode_is_not_browser_persistent():
+def test_training_workspace_has_no_setup_mode_state_or_browser_persistence():
     script = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    state_script = (ROOT / "tool" / "js" / "training_workspace_state.js").read_text(encoding="utf-8")
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
 
     assert "trainingModeStorageKey" not in script
     assert "webcap.trainingMode." not in script
     assert "localStorage" not in script
-    assert "trainingWorkspaceState.selectedMode = normalizeTrainingWorkspaceMode(trainingWorkspaceState.selectedMode);" in script
+    assert "normalizeTrainingWorkspaceMode" not in script
+    assert "selectedMode" not in script
+    assert "selectedMode" not in state_script
+    assert "profile.setups" not in script
+    assert "mode: options.mode" not in runner
+    assert "job.mode" not in history
+    assert "job.datasetTarget" not in history

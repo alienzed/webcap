@@ -830,6 +830,7 @@ def _ensure_server():
             "--models-dir", str(models_dir),
             "--models-max", "1",
             "--no-models-autoload",
+            "--media-path", str(Path(app_config.FS_ROOT).resolve()),
             "--host", LLAMA_HOST,
             "--port", str(settings["port"]),
             "--log-colors", "off",
@@ -1589,12 +1590,42 @@ def normalize_freeform_messages(messages):
         role = str(message.get("role") or "").strip().lower()
         if role not in {"system", "user", "assistant"}:
             raise ValueError("Director Chat supports only system, user, and assistant messages.")
-        content = str(message.get("content") or "").strip()
+
+        raw_content = message.get("content")
+        if isinstance(raw_content, list):
+            parts = []
+            for part in raw_content:
+                if not isinstance(part, dict):
+                    raise ValueError("Multimodal message content parts must be objects.")
+                part_type = str(part.get("type") or "").strip().lower()
+                if part_type == "text":
+                    text = str(part.get("text") or "").strip()
+                    if not text:
+                        raise ValueError("Multimodal text content cannot be empty.")
+                    parts.append({"type": "text", "text": text})
+                    continue
+                if part_type == "image_url":
+                    image_url = part.get("image_url")
+                    image_url = image_url if isinstance(image_url, dict) else {}
+                    url = str(image_url.get("url") or "").strip()
+                    if not url.startswith("file://") or url.startswith("file:///"):
+                        raise ValueError("Local multimodal images must use a relative file:// URL.")
+                    relative = url[len("file://"):]
+                    if not relative or relative.startswith(("/", "\\")) or ".." in Path(relative).parts:
+                        raise ValueError("Local multimodal image path is invalid.")
+                    parts.append({"type": "image_url", "image_url": {"url": "file://" + relative}})
+                    continue
+                raise ValueError("Unsupported multimodal content type: " + (part_type or "empty"))
+            if not parts:
+                raise ValueError("Director Chat messages cannot be empty.")
+            normalized.append({"role": role, "content": parts})
+            continue
+
+        content = str(raw_content or "").strip()
         if not content:
             raise ValueError("Director Chat messages cannot be empty.")
         normalized.append({"role": role, "content": content})
     return normalized
-
 
 def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False):
     normalized = normalize_freeform_messages(messages)

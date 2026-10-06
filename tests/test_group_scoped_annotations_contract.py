@@ -437,3 +437,56 @@ def test_derived_caption_phrase_catalog_does_not_write_folder_state():
     )[0]
     assert "saveCaptionHelpersToFolderState" not in ensure
     assert "saveCaptionHelpersToFolderState" not in merge
+
+
+def test_incomplete_filter_progress_is_cached_per_media_item():
+    checklist = _read("tool/js/checklist_state.js")
+    details = _read("tool/js/item_details.js")
+
+    assert "var checklistRequirementProgressCache = {}" in checklist
+    assert "var checklistConfiguredRequirementsCache = null" in checklist
+    assert "function invalidateChecklistRequirementProgress(mediaKey)" in checklist
+    assert "function invalidateChecklistRequirementConfiguration()" in checklist
+    assert "function getChecklistConfiguredRequirementsMap()" in checklist
+
+    progress = details.split("function computeRequirementProgressForMediaKey", 1)[1].split(
+        "function computeReviewedProgressForMediaKey", 1
+    )[0]
+    assert "if (checklistRequirementProgressCache[key])" in progress
+    assert "var configuredRequirements = getChecklistConfiguredRequirementsMap();" in progress
+    assert "getChecklistKeywordTermsForRequirement(requirementLabel)" not in progress
+    assert "checklistRequirementProgressCache[key] = progress;" in progress
+
+
+def test_group_assignment_changes_invalidate_only_that_media_progress():
+    checklist = _read("tool/js/checklist_state.js")
+
+    assign = checklist.split("function assignChecklistTagToMediaKey", 1)[1].split(
+        "function unassignChecklistTagFromMediaKey", 1
+    )[0]
+    unassign = checklist.split("function unassignChecklistTagFromMediaKey", 1)[1].split(
+        "function moveChecklistAssignedTagForRequirement", 1
+    )[0]
+
+    assert "invalidateChecklistRequirementProgress(key);" in assign
+    assert "invalidateChecklistRequirementProgress(key);" in unassign
+    assert "invalidateChecklistRequirementConfiguration();" not in assign
+    assert "invalidateChecklistRequirementConfiguration();" not in unassign
+
+
+def test_requirement_configuration_changes_invalidate_all_incomplete_progress():
+    checklist = _read("tool/js/checklist_state.js")
+
+    keyword_setter = checklist.split("function setChecklistKeywordTermsForRequirement", 1)[1].split(
+        "function applyChecklistKeywordTermsForRequirement", 1
+    )[0]
+    config_refresh = checklist.split("function refreshChecklistConfigDrivenUi", 1)[1].split(
+        "function saveChecklistGlobalTermPin", 1
+    )[0]
+    group_refresh = checklist.split("function refreshChecklistGroupConfigurationUi", 1)[1].split(
+        "function deleteChecklistGroupByIndex", 1
+    )[0]
+
+    assert "invalidateChecklistRequirementConfiguration();" in keyword_setter
+    assert "invalidateChecklistRequirementConfiguration();" in config_refresh
+    assert "invalidateChecklistRequirementConfiguration();" in group_refresh

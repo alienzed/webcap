@@ -220,6 +220,21 @@ def test_session_status_projects_resolved_wildcard_values(tmp_path):
     assert status["wildcardValues"] == ["rooftop", "side"]
 
 
+def test_session_status_ignores_legacy_stored_wildcard_values(tmp_path):
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "test.json").write_text(json.dumps({
+        "status": "complete",
+        "sourcePrompt": "person in {studio|rooftop}, {front|side} view",
+        "resolvedPrompt": "person in rooftop, side view",
+        "wildcardValues": ["stale", "copy"],
+    }), encoding="utf-8")
+
+    status = bench._session_status(session)
+
+    assert status["wildcardValues"] == ["rooftop", "side"]
+
+
 def test_enqueued_session_exposes_wildcard_values_immediately(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
     monkeypatch.setattr(
@@ -236,6 +251,9 @@ def test_enqueued_session_exposes_wildcard_values_immediately(tmp_path, monkeypa
     )
 
     assert payload["latest"]["wildcardValues"] == ["rooftop", "side"]
+    session_dir = bench._session_directory(tmp_path, payload["latest"]["session"])
+    stored = json.loads((session_dir / "test.json").read_text(encoding="utf-8"))
+    assert "wildcardValues" not in stored
     reopened = bench.open_session(tmp_path, payload["latest"]["session"])
     assert reopened["wildcardValues"] == ["rooftop", "side"]
 

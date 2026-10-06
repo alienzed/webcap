@@ -251,6 +251,7 @@ function wireAllUi() {
 
   // Wire up review actions (if stats.js is loaded)
   wireReviewActions();
+  wireQaWorkbench();
   wirePruneCandidatesUi();
   wireDuplicateCandidatesUi();
   

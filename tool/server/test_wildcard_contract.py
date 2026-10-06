@@ -91,6 +91,7 @@ def build_request(captions, set_name="", focus=""):
         "For example, separate color, pattern, trim, top shape, and bottom shape rather than collapsing them into a single 'style' wildcard.\n"
         "- Recombine observed attribute values across dimensions. The goal is to make compatible learned attributes independently selectable, "
         "not merely replay complete caption fragments.\n"
+        "- Use only information present in the supplied captions. Do not invent new attributes or options.\n"
         "- Use only concrete values supported by the supplied captions. Do not invent unseen colors, garments, poses, locations, or traits.\n"
         "- Every wildcard option must itself be usable prompt text. Never emit category placeholders such as 'various styles', "
         "'other background', 'different poses', 'multiple colors', 'etc.', or similar descriptions of options you failed to enumerate.\n"

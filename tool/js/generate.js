@@ -2267,8 +2267,21 @@
     if (!prompt) throw new Error('Generate prompt editor is missing.');
     prompt.value = '';
     prompt.removeAttribute('data-model-id');
+    generateState.lorasByModel = {};
+    generateState.loraMode = 'selected';
+    generateState.sweepFolderByModel = {};
+    generateState.sweepSelections = {};
     generateState.promptLibrary.activeId = '';
+    generateState.promptLibrary.query = '';
     generateState.director.previousPrompt = null;
+    var instruction = el('generate-director-instruction');
+    if (instruction) instruction.value = '';
+    ['first_frame', 'last_frame'].forEach(function (role) {
+      var input = el('generate-reference-' + role);
+      if (!input) throw new Error('Generate reference input is missing for ' + role + '.');
+      input.value = '';
+      syncReferenceDropzone(role);
+    });
     setDirectorStatus('');
   }
 

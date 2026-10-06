@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WebCap QA Workbench — Triage mock</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{color-scheme:dark;--bg:#15171a;--panel:#1d2024;--panel2:#23272c;--line:#353b43;--text:#edf0f3;--muted:#9da6af;--accent:#b9c8ff;--warn:#ffd18a;--bad:#ff9999}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,sans-serif}button{font:inherit;color:inherit;background:#292e34;border:1px solid #414852;border-radius:7px;padding:7px 10px}.primary{background:#35466d}
+header{height:67px;display:flex;align-items:center;gap:10px;padding:0 18px;border-bottom:1px solid var(--line)}h1{font-size:19px;margin:0}.scope{color:var(--muted)}.grow{flex:1}.workspace{display:grid;grid-template-columns:390px 1fr;min-height:calc(100vh - 67px)}
+.list{border-right:1px solid var(--line);background:#181b1f}.filters{padding:12px;border-bottom:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap}.pill{font-size:12px;padding:5px 8px}.finding{padding:13px 15px;border-bottom:1px solid #2b3036;cursor:pointer}.finding.active{background:#242a31;box-shadow:inset 3px 0 0 var(--accent)}.finding .k{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.05em}.finding .t{font-weight:650;margin-top:2px}.finding .s{font-size:12px;color:var(--muted);margin-top:4px}.detail{padding:22px 28px;max-width:920px}.eyebrow{font-size:11px;text-transform:uppercase;color:var(--warn);letter-spacing:.06em}.detail h2{font-size:22px;margin:5px 0 8px}.lead{font-size:15px;color:#cbd1d7;max-width:780px}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}.fact{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:11px}.fact b{display:block;font-size:18px}.fact span{color:var(--muted);font-size:12px}.evidence{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:15px;margin:15px 0}.evidence h3{margin:0 0 8px;font-size:14px}.files{display:flex;gap:6px;flex-wrap:wrap}.file{background:#252a30;border:1px solid #383f48;border-radius:6px;padding:5px 7px;color:#cfd5db}.actions{display:flex;gap:8px;margin-top:18px}.note{color:var(--muted);font-size:12px;margin-top:18px}.utility{position:absolute;right:16px;bottom:16px;display:flex;gap:7px}
+@media(max-width:850px){.workspace{grid-template-columns:1fr}.list{border-right:0}.detail{border-top:1px solid var(--line)}.facts{grid-template-columns:1fr}.utility{position:static;margin:15px}}
+</style>
+</head><body>
+<header><div><h1>Quality Assurance</h1><div class="scope">Bikini Set · 312 items · 12 findings</div></div><div class="grow"></div><button>Combined Captions</button><button>Metadata</button><button class="primary">✦ Run Assistant</button></header>
+<div class="workspace">
+ <aside class="list">
+  <div class="filters"><button class="pill primary">All 12</button><button class="pill">Prune 4</button><button class="pill">Consistency 3</button><button class="pill">Balance 2</button><button class="pill">Media 3</button></div>
+  <div class="finding active"><div class="k">Check · consistency</div><div class="t">ruched → v-string has one exception</div><div class="s">18 affected · deterministic association</div></div>
+  <div class="finding"><div class="k">Blocking · media</div><div class="t">2 unsupported aspect-ratio items</div><div class="s">2 affected · prune candidate</div></div>
+  <div class="finding"><div class="k">AI · high</div><div class="t">Possible ring-construction terminology drift</div><div class="s">11 affected · captions + grouped tags</div></div>
+  <div class="finding"><div class="k">Check · redundancy</div><div class="t">3 near-duplicate image pairs</div><div class="s">6 affected · visual hash</div></div>
+  <div class="finding"><div class="k">Info · media composition</div><div class="t">Tiny 9:16 aspect-ratio cohort</div><div class="s">3 affected · metadata</div></div>
+  <div class="finding"><div class="k">AI · caption quality</div><div class="t">Likely typo: “tringle”</div><div class="s">1 affected · vocabulary anomaly</div></div>
+ </aside>
+ <main class="detail">
+  <div class="eyebrow">Check · deterministic association</div>
+  <h2>One unusual ruched / v-string exception</h2>
+  <div class="lead"><b>ruched</b> co-occurs with <b>v-string</b> on 17 of 18 items where ruched is assigned. That makes the one exception worth a quick human check, but it is not automatically wrong.</div>
+  <div class="facts">
+    <div class="fact"><b>18</b><span>supporting items</span></div>
+    <div class="fact"><b>94%</b><span>conditional confidence</span></div>
+    <div class="fact"><b>1</b><span>exception</span></div>
+  </div>
+  <div class="evidence"><h3>Exception</h3><div class="files"><span class="file">IMG_184.webp</span></div></div>
+  <div class="evidence"><h3>Why WebCap surfaced this</h3><p>Both values come from configured annotation groups and the relationship is unusually stable across the current set. The signal is deterministic; no LLM is required.</p><p class="note">An optional Assistant pass could interpret whether the relationship looks semantically meaningful or merely incidental.</p></div>
+  <div class="actions"><button class="primary">Inspect 18 as Focus Set</button><button>Open exception</button><button>Not useful</button></div>
+  <div class="note">Primary action remains inspection in existing WebCap workflows; QA does not create a parallel editor.</div>
+ </main>
+</div>
+</body></html>

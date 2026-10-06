@@ -1926,6 +1926,10 @@
   text-align: center;
 }
 
+.app.shell-revamp.workspace-surface-training .training-item-fallback[hidden] {
+  display: none;
+}
+
 .app.shell-revamp.workspace-surface-training .training-item-badges {
   position: absolute;
   top: 5px;

@@ -15,6 +15,43 @@ def isolate_generate_output_root(monkeypatch):
         "output_root",
         lambda: Path(generate_store.app_config.FS_ROOT) / "output",
     )
+    monkeypatch.setattr(
+        generate_store,
+        "write_webcap_metadata",
+        lambda _path, payload: payload,
+    )
+
+
+def test_generate_embedded_metadata_keeps_only_portable_reproduction_fields():
+    payload = generate_store._generation_embedded_metadata({
+        "modelId": "minimax_h3",
+        "sourcePrompt": "person in {studio|rooftop}",
+        "prompt": "aligned prompt",
+        "resolvedPrompt": "aligned prompt with rooftop",
+        "settings": {
+            "seed": 42,
+            "aspectRatio": "16:9",
+            "megapixels": 0.5,
+            "duration": 8,
+            "guidance": 3.5,
+        },
+        "loras": [{"name": "mh3/detail.safetensors", "strength": 0.8}],
+        "references": {
+            "first_frame": "work/generate-references/ref-1/first.png",
+        },
+        "workflowFile": "workflow.json",
+        "providerJobId": "provider-1",
+    })
+
+    assert payload == {
+        "model": "minimax_h3",
+        "prompt": "aligned prompt with rooftop",
+        "sourcePrompt": "person in {studio|rooftop}",
+        "seed": 42,
+        "parameters": {"guidance": 3.5},
+        "loras": [{"name": "mh3/detail.safetensors", "strength": 0.8}],
+        "references": {"first_frame": "first.png"},
+    }
 
 
 def test_generate_enqueue_is_global_and_uses_frozen_prepared_request(monkeypatch):

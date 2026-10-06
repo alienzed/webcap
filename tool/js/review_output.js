@@ -33,6 +33,7 @@ function activateFocusSet(fileNames, source, reportType) {
 }
 
 function getFocusSetReportLabel(reportType) {
+  if (reportType === 'qa') return 'Quality Assurance';
   if (reportType === 'review') return 'Review Set';
   if (reportType === 'pruneCandidates') return 'Prune Candidates';
   if (reportType === 'duplicateCandidates') return 'Duplicates';
@@ -57,26 +58,53 @@ function refreshReviewOutputSummary() {
   if (typeof refreshReviewWorkspaceBaseline === 'function') refreshReviewWorkspaceBaseline();
 }
 
-var reviewWorkspaceState = { detailTab: 'metadata', metadataScopeKey: '', reportReady: false, reportScopeKey: '' };
+var reviewWorkspaceState = { detailTab: 'qa', metadataScopeKey: '', reportReady: false, reportScopeKey: '' };
 
 function setReviewDetailTab(tab, options) {
   var opts = options || {};
-  var value = ['metadata', 'report', 'prune', 'duplicates'].indexOf(tab) !== -1 ? tab : 'metadata';
+  var allowed = ['qa', 'captions', 'metadata', 'report', 'prune', 'duplicates'];
+  var value = allowed.indexOf(tab) !== -1 ? tab : 'qa';
   reviewWorkspaceState.detailTab = value;
+
   Array.prototype.forEach.call(document.querySelectorAll('[data-review-detail-tab]'), function (button) {
     var active = button.getAttribute('data-review-detail-tab') === value;
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', active ? 'true' : 'false');
   });
-  [['metadata', 'review-metadata-pane'], ['report', 'review-report-pane'], ['prune', 'prune-candidates-pane'], ['duplicates', 'duplicate-candidates-pane']].forEach(function (entry) {
+
+  [
+    ['captions', 'caption-sheet-pane'],
+    ['metadata', 'review-metadata-pane'],
+    ['report', 'review-report-pane'],
+    ['prune', 'prune-candidates-pane'],
+    ['duplicates', 'duplicate-candidates-pane']
+  ].forEach(function (entry) {
     var pane = document.getElementById(entry[1]);
     if (pane) pane.classList.toggle('hidden', entry[0] !== value);
   });
-  if (value === 'metadata') refreshReviewWorkspaceBaseline(true);
-  if (value === 'report' && !opts.skipReportBuild && !reviewWorkspaceState.reportReady) buildReviewReport();
+
+  if (ui && ui.appEl) ui.appEl.classList.toggle('qa-utility-open', value !== 'qa');
+
+  if (value === 'qa') {
+    if (typeof renderQaWorkbench === 'function') renderQaWorkbench();
+    return;
+  }
+  if (value === 'captions') {
+    showCaptionSheet();
+    return;
+  }
+  if (value === 'metadata') {
+    refreshReviewWorkspaceBaseline(true);
+    return;
+  }
+  if (value === 'report' && !opts.skipReportBuild && !reviewWorkspaceState.reportReady) {
+    buildReviewReport();
+    return;
+  }
   if (value === 'prune') {
     renderPruneCandidatesReport();
     ensurePruneCandidatesForCurrentFolder(false).then(renderPruneCandidatesReport).catch(renderPruneCandidatesReport);
+    return;
   }
   if (value === 'duplicates') {
     renderDuplicateCandidatesReport();
@@ -102,6 +130,9 @@ function refreshReviewWorkspaceBaseline(forceMetadata) {
   reviewWorkspaceState.metadataScopeKey = key;
   if (typeof renderReviewWorkspaceMetadata === 'function') {
     renderReviewWorkspaceMetadata(state.folder, items.map(function (item) { return item.fileName; }));
+  }
+  if (reviewWorkspaceState.detailTab === 'qa' && typeof renderQaWorkbench === 'function') {
+    renderQaWorkbench();
   }
 }
 
@@ -157,6 +188,10 @@ function rerunFocusSetReport() {
   var focusSet = state && state.focusSet;
   var reportType = String(focusSet && focusSet.reportType || '');
   if (!reportType) return;
+  if (reportType === 'qa') {
+    returnToQaWorkbenchFromFocusSet();
+    return;
+  }
   if (reportType === 'duplicateCandidates') {
     returnToDuplicateCandidatesReport();
     return;

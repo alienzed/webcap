@@ -95,3 +95,16 @@ def test_director_chat_pin_is_ephemeral_ui_state():
     assert "webcap.directorChat.pinned" not in script
     assert "localStorage" not in script
     assert "state.pinned = false;" in script
+
+
+def test_generate_base_model_preference_is_config_backed():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    settings_script = (ROOT / "tool" / "js" / "app_settings.js").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+
+    assert "getGenerateModelPreference()" in script
+    assert "setGenerateModelPreference(" in script
+    assert "'/app/config/generate_model'" in script
+    assert "webcap.generate.model" not in script
+    assert "out.generate_model = String(out.generate_model || '').trim();" in settings_script
+    assert '@app.route("/app/config/generate_model", methods=["POST"])' in app

@@ -65,11 +65,8 @@ function beginFocusedCaptionPrefetchVision(prefetch, mediaItem, candidate) {
 
   var task = createCaptionVisionTask(mediaItem, candidate.text);
   prefetch.visionTask = task;
-  task.promise = task.promise.then(function (result) {
-    if (prefetch.discarded || focusedCaptionPrefetch !== prefetch) return null;
-    return result;
-  }).catch(function (err) {
-    if (!prefetch.discarded && focusedCaptionPrefetch === prefetch && captionVisionEnabled) {
+  task.promise.catch(function (err) {
+    if (!task.cancelled && !prefetch.discarded && focusedCaptionPrefetch === prefetch && captionVisionEnabled) {
       reportConsoleError('Focus Caption Vision', err);
     }
     return null;

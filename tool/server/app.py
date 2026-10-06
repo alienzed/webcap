@@ -44,7 +44,7 @@ from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
-from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_local_vision_models, status as storyboard_director_status
+from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
@@ -517,6 +517,27 @@ def app_director_model_save():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/app/config/vision_model", methods=["POST"])
+def app_vision_model_save():
+    data = request.get_json(silent=True)
+    try:
+        if not isinstance(data, dict):
+            raise ValueError("Vision model preference requires a JSON object.")
+        selected = data.get("modelId", "")
+        if not isinstance(selected, str):
+            raise ValueError("Vision model preference must be a string.")
+        current = app_config.load_config_from_disk()
+        current["vision_model"] = selected.strip()
+        saved = app_config.save_config_to_disk(current)
+        return jsonify({"ok": True, "config": saved})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        if app_config.FS_DEBUG:
+            app_config.debug_traceback()
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/app/config/generate_model", methods=["POST"])
 def app_generate_model_save():
     data = request.get_json(silent=True)
@@ -637,12 +658,17 @@ def caption_assist_route():
 @app.route("/caption/vision-capabilities", methods=["GET"])
 def caption_vision_capabilities_route():
     try:
-        models = list_local_vision_models()
+        models = list_vision_models(reload=_request_bool_arg("reload"))
+        configured = str((app_config.load_config_from_disk() or {}).get("vision_model") or "").strip()
+        available_ids = {str(item.get("id") or "") for item in models}
+        default_model = configured if configured in available_ids else str((models[0] if models else {}).get("id") or "")
         return jsonify({
             "ok": True,
             "available": bool(models),
             "models": models,
-            "defaultModel": str((models[0] if models else {}).get("id") or ""),
+            "defaultModel": default_model,
+            "configuredModel": configured,
+            "warnings": list(getattr(list_vision_models, "last_warnings", []) or []),
         })
     except Exception as exc:
         app.logger.exception("CAPTION VISION CAPABILITIES FAILED: %s", exc)
@@ -654,9 +680,9 @@ def caption_vision_check_route():
     data = request.get_json(silent=True) or {}
     try:
         model = str(data.get("model") or "").strip()
-        local_vision_ids = {str(item.get("id") or "") for item in list_local_vision_models()}
-        if not model or model not in local_vision_ids:
-            raise ValueError("Select an available local vision model.")
+        vision_ids = {str(item.get("id") or "") for item in list_vision_models()}
+        if not model or model not in vision_ids:
+            raise ValueError("Select an available Vision model.")
         relative_media = resolve_caption_vision_media(
             data.get("folder", ""),
             data.get("media", ""),

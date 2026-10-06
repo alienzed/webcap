@@ -2898,6 +2898,10 @@ iframe {
   border: 0;
   background: transparent;
 }
+.test-generations-wildcard-modal .test-generations-wildcard-analysis > div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+}
 .test-generations-wildcard-modal .test-generations-wildcard-output textarea {
   min-height: 150px;
   padding: 10px;
@@ -2971,7 +2975,7 @@ iframe {
   display: grid;
   gap: 5px;
 }
-.test-generations-wildcard-preview {
+#test-generations-wildcard-preview {
   min-height: 54px;
   max-height: 150px;
   margin: 0;

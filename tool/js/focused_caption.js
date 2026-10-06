@@ -264,6 +264,7 @@ function syncFocusedCaptionControls() {
     focusedCaptionState.itemKey = '';
     cancelFocusedCaptionPrefetch();
     clearCaptionAssistCandidate();
+    captionVisionEnabled = false;
   }
 
   if (!focusedCaptionState.open) {
@@ -390,7 +391,9 @@ function skipFocusedCaptionItem() {
     return Promise.resolve(false);
   }
   clearCaptionAssistCandidate();
-  return advanceFocusedCaption();
+  return cancelCurrentCaptionVision().then(function () {
+    return advanceFocusedCaption();
+  });
 }
 
 function startFocusedCaption(targetMediaKey) {

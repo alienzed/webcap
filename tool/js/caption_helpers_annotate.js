@@ -328,6 +328,10 @@ function clearAnnotateStripDeferredFilterRefresh() {
   annotateStripDeferredFilterRefreshFolder = '';
 }
 
+function shouldDeferAnnotateStripFilterRefresh(event) {
+  return !!(event && event.shiftKey && hasAnyActiveMediaFilter());
+}
+
 function flushAnnotateStripDeferredFilterRefresh() {
   if (!annotateStripDeferredFilterRefreshFolder) return false;
   var deferredFolder = annotateStripDeferredFilterRefreshFolder;
@@ -575,8 +579,7 @@ function renderAnnotateStrip() {
       chipTitle += ' - right-click to edit prefix/suffix';
       chip.title = chipTitle;
       chip.onclick = function (e) {
-        var deferFilterRefresh = !!(e && e.shiftKey && hasAnyActiveMediaFilter());
-        toggleAnnotateTag(groupRequirementLabel, term, deferFilterRefresh);
+        toggleAnnotateTag(groupRequirementLabel, term, shouldDeferAnnotateStripFilterRefresh(e));
       };
       chip.oncontextmenu = function (e) {
         e.preventDefault();

@@ -12,7 +12,7 @@ import sys
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
-from .caption_vision import build_caption_vision_messages, resolve_caption_vision_media
+from .caption_vision import build_caption_vision_messages, build_vision_image_caption_messages, resolve_caption_vision_media
 from .originals import copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
 from .file_ops import duplicate_folder_response, duplicate_media_response, open_in_explorer_response, open_path_in_explorer_response, open_in_vscode_response, rename_response
 from .media import color_suggestions_response, media_blur_background_response, media_convert_fps_response, media_convert_webp_png_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
@@ -709,6 +709,37 @@ def caption_vision_check_route():
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:
         app.logger.exception("CAPTION VISION FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/caption/vision-caption", methods=["POST"])
+def vision_image_caption_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        model = str(data.get("model") or "").strip()
+        vision_ids = {str(item.get("id") or "") for item in list_vision_models()}
+        if not model or model not in vision_ids:
+            raise ValueError("Select an available Vision model.")
+        relative_media = resolve_caption_vision_media(
+            data.get("folder", ""),
+            data.get("media", ""),
+        )
+        messages = build_vision_image_caption_messages(relative_media)
+        job = enqueue_llm(
+            "caption",
+            model,
+            {
+                "operation": "vision_image_caption",
+                "messages": messages,
+            },
+            context={
+                "runtimeOverrides": {"maxTokens": 384},
+            },
+            label="Vision Caption",
+        )
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("VISION IMAGE CAPTION FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

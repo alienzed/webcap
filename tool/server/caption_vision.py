@@ -44,6 +44,36 @@ CAPTION_VISION_RESPONSE_SCHEMA = {
 }
 
 
+VISION_IMAGE_CAPTION_SYSTEM_PROMPT = (
+    "You caption one image from visual evidence alone. "
+    "Write one concise, information-dense natural-language description of what is clearly visible. "
+    "Prioritize the main subject or subjects, appearance and clothing, pose or action, distinctive objects and details, "
+    "spatial relationships, setting or background, lighting, and camera viewpoint when those details are visually clear. "
+    "Use specific colors, materials, and shapes when they are clear in the image. "
+    "Do not use annotation tags, external knowledge, hidden context, or unsupported identity or demographic inferences. "
+    "Return only the caption text with no label, commentary, quotes, or markdown."
+)
+
+
+def build_vision_image_caption_messages(media_relative_path):
+    return [
+        {"role": "system", "content": VISION_IMAGE_CAPTION_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        "Describe this image accurately and concisely. Include distinctive visible details and relationships "
+                        "that would make the description useful on its own."
+                    ),
+                },
+                {"type": "image_url", "image_url": {"url": "file://" + str(media_relative_path or "").strip()}},
+            ],
+        },
+    ]
+
+
 CAPTION_VISION_SYSTEM_PROMPT = (
     "You verify a training caption against one image. "
     "For each candidate discrepancy, check both the image and the current caption before reporting it. "

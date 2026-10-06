@@ -5,6 +5,15 @@ import pytest
 from tool.server import caption_vision
 
 
+def test_standalone_vision_caption_prompt_uses_image_only_without_annotation_ontology():
+    messages = caption_vision.build_vision_image_caption_messages("bikini/item.jpg")
+
+    assert "visual evidence alone" in caption_vision.VISION_IMAGE_CAPTION_SYSTEM_PROMPT
+    assert "Do not use annotation tags" in caption_vision.VISION_IMAGE_CAPTION_SYSTEM_PROMPT
+    assert messages[1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
+    assert "groups" not in messages[1]["content"][0]["text"].lower()
+
+
 def test_caption_vision_prompt_preserves_known_group_options_and_uses_local_media_url():
     messages, groups = caption_vision.build_caption_vision_messages(
         "snow leopard bikini",
@@ -109,6 +118,49 @@ def test_caption_vision_route_queues_normalized_multimodal_caption_job(monkeypat
     assert captured["contract"]["messages"][1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
     assert captured["context"]["runtimeOverrides"]["maxTokens"] == 320
     assert captured["context"]["visionGroups"][0]["group"] == "Connector"
+
+
+def test_standalone_vision_caption_route_queues_plain_multimodal_caption_job(monkeypatch):
+    from tool.server import app as app_module
+
+    captured = {}
+    monkeypatch.setattr(
+        app_module,
+        "list_vision_models",
+        lambda reload=False: [{"id": "local::vision"}],
+    )
+    monkeypatch.setattr(
+        app_module,
+        "resolve_caption_vision_media",
+        lambda folder, media: "bikini/" + media,
+    )
+
+    def enqueue(client, model, contract, context=None, label=""):
+        captured.update(
+            client=client,
+            model=model,
+            contract=contract,
+            context=context,
+            label=label,
+        )
+        return {"jobId": "vision-caption-test"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
+
+    with app_module.app.test_client() as client:
+        response = client.post("/caption/vision-caption", json={
+            "model": "local::vision",
+            "folder": "bikini",
+            "media": "item.jpg",
+        })
+
+    assert response.status_code == 202
+    assert captured["client"] == "caption"
+    assert captured["model"] == "local::vision"
+    assert captured["contract"]["operation"] == "vision_image_caption"
+    assert captured["contract"]["messages"][1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
+    assert captured["context"]["runtimeOverrides"]["maxTokens"] == 384
+    assert captured["label"] == "Vision Caption"
 
 
 def test_caption_vision_route_accepts_remote_ollama_vision_model(monkeypatch):

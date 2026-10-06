@@ -23,6 +23,7 @@ def _require_llm_lane(lane_name):
 
 execution_clear_lane = _execution_queue.clear
 execution_consume_terminal_job = _execution_queue.consume_terminal_job
+execution_cancel_or_stop = _execution_queue.cancel_or_stop
 
 
 def execution_claim_next(lane_name, runnable_backlog_ids=None, expected_job_id=""):
@@ -809,6 +810,22 @@ def snapshot(include_terminal=False):
     }
 
 
+def cancel_job(job_id):
+    _ensure_execution_reconciled()
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        raise ValueError("LLM job ID is required.")
+    with _enqueue_lock:
+        result = execution_cancel_or_stop(job_id)
+        if str(result.get("status") or "") == "stopping":
+            from .storyboard_llm_runtime import stop_active_request
+            try:
+                stop_active_request()
+            except (ValueError, RuntimeError) as exc:
+                _logger.warning("LLM runtime could not be interrupted; abandoning its result: %s", exc)
+        return {"job": _job_view(result), "queue": snapshot(include_terminal=False)}
+
+
 def reset():
     _ensure_execution_reconciled()
     with _enqueue_lock:
@@ -829,9 +846,11 @@ def reset():
         return snapshot(include_terminal=False)
 
 
-def action(operation):
+def action(operation, job_id=""):
     _ensure_execution_reconciled()
     operation = str(operation or "").strip()
     if operation == "reset":
         return {"queue": reset()}
+    if operation == "cancel_job":
+        return cancel_job(job_id)
     raise ValueError("Unsupported LLM queue action: " + operation)

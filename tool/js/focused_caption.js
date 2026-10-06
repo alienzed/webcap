@@ -6,6 +6,8 @@ var focusedCaptionState = {
   itemKey: ''
 };
 
+var focusedCaptionPrefetch = null; // one-deep speculative { itemKey, index, fingerprint, jobId, promise, candidate, discarded }
+
 function isFocusedCaptionOpen() {
   return !!focusedCaptionState.open;
 }
@@ -18,6 +20,142 @@ function findFocusedCaptionMediaItemByKey(mediaKey) {
     if (item && item.key === key) return item;
   }
   return null;
+}
+
+function getNextFocusedCaptionTarget(fromIndex) {
+  var start = Math.max(-1, Number(fromIndex) || 0);
+  for (var index = start + 1; index < focusedCaptionState.itemKeys.length; index += 1) {
+    var itemKey = focusedCaptionState.itemKeys[index];
+    var item = findFocusedCaptionMediaItemByKey(itemKey);
+    if (item) return { index: index, itemKey: itemKey, item: item };
+  }
+  return null;
+}
+
+function cancelFocusedCaptionPrefetch() {
+  var prefetch = focusedCaptionPrefetch;
+  if (!prefetch) return Promise.resolve(false);
+  focusedCaptionPrefetch = null;
+  prefetch.discarded = true;
+  if (
+    captionAssistPendingJobId === prefetch.jobId ||
+    (captionAssistPendingJobId === 'prefetch' && !prefetch.jobId)
+  ) {
+    captionAssistPendingJobId = '';
+    updatePrimerCaptionResetUi();
+  }
+  if (!prefetch.jobId || prefetch.candidate) return Promise.resolve(true);
+  return cancelCaptionAssistJob(prefetch.jobId).catch(function (err) {
+    console.warn('[Focus Caption] Could not cancel speculative Caption Assist job:', err);
+    return false;
+  });
+}
+
+function startFocusedCaptionPrefetch(sourceMediaKey) {
+  if (!focusedCaptionState.open) return Promise.resolve(false);
+  if (String(focusedCaptionState.itemKey || '') !== String(sourceMediaKey || '')) return Promise.resolve(false);
+
+  var target = getNextFocusedCaptionTarget(focusedCaptionState.itemIndex);
+  if (!target) return cancelFocusedCaptionPrefetch();
+
+  var request = buildCaptionAssistRequest(target.item);
+  if (!request.model) return Promise.resolve(false);
+  var fingerprint = captionAssistRequestFingerprint(target.item, request);
+  if (
+    focusedCaptionPrefetch &&
+    focusedCaptionPrefetch.itemKey === target.itemKey &&
+    focusedCaptionPrefetch.fingerprint === fingerprint
+  ) {
+    return focusedCaptionPrefetch.promise || Promise.resolve(!!focusedCaptionPrefetch.candidate);
+  }
+
+  return cancelFocusedCaptionPrefetch().then(function () {
+    if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== String(sourceMediaKey || '')) {
+      return false;
+    }
+    var prefetch = {
+      itemKey: target.itemKey,
+      index: target.index,
+      fingerprint: fingerprint,
+      jobId: '',
+      promise: null,
+      candidate: null,
+      discarded: false
+    };
+    focusedCaptionPrefetch = prefetch;
+    prefetch.promise = requestCaptionAssistCandidate(target.item, request, {
+      onJob: function (job) {
+        prefetch.jobId = String(job.jobId || '');
+        if (prefetch.discarded) return cancelCaptionAssistJob(prefetch.jobId);
+        return null;
+      }
+    }).then(function (candidate) {
+      if (prefetch.discarded || focusedCaptionPrefetch !== prefetch) return null;
+      prefetch.candidate = candidate;
+      return candidate;
+    }).catch(function (err) {
+      if (!prefetch.discarded && focusedCaptionPrefetch === prefetch) {
+        focusedCaptionPrefetch = null;
+        console.warn('[Focus Caption] Caption Assist prefetch failed:', err);
+      }
+      return null;
+    });
+    return prefetch.promise;
+  });
+}
+
+function useFocusedCaptionPrefetchForCurrentItem() {
+  var mediaItem = state && state.currentItem;
+  var prefetch = focusedCaptionPrefetch;
+  if (!prefetch) return Promise.resolve(false);
+  if (
+    !mediaItem ||
+    mediaItem.key !== focusedCaptionState.itemKey ||
+    prefetch.itemKey !== mediaItem.key ||
+    prefetch.index !== focusedCaptionState.itemIndex
+  ) {
+    return cancelFocusedCaptionPrefetch().then(function () { return false; });
+  }
+
+  var currentRequest = buildCaptionAssistRequest(mediaItem);
+  var currentFingerprint = captionAssistRequestFingerprint(mediaItem, currentRequest);
+  if (currentFingerprint !== prefetch.fingerprint) {
+    return cancelFocusedCaptionPrefetch().then(function () { return false; });
+  }
+
+  function presentCandidate(candidate) {
+    if (!candidate || !focusedCaptionState.open || !state.currentItem || state.currentItem.key !== prefetch.itemKey) {
+      return false;
+    }
+    var latestRequest = buildCaptionAssistRequest(state.currentItem);
+    if (captionAssistRequestFingerprint(state.currentItem, latestRequest) !== prefetch.fingerprint) {
+      focusedCaptionPrefetch = null;
+      return false;
+    }
+    focusedCaptionPrefetch = null;
+    captionAssistCandidate = candidate;
+    syncCaptionAssistCandidateUi();
+    setStatus(
+      candidate.omittedAssignments.length
+        ? 'Caption Assist candidate failed annotation validation.'
+        : 'AI caption candidate ready.'
+    );
+    startFocusedCaptionPrefetch(candidate.mediaKey);
+    return true;
+  }
+
+  if (prefetch.candidate) return Promise.resolve(presentCandidate(prefetch.candidate));
+
+  captionAssistPendingJobId = prefetch.jobId || 'prefetch';
+  updatePrimerCaptionResetUi();
+  setStatus('Caption Assist preloaded candidate finishing...');
+  return prefetch.promise.then(function (candidate) {
+    if (captionAssistPendingJobId === prefetch.jobId || captionAssistPendingJobId === 'prefetch') {
+      captionAssistPendingJobId = '';
+      updatePrimerCaptionResetUi();
+    }
+    return presentCandidate(candidate);
+  });
 }
 
 function getFocusedCaptionEntryKeys(targetMediaKey) {
@@ -53,6 +191,7 @@ function syncFocusedCaptionControls() {
     focusedCaptionState.itemKeys = [];
     focusedCaptionState.itemIndex = 0;
     focusedCaptionState.itemKey = '';
+    cancelFocusedCaptionPrefetch();
     clearCaptionAssistCandidate();
   }
 
@@ -96,6 +235,7 @@ function stopFocusedCaption(message) {
   focusedCaptionState.itemKeys = [];
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = '';
+  cancelFocusedCaptionPrefetch();
   clearCaptionAssistCandidate();
   syncFocusedCaptionControls();
   renderPreviewHeaderMeta();
@@ -118,7 +258,10 @@ function prepareFocusedCaptionCurrentItem() {
     setStatus('Caption Assist is already running for this Focus Caption item.');
     return Promise.resolve(false);
   }
-  return runCaptionAssist();
+  return useFocusedCaptionPrefetchForCurrentItem().then(function (usedPrefetch) {
+    if (usedPrefetch) return true;
+    return runCaptionAssist();
+  });
 }
 
 function syncFocusedCaptionSelection(mediaKey) {
@@ -260,3 +403,5 @@ window.syncFocusedCaptionSelection = syncFocusedCaptionSelection;
 window.syncFocusedCaptionControls = syncFocusedCaptionControls;
 window.syncFocusedCaptionAfterAssist = syncFocusedCaptionAfterAssist;
 window.advanceFocusedCaption = advanceFocusedCaption;
+window.startFocusedCaptionPrefetch = startFocusedCaptionPrefetch;
+window.cancelFocusedCaptionPrefetch = cancelFocusedCaptionPrefetch;

@@ -603,15 +603,7 @@ def _session_status(session_directory):
         visible["modelId"] = str(visible.get("model") or get_test_model().PROFILE_ID)
     if not visible.get("resultFolder"):
         visible["resultFolder"] = _session_result_folder(session_directory)
-    stored_wildcard_values = visible.get("wildcardValues")
-    visible["wildcardValues"] = (
-        list(stored_wildcard_values)
-        if isinstance(stored_wildcard_values, list) and stored_wildcard_values
-        else _resolved_wildcard_values(
-            visible.get("sourcePrompt"),
-            visible.get("resolvedPrompt") or visible.get("prompt"),
-        )
-    )
+    _project_wildcard_fields(visible)
     return visible
 
 
@@ -1185,6 +1177,345 @@ def _resolved_wildcard_values(source_prompt, resolved_prompt):
     return values if position == len(resolved) else []
 
 
+_WILDCARD_SUMMARY_LOW_TERMS = {
+    "view", "shot", "camera", "angle", "perspective", "lighting",
+    "background", "setting", "scene", "breast", "breasts", "body",
+    "physique", "music", "beat", "audio", "sound", "woman", "man",
+    "person", "people",
+}
+_WILDCARD_SUMMARY_MID_TERMS = {
+    "hair", "skin", "eye", "eyes", "face", "smile", "freckles",
+    "glasses", "clothing", "outfit", "shirt", "dress", "skirt",
+    "pants", "trousers", "jacket", "coat", "top", "bottom", "trim",
+    "bikini", "swimsuit", "shoe", "shoes",
+}
+_WILDCARD_SUMMARY_PLACE_TERMS = {
+    "bedroom", "beach", "pool", "apartment", "studio", "room", "street",
+    "forest", "city", "park", "kitchen", "bathroom", "office", "outdoors",
+    "outdoor", "indoors", "indoor",
+}
+_WILDCARD_SUMMARY_ACTION_PREFIXES = (
+    "standing", "sitting", "kneeling", "walking", "running", "rotating",
+    "stretching", "holding", "looking", "posing", "lying", "dancing",
+    "turning", "leaning", "arching", "slowly", "raising", "lowering",
+)
+_WILDCARD_SUMMARY_GENERIC_SET_TERMS = {
+    "set", "dataset", "training", "train", "images", "image",
+    "videos", "video", "data", "test",
+}
+
+
+def _match_top_level_wildcard_selections(nodes, resolved, node_index=0, position=0):
+    if node_index >= len(nodes):
+        return position, []
+
+    kind, value = nodes[node_index]
+    if kind == "literal":
+        next_position = _consume_wildcard_fragment(resolved, position, value)
+        if next_position is None:
+            return None
+        return _match_top_level_wildcard_selections(
+            nodes,
+            resolved,
+            node_index + 1,
+            next_position,
+        )
+
+    for option in value:
+        option_match = _match_wildcard_nodes(option, resolved, 0, position)
+        if option_match is None:
+            continue
+        option_position, _nested_values = option_match
+        tail_match = _match_top_level_wildcard_selections(
+            nodes,
+            resolved,
+            node_index + 1,
+            option_position,
+        )
+        if tail_match is None:
+            continue
+        tail_position, tail_values = tail_match
+        selected_text = _normalize_wildcard_text(resolved[position:option_position])
+        return tail_position, [selected_text] + tail_values
+
+    return None
+
+
+def _top_level_wildcard_spans(source):
+    text = str(source or "")
+    spans = []
+    depth = 0
+    start = None
+    for index, char in enumerate(text):
+        if char == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif char == "}":
+            if depth <= 0:
+                return []
+            depth -= 1
+            if depth == 0 and start is not None:
+                spans.append((start, index + 1))
+                start = None
+    return spans if depth == 0 else []
+
+
+def _wildcard_neighbor_literal(nodes, node_index, direction):
+    index = node_index + direction
+    while 0 <= index < len(nodes):
+        kind, value = nodes[index]
+        if kind == "literal":
+            text = _normalize_wildcard_text(value)
+            if text:
+                return text
+        index += direction
+    return ""
+
+
+def _wildcard_summary_suffix(after_literal):
+    raw = str(after_literal or "").lstrip()
+    if not raw or raw[0] in ",;:":
+        return ""
+    text = _normalize_wildcard_text(raw)
+    candidate = re.split(
+        r"[,.;:!?]|\b(?:and|with|while|who|which|that|she|he|they|is|are|was|were)\b",
+        text,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
+    words = _normalize_wildcard_text(candidate).split()
+    return " ".join(words[:4])
+
+
+def _clean_wildcard_summary_selection(value):
+    text = _normalize_wildcard_text(value).strip(" ,.;:")
+    text = re.sub(r"^(?:with|in|on|at)\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^(?:a|an|the)\s+", "", text, flags=re.IGNORECASE)
+    return text
+
+
+def _wildcard_set_concept(owner_folder):
+    name = Path(str(owner_folder or "").replace("\\", "/")).name
+    name = re.sub(r"[_-]+", " ", name).casefold()
+    terms = [
+        term for term in re.findall(r"[a-z0-9]+", name)
+        if len(term) > 2 and term not in _WILDCARD_SUMMARY_GENERIC_SET_TERMS
+    ]
+    return " ".join(terms), terms
+
+
+def _wildcard_summary_semantic_base(item):
+    before_words = _normalize_wildcard_text(item.get("before")).split()
+    after_words = _normalize_wildcard_text(item.get("after")).split()
+    context = " ".join([
+        str(item.get("phrase") or ""),
+        " ".join(before_words[-3:]),
+        " ".join(after_words[:4]),
+        str(item.get("groupSource") or ""),
+    ]).casefold()
+    words = set(re.findall(r"[a-z-]+", context))
+
+    if words.intersection(_WILDCARD_SUMMARY_LOW_TERMS):
+        score = 0
+    elif words.intersection(_WILDCARD_SUMMARY_MID_TERMS):
+        score = 30
+    else:
+        score = 50
+
+    raw = _normalize_wildcard_text(item.get("raw")).casefold()
+    if words.intersection(_WILDCARD_SUMMARY_PLACE_TERMS):
+        score = min(score, 0)
+    if raw.startswith(_WILDCARD_SUMMARY_ACTION_PREFIXES):
+        score = min(score, 0)
+    return score
+
+
+def _wildcard_summary_score(item, source_prompt, owner_folder):
+    score = _wildcard_summary_semantic_base(item)
+    concept, concept_terms = _wildcard_set_concept(owner_folder)
+    source = str(source_prompt or "").casefold()
+    concept_positions = []
+
+    if concept:
+        position = source.find(concept)
+        if position >= 0:
+            concept_positions.append(position)
+    if not concept_positions:
+        for term in concept_terms:
+            position = source.find(term)
+            if position >= 0:
+                concept_positions.append(position)
+
+    bonus = 0
+    if concept_positions:
+        start, end = item.get("span") or (0, 0)
+        distance = min(
+            0 if start <= position <= end else min(abs(start - position), abs(end - position))
+            for position in concept_positions
+        )
+        if distance <= 80:
+            bonus = 70
+        elif distance <= 160:
+            bonus = 55
+        elif distance <= 260:
+            bonus = 35
+        elif distance <= 400:
+            bonus = 15
+
+    phrase = str(item.get("phrase") or "").casefold()
+    if concept and concept in phrase:
+        bonus = max(bonus, 80)
+    elif concept_terms:
+        matched_terms = sum(1 for term in concept_terms if term in phrase)
+        required_terms = max(1, min(2, len(concept_terms)))
+        if matched_terms >= required_terms:
+            bonus = max(bonus, 70)
+
+    return score + bonus
+
+
+def _wildcard_summary_items(source_prompt, resolved_prompt):
+    source = str(source_prompt or "")
+    resolved = _normalize_wildcard_text(resolved_prompt)
+    if "|" not in source or "{" not in source:
+        return []
+
+    try:
+        nodes = _parse_wildcard_nodes(source)
+    except ValueError:
+        return []
+
+    matched = _match_top_level_wildcard_selections(nodes, resolved)
+    if matched is None:
+        return []
+    position, selections = matched
+    if position != len(resolved):
+        return []
+
+    spans = _top_level_wildcard_spans(source)
+    group_nodes = [
+        (node_index, value)
+        for node_index, (kind, value) in enumerate(nodes)
+        if kind == "group"
+    ]
+    if len(spans) != len(group_nodes) or len(selections) != len(group_nodes):
+        return []
+
+    items = []
+    for group_index, ((node_index, _group), selected) in enumerate(zip(group_nodes, selections)):
+        if not selected:
+            continue
+        before = _wildcard_neighbor_literal(nodes, node_index, -1)
+        after = _wildcard_neighbor_literal(nodes, node_index, 1)
+        suffix = _wildcard_summary_suffix(after)
+        phrase = _clean_wildcard_summary_selection(selected)
+        if phrase and suffix and suffix.casefold() not in phrase.casefold():
+            phrase = phrase + " " + suffix
+        if not phrase:
+            continue
+
+        anchor = suffix or phrase.split()[-1]
+        start, end = spans[group_index]
+        items.append({
+            "index": group_index,
+            "raw": selected,
+            "phrase": phrase,
+            "anchor": anchor,
+            "before": before,
+            "after": after,
+            "span": (start, end),
+            "groupSource": source[start:end],
+        })
+    return items
+
+
+def _resolved_wildcard_summary(source_prompt, resolved_prompt, owner_folder=""):
+    items = _wildcard_summary_items(source_prompt, resolved_prompt)
+    if not items:
+        return []
+
+    aggregates = []
+    by_anchor = {}
+    for item in items:
+        anchor = str(item.get("anchor") or "").strip()
+        key = anchor.casefold() if anchor else "group-" + str(item.get("index"))
+        score = _wildcard_summary_score(item, source_prompt, owner_folder)
+        aggregate = by_anchor.get(key)
+        if aggregate is None:
+            aggregate = {
+                "anchor": anchor,
+                "items": [],
+                "score": score,
+                "index": int(item.get("index") or 0),
+            }
+            by_anchor[key] = aggregate
+            aggregates.append(aggregate)
+        aggregate["items"].append(item)
+        aggregate["score"] = max(int(aggregate.get("score") or 0), score)
+
+    for aggregate in aggregates:
+        group_items = aggregate["items"]
+        anchor = str(aggregate.get("anchor") or "").strip()
+        if len(group_items) == 1:
+            aggregate["phrase"] = str(group_items[0].get("phrase") or "")
+            continue
+
+        components = []
+        anchor_folded = anchor.casefold()
+        for item in group_items:
+            phrase = str(item.get("phrase") or "").strip()
+            phrase_folded = phrase.casefold()
+            suffix = " " + anchor_folded if anchor_folded else ""
+            if anchor_folded and phrase_folded.endswith(suffix):
+                component = phrase[:-(len(anchor) + 1)].strip()
+            elif phrase_folded == anchor_folded:
+                component = ""
+            else:
+                component = phrase
+            if component and component.casefold() not in {value.casefold() for value in components}:
+                components.append(component)
+        aggregate["phrase"] = " ".join(components + ([anchor] if anchor else [])).strip()
+
+    ranked = sorted(
+        aggregates,
+        key=lambda item: (-int(item.get("score") or 0), int(item.get("index") or 0)),
+    )
+    chosen = [item for item in ranked if int(item.get("score") or 0) >= 50][:5]
+    if len(chosen) < 3:
+        for item in ranked:
+            if item in chosen:
+                continue
+            chosen.append(item)
+            if len(chosen) >= 3:
+                break
+
+    return [
+        str(item.get("phrase") or "").strip()
+        for item in chosen
+        if str(item.get("phrase") or "").strip()
+    ]
+
+
+def _project_wildcard_fields(payload):
+    visible = payload
+    stored_wildcard_values = visible.get("wildcardValues")
+    visible["wildcardValues"] = (
+        list(stored_wildcard_values)
+        if isinstance(stored_wildcard_values, list) and stored_wildcard_values
+        else _resolved_wildcard_values(
+            visible.get("sourcePrompt"),
+            visible.get("resolvedPrompt") or visible.get("prompt"),
+        )
+    )
+    visible["wildcardSummary"] = _resolved_wildcard_summary(
+        visible.get("sourcePrompt"),
+        visible.get("resolvedPrompt") or visible.get("prompt"),
+        visible.get("ownerFolder"),
+    )
+    return visible
+
+
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
                            selected_files=None, candidate_strengths=None, include_base=True, model_id=None,
                            aspect_ratio=None, megapixels=None, duration=None):
@@ -1511,15 +1842,7 @@ def _sync_inference_session(session_directory):
         visible["running"] = 1 if active is not None else 0
         visible["session"] = Path(session_directory).name
         visible["resultFolder"] = visible.get("resultFolder") or _session_result_folder(session_directory)
-        stored_wildcard_values = visible.get("wildcardValues")
-        visible["wildcardValues"] = (
-            list(stored_wildcard_values)
-            if isinstance(stored_wildcard_values, list) and stored_wildcard_values
-            else _resolved_wildcard_values(
-                visible.get("sourcePrompt"),
-                visible.get("resolvedPrompt") or visible.get("prompt"),
-            )
-        )
+        _project_wildcard_fields(visible)
 
         if active is not None:
             metadata = active.get("metadata") if isinstance(active.get("metadata"), dict) else {}

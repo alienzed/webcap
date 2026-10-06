@@ -46,7 +46,7 @@ function cancelFocusedCaptionPrefetch() {
   }
   if (!prefetch.jobId || prefetch.candidate) return Promise.resolve(true);
   return cancelCaptionAssistJob(prefetch.jobId).catch(function (err) {
-    console.warn('[Focus Caption] Could not cancel speculative Caption Assist job:', err);
+    reportConsoleWarning('Focus Caption', 'Could not cancel speculative Caption Assist job: ' + String(err && err.message ? err.message : err));
     return false;
   });
 }
@@ -96,7 +96,7 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
     }).catch(function (err) {
       if (!prefetch.discarded && focusedCaptionPrefetch === prefetch) {
         focusedCaptionPrefetch = null;
-        console.warn('[Focus Caption] Caption Assist prefetch failed:', err);
+        reportConsoleError('Focus Caption', err);
       }
       return null;
     });

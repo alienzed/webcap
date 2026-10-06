@@ -13,9 +13,18 @@ function sanitizeFolderState(data) {
   var testGenerationSettings = (src.test_generation_settings && typeof src.test_generation_settings === 'object')
     ? src.test_generation_settings
     : {};
-  var testGenerationByModel = (src.test_generation_by_model && typeof src.test_generation_by_model === 'object')
-    ? JSON.parse(JSON.stringify(src.test_generation_by_model))
-    : {};
+  var testGenerationByModel = {};
+  if (src.test_generation_by_model && typeof src.test_generation_by_model === 'object' && !Array.isArray(src.test_generation_by_model)) {
+    Object.keys(src.test_generation_by_model).forEach(function (modelId) {
+      var entry = src.test_generation_by_model[modelId];
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return;
+      testGenerationByModel[String(modelId)] = {
+        settings: (entry.settings && typeof entry.settings === 'object' && !Array.isArray(entry.settings))
+          ? JSON.parse(JSON.stringify(entry.settings))
+          : {}
+      };
+    });
+  }
   var lastTrainingArchive = (src.last_training_archive && typeof src.last_training_archive === 'object' && !Array.isArray(src.last_training_archive))
     ? JSON.parse(JSON.stringify(src.last_training_archive))
     : {};
@@ -191,7 +200,6 @@ function sanitizeFolderState(data) {
     caption_group_primer_separators: captionGroupPrimerSeparators,
     caption_group_primer_precedence: captionGroupPrimerPrecedence,
     caption_set_notes: String(src.caption_set_notes || ''),
-    test_generation_prompt: String(src.test_generation_prompt || ''),
     test_generation_settings: {
       aspectRatio: String(testGenerationSettings.aspectRatio || ''),
       megapixels: isFinite(testGenerationMegapixels) && testGenerationMegapixels > 0 ? testGenerationMegapixels : null,
@@ -412,7 +420,6 @@ function snapshotFolderStateFromDom() {
     caption_group_primer_separators: (typeof window.checklistPrimerSeparatorsByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistPrimerSeparatorsByGroup)) : undefined,
     caption_group_primer_precedence: (typeof window.checklistPrimerPrecedenceByGroup !== 'undefined') ? JSON.parse(JSON.stringify(window.checklistPrimerPrecedenceByGroup)) : undefined,
     caption_set_notes: String(window.captionHelperNotes || ''),
-    test_generation_prompt: String(state.testGenerationPrompt || ''),
     test_generation_settings: (state.testGenerationSettings && typeof state.testGenerationSettings === 'object')
       ? JSON.parse(JSON.stringify(state.testGenerationSettings))
       : {},
@@ -459,7 +466,6 @@ function applyFolderStateToDom(folderState) {
   state.ratings = (clean && clean.ratings_by_media && typeof clean.ratings_by_media === 'object')
     ? clean.ratings_by_media
     : {};
-  state.testGenerationPrompt = String(clean.test_generation_prompt || '');
   state.testGenerationSettings = (clean.test_generation_settings && typeof clean.test_generation_settings === 'object')
     ? JSON.parse(JSON.stringify(clean.test_generation_settings))
     : {};

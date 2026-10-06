@@ -1,6 +1,71 @@
 // NOTE: This project intentionally uses plain global variables for all state and functions.
 // No IIFE, encapsulation, or modular patterns are used by design.
 var APP_CONFIG = {};
+
+(function installWebCapPerformanceDiagnostics() {
+  if (!window.PerformanceObserver) return;
+
+  function roundMs(value) {
+    return Math.round(Number(value || 0) * 10) / 10;
+  }
+
+  function logLongAnimationFrame(entry) {
+    var scripts = Array.isArray(entry.scripts) ? entry.scripts.slice() : [];
+    scripts.sort(function (a, b) {
+      return Number(b.duration || 0) - Number(a.duration || 0);
+    });
+    console.warn('[Performance] Long animation frame', {
+      durationMs: roundMs(entry.duration),
+      blockingDurationMs: roundMs(entry.blockingDuration),
+      startTimeMs: roundMs(entry.startTime),
+      scripts: scripts.slice(0, 8).map(function (script) {
+        return {
+          durationMs: roundMs(script.duration),
+          pauseDurationMs: roundMs(script.pauseDuration),
+          forcedStyleAndLayoutDurationMs: roundMs(script.forcedStyleAndLayoutDuration),
+          functionName: String(script.sourceFunctionName || ''),
+          source: String(script.sourceURL || ''),
+          invokerType: String(script.invokerType || ''),
+          invoker: String(script.invoker || '')
+        };
+      })
+    });
+  }
+
+  try {
+    if (PerformanceObserver.supportedEntryTypes &&
+        PerformanceObserver.supportedEntryTypes.indexOf('long-animation-frame') !== -1) {
+      new PerformanceObserver(function (list) {
+        list.getEntries().forEach(function (entry) {
+          if (Number(entry.duration || 0) >= 100) logLongAnimationFrame(entry);
+        });
+      }).observe({ type: 'long-animation-frame', buffered: true });
+      console.info('[Performance] Long-animation-frame diagnostics enabled.');
+      return;
+    }
+  } catch (error) {
+    console.warn('[Performance] Could not enable long-animation-frame diagnostics:', error);
+  }
+
+  try {
+    if (PerformanceObserver.supportedEntryTypes &&
+        PerformanceObserver.supportedEntryTypes.indexOf('longtask') !== -1) {
+      new PerformanceObserver(function (list) {
+        list.getEntries().forEach(function (entry) {
+          if (Number(entry.duration || 0) < 100) return;
+          console.warn('[Performance] Long task', {
+            durationMs: roundMs(entry.duration),
+            startTimeMs: roundMs(entry.startTime),
+            name: String(entry.name || '')
+          });
+        });
+      }).observe({ type: 'longtask', buffered: true });
+      console.info('[Performance] Long-task diagnostics enabled.');
+    }
+  } catch (error) {
+    console.warn('[Performance] Could not enable long-task diagnostics:', error);
+  }
+})();
 var DEFAULT_PRIMER_TEMPLATE = [
   'A person {subject }{second_subject }{action, }',
   '{position }{surface, }{body, }',

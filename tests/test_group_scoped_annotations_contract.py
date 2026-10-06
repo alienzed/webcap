@@ -424,3 +424,16 @@ def test_descriptor_snapshots_compact_empty_entries_without_changing_saved_capti
     assert "descriptorSnapshotMediaKeys.add(key);" in sanitizer
     assert "sanitizeGroupAffixMap(src.caption_group_term_descriptors_by_media[mediaKey], false)" in sanitizer
     assert "caption_group_term_descriptor_snapshot_media_keys" in folder_state
+
+
+def test_derived_caption_phrase_catalog_does_not_write_folder_state():
+    catalog = _read("tool/js/caption_helpers_catalog.js")
+
+    ensure = catalog.split("function ensureCaptionHelperPhraseInCatalog", 1)[1].split(
+        "function mergeCaptionHelperPhrasesFromTagsMap", 1
+    )[0]
+    merge = catalog.split("function mergeCaptionHelperPhrasesFromTagsMap", 1)[1].split(
+        "function getCaptionHelperCatalogTerms", 1
+    )[0]
+    assert "saveCaptionHelpersToFolderState" not in ensure
+    assert "saveCaptionHelpersToFolderState" not in merge

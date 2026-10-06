@@ -41,6 +41,7 @@ _request_lock = threading.RLock()
 _remote_request_lock = threading.Lock()
 _active_remote_connection = None
 _remote_provider_cache = {}
+_ollama_capabilities_cache = {}
 _runtime_context = threading.local()
 _activity_lock = threading.Lock()
 _log_relay_lock = threading.Lock()
@@ -1104,15 +1105,25 @@ def list_local_vision_models():
     return models
 
 
-def _ollama_model_capabilities(model_id):
+def _ollama_model_capabilities(model_id, refresh=False):
     model_id = str(model_id or "").strip()
     if not model_id:
         return []
+    settings = _director_config()
+    endpoint = str(settings.get("endpoint") or "").rstrip("/")
+    cache_key = (endpoint, model_id)
+    if not refresh and cache_key in _ollama_capabilities_cache:
+        return list(_ollama_capabilities_cache[cache_key])
+
     payload = _remote_native_http_json("/api/show", timeout=5, method="POST", payload={"model": model_id})
     capabilities = payload.get("capabilities") if isinstance(payload, dict) else None
-    if not isinstance(capabilities, list):
-        return []
-    return [str(value).strip().lower() for value in capabilities if str(value or "").strip()]
+    normalized = (
+        [str(value).strip().lower() for value in capabilities if str(value or "").strip()]
+        if isinstance(capabilities, list)
+        else []
+    )
+    _ollama_capabilities_cache[cache_key] = list(normalized)
+    return normalized
 
 
 def list_vision_models(reload=False):
@@ -1143,7 +1154,7 @@ def list_vision_models(reload=False):
                     if not model_id:
                         continue
                     try:
-                        capabilities = _ollama_model_capabilities(model_id)
+                        capabilities = _ollama_model_capabilities(model_id, refresh=reload)
                     except Exception as exc:
                         _logger.info("Could not inspect Ollama model capabilities for %s: %s", model_id, exc)
                         continue

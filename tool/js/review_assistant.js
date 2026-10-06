@@ -41,25 +41,56 @@
     });
   }
 
+  function buildReviewCorpus(items) {
+    return (items || []).map(function (item) {
+      var key = item && (item.key || item.fileName);
+      var grouped = typeof getChecklistAssignmentEntriesForMediaKey === 'function'
+        ? getChecklistAssignmentEntriesForMediaKey(key)
+        : [];
+      var groupedText = grouped.map(function (entry) {
+        return String(entry.requirement || '') + ': ' + String(entry.term || '');
+      }).filter(Boolean);
+      var allTags = typeof getTagsForMediaKey === 'function'
+        ? getTagsForMediaKey(key)
+        : (Array.isArray(item && item.tags) ? item.tags : []);
+      return [
+        'FILE: ' + String(item && item.fileName || ''),
+        'CAPTION: ' + String(item && item.caption || ''),
+        groupedText.length ? 'GROUPED TAGS: ' + groupedText.join(' | ') : '',
+        allTags.length ? 'ALL TAGS: ' + allTags.join(', ') : ''
+      ].filter(Boolean).join('\n');
+    }).join('\n\n');
+  }
+
   function buildPrompt(instruction) {
-    var items = getVisibleReviewItems();
+    var items = typeof window.getQaTrainingItemsForAssistant === 'function'
+      ? window.getQaTrainingItemsForAssistant()
+      : getVisibleReviewItems();
+    var trainingFocus = typeof window.getQaTrainingFocus === 'function'
+      ? String(window.getQaTrainingFocus() || '').trim()
+      : '';
     return [
       'You are reviewing one WebCap training Set. This is analysis only: do not rewrite captions.',
       '',
-      'Review the supplied captions as a set, not one by one. Look for useful corpus-level issues a human may miss while scanning quickly:',
+      'The goal is training quality. Prioritize issues that could weaken learning, create accidental associations, dilute useful variation, or make a concept too sparse to learn reliably.',
+      'Treat underrepresentation and overrepresentation differently. A rare concept may fail to train; a common concept is only concerning when it crowds out useful variation or creates an unintended association.',
+      '',
+      'Review the supplied training selection as a set, not one item at a time. Use captions and annotation tags together. Look for:',
+      '- training-relevant underrepresented concepts',
+      '- overrepresented patterns that may crowd out desired variation',
       '- inconsistent subject/identity wording, attributes, terminology, or descriptive granularity',
-      '- meaningful coverage or balance skews in recurring concepts actually present in the captions',
+      '- near-universal tag/group relationships with suspicious exceptions',
       '- repeated/template-like captions, copy/paste residue, suspicious one-off wording, or outliers',
-      '- missing captions and unusually sparse or verbose captions',
-      '- recurring caption patterns that may create noisy or misleading training associations',
+      '- recurring patterns that may create noisy or misleading training associations',
       '- useful groups of filenames that deserve inspection together',
       '',
       'Be evidence-based. Do not invent desired categories. Rare terms are not automatically problems. Mention filenames when useful.',
       '',
+      'Training focus: ' + (trainingFocus || 'Not specified; use generic training-quality priorities.'),
       'User focus: ' + String(instruction || 'Give me a concise full review.'),
       '',
-      'CAPTIONS',
-      buildCombinedCaptionsText(items)
+      'TRAINING SELECTION',
+      buildReviewCorpus(items)
     ].join('\n');
   }
 
@@ -85,12 +116,12 @@
   window.registerAssistantMode({
     id: 'review-dataset',
     label: 'Review Dataset',
-    description: 'Read-only analysis of the current visible caption set.',
+    description: 'Read-only analysis of the current training selection.',
     placeholder: 'What should the review focus on?',
     presets: [
       {
         label: 'Full review',
-        title: 'Review the visible caption set across all useful corpus-level signals',
+        title: 'Review the current training selection across useful training-quality signals',
         instruction: 'Give me a concise full review.'
       },
       {
@@ -110,13 +141,21 @@
       }
     ],
     available: function () {
-      return !document.getElementById('review-output-surface').classList.contains('hidden');
+      var surface = document.getElementById('review-output-surface');
+      return !!surface && !surface.classList.contains('hidden');
     },
     execute: runReview,
     cancel: cancelReview
   });
 
-  document.getElementById('review-output-assistant-btn').onclick = function () {
-    window.openAssistant({ mode: 'review-dataset' });
-  };
+  function bindReviewAssistantButton() {
+    var button = document.getElementById('review-output-assistant-btn');
+    if (!button) return;
+    button.onclick = function () {
+      window.openAssistant({ mode: 'review-dataset' });
+    };
+  }
+
+  window.bindReviewAssistantButton = bindReviewAssistantButton;
+  bindReviewAssistantButton();
 })();

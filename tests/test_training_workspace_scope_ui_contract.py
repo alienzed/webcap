@@ -165,6 +165,15 @@ def test_training_entry_defaults_collapse_by_context_without_refresh_reset():
 
 
 
+
+
+def test_training_item_preview_fallback_respects_hidden_attribute():
+    css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+
+    assert ".training-item-fallback[hidden]" in css
+    hidden_rule = css.split(".training-item-fallback[hidden] {", 1)[1].split("}", 1)[0]
+    assert "display: none;" in hidden_rule
+
 def test_training_lifecycle_is_run_setup_training_tests():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")

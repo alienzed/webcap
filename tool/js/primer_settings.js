@@ -278,7 +278,9 @@ function updatePrimerCaptionResetUi() {
   var undoBtn = document.getElementById('primer-undo-reset-caption-btn');
   var applyCaptionBtn = ui && ui.editorApplyPrimerBtn ? ui.editorApplyPrimerBtn : null;
   var captionWandBtn = document.getElementById('editor-caption-wand-btn');
-  if (!resetBtn || !undoBtn || !captionWandBtn) return;
+  if (!resetBtn || !undoBtn || !captionWandBtn) {
+    throw new Error('Caption reset controls are missing.');
+  }
 
   var mediaItem = getPrimerResetCurrentMediaItem();
   var hasSelectedMedia = !!(mediaItem && ui && ui.editorEl && !ui.editorEl.readOnly);
@@ -528,9 +530,7 @@ function getCaptionAssistMissingGroups(mediaKey) {
   return (Array.isArray(checklistItems) ? checklistItems : []).filter(function (label) {
     var key = String(label || '').trim().toLowerCase();
     if (!key || assigned[key]) return false;
-    var reviewed = (typeof isChecklistRequirementCheckedForMediaKey === 'function')
-      ? isChecklistRequirementCheckedForMediaKey(mediaKey, label)
-      : false;
+    var reviewed = isChecklistRequirementCheckedForMediaKey(mediaKey, label);
     return !reviewed;
   });
 }
@@ -750,7 +750,9 @@ function wirePrimerCaptionResetUi() {
   var candidateUseBtn = document.getElementById('editor-caption-candidate-use');
   var candidateRegenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
   var candidateDismissBtn = document.getElementById('editor-caption-candidate-dismiss');
-  if (!resetBtn || !undoBtn || !captionWandBtn || !candidatePanel || !candidateUseBtn || !candidateRegenerateBtn || !candidateDismissBtn) return;
+  if (!resetBtn || !undoBtn || !captionWandBtn || !candidatePanel || !candidateUseBtn || !candidateRegenerateBtn || !candidateDismissBtn) {
+    throw new Error('Caption Assist controls are missing.');
+  }
 
   if (!candidateUseBtn.__captionAssistBound) {
     candidateUseBtn.__captionAssistBound = true;

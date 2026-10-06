@@ -993,6 +993,16 @@ def test_test_prompt_draft_uses_disk_backed_set_workspace():
 
 
 
+def test_set_state_drops_obsolete_test_generation_prompt_fields():
+    folder_state = (ROOT / "tool" / "js" / "folder_state.js").read_text(encoding="utf-8")
+
+    assert "test_generation_prompt" not in folder_state
+    assert "testGenerationPrompt" not in folder_state
+    assert "test_generation_by_model" in folder_state
+    assert "settings: (entry.settings && typeof entry.settings === 'object'" in folder_state
+    assert "JSON.parse(JSON.stringify(src.test_generation_by_model))" not in folder_state
+
+
 def test_test_generations_set_change_reloads_current_set_without_source_redirect():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 

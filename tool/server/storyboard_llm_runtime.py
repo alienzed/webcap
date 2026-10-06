@@ -1631,7 +1631,13 @@ def normalize_freeform_messages(messages):
                     if not url.startswith("file://") or url.startswith("file:///"):
                         raise ValueError("Local multimodal images must use a relative file:// URL.")
                     relative = url[len("file://"):]
-                    if not relative or relative.startswith(("/", "\\")) or ".." in Path(relative).parts:
+                    if (
+                        not relative
+                        or relative.startswith(("/", "\\"))
+                        or "\\" in relative
+                        or ":" in relative
+                        or ".." in Path(relative).parts
+                    ):
                         raise ValueError("Local multimodal image path is invalid.")
                     parts.append({"type": "image_url", "image_url": {"url": "file://" + relative}})
                     continue

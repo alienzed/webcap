@@ -264,6 +264,60 @@ function writeCapturedFolderState(capturedSave) {
   });
 }
 
+function saveMediaAnnotationState(mediaKey) {
+  var targetFolder = String((state && state.folder) || '');
+  var key = String(mediaKey || '').trim();
+  if (!key) return Promise.reject(new Error('Media annotation save requires a media key.'));
+
+  var payload = {
+    folder: targetFolder,
+    mediaKey: key,
+    groupTags: (checklistAssignmentsByMedia[key] && typeof checklistAssignmentsByMedia[key] === 'object')
+      ? checklistAssignmentsByMedia[key]
+      : {},
+    unscopedTags: Array.isArray(captionItemTagsByMedia[key]) ? captionItemTagsByMedia[key] : [],
+    checkedRequirements: (checklistCheckedByMedia[key] && typeof checklistCheckedByMedia[key] === 'object')
+      ? checklistCheckedByMedia[key]
+      : {},
+    descriptors: (checklistTermDescriptorsByMedia[key] && typeof checklistTermDescriptorsByMedia[key] === 'object')
+      ? checklistTermDescriptorsByMedia[key]
+      : {},
+    reviewed: !!(state.reviewedSet && state.reviewedSet.has(key))
+  };
+
+  var performWrite = function () {
+    return fetch('/fs/folder_state/media_annotations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (response) {
+      return response.json().then(function (result) {
+        if (!response.ok || !result || result.ok === false) {
+          throw new Error(result && result.error ? result.error : 'Failed to save media annotation state.');
+        }
+        return true;
+      });
+    });
+  };
+
+  var previousWrite = folderStateWriteChains[targetFolder] || Promise.resolve();
+  var queuedWrite = previousWrite.catch(function () {
+    return false;
+  }).then(performWrite);
+  folderStateWriteChains[targetFolder] = queuedWrite;
+  queuedWrite.then(function () {
+    if (folderStateWriteChains[targetFolder] === queuedWrite) {
+      delete folderStateWriteChains[targetFolder];
+    }
+  }, function () {
+    if (folderStateWriteChains[targetFolder] === queuedWrite) {
+      delete folderStateWriteChains[targetFolder];
+    }
+  });
+  return queuedWrite;
+}
+
+
 function setMediaRating(folderPath, mediaKey, rating) {
   var targetFolder = String(folderPath || '');
   var key = String(mediaKey || '').trim();

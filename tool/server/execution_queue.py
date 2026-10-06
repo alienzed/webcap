@@ -925,7 +925,6 @@ def cancel_pending_transient(job_id):
         job["updatedAt"] = now
         job["requestedAction"] = ""
         receipt = _public_job(job)
-        _record_recent(lane, job)
         lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
         _refresh_positions(lane)
         _write_state(state)

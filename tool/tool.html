@@ -1061,6 +1061,24 @@
                                         <span class="btn-glyph" aria-hidden="true">&#8594;</span>
                                         <span class="preview-header-btn-label">Skip</span>
                                     </button>
+                                    <button
+                                        id="preview-vision-caption-btn"
+                                        type="button"
+                                        class="review-captions-btn hidden"
+                                        title="Describe this image using the selected Vision model"
+                                        aria-label="Caption this image with Vision"
+                                    >
+                                        <span class="btn-glyph vision-caption-binoculars" aria-hidden="true">
+                                            <svg viewBox="0 0 24 24" focusable="false">
+                                                <path d="M8.5 5.5h-2L3.5 16a3 3 0 1 0 5.8 1.1L10 13h4l.7 4.1a3 3 0 1 0 5.8-1.1l-3-10.5h-2"></path>
+                                                <path d="M9 7.5h6"></path>
+                                                <path d="M8.8 11.5h6.4"></path>
+                                                <circle cx="6.5" cy="17" r="2.5"></circle>
+                                                <circle cx="17.5" cy="17" r="2.5"></circle>
+                                            </svg>
+                                        </span>
+                                        <span class="preview-header-btn-label">Caption Image</span>
+                                    </button>
                                 </div>
                             </div>
                             <div id="preview-actions" class="preview-actions hidden" aria-label="Preview actions">
@@ -1777,6 +1795,31 @@
                             <button id="editor-caption-candidate-use" type="button">Apply Caption</button>
                             <button id="editor-caption-candidate-regenerate" class="editor-caption-candidate-regenerate" type="button" title="Generate another candidate" aria-label="Generate another candidate">&#8635;</button>
                             <button id="editor-caption-focus-cancel" class="hidden" type="button">Cancel generation</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <div id="vision-image-caption-modal" class="editor-caption-candidate hidden" aria-live="polite">
+                <section class="editor-caption-candidate-dialog vision-image-caption-dialog" role="dialog" aria-modal="true" aria-labelledby="vision-image-caption-title">
+                    <div class="editor-caption-candidate-header">
+                        <div class="editor-caption-candidate-heading">
+                            <strong id="vision-image-caption-title">Vision Caption</strong>
+                            <span id="vision-image-caption-model" class="vision-image-caption-model"></span>
+                        </div>
+                        <button id="vision-image-caption-close" class="editor-caption-candidate-close" type="button" title="Close Vision Caption" aria-label="Close Vision Caption">&times;</button>
+                    </div>
+                    <div id="vision-image-caption-loading" class="editor-caption-focus-loading hidden" role="status">
+                        <span class="editor-caption-focus-spinner" aria-hidden="true"></span>
+                        <strong>Captioning image…</strong>
+                    </div>
+                    <div id="vision-image-caption-error" class="vision-image-caption-error hidden"></div>
+                    <div id="vision-image-caption-text" class="editor-caption-candidate-text hidden"></div>
+                    <div class="editor-caption-candidate-actions">
+                        <div class="editor-caption-candidate-actions-left"></div>
+                        <div class="editor-caption-candidate-actions-right">
+                            <button id="vision-image-caption-copy" type="button" disabled>Copy</button>
+                            <button id="vision-image-caption-use" type="button" disabled>Use in Editor</button>
+                            <button id="vision-image-caption-cancel" class="hidden" type="button">Cancel generation</button>
                         </div>
                     </div>
                 </section>

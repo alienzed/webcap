@@ -266,6 +266,30 @@ def test_focus_caption_vision_is_opt_in_actionable_and_one_deep():
     assert "maybeRunCaptionVisionForCandidate(candidate)" in primer
 
 
+def test_standalone_vision_caption_is_preview_adjacent_and_requires_explicit_editor_use():
+    html = _read("tool/tool.html")
+    vision = _read("tool/js/caption_vision.js")
+    runner = _read("tool/server/llm_runner.py")
+
+    focus_annotate = html.index('id="preview-open-focused-btn"')
+    focus_caption = html.index('id="preview-open-focus-caption-btn"')
+    focus_next = html.index('id="preview-focus-caption-skip-btn"')
+    vision_caption = html.index('id="preview-vision-caption-btn"')
+    rating = html.index('id="preview-action-rating"')
+    assert focus_annotate < focus_caption < focus_next < vision_caption < rating
+
+    assert 'class="btn-glyph vision-caption-binoculars"' in html
+    assert 'id="vision-image-caption-modal"' in html
+    assert '>Copy</button>' in html
+    assert '>Use in Editor</button>' in html
+    assert "'/caption/vision-caption'" in vision
+    run_start = vision.index("function runVisionImageCaption()")
+    run_end = vision.index("function copyVisionImageCaption()", run_start)
+    assert "assignChecklistTagToMediaKey" not in vision[run_start:run_end]
+    assert "applyEditorTextAndTriggerInput(text);" in vision
+    assert 'caption_operation in {"caption_vision_validate", "vision_image_caption"}' in runner
+
+
 def test_caption_vision_preference_is_config_backed_not_browser_persistent():
     html = _read("tool/tool.html")
     vision = _read("tool/js/caption_vision.js")

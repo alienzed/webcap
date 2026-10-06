@@ -440,6 +440,44 @@ textarea:focus, input:focus {
   display: none !important;
 }
 
+.vision-caption-binoculars {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+.vision-caption-binoculars svg {
+  width: 16px;
+  height: 16px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vision-image-caption-model {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vision-image-caption-error {
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(220, 38, 38, 0.28);
+  background: rgba(220, 38, 38, 0.10);
+  color: #991b1b;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+html[data-theme="dark"] .vision-image-caption-error {
+  color: #fca5a5;
+  background: rgba(220, 38, 38, 0.16);
+}
+
 .editor-caption-candidate-dialog {
   width: min(860px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);

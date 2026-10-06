@@ -9,6 +9,16 @@ var captionVisionActiveTask = null;
 var captionVisionTaskSequence = 0;
 var captionVisionResult = null;
 var captionVisionError = '';
+var visionImageCaptionState = {
+  open: false,
+  mediaKey: '',
+  model: '',
+  jobId: '',
+  pending: false,
+  text: '',
+  error: '',
+  requestToken: 0
+};
 
 function isCaptionVisionSupportedMedia(fileName) {
   return /\.(jpe?g|png|webp|bmp|gif)$/i.test(String(fileName || ''));
@@ -384,6 +394,7 @@ function syncCaptionVisionUi() {
   toggleWrap.classList.toggle('hidden', !candidateVisible || !supported);
   toggle.checked = !!captionVisionEnabled;
   toggle.disabled = false;
+  syncVisionImageCaptionActionUi();
 
   findings.innerHTML = '';
   findings.classList.add('hidden');
@@ -417,6 +428,240 @@ function syncCaptionVisionUi() {
     findings.appendChild(renderCaptionVisionFinding(finding));
   });
   findings.classList.remove('hidden');
+}
+
+function getVisionImageCaptionEls() {
+  var els = {
+    actionBtn: document.getElementById('preview-vision-caption-btn'),
+    modal: document.getElementById('vision-image-caption-modal'),
+    model: document.getElementById('vision-image-caption-model'),
+    loading: document.getElementById('vision-image-caption-loading'),
+    error: document.getElementById('vision-image-caption-error'),
+    text: document.getElementById('vision-image-caption-text'),
+    closeBtn: document.getElementById('vision-image-caption-close'),
+    copyBtn: document.getElementById('vision-image-caption-copy'),
+    useBtn: document.getElementById('vision-image-caption-use'),
+    cancelBtn: document.getElementById('vision-image-caption-cancel')
+  };
+  Object.keys(els).forEach(function (key) {
+    if (!els[key]) throw new Error('Vision Caption UI is missing: ' + key);
+  });
+  return els;
+}
+
+function syncVisionImageCaptionActionUi() {
+  var btn = document.getElementById('preview-vision-caption-btn');
+  if (!btn) throw new Error('Vision Caption preview action is missing.');
+  var mediaItem = state && state.currentItem;
+  var focusCaptionBtn = document.getElementById('preview-open-focus-caption-btn');
+  var focusCaptionOpen = !!(focusCaptionBtn && focusCaptionBtn.getAttribute('aria-pressed') === 'true');
+  var supported = !!(
+    captionVisionCapabilities.models.length &&
+    mediaItem &&
+    isCaptionVisionSupportedMedia(mediaItem.fileName)
+  );
+  btn.classList.toggle('hidden', !supported || focusCaptionOpen);
+  btn.disabled = !!visionImageCaptionState.pending;
+}
+
+function syncVisionImageCaptionModal() {
+  var els = getVisionImageCaptionEls();
+  var open = !!visionImageCaptionState.open;
+  var hasText = !!String(visionImageCaptionState.text || '').trim();
+  els.modal.classList.toggle('hidden', !open);
+  els.model.textContent = visionImageCaptionState.model ? ('Vision model · ' + visionImageCaptionState.model) : '';
+  els.loading.classList.toggle('hidden', !open || !visionImageCaptionState.pending);
+  els.error.classList.toggle('hidden', !open || !visionImageCaptionState.error);
+  els.error.textContent = visionImageCaptionState.error || '';
+  els.text.classList.toggle('hidden', !open || !hasText);
+  els.text.textContent = hasText ? visionImageCaptionState.text : '';
+  els.copyBtn.disabled = !hasText || visionImageCaptionState.pending;
+  els.useBtn.disabled = !(
+    hasText &&
+    !visionImageCaptionState.pending &&
+    state && state.currentItem &&
+    state.currentItem.key === visionImageCaptionState.mediaKey
+  );
+  els.cancelBtn.classList.toggle('hidden', !open || !visionImageCaptionState.pending);
+  syncVisionImageCaptionActionUi();
+}
+
+function cancelVisionImageCaptionRequest() {
+  var jobId = String(visionImageCaptionState.jobId || '');
+  if (!visionImageCaptionState.pending && !jobId) return Promise.resolve(false);
+  visionImageCaptionState.requestToken += 1;
+  visionImageCaptionState.jobId = '';
+  visionImageCaptionState.pending = false;
+  syncVisionImageCaptionModal();
+  if (!jobId) return Promise.resolve(true);
+  return cancelCaptionAssistJob(jobId).catch(function (err) {
+    reportConsoleWarning('Vision Caption', 'Could not cancel Vision Caption job: ' + String(err && err.message ? err.message : err));
+    return false;
+  });
+}
+
+function closeVisionImageCaption() {
+  var pending = visionImageCaptionState.pending || !!visionImageCaptionState.jobId;
+  visionImageCaptionState.open = false;
+  visionImageCaptionState.text = '';
+  visionImageCaptionState.error = '';
+  syncVisionImageCaptionModal();
+  if (pending) cancelVisionImageCaptionRequest();
+}
+
+function runVisionImageCaption() {
+  var mediaItem = state && state.currentItem;
+  if (!mediaItem || !mediaItem.key || !mediaItem.fileName) {
+    setStatus('Select an image first.');
+    return Promise.resolve(false);
+  }
+  if (!isCaptionVisionSupportedMedia(mediaItem.fileName)) {
+    setStatus('Vision Caption currently supports image files only.');
+    return Promise.resolve(false);
+  }
+  if (visionImageCaptionState.pending) {
+    setStatus('Vision Caption is already running.');
+    return Promise.resolve(false);
+  }
+
+  return loadCaptionVisionCapabilities().then(function () {
+    var model = getCaptionVisionModelId();
+    if (!model) throw new Error('Select an available Vision model.');
+
+    var token = visionImageCaptionState.requestToken + 1;
+    visionImageCaptionState.open = true;
+    visionImageCaptionState.mediaKey = String(mediaItem.key || '');
+    visionImageCaptionState.model = model;
+    visionImageCaptionState.jobId = '';
+    visionImageCaptionState.pending = true;
+    visionImageCaptionState.text = '';
+    visionImageCaptionState.error = '';
+    visionImageCaptionState.requestToken = token;
+    syncVisionImageCaptionModal();
+    setStatus('Vision Caption starting...');
+
+    return captionAssistRequestJson('/caption/vision-caption', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model,
+        folder: String((state && state.folder) || ''),
+        media: String(mediaItem.fileName || '')
+      })
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Vision Caption did not return a queued job.');
+      if (visionImageCaptionState.requestToken !== token || !visionImageCaptionState.open) {
+        return cancelCaptionAssistJob(String(payload.job.jobId || '')).then(function () { return null; });
+      }
+      visionImageCaptionState.jobId = String(payload.job.jobId || '');
+      syncVisionImageCaptionModal();
+      return waitForCaptionAssistJob(payload.job);
+    }).then(function (job) {
+      if (!job || visionImageCaptionState.requestToken !== token || !visionImageCaptionState.open) return false;
+      var result = job.result && typeof job.result === 'object' ? job.result : {};
+      var text = String(result.text || '').trim();
+      if (!text) throw new Error('Vision model returned an empty caption.');
+      visionImageCaptionState.jobId = '';
+      visionImageCaptionState.pending = false;
+      visionImageCaptionState.text = text;
+      visionImageCaptionState.error = '';
+      visionImageCaptionState.model = String(result.model || model);
+      syncVisionImageCaptionModal();
+      setStatus('Vision Caption ready.');
+      return true;
+    });
+  }).catch(function (err) {
+    if (!visionImageCaptionState.open) return false;
+    visionImageCaptionState.jobId = '';
+    visionImageCaptionState.pending = false;
+    visionImageCaptionState.error = String(err && err.message ? err.message : err);
+    syncVisionImageCaptionModal();
+    setStatus('Vision Caption failed: ' + visionImageCaptionState.error);
+    reportConsoleError('Vision Caption', err);
+    return false;
+  });
+}
+
+function copyVisionImageCaption() {
+  var text = String(visionImageCaptionState.text || '').trim();
+  if (!text) return Promise.resolve(false);
+  if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+    setStatus('Clipboard access is unavailable in this browser.');
+    return Promise.resolve(false);
+  }
+  return navigator.clipboard.writeText(text).then(function () {
+    setStatus('Vision Caption copied.');
+    return true;
+  }).catch(function (err) {
+    reportConsoleError('Vision Caption', err);
+    setStatus('Could not copy Vision Caption.');
+    return false;
+  });
+}
+
+function useVisionImageCaptionInEditor() {
+  var text = String(visionImageCaptionState.text || '').trim();
+  if (!text || !state || !state.currentItem || state.currentItem.key !== visionImageCaptionState.mediaKey) {
+    setStatus('Vision Caption no longer matches the selected item.');
+    return false;
+  }
+  applyEditorTextAndTriggerInput(text);
+  visionImageCaptionState.open = false;
+  visionImageCaptionState.text = '';
+  syncVisionImageCaptionModal();
+  if (ui && ui.editorEl) ui.editorEl.focus();
+  setStatus('Vision Caption moved into the editor.');
+  return true;
+}
+
+function wireVisionImageCaptionUi() {
+  var els = getVisionImageCaptionEls();
+  if (!els.actionBtn.__visionImageCaptionBound) {
+    els.actionBtn.__visionImageCaptionBound = true;
+    els.actionBtn.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      runVisionImageCaption();
+    });
+  }
+  if (!els.closeBtn.__visionImageCaptionBound) {
+    els.closeBtn.__visionImageCaptionBound = true;
+    els.closeBtn.addEventListener('click', closeVisionImageCaption);
+  }
+  if (!els.cancelBtn.__visionImageCaptionBound) {
+    els.cancelBtn.__visionImageCaptionBound = true;
+    els.cancelBtn.addEventListener('click', function () {
+      cancelVisionImageCaptionRequest().then(function () {
+        if (!visionImageCaptionState.open) return;
+        visionImageCaptionState.error = 'Vision Caption generation cancelled.';
+        syncVisionImageCaptionModal();
+      });
+    });
+  }
+  if (!els.copyBtn.__visionImageCaptionBound) {
+    els.copyBtn.__visionImageCaptionBound = true;
+    els.copyBtn.addEventListener('click', copyVisionImageCaption);
+  }
+  if (!els.useBtn.__visionImageCaptionBound) {
+    els.useBtn.__visionImageCaptionBound = true;
+    els.useBtn.addEventListener('click', useVisionImageCaptionInEditor);
+  }
+  if (!els.modal.__visionImageCaptionBackdropBound) {
+    els.modal.__visionImageCaptionBackdropBound = true;
+    els.modal.addEventListener('click', function (event) {
+      if (event.target === els.modal) closeVisionImageCaption();
+    });
+  }
+  if (!document.__visionImageCaptionEscapeBound) {
+    document.__visionImageCaptionEscapeBound = true;
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' || !visionImageCaptionState.open) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeVisionImageCaption();
+    }, true);
+  }
+  syncVisionImageCaptionModal();
 }
 
 function setCaptionVisionEnabled(enabled) {
@@ -480,6 +725,7 @@ function wireCaptionVisionUi() {
     });
   }
   syncCaptionVisionUi();
+  wireVisionImageCaptionUi();
 }
 
 wireCaptionVisionUi();
@@ -502,6 +748,8 @@ window.captionVisionRequestFingerprint = captionVisionRequestFingerprint;
 window.adoptCaptionVisionPrefetch = adoptCaptionVisionPrefetch;
 window.isCaptionVisionSupportedMedia = isCaptionVisionSupportedMedia;
 window.getCaptionVisionModelId = getCaptionVisionModelId;
+window.syncVisionImageCaptionActionUi = syncVisionImageCaptionActionUi;
+window.runVisionImageCaption = runVisionImageCaption;
 
 window.createCaptionVisionTask = createCaptionVisionTask;
 window.cancelCaptionVisionTask = cancelCaptionVisionTask;

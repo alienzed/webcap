@@ -554,3 +554,16 @@ def test_generate_loras_are_session_only_but_library_restore_rehydrates_them():
     assert "function saveLoras" not in script
     assert "generateState.lorasByModel[resultModelId] = Array.isArray(result.loras)" in script
     assert "strength: isFinite(strength) ? strength : 1" in script
+
+
+def test_generate_job_ownership_comes_from_inference_queue_metadata():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+
+    assert "trackedJobIds: []" in script
+    assert "webcap.generate.trackedJobs" not in script
+    assert "loadTrackedGenerateJobs" not in script
+    assert "saveTrackedGenerateJobs" not in script
+    assert "function adoptGenerateJobsFromQueue(queue)" in script
+    assert "String(job && job.client || '') !== 'generate'" in script
+    assert "String(job && job.client || '') === 'generate'" in script
+    assert "adoptGenerateJobsFromQueue(queue);" in script

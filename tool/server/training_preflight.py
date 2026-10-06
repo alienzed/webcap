@@ -26,7 +26,7 @@ from .training_runtime import (
     uses_native_wsl_shell,
     wsl_executable,
 )
-from .training_profiles import config_for_stage, profile_for_mode
+from .training_profiles import config_for_stage, resolved_profile
 
 
 PARTIAL_CAPTION_REVIEW_MIN_ITEMS = 3
@@ -43,11 +43,11 @@ def resolve_folder(folder):
     return value, path
 
 
-def resolve_artifacts(folder, folder_path, stages, profile_id, mode="normal", artifacts_override=None):
+def resolve_artifacts(folder, folder_path, stages, profile_id, artifacts_override=None):
     if artifacts_override:
         paths = {key: Path(value) for key, value in artifacts_override.items()}
     else:
-        selected_profile = profile_for_mode(profile_id, mode)
+        selected_profile = resolved_profile(profile_id)
         paths = {}
         for item in selected_profile["configs"]:
             paths[item["id"] + "Config"] = folder_path / item["file"]
@@ -196,9 +196,9 @@ def gpu_snapshot():
     }
 
 
-def build_preflight(folder, stages, profile_id, mode="normal", artifacts_override=None):
+def build_preflight(folder, stages, profile_id, artifacts_override=None):
     folder_value, folder_path = resolve_folder(folder)
-    artifacts, missing = resolve_artifacts(folder_value, folder_path, stages, profile_id, mode, artifacts_override)
+    artifacts, missing = resolve_artifacts(folder_value, folder_path, stages, profile_id, artifacts_override)
     settings = configured_training_settings()
     checks = [
         make_check("set_folder_exists", "blocker", True, "Set folder is available.", str(folder_path)),
@@ -258,9 +258,9 @@ def build_preflight(folder, stages, profile_id, mode="normal", artifacts_overrid
     return folder_value, folder_path, artifacts, settings, checks
 
 
-def build_launch_preflight(folder, stages, profile_id, mode="normal", artifacts_override=None):
+def build_launch_preflight(folder, stages, profile_id, artifacts_override=None):
     folder_value, folder_path = resolve_folder(folder)
-    artifacts, missing = resolve_artifacts(folder_value, folder_path, stages, profile_id, mode, artifacts_override)
+    artifacts, missing = resolve_artifacts(folder_value, folder_path, stages, profile_id, artifacts_override)
     settings = configured_training_settings()
     shell_available = bool(shutil.which("bash")) if uses_native_wsl_shell() else bool(wsl_executable())
     checks = [
@@ -304,8 +304,8 @@ def build_launch_preflight(folder, stages, profile_id, mode="normal", artifacts_
     return folder_value, folder_path, artifacts, settings, checks
 
 
-def preflight_payload(folder, stages, profile_id, mode="normal", artifacts_override=None):
-    folder_value, folder_path, artifacts, settings, checks = build_preflight(folder, stages, profile_id, mode, artifacts_override)
+def preflight_payload(folder, stages, profile_id, artifacts_override=None):
+    folder_value, folder_path, artifacts, settings, checks = build_preflight(folder, stages, profile_id, artifacts_override)
     blockers = [item for item in checks if item["severity"] == "blocker" and not item["ok"]]
     warnings = [item for item in checks if item["severity"] == "warning" and not item["ok"]]
     return {

@@ -3005,16 +3005,15 @@
       summary.textContent = hasSession ? sessionMetaText(status) : '';
       summary.classList.toggle('hidden', !hasSession);
     }
-    if (wildcardTagline) {
-      var wildcardValues = hasSession && Array.isArray(status.wildcardValues)
-        ? status.wildcardValues.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
-        : [];
-      wildcardTagline.textContent = wildcardValues.join(' · ');
-      wildcardTagline.classList.toggle('hidden', !wildcardValues.length);
-      wildcardTagline.title = wildcardValues.length
-        ? 'Resolved wildcard choices: ' + wildcardValues.join(' · ')
-        : '';
-    }
+    if (!wildcardTagline) throw new Error('Test wildcard tagline is missing.');
+    var wildcardValues = hasSession && Array.isArray(status.wildcardValues)
+      ? status.wildcardValues.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
+      : [];
+    wildcardTagline.textContent = wildcardValues.join(' · ');
+    wildcardTagline.classList.toggle('hidden', !wildcardValues.length);
+    wildcardTagline.title = wildcardValues.length
+      ? 'Resolved wildcard choices: ' + wildcardValues.join(' · ')
+      : '';
     if (infoBtn) infoBtn.classList.toggle('hidden', !hasSession);
     if (!details) return;
     if (!hasSession) {

@@ -50,6 +50,7 @@ function normalizeAppConfigShape(cfg) {
   if (!out.requirements || typeof out.requirements !== 'object') out.requirements = {};
   if (typeof out.debug !== 'boolean') out.debug = !!out.debug;
   out.theme = String(out.theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
+  out.director_model = String(out.director_model || '').trim();
   if (!out.filesystem.root) out.filesystem.root = '';
   if (!out.filesystem.output_root) out.filesystem.output_root = '';
   if (!out.filesystem.models) out.filesystem.models = '';

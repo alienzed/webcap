@@ -39,7 +39,7 @@ function cancelFocusedCaptionPrefetch() {
   prefetch.discarded = true;
   if (
     captionAssistPendingJobId === prefetch.jobId ||
-    (captionAssistPendingJobId === 'prefetch' && !prefetch.jobId)
+    captionAssistPendingJobId === 'prefetch'
   ) {
     captionAssistPendingJobId = '';
     updatePrimerCaptionResetUi();

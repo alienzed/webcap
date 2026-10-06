@@ -318,7 +318,7 @@ def test_local_llm_waits_without_claiming_when_shared_gpu_prep_is_busy(llm_root,
 
     assert llm_runner._advance_queue() is None
     assert llm_runner.job_status(job["jobId"])["status"] == "queued"
-    assert execution_queue.resource_owner() == "llm"
+    assert execution_queue.resource_owner() == ""
     assert calls == []
 
     llm_runner._advance_queue()

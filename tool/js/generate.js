@@ -640,7 +640,6 @@
     if (resultModelId && modelAvailable) {
       generateState.modelId = resultModelId;
       el('generate-model').value = resultModelId;
-      setGenerateModelPreference(resultModelId);
       renderModelForm();
     } else if (resultModelId && typeof window.reportConsoleWarning === 'function') {
       window.reportConsoleWarning(
@@ -2267,12 +2266,16 @@
     if (!prompt) throw new Error('Generate prompt editor is missing.');
     prompt.value = '';
     prompt.removeAttribute('data-model-id');
+    generateState.modelId = getGenerateModelPreference();
     generateState.lorasByModel = {};
     generateState.loraMode = 'selected';
     generateState.sweepFolderByModel = {};
     generateState.sweepSelections = {};
     generateState.promptLibrary.activeId = '';
     generateState.promptLibrary.query = '';
+    var promptSearch = el('generate-prompt-library-search');
+    if (promptSearch) promptSearch.value = '';
+    setPromptLibraryOpen(false);
     generateState.director.previousPrompt = null;
     var instruction = el('generate-director-instruction');
     if (instruction) instruction.value = '';

@@ -210,6 +210,23 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
+    if client == "schema":
+        operation = str((frozen_contract or {}).get("operation") or "").strip()
+        if operation != "vision_schema_suggest":
+            raise RuntimeError("Unsupported Schema Assist LLM operation: " + (operation or "empty"))
+        from .vision_schema_contract import normalize_result
+        return {
+            "schema": normalize_result(
+                llm_result.get("data"),
+                pattern_evidence=(frozen_contract or {}).get("pattern_evidence") or [],
+                existing_groups=(frozen_contract or {}).get("existing_groups") or [],
+            ),
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if client == "test":
         operation = str((frozen_contract or {}).get("operation") or "").strip()
         if operation != "analyze_caption_wildcard":
@@ -719,7 +736,7 @@ def enqueue(client, model_id, contract, context=None, label=""):
     _ensure_execution_reconciled()
     client = str(client or "").strip()
     model_id = str(model_id or "").strip()
-    if client not in {"storyboard", "generate", "test", "qa", "chat", "caption"}:
+    if client not in {"storyboard", "generate", "test", "qa", "schema", "chat", "caption"}:
         raise ValueError("Unsupported LLM client: " + (client or "empty"))
     if not model_id:
         raise ValueError("LLM model is required.")

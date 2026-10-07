@@ -615,7 +615,10 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
             and (not needs_selection_pose or selection_pose_unavailable)
         ):
             continue
-        metadata[entry.name] = probe_media_metadata(entry, face_detector, selection_pose_analyzers)
+        next_info = probe_media_metadata(entry, face_detector, selection_pose_analyzers)
+        if unchanged and isinstance(cached, dict) and isinstance(cached.get("vision_sight"), dict):
+            next_info["vision_sight"] = cached["vision_sight"]
+        metadata[entry.name] = next_info
         generated_count += 1
         if (include_face_focus and is_face_focus_image(entry)) or (include_selection_pose and is_selection_pose_image(entry)):
             write_media_metadata_file(metadata_path, metadata)

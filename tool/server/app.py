@@ -69,6 +69,7 @@ from .inference_runner import action as inference_action, cancel_storyboard_pend
 from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot, storyboard_story_busy as llm_storyboard_story_busy, storyboard_target_busy as llm_storyboard_target_busy
 from .activity_monitor import activity_snapshot
 from .director_model_test_store import register_routes as register_director_model_test_routes
+from .model_lab import register_routes as register_model_lab_routes
 from .execution_queue import ExecutionQueueStateError, recover_invalid_startup_state
 
 os.umask(0o022)  # Ensure files/dirs are created with safe permissions
@@ -85,6 +86,7 @@ TEMPLATES_DIR = TOOL_DIR / "templates"
 
 app = Flask(__name__, static_folder=None)
 register_director_model_test_routes(app)
+register_model_lab_routes(app)
 
 
 @app.errorhandler(TrainingStateError)

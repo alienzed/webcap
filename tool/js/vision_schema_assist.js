@@ -481,11 +481,20 @@
       label.textContent = String(term.term || '');
       var evidence = document.createElement('span');
       evidence.textContent = (term.evidence || []).slice(0, 4).join(' · ');
-      var examples = document.createElement('small');
-      examples.textContent = (term.examples || []).slice(0, 4).join(' · ');
+      var examples = document.createElement('div');
+      examples.className = 'vision-schema-evidence-thumbs';
+      (term.examples || []).slice(0, 4).forEach(function (fileName) {
+        var thumb = document.createElement('img');
+        thumb.loading = 'lazy';
+        thumb.alt = String(fileName || '');
+        thumb.title = String(fileName || '');
+        thumb.src = '/caption/media?folder=' + encodeURIComponent(schemaState.folder) +
+          '&media=' + encodeURIComponent(String(fileName || ''));
+        examples.appendChild(thumb);
+      });
       evidenceRow.appendChild(label);
       if (evidence.textContent) evidenceRow.appendChild(evidence);
-      if (examples.textContent) evidenceRow.appendChild(examples);
+      if (examples.children.length) evidenceRow.appendChild(examples);
       evidenceDetails.appendChild(evidenceRow);
     });
     if (evidenceDetails.children.length > 1) card.appendChild(evidenceDetails);
@@ -502,14 +511,19 @@
     });
     var total = scopedItems.length;
     var cached = scopedItems.filter(function (item) { return !!item.structured; }).length;
-    var percent = total > 0 ? Math.max(0, Math.min(100, cached / total * 100)) : 0;
+    var usingVocabularyPass = !schemaState.guidedLaunch && schemaState.vocabularyScanTotal > 0;
+    var percent = usingVocabularyPass
+      ? Math.max(0, Math.min(100, schemaState.vocabularyScanIndex / schemaState.vocabularyScanTotal * 100))
+      : (total > 0 ? Math.max(0, Math.min(100, cached / total * 100)) : 0);
     var fill = el('vision-schema-progress-fill');
     var text = el('vision-schema-progress-text');
     if (!fill || !text) throw new Error('Schema Assist progress controls are missing.');
     fill.style.width = percent.toFixed(1) + '%';
-    text.textContent = total
-      ? (String(cached) + ' / ' + String(total) + ' Set media have structured Sight for ' + (schemaState.visionModel || 'the selected Vision model'))
-      : 'No supported media in this Set.';
+    text.textContent = usingVocabularyPass
+      ? (String(schemaState.vocabularyScanIndex) + ' / ' + String(schemaState.vocabularyScanTotal) + ' fresh group-aware visual checks complete')
+      : (total
+        ? (String(cached) + ' / ' + String(total) + ' Set media have structured Sight for ' + (schemaState.visionModel || 'the selected Vision model'))
+        : 'No supported media in this Set.');
   }
 
   function render() {

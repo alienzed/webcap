@@ -363,9 +363,14 @@
       ? 'Scan Missing Sight'
       : 'Scan Visible';
     stopBtn.classList.toggle('hidden', !schemaState.scanRunning && !schemaBusy);
-    var structuredReady = schemaState.statusPayload && Number(schemaState.statusPayload.structured || 0) > 0;
-    suggestBtn.disabled = schemaState.scanRunning || schemaBusy || !structuredReady;
-    tagBtn.disabled = schemaState.scanRunning || schemaBusy || !structuredReady;
+    var scope = {};
+    (schemaState.scopeFiles || []).forEach(function (fileName) { scope[String(fileName || '')] = true; });
+    var scopedStructured = ((schemaState.statusPayload && schemaState.statusPayload.items) || []).filter(function (item) {
+      return (!schemaState.scopeFiles.length || !!scope[String(item.file || '')]) && !!item.structured;
+    }).length;
+    var allStructured = Number(schemaState.statusPayload && schemaState.statusPayload.structured || 0);
+    suggestBtn.disabled = schemaState.scanRunning || schemaBusy || allStructured < 2;
+    tagBtn.disabled = schemaState.scanRunning || schemaBusy || scopedStructured < 1;
     applyBtn.textContent = schemaState.mode === 'tags' ? 'Apply Selected Tags' : 'Merge Selected Vocabulary';
     applyBtn.disabled = schemaState.scanRunning || schemaBusy || (
       schemaState.mode === 'tags'

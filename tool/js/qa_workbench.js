@@ -1592,6 +1592,14 @@
     return qaGetTrainingItems();
   }
 
+  window.addEventListener('webcap:media-metadata-updated', function (event) {
+    var detail = event && event.detail ? event.detail : {};
+    if (String(detail.folder || '') !== String(state.folder || '')) return;
+    if (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput') return;
+    if (reviewWorkspaceState.detailTab !== 'qa') return;
+    renderQaWorkbench(true);
+  });
+
   window.renderQaWorkbench = renderQaWorkbench;
   window.refreshQaWorkbench = function () { renderQaWorkbench(true); };
   window.wireQaWorkbench = wireQaWorkbench;

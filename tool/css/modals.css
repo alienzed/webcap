@@ -2769,8 +2769,7 @@ html[data-theme="dark"] .app-settings-environment-check {
 
 .set-scan-dialog {
   width: min(900px, calc(100vw - 36px));
-  height: min(760px, calc(100vh - 36px));
-  min-height: 480px;
+  max-height: calc(100vh - 36px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2866,6 +2865,7 @@ html[data-theme="dark"] .app-settings-environment-check {
 .set-scan-raw-wrap {
   flex: 1 1 auto;
   min-height: 0;
+  max-height: min(480px, 52vh);
   overflow: auto;
   margin: 0 18px 14px;
   padding: 12px;

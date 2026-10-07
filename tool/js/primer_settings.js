@@ -1205,10 +1205,12 @@ function runCaptionAssist() {
         ? 'Caption Assist candidate failed annotation validation.'
         : 'AI caption candidate ready.'
     );
+    if (captionVisionEnabled) {
+      maybeRunCaptionVisionForCandidate(candidate);
+    }
     if (isFocusedCaptionOpen()) {
       if (captionVisionEnabled) {
         setFocusedCaptionVisionSightEnabled(true);
-        maybeRunCaptionVisionForCandidate(candidate);
         loadFocusedCaptionVisionPhrases();
       }
       startFocusedCaptionPrefetch(sourceMediaKey);

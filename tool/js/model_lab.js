@@ -198,9 +198,12 @@ function modelLabRenderRun() {
       var state = String(row.status || '');
       var error = row.error ? (' — ' + escapeHtml(row.error)) : '';
       var file = row.file ? (' · ' + escapeHtml(row.file)) : '';
+      var raw = row.result && Object.keys(row.result).length
+        ? '<details><summary>Evidence</summary><pre>' + escapeHtml(JSON.stringify(row.result, null, 2)) + '</pre></details>'
+        : '';
       return '<div class="model-lab-attempt model-lab-attempt-' + escapeHtml(state) + '">' +
         '<strong>' + escapeHtml(modelLabAttemptLabel(row.kind)) + '</strong>' +
-        '<span>' + escapeHtml(state) + file + error + '</span></div>';
+        '<span>' + escapeHtml(state) + file + error + '</span>' + raw + '</div>';
     }).join('');
     return '<details class="model-lab-model-result" ' + (failed ? 'open' : '') + '>' +
       '<summary><strong>' + escapeHtml(modelRef) + '</strong><span>' +

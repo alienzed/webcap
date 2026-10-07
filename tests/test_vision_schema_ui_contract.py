@@ -16,8 +16,11 @@ def test_schema_assist_is_contextual_and_reuses_existing_vision_and_schema_paths
     assert 'id="vision-schema-open-btn"' in html
     assert html.index('id="vision-schema-open-btn"') < html.index('id="checklist-settings-btn"')
     assert 'id="vision-schema-modal"' in html
+    assert 'id="vision-schema-scan-btn"' in html
     assert 'id="vision-schema-tags-btn"' in html
+    assert 'id="vision-schema-skip-btn"' in html
     assert 'id="vision-schema-proposal-heading"' in html
+    assert 'id="vision-schema-suggest-btn"' not in html
     assert 'src="/static/js/vision_schema_assist.js"' in html
     assert html.index('src="/static/js/caption_vision.js"') < html.index('src="/static/js/vision_schema_assist.js"')
 
@@ -45,13 +48,35 @@ def test_schema_assist_keeps_scan_ephemeral_and_schema_mutations_explicit():
     assert "scanStopRequested" in script
     assert "schemaStarting" in script
     assert "schemaRequestToken" in script
-    assert "Nothing changes until you apply selected vocabulary." in _read("tool/tool.html")
+    html = _read("tool/tool.html")
+    assert "Discovery changes vocabulary only; it does not tag media." in html
+    assert "Add Selected to Vocabulary" in html
     assert "check.checked = !term.alreadyExists;" in script
     assert "check.disabled = false;" in script
     assert "function canonicalExistingGroup(name)" in script
-    assert "vision-schema-example-thumb" in script
+    assert "function runDiscovery()" in script
+    assert "runScan({ discoverAfter: true });" in script
+    assert "function currentVocabularyGroup()" in script
+    assert "function skipCurrentVocabularyGroup()" in script
+    assert "scanBtn.onclick = runDiscovery;" in script
+    assert "skipBtn.onclick = skipCurrentVocabularyGroup;" in script
     assert "applyBtn.onclick = applySelected;" in script
 
+
+
+def test_discover_vocabulary_is_single_action_and_one_group_at_a_time():
+    html = _read("tool/tool.html")
+    script = _read("tool/js/vision_schema_assist.js")
+
+    assert html.count('id="vision-schema-scan-btn"') == 1
+    assert ">Discover Vocabulary</button>" in html
+    assert "Structured Sight</strong>" not in html
+    assert "vision-schema-evidence-column" not in html
+    assert "Merge Selected Vocabulary" not in html
+    assert "schemaState.reviewIndex = 0;" in script
+    assert "Group ' + String(groupIndex + 1) + ' of ' + String(groups.length)" in script
+    assert "String(term.support || 0) + ' items'" in script
+    assert "advanceVocabularyReview(message);" in script
 
 
 def test_schema_assist_materializes_only_explicitly_selected_tag_candidates():

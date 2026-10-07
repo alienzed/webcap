@@ -202,7 +202,7 @@
 
     setScanState.folder = folder;
     setScanState.files = files.slice();
-    setScanState.visionModel = String(getCaptionVisionModelId() || '').trim();
+    setScanState.visionModel = '';
     setScanState.running = true;
     setScanState.stopRequested = false;
     setScanState.currentVisionJobId = '';
@@ -210,12 +210,17 @@
     setScanSetStage('metadata', 'Checking ' + String(files.length) + ' Set media item' + (files.length === 1 ? '' : 's') + '…');
     renderSetScanStages();
 
-    refreshMediaResolutionCache({
-      includeFaceFocus: true,
-      includeSelectionPose: true,
-      suppressUpdatedEvent: true,
-      successStatus: 'WebCap Set analysis is current.'
-    }).then(function (metadataResult) {
+    Promise.all([
+      loadCaptionVisionCapabilities(),
+      refreshMediaResolutionCache({
+        includeFaceFocus: true,
+        includeSelectionPose: true,
+        suppressUpdatedEvent: true,
+        successStatus: 'WebCap Set analysis is current.'
+      })
+    ]).then(function (results) {
+      setScanState.visionModel = String(getCaptionVisionModelId() || '').trim();
+      var metadataResult = results[1];
       if (!metadataResult || metadataResult.ok === false) {
         throw new Error((metadataResult && metadataResult.error) || 'WebCap Set analysis failed.');
       }

@@ -873,8 +873,9 @@
     if (!bar || !progress || !label || !launchBtn) throw new Error('Guided Tag Pass Grid controls are missing.');
     var pass = schemaState.guidedPass;
     var step = getGuidedTagPassStep();
+    var canLaunch = typeof isSetFolderPath === 'function' && isSetFolderPath(state && state.folder);
     bar.classList.toggle('hidden', !pass || !step);
-    launchBtn.classList.toggle('hidden', !!pass);
+    launchBtn.classList.toggle('hidden', !!pass || !canLaunch);
     if (!pass || !step) return;
     progress.textContent = String(pass.index + 1) + ' / ' + String(pass.steps.length);
     label.textContent = step.group + ' · ' + step.term + ' — ' + String(step.highFiles.length) + ' likely';

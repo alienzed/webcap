@@ -69,6 +69,8 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "getTagsForMediaKey" in qa
     assert "qaWorkbenchState.deterministicFindings.concat(ai)" in qa
     assert "currentSignature !== signature" in qa
+    assert "inputsChanged" in qa
+    assert "qaWorkbenchState.deepScanInputSignature !== inputSignature" in qa
     assert "sourceLabel: 'AI · '" in qa
     assert '@app.route("/fs/qa/deep-scan"' in app
     assert 'enqueue_llm(\n            "qa",' in app

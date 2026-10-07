@@ -338,43 +338,60 @@ def build_vision_vocabulary_sight_messages(media_reference, existing_groups):
 def normalize_vision_vocabulary_sight_payload(data, existing_groups):
     if not isinstance(data, dict):
         raise ValueError("Vocabulary sight response must be an object.")
+    if not isinstance(data.get("groups"), list):
+        raise ValueError("Vocabulary sight response is missing its groups array.")
+    if not isinstance(data.get("other"), list):
+        raise ValueError("Vocabulary sight response is missing its other array.")
+
     groups = _normalize_vocabulary_groups(existing_groups)
     allowed = {row["group"].casefold(): row["group"] for row in groups}
     grouped = {row["group"]: [] for row in groups}
 
-    def add_observations(target, values):
+    def add_observations(target, values, label):
+        if not isinstance(values, list):
+            raise ValueError(label + " observations must be an array.")
         seen = {value.casefold() for value in target}
-        for value in _clean_list(values, 16):
+        for raw in values:
+            value = _clean(raw)
+            if not value:
+                raise ValueError(label + " contains an empty observation.")
             key = value.casefold()
             if key not in seen:
                 seen.add(key)
                 target.append(value)
 
     unknown = []
-    for raw in data.get("groups") if isinstance(data.get("groups"), list) else []:
+    for index, raw in enumerate(data["groups"], start=1):
         if not isinstance(raw, dict):
-            continue
+            raise ValueError("Vocabulary sight group {} is not an object.".format(index))
         raw_group = _clean(raw.get("group"), 120)
+        if not raw_group:
+            raise ValueError("Vocabulary sight group {} has an empty name.".format(index))
+        observations = raw.get("observations")
         canonical = allowed.get(raw_group.casefold())
-        observations = _clean_list(raw.get("observations"), 16)
         if canonical:
-            add_observations(grouped[canonical], observations)
-        elif raw_group and observations:
-            unknown.append({"suggestedGroup": raw_group, "observations": observations})
+            add_observations(grouped[canonical], observations, "Vocabulary sight group '{}'".format(raw_group))
+        else:
+            values = []
+            add_observations(values, observations, "Vocabulary sight group '{}'".format(raw_group))
+            if values:
+                unknown.append({"suggestedGroup": raw_group, "observations": values})
 
-    other = []
-    for raw in data.get("other") if isinstance(data.get("other"), list) else []:
+    for index, raw in enumerate(data["other"], start=1):
         if not isinstance(raw, dict):
-            continue
+            raise ValueError("Vocabulary sight other item {} is not an object.".format(index))
         suggested = _clean(raw.get("suggestedGroup"), 120)
-        observations = _clean_list(raw.get("observations"), 16)
-        if not suggested or not observations:
-            continue
+        if not suggested:
+            raise ValueError("Vocabulary sight other item {} has an empty suggestedGroup.".format(index))
+        observations = raw.get("observations")
         canonical = allowed.get(suggested.casefold())
         if canonical:
-            add_observations(grouped[canonical], observations)
+            add_observations(grouped[canonical], observations, "Vocabulary sight other '{}'".format(suggested))
         else:
-            unknown.append({"suggestedGroup": suggested, "observations": observations})
+            values = []
+            add_observations(values, observations, "Vocabulary sight other '{}'".format(suggested))
+            if values:
+                unknown.append({"suggestedGroup": suggested, "observations": values})
 
     other_by_key = {}
     for row in unknown:
@@ -383,8 +400,11 @@ def normalize_vision_vocabulary_sight_payload(data, existing_groups):
             "suggestedGroup": row["suggestedGroup"],
             "observations": [],
         })
-        add_observations(target["observations"], row["observations"])
-    other = list(other_by_key.values())
+        add_observations(
+            target["observations"],
+            row["observations"],
+            "Vocabulary sight other '{}'".format(row["suggestedGroup"]),
+        )
 
     return {
         "groups": [
@@ -392,7 +412,7 @@ def normalize_vision_vocabulary_sight_payload(data, existing_groups):
             for row in groups
             if grouped[row["group"]]
         ],
-        "other": other,
+        "other": list(other_by_key.values()),
     }
 
 

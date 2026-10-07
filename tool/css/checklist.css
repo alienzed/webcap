@@ -1807,3 +1807,8 @@ html[data-theme="dark"] .checklist-settings-btn,
 html[data-theme="dark"] .checklist-close-btn {
   color: var(--text);
 }
+
+.vision-schema-open-btn {
+  font-size: 15px;
+  line-height: 1;
+}

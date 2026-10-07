@@ -303,6 +303,7 @@ function shellManagedActivityLabel(item) {
   if (kind === 'director') {
     if (operation === 'caption_vision_validate') return 'Vision QA';
     if (operation === 'vision_image_caption') return 'Vision sight';
+    if (operation === 'vision_schema_suggest' || client === 'schema') return 'Schema Assist';
     if (client === 'caption') return 'Caption Assist';
     return 'Director';
   }

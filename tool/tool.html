@@ -658,6 +658,13 @@
                                             </button>
                                         </div>
                                         <button
+                                            id="vision-schema-open-btn"
+                                            type="button"
+                                            class="checklist-settings-btn vision-schema-open-btn"
+                                            title="Discover annotation vocabulary from Vision sight"
+                                            aria-label="Discover vocabulary"
+                                        >&#10022;</button>
+                                        <button
                                             id="checklist-settings-btn"
                                             type="button"
                                             class="checklist-settings-btn"
@@ -2430,6 +2437,53 @@
             </div>
         </div>
         <div id="modal-overlay" class="modal-overlay hidden"></div>
+        <div id="vision-schema-modal" class="vision-schema-modal hidden" role="dialog" aria-modal="true" aria-labelledby="vision-schema-title">
+            <div class="vision-schema-dialog">
+                <div class="vision-schema-header">
+                    <div>
+                        <h2 id="vision-schema-title">Discover Vocabulary</h2>
+                        <div id="vision-schema-subtitle" class="vision-schema-subtitle">Build a reusable annotation schema from batch Vision sight.</div>
+                    </div>
+                    <button id="vision-schema-close-btn" type="button" class="modal-close-btn" aria-label="Close Discover Vocabulary">&times;</button>
+                </div>
+                <div class="vision-schema-toolbar">
+                    <div class="vision-schema-stage-actions">
+                        <button id="vision-schema-scan-btn" type="button" class="review-captions-btn">Scan Set</button>
+                        <button id="vision-schema-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
+                        <button id="vision-schema-suggest-btn" type="button" class="review-captions-btn" disabled>Build Suggestions</button>
+                    </div>
+                    <div id="vision-schema-status" class="vision-schema-status" aria-live="polite"></div>
+                </div>
+                <div class="vision-schema-progress-wrap">
+                    <div class="vision-schema-progress-track"><span id="vision-schema-progress-fill"></span></div>
+                    <div id="vision-schema-progress-text" class="vision-schema-progress-text"></div>
+                </div>
+                <div class="vision-schema-body">
+                    <section class="vision-schema-column vision-schema-evidence-column">
+                        <div class="vision-schema-section-heading">
+                            <div>
+                                <strong>Recurring Sight</strong>
+                                <span>WebCap-mined evidence from cached Vision descriptions.</span>
+                            </div>
+                        </div>
+                        <div id="vision-schema-evidence" class="vision-schema-evidence"></div>
+                    </section>
+                    <section class="vision-schema-column vision-schema-proposal-column">
+                        <div class="vision-schema-section-heading">
+                            <div>
+                                <strong>Schema Suggestions</strong>
+                                <span>Director-organized vocabulary grounded in the evidence at left.</span>
+                            </div>
+                        </div>
+                        <div id="vision-schema-proposals" class="vision-schema-proposals"></div>
+                    </section>
+                </div>
+                <div class="vision-schema-footer">
+                    <span id="vision-schema-footer-note">Nothing changes until you apply selected vocabulary.</span>
+                    <button id="vision-schema-apply-btn" type="button" class="review-captions-btn" disabled>Merge Selected Vocabulary</button>
+                </div>
+            </div>
+        </div>
         <div
             id="checklist-keywords-modal"
             class="modal hidden"
@@ -2573,6 +2627,7 @@
         <script src="/static/js/focused_annotation_navigation.js"></script>
         <script src="/static/js/focused_annotation.js"></script>
         <script src="/static/js/caption_vision.js"></script>
+        <script src="/static/js/vision_schema_assist.js"></script>
         <script src="/static/js/focused_caption.js"></script>
         <script src="/static/js/balance_distribution_wheel.js"></script>
         <script src="/static/js/h3_calibration_results.js"></script>

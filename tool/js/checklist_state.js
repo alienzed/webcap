@@ -986,6 +986,52 @@ function toggleChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel
   );
 }
 
+function addChecklistGroup(requirementLabel) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requirement) return false;
+  var exists = (Array.isArray(checklistItems) ? checklistItems : []).some(function (current) {
+    return normalizeChecklistRequirementKey(current).toLowerCase() === requirement.toLowerCase();
+  });
+  if (exists) return false;
+  checklistItems.push(requirement);
+  Object.keys(checklistCheckedByMedia || {}).forEach(function (mediaKey) {
+    if (checklistCheckedByMedia[mediaKey]) checklistCheckedByMedia[mediaKey][requirement] = false;
+  });
+  refreshChecklistGroupConfigurationUi();
+  return true;
+}
+
+function mergeChecklistKeywordTermsForRequirement(requirementLabel, terms) {
+  var requirement = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requirement) return [];
+  var effective = {};
+  getChecklistKeywordTermsForRequirement(requirement).forEach(function (term) {
+    effective[normalizeChecklistTerm(term).toLowerCase()] = true;
+  });
+  var localTerms = parseChecklistKeywordTerms(String(checklistKeywordsByItem[requirement] || ''));
+  var added = [];
+  (Array.isArray(terms) ? terms : []).forEach(function (raw) {
+    var term = normalizeChecklistTerm(raw);
+    var key = term.toLowerCase();
+    if (!term || effective[key]) return;
+    effective[key] = true;
+    localTerms.push(term);
+    added.push(term);
+  });
+  if (!added.length) return added;
+  setChecklistKeywordTermsForRequirement(requirement, localTerms);
+  syncReviewedFromChecklistAll();
+  saveChecklistToFolderState();
+  refreshCurrentPrimerDerivedUi();
+  renderChecklistPanel();
+  renderItemMetadataPanel();
+  renderAnnotateStrip();
+  renderItemTagsPanel();
+  if (typeof renderFileList === 'function') renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+  renderFocusedAnnotationSurface();
+  return added;
+}
+
 function moveChecklistItemToIndex(fromIndex, toIndex) {
   var from = Number(fromIndex);
   var to = Number(toIndex);

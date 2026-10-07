@@ -288,13 +288,8 @@ function wireAllUi() {
   if (addBtn && addInput) {
     addBtn.onclick = function() {
       var val = addInput.value.trim();
-      if (!val || checklistItems.indexOf(val) !== -1) return;
-      checklistItems.push(val);
-      for (var k in checklistCheckedByMedia) {
-        if (checklistCheckedByMedia[k]) checklistCheckedByMedia[k][val] = false;
-      }
-      refreshChecklistGroupConfigurationUi();
-      addInput.value = '';
+      if (!val) return;
+      if (addChecklistGroup(val)) addInput.value = '';
     };
     addInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') addBtn.onclick();

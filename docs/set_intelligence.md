@@ -78,9 +78,19 @@ Director proposals, Guided Tag steps, QA dispositions, and modal progress remain
 
 Purpose: decide **what the Set vocabulary should contain**.
 
-It consumes current Set intelligence for the whole Set. It does not scan media and does not tag media.
+Vocabulary discovery deliberately uses multiple reasoning passes before human curation:
 
-The default review stays one proposed group at a time. Support counts are visible. Rationale/evidence/examples are buried behind an optional reveal so uncertain suggestions can be investigated without making every decision noisy.
+1. Reuse the Set Intelligence **open Sight** pass: structured, vocabulary-agnostic visual atoms.
+2. Run a fresh **group-aware, term-unconstrained Vision pass**. Vision receives existing group names as semantic lenses, but not the current terms. It reports visible observations inside those groups plus important concepts that do not fit them.
+3. Combine both evidence sources and let the Director synthesize canonical terms, extend existing groups, and propose genuinely missing groups.
+4. Run a separate Director **challenge pass** against that draft to recover missed distinctions, merge synonyms, and remove weak or ungrounded proposals.
+5. Only then begin human curation, one group at a time. Existing groups are reviewed before proposed new groups.
+
+The schema-aware Vision evidence is cached separately from open Sight in `media_metadata.json`. It is invalidated by media, Vision-model, or group-structure changes. Editing terms alone does not require the pixels to be inspected again.
+
+Discovery does not assign tags to media. Current terms are supplied to the Director during synthesis as vocabulary context, not to the fresh Vision pass as answer choices.
+
+Support counts are visible. Representative thumbnails plus rationale/evidence are available behind an optional reveal. Slightly overcomplete vocabulary is acceptable: proposed terms are available language, not requirements to use every term. Missing a meaningful recurring distinction is more costly than retaining an extra plausible term.
 
 ## Guided Tagging
 

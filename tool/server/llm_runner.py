@@ -251,6 +251,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                     existing_groups=(frozen_contract or {}).get("existing_groups") or [],
                     allowed_files=(frozen_contract or {}).get("source_files") or [],
                     current_assignments=(frozen_contract or {}).get("current_assignments") or {},
+                    existing_only=bool((frozen_contract or {}).get("existing_only")),
                 ),
                 "model": llm_result["model"],
                 "finishReason": llm_result.get("finishReason"),

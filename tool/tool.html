@@ -477,10 +477,7 @@
                                     <span class="btn-glyph" aria-hidden="true">&#8627;</span>
                                     <span>Create Set</span>
                                 </button>
-                                <button id="set-scan-open-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Build reusable Set intelligence from WebCap analysis and optional Vision">Scan Set</button>
-                                <button id="discover-vocabulary-set-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Review vocabulary suggestions from the current Set scan">Discover Vocabulary</button>
-                                <button id="guided-tag-pass-open-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Use current Set intelligence to bulk-apply existing vocabulary in Grid">Guided Tag Pass</button>
-                                <button id="sidebar-open-review-output-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Open Quality Assurance for this set" aria-pressed="false">Quality Assurance</button>
+                                <button id="set-intelligence-open-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Understand this Set, then move through vocabulary, guided tagging, and QA">Set Intelligence</button>
                                 <button id="sidebar-open-training-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Open Training for the current set" aria-label="Train current set" aria-pressed="false">Train Set</button>
                             </div>
                         </details>
@@ -2456,26 +2453,33 @@
             <div class="set-scan-dialog">
                 <div class="set-scan-header">
                     <div>
-                        <h2 id="set-scan-title">Scan Set</h2>
-                        <div class="set-scan-subtitle">Build reusable Set intelligence once, then let Vocabulary, Guided Tagging, and QA consume it.</div>
+                        <h2 id="set-scan-title">Set Intelligence</h2>
+                        <div class="set-scan-subtitle">Understand the Set once, then move through vocabulary, guided tagging, and QA.</div>
                     </div>
-                    <button id="set-scan-close-btn" type="button" class="modal-close-btn" aria-label="Close Scan Set">&times;</button>
+                    <button id="set-scan-close-btn" type="button" class="modal-close-btn" aria-label="Close Set Intelligence">&times;</button>
                 </div>
                 <div class="set-scan-summary">
-                    <strong id="set-scan-stage">Ready</strong>
+                    <strong id="set-scan-stage">Checking Set</strong>
                     <span id="set-scan-status" aria-live="polite"></span>
                 </div>
                 <div class="set-scan-progress-track"><span id="set-scan-progress-fill"></span></div>
-                <div id="set-scan-stages" class="set-scan-stages">
-                    <div class="set-scan-stage" data-stage="metadata"><strong>WebCap analysis</strong><span>Metadata, Scene Complexity, Face Focus, MediaPipe pose</span></div>
-                    <div class="set-scan-stage" data-stage="vision"><strong>Vision Sight</strong><span>Optional structured visual semantics when a Vision model is selected</span></div>
-                    <div class="set-scan-stage" data-stage="ready"><strong>Reusable intelligence</strong><span>Ready for Vocabulary, Guided Tagging, and QA</span></div>
+                <div id="set-intelligence-next" class="set-intelligence-next hidden">
+                    <div class="set-intelligence-next-copy">
+                        <strong>Next: review the vocabulary</strong>
+                        <span>Shape the schema before using it for bulk tagging.</span>
+                    </div>
+                    <button id="set-intelligence-primary-btn" type="button" class="review-captions-btn">Discover Vocabulary</button>
+                    <div class="set-intelligence-secondary-actions">
+                        <button id="set-intelligence-guided-btn" type="button" class="set-intelligence-link-btn">Vocabulary is already mature → Guided Tagging</button>
+                        <button id="set-intelligence-qa-btn" type="button" class="set-intelligence-link-btn">Go straight to Quality Assurance</button>
+                    </div>
                 </div>
-                <section id="set-scan-raw-wrap" class="set-scan-raw-wrap hidden" aria-label="Raw Vision responses">
+                <details id="set-scan-details" class="set-scan-details hidden">
+                    <summary>Scan details</summary>
                     <pre id="set-scan-raw-output" class="set-scan-raw-output"></pre>
-                </section>
+                </details>
                 <div class="set-scan-footer">
-                    <span id="set-scan-note">Scan Set reuses current cached analysis and only rebuilds missing or stale evidence.</span>
+                    <span id="set-scan-note">Uses the selected Vision model. Existing scan data is reused when it is still current.</span>
                     <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
                 </div>
             </div>

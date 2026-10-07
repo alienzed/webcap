@@ -55,7 +55,8 @@ function resolveGroupWorkbenchOptions(options) {
       return freshKeys.length ? freshKeys : mediaKeys.slice();
     },
     currentMediaKey: currentMediaKey,
-    onAfterMutation: opts.onAfterMutation
+    onAfterMutation: opts.onAfterMutation,
+    onTermMutation: opts.onTermMutation
   };
 }
 
@@ -288,10 +289,12 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
   if (typeof setStatus === 'function') {
     setStatus((allHaveTerm ? 'Removed' : 'Added') + ' "' + term + '" on ' + changed + ' Grid item' + (changed === 1 ? '' : 's') + '.');
   }
-  window.handleGuidedTagPassGridTermMutation(requirementLabel, term, {
-    removed: allHaveTerm,
-    changed: changed
-  });
+  if (typeof opts.onTermMutation === 'function') {
+    opts.onTermMutation(requirementLabel, term, {
+      removed: allHaveTerm,
+      changed: changed
+    });
+  }
   if (typeof opts.onAfterMutation === 'function') {
     opts.onAfterMutation();
   } else {
@@ -301,7 +304,8 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
       mediaKeys: keys,
       contextMediaKeys: opts.contextMediaKeys,
       getContextMediaKeys: opts.getContextMediaKeys,
-      onAfterMutation: opts.onAfterMutation
+      onAfterMutation: opts.onAfterMutation,
+      onTermMutation: opts.onTermMutation
     });
   }
   return true;
@@ -477,7 +481,8 @@ function renderGroupWorkbench(options) {
     contextMediaKeys: opts.contextMediaKeys.slice(),
     getContextMediaKeys: opts.getContextMediaKeys,
     currentMediaKey: opts.currentMediaKey,
-    onAfterMutation: opts.onAfterMutation
+    onAfterMutation: opts.onAfterMutation,
+    onTermMutation: opts.onTermMutation
   };
   var isGridMode = opts.mode === 'grid';
   var useVisibilityFilter = !isGridMode && targetEl.id === 'group-workbench-list';
@@ -684,7 +689,7 @@ function renderGroupWorkbench(options) {
       groupHasMismatchTerm = groupHasMismatchTerm || isMismatch;
       if (isActive) selectedTermCount += 1;
       if (isMixed) mixedTermCount += 1;
-      (function (btn, key, label, termText, mode, afterMutation, getMediaKeys, getContextMediaKeys) {
+      (function (btn, key, label, termText, mode, afterMutation, termMutation, getMediaKeys, getContextMediaKeys) {
         btn.onclick = function () {
           if (btn.disabled) return;
           if (mode === 'grid') {
@@ -692,7 +697,8 @@ function renderGroupWorkbench(options) {
               targetEl: targetEl,
               contextMediaKeys: getContextMediaKeys(),
               getContextMediaKeys: getContextMediaKeys,
-              onAfterMutation: afterMutation
+              onAfterMutation: afterMutation,
+              onTermMutation: termMutation
             });
             return;
           }
@@ -702,7 +708,7 @@ function renderGroupWorkbench(options) {
           event.preventDefault();
           openChecklistTermAffixesModal(label, termText);
         };
-      })(termBtn, mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.getMediaKeys, opts.getContextMediaKeys);
+      })(termBtn, mediaKey, requirementLabel, term, opts.mode, opts.onAfterMutation, opts.onTermMutation, opts.getMediaKeys, opts.getContextMediaKeys);
       termEntries.push({
         term: term,
         button: termBtn,

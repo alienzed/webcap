@@ -64,3 +64,23 @@ def test_schema_assist_materializes_only_explicitly_selected_tag_candidates():
     assert "mergeChecklistSchemaVocabulary(vocabularyMutations)" in script
     assert "assignChecklistTagToMediaKey(item.key, candidate.group, candidate.term, { skipRefresh: true })" in script
     assert "schemaState.scopeFiles = getVisibleMediaSelectionForTraining();" in script
+
+
+def test_guided_tag_pass_reuses_grid_and_keeps_new_vocabulary_out_of_primary_flow():
+    html = _read("tool/tool.html")
+    script = _read("tool/js/vision_schema_assist.js")
+    grid_actions = _read("tool/js/media_grid_actions.js")
+    grid_tiles = _read("tool/js/media_grid_tiles.js")
+    workbench = _read("tool/js/group_workbench.js")
+
+    assert 'id="guided-tag-pass-open-btn"' in html
+    assert 'id="media-grid-guided-pass"' in html
+    assert 'id="vision-schema-raw-output"' in html
+    assert "window.openGuidedTagPass = openGuidedTagPass;" in script
+    assert "appendRawResponse(fileName, result.text);" in script
+    assert "if (!candidate || !candidate.existing) return;" in script
+    assert "mediaGridState.selectedKeys = selected;" in script
+    assert "window.handleGuidedTagPassGridTermMutation" in workbench
+    assert "window.syncGuidedTagPassWorkbenchHighlight" in grid_tiles
+    assert "window.openGuidedTagPass({ source: 'grid' });" in grid_actions
+    assert "openMediaGridSurface();" in script

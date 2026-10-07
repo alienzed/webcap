@@ -163,6 +163,7 @@ function mediaGridRenderSharedWorkbench() {
       else if (typeof mediaGridRenderSelectionState === 'function') mediaGridRenderSelectionState();
     }
   });
+  window.syncGuidedTagPassWorkbenchHighlight();
 }
 
 function mediaGridHandleTileContextMenu(mediaItem, e) {

@@ -288,6 +288,10 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
   if (typeof setStatus === 'function') {
     setStatus((allHaveTerm ? 'Removed' : 'Added') + ' "' + term + '" on ' + changed + ' Grid item' + (changed === 1 ? '' : 's') + '.');
   }
+  window.handleGuidedTagPassGridTermMutation(requirementLabel, term, {
+    removed: allHaveTerm,
+    changed: changed
+  });
   if (typeof opts.onAfterMutation === 'function') {
     opts.onAfterMutation();
   } else {
@@ -529,6 +533,7 @@ function renderGroupWorkbench(options) {
 
     var groupEl = document.createElement('div');
     groupEl.className = 'group-workbench-group';
+    groupEl.dataset.group = requirementLabel;
     groupEl.classList.toggle('is-reviewed', isReviewed);
     groupEl.classList.toggle('is-complete', isReviewed);
     groupEl.classList.toggle('is-incomplete', !isReviewed);
@@ -663,6 +668,8 @@ function renderGroupWorkbench(options) {
       var termBtn = document.createElement('button');
       termBtn.type = 'button';
       termBtn.className = 'group-workbench-term-btn group-workbench-term-usage-' + usageState;
+      termBtn.dataset.group = requirementLabel;
+      termBtn.dataset.term = term;
       termBtn.textContent = term;
       termBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       termBtn.title = renderedTerm && renderedTerm !== term ? renderedTerm : term;

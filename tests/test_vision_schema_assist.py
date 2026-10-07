@@ -207,6 +207,51 @@ def test_tag_assignment_contract_prefers_existing_terms_and_allows_new_terms_in_
     assert result["items"][1]["candidates"] == []
 
 
+
+
+def test_guided_assignment_contract_rejects_new_terms():
+    records = [{
+        "file": "a.jpg",
+        **_sight(
+            "Front view of a red triangle top with ring connectors.",
+            viewpoint=["front"],
+            things=[{"name": "bikini top", "qualities": ["triangle"]}],
+            details=["ring connectors"],
+        ),
+    }]
+    groups = [
+        {"group": "Viewpoint", "terms": ["front"]},
+        {"group": "BT Shape", "terms": ["triangle"]},
+        {"group": "BT Detail", "terms": ["chain"]},
+    ]
+    contract = vision_schema_contract.build_assignment_request(
+        records,
+        groups,
+        existing_only=True,
+    )
+    result = vision_schema_contract.normalize_assignment_result(
+        {
+            "items": [{
+                "file": "a.jpg",
+                "candidates": [
+                    {"group": "Viewpoint", "term": "front", "confidence": "high", "why": "Visible front view."},
+                    {"group": "BT Detail", "term": "ring connector", "confidence": "high", "why": "Visible ring hardware."},
+                ],
+            }]
+        },
+        existing_groups=contract["existing_groups"],
+        allowed_files=contract["source_files"],
+        current_assignments=contract["current_assignments"],
+        existing_only=contract["existing_only"],
+    )
+
+    assert contract["existing_only"] is True
+    assert "Do not propose new terms or groups." in contract["prompt"]
+    assert [(row["group"], row["term"], row["existing"]) for row in result["items"][0]["candidates"]] == [
+        ("Viewpoint", "front", True),
+    ]
+
+
 def test_vision_status_preserves_legacy_cache_but_requires_structured_sight_for_phase1(tmp_path, monkeypatch):
     import json
     from tool.server import config as app_config

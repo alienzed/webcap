@@ -479,6 +479,7 @@
                                 </button>
                                 <button id="sidebar-open-review-output-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Open Review Set for this set" aria-pressed="false">Review</button>
                                 <button id="sidebar-open-training-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Open Training for the current set" aria-label="Train current set" aria-pressed="false">Train Set</button>
+                                <button id="guided-tag-pass-open-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Scan the visible set with Vision, then review existing-tag suggestions in Grid">Guided Tag Pass</button>
                             </div>
                         </details>
                     </div>
@@ -1109,8 +1110,20 @@
                             </div>
                             <div class="media-grid-surface-actions">
                                 <div id="media-grid-surface-status" class="media-grid-surface-status"></div>
+                                <button id="media-grid-guided-pass-btn" type="button" class="media-grid-btn" title="Build a Guided Tag Pass for the current Grid scope">Guided Pass</button>
                                 <button id="media-grid-surface-select-all-btn" type="button" class="media-grid-btn">Select All</button>
                                 <button id="media-grid-surface-clear-btn" type="button" class="media-grid-btn">Clear</button>
+                            </div>
+                        </div>
+                        <div id="media-grid-guided-pass" class="media-grid-guided-pass hidden" aria-live="polite">
+                            <div class="media-grid-guided-pass-copy">
+                                <span id="media-grid-guided-pass-progress" class="media-grid-guided-pass-progress"></span>
+                                <strong id="media-grid-guided-pass-label" class="media-grid-guided-pass-label"></strong>
+                                <span class="media-grid-guided-pass-hint">Likely matches are selected. Adjust the selection, then click the highlighted tag on the right.</span>
+                            </div>
+                            <div class="media-grid-guided-pass-actions">
+                                <button id="media-grid-guided-pass-skip-btn" type="button" class="media-grid-btn">Skip</button>
+                                <button id="media-grid-guided-pass-exit-btn" type="button" class="media-grid-btn">Exit</button>
                             </div>
                         </div>
                         <div id="media-grid-surface-canvas" class="media-grid-surface-canvas"></div>
@@ -2459,7 +2472,10 @@
                     <div class="vision-schema-progress-track"><span id="vision-schema-progress-fill"></span></div>
                     <div id="vision-schema-progress-text" class="vision-schema-progress-text"></div>
                 </div>
-                <div class="vision-schema-body">
+                <section id="vision-schema-raw" class="vision-schema-raw hidden" aria-label="Vision responses">
+                    <pre id="vision-schema-raw-output" class="vision-schema-raw-output"></pre>
+                </section>
+                <div id="vision-schema-body" class="vision-schema-body">
                     <section class="vision-schema-column vision-schema-evidence-column">
                         <div class="vision-schema-section-heading">
                             <div>

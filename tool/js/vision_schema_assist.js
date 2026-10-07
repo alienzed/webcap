@@ -17,6 +17,9 @@
     tagCandidates: null,
     mode: 'vocabulary',
     scopeFiles: [],
+    guidedLaunch: false,
+    rawResponses: [],
+    guidedPass: null,
     error: ''
   };
 
@@ -99,6 +102,29 @@
       render();
       return payload;
     });
+  }
+
+  function renderRawResponses() {
+    var wrap = el('vision-schema-raw');
+    var output = el('vision-schema-raw-output');
+    if (!wrap || !output) throw new Error('Vision raw response controls are missing.');
+    wrap.classList.toggle('hidden', !schemaState.guidedLaunch);
+    if (!schemaState.guidedLaunch) {
+      output.textContent = '';
+      return;
+    }
+    output.textContent = schemaState.rawResponses.map(function (entry) {
+      return '--- ' + String(entry.file || '') + ' ---\n' + String(entry.text || '');
+    }).join('\n\n');
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  function appendRawResponse(fileName, rawText) {
+    schemaState.rawResponses.push({
+      file: String(fileName || ''),
+      text: String(rawText || '')
+    });
+    renderRawResponses();
   }
 
   function renderEvidence() {
@@ -363,10 +389,24 @@
     var suggestBtn = el('vision-schema-suggest-btn');
     var tagBtn = el('vision-schema-tags-btn');
     var applyBtn = el('vision-schema-apply-btn');
-    if (!modal || !scanBtn || !stopBtn || !suggestBtn || !tagBtn || !applyBtn) {
+    var footerNote = el('vision-schema-footer-note');
+    var body = el('vision-schema-body');
+    var title = el('vision-schema-title');
+    var subtitle = el('vision-schema-subtitle');
+    if (!modal || !scanBtn || !stopBtn || !suggestBtn || !tagBtn || !applyBtn || !footerNote || !body || !title || !subtitle) {
       throw new Error('Schema Assist UI is incomplete.');
     }
     modal.classList.toggle('hidden', !schemaState.open);
+    title.textContent = schemaState.guidedLaunch ? 'Guided Tag Pass' : 'Discover Vocabulary';
+    subtitle.textContent = schemaState.guidedLaunch
+      ? 'Review raw Vision output before building an existing-vocabulary pass.'
+      : 'Build a reusable annotation schema from batch Vision sight.';
+    body.classList.toggle('hidden', schemaState.guidedLaunch);
+    suggestBtn.classList.toggle('hidden', schemaState.guidedLaunch);
+    applyBtn.classList.toggle('hidden', schemaState.guidedLaunch);
+    footerNote.textContent = schemaState.guidedLaunch
+      ? 'Sight is cached in the Set; nothing is tagged until you act in Grid.'
+      : 'Nothing changes until you apply selected vocabulary.';
     var schemaBusy = schemaState.schemaStarting || !!schemaState.schemaJobId;
     scanBtn.disabled = schemaState.scanRunning || schemaBusy;
     scanBtn.textContent = schemaState.statusPayload && Number(schemaState.statusPayload.structured || 0)
@@ -380,7 +420,9 @@
     }).length;
     var allStructured = Number(schemaState.statusPayload && schemaState.statusPayload.structured || 0);
     suggestBtn.disabled = schemaState.scanRunning || schemaBusy || allStructured < 2;
-    tagBtn.disabled = schemaState.scanRunning || schemaBusy || scopedStructured < 1;
+    var scopedTotal = schemaState.scopeFiles.length;
+    tagBtn.disabled = schemaState.scanRunning || schemaBusy || !scopedTotal || scopedStructured < scopedTotal;
+    tagBtn.textContent = schemaState.guidedLaunch ? 'Build Guided Pass' : 'Build Tag Candidates';
     applyBtn.textContent = schemaState.mode === 'tags' ? 'Apply Selected Tags' : 'Merge Selected Vocabulary';
     var tagCandidateCount = schemaState.tagCandidates && Array.isArray(schemaState.tagCandidates.items)
       ? schemaState.tagCandidates.items.reduce(function (total, item) {
@@ -399,6 +441,7 @@
       ? 'Toggle confident additions, including proposed new terms, then apply.'
       : 'Director-organized vocabulary grounded in structured Sight.';
     renderProgress();
+    renderRawResponses();
     renderEvidence();
     renderProposals();
   }
@@ -438,7 +481,10 @@
       if (!sight || !sight.description || !sight.inventory) {
         throw new Error('Vision Sight completed without structured evidence.');
       }
-      return sight;
+      return {
+        sight: sight,
+        text: String(job.result && job.result.text || '')
+      };
     });
   }
 
@@ -449,9 +495,10 @@
 
     var fileName = pending[index];
     setStatus('Structured Sight · ' + String(index + 1) + ' / ' + String(pending.length));
-    return requestStructuredSight(folder, model, fileName).then(function (sight) {
+    return requestStructuredSight(folder, model, fileName).then(function (result) {
       if (schemaState.scanStopRequested) return false;
-      return saveSight(folder, model, fileName, sight);
+      appendRawResponse(fileName, result.text);
+      return saveSight(folder, model, fileName, result.sight);
     }).then(function (saved) {
       if (saved === false) return false;
       return refreshStatus();
@@ -476,7 +523,9 @@
 
     schemaState.folder = folder;
     schemaState.visionModel = model;
-    schemaState.scopeFiles = getVisibleMediaSelectionForTraining();
+    if (!schemaState.guidedLaunch || !schemaState.scopeFiles.length) {
+      schemaState.scopeFiles = getVisibleMediaSelectionForTraining();
+    }
     if (!schemaState.scopeFiles.length) {
       setStatus('No visible media to scan.', true);
       return;
@@ -505,9 +554,14 @@
         setStatus('Sight scan stopped. Completed items are cached.');
         return null;
       }
+      if (schemaState.guidedLaunch) return null;
       return analyze();
     }).then(function () {
-      if (!schemaState.scanStopRequested) setStatus('Structured Sight complete. Build tag candidates or vocabulary suggestions.');
+      if (!schemaState.scanStopRequested) {
+        setStatus(schemaState.guidedLaunch
+          ? 'Vision review complete. Build the Guided Pass when the responses look useful.'
+          : 'Structured Sight complete. Build tag candidates or vocabulary suggestions.');
+      }
     }).catch(function (err) {
       if (schemaState.scanStopRequested) {
         setStatus('Sight scan stopped. Completed items are cached.');
@@ -633,7 +687,9 @@
       return;
     }
 
-    var files = getVisibleMediaSelectionForTraining();
+    var files = schemaState.guidedLaunch && schemaState.scopeFiles.length
+      ? schemaState.scopeFiles.slice()
+      : getVisibleMediaSelectionForTraining();
     if (!files.length) {
       setStatus('No visible media to analyze.', true);
       return;
@@ -661,7 +717,8 @@
         directorModel: director,
         files: files,
         existingGroups: existingGroupsPayload(),
-        currentAssignments: currentAssignmentsPayload(files)
+        currentAssignments: currentAssignmentsPayload(files),
+        existingOnly: !!schemaState.guidedLaunch
       })
     }).then(function (payload) {
       var jobId = String(payload.job && payload.job.jobId || '');
@@ -689,6 +746,9 @@
         throw new Error('Vision Tag Assist completed without structured candidates.');
       }
       schemaState.tagCandidates = result;
+      if (schemaState.guidedLaunch) {
+        if (startGuidedTagPass(result)) return;
+      }
       var candidateCount = result.items.reduce(function (total, item) {
         return total + (Array.isArray(item.candidates) ? item.candidates.length : 0);
       }, 0);
@@ -710,6 +770,146 @@
       }
       render();
     });
+  }
+
+  function buildGuidedTagPassSteps(result) {
+    var byKey = {};
+    (result && Array.isArray(result.items) ? result.items : []).forEach(function (item) {
+      var fileName = String(item && item.file || '');
+      (item && Array.isArray(item.candidates) ? item.candidates : []).forEach(function (candidate) {
+        if (!candidate || !candidate.existing) return;
+        var group = String(candidate.group || '');
+        var term = String(candidate.term || '');
+        var confidence = String(candidate.confidence || '');
+        if (!group || !term || confidence !== 'high') return;
+        var key = group.toLowerCase() + '\u0000' + term.toLowerCase();
+        if (!byKey[key]) {
+          byKey[key] = { group: group, term: term, highFiles: [] };
+        }
+        if (byKey[key].highFiles.indexOf(fileName) === -1) byKey[key].highFiles.push(fileName);
+      });
+    });
+    return Object.keys(byKey).map(function (key) {
+      return byKey[key];
+    }).filter(function (step) {
+      return step.highFiles.length;
+    }).sort(function (a, b) {
+      if (b.highFiles.length !== a.highFiles.length) return b.highFiles.length - a.highFiles.length;
+      var groupCmp = a.group.localeCompare(b.group);
+      return groupCmp || a.term.localeCompare(b.term);
+    });
+  }
+
+  function getGuidedTagPassStep() {
+    var pass = schemaState.guidedPass;
+    if (!pass || !Array.isArray(pass.steps) || pass.index < 0 || pass.index >= pass.steps.length) return null;
+    return pass.steps[pass.index];
+  }
+
+  function applyGuidedTagPassStep() {
+    var step = getGuidedTagPassStep();
+    if (!step || !mediaGridState.open) return;
+    var selected = new Set();
+    step.highFiles.forEach(function (fileName) {
+      var item = findMediaItem(fileName);
+      if (item && item.key) selected.add(item.key);
+    });
+    mediaGridState.selectedKeys = selected;
+    mediaGridState.lastSelectedKey = selected.size ? Array.from(selected)[selected.size - 1] : '';
+    renderMediaGridSurface();
+  }
+
+  function startGuidedTagPass(result) {
+    var steps = buildGuidedTagPassSteps(result);
+    if (!steps.length) {
+      setStatus('No useful existing-vocabulary tag passes were found for this scope.', true);
+      return false;
+    }
+    schemaState.guidedPass = {
+      steps: steps,
+      index: 0,
+      scopeFiles: schemaState.scopeFiles.slice()
+    };
+    schemaState.open = false;
+    schemaState.guidedLaunch = false;
+    render();
+    if (!mediaGridState.open) openMediaGridSurface();
+    applyGuidedTagPassStep();
+    setStatus('');
+    return true;
+  }
+
+  function advanceGuidedTagPass() {
+    var pass = schemaState.guidedPass;
+    if (!pass) return;
+    pass.index += 1;
+    if (pass.index >= pass.steps.length) {
+      exitGuidedTagPass({ keepGridOpen: true, completed: true });
+      return;
+    }
+    applyGuidedTagPassStep();
+  }
+
+  function skipGuidedTagPassStep() {
+    if (!schemaState.guidedPass) return;
+    advanceGuidedTagPass();
+  }
+
+  function exitGuidedTagPass(options) {
+    var opts = options || {};
+    var hadPass = !!schemaState.guidedPass;
+    schemaState.guidedPass = null;
+    if (hadPass && opts.keepGridOpen !== false && mediaGridState.open) {
+      mediaGridSetStatus(opts.completed ? 'Guided Tag Pass complete.' : 'Guided Tag Pass ended.');
+      renderMediaGridSurface();
+    }
+  }
+
+  function renderGuidedTagPassGridChrome() {
+    var bar = el('media-grid-guided-pass');
+    var progress = el('media-grid-guided-pass-progress');
+    var label = el('media-grid-guided-pass-label');
+    var launchBtn = el('media-grid-guided-pass-btn');
+    if (!bar || !progress || !label || !launchBtn) throw new Error('Guided Tag Pass Grid controls are missing.');
+    var pass = schemaState.guidedPass;
+    var step = getGuidedTagPassStep();
+    var canLaunch = isSetFolderPath(state && state.folder);
+    bar.classList.toggle('hidden', !pass || !step);
+    launchBtn.classList.toggle('hidden', !!pass || !canLaunch);
+    if (!pass || !step) return;
+    progress.textContent = String(pass.index + 1) + ' / ' + String(pass.steps.length);
+    label.textContent = step.group + ' · ' + step.term + ' — ' + String(step.highFiles.length) + ' likely';
+  }
+
+  function syncGuidedTagPassWorkbenchHighlight() {
+    var target = el('group-workbench-list');
+    if (!target) return;
+    Array.prototype.forEach.call(target.querySelectorAll('.guided-tag-target'), function (node) {
+      node.classList.remove('guided-tag-target');
+    });
+    var step = getGuidedTagPassStep();
+    if (!step) return;
+    var buttons = target.querySelectorAll('.group-workbench-term-btn[data-group][data-term]');
+    for (var i = 0; i < buttons.length; i += 1) {
+      if (
+        String(buttons[i].dataset.group || '') === step.group &&
+        String(buttons[i].dataset.term || '') === step.term
+      ) {
+        buttons[i].classList.add('guided-tag-target');
+        buttons[i].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        break;
+      }
+    }
+  }
+
+  function handleGuidedTagPassGridTermMutation(group, term, details) {
+    var step = getGuidedTagPassStep();
+    if (!step) return false;
+    if (step.group !== String(group || '') || step.term !== String(term || '')) return false;
+    if (details && details.removed) return false;
+    if (!details || Number(details.changed || 0) <= 0) return false;
+    advanceGuidedTagPass();
+    return true;
   }
 
   function selectedTagCandidates() {
@@ -845,6 +1045,54 @@
     render();
   }
 
+  function guidedScopeFiles(options) {
+    var opts = options || {};
+    if (opts.source === 'grid' && mediaGridState.open) {
+      return (mediaGridState.items || []).map(function (item) {
+        return String(item && item.fileName || '');
+      }).filter(Boolean);
+    }
+    return getVisibleMediaSelectionForTraining();
+  }
+
+  function openGuidedTagPass(options) {
+    var folder = currentFolder();
+    var model = currentVisionModel();
+    if (!folder) {
+      window.setStatus('Open a Set before starting Guided Tag Pass.');
+      return;
+    }
+    if (!model) {
+      window.setStatus('Select a Vision model first.');
+      return;
+    }
+    var files = guidedScopeFiles(options);
+    if (!files.length) {
+      window.setStatus('No visible media to review.');
+      return;
+    }
+    schemaState.open = true;
+    schemaState.folder = folder;
+    schemaState.visionModel = model;
+    schemaState.scopeFiles = files.slice();
+    schemaState.scanStopRequested = false;
+    schemaState.schema = null;
+    schemaState.tagCandidates = null;
+    schemaState.mode = 'tags';
+    schemaState.analysis = null;
+    schemaState.guidedLaunch = true;
+    schemaState.rawResponses = [];
+    render();
+    setStatus('Loading current Sight coverage…');
+    refreshStatus().then(function () {
+      if (!schemaState.open || !schemaState.guidedLaunch) return;
+      runScan();
+    }).catch(function (err) {
+      setStatus('Could not start Guided Tag Pass: ' + String(err && err.message ? err.message : err), true);
+      reportConsoleError('Guided Tag Pass', err);
+    });
+  }
+
   function open() {
     var folder = currentFolder();
     var model = currentVisionModel();
@@ -865,6 +1113,8 @@
     schemaState.tagCandidates = null;
     schemaState.mode = 'tags';
     schemaState.analysis = null;
+    schemaState.guidedLaunch = false;
+    schemaState.rawResponses = [];
     render();
     setStatus('Loading current Sight coverage…');
     refreshStatus().then(function () {
@@ -879,11 +1129,13 @@
   function close() {
     if (schemaState.scanRunning || schemaState.schemaStarting || schemaState.schemaJobId) stopWork();
     schemaState.open = false;
+    schemaState.guidedLaunch = false;
     render();
   }
 
   function bind() {
     var openBtn = el('vision-schema-open-btn');
+    var guidedOpenBtn = el('guided-tag-pass-open-btn');
     var closeBtn = el('vision-schema-close-btn');
     var scanBtn = el('vision-schema-scan-btn');
     var stopBtn = el('vision-schema-stop-btn');
@@ -891,10 +1143,11 @@
     var tagBtn = el('vision-schema-tags-btn');
     var applyBtn = el('vision-schema-apply-btn');
     var modal = el('vision-schema-modal');
-    if (!openBtn || !closeBtn || !scanBtn || !stopBtn || !suggestBtn || !tagBtn || !applyBtn || !modal) {
+    if (!openBtn || !guidedOpenBtn || !closeBtn || !scanBtn || !stopBtn || !suggestBtn || !tagBtn || !applyBtn || !modal) {
       throw new Error('Schema Assist controls are missing.');
     }
     openBtn.onclick = open;
+    guidedOpenBtn.onclick = function () { openGuidedTagPass({ source: 'set' }); };
     closeBtn.onclick = close;
     scanBtn.onclick = runScan;
     stopBtn.onclick = stopWork;
@@ -918,5 +1171,11 @@
   }
 
   window.openVisionSchemaAssist = open;
+  window.openGuidedTagPass = openGuidedTagPass;
+  window.skipGuidedTagPassStep = skipGuidedTagPassStep;
+  window.exitGuidedTagPass = exitGuidedTagPass;
+  window.renderGuidedTagPassGridChrome = renderGuidedTagPassGridChrome;
+  window.syncGuidedTagPassWorkbenchHighlight = syncGuidedTagPassWorkbenchHighlight;
+  window.handleGuidedTagPassGridTermMutation = handleGuidedTagPassGridTermMutation;
   bind();
 })();

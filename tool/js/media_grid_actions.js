@@ -38,12 +38,24 @@ function mediaGridWireSurface() {
   if (!els.surface) throw new Error('Media Grid surface is missing.');
   if (els.surface.__wired) return;
   els.surface.__wired = true;
-  if (!els.selectAllBtn || !els.clearBtn || !els.closeBtn) {
+  var guidedBtn = document.getElementById('media-grid-guided-pass-btn');
+  var guidedSkipBtn = document.getElementById('media-grid-guided-pass-skip-btn');
+  var guidedExitBtn = document.getElementById('media-grid-guided-pass-exit-btn');
+  if (!els.selectAllBtn || !els.clearBtn || !els.closeBtn || !guidedBtn || !guidedSkipBtn || !guidedExitBtn) {
     throw new Error('Media Grid surface controls are missing.');
   }
   els.selectAllBtn.onclick = mediaGridSelectAll;
   els.clearBtn.onclick = mediaGridClearSelection;
   els.closeBtn.onclick = closeMediaGridSurface;
+  guidedBtn.onclick = function () {
+    window.openGuidedTagPass({ source: 'grid' });
+  };
+  guidedSkipBtn.onclick = function () {
+    window.skipGuidedTagPassStep();
+  };
+  guidedExitBtn.onclick = function () {
+    window.exitGuidedTagPass();
+  };
 }
 
 
@@ -79,6 +91,7 @@ function openMediaGridSurface() {
 
 function closeMediaGridSurface() {
   closeMediaGridViewer();
+  window.exitGuidedTagPass({ keepGridOpen: false, silent: true });
   mediaGridHideSurfaceShell();
   var previousWorkspaceState = mediaGridState.previousWorkspaceState;
   mediaGridResetSessionState();
@@ -105,6 +118,7 @@ function renderMediaGridSurfaceHeader() {
   els.clearBtn.disabled = selectedCount <= 0;
   els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
   mediaGridSyncSurfaceFilterControls();
+  window.renderGuidedTagPassGridChrome();
 }
 
 

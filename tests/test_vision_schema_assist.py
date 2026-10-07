@@ -346,18 +346,19 @@ def test_schema_aware_vocabulary_sight_normalizes_known_groups_and_keeps_unknown
     assert {row["suggestedGroup"] for row in payload["other"]} == {"Invented Dimension", "Connector"}
 
 
-def test_vocabulary_sight_signature_changes_when_group_vocabulary_changes():
+def test_vocabulary_sight_signature_tracks_group_structure_not_terms():
     first = vision_schema_assist.vision_vocabulary_group_signature([
         {"group": "BT Shape", "terms": ["triangle"]},
     ])
-    same = vision_schema_assist.vision_vocabulary_group_signature([
-        {"group": "BT Shape", "terms": ["triangle"]},
-    ])
-    changed = vision_schema_assist.vision_vocabulary_group_signature([
+    term_changed = vision_schema_assist.vision_vocabulary_group_signature([
         {"group": "BT Shape", "terms": ["triangle", "micro triangle"]},
     ])
-    assert first == same
-    assert first != changed
+    group_changed = vision_schema_assist.vision_vocabulary_group_signature([
+        {"group": "BT Shape", "terms": ["triangle"]},
+        {"group": "BT Connector", "terms": []},
+    ])
+    assert first == term_changed
+    assert first != group_changed
 
 
 def test_schema_aware_mining_keeps_bounded_singletons_for_semantic_consolidation():

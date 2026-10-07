@@ -344,7 +344,9 @@
   }
 
   function actionableVocabularyGroups() {
-    var groups = actionableVocabularyGroups();
+    var groups = schemaState.schema && Array.isArray(schemaState.schema.groups)
+      ? schemaState.schema.groups
+      : [];
     return groups.filter(function (group) {
       return (group.terms || []).some(function (term) { return !term.alreadyExists; });
     });
@@ -371,9 +373,7 @@
       return;
     }
 
-    var groups = schemaState.schema && Array.isArray(schemaState.schema.groups)
-      ? schemaState.schema.groups
-      : [];
+    var groups = actionableVocabularyGroups();
     var group = currentVocabularyGroup();
     var card = el('vision-schema-proposals').querySelector('.vision-schema-group-card');
     var selected = card

@@ -523,6 +523,27 @@
   transform-origin: 50% 50%;
 }
 
+.shell-workload-icon path,
+.shell-workload-icon rect,
+.shell-workload-icon ellipse,
+.shell-workload-icon circle {
+  vector-effect: non-scaling-stroke;
+}
+
+.shell-workload-icon--llm path,
+.shell-workload-icon--inference path,
+.shell-workload-icon--inference rect,
+.shell-workload-icon--inference circle,
+.shell-workload-icon--training path,
+.shell-workload-icon--training ellipse,
+.shell-workload-icon--training circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .shell-workload-ring {
   fill: none;
   stroke: currentColor;
@@ -540,7 +561,7 @@
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 72%, transparent));
 }
 
-.shell-workload-indicator.is-active .shell-workload-icon {
+.shell-workload-indicator.is-active.is-work .shell-workload-icon--idle {
   animation: shell-workload-spin 0.9s linear infinite;
 }
 
@@ -549,7 +570,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shell-workload-indicator.is-active .shell-workload-icon {
+  .shell-workload-indicator.is-active.is-work .shell-workload-icon--idle {
     animation: none;
   }
 }

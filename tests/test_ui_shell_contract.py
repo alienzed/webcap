@@ -646,7 +646,10 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "function setShellTrainingActive(active)" in shell
     assert "function setShellTestingActive(active)" in shell
     assert "function setShellGeneratingActive(active)" in shell
-    assert "shell-workload-status is-" in shell
+    assert "shell-workload-indicator is-" in shell
+    assert "function setShellManagedActivity(active, gpuOwner)" in shell
+    assert "window.setShellManagedActivity = setShellManagedActivity" in shell
+    assert "window.setShellManagedActivity(active, state.payload.gpuOwner);" in activity
     assert "window.setShellTrainingActive = setShellTrainingActive" in shell
     assert "window.setShellTestingActive = setShellTestingActive" in shell
     assert "window.setShellGeneratingActive = setShellGeneratingActive" in shell
@@ -655,8 +658,10 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "setShellTestingActive(!!active);" in test_bench
     assert "typeof window.renderShellSystemStatus" not in runner
     assert "typeof window.renderShellSystemStatus" not in test_bench
-    assert ".shell-workload-status {" in css
-    assert ".shell-workload-status.is-generating" in css
+    assert ".shell-workload-indicator {" in css
+    assert ".shell-workload-indicator.is-active" in css
+    assert "animation: shell-workload-spin 0.9s linear infinite;" in css
+    assert "@keyframes shell-workload-spin" in css
     assert "color: var(--accent);" in css
     assert "font-size: 12px;" in css
     assert ".shell-gpu-status .shell-system-disk {" in css

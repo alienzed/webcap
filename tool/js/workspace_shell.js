@@ -287,19 +287,54 @@ var shellWorkloadState = {
   testingActive: false,
   generatingActive: false,
   inferenceActive: false,
-  directorActive: false
+  directorActive: false,
+  managedActive: false,
+  managedLabels: []
 };
 
+function shellManagedActivityLabel(item) {
+  item = item && typeof item === 'object' ? item : {};
+  var kind = String(item.kind || '');
+  var operation = String(item.operation || '');
+  var client = String(item.client || '');
+  if (kind === 'training') return 'Training';
+  if (kind === 'test') return 'Testing';
+  if (kind === 'storage') return 'Storage';
+  if (kind === 'director') {
+    if (operation === 'caption_vision_validate') return 'Vision QA';
+    if (operation === 'vision_image_caption') return 'Vision sight';
+    if (client === 'caption') return 'Caption Assist';
+    return 'Director';
+  }
+  if (kind === 'storyboard') return 'Storyboard';
+  if (kind === 'generate') return 'Inference';
+  return kind ? kind.charAt(0).toUpperCase() + kind.slice(1) : 'Work';
+}
+
+function setShellManagedActivity(active, gpuOwner) {
+  var labels = [];
+  (Array.isArray(active) ? active : []).forEach(function (item) {
+    var label = shellManagedActivityLabel(item);
+    if (label && labels.indexOf(label) === -1) labels.push(label);
+  });
+  var owner = String(gpuOwner || '').trim();
+  if (!labels.length && owner) {
+    labels.push(owner === 'llm' ? 'LLM' : (owner === 'inference' ? 'Inference' : (owner === 'training' ? 'Training' : owner)));
+  }
+  shellWorkloadState.managedActive = !!(labels.length || owner);
+  shellWorkloadState.managedLabels = labels.slice(0, 4);
+  renderShellSystemStatus();
+}
+
 function getShellWorkloadStatus() {
-  if (shellWorkloadState.trainingActive) {
-    return { key: 'training', label: 'Training' };
+  if (shellWorkloadState.managedActive) {
+    return { key: 'active', label: shellWorkloadState.managedLabels.length ? shellWorkloadState.managedLabels.join(' + ') : 'Working' };
   }
-  if (shellWorkloadState.testingActive) {
-    return { key: 'testing', label: 'Testing' };
-  }
-  if (shellWorkloadState.generatingActive || shellWorkloadState.inferenceActive || shellWorkloadState.directorActive) {
-    return { key: 'generating', label: 'Generating' };
-  }
+  if (shellWorkloadState.trainingActive) return { key: 'active', label: 'Training' };
+  if (shellWorkloadState.testingActive) return { key: 'active', label: 'Testing' };
+  if (shellWorkloadState.generatingActive) return { key: 'active', label: 'Generating' };
+  if (shellWorkloadState.inferenceActive) return { key: 'active', label: 'Inference' };
+  if (shellWorkloadState.directorActive) return { key: 'active', label: 'Director' };
   return { key: 'idle', label: 'Idle' };
 }
 
@@ -334,9 +369,13 @@ function renderShellSystemStatus() {
 
   var parts = [];
   var workload = getShellWorkloadStatus();
+  var workloadTitle = workload.key === 'idle' ? 'Idle' : ('Working · ' + workload.label);
   parts.push(
-    '<span class="shell-workload-status is-' + workload.key + '" title="Current GPU workload state.">' +
-    escapeHtml(workload.label) +
+    '<span class="shell-workload-indicator is-' + workload.key + '" title="' + escapeHtml(workloadTitle) + '" aria-label="' + escapeHtml(workloadTitle) + '">' +
+      '<svg class="shell-workload-icon" viewBox="0 0 16 16" aria-hidden="true">' +
+        '<circle class="shell-workload-ring" cx="8" cy="8" r="5.25"></circle>' +
+        '<circle class="shell-workload-dot" cx="8" cy="2.75" r="1.35"></circle>' +
+      '</svg>' +
     '</span>'
   );
   var gpu = shellSystemStatusState.gpu;
@@ -1362,3 +1401,4 @@ window.setShellTestingActive = setShellTestingActive;
 window.setShellGeneratingActive = setShellGeneratingActive;
 window.setShellInferenceActive = setShellInferenceActive;
 window.setShellDirectorActive = setShellDirectorActive;
+window.setShellManagedActivity = setShellManagedActivity;

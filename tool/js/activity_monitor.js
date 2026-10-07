@@ -550,6 +550,9 @@
     if (typeof window.setShellTrainingActive === 'function') {
       window.setShellTrainingActive(!!activeIds['activity-training-btn']);
     }
+    if (typeof window.setShellManagedActivity === 'function') {
+      window.setShellManagedActivity(active, state.payload.gpuOwner);
+    }
   }
 
   function render() {

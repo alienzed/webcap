@@ -505,16 +505,53 @@
   white-space: nowrap;
 }
 
-.shell-workload-status {
+.shell-workload-indicator {
   flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--muted);
-  font-weight: 700;
+  opacity: 0.52;
 }
 
-.shell-workload-status.is-training,
-.shell-workload-status.is-testing,
-.shell-workload-status.is-generating {
+.shell-workload-icon {
+  width: 16px;
+  height: 16px;
+  overflow: visible;
+  transform-origin: 50% 50%;
+}
+
+.shell-workload-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.35;
+  opacity: 0.55;
+}
+
+.shell-workload-dot {
+  fill: currentColor;
+}
+
+.shell-workload-indicator.is-active {
   color: var(--accent);
+  opacity: 1;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 72%, transparent));
+}
+
+.shell-workload-indicator.is-active .shell-workload-icon {
+  animation: shell-workload-spin 0.9s linear infinite;
+}
+
+@keyframes shell-workload-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-workload-indicator.is-active .shell-workload-icon {
+    animation: none;
+  }
 }
 
 .shell-gpu-status strong {

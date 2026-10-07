@@ -6,7 +6,7 @@ function diagnosticsEl(id) {
 }
 
 function setDiagnosticsTab(tabName, focusTab) {
-  var next = ['health', 'h3', 'models', 'benchmark'].indexOf(tabName) !== -1 ? tabName : 'health';
+  var next = ['health', 'h3', 'models', 'benchmark', 'model-lab'].indexOf(tabName) !== -1 ? tabName : 'health';
   diagnosticsActiveTab = next;
   var selectedButton = null;
 
@@ -26,6 +26,7 @@ function setDiagnosticsTab(tabName, focusTab) {
 
   if (next === 'h3') refreshH3CalibrationSettings();
   if ((next === 'models' || next === 'benchmark') && !directorModelTestState.loaded) directorModelTestRefresh();
+  if (next === 'model-lab') modelLabRefresh();
   if (focusTab && selectedButton) selectedButton.focus();
 }
 

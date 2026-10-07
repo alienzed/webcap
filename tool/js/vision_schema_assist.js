@@ -354,6 +354,33 @@
       card.appendChild(row);
     });
 
+    var evidenceDetails = document.createElement('details');
+    evidenceDetails.className = 'vision-schema-evidence-details';
+    var evidenceSummary = document.createElement('summary');
+    evidenceSummary.textContent = 'Why these suggestions?';
+    evidenceDetails.appendChild(evidenceSummary);
+    if (group.rationale) {
+      var rationale = document.createElement('p');
+      rationale.textContent = String(group.rationale || '');
+      evidenceDetails.appendChild(rationale);
+    }
+    (group.terms || []).forEach(function (term) {
+      if (!(term.evidence || []).length && !(term.examples || []).length) return;
+      var evidenceRow = document.createElement('div');
+      evidenceRow.className = 'vision-schema-evidence-detail-row';
+      var label = document.createElement('strong');
+      label.textContent = String(term.term || '');
+      var evidence = document.createElement('span');
+      evidence.textContent = (term.evidence || []).slice(0, 4).join(' · ');
+      var examples = document.createElement('small');
+      examples.textContent = (term.examples || []).slice(0, 4).join(' · ');
+      evidenceRow.appendChild(label);
+      if (evidence.textContent) evidenceRow.appendChild(evidence);
+      if (examples.textContent) evidenceRow.appendChild(examples);
+      evidenceDetails.appendChild(evidenceRow);
+    });
+    if (evidenceDetails.children.length > 1) card.appendChild(evidenceDetails);
+
     host.appendChild(card);
   }
 

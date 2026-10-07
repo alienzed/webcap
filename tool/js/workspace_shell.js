@@ -289,7 +289,8 @@ var shellWorkloadState = {
   inferenceActive: false,
   directorActive: false,
   managedActive: false,
-  managedLabels: []
+  managedLabels: [],
+  managedLane: ''
 };
 
 function shellManagedActivityLabel(item) {
@@ -312,6 +313,17 @@ function shellManagedActivityLabel(item) {
   return kind ? kind.charAt(0).toUpperCase() + kind.slice(1) : 'Work';
 }
 
+function shellManagedActivityLane(active, gpuOwner) {
+  var owner = String(gpuOwner || '').trim();
+  if (owner === 'llm' || owner === 'inference' || owner === 'training') return owner;
+  var items = Array.isArray(active) ? active : [];
+  for (var i = 0; i < items.length; i += 1) {
+    var lane = String(items[i] && items[i].lane || '').trim();
+    if (lane === 'llm' || lane === 'inference' || lane === 'training') return lane;
+  }
+  return items.length ? 'work' : '';
+}
+
 function setShellManagedActivity(active, gpuOwner) {
   var labels = [];
   (Array.isArray(active) ? active : []).forEach(function (item) {
@@ -324,19 +336,52 @@ function setShellManagedActivity(active, gpuOwner) {
   }
   shellWorkloadState.managedActive = !!(labels.length || owner);
   shellWorkloadState.managedLabels = labels.slice(0, 4);
+  shellWorkloadState.managedLane = shellManagedActivityLane(active, owner);
   renderShellSystemStatus();
 }
 
 function getShellWorkloadStatus() {
   if (shellWorkloadState.managedActive) {
-    return { key: 'active', label: shellWorkloadState.managedLabels.length ? shellWorkloadState.managedLabels.join(' + ') : 'Working' };
+    return {
+      key: 'active',
+      lane: shellWorkloadState.managedLane || 'work',
+      label: shellWorkloadState.managedLabels.length ? shellWorkloadState.managedLabels.join(' + ') : 'Working'
+    };
   }
-  if (shellWorkloadState.trainingActive) return { key: 'active', label: 'Training' };
-  if (shellWorkloadState.testingActive) return { key: 'active', label: 'Testing' };
-  if (shellWorkloadState.generatingActive) return { key: 'active', label: 'Generating' };
-  if (shellWorkloadState.inferenceActive) return { key: 'active', label: 'Inference' };
-  if (shellWorkloadState.directorActive) return { key: 'active', label: 'Director' };
-  return { key: 'idle', label: 'Idle' };
+  if (shellWorkloadState.trainingActive) return { key: 'active', lane: 'training', label: 'Training' };
+  if (shellWorkloadState.testingActive) return { key: 'active', lane: 'inference', label: 'Testing' };
+  if (shellWorkloadState.generatingActive) return { key: 'active', lane: 'inference', label: 'Generating' };
+  if (shellWorkloadState.inferenceActive) return { key: 'active', lane: 'inference', label: 'Inference' };
+  if (shellWorkloadState.directorActive) return { key: 'active', lane: 'llm', label: 'Director' };
+  return { key: 'idle', lane: 'idle', label: 'Idle' };
+}
+
+function shellWorkloadIcon(lane) {
+  if (lane === 'llm') {
+    return '<svg class="shell-workload-icon shell-workload-icon--llm" viewBox="0 0 16 16" aria-hidden="true">' +
+      '<path d="M3 12.75l.72-2.82 6.77-6.77a1.35 1.35 0 0 1 1.91 0l.44.44a1.35 1.35 0 0 1 0 1.91l-6.77 6.77L4.25 13z"></path>' +
+      '<path d="M9.62 4.03l2.35 2.35M3.72 9.93l2.35 2.35"></path>' +
+    '</svg>';
+  }
+  if (lane === 'inference') {
+    return '<svg class="shell-workload-icon shell-workload-icon--inference" viewBox="0 0 16 16" aria-hidden="true">' +
+      '<rect x="2.25" y="3" width="11.5" height="10" rx="1.5"></rect>' +
+      '<circle cx="5.1" cy="6.05" r="1.05"></circle>' +
+      '<path d="M3.6 11l2.55-2.55 1.85 1.8 1.42-1.42L12.4 11"></path>' +
+    '</svg>';
+  }
+  if (lane === 'training') {
+    return '<svg class="shell-workload-icon shell-workload-icon--training" viewBox="0 0 16 16" aria-hidden="true">' +
+      '<ellipse cx="7.05" cy="8.05" rx="4.15" ry="3.05"></ellipse>' +
+      '<circle cx="12.15" cy="7.25" r="1.35"></circle>' +
+      '<path d="M3.55 5.95L2.2 4.9M3.45 10.2l-1.35 1.05M9.1 5.35l1-1.25M9.25 10.65l1.15 1.25M2.95 8.05L1.6 7.5"></path>' +
+      '<path d="M5.1 6.45c1.15.45 2.2.45 3.45 0M5.05 9.6c1.2-.45 2.35-.45 3.55 0"></path>' +
+    '</svg>';
+  }
+  return '<svg class="shell-workload-icon shell-workload-icon--idle" viewBox="0 0 16 16" aria-hidden="true">' +
+    '<circle class="shell-workload-ring" cx="8" cy="8" r="5.25"></circle>' +
+    '<circle class="shell-workload-dot" cx="8" cy="2.75" r="1.35"></circle>' +
+  '</svg>';
 }
 
 function setShellTrainingActive(active) {
@@ -370,13 +415,17 @@ function renderShellSystemStatus() {
 
   var parts = [];
   var workload = getShellWorkloadStatus();
-  var workloadTitle = workload.key === 'idle' ? 'Idle' : ('Working · ' + workload.label);
+  var laneLabel = workload.lane === 'llm'
+    ? 'LLM'
+    : (workload.lane === 'inference'
+      ? 'Inference'
+      : (workload.lane === 'training' ? 'Training' : ''));
+  var workloadTitle = workload.key === 'idle'
+    ? 'Idle'
+    : ((laneLabel ? laneLabel + ' · ' : '') + workload.label);
   parts.push(
-    '<span class="shell-workload-indicator is-' + workload.key + '" title="' + escapeHtml(workloadTitle) + '" aria-label="' + escapeHtml(workloadTitle) + '">' +
-      '<svg class="shell-workload-icon" viewBox="0 0 16 16" aria-hidden="true">' +
-        '<circle class="shell-workload-ring" cx="8" cy="8" r="5.25"></circle>' +
-        '<circle class="shell-workload-dot" cx="8" cy="2.75" r="1.35"></circle>' +
-      '</svg>' +
+    '<span class="shell-workload-indicator is-' + workload.key + ' is-' + workload.lane + '" title="' + escapeHtml(workloadTitle) + '" aria-label="' + escapeHtml(workloadTitle) + '">' +
+      shellWorkloadIcon(workload.lane) +
     '</span>'
   );
   var gpu = shellSystemStatusState.gpu;

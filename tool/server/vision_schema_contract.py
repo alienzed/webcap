@@ -82,11 +82,6 @@ def build_request(analysis, existing_groups):
             "label": str(row.get("label") or ""),
             "count": int(row.get("count") or 0),
             "examples": list(row.get("examples") or [])[:6],
-            "contexts": [
-                _clean(value, 260)
-                for value in list(row.get("contexts") or [])[:2]
-                if _clean(value)
-            ],
         }
         for row in evidence
         if isinstance(row, dict) and row.get("id")
@@ -120,7 +115,7 @@ def build_request(analysis, existing_groups):
         "Every proposed term must cite one or more supplied evidence IDs. "
         "Use an exact existing group name in targetGroup when extending it. Use an empty targetGroup for a genuinely new group. "
         "Evidence may come from an open visual pass or a fresh schema-aware visual pass. A schema-aware suggestedGroup is a strong organizational hint, not a forced answer. "
-        "Evidence counts, filenames, and contexts are supplied by WebCap; semantic grouping and naming are your task. "
+        "Evidence counts and filenames are supplied by WebCap; semantic grouping and naming are your task. "
         "Existing terms are organizational context, not visual evidence: do not infer that an existing term appears unless the Sight evidence supports it.\n\n"
         "[INPUT]\n"
         + json.dumps(payload, ensure_ascii=False)

@@ -49,6 +49,7 @@ function resetPruneCandidateState(status) {
   state.pruneCandidatesPopulation = 0;
   state.pruneCandidatesDirty = false;
   syncPruneCandidateConsumers();
+  refreshQaWorkbench();
 }
 
 function invalidatePruneCandidates() {

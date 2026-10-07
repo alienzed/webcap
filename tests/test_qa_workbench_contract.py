@@ -67,6 +67,13 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "qaBuildDeepScanItems" in qa
     assert "getChecklistAssignmentEntriesForMediaKey" in qa
     assert "getTagsForMediaKey" in qa
+    assert "qaBuildCompactAnalysis" in qa
+    assert "metadata.face_focus" in qa
+    assert "metadata.selection_pose" in qa
+    assert "metadata.vision_sight" in qa
+    assert "qaBuildVisualAgreementFindings" in qa
+    assert "getSelectionPoseSuggestedTags" in qa
+    assert "qaSightSupportsTerm" in qa
     assert "qaWorkbenchState.deterministicFindings.concat(ai)" in qa
     assert "currentSignature !== signature" in qa
     assert "inputsChanged" in qa

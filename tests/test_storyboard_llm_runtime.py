@@ -2397,3 +2397,19 @@ def test_prepare_local_caption_vision_messages_preserves_existing_data_url():
     )
 
     assert prepared[0]["content"][1]["image_url"]["url"] == data_url
+
+
+def test_normalize_freeform_messages_accepts_embedded_image_without_extra_flag():
+    data_url = "data:image/png;base64,ZmFrZS1pbWFnZQ=="
+
+    normalized = storyboard_llm_runtime.normalize_freeform_messages([
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Describe."},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+        }
+    ])
+
+    assert normalized[0]["content"][1]["image_url"]["url"] == data_url

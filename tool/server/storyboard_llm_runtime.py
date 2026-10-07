@@ -1819,11 +1819,13 @@ def normalize_freeform_messages(messages, allow_image_data_urls=False):
                     image_url = part.get("image_url")
                     image_url = image_url if isinstance(image_url, dict) else {}
                     url = str(image_url.get("url") or "").strip()
-                    if allow_image_data_urls and url.startswith("data:image/"):
+                    if url.startswith("data:image/"):
                         parts.append({"type": "image_url", "image_url": {"url": url}})
                         continue
                     if not url.startswith("file://") or url.startswith("file:///"):
-                        raise ValueError("Local multimodal images must use a relative file:// URL.")
+                        raise ValueError(
+                            "Multimodal images must use an embedded data:image URL or a relative file:// URL."
+                        )
                     relative = url[len("file://"):]
                     if (
                         not relative

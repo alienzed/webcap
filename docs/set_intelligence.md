@@ -1,114 +1,116 @@
 # Set Intelligence
 
-Status: implemented shared analysis workflow and product contract.
+Status: focused LLM/VL-driven annotation workflow.
 
 ## North-star sequence
 
-For annotation-oriented Set work, the intended order is:
+Set Intelligence is one entry point for the annotation intelligence workflow:
 
-1. **Scan Set**
+1. **Understand the Set**
 2. **Discover Vocabulary**
-3. **Guided Tag Pass**
+3. **Guided Tagging**
 4. **Quality Assurance**
 
-The order matters. Scan Set creates reusable evidence. Vocabulary discovery turns recurring evidence into a usable schema. Guided Tagging applies mature vocabulary efficiently. QA checks the resulting Set using both deterministic and optional model-assisted evidence.
+The steps are ordered because each one improves the next. They are not four peer tools in Set Tools.
 
-## Scan Set
+The user may skip forward when the earlier decision is already settled. WebCap does not persist a separate wizard-state machine; current Set data remains the source of truth.
 
-**Set Tools → Scan Set** is the primary intelligence entry point below the media list.
+## Master of One
 
-Scan Set is a full-Set operation. Filters and Focus Sets do not silently narrow it.
+Each surface has one job:
 
-The operation is incremental:
+- **Set Intelligence** builds reusable semantic understanding.
+- **Discover Vocabulary** decides what concepts belong in the annotation schema.
+- **Guided Tagging** applies mature existing vocabulary efficiently.
+- **Quality Assurance** decides what still deserves human attention.
 
-1. refresh normal media metadata;
-2. request current Scene Complexity, Face Focus, and MediaPipe Selection Pose analysis;
-3. when a Vision model is available, fill missing/stale Structured Sight for that model;
-4. refresh the browser's media metadata once so all consumers see the completed evidence;
-5. publish the existing metadata-updated event once, allowing normal downstream deterministic consumers to refresh.
+Supporting analyzers do not become peer workflows merely because WebCap can compute them.
 
-Current cached/versioned evidence is reused. No separate scan manifest or durable queue is created.
+## Set Intelligence
 
-### Optional model rule
+**Set Tools → Set Intelligence** is the primary entry point below the media list.
 
-LLM/Vision capability is optional infrastructure.
+It is a full-Set operation. Filters and Focus Sets do not silently narrow it.
 
-- WebCap metadata, Face Focus, Selection Pose, Scene Complexity, Prune/Duplicate, and ordinary QA remain useful without a Vision or Director model.
-- If no Vision model is selected/available, Scan Set succeeds and explicitly marks Vision Sight as skipped.
-- A Director model is **not** required to scan a Set.
-- Vocabulary discovery and Guided Tagging require model intelligence because semantic mapping is their job; failure to configure a model must not make deterministic QA unavailable.
+The intelligence path is fundamentally model-driven:
 
-### Visibility and failure
+- the selected **Vision** model observes the media and produces structured Sight;
+- the selected **Director** model is required for the semantic interpretation workflows that follow;
+- WebCap's deterministic metadata, Face Focus, MediaPipe pose, Scene Complexity, Prune, Duplicate, and other signals remain supporting evidence and constraints.
 
-Scan Set shows its three meaningful stages:
+Vision and Director availability are therefore required before Set Intelligence runs. The workflow must not present a successful deterministic-only scan as equivalent to semantic Set understanding.
 
-- WebCap analysis
-- Vision Sight
-- Reusable intelligence
+Current versioned evidence is reused. No separate scan manifest or durable workflow-state file is created.
 
-When Vision actually runs, raw model responses are shown as they complete. This is diagnostic transparency, not a separate review workflow.
+### Visibility
 
-Stop is explicit. Completed cache entries remain valid. Required failures reach the global Console.
+The default surface exposes only information the user can act on:
+
+- one scan/progress state;
+- completion;
+- one prominent next decision: **Discover Vocabulary**;
+- quieter skip-ahead actions for **Guided Tagging** and **Quality Assurance**.
+
+Analyzer names and internal stages are not primary UI.
+
+Raw Vision responses remain available only under collapsed **Scan details** when new model output exists. They are diagnostic evidence, not a review task.
+
+Stop is explicit. Completed cached Sight remains valid.
 
 ## Data ownership
 
-Per-media reusable analysis stays in the Set's existing media_metadata.json.
+Reusable per-media evidence stays in the Set's existing `media_metadata.json`.
 
-Current reusable blocks include:
+Current blocks may include:
 
 - base media metadata;
-- scene_complexity;
-- face_focus;
-- selection_pose;
-- vision_sight;
-- other existing analyzer-owned blocks.
+- `scene_complexity`;
+- `face_focus`;
+- `selection_pose`;
+- `vision_sight`;
+- other analyzer-owned blocks.
 
-Each analyzer owns its own versioning/invalidation rules. Scan Set does not create a second cache.
+Each analyzer owns its own versioning/invalidation rules. Set Intelligence does not create a second cache.
 
-Temporary Director proposals, Guided Tag steps, QA dispositions, and scan UI state remain ephemeral.
+Director proposals, Guided Tag steps, QA dispositions, and modal progress remain ephemeral.
 
-## Consumer boundaries
-
-### Discover Vocabulary
+## Discover Vocabulary
 
 Purpose: decide **what the Set vocabulary should contain**.
 
-It consumes current Structured Sight for the whole Set. It does not scan media and does not tag media.
+It consumes current Set intelligence for the whole Set. It does not scan media and does not tag media.
 
-The default review remains one proposed group at a time. Support counts stay visible; rationale/evidence/example filenames are available behind an optional reveal for ambiguous proposals.
+The default review stays one proposed group at a time. Support counts are visible. Rationale/evidence/examples are buried behind an optional reveal so uncertain suggestions can be investigated without making every decision noisy.
 
-### Guided Tag Pass
+## Guided Tagging
 
 Purpose: apply **existing vocabulary** efficiently.
 
-It consumes current Structured Sight plus the current vocabulary and assignments. It does not scan media or invent new vocabulary in the primary flow.
+It consumes current Set intelligence plus current vocabulary and assignments. It does not scan media or invent new vocabulary in the primary flow.
 
 The interaction remains in Grid: one tag proposition, likely media preselected, explicit human correction/application, then the next proposition.
 
-### Quality Assurance
+## Quality Assurance
 
-Purpose: reduce the amount of material a human must inspect before considering the Set finished.
+Purpose: reduce the amount of material the user must personally inspect.
 
-QA remains useful without an LLM. Deterministic findings remain authoritative for exact facts.
+The new intelligence value comes from semantic interpretation and cross-signal synthesis. Deterministic systems remain useful evidence producers, but should not be promoted into strong semantic recommendations by themselves.
 
-Set intelligence adds two forms of value:
+High-confidence findings should prefer corroborated evidence and exact known actions. Lower-confidence observations should remain available but buried rather than competing with the attention queue.
 
-- high-confidence cross-signal findings can combine independent normalized sources, e.g. MediaPipe plus Vision Sight agreeing that an existing known tag is probably missing;
-- optional Deep QA receives compact Face Focus, Selection Pose, Scene Complexity, and Vision Sight evidence alongside captions/tags and deterministic findings.
+Optional raw reports remain reference utilities, not the main QA experience.
 
-The model interprets evidence; WebCap owns counts, validation, filenames, known vocabulary, and mutations.
+## Future model passes
 
-## Follow-up Vision and larger Set reasoning
+A future Set Intelligence scan may add targeted follow-up Vision questions or a larger Set-level reasoning pass when a proven information gap justifies the extra GPU/context cost.
 
-A future Scan Set may add targeted follow-up Vision questions or a larger Set-level reasoning pass when a proven information gap justifies the GPU/context cost.
+Do **not** add stochastic reruns merely to obtain different wording.
 
-Do **not** add stochastic reruns merely to get different wording.
-
-A follow-up pass should exist only when it asks a materially different question that downstream consumers cannot answer from current normalized evidence. Until then, the current generic Structured Sight plus deterministic analyzers is the stable foundation.
+A follow-up pass belongs only when it asks a materially different question that improves Vocabulary, Guided Tagging, or QA.
 
 ## Mutation boundary
 
-Scan Set is analysis only.
+Set Intelligence is analysis only.
 
 Discover Vocabulary changes vocabulary only after explicit selection.
 
@@ -116,4 +118,6 @@ Guided Tagging changes assignments only after explicit application in Grid.
 
 QA does not silently repair captions, tags, media, or reviewed state.
 
-This preserves WebCap's normal rule: intelligence controls attention; WebCap performs deterministic user-authorized mutations.
+The operating rule remains:
+
+> **Models direct attention and propose meaning; WebCap performs explicit, deterministic user-authorized mutations.**

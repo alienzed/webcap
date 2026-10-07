@@ -87,6 +87,17 @@ def test_caption_vision_result_only_makes_exact_known_tags_actionable():
     assert result["findings"][1]["knownTag"] is None
 
 
+def test_caption_vision_result_deduplicates_identical_findings():
+    result = caption_vision.normalize_caption_vision_result(json.dumps({
+        "findings": [
+            {"description": "A visible detail is missing.", "type": "omitted", "confidence": "high", "knownTag": None},
+            {"description": "A visible detail is missing.", "type": "omitted", "confidence": "high", "knownTag": None},
+        ]
+    }), [])
+
+    assert len(result["findings"]) == 1
+
+
 def test_caption_vision_result_accepts_json_code_fence():
     result = caption_vision.normalize_caption_vision_result(
         '```json\n{"findings": []}\n```',

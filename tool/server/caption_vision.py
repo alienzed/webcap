@@ -213,6 +213,7 @@ def normalize_caption_vision_result(raw_text, groups):
         allowed[group_key] = {term.casefold(): term for term in group["options"]}
 
     normalized = []
+    seen = set()
     for raw in findings[:4]:
         if not isinstance(raw, dict):
             continue
@@ -233,6 +234,15 @@ def normalize_caption_vision_result(raw_text, groups):
                     "group": display_groups[group_key],
                     "term": allowed[group_key][term_key],
                 }
+        key = (
+            finding_type,
+            " ".join(description.casefold().split()),
+            str((known or {}).get("group") or "").casefold(),
+            str((known or {}).get("term") or "").casefold(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
         normalized.append({
             "description": description,
             "type": finding_type,

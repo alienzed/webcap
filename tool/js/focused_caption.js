@@ -148,25 +148,16 @@ function extractFocusedCaptionVisionPhrases(text) {
   if (!clean) return [];
   var phrases = [];
   var seen = {};
-  clean.split(/[.!?]+/).forEach(function (sentence) {
-    var sentenceText = String(sentence || '').trim();
-    if (!sentenceText) return;
-    var parts = sentenceText.split(/\s*[,;:]\s*/);
-    if (parts.length === 1 && sentenceText.split(/\s+/).length > 14) {
-      parts = sentenceText.split(/\s+(?:and|while)\s+/i);
-    }
-    parts.forEach(function (raw) {
-      var phrase = String(raw || '').trim().replace(/^(?:and|while)\s+/i, '');
-      var words = phrase.split(/\s+/).filter(Boolean);
-      if (!phrase || words.length < 2 || words.length > 16) return;
-      var key = phrase.toLowerCase();
-      if (seen[key]) return;
-      seen[key] = true;
-      phrases.push(phrase);
-    });
+  clean.split(/[,.]+/).forEach(function (raw) {
+    var phrase = String(raw || '').trim();
+    if (!phrase) return;
+    var key = phrase.toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    phrases.push(phrase);
   });
-  if (!phrases.length && clean.split(/\s+/).length <= 16) phrases.push(clean.replace(/[.!?]+$/, ''));
-  return phrases.slice(0, 10);
+  if (!phrases.length) phrases.push(clean);
+  return phrases.slice(0, 12);
 }
 
 function createFocusedCaptionVisionPhraseTask(mediaItem) {

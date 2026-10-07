@@ -626,22 +626,37 @@ html[data-theme="dark"] .vision-image-caption-error {
 }
 
 .editor-caption-vision-phrases {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  padding: 10px 18px;
-  border-bottom: 1px solid var(--border-soft);
+  display: block;
+  padding: 12px 18px 14px;
+  border-top: 1px solid color-mix(in srgb, #0891b2 24%, var(--border));
   background: color-mix(in srgb, #0891b2 6%, var(--panel));
 }
 
-.caption-vision-phrases-label {
-  flex: 0 0 auto;
-  color: var(--muted);
+.caption-vision-sight-label {
+  margin-bottom: 6px;
+  color: color-mix(in srgb, #0891b2 72%, var(--text));
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.caption-vision-description {
+  margin-bottom: 9px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.caption-vision-description-error {
+  color: #b91c1c;
+}
+
+.caption-vision-phrase-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
 }
 
 .caption-vision-phrase {

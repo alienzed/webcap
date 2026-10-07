@@ -310,6 +310,22 @@ def test_standalone_vision_caption_is_preview_adjacent_and_requires_explicit_edi
     assert 'caption_operation in {"caption_vision_validate", "vision_image_caption"}' in runner
 
 
+def test_focus_caption_orders_warnings_then_editable_caption_then_vision_sight():
+    html = _read("tool/tool.html")
+    focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
+
+    findings = html.index('id="editor-caption-vision-findings"')
+    candidate = html.index('id="editor-caption-candidate-text"')
+    sight = html.index('id="editor-caption-vision-phrases"')
+    assert findings < candidate < sight
+    assert "clean.split(/[,.]+/)" in focus
+    assert "Vision sees" in primer
+    assert "fullDescription" in primer
+    assert "insertFocusedCaptionVisionPhrase(phrase)" in primer
+    assert "blendFocusedCaptionVisionPhrase(phrase)" in primer
+
+
 def test_focus_caption_vision_phrases_are_ephemeral_editable_and_one_deep_prefetched():
     html = _read("tool/tool.html")
     focus = _read("tool/js/focused_caption.js")

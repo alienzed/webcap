@@ -367,7 +367,7 @@ function insertFocusedCaptionVisionPhrase(phrase) {
 function syncFocusedCaptionVisionPhrasesUi() {
   var row = document.getElementById('editor-caption-vision-phrases');
   var trigger = document.getElementById('editor-caption-vision-phrases-btn');
-  if (!row || !trigger) throw new Error('Focus Caption Vision phrase controls are missing.');
+  if (!row || !trigger) throw new Error('Focus Caption Vision sight controls are missing.');
 
   var focusOpen = isFocusedCaptionOpen();
   var mediaKey = state && state.currentItem && state.currentItem.key;
@@ -382,24 +382,50 @@ function syncFocusedCaptionVisionPhrasesUi() {
   trigger.classList.toggle('hidden', !candidateReady);
   trigger.classList.toggle('is-pending', !!focusedCaptionVisionPhrases.pending);
   trigger.disabled = !candidateReady || !!focusedCaptionVisionPhrases.pending;
-  trigger.textContent = focusedCaptionVisionPhrases.pending
-    ? 'Vision phrases…'
-    : (focusedCaptionVisionPhrases.phrases.length ? 'Refresh phrases' : 'Vision phrases');
+  trigger.textContent = focusedCaptionVisionPhrases.pending ? 'Loading sight…' : 'Refresh sight';
 
   row.innerHTML = '';
-  var phrases = candidateReady && focusedCaptionVisionPhrases.mediaKey === mediaKey
-    ? focusedCaptionVisionPhrases.phrases
-    : [];
-  if (!phrases.length) {
+  if (!candidateReady) {
     row.classList.add('hidden');
     return;
   }
 
-  var label = document.createElement('span');
-  label.className = 'caption-vision-phrases-label';
-  label.textContent = 'Vision';
+  var label = document.createElement('div');
+  label.className = 'caption-vision-sight-label';
+  label.textContent = 'Vision sees';
   row.appendChild(label);
 
+  if (focusedCaptionVisionPhrases.pending) {
+    var pending = document.createElement('div');
+    pending.className = 'caption-vision-description';
+    pending.textContent = 'Reading the media…';
+    row.appendChild(pending);
+    row.classList.remove('hidden');
+    return;
+  }
+
+  if (focusedCaptionVisionPhrases.error) {
+    var error = document.createElement('div');
+    error.className = 'caption-vision-description caption-vision-description-error';
+    error.textContent = 'Vision sight failed: ' + focusedCaptionVisionPhrases.error;
+    row.appendChild(error);
+    row.classList.remove('hidden');
+    return;
+  }
+
+  var matching = focusedCaptionVisionPhrases.mediaKey === mediaKey;
+  var fullDescription = matching ? String(focusedCaptionVisionPhrases.description || '').trim() : '';
+  var phrases = matching ? focusedCaptionVisionPhrases.phrases : [];
+
+  if (fullDescription) {
+    var description = document.createElement('div');
+    description.className = 'caption-vision-description';
+    description.textContent = fullDescription;
+    row.appendChild(description);
+  }
+
+  var chips = document.createElement('div');
+  chips.className = 'caption-vision-phrase-list';
   phrases.forEach(function (phrase) {
     var chip = document.createElement('span');
     chip.className = 'caption-vision-phrase';
@@ -429,9 +455,10 @@ function syncFocusedCaptionVisionPhrasesUi() {
       blendFocusedCaptionVisionPhrase(phrase);
     });
     chip.appendChild(blendBtn);
-    row.appendChild(chip);
+    chips.appendChild(chip);
   });
-  row.classList.remove('hidden');
+  if (phrases.length) row.appendChild(chips);
+  row.classList.toggle('hidden', !fullDescription && !phrases.length);
 }
 
 function syncCaptionAssistCandidateUi() {

@@ -713,7 +713,8 @@
         directorModel: director,
         files: files,
         existingGroups: existingGroupsPayload(),
-        currentAssignments: currentAssignmentsPayload(files)
+        currentAssignments: currentAssignmentsPayload(files),
+        existingOnly: !!schemaState.guidedLaunch
       })
     }).then(function (payload) {
       var jobId = String(payload.job && payload.job.jobId || '');

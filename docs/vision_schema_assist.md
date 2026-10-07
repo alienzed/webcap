@@ -12,7 +12,7 @@ Purpose: improve an immature or incomplete annotation vocabulary at the Set leve
 
 1. The user runs **Set Tools → Set Intelligence** to build reusable open visual Sight.
 2. The user opens **Discover Vocabulary**.
-3. WebCap verifies that current open Structured Sight exists for the whole Set.
+3. WebCap reuses whatever current open Structured Sight is available for the Set; incomplete per-media coverage does not block the workflow.
 4. Vision performs a **fresh second inspection** using existing group names only. Current terms are intentionally withheld so the model is not anchored to an incomplete vocabulary. The pass reports compact observations within known groups plus important concepts that do not fit them.
 5. WebCap aggregates open and group-aware visual atoms. Exact recurring observations are retained, while a bounded sample of one-off wording is also kept so the Director can consolidate synonyms that deterministic string matching would otherwise discard.
 6. The Director synthesizes candidate vocabulary against the existing groups and current terms.
@@ -29,7 +29,7 @@ Slight overcoverage is acceptable because vocabulary terms are options, not obli
 
 Purpose: apply an already-useful vocabulary to media.
 
-A text Director receives current structured Sight, current groups/terms, and current assignments, then proposes confident missing tags per media item. Existing vocabulary is preferred. Guided Tag Pass owns the user interaction for materializing those tags in Grid and does not launch its own Vision scan.
+A text Director receives current structured Sight, current groups/terms, and current assignments, then proposes confident missing tags per media item. Existing vocabulary is preferred. Guided Tag Pass may operate on partial Sight coverage, groups high-confidence existing-term matches into term-centric Grid steps, preselects likely media, and advances after the user applies the highlighted tag. It does not launch its own Vision scan.
 
 The shared backend may reuse the same Sight cache and suggestion routes, but Discover Vocabulary must not expose tag-materialization controls in its primary workflow.
 

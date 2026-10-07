@@ -643,7 +643,8 @@
       body: JSON.stringify({
         operation: 'analyze',
         folder: schemaState.folder,
-        visionModel: schemaState.visionModel
+        visionModel: schemaState.visionModel,
+        files: schemaState.scopeFiles.slice()
       })
     }).then(function (payload) {
       schemaState.analysis = payload.analysis || null;
@@ -679,6 +680,7 @@
         folder: folder,
         visionModel: visionModel,
         directorModel: director,
+        files: schemaState.scopeFiles.slice(),
         existingGroups: groups
       })
     }).then(function (payload) {

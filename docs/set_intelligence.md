@@ -100,7 +100,7 @@ Purpose: apply **existing vocabulary** efficiently.
 
 It consumes current Set intelligence plus current vocabulary and assignments. It does not scan media or invent new vocabulary in the primary flow.
 
-The interaction remains in Grid: one tag proposition, likely media preselected, explicit human correction/application, then the next proposition.
+The interaction remains in Grid: one tag proposition, likely media preselected, explicit human correction/application, then the next proposition. Completing Vocabulary review presents **Continue to Guided Tagging** as the primary next action and launches this Grid flow directly.
 
 ## Quality Assurance
 

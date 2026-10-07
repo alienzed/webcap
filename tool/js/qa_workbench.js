@@ -25,6 +25,7 @@
     aiSummary: '',
     aiScopeSignature: '',
     deepScanJobId: '',
+    deepScanSubmitting: false,
     deepScanStatus: '',
     deepScanInputSignature: '',
     observations: [],
@@ -190,7 +191,7 @@
   }
 
   function qaRunDeepScan() {
-    if (qaWorkbenchState.deepScanJobId) return;
+    if (qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting) return;
     var items = qaGetTrainingItems();
     if (!items.length) throw new Error('QA Deep Scan requires at least one training item.');
     var model = String(getDirectorModelPreference() || '').trim();
@@ -198,7 +199,8 @@
 
     var signature = qaBuildDeepScanSignature(items);
     qaWorkbenchState.deepScanInputSignature = signature;
-    qaWorkbenchState.deepScanStatus = 'Deep scan queued…';
+    qaWorkbenchState.deepScanSubmitting = true;
+    qaWorkbenchState.deepScanStatus = 'Starting deep scan…';
     renderQaWorkbench();
 
     qaRequestJson('/fs/qa/deep-scan', {
@@ -212,6 +214,7 @@
         deterministicFindings: qaDeepScanFindingPayload()
       })
     }).then(function (payload) {
+      qaWorkbenchState.deepScanSubmitting = false;
       qaWorkbenchState.deepScanStatus = 'Deep scan running…';
       renderQaWorkbench();
       return qaWaitForDeepScan(payload.job);
@@ -237,9 +240,14 @@
       qaMergeFindings();
       renderQaWorkbench();
     }).catch(function (err) {
+      qaWorkbenchState.deepScanSubmitting = false;
       qaWorkbenchState.deepScanJobId = '';
-      qaWorkbenchState.deepScanStatus = 'Deep scan failed.';
-      window.reportConsoleError('QA Deep Scan', err);
+      if (['cancelled', 'stopped', 'interrupted'].indexOf(String(err && err.jobStatus || '')) !== -1) {
+        qaWorkbenchState.deepScanStatus = 'Deep scan stopped.';
+      } else {
+        qaWorkbenchState.deepScanStatus = 'Deep scan failed.';
+        window.reportConsoleError('QA Deep Scan', err);
+      }
       renderQaWorkbench();
     });
   }
@@ -825,10 +833,11 @@
     var deepWrap = document.createElement('div');
     deepWrap.className = 'qa-deep-scan-wrap';
     var deep = qaCreateButton(
-      qaWorkbenchState.deepScanJobId ? 'Stop Deep Scan' : '✦ Deep QA Scan',
+      qaWorkbenchState.deepScanSubmitting ? 'Starting…' : (qaWorkbenchState.deepScanJobId ? 'Stop Deep Scan' : '✦ Deep QA Scan'),
       '',
       qaWorkbenchState.deepScanJobId ? 'deep-scan-stop' : 'deep-scan'
     );
+    deep.disabled = qaWorkbenchState.deepScanSubmitting;
     deep.title = 'Optional structured LLM scan of the current training selection';
     deepWrap.appendChild(deep);
     var note = document.createElement('span');

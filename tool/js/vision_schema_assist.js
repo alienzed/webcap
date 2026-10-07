@@ -1080,19 +1080,15 @@
 
   function bind() {
     var openBtn = el('vision-schema-open-btn');
-    var setToolsOpenBtn = el('discover-vocabulary-set-btn');
-    var guidedOpenBtn = el('guided-tag-pass-open-btn');
     var closeBtn = el('vision-schema-close-btn');
     var stopBtn = el('vision-schema-stop-btn');
     var skipBtn = el('vision-schema-skip-btn');
     var applyBtn = el('vision-schema-apply-btn');
     var modal = el('vision-schema-modal');
-    if (!openBtn || !setToolsOpenBtn || !guidedOpenBtn || !closeBtn || !stopBtn || !skipBtn || !applyBtn || !modal) {
+    if (!openBtn || !closeBtn || !stopBtn || !skipBtn || !applyBtn || !modal) {
       throw new Error('Schema Assist controls are missing.');
     }
     openBtn.onclick = open;
-    setToolsOpenBtn.onclick = open;
-    guidedOpenBtn.onclick = function () { openGuidedTagPass({ source: 'set' }); };
     closeBtn.onclick = close;
     stopBtn.onclick = stopWork;
     skipBtn.onclick = skipCurrentVocabularyGroup;

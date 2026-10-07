@@ -532,8 +532,6 @@
     schemaState.tagCandidates = null;
     schemaState.mode = 'tags';
     schemaState.analysis = null;
-    schemaState.guidedLaunch = false;
-    schemaState.rawResponses = [];
     render();
     setStatus('Checking cached Vision sight…');
 
@@ -1114,6 +1112,8 @@
     schemaState.tagCandidates = null;
     schemaState.mode = 'tags';
     schemaState.analysis = null;
+    schemaState.guidedLaunch = false;
+    schemaState.rawResponses = [];
     render();
     setStatus('Loading current Sight coverage…');
     refreshStatus().then(function () {

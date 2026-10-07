@@ -200,13 +200,21 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             )
         if client == "caption" and operation == "vision_schema_sight":
             from .vision_schema_assist import normalize_vision_schema_sight_result
-            result["sight"] = normalize_vision_schema_sight_result(llm_result["text"])
+            try:
+                result["sight"] = normalize_vision_schema_sight_result(llm_result["text"])
+            except ValueError as exc:
+                result["sight"] = None
+                result["structureWarning"] = str(exc)
         if client == "caption" and operation == "vision_vocabulary_sight":
             from .vision_schema_assist import normalize_vision_vocabulary_sight_result
-            result["vocabularySight"] = normalize_vision_vocabulary_sight_result(
-                llm_result["text"],
-                context.get("existingGroups"),
-            )
+            try:
+                result["vocabularySight"] = normalize_vision_vocabulary_sight_result(
+                    llm_result["text"],
+                    context.get("existingGroups"),
+                )
+            except ValueError as exc:
+                result["vocabularySight"] = None
+                result["structureWarning"] = str(exc)
         return result
 
     if client == "generate":

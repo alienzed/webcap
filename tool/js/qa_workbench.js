@@ -99,6 +99,45 @@
     });
   }
 
+  function qaBuildCompactAnalysis(item) {
+    var metadata = item && item.metadata && typeof item.metadata === 'object' ? item.metadata : {};
+    var out = {};
+    var face = metadata.face_focus && typeof metadata.face_focus === 'object' ? metadata.face_focus : null;
+    if (face) {
+      out.faceFocus = {
+        bucket: String(face.bucket || 'unknown'),
+        faceCount: Number(face.face_count || 0),
+        largestHeightPct: Number(face.largest_height_pct || 0)
+      };
+    }
+    var pose = metadata.selection_pose && typeof metadata.selection_pose === 'object' ? metadata.selection_pose : null;
+    if (pose) {
+      out.selectionPose = {
+        faceDirection: String(pose.face_direction || 'unknown'),
+        expression: String(pose.expression_primary || 'unknown'),
+        bodyOrientation: String(pose.body_orientation || 'unknown'),
+        poseClass: String(pose.pose_class || 'unknown'),
+        armPosition: String(pose.arm_position || 'unknown')
+      };
+    }
+    var complexity = metadata.scene_complexity && typeof metadata.scene_complexity === 'object' ? metadata.scene_complexity : null;
+    if (complexity) {
+      out.sceneComplexity = {
+        bucket: String(complexity.bucket || 'unknown'),
+        score: Number(complexity.score || 0)
+      };
+    }
+    var sight = metadata.vision_sight && typeof metadata.vision_sight === 'object' ? metadata.vision_sight : null;
+    if (sight && sight.description && sight.inventory) {
+      out.visionSight = {
+        model: String(sight.model || ''),
+        description: String(sight.description || ''),
+        inventory: sight.inventory
+      };
+    }
+    return out;
+  }
+
   function qaBuildDeepScanItems(items) {
     return (items || []).map(function (item) {
       var key = item && item.key;
@@ -111,7 +150,8 @@
             term: String(entry && entry.term || '')
           };
         }),
-        tags: getTagsForMediaKey(key).slice()
+        tags: getTagsForMediaKey(key).slice(),
+        analysis: qaBuildCompactAnalysis(item)
       };
     });
   }
@@ -632,6 +672,71 @@
     }];
   }
 
+  function qaSightSupportsTerm(metadata, term) {
+    var sight = metadata && metadata.vision_sight && typeof metadata.vision_sight === 'object'
+      ? metadata.vision_sight
+      : null;
+    if (!sight) return false;
+    var haystack = (
+      String(sight.description || '') + ' ' +
+      JSON.stringify(sight.inventory || {})
+    ).toLowerCase().replace(/[_-]+/g, ' ');
+    var wanted = String(term || '').toLowerCase().replace(/[_-]+/g, ' ').trim();
+    var aliases = {
+      'side': ['side'],
+      'front': ['front'],
+      'three quarter': ['three quarter', '3/4'],
+      'rear': ['rear', 'back view', 'from behind'],
+      'three quarter rear': ['three quarter rear', 'rear three quarter'],
+      'standing': ['standing'],
+      'sitting': ['sitting', 'seated'],
+      'kneeling': ['kneeling', 'crouched'],
+      'lying on her back': ['lying on her back', 'reclining'],
+      'arms up': ['arms up', 'arms raised', 'both arms up'],
+      'one arm up': ['one arm up', 'one arm raised'],
+      'arms spread': ['arms spread', 'arms out'],
+      'smiling': ['smiling', 'smile'],
+      'surprised': ['surprised'],
+      'neutral expression': ['neutral expression']
+    };
+    var terms = aliases[wanted] || [wanted];
+    return terms.some(function (value) { return value && haystack.indexOf(value) !== -1; });
+  }
+
+  function qaBuildVisualAgreementFindings(items) {
+    var buckets = {};
+    (items || []).forEach(function (item) {
+      if (!item || !item.key || !item.metadata) return;
+      var existingTags = getTagsForMediaKey(item.key).slice();
+      var suggestions = getSelectionPoseSuggestedTags(item.metadata, existingTags);
+      suggestions.forEach(function (term) {
+        var groups = getChecklistRequirementsForTag(term);
+        if (!groups.length || !qaSightSupportsTerm(item.metadata, term)) return;
+        var key = String(term || '').toLowerCase();
+        if (!buckets[key]) buckets[key] = { term: term, groups: groups.slice(), files: [] };
+        buckets[key].files.push(item.fileName);
+      });
+    });
+    return Object.keys(buckets).map(function (key) {
+      var row = buckets[key];
+      return {
+        id: qaStableId(['visual-agreement', row.term].concat(row.files)),
+        category: 'consistency',
+        priority: row.files.length > 1 ? 'high' : 'normal',
+        confidence: 'high',
+        title: 'Independent visual signals suggest missing "' + row.term + '"',
+        summary: qaFileCountText(row.files.length) + ' have matching MediaPipe and Vision evidence but are not tagged "' + row.term + '".',
+        why: 'Two independent visual signals agree on a term that already exists in the Set vocabulary, making these strong annotation-review candidates.',
+        files: row.files.slice(),
+        facts: [
+          { value: '2', label: 'agreeing visual sources' },
+          { value: String(row.groups[0] || ''), label: 'annotation group' }
+        ],
+        sourceLabel: 'WebCap + Vision'
+      };
+    }).slice(0, 6);
+  }
+
   function qaBuildObservations(items) {
     var total = items.length;
     if (total < 30) return [];
@@ -694,6 +799,7 @@
       .concat(qaBuildPruneFindings(items))
       .concat(qaBuildDuplicateFindings(items))
       .concat(qaBuildAssociationFindings(items))
+      .concat(qaBuildVisualAgreementFindings(items))
       .concat(qaBuildCaptionFindings(items));
     return {
       findings: qaSortFindings(findings),

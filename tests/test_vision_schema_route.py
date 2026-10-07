@@ -196,6 +196,57 @@ def test_vocabulary_sight_scan_uses_fresh_group_aware_vision_contract(tmp_path, 
     assert seen["label"] == "Vocabulary Vision"
 
 
+def test_vocabulary_synthesis_accepts_partial_visual_coverage(tmp_path, monkeypatch):
+    set_root = tmp_path / "set"
+    set_root.mkdir()
+    for name in ("a.jpg", "b.jpg", "c.jpg"):
+        (set_root / name).write_bytes(name.encode("utf-8"))
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", Path(tmp_path))
+
+    from tool.server import vision_schema_assist
+    groups = [{"group": "BT Shape", "terms": ["triangle"]}]
+    for name in ("a.jpg", "b.jpg"):
+        vision_schema_assist.save_vision_sight(
+            "set",
+            name,
+            "vl",
+            _sight(
+                "Triangle top.",
+                things=[{"name": "bikini top", "qualities": ["triangle"]}],
+            ),
+        )
+    vision_schema_assist.save_vision_vocabulary_sight(
+        "set",
+        "a.jpg",
+        "vl",
+        groups,
+        {
+            "groups": [{"group": "BT Shape", "observations": ["micro triangle"]}],
+            "other": [],
+        },
+    )
+
+    seen = {}
+    def fake_enqueue(client, model_id, contract, context=None, label=""):
+        seen.update(client=client, model=model_id, contract=contract, context=context, label=label)
+        return {"jobId": "partial-vocab-1", "status": "queued", "queuePosition": 1}
+    monkeypatch.setattr(app_module, "enqueue_llm", fake_enqueue)
+
+    response = app_module.app.test_client().post("/fs/vision_schema", json={
+        "operation": "synthesize_vocabulary",
+        "folder": "set",
+        "visionModel": "vl",
+        "directorModel": "director",
+        "existingGroups": groups,
+    })
+
+    assert response.status_code == 202
+    payload = response.get_json()
+    assert payload["analysis"]["openItemCount"] == 2
+    assert payload["analysis"]["schemaAwareItemCount"] == 1
+    assert seen["label"] == "Vocabulary Synthesis"
+
+
 def test_vocabulary_challenge_queues_schema_contract_from_both_visual_passes(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()

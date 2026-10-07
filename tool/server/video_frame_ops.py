@@ -177,9 +177,10 @@ def extract_boundary_frame_png(source_path, boundary):
     boundary = str(boundary or "").strip().lower()
     if boundary not in {"first", "last"}:
         raise RuntimeError("Boundary frame must be first or last")
+    if boundary == "first":
+        return _extract_frame_png(source_path, 0)
     _, timestamps = _cached_frame_timestamps(source_path)
-    frame_index = 0 if boundary == "first" else len(timestamps) - 1
-    return _extract_frame_png(source_path, frame_index)
+    return _extract_frame_png(source_path, len(timestamps) - 1)
 
 
 def resolve_exact_start(source_path, frame_index, source_fingerprint):

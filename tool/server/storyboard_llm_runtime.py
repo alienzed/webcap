@@ -1233,6 +1233,8 @@ def prepare_caption_vision_messages(model_ref, messages):
                 continue
             image_url = part.get("image_url") if isinstance(part.get("image_url"), dict) else {}
             url = str(image_url.get("url") or "").strip()
+            if url.startswith("data:image/"):
+                continue
             if not url.startswith("file://") or url.startswith("file:///"):
                 raise ValueError("Vision image reference is invalid.")
             relative = url[len("file://"):]

@@ -1,11 +1,14 @@
+import base64
 import json
 from pathlib import Path
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, _validate_media_name
+from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
 
 
 VISION_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
+VISION_MEDIA_EXTS = VISION_IMAGE_EXTS | VIDEO_EXTS
 
 CAPTION_VISION_RESPONSE_SCHEMA = {
     "type": "object",
@@ -55,6 +58,13 @@ VISION_IMAGE_CAPTION_SYSTEM_PROMPT = (
 )
 
 
+def _vision_media_url(media_reference):
+    value = str(media_reference or "").strip()
+    if value.startswith("data:image/"):
+        return value
+    return "file://" + value
+
+
 def build_vision_image_caption_messages(media_relative_path):
     return [
         {"role": "system", "content": VISION_IMAGE_CAPTION_SYSTEM_PROMPT},
@@ -68,7 +78,7 @@ def build_vision_image_caption_messages(media_relative_path):
                         "that would make the description useful on its own."
                     ),
                 },
-                {"type": "image_url", "image_url": {"url": "file://" + str(media_relative_path or "").strip()}},
+                {"type": "image_url", "image_url": {"url": _vision_media_url(media_relative_path)}},
             ],
         },
     ]
@@ -122,15 +132,21 @@ def resolve_caption_vision_media(folder, media_name):
     folder_path = _resolve_folder(folder)
     media_name = _validate_media_name(media_name)
     media_path = (folder_path / media_name).resolve()
-    if media_path.suffix.casefold() not in VISION_IMAGE_EXTS:
-        raise ValueError("Vision Caption validation currently supports image files only.")
     if not media_path.exists() or not media_path.is_file():
         raise FileNotFoundError("Media file not found")
+    suffix = media_path.suffix.casefold()
+    if suffix not in VISION_MEDIA_EXTS:
+        raise ValueError("Vision currently supports image files and video first frames.")
+
     root = Path(app_config.FS_ROOT).resolve()
     try:
         relative = media_path.relative_to(root)
     except ValueError as exc:
         raise ValueError("Vision media must be inside the configured dataset root.") from exc
+
+    if suffix in VIDEO_EXTS:
+        first_frame = extract_boundary_frame_png(media_path, "first")
+        return "data:image/png;base64," + base64.b64encode(first_frame).decode("ascii")
     return relative.as_posix()
 
 
@@ -166,7 +182,7 @@ def build_caption_vision_messages(caption, groups, media_relative_path):
             "role": "user",
             "content": [
                 {"type": "text", "text": text},
-                {"type": "image_url", "image_url": {"url": "file://" + media_relative_path}},
+                {"type": "image_url", "image_url": {"url": _vision_media_url(media_relative_path)}},
             ],
         },
     ], normalized_groups

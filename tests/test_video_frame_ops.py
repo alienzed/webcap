@@ -42,6 +42,19 @@ def test_frame_inspection_caches_timestamps_and_returns_decoded_preview(tmp_path
     assert len([call for call in calls if call[0] == "ffprobe"]) == 1
 
 
+def test_first_boundary_frame_skips_full_timestamp_index(tmp_path, monkeypatch):
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"video")
+    calls = []
+    monkeypatch.setattr(video_frame_ops, "_cached_frame_timestamps", lambda path: pytest.fail("first frame must not index every video frame"))
+    monkeypatch.setattr(video_frame_ops, "_extract_frame_png", lambda path, index: calls.append((path, index)) or b"first")
+
+    result = video_frame_ops.extract_boundary_frame_png(source, "first")
+
+    assert result == b"first"
+    assert calls == [(source, 0)]
+
+
 def test_exact_start_rejects_a_changed_source(tmp_path, monkeypatch):
     source = tmp_path / "source.mp4"
     source.write_bytes(b"before")

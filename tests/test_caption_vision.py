@@ -15,6 +15,29 @@ def test_standalone_vision_caption_prompt_uses_image_only_without_annotation_ont
     assert "groups" not in messages[1]["content"][0]["text"].lower()
 
 
+def test_vision_message_builders_preserve_first_frame_data_urls():
+    data_url = "data:image/png;base64,Zmlyc3QtZnJhbWU="
+
+    standalone = caption_vision.build_vision_image_caption_messages(data_url)
+    qa, _groups = caption_vision.build_caption_vision_messages("caption", [], data_url)
+
+    assert standalone[1]["content"][1]["image_url"]["url"] == data_url
+    assert qa[1]["content"][1]["image_url"]["url"] == data_url
+
+
+def test_resolve_caption_vision_media_uses_first_video_frame(tmp_path, monkeypatch):
+    from tool.server import config as app_config
+
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"video")
+    monkeypatch.setattr(app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(caption_vision, "extract_boundary_frame_png", lambda path, boundary: b"first-frame")
+
+    resolved = caption_vision.resolve_caption_vision_media("", "clip.mp4")
+
+    assert resolved == "data:image/png;base64,Zmlyc3QtZnJhbWU="
+
+
 def test_caption_vision_prompt_preserves_known_group_options_and_uses_local_media_url():
     messages, groups = caption_vision.build_caption_vision_messages(
         "snow leopard bikini",

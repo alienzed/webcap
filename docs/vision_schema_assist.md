@@ -1,32 +1,43 @@
 # Vision Schema Assist
 
-Status: structured Sight + tag materialization V1.
+Status: shared Structured Sight infrastructure with focused vocabulary discovery and separate tag materialization workflows.
 
-## Product flow
+## Product lanes
 
-Vision Schema Assist bridges schema-blind visual observation into WebCap's mature concept vocabulary and annotation state:
+Vision Schema Assist provides shared visual evidence, but the user-facing workflows stay deliberately separate.
 
-1. **Structured Sight** — scan the current visible media with the selected Vision model.
-2. **Cache evidence** — store one replaceable `vision_sight` analysis block per media item in `media_metadata.json`.
-3. **Observe two ways** — each Sight block keeps a concise description plus a structured visual inventory: viewpoint, position, things + qualities, thing-bound colors, setting/background, lighting, surface/support, and distinctive details.
-4. **Materialize tags** — a text Director receives structured Sight, current groups/terms, and current assignments, then proposes confident missing tags per media item. Existing vocabulary is preferred; clearly useful new terms may be proposed only inside existing groups.
-5. **Curate explicitly** — high-confidence tag candidates start selected, medium-confidence candidates start unselected. The user can toggle any candidate before applying.
-6. **Apply** — accepted new terms merge through the existing vocabulary mutation path, then accepted tags use the existing annotation assignment path. Groups are not automatically marked reviewed.
-7. **Discover vocabulary** — across the Set, WebCap deterministically aggregates structured visual evidence and the Director can synthesize recurring vocabulary proposals grounded in that evidence.
-8. **Merge explicitly** — accepted vocabulary changes enter the existing annotation schema through normal WebCap mutation paths.
+### Discover Vocabulary
 
-The first practical target is a mature-vocabulary workflow: filter to new media, scan visible items, build tag candidates, toggle, apply, then caption from the resulting concept-guided annotations.
+Purpose: improve an immature or incomplete annotation vocabulary at the Set level.
 
-## Ownership and lifecycle
+1. The user opens **Discover Vocabulary** and clicks one primary action: **Discover Vocabulary**.
+2. WebCap reuses current structured Sight where possible and scans only missing visible media.
+3. WebCap deterministically aggregates recurring visual evidence.
+4. The Director synthesizes recurring vocabulary proposals against the existing groups and terms.
+5. The user reviews **one proposed group at a time**.
+6. Each review shows only the information needed for the vocabulary decision: proposed group / merge target, proposed terms, and support counts.
+7. The user can edit, select, skip, or **Add Selected to Vocabulary**.
+8. Accepting or skipping advances to the next proposed group.
 
-- `vision_sight` is analysis evidence, not user-authored Set state.
-- It lives inside the owning Set's `media_metadata.json`.
-- V2 blocks record analyzer version, Vision model, source mtime/size, description, structured inventory, and update time.
-- Legacy V1 prose Sight remains readable as cache evidence but is not considered structured Phase-1 evidence; visible items are rescanned as needed.
-- Changing the Vision model, changing the media, or bumping the analyzer version makes structured evidence stale.
-- Rescanning replaces stale evidence; no scan history accumulates.
-- LLM queue intent remains ephemeral. Batch orchestration resumes by skipping current structured evidence rather than persisting queued Vision jobs.
-- Deterministic aggregation is cheap and recomputed from current evidence.
+Discover Vocabulary does **not** tag media and does not act as an alternate captioning workflow. Structured Sight, thumbnails, evidence IDs, and synthesis rationale remain supporting machinery rather than the primary review surface.
+
+### Guided / Assisted Tagging
+
+Purpose: apply an already-useful vocabulary to media.
+
+A text Director receives structured Sight, current groups/terms, and current assignments, then proposes confident missing tags per media item. Existing vocabulary is preferred. Guided Tag Pass and other assisted-caption/tagging surfaces own the user interaction for materializing those tags.
+
+The shared backend may reuse the same Sight cache and suggestion routes, but Discover Vocabulary must not expose tag-materialization controls in its primary workflow.
+
+## Shared Structured Sight
+
+1. **Structured Sight** scans media with the selected Vision model.
+2. One replaceable `vision_sight` analysis block per media item is cached in `media_metadata.json`.
+3. Each block keeps a concise description plus a structured visual inventory: viewpoint, position, things + qualities, thing-bound colors, setting/background, lighting, surface/support, and distinctive details.
+4. Changing the Vision model, changing the media, or bumping the analyzer version makes structured evidence stale.
+5. Rescanning replaces stale evidence; no scan history accumulates.
+6. LLM queue intent remains ephemeral. Batch orchestration resumes by skipping current structured evidence rather than persisting queued Vision jobs.
+7. Deterministic aggregation is cheap and recomputed from current evidence.
 
 ## Grounding contract
 
@@ -40,8 +51,10 @@ Tag materialization can use only supplied media filenames and existing group nam
 
 ## Mutation contract
 
-Nothing mutates during Sight, analysis, or suggestion generation.
+Nothing mutates during Sight, aggregation, synthesis, or suggestion generation.
 
-Tag materialization mutates only candidates explicitly selected by the user. New selected terms are merged into their existing groups first, then selected tags are assigned through the normal annotation mutation path.
+Discover Vocabulary mutates only explicitly selected vocabulary for the current review group, through the existing schema mutation path.
 
-Vocabulary discovery remains separately curated and explicit. No Vision or Director result automatically marks a group reviewed.
+Tag materialization mutates only explicitly accepted tag candidates through its owning workflow.
+
+No Vision or Director result automatically marks a group reviewed.

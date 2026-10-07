@@ -52,13 +52,13 @@ def _response_schema():
                             "items": {
                                 "type": "object",
                                 "additionalProperties": False,
-                                "required": ["term", "patternIds"],
+                                "required": ["term", "evidenceIds"],
                                 "properties": {
                                     "term": {"type": "string", "minLength": 1},
-                                    "patternIds": {
+                                    "evidenceIds": {
                                         "type": "array",
                                         "minItems": 1,
-                                        "maxItems": 12,
+                                        "maxItems": 16,
                                         "items": {"type": "string", "minLength": 1},
                                     },
                                 },
@@ -72,36 +72,52 @@ def _response_schema():
 
 
 def build_request(analysis, existing_groups):
-    patterns = analysis.get("patterns") if isinstance(analysis, dict) else []
-    compact_patterns = [
+    evidence = analysis.get("evidence") if isinstance(analysis, dict) else []
+    compact_evidence = [
         {
             "id": str(row.get("id") or ""),
+            "category": str(row.get("category") or ""),
             "label": str(row.get("label") or ""),
             "count": int(row.get("count") or 0),
             "examples": list(row.get("examples") or [])[:6],
+            "contexts": [
+                _clean(value, 260)
+                for value in list(row.get("contexts") or [])[:2]
+                if _clean(value)
+            ],
         }
-        for row in patterns if isinstance(row, dict) and row.get("id")
+        for row in evidence
+        if isinstance(row, dict) and row.get("id")
     ]
     normalized_existing = _normalize_existing_groups(existing_groups)
     payload = {
         "dataset": {
             "itemsWithSight": int((analysis or {}).get("itemCount") or 0),
-            "patterns": compact_patterns,
+            "evidence": compact_evidence,
         },
         "existingGroups": normalized_existing,
     }
     prompt = (
         "[ROLE]\n"
-        "You design a compact annotation vocabulary from recurring visual evidence. "
+        "You design a compact annotation vocabulary from structured visual evidence. "
         "Groups are independent semantic dimensions; terms are reusable normalized values inside those dimensions.\n\n"
         "[GOAL]\n"
-        "Find the smallest useful vocabulary that captures recurring visual distinctions in this dataset. "
-        "Prefer reusable distinctions with meaningful support. Merge synonymous or near-synonymous evidence into one canonical term. "
-        "Extend an existing group when the evidence belongs to that dimension; otherwise propose a concise new group.\n\n"
+        "Bridge schema-blind Vision observations into tight concept-guided annotation vocabulary. "
+        "The existing groups are already mature and should absorb evidence that belongs to them. "
+        "Propose a new group only when recurring evidence represents a useful semantic dimension that the supplied groups do not cover. "
+        "Prefer promptable, visually concrete distinctions: viewpoint, position, colors bound to things, shape, material, pattern, "
+        "construction, accessories, setting/background, lighting, support/surface, and concept-specific details. "
+        "Merge synonymous or near-synonymous observations into one canonical term.\n\n"
+        "[FILTER]\n"
+        "Do not turn narration, connective language, generic image words, or incidental prose into vocabulary. "
+        "Generic subject nouns are usually weak vocabulary unless subject type or count is actually a varying visual distinction. "
+        "Do not propose decorative wording, mood, inferred intent, or facts not grounded in the supplied evidence. "
+        "Silence is better than weak vocabulary.\n\n"
         "[GROUNDING]\n"
-        "Every proposed term cites one or more supplied pattern IDs. "
-        "Use an exact existing group name in targetGroup when extending it. Use an empty targetGroup for a new group. "
-        "Pattern counts and example filenames are evidence supplied by WebCap; semantic grouping and naming are your task.\n\n"
+        "Every proposed term must cite one or more supplied evidence IDs. "
+        "Use an exact existing group name in targetGroup when extending it. Use an empty targetGroup for a genuinely new group. "
+        "Evidence counts, filenames, and contexts are supplied by WebCap; semantic grouping and naming are your task. "
+        "Existing terms are organizational context, not visual evidence: do not infer that an existing term appears unless the Sight evidence supports it.\n\n"
         "[INPUT]\n"
         + json.dumps(payload, ensure_ascii=False)
         + "\n\n[OUTPUT]\nReturn only JSON matching the supplied schema."
@@ -111,18 +127,18 @@ def build_request(analysis, existing_groups):
         "output": "json",
         "prompt": prompt,
         "response_schema": _response_schema(),
-        "pattern_evidence": list(patterns or []),
+        "sight_evidence": list(evidence or []),
         "existing_groups": normalized_existing,
     }
 
 
-def normalize_result(data, pattern_evidence=None, existing_groups=None):
+def normalize_result(data, sight_evidence=None, existing_groups=None):
     if not isinstance(data, dict) or not isinstance(data.get("groups"), list):
         raise ValueError("Schema Assist response is missing its groups array.")
 
-    patterns = {
+    evidence = {
         str(row.get("id") or ""): row
-        for row in (pattern_evidence or [])
+        for row in (sight_evidence or [])
         if isinstance(row, dict) and row.get("id")
     }
     existing = _normalize_existing_groups(existing_groups)
@@ -152,30 +168,35 @@ def normalize_result(data, pattern_evidence=None, existing_groups=None):
                 continue
             term = _clean(raw_term.get("term"), 80)
             term_key = term.casefold()
-            pattern_ids = []
-            for raw_id in raw_term.get("patternIds") if isinstance(raw_term.get("patternIds"), list) else []:
-                pattern_id = str(raw_id or "").strip()
-                if pattern_id in patterns and pattern_id not in pattern_ids:
-                    pattern_ids.append(pattern_id)
-            if not term or term_key in seen_terms or not pattern_ids:
+            evidence_ids = []
+            for raw_id in raw_term.get("evidenceIds") if isinstance(raw_term.get("evidenceIds"), list) else []:
+                evidence_id = str(raw_id or "").strip()
+                if evidence_id in evidence and evidence_id not in evidence_ids:
+                    evidence_ids.append(evidence_id)
+            if not term or term_key in seen_terms or not evidence_ids:
                 continue
 
             support_media = set()
-            evidence = []
-            for pattern_id in pattern_ids:
-                pattern = patterns[pattern_id]
-                support_media.update(str(value) for value in pattern.get("media") or [] if str(value))
-                label = _clean(pattern.get("label"))
-                if label and label not in evidence:
-                    evidence.append(label)
+            labels = []
+            categories = []
+            for evidence_id in evidence_ids:
+                row = evidence[evidence_id]
+                support_media.update(str(value) for value in row.get("media") or [] if str(value))
+                label = _clean(row.get("label"))
+                category = _clean(row.get("category"))
+                if label and label not in labels:
+                    labels.append(label)
+                if category and category not in categories:
+                    categories.append(category)
             media = sorted(support_media, key=str.casefold)
             seen_terms.add(term_key)
             terms.append({
                 "term": term,
-                "patternIds": pattern_ids,
+                "evidenceIds": evidence_ids,
                 "support": len(media),
                 "examples": media[:6],
-                "evidence": evidence[:6],
+                "evidence": labels[:6],
+                "evidenceCategories": categories[:6],
                 "alreadyExists": term_key in existing_terms,
             })
 
@@ -190,4 +211,4 @@ def normalize_result(data, pattern_evidence=None, existing_groups=None):
             "terms": terms,
         })
 
-    return {"version": 1, "groups": normalized_groups}
+    return {"version": 2, "groups": normalized_groups}

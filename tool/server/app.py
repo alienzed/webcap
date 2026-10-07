@@ -13,8 +13,8 @@ import sys
 from . import config as app_config
 from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .caption_vision import build_caption_vision_messages, build_vision_image_caption_messages, resolve_caption_vision_media
-from .vision_schema_assist import build_vision_schema_sight_messages, mine_vision_sight, save_vision_sight, vision_sight_status
-from .vision_schema_contract import build_request as build_vision_schema_request
+from .vision_schema_assist import build_vision_schema_sight_messages, mine_vision_sight, save_vision_sight, vision_sight_records, vision_sight_status
+from .vision_schema_contract import build_assignment_request as build_vision_tag_request, build_request as build_vision_schema_request
 from .originals import copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
 from .file_ops import duplicate_folder_response, duplicate_media_response, open_in_explorer_response, open_path_in_explorer_response, open_in_vscode_response, rename_response
 from .media import color_suggestions_response, media_blur_background_response, media_convert_fps_response, media_convert_webp_png_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
@@ -801,10 +801,29 @@ def vision_schema_assist_route():
                 raise ValueError("Select a Director model.")
             analysis = mine_vision_sight(folder, vision_model)
             if int(analysis.get("itemCount") or 0) < 2:
-                raise ValueError("Schema Assist needs Vision sight for at least two media items.")
+                raise ValueError("Schema Assist needs structured Vision sight for at least two media items.")
             contract = build_vision_schema_request(analysis, data.get("existingGroups"))
             job = enqueue_llm("schema", director_model, contract, context={}, label="Schema Assist")
             return jsonify({"ok": True, "analysis": analysis, "job": job}), 202
+        if operation == "suggest_tags":
+            director_model = str(data.get("directorModel") or "").strip()
+            if not director_model:
+                raise ValueError("Select a Director model.")
+            requested_files = data.get("files") if isinstance(data.get("files"), list) else []
+            records = vision_sight_records(folder, vision_model, files=requested_files)
+            if not records:
+                raise ValueError("Tag Assist needs structured Vision sight for the selected media.")
+            contract = build_vision_tag_request(
+                records,
+                data.get("existingGroups"),
+                current_assignments=data.get("currentAssignments"),
+            )
+            job = enqueue_llm("schema", director_model, contract, context={}, label="Vision Tag Assist")
+            return jsonify({
+                "ok": True,
+                "files": [row["file"] for row in records],
+                "job": job,
+            }), 202
         raise ValueError("Unknown Schema Assist operation.")
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404

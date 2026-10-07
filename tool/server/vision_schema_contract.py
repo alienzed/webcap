@@ -255,7 +255,7 @@ def _assignment_response_schema():
     }
 
 
-def build_assignment_request(records, existing_groups, current_assignments=None):
+def build_assignment_request(records, existing_groups, current_assignments=None, existing_only=False):
     normalized_existing = _normalize_existing_groups(existing_groups)
     groups_by_key = {row["group"].casefold(): row for row in normalized_existing}
     assignments = current_assignments if isinstance(current_assignments, dict) else {}
@@ -292,8 +292,13 @@ def build_assignment_request(records, existing_groups, current_assignments=None)
         "The supplied group names define semantic dimensions. Existing terms are preferred whenever they accurately describe what is visible.\n\n"
         "[GOAL]\n"
         "For each media item, return only tags that a human can confidently add from the supplied visual evidence. "
-        "Use an exact existing term when one fits. When an important clearly visible concept belongs to a supplied group but no existing term expresses it, "
-        "you may propose a concise new term for that same group. Do not create new groups.\n\n"
+        + (
+            "Use only exact existing terms from the supplied vocabulary. Do not propose new terms or groups. "
+            if existing_only else
+            "Use an exact existing term when one fits. When an important clearly visible concept belongs to a supplied group but no existing term expresses it, "
+            "you may propose a concise new term for that same group. Do not create new groups. "
+        )
+        + "\n\n"
         "[BOUNDARIES]\n"
         "- Sight evidence is authoritative; do not infer facts merely because a term exists in the vocabulary.\n"
         "- Do not repeat tags already present in currentAssignments.\n"
@@ -314,10 +319,11 @@ def build_assignment_request(records, existing_groups, current_assignments=None)
         "existing_groups": normalized_existing,
         "source_files": allowed_files,
         "current_assignments": assignments,
+        "existing_only": bool(existing_only),
     }
 
 
-def normalize_assignment_result(data, existing_groups=None, allowed_files=None, current_assignments=None):
+def normalize_assignment_result(data, existing_groups=None, allowed_files=None, current_assignments=None, existing_only=False):
     if not isinstance(data, dict) or not isinstance(data.get("items"), list):
         raise ValueError("Tag Assist response is missing its items array.")
 
@@ -364,6 +370,8 @@ def normalize_assignment_result(data, existing_groups=None, allowed_files=None, 
 
             exact_terms = {value.casefold(): value for value in target["terms"]}
             canonical = exact_terms.get(term.casefold(), term)
+            if existing_only and canonical.casefold() not in exact_terms:
+                continue
             key = (target["group"].casefold(), canonical.casefold())
             if key in seen or key in existing_assigned:
                 continue

@@ -9,11 +9,11 @@ The implemented Set intelligence flow now provides QA with normalized evidence f
 
 Current behavior:
 
-- deterministic QA still works without any LLM or Vision model;
+- the broader **Set Intelligence** workflow is model-driven; deterministic QA remains available as supporting/reference capability but is not the semantic engine;
 - QA primes the existing Prune and Duplicate analyzers for its current scope instead of requiring the user to visit those reports first;
 - Face Focus, MediaPipe Selection Pose, Scene Complexity, and cached Vision Sight can be supplied as compact QA evidence;
 - one high-confidence deterministic producer may promote a likely missing known tag only when independent MediaPipe and structured Sight evidence agree;
-- optional Deep QA receives the same normalized evidence alongside captions, grouped tags, flat tags, and deterministic findings;
+- Deep QA receives normalized evidence alongside captions, grouped tags, flat tags, and deterministic findings when semantic review is requested;
 - QA remains an attention funnel and never silently repairs annotations or captions.
 
 This preserves the original rule below: **many signal producers -> normalized QA findings -> prioritized human review**.
@@ -28,7 +28,7 @@ The new surface should therefore be a **QA Workbench**, not a better report.
 
 The Workbench should:
 
-- remain useful with no LLM available;
+- keep deterministic evidence available even when model intelligence is unavailable, without presenting that fallback as equivalent to semantic QA;
 - centralize high-value existing signals instead of deleting them;
 - emphasize exceptions, suspicious relationships, cohort outliers, and prune opportunities;
 - avoid promoting facts already exposed better elsewhere;
@@ -964,7 +964,7 @@ Do not make full-dataset vision mandatory.
 - Association is not causation or correctness.
 - AI findings must always expose evidence / affected files.
 - Do not make the user read a second AI report to act on the first report.
-- Never require an LLM for deterministic QA.
+- Do not confuse deterministic QA/reference reports with the model-driven Set Intelligence workflow.
 - Avoid persistent QA-state files until a concrete workflow requires them.
 - Prefer current data to explicit "resolved" bookkeeping.
 - Preserve Focus Set as the central bridge from finding -> inspection.

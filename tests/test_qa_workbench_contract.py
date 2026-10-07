@@ -38,7 +38,6 @@ def test_qa_reuses_exact_training_selection_and_keeps_session_state_ephemeral():
     assert "qaWorkbenchState.trainingFocus = '';" in qa
     assert "localStorage" not in qa
     assert "sessionStorage" not in qa
-    assert "fetch(" not in qa
 
 
 def test_qa_focus_inspection_reuses_existing_focus_set_round_trip():
@@ -56,21 +55,27 @@ def test_qa_focus_inspection_reuses_existing_focus_set_round_trip():
     assert "if (reportType === 'duplicateCandidates')" in review
 
 
-def test_qa_deep_scan_is_explicit_and_uses_training_focus_plus_annotations():
+def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     qa = _read("tool/js/qa_workbench.js")
-    assistant = _read("tool/js/review_assistant.js")
+    app = _read("tool/server/app.py")
+    runner = _read("tool/server/llm_runner.py")
+    contract = _read("tool/server/qa_llm_contract.py")
 
     assert "✦ Deep QA Scan" in qa
-    assert "id = 'review-output-assistant-btn'" in qa
-    assert "getQaTrainingItemsForAssistant" in assistant
-    assert "getQaTrainingFocus" in assistant
-    assert "getChecklistAssignmentEntriesForMediaKey" in assistant
-    assert "GROUPED TAGS:" in assistant
-    assert "Training focus:" in assistant
-    assert "function bindReviewAssistantButton()" in assistant
-    assert "if (!button) throw new Error('QA Deep Scan button is missing.');" in assistant
-    assert "typeof getChecklistAssignmentEntriesForMediaKey" not in assistant
-    assert "typeof getTagsForMediaKey" not in assistant
+    assert "'deep-scan'" in qa
+    assert "'/fs/qa/deep-scan'" in qa
+    assert "qaBuildDeepScanItems" in qa
+    assert "getChecklistAssignmentEntriesForMediaKey" in qa
+    assert "getTagsForMediaKey" in qa
+    assert "qaWorkbenchState.deterministicFindings.concat(ai)" in qa
+    assert "currentSignature !== signature" in qa
+    assert "sourceLabel: 'AI · '" in qa
+    assert '@app.route("/fs/qa/deep-scan"' in app
+    assert 'enqueue_llm(\n            "qa",' in app
+    assert 'if client == "qa":' in runner
+    assert '"operation": "qa_deep_scan"' in contract
+    assert '"response_schema": _response_schema()' in contract
+    assert "window.openAssistant({ mode: 'review-dataset' })" not in qa
 
 
 def test_qa_isolated_styles_keep_large_editorial_typography():

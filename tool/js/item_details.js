@@ -1628,8 +1628,9 @@ function refreshMediaResolutionCache(options) {
         var checkedCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Checked') || 0);
         var pendingCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Pending') || 0);
         var optionalWarningsHeader = xhr.getResponseHeader('X-WebCap-Optional-Analysis-Warnings') || '';
+        var optionalWarnings = [];
         if (optionalWarningsHeader) {
-          var optionalWarnings = JSON.parse(optionalWarningsHeader);
+          optionalWarnings = JSON.parse(optionalWarningsHeader);
           (optionalWarnings || []).forEach(function (warning) {
             var message = String(warning || '').trim();
             if (!message || reportedOptionalAnalysisWarnings[message]) return;
@@ -1669,7 +1670,8 @@ function refreshMediaResolutionCache(options) {
           rows: rows,
           generated: generatedCount,
           checked: checkedCount,
-          pending: pendingCount
+          pending: pendingCount,
+          warnings: optionalWarnings.slice()
         });
       } catch (e) {
         mediaMetadataLoading = false;

@@ -35,7 +35,9 @@
     scopeKey: '',
     parentFocusSet: undefined,
     returnFindingId: '',
-    statusMessage: ''
+    statusMessage: '',
+    externalAnalysisAttemptKey: '',
+    externalAnalysisRunning: false
   };
 
   function qaCloneFocusSet(focusSet) {
@@ -86,6 +88,44 @@
       String(state.folder || ''),
       (items || []).map(function (item) { return item.fileName; }).join('\n')
     ].join('\u0001');
+  }
+
+  function qaPrimeDeterministicSources(items) {
+    var scopeKey = qaBuildScopeKey(items);
+    if (!items.length || qaWorkbenchState.externalAnalysisAttemptKey === scopeKey) return;
+    qaWorkbenchState.externalAnalysisAttemptKey = scopeKey;
+
+    var scopeFiles = items.map(function (item) {
+      return String(item && item.fileName || '');
+    }).filter(Boolean);
+    var pruneReady = state.pruneCandidatesStatus === 'ready'
+      && state.pruneCandidatesFolder === String(state.folder || '')
+      && state.pruneCandidatesScopeKey === pruneCandidateScopeKey(scopeFiles);
+    var duplicateReady = state.duplicateCandidatesStatus === 'ready'
+      && state.duplicateCandidatesFolder === String(state.folder || '')
+      && state.duplicateCandidatesScopeKey === duplicateCandidateScopeKey(scopeFiles);
+    var jobs = [];
+
+    if (!pruneReady) {
+      jobs.push(ensurePruneCandidatesForCurrentFolder(false).catch(function (err) {
+        reportConsoleError('QA · Prune analysis', err);
+        return [];
+      }));
+    }
+    if (!duplicateReady) {
+      jobs.push(ensureDuplicateCandidatesForCurrentFolder(false).catch(function (err) {
+        reportConsoleError('QA · Duplicate analysis', err);
+        return [];
+      }));
+    }
+    if (!jobs.length) return;
+
+    qaWorkbenchState.externalAnalysisRunning = true;
+    Promise.all(jobs).then(function () {
+      qaWorkbenchState.externalAnalysisRunning = false;
+      if (qaBuildScopeKey(qaGetTrainingItems()) !== scopeKey) return;
+      renderQaWorkbench(true);
+    });
   }
 
   function qaRequestJson(url, options) {
@@ -1415,6 +1455,8 @@
     if (reviewWorkspaceState.detailTab !== 'qa') return;
     var root = document.getElementById('qa-workbench');
     if (!root) throw new Error('QA workbench root is missing.');
+    var currentItems = qaGetTrainingItems();
+    qaPrimeDeterministicSources(currentItems);
     var data = qaRefreshComputedState(!!force);
     if (qaWorkbenchState.view === 'browse') {
       qaRenderBrowse(root, data.items);
@@ -1606,6 +1648,7 @@
   window.addEventListener('webcap:media-metadata-updated', function (event) {
     var detail = event && event.detail ? event.detail : {};
     if (String(detail.folder || '') !== String(state.folder || '')) return;
+    qaWorkbenchState.externalAnalysisAttemptKey = '';
     if (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput') return;
     if (reviewWorkspaceState.detailTab !== 'qa') return;
     renderQaWorkbench(true);

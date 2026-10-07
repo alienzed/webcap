@@ -9,7 +9,7 @@
     files: [],
     visionModel: '',
     currentVisionJobId: '',
-    rawResponses: [],
+    currentRawResponse: null,
     completed: 0,
     total: 0,
     phase: 'idle'
@@ -55,10 +55,14 @@
     if (setScanState.phase === 'complete') percent = 100;
     progressFill.style.width = String(percent) + '%';
 
-    details.classList.toggle('hidden', !setScanState.rawResponses.length);
-    output.textContent = setScanState.rawResponses.map(function (entry) {
-      return '--- ' + String(entry.file || '') + ' ---\n' + String(entry.text || '');
-    }).join('\n\n');
+    var currentRaw = setScanState.currentRawResponse;
+    details.classList.toggle('hidden', !currentRaw);
+    if (currentRaw) {
+      details.open = true;
+      output.textContent = '--- ' + String(currentRaw.file || '') + ' ---\n' + String(currentRaw.text || '');
+    } else {
+      output.textContent = '';
+    }
   }
 
   function setSetIntelligenceStatus(title, message) {
@@ -70,11 +74,11 @@
     renderSetIntelligence();
   }
 
-  function appendRawResponse(fileName, text) {
-    setScanState.rawResponses.push({
+  function showRawResponse(fileName, text) {
+    setScanState.currentRawResponse = {
       file: String(fileName || ''),
       text: String(text || '')
-    });
+    };
     renderSetIntelligence();
   }
 
@@ -141,7 +145,7 @@
     }).then(function (result) {
       if (result === false || setScanState.stopRequested) return false;
       if (!result) return true;
-      appendRawResponse(fileName, result.text);
+      showRawResponse(fileName, result.text);
       if (!result.sight) {
         reportConsoleError(
           'Set Intelligence',
@@ -209,7 +213,7 @@
     setScanState.running = true;
     setScanState.stopRequested = false;
     setScanState.currentVisionJobId = '';
-    setScanState.rawResponses = [];
+    setScanState.currentRawResponse = null;
     el('set-scan-details').open = false;
     setScanState.completed = 0;
     setScanState.total = 0;

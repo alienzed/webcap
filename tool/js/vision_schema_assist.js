@@ -808,7 +808,7 @@
 
   function applyGuidedTagPassStep() {
     var step = getGuidedTagPassStep();
-    if (!step || typeof mediaGridState === 'undefined' || !mediaGridState.open) return;
+    if (!step || !mediaGridState.open) return;
     var selected = new Set();
     step.highFiles.forEach(function (fileName) {
       var item = findMediaItem(fileName);
@@ -833,7 +833,6 @@
     schemaState.open = false;
     schemaState.guidedLaunch = false;
     render();
-    if (typeof mediaGridState === 'undefined') throw new Error('Media Grid state is not available for Guided Tag Pass.');
     if (!mediaGridState.open) openMediaGridSurface();
     applyGuidedTagPassStep();
     setStatus('');
@@ -860,7 +859,7 @@
     var opts = options || {};
     var hadPass = !!schemaState.guidedPass;
     schemaState.guidedPass = null;
-    if (hadPass && opts.keepGridOpen !== false && typeof mediaGridState !== 'undefined' && mediaGridState.open) {
+    if (hadPass && opts.keepGridOpen !== false && mediaGridState.open) {
       mediaGridSetStatus(opts.completed ? 'Guided Tag Pass complete.' : 'Guided Tag Pass ended.');
       renderMediaGridSurface();
     }
@@ -874,7 +873,7 @@
     if (!bar || !progress || !label || !launchBtn) throw new Error('Guided Tag Pass Grid controls are missing.');
     var pass = schemaState.guidedPass;
     var step = getGuidedTagPassStep();
-    var canLaunch = typeof isSetFolderPath === 'function' && isSetFolderPath(state && state.folder);
+    var canLaunch = isSetFolderPath(state && state.folder);
     bar.classList.toggle('hidden', !pass || !step);
     launchBtn.classList.toggle('hidden', !!pass || !canLaunch);
     if (!pass || !step) return;
@@ -1048,7 +1047,7 @@
 
   function guidedScopeFiles(options) {
     var opts = options || {};
-    if (opts.source === 'grid' && typeof mediaGridState !== 'undefined' && mediaGridState.open) {
+    if (opts.source === 'grid' && mediaGridState.open) {
       return (mediaGridState.items || []).map(function (item) {
         return String(item && item.fileName || '');
       }).filter(Boolean);

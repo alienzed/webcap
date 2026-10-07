@@ -194,6 +194,22 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
+    if client == "qa":
+        operation = str((frozen_contract or {}).get("operation") or "").strip()
+        if operation != "qa_deep_scan":
+            raise RuntimeError("Unsupported QA LLM operation: " + (operation or "empty"))
+        from .qa_llm_contract import normalize_result
+        return {
+            "analysis": normalize_result(
+                llm_result.get("data"),
+                allowed_files=(frozen_contract or {}).get("source_files") or [],
+            ),
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if client == "test":
         operation = str((frozen_contract or {}).get("operation") or "").strip()
         if operation != "analyze_caption_wildcard":
@@ -703,7 +719,7 @@ def enqueue(client, model_id, contract, context=None, label=""):
     _ensure_execution_reconciled()
     client = str(client or "").strip()
     model_id = str(model_id or "").strip()
-    if client not in {"storyboard", "generate", "test", "chat", "caption"}:
+    if client not in {"storyboard", "generate", "test", "qa", "chat", "caption"}:
         raise ValueError("Unsupported LLM client: " + (client or "empty"))
     if not model_id:
         raise ValueError("LLM model is required.")

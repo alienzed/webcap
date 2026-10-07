@@ -1177,6 +1177,50 @@ def director_job_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/qa/deep-scan", methods=["POST"])
+def qa_deep_scan_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        items = data.get("items")
+        if not isinstance(items, list) or not items:
+            raise ValueError("QA Deep Scan requires the current training selection.")
+
+        folder = str(data.get("folder") or "").strip()
+        available_files = set(list_media_files(folder))
+        requested_files = [
+            str(item.get("fileName") or "").strip()
+            for item in items
+            if isinstance(item, dict)
+        ]
+        unknown_files = [
+            file_name for file_name in requested_files
+            if not file_name or file_name not in available_files
+        ]
+        if unknown_files:
+            raise ValueError(
+                "QA Deep Scan scope contains media that is not in the current Set: "
+                + ", ".join(unknown_files[:10])
+            )
+
+        from .qa_llm_contract import build_request as build_qa_llm_request
+        contract = build_qa_llm_request(
+            items,
+            training_focus=data.get("trainingFocus"),
+            deterministic_findings=data.get("deterministicFindings"),
+        )
+        job = enqueue_llm(
+            "qa",
+            str(data.get("model") or "").strip(),
+            contract,
+            context={},
+            label="QA Deep Scan",
+        )
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("QA DEEP SCAN FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/director/chat", methods=["POST"])
 def director_chat_route():
     data = request.get_json(silent=True) or {}

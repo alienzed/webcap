@@ -114,6 +114,13 @@ def test_only_the_surface_grid_and_viewer_remain():
     assert ".app.shell-revamp.workspace-surface-grid .preview-shell > :not(#media-grid-surface)" in css
 
 
+def test_media_grid_selection_highlight_is_visually_strong():
+    css = _read("tool/css/media_grid.css")
+
+    assert ".media-grid-tile.selected .media-grid-thumb-wrap" in css
+    assert "inset 0 0 0 4px" in css
+
+
 def test_grid_initializes_after_all_classic_scripts_are_loaded():
     actions = _read("tool/js/media_grid_actions.js")
 

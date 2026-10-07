@@ -1183,15 +1183,14 @@
       var structured = (payload.items || []).filter(function (item) {
         return !!wanted[String(item.file || '')] && !!item.structured;
       }).length;
-      if (structured < schemaState.scopeFiles.length) {
-        setStatus(
-          'Set Scan is incomplete for this Vision model (' + String(structured) + ' / ' +
-          String(schemaState.scopeFiles.length) + '). Run Set Intelligence from Set Tools first.',
-          true
-        );
+      if (!structured) {
+        setStatus('Guided Tagging needs at least one usable Set Intelligence result for this Vision model.', true);
         return;
       }
-      setStatus('Set intelligence ready. Building Guided Tag Pass…');
+      setStatus(
+        'Using Set intelligence for ' + String(structured) + ' of ' +
+        String(schemaState.scopeFiles.length) + ' media. Building Guided Tag Pass…'
+      );
       runTagSuggestions();
     }).catch(function (err) {
       setStatus('Could not start Guided Tag Pass: ' + String(err && err.message ? err.message : err), true);

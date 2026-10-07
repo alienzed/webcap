@@ -399,7 +399,7 @@
     if (!fill || !text) throw new Error('Schema Assist progress controls are missing.');
     fill.style.width = percent.toFixed(1) + '%';
     text.textContent = total
-      ? (String(cached) + ' / ' + String(total) + ' visible media have structured Sight for ' + (schemaState.visionModel || 'the selected Vision model'))
+      ? (String(cached) + ' / ' + String(total) + ' Set media have structured Sight for ' + (schemaState.visionModel || 'the selected Vision model'))
       : 'No supported media in this Set.';
   }
 
@@ -420,7 +420,7 @@
     modal.classList.toggle('vision-schema-guided', !!schemaState.guidedLaunch);
     title.textContent = schemaState.guidedLaunch ? 'Guided Tag Pass' : 'Discover Vocabulary';
     subtitle.textContent = schemaState.guidedLaunch
-      ? 'Review raw Vision output before building an existing-vocabulary pass.'
+      ? 'Use current Set intelligence to build an existing-vocabulary pass in Grid.'
       : 'Find recurring concepts and decide what belongs in this Set\'s vocabulary.';
     body.classList.toggle('hidden', schemaState.guidedLaunch);
 
@@ -430,13 +430,6 @@
     progressWrap.classList.toggle('hidden', hasVocabularyReview);
 
     stopBtn.classList.toggle('hidden', !schemaBusy);
-
-    var scope = {};
-    (schemaState.scopeFiles || []).forEach(function (fileName) { scope[String(fileName || '')] = true; });
-    var scopedStructured = ((schemaState.statusPayload && schemaState.statusPayload.items) || []).filter(function (item) {
-      return (!schemaState.scopeFiles.length || !!scope[String(item.file || '')]) && !!item.structured;
-    }).length;
-    var scopedTotal = schemaState.scopeFiles.length;
 
     var heading = el('vision-schema-proposal-heading');
     var headingNote = el('vision-schema-proposal-note');

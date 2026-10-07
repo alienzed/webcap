@@ -808,15 +808,13 @@
 
   function applyGuidedTagPassStep() {
     var step = getGuidedTagPassStep();
-    if (!step || !mediaGridState.open) return;
+    if (!step || !mediaGridIsOpen()) return;
     var selected = new Set();
     step.highFiles.forEach(function (fileName) {
       var item = findMediaItem(fileName);
       if (item && item.key) selected.add(item.key);
     });
-    mediaGridState.selectedKeys = selected;
-    mediaGridState.lastSelectedKey = selected.size ? Array.from(selected)[selected.size - 1] : '';
-    renderMediaGridSurface();
+    mediaGridReplaceSelection(Array.from(selected));
   }
 
   function startGuidedTagPass(result) {
@@ -833,7 +831,7 @@
     schemaState.open = false;
     schemaState.guidedLaunch = false;
     render();
-    if (!mediaGridState.open) openMediaGridSurface();
+    if (!mediaGridIsOpen()) openMediaGridSurface();
     applyGuidedTagPassStep();
     setStatus('');
     return true;
@@ -859,7 +857,7 @@
     var opts = options || {};
     var hadPass = !!schemaState.guidedPass;
     schemaState.guidedPass = null;
-    if (hadPass && opts.keepGridOpen !== false && mediaGridState.open) {
+    if (hadPass && opts.keepGridOpen !== false && mediaGridIsOpen()) {
       mediaGridSetStatus(opts.completed ? 'Guided Tag Pass complete.' : 'Guided Tag Pass ended.');
       renderMediaGridSurface();
     }
@@ -1047,10 +1045,8 @@
 
   function guidedScopeFiles(options) {
     var opts = options || {};
-    if (opts.source === 'grid' && mediaGridState.open) {
-      return (mediaGridState.items || []).map(function (item) {
-        return String(item && item.fileName || '');
-      }).filter(Boolean);
+    if (opts.source === 'grid' && mediaGridIsOpen()) {
+      return mediaGridGetVisibleFileNamesSnapshot();
     }
     return getVisibleMediaSelectionForTraining();
   }

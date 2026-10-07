@@ -157,6 +157,16 @@ function mediaGridGetFolderName() {
   return folder.split('/').pop();
 }
 
+function mediaGridIsOpen() {
+  return !!mediaGridState.open;
+}
+
+function mediaGridGetVisibleFileNamesSnapshot() {
+  return (Array.isArray(mediaGridState.items) ? mediaGridState.items : []).map(function (item) {
+    return String(item && item.fileName || '');
+  }).filter(Boolean);
+}
+
 function mediaGridGetSelectedItems() {
   return mediaGridState.items.filter(function (item) {
     return mediaGridState.selectedKeys.has(item.key);

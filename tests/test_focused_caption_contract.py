@@ -368,6 +368,19 @@ def test_focus_caption_vision_phrase_blend_reuses_caption_assist_without_tag_mut
     assert "startFocusedCaptionPrefetch(sourceMediaKey)" in blend
 
 
+def test_caption_assist_runs_vision_qa_when_enabled_outside_focus_mode():
+    primer = _read("tool/js/primer_settings.js")
+
+    start = primer.index("function runCaptionAssist()")
+    end = primer.index("window.repairCaptionAssistCandidate", start)
+    run = primer[start:end]
+    vision_call = run.index("maybeRunCaptionVisionForCandidate(candidate);")
+    focus_branch = run.index("if (isFocusedCaptionOpen()) {")
+
+    assert "if (captionVisionEnabled) {" in run[:focus_branch]
+    assert vision_call < focus_branch
+
+
 def test_focus_vision_checkbox_runs_qa_and_sight_together():
     vision = _read("tool/js/caption_vision.js")
     focus = _read("tool/js/focused_caption.js")

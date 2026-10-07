@@ -10,6 +10,7 @@ The implemented Set intelligence flow now provides QA with normalized evidence f
 Current behavior:
 
 - deterministic QA still works without any LLM or Vision model;
+- QA primes the existing Prune and Duplicate analyzers for its current scope instead of requiring the user to visit those reports first;
 - Face Focus, MediaPipe Selection Pose, Scene Complexity, and cached Vision Sight can be supplied as compact QA evidence;
 - one high-confidence deterministic producer may promote a likely missing known tag only when independent MediaPipe and structured Sight evidence agree;
 - optional Deep QA receives the same normalized evidence alongside captions, grouped tags, flat tags, and deterministic findings;

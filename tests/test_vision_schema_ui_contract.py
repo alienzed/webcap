@@ -54,7 +54,9 @@ def test_schema_assist_keeps_scan_ephemeral_and_schema_mutations_explicit():
     assert "check.disabled = false;" in script
     assert "function canonicalExistingGroup(name)" in script
     assert "function runDiscovery()" in script
-    assert "Run Set Intelligence from Set Tools first." in script
+    assert "Discover Vocabulary needs at least one usable Set Intelligence result" in script
+    assert "Set Intelligence is incomplete for this Vision model" not in script
+    assert "function actionableVocabularyGroups()" in script
     assert "getCurrentSetMediaFileNames()" in script
     assert "function currentVocabularyGroup()" in script
     assert "function skipCurrentVocabularyGroup()" in script

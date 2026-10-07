@@ -1218,13 +1218,14 @@ def encode_media_data_url(relative_media_path):
 
 def prepare_caption_vision_messages(model_ref, messages):
     runtime_id, _model_id = _split_model_ref(model_ref)
-    if runtime_id == "local":
-        return copy.deepcopy(messages)
+    if runtime_id != "local":
+        with _use_runtime(runtime_id):
+            if not _remote_is_ollama():
+                raise ValueError("Remote Vision currently requires an Ollama runtime.")
 
-    with _use_runtime(runtime_id):
-        if not _remote_is_ollama():
-            raise ValueError("Remote Vision currently requires an Ollama runtime.")
-
+    # Send Vision media as self-contained data URLs for every runtime.
+    # llama.cpp router children do not consistently inherit local media-path
+    # access, while data URLs are independent of router filesystem policy.
     prepared = copy.deepcopy(messages)
     for message in prepared if isinstance(prepared, list) else []:
         content = message.get("content") if isinstance(message, dict) else None

@@ -2358,3 +2358,42 @@ def test_normalize_freeform_messages_rejects_data_urls_by_default_and_allows_tru
         allow_image_data_urls=True,
     )
     assert normalized[0]["content"][1]["image_url"]["url"] == "data:image/jpeg;base64,AAAA"
+
+
+def test_prepare_local_caption_vision_messages_embeds_media_bytes(monkeypatch, tmp_path):
+    image = tmp_path / "set" / "item.png"
+    image.parent.mkdir()
+    image.write_bytes(b"png-bytes")
+    monkeypatch.setattr(storyboard_llm_runtime.app_config, "FS_ROOT", tmp_path)
+
+    prepared = storyboard_llm_runtime.prepare_caption_vision_messages(
+        "local::vision",
+        [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Describe."},
+                {"type": "image_url", "image_url": {"url": "file://set/item.png"}},
+            ],
+        }],
+    )
+
+    url = prepared[0]["content"][1]["image_url"]["url"]
+    assert url.startswith("data:image/png;base64,")
+    assert prepared[0]["content"][0]["text"] == "Describe."
+
+
+def test_prepare_local_caption_vision_messages_preserves_existing_data_url():
+    data_url = "data:image/png;base64,Zmlyc3QtZnJhbWU="
+
+    prepared = storyboard_llm_runtime.prepare_caption_vision_messages(
+        "local::vision",
+        [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Describe."},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+        }],
+    )
+
+    assert prepared[0]["content"][1]["image_url"]["url"] == data_url

@@ -10,11 +10,15 @@ From WebCap's perspective, the workflow starts when a set folder exists and cont
 
 1. Open a set folder.
 2. Curate media with explicit, reversible operations.
-3. Caption and review items while filtering or building focus sets.
-4. Open Training and select a model.
-5. Inspect or edit the setup's persistent config and dataset TOMLs.
-6. Leave exactly the desired media visible, then Train, queue, or generate a manual command.
-7. Monitor managed work or run the self-contained command externally, then iterate from the source set as needed.
+3. For AI-assisted annotation work, run **Scan Set** once to build reusable deterministic analysis and optional Vision Sight.
+4. When vocabulary is immature, use **Discover Vocabulary** before materializing tags.
+5. Use normal annotation or **Guided Tag Pass** to apply the mature vocabulary.
+6. Use **Quality Assurance** as the final attention funnel; optional model intelligence augments rather than replaces deterministic QA.
+7. Caption and review items while filtering or building focus sets as needed throughout the workflow.
+8. Open Training and select a model.
+9. Inspect or edit the setup's persistent config and dataset TOMLs.
+10. Leave exactly the desired media visible, then Train, queue, or generate a manual command.
+11. Monitor managed work or run the self-contained command externally, then iterate from the source set as needed.
 
 Each Train action captures visible media, latest captions, exact saved TOMLs, and a run plan into an immutable bundle under its numbered output folder. Later source-set changes affect only future actions.
 

@@ -794,12 +794,14 @@ def vision_schema_assist_route():
                 ),
             })
         if operation == "analyze":
-            return jsonify({"ok": True, "analysis": mine_vision_sight(folder, vision_model)})
+            requested_files = data.get("files") if isinstance(data.get("files"), list) else None
+            return jsonify({"ok": True, "analysis": mine_vision_sight(folder, vision_model, files=requested_files)})
         if operation == "synthesize":
             director_model = str(data.get("directorModel") or "").strip()
             if not director_model:
                 raise ValueError("Select a Director model.")
-            analysis = mine_vision_sight(folder, vision_model)
+            requested_files = data.get("files") if isinstance(data.get("files"), list) else None
+            analysis = mine_vision_sight(folder, vision_model, files=requested_files)
             if int(analysis.get("itemCount") or 0) < 2:
                 raise ValueError("Schema Assist needs structured Vision sight for at least two media items.")
             contract = build_vision_schema_request(analysis, data.get("existingGroups"))

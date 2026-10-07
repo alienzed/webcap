@@ -343,10 +343,15 @@
     });
   }
 
+  function actionableVocabularyGroups() {
+    var groups = actionableVocabularyGroups();
+    return groups.filter(function (group) {
+      return (group.terms || []).some(function (term) { return !term.alreadyExists; });
+    });
+  }
+
   function currentVocabularyGroup() {
-    var groups = schemaState.schema && Array.isArray(schemaState.schema.groups)
-      ? schemaState.schema.groups
-      : [];
+    var groups = actionableVocabularyGroups();
     if (!groups.length) return null;
     var index = Math.max(0, Math.min(Number(schemaState.reviewIndex || 0), groups.length - 1));
     schemaState.reviewIndex = index;
@@ -402,9 +407,7 @@
       return;
     }
 
-    var groups = schemaState.schema && Array.isArray(schemaState.schema.groups)
-      ? schemaState.schema.groups
-      : [];
+    var groups = actionableVocabularyGroups();
     if (!groups.length) {
       var empty = document.createElement('div');
       empty.className = 'vision-schema-empty';
@@ -627,6 +630,7 @@
     }).then(function (finalSchema) {
       if (!finalSchema || schemaState.workStopRequested) return;
       schemaState.schema = finalSchema;
+      schemaState.schema.groups = actionableVocabularyGroups();
       schemaState.reviewIndex = 0;
       schemaState.schemaStarting = false;
       setStatus(finalSchema.groups.length

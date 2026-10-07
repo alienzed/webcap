@@ -111,13 +111,10 @@
       return waitForCaptionAssistJob(payload.job);
     }).then(function (job) {
       setScanState.currentVisionJobId = '';
-      var sight = job && job.result && job.result.sight;
-      if (!sight || !sight.description || !sight.inventory) {
-        throw new Error('Set Intelligence Vision scan completed without structured evidence.');
-      }
       return {
-        sight: sight,
-        text: String(job.result && job.result.text || '')
+        sight: job && job.result && job.result.sight || null,
+        text: String(job && job.result && job.result.text || ''),
+        warning: String(job && job.result && job.result.structureWarning || '')
       };
     });
   }
@@ -139,9 +136,22 @@
     return requestSight(folder, model, fileName).then(function (result) {
       if (setScanState.stopRequested) return false;
       appendRawResponse(fileName, result.text);
+      if (!result.sight) {
+        reportConsoleError(
+          'Set Intelligence',
+          new Error(result.warning || ('Vision returned unstructured evidence for ' + fileName + '.'))
+        );
+        return true;
+      }
       return saveSight(folder, model, fileName, result.sight);
     }).then(function (saved) {
       if (saved === false || setScanState.stopRequested) return false;
+      setScanState.completed = index + 1;
+      return scanNext(pending, index + 1, folder, model);
+    }).catch(function (err) {
+      setScanState.currentVisionJobId = '';
+      if (setScanState.stopRequested) return false;
+      reportConsoleError('Set Intelligence item ' + fileName, err);
       setScanState.completed = index + 1;
       return scanNext(pending, index + 1, folder, model);
     });

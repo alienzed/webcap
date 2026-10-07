@@ -3227,6 +3227,12 @@ html[data-theme="dark"] .app-settings-environment-check {
   gap: 8px;
 }
 
+.vision-schema-continue-btn {
+  padding: 9px 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 @media (max-width: 900px) {
   .vision-schema-dialog {
     width: calc(100vw - 24px);

@@ -62,6 +62,22 @@
     }).filter(function (row) { return !!row.group; });
   }
 
+
+  function currentAssignmentsPayload(files) {
+    var out = {};
+    (files || []).forEach(function (fileName) {
+      var item = findMediaItem(fileName);
+      var entries = item && item.key ? getChecklistAssignmentEntriesForMediaKey(item.key) : [];
+      out[String(fileName || '')] = entries.map(function (entry) {
+        return {
+          group: String(entry && entry.requirement || ''),
+          term: String(entry && entry.term || '')
+        };
+      }).filter(function (entry) { return entry.group && entry.term; });
+    });
+    return out;
+  }
+
   function schemaStatusUrl(folder, model) {
     return '/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model);
   }
@@ -586,6 +602,166 @@
     });
   }
 
+  function runTagSuggestions() {
+    if (schemaState.scanRunning || schemaState.schemaStarting || schemaState.schemaJobId) return;
+    var director = currentDirectorModel();
+    if (!director) {
+      setStatus('Select a Director model first.', true);
+      return;
+    }
+
+    var files = getVisibleMediaSelectionForTraining();
+    if (!files.length) {
+      setStatus('No visible media to analyze.', true);
+      return;
+    }
+
+    var folder = schemaState.folder;
+    var visionModel = schemaState.visionModel;
+    var token = schemaState.schemaRequestToken + 1;
+    schemaState.schemaRequestToken = token;
+    schemaState.scopeFiles = files.slice();
+    schemaState.scanStopRequested = false;
+    schemaState.schemaStarting = true;
+    schemaState.mode = 'tags';
+    schemaState.tagCandidates = null;
+    setStatus('Mapping structured Sight onto existing groups and tags…');
+    render();
+
+    requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'suggest_tags',
+        folder: folder,
+        visionModel: visionModel,
+        directorModel: director,
+        files: files,
+        existingGroups: existingGroupsPayload(),
+        currentAssignments: currentAssignmentsPayload(files)
+      })
+    }).then(function (payload) {
+      var jobId = String(payload.job && payload.job.jobId || '');
+      if (!jobId) throw new Error('Vision Tag Assist did not return a queued job.');
+      if (
+        token !== schemaState.schemaRequestToken ||
+        schemaState.scanStopRequested ||
+        !schemaState.open ||
+        folder !== schemaState.folder ||
+        visionModel !== schemaState.visionModel
+      ) {
+        schemaState.schemaStarting = false;
+        return cancelCaptionAssistJob(jobId).then(function () { return null; });
+      }
+      schemaState.schemaStarting = false;
+      schemaState.schemaJobId = jobId;
+      render();
+      return waitForCaptionAssistJob(payload.job);
+    }).then(function (job) {
+      if (!job || token !== schemaState.schemaRequestToken) return;
+      schemaState.schemaJobId = '';
+      if (!schemaState.open || folder !== schemaState.folder || visionModel !== schemaState.visionModel) return;
+      var result = job.result && job.result.tagCandidates;
+      if (!result || !Array.isArray(result.items)) {
+        throw new Error('Vision Tag Assist completed without structured candidates.');
+      }
+      schemaState.tagCandidates = result;
+      var candidateCount = result.items.reduce(function (total, item) {
+        return total + (Array.isArray(item.candidates) ? item.candidates.length : 0);
+      }, 0);
+      setStatus(
+        candidateCount
+          ? ('Found ' + String(candidateCount) + ' candidate tag' + (candidateCount === 1 ? '' : 's') + ' across ' + String(result.items.length) + ' media.')
+          : 'No confident missing tags found for the visible media.'
+      );
+      render();
+    }).catch(function (err) {
+      if (token !== schemaState.schemaRequestToken) return;
+      schemaState.schemaStarting = false;
+      schemaState.schemaJobId = '';
+      if (schemaState.scanStopRequested) {
+        setStatus('Vision Tag Assist stopped.');
+      } else {
+        setStatus('Vision Tag Assist failed: ' + String(err && err.message ? err.message : err), true);
+        reportConsoleError('Vision Tag Assist', err);
+      }
+      render();
+    });
+  }
+
+  function selectedTagCandidates() {
+    var result = schemaState.tagCandidates;
+    var items = result && Array.isArray(result.items) ? result.items : [];
+    var selected = [];
+    var cards = el('vision-schema-proposals').querySelectorAll('.vision-tag-item-card');
+    Array.prototype.forEach.call(cards, function (card) {
+      var fileName = String(card.dataset.file || '');
+      var source = items.find(function (item) { return String(item.file || '') === fileName; });
+      if (!source) return;
+      Array.prototype.forEach.call(card.querySelectorAll('.vision-tag-candidate-row'), function (row) {
+        var check = row.querySelector('.vision-tag-candidate-check');
+        if (!check || !check.checked) return;
+        var index = Number(row.dataset.candidateIndex);
+        var candidate = source.candidates && source.candidates[index];
+        if (!candidate) return;
+        selected.push({
+          file: fileName,
+          group: String(candidate.group || ''),
+          term: String(candidate.term || ''),
+          existing: !!candidate.existing
+        });
+      });
+    });
+    return selected;
+  }
+
+  function applySelectedTags() {
+    var selected = selectedTagCandidates();
+    if (!selected.length) {
+      setStatus('Select at least one candidate tag to apply.', true);
+      return;
+    }
+
+    var newTermsByGroup = {};
+    selected.forEach(function (candidate) {
+      if (candidate.existing) return;
+      if (!newTermsByGroup[candidate.group]) newTermsByGroup[candidate.group] = [];
+      if (newTermsByGroup[candidate.group].indexOf(candidate.term) === -1) {
+        newTermsByGroup[candidate.group].push(candidate.term);
+      }
+    });
+    var vocabularyMutations = Object.keys(newTermsByGroup).map(function (group) {
+      return { group: group, create: false, terms: newTermsByGroup[group] };
+    });
+    var merged = vocabularyMutations.length
+      ? mergeChecklistSchemaVocabulary(vocabularyMutations)
+      : { addedTerms: 0 };
+
+    var applied = 0;
+    selected.forEach(function (candidate) {
+      var item = findMediaItem(candidate.file);
+      if (!item || !item.key) throw new Error('Could not find media item for tag candidate: ' + candidate.file);
+      if (assignChecklistTagToMediaKey(item.key, candidate.group, candidate.term, { skipRefresh: true })) {
+        applied += 1;
+      }
+    });
+
+    refreshCurrentPrimerDerivedUi();
+    renderChecklistPanel();
+    renderItemMetadataPanel();
+    renderAnnotateStrip();
+    renderItemTagsPanel();
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+    renderFocusedAnnotationSurface();
+
+    setStatus(
+      'Applied ' + String(applied) + ' tag' + (applied === 1 ? '' : 's') +
+      (Number(merged.addedTerms || 0) ? (' and added ' + String(merged.addedTerms) + ' new vocabulary term' + (Number(merged.addedTerms) === 1 ? '' : 's')) : '') + '.'
+    );
+    schemaState.tagCandidates = null;
+    render();
+  }
+
   function canonicalExistingGroup(name) {
     var wanted = String(name || '').trim().toLowerCase();
     if (!wanted) return '';
@@ -626,6 +802,10 @@
   }
 
   function applySelected() {
+    if (schemaState.mode === 'tags') {
+      applySelectedTags();
+      return;
+    }
     var mutations = selectedProposalMutations();
     if (!mutations.length) {
       setStatus('Select at least one proposed term to merge.', true);
@@ -656,13 +836,16 @@
     schemaState.open = true;
     schemaState.folder = folder;
     schemaState.visionModel = model;
+    schemaState.scopeFiles = getVisibleMediaSelectionForTraining();
     schemaState.scanStopRequested = false;
     schemaState.schema = null;
+    schemaState.tagCandidates = null;
+    schemaState.mode = 'tags';
     schemaState.analysis = null;
     render();
     setStatus('Loading current Sight coverage…');
     refreshStatus().then(function () {
-      if (schemaState.statusPayload && schemaState.statusPayload.cached) return analyze();
+      if (schemaState.statusPayload && schemaState.statusPayload.structured) return analyze();
       return null;
     }).catch(function (err) {
       setStatus('Could not load Schema Assist: ' + String(err && err.message ? err.message : err), true);
@@ -682,16 +865,22 @@
     var scanBtn = el('vision-schema-scan-btn');
     var stopBtn = el('vision-schema-stop-btn');
     var suggestBtn = el('vision-schema-suggest-btn');
+    var tagBtn = el('vision-schema-tags-btn');
     var applyBtn = el('vision-schema-apply-btn');
     var modal = el('vision-schema-modal');
-    if (!openBtn || !closeBtn || !scanBtn || !stopBtn || !suggestBtn || !applyBtn || !modal) {
+    if (!openBtn || !closeBtn || !scanBtn || !stopBtn || !suggestBtn || !tagBtn || !applyBtn || !modal) {
       throw new Error('Schema Assist controls are missing.');
     }
     openBtn.onclick = open;
     closeBtn.onclick = close;
     scanBtn.onclick = runScan;
     stopBtn.onclick = stopWork;
-    suggestBtn.onclick = runSuggestions;
+    suggestBtn.onclick = function () {
+      schemaState.mode = 'vocabulary';
+      render();
+      runSuggestions();
+    };
+    tagBtn.onclick = runTagSuggestions;
     applyBtn.onclick = applySelected;
     modal.addEventListener('click', function (event) {
       if (event.target === modal) close();

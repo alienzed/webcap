@@ -48,6 +48,7 @@ def _response_schema():
                         "rationale": {"type": "string"},
                         "terms": {
                             "type": "array",
+                            "minItems": 1,
                             "maxItems": 24,
                             "items": {
                                 "type": "object",
@@ -197,72 +198,152 @@ def normalize_result(data, sight_evidence=None, existing_groups=None):
     existing = _normalize_existing_groups(existing_groups)
     existing_by_key = {row["group"].casefold(): row for row in existing}
     normalized_groups = []
-    seen_groups = set()
+    groups_by_key = {}
 
-    for raw_group in data["groups"][:16]:
+    def normalized_term_payload(term, evidence_ids, existing_terms):
+        support_media = set()
+        labels = []
+        categories = []
+        for evidence_id in evidence_ids:
+            row = evidence[evidence_id]
+            support_media.update(str(value) for value in row.get("media") or [] if str(value))
+            label = _clean(row.get("label"))
+            category = _clean(row.get("category"))
+            if label and label not in labels:
+                labels.append(label)
+            if category and category not in categories:
+                categories.append(category)
+        media = sorted(support_media, key=str.casefold)
+        return {
+            "term": term,
+            "evidenceIds": list(evidence_ids),
+            "support": len(media),
+            "examples": media[:6],
+            "evidence": labels[:6],
+            "evidenceCategories": categories[:6],
+            "alreadyExists": term.casefold() in existing_terms,
+        }
+
+    for group_index, raw_group in enumerate(data["groups"][:16], start=1):
         if not isinstance(raw_group, dict):
-            continue
+            raise ValueError("Schema Assist group {} is not an object.".format(group_index))
+
         name = _clean(raw_group.get("name"), 80)
+        if not name:
+            raise ValueError("Schema Assist group {} has an empty name.".format(group_index))
+
         raw_target = _clean(raw_group.get("targetGroup"), 80)
-        target = existing_by_key.get(raw_target.casefold()) if raw_target else None
-        if target is None and name.casefold() in existing_by_key:
-            target = existing_by_key[name.casefold()]
+        if raw_target:
+            target = existing_by_key.get(raw_target.casefold())
+            if target is None:
+                raise ValueError(
+                    "Schema Assist referenced unknown targetGroup '{}'."
+                    .format(raw_target)
+                )
+        else:
+            target = existing_by_key.get(name.casefold())
+
         effective_name = target["group"] if target else name
         group_key = target["group"].casefold() if target else "new:" + name.casefold()
-        if not effective_name or group_key in seen_groups:
-            continue
-
         existing_terms = {term.casefold() for term in (target or {}).get("terms", [])}
-        terms = []
-        seen_terms = set()
-        raw_terms = raw_group.get("terms") if isinstance(raw_group.get("terms"), list) else []
-        for raw_term in raw_terms[:24]:
+
+        group = groups_by_key.get(group_key)
+        if group is None:
+            group = {
+                "name": effective_name,
+                "targetGroup": target["group"] if target else "",
+                "action": "extend" if target else "new",
+                "rationale": _clean(raw_group.get("rationale"), 500),
+                "terms": [],
+                "_termsByKey": {},
+            }
+            groups_by_key[group_key] = group
+            normalized_groups.append(group)
+        else:
+            rationale = _clean(raw_group.get("rationale"), 500)
+            if rationale and rationale not in group["rationale"]:
+                group["rationale"] = _clean(
+                    (group["rationale"] + " " + rationale).strip(),
+                    500,
+                )
+
+        raw_terms = raw_group.get("terms")
+        if not isinstance(raw_terms, list) or not raw_terms:
+            raise ValueError(
+                "Schema Assist group '{}' contains no term proposals."
+                .format(effective_name)
+            )
+
+        for term_index, raw_term in enumerate(raw_terms[:24], start=1):
             if not isinstance(raw_term, dict):
-                continue
+                raise ValueError(
+                    "Schema Assist term {} in group '{}' is not an object."
+                    .format(term_index, effective_name)
+                )
             term = _clean(raw_term.get("term"), 80)
-            term_key = term.casefold()
+            if not term:
+                raise ValueError(
+                    "Schema Assist term {} in group '{}' is empty."
+                    .format(term_index, effective_name)
+                )
+
+            raw_evidence_ids = raw_term.get("evidenceIds")
+            if not isinstance(raw_evidence_ids, list) or not raw_evidence_ids:
+                raise ValueError(
+                    "Schema Assist term '{}' in group '{}' has no evidence IDs."
+                    .format(term, effective_name)
+                )
+
             evidence_ids = []
-            for raw_id in raw_term.get("evidenceIds") if isinstance(raw_term.get("evidenceIds"), list) else []:
+            unknown_ids = []
+            for raw_id in raw_evidence_ids:
                 evidence_id = str(raw_id or "").strip()
-                if evidence_id in evidence and evidence_id not in evidence_ids:
+                if not evidence_id:
+                    continue
+                if evidence_id not in evidence:
+                    if evidence_id not in unknown_ids:
+                        unknown_ids.append(evidence_id)
+                    continue
+                if evidence_id not in evidence_ids:
                     evidence_ids.append(evidence_id)
-            if not term or term_key in seen_terms or not evidence_ids:
-                continue
 
-            support_media = set()
-            labels = []
-            categories = []
-            for evidence_id in evidence_ids:
-                row = evidence[evidence_id]
-                support_media.update(str(value) for value in row.get("media") or [] if str(value))
-                label = _clean(row.get("label"))
-                category = _clean(row.get("category"))
-                if label and label not in labels:
-                    labels.append(label)
-                if category and category not in categories:
-                    categories.append(category)
-            media = sorted(support_media, key=str.casefold)
-            seen_terms.add(term_key)
-            terms.append({
-                "term": term,
-                "evidenceIds": evidence_ids,
-                "support": len(media),
-                "examples": media[:6],
-                "evidence": labels[:6],
-                "evidenceCategories": categories[:6],
-                "alreadyExists": term_key in existing_terms,
-            })
+            if unknown_ids:
+                raise ValueError(
+                    "Schema Assist term '{}' in group '{}' referenced unknown evidence ID{}: {}."
+                    .format(
+                        term,
+                        effective_name,
+                        "" if len(unknown_ids) == 1 else "s",
+                        ", ".join(unknown_ids),
+                    )
+                )
+            if not evidence_ids:
+                raise ValueError(
+                    "Schema Assist term '{}' in group '{}' has no usable evidence IDs."
+                    .format(term, effective_name)
+                )
 
-        if not terms:
-            continue
-        seen_groups.add(group_key)
-        normalized_groups.append({
-            "name": effective_name,
-            "targetGroup": target["group"] if target else "",
-            "action": "extend" if target else "new",
-            "rationale": _clean(raw_group.get("rationale"), 500),
-            "terms": terms,
-        })
+            term_key = term.casefold()
+            existing_term = group["_termsByKey"].get(term_key)
+            if existing_term is None:
+                normalized = normalized_term_payload(term, evidence_ids, existing_terms)
+                group["_termsByKey"][term_key] = normalized
+                group["terms"].append(normalized)
+            else:
+                merged_ids = list(existing_term["evidenceIds"])
+                for evidence_id in evidence_ids:
+                    if evidence_id not in merged_ids:
+                        merged_ids.append(evidence_id)
+                refreshed = normalized_term_payload(
+                    existing_term["term"],
+                    merged_ids,
+                    existing_terms,
+                )
+                existing_term.clear()
+                existing_term.update(refreshed)
+
+    for group in normalized_groups:
+        group.pop("_termsByKey", None)
 
     existing_order = {
         row["group"].casefold(): index

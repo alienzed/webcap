@@ -51,6 +51,8 @@ def test_set_intelligence_hides_supporting_analyzers_and_raw_output_by_default()
     assert "WebCap analysis</strong>" not in html
     assert "Face Focus, MediaPipe pose" not in html
     assert 'id="set-scan-details"' in html
-    assert '<summary>Scan details</summary>' in html
-    assert "details.classList.toggle('hidden', !setScanState.rawResponses.length);" in scan
+    assert '<summary>Latest Vision response</summary>' in html
+    assert "currentRawResponse" in scan
+    assert "showRawResponse(fileName, result.text);" in scan
+    assert "rawResponses" not in scan
     assert "Next: review the vocabulary" in html

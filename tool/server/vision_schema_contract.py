@@ -212,3 +212,170 @@ def normalize_result(data, sight_evidence=None, existing_groups=None):
         })
 
     return {"version": 2, "groups": normalized_groups}
+
+
+
+def _assignment_response_schema():
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["items"],
+        "properties": {
+            "items": {
+                "type": "array",
+                "maxItems": 80,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["file", "candidates"],
+                    "properties": {
+                        "file": {"type": "string", "minLength": 1},
+                        "candidates": {
+                            "type": "array",
+                            "maxItems": 40,
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["group", "term", "confidence", "why"],
+                                "properties": {
+                                    "group": {"type": "string", "minLength": 1},
+                                    "term": {"type": "string", "minLength": 1},
+                                    "confidence": {
+                                        "type": "string",
+                                        "enum": ["high", "medium"],
+                                    },
+                                    "why": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+            }
+        },
+    }
+
+
+def build_assignment_request(records, existing_groups, current_assignments=None):
+    normalized_existing = _normalize_existing_groups(existing_groups)
+    groups_by_key = {row["group"].casefold(): row for row in normalized_existing}
+    assignments = current_assignments if isinstance(current_assignments, dict) else {}
+    compact_items = []
+    allowed_files = []
+    for raw in records if isinstance(records, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        file_name = str(raw.get("file") or "").strip()
+        description = _clean(raw.get("description"), 1200)
+        inventory = raw.get("inventory") if isinstance(raw.get("inventory"), dict) else {}
+        if not file_name or not description:
+            continue
+        allowed_files.append(file_name)
+        compact_items.append({
+            "file": file_name,
+            "description": description,
+            "inventory": inventory,
+            "currentAssignments": assignments.get(file_name) if isinstance(assignments.get(file_name), list) else [],
+        })
+
+    if not compact_items:
+        raise ValueError("Tag Assist needs structured Sight for at least one media item.")
+    if not normalized_existing:
+        raise ValueError("Tag Assist needs at least one configured annotation group.")
+
+    payload = {
+        "groups": normalized_existing,
+        "items": compact_items,
+    }
+    prompt = (
+        "[ROLE]\n"
+        "You map visual Sight evidence onto WebCap's mature annotation vocabulary. "
+        "The supplied group names define semantic dimensions. Existing terms are preferred whenever they accurately describe what is visible.\n\n"
+        "[GOAL]\n"
+        "For each media item, return only tags that a human can confidently add from the supplied visual evidence. "
+        "Use an exact existing term when one fits. When an important clearly visible concept belongs to a supplied group but no existing term expresses it, "
+        "you may propose a concise new term for that same group. Do not create new groups.\n\n"
+        "[BOUNDARIES]\n"
+        "- Sight evidence is authoritative; do not infer facts merely because a term exists in the vocabulary.\n"
+        "- Do not repeat tags already present in currentAssignments.\n"
+        "- Prefer high confidence. Use medium only when useful and visually well supported. Omit weak or speculative candidates.\n"
+        "- Respect the group meaning. A term must belong semantically to the exact group you name.\n"
+        "- Preserve existing term spelling exactly when using existing vocabulary.\n"
+        "- New terms should be short reusable vocabulary, not prose.\n"
+        "- Empty candidates is a successful result when nothing should be added.\n\n"
+        "[INPUT]\n"
+        + json.dumps(payload, ensure_ascii=False)
+        + "\n\n[OUTPUT]\nReturn only JSON matching the supplied schema."
+    )
+    return {
+        "operation": "vision_tag_suggest",
+        "output": "json",
+        "prompt": prompt,
+        "response_schema": _assignment_response_schema(),
+        "existing_groups": normalized_existing,
+        "source_files": allowed_files,
+        "current_assignments": assignments,
+    }
+
+
+def normalize_assignment_result(data, existing_groups=None, allowed_files=None, current_assignments=None):
+    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        raise ValueError("Tag Assist response is missing its items array.")
+
+    existing = _normalize_existing_groups(existing_groups)
+    group_by_key = {row["group"].casefold(): row for row in existing}
+    allowed = {
+        str(value or "").strip()
+        for value in (allowed_files or [])
+        if str(value or "").strip()
+    }
+    assigned = current_assignments if isinstance(current_assignments, dict) else {}
+    out = []
+    seen_files = set()
+
+    for raw_item in data["items"]:
+        if not isinstance(raw_item, dict):
+            continue
+        file_name = str(raw_item.get("file") or "").strip()
+        if not file_name or (allowed and file_name not in allowed) or file_name in seen_files:
+            continue
+        seen_files.add(file_name)
+
+        existing_assigned = set()
+        for row in assigned.get(file_name) if isinstance(assigned.get(file_name), list) else []:
+            if not isinstance(row, dict):
+                continue
+            group = _clean(row.get("group"))
+            term = _clean(row.get("term"))
+            if group and term:
+                existing_assigned.add((group.casefold(), term.casefold()))
+
+        candidates = []
+        seen = set()
+        for raw in raw_item.get("candidates") if isinstance(raw_item.get("candidates"), list) else []:
+            if not isinstance(raw, dict):
+                continue
+            raw_group = _clean(raw.get("group"), 80)
+            target = group_by_key.get(raw_group.casefold())
+            term = _clean(raw.get("term"), 80)
+            confidence = str(raw.get("confidence") or "").strip().lower()
+            why = _clean(raw.get("why"), 240)
+            if target is None or not term or confidence not in {"high", "medium"}:
+                continue
+
+            exact_terms = {value.casefold(): value for value in target["terms"]}
+            canonical = exact_terms.get(term.casefold(), term)
+            key = (target["group"].casefold(), canonical.casefold())
+            if key in seen or key in existing_assigned:
+                continue
+            seen.add(key)
+            candidates.append({
+                "group": target["group"],
+                "term": canonical,
+                "existing": canonical.casefold() in exact_terms,
+                "confidence": confidence,
+                "why": why,
+            })
+
+        out.append({"file": file_name, "candidates": candidates})
+
+    return {"version": 1, "items": out}

@@ -378,4 +378,18 @@ def normalize_assignment_result(data, existing_groups=None, allowed_files=None, 
 
         out.append({"file": file_name, "candidates": candidates})
 
-    return {"version": 1, "items": out}
+    by_file = {row["file"]: row for row in out}
+    ordered = []
+    for file_name in (allowed_files or []):
+        file_name = str(file_name or "").strip()
+        if file_name and file_name in allowed:
+            ordered.append(by_file.get(file_name, {"file": file_name, "candidates": []}))
+    if not ordered:
+        ordered = out
+    for row in ordered:
+        row["candidates"].sort(key=lambda candidate: (
+            0 if candidate["confidence"] == "high" else 1,
+            candidate["group"].casefold(),
+            candidate["term"].casefold(),
+        ))
+    return {"version": 1, "items": ordered}

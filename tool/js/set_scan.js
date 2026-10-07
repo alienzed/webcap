@@ -213,6 +213,7 @@
     refreshMediaResolutionCache({
       includeFaceFocus: true,
       includeSelectionPose: true,
+      suppressUpdatedEvent: true,
       successStatus: 'WebCap Set analysis is current.'
     }).then(function (metadataResult) {
       if (!metadataResult || metadataResult.ok === false) {

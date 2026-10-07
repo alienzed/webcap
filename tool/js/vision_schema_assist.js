@@ -133,11 +133,10 @@
       return waitForCaptionAssistJob(payload.job);
     }).then(function (job) {
       schemaState.schemaJobId = '';
-      var sight = job && job.result && job.result.vocabularySight;
-      if (!sight || !Array.isArray(sight.groups) || !Array.isArray(sight.other)) {
-        throw new Error('Vocabulary Vision completed without structured evidence.');
-      }
-      return sight;
+      return {
+        sight: job && job.result && job.result.vocabularySight || null,
+        warning: String(job && job.result && job.result.structureWarning || '')
+      };
     });
   }
 
@@ -157,9 +156,18 @@
     render();
 
     var fileName = pending[index];
-    return requestVocabularySight(folder, model, fileName, groups).then(function (sight) {
+    return requestVocabularySight(folder, model, fileName, groups).catch(function (err) {
+      schemaState.schemaJobId = '';
       if (schemaState.workStopRequested) return false;
-      return saveVocabularySight(folder, model, fileName, groups, sight);
+      reportConsoleError('Discover Vocabulary item ' + fileName, err);
+      return null;
+    }).then(function (result) {
+      if (result === false || schemaState.workStopRequested) return false;
+      if (!result || !result.sight) {
+        if (result && result.warning) reportConsoleError('Discover Vocabulary', new Error(result.warning));
+        return true;
+      }
+      return saveVocabularySight(folder, model, fileName, groups, result.sight);
     }).then(function (saved) {
       if (saved === false || schemaState.workStopRequested) return false;
       schemaState.vocabularyScanIndex = index + 1;
@@ -600,13 +608,13 @@
       var structured = (payload.items || []).filter(function (item) {
         return !!wanted[String(item.file || '')] && !!item.structured;
       }).length;
-      if (structured < schemaState.scopeFiles.length) {
-        throw new Error(
-          'Set Intelligence is incomplete for this Vision model (' + String(structured) + ' / ' +
-          String(schemaState.scopeFiles.length) + '). Run Set Intelligence from Set Tools first.'
-        );
+      if (!structured) {
+        throw new Error('Discover Vocabulary needs at least one usable Set Intelligence result for this Vision model.');
       }
-      setStatus('Open visual evidence is ready. Starting a fresh group-aware visual pass…');
+      setStatus(
+        'Open visual evidence is ready for ' + String(structured) + ' of ' +
+        String(schemaState.scopeFiles.length) + ' items. Starting a fresh group-aware visual pass…'
+      );
       return ensureVocabularySight();
     }).then(function (ready) {
       if (ready === false || schemaState.workStopRequested) return false;

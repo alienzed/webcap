@@ -133,8 +133,14 @@
     );
 
     var fileName = pending[index];
-    return requestSight(folder, model, fileName).then(function (result) {
+    return requestSight(folder, model, fileName).catch(function (err) {
+      setScanState.currentVisionJobId = '';
       if (setScanState.stopRequested) return false;
+      reportConsoleError('Set Intelligence item ' + fileName, err);
+      return null;
+    }).then(function (result) {
+      if (result === false || setScanState.stopRequested) return false;
+      if (!result) return true;
       appendRawResponse(fileName, result.text);
       if (!result.sight) {
         reportConsoleError(
@@ -146,12 +152,6 @@
       return saveSight(folder, model, fileName, result.sight);
     }).then(function (saved) {
       if (saved === false || setScanState.stopRequested) return false;
-      setScanState.completed = index + 1;
-      return scanNext(pending, index + 1, folder, model);
-    }).catch(function (err) {
-      setScanState.currentVisionJobId = '';
-      if (setScanState.stopRequested) return false;
-      reportConsoleError('Set Intelligence item ' + fileName, err);
       setScanState.completed = index + 1;
       return scanNext(pending, index + 1, folder, model);
     });

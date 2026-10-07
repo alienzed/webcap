@@ -8,7 +8,9 @@
     scanRunning: false,
     scanStopRequested: false,
     currentVisionJobId: '',
+    schemaStarting: false,
     schemaJobId: '',
+    schemaRequestToken: 0,
     statusPayload: null,
     analysis: null,
     schema: null,
@@ -259,13 +261,14 @@
       throw new Error('Schema Assist UI is incomplete.');
     }
     modal.classList.toggle('hidden', !schemaState.open);
-    scanBtn.disabled = schemaState.scanRunning || !!schemaState.schemaJobId;
+    var schemaBusy = schemaState.schemaStarting || !!schemaState.schemaJobId;
+    scanBtn.disabled = schemaState.scanRunning || schemaBusy;
     scanBtn.textContent = schemaState.statusPayload && Number(schemaState.statusPayload.cached || 0)
       ? 'Resume / Refresh Sight'
       : 'Scan Set';
-    stopBtn.classList.toggle('hidden', !schemaState.scanRunning && !schemaState.schemaJobId);
-    suggestBtn.disabled = schemaState.scanRunning || !!schemaState.schemaJobId || !(schemaState.statusPayload && Number(schemaState.statusPayload.cached || 0) >= 2);
-    applyBtn.disabled = schemaState.scanRunning || !!schemaState.schemaJobId || !(schemaState.schema && schemaState.schema.groups && schemaState.schema.groups.length);
+    stopBtn.classList.toggle('hidden', !schemaState.scanRunning && !schemaBusy);
+    suggestBtn.disabled = schemaState.scanRunning || schemaBusy || !(schemaState.statusPayload && Number(schemaState.statusPayload.cached || 0) >= 2);
+    applyBtn.disabled = schemaState.scanRunning || schemaBusy || !(schemaState.schema && schemaState.schema.groups && schemaState.schema.groups.length);
     renderProgress();
     renderEvidence();
     renderProposals();
@@ -313,7 +316,7 @@
   }
 
   function runScan() {
-    if (schemaState.scanRunning || schemaState.schemaJobId) return;
+    if (schemaState.scanRunning || schemaState.schemaStarting || schemaState.schemaJobId) return;
     var folder = currentFolder();
     var model = currentVisionModel();
     if (!folder) {
@@ -366,10 +369,12 @@
 
   function stopWork() {
     schemaState.scanStopRequested = true;
+    schemaState.schemaRequestToken += 1;
     var jobs = [];
     if (schemaState.currentVisionJobId) jobs.push(cancelCaptionAssistJob(schemaState.currentVisionJobId));
     if (schemaState.schemaJobId) jobs.push(cancelCaptionAssistJob(schemaState.schemaJobId));
     schemaState.currentVisionJobId = '';
+    schemaState.schemaStarting = false;
     schemaState.schemaJobId = '';
     setStatus('Stopping…');
     Promise.all(jobs).catch(function (err) {
@@ -394,7 +399,7 @@
   }
 
   function runSuggestions() {
-    if (schemaState.scanRunning || schemaState.schemaJobId) return;
+    if (schemaState.scanRunning || schemaState.schemaStarting || schemaState.schemaJobId) return;
     var director = currentDirectorModel();
     if (!director) {
       setStatus('Select a Director model first.', true);
@@ -403,7 +408,10 @@
     var folder = schemaState.folder;
     var visionModel = schemaState.visionModel;
     var groups = existingGroupsPayload();
+    var token = schemaState.schemaRequestToken + 1;
+    schemaState.schemaRequestToken = token;
     schemaState.scanStopRequested = false;
+    schemaState.schemaStarting = true;
     schemaState.schema = null;
     setStatus('Schema Assist organizing recurring visual evidence…');
     render();
@@ -419,12 +427,25 @@
         existingGroups: groups
       })
     }).then(function (payload) {
+      var jobId = String(payload.job && payload.job.jobId || '');
+      if (!jobId) throw new Error('Schema Assist did not return a queued job.');
+      if (
+        token !== schemaState.schemaRequestToken ||
+        schemaState.scanStopRequested ||
+        !schemaState.open ||
+        folder !== schemaState.folder ||
+        visionModel !== schemaState.visionModel
+      ) {
+        schemaState.schemaStarting = false;
+        return cancelCaptionAssistJob(jobId).then(function () { return null; });
+      }
       schemaState.analysis = payload.analysis || schemaState.analysis;
-      schemaState.schemaJobId = String(payload.job && payload.job.jobId || '');
-      if (!schemaState.schemaJobId) throw new Error('Schema Assist did not return a queued job.');
+      schemaState.schemaStarting = false;
+      schemaState.schemaJobId = jobId;
       render();
       return waitForCaptionAssistJob(payload.job);
     }).then(function (job) {
+      if (!job || token !== schemaState.schemaRequestToken) return;
       schemaState.schemaJobId = '';
       if (!schemaState.open || folder !== schemaState.folder || visionModel !== schemaState.visionModel) return;
       var result = job.result && job.result.schema;
@@ -435,6 +456,8 @@
         : 'Schema Assist found no useful vocabulary to add.');
       render();
     }).catch(function (err) {
+      if (token !== schemaState.schemaRequestToken) return;
+      schemaState.schemaStarting = false;
       schemaState.schemaJobId = '';
       if (schemaState.scanStopRequested) {
         setStatus('Schema Assist stopped.');
@@ -491,14 +514,9 @@
       setStatus('Select at least one proposed term to merge.', true);
       return;
     }
-    var addedGroups = 0;
-    var addedTerms = 0;
-    mutations.forEach(function (mutation) {
-      var group = String(mutation.group || '').trim();
-      if (!group) return;
-      if (mutation.create && addChecklistGroup(group)) addedGroups += 1;
-      addedTerms += mergeChecklistKeywordTermsForRequirement(group, mutation.terms).length;
-    });
+    var merged = mergeChecklistSchemaVocabulary(mutations);
+    var addedGroups = Number(merged.addedGroups || 0);
+    var addedTerms = Number(merged.addedTerms || 0);
     setStatus(
       'Merged ' + String(addedTerms) + ' term' + (addedTerms === 1 ? '' : 's') +
       (addedGroups ? (' across ' + String(addedGroups) + ' new group' + (addedGroups === 1 ? '' : 's')) : '') + '.'
@@ -536,7 +554,7 @@
   }
 
   function close() {
-    if (schemaState.scanRunning || schemaState.schemaJobId) stopWork();
+    if (schemaState.scanRunning || schemaState.schemaStarting || schemaState.schemaJobId) stopWork();
     schemaState.open = false;
     render();
   }

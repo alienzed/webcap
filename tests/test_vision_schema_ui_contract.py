@@ -25,11 +25,11 @@ def test_schema_assist_is_contextual_and_reuses_existing_vision_and_schema_paths
     assert "operation: 'synthesize'" in script
     assert "waitForCaptionAssistJob(payload.job)" in script
     assert "cancelCaptionAssistJob(schemaState.currentVisionJobId)" in script
-    assert "addChecklistGroup(group)" in script
-    assert "mergeChecklistKeywordTermsForRequirement(group, mutation.terms)" in script
+    assert "mergeChecklistSchemaVocabulary(mutations)" in script
 
-    assert "function addChecklistGroup(requirementLabel)" in checklist
-    assert "function mergeChecklistKeywordTermsForRequirement(requirementLabel, terms)" in checklist
+    assert "function addChecklistGroup(requirementLabel, options)" in checklist
+    assert "function mergeChecklistKeywordTermsForRequirement(requirementLabel, terms, options)" in checklist
+    assert "function mergeChecklistSchemaVocabulary(mutations)" in checklist
     assert "if (addChecklistGroup(val)) addInput.value = '';" in main
 
 
@@ -39,6 +39,8 @@ def test_schema_assist_keeps_scan_ephemeral_and_schema_mutations_explicit():
     assert "localStorage" not in script
     assert "sessionStorage" not in script
     assert "scanStopRequested" in script
+    assert "schemaStarting" in script
+    assert "schemaRequestToken" in script
     assert "Nothing changes until you apply selected vocabulary." in _read("tool/tool.html")
     assert "check.checked = !term.alreadyExists;" in script
     assert "check.disabled = false;" in script

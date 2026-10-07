@@ -986,7 +986,8 @@ function toggleChecklistRequirementCheckedForMediaKey(mediaKey, requirementLabel
   );
 }
 
-function addChecklistGroup(requirementLabel) {
+function addChecklistGroup(requirementLabel, options) {
+  var opts = options || {};
   var requirement = normalizeChecklistRequirementKey(requirementLabel);
   if (!requirement) return false;
   var exists = (Array.isArray(checklistItems) ? checklistItems : []).some(function (current) {
@@ -997,13 +998,25 @@ function addChecklistGroup(requirementLabel) {
   Object.keys(checklistCheckedByMedia || {}).forEach(function (mediaKey) {
     if (checklistCheckedByMedia[mediaKey]) checklistCheckedByMedia[mediaKey][requirement] = false;
   });
-  refreshChecklistGroupConfigurationUi();
+  if (!opts.skipRefresh) refreshChecklistGroupConfigurationUi();
   return true;
 }
 
-function mergeChecklistKeywordTermsForRequirement(requirementLabel, terms) {
-  var requirement = normalizeChecklistRequirementKey(requirementLabel);
-  if (!requirement) return [];
+function mergeChecklistKeywordTermsForRequirement(requirementLabel, terms, options) {
+  var opts = options || {};
+  var requested = normalizeChecklistRequirementKey(requirementLabel);
+  if (!requested) return [];
+  var requirement = '';
+  (Array.isArray(checklistItems) ? checklistItems : []).some(function (current) {
+    var candidate = normalizeChecklistRequirementKey(current);
+    if (candidate.toLowerCase() !== requested.toLowerCase()) return false;
+    requirement = candidate;
+    return true;
+  });
+  if (!requirement) {
+    throw new Error('Cannot merge vocabulary into an unconfigured group: ' + requested);
+  }
+
   var effective = {};
   getChecklistKeywordTermsForRequirement(requirement).forEach(function (term) {
     effective[normalizeChecklistTerm(term).toLowerCase()] = true;
@@ -1019,17 +1032,45 @@ function mergeChecklistKeywordTermsForRequirement(requirementLabel, terms) {
     added.push(term);
   });
   if (!added.length) return added;
+
   setChecklistKeywordTermsForRequirement(requirement, localTerms);
-  syncReviewedFromChecklistAll();
-  saveChecklistToFolderState();
-  refreshCurrentPrimerDerivedUi();
-  renderChecklistPanel();
-  renderItemMetadataPanel();
-  renderAnnotateStrip();
-  renderItemTagsPanel();
-  if (typeof renderFileList === 'function') renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
-  renderFocusedAnnotationSurface();
+  if (!opts.skipRefresh) {
+    syncReviewedFromChecklistAll();
+    saveChecklistToFolderState();
+    refreshCurrentPrimerDerivedUi();
+    renderChecklistPanel();
+    renderItemMetadataPanel();
+    renderAnnotateStrip();
+    renderItemTagsPanel();
+    renderFileList(ui && ui.filterEl ? ui.filterEl.value : '');
+    renderFocusedAnnotationSurface();
+  }
   return added;
+}
+
+function mergeChecklistSchemaVocabulary(mutations) {
+  var addedGroups = 0;
+  var addedTerms = 0;
+  (Array.isArray(mutations) ? mutations : []).forEach(function (mutation) {
+    mutation = mutation && typeof mutation === 'object' ? mutation : {};
+    var group = normalizeChecklistRequirementKey(mutation.group);
+    if (!group) throw new Error('Schema vocabulary merge requires a target group.');
+    if (mutation.create && addChecklistGroup(group, { skipRefresh: true })) {
+      addedGroups += 1;
+    }
+    addedTerms += mergeChecklistKeywordTermsForRequirement(
+      group,
+      mutation.terms,
+      { skipRefresh: true }
+    ).length;
+  });
+
+  if (addedGroups || addedTerms) {
+    refreshChecklistGroupConfigurationUi();
+    renderItemTagsPanel();
+    renderFocusedAnnotationSurface();
+  }
+  return { addedGroups: addedGroups, addedTerms: addedTerms };
 }
 
 function moveChecklistItemToIndex(fromIndex, toIndex) {

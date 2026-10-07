@@ -129,10 +129,21 @@
     }
     var sight = metadata.vision_sight && typeof metadata.vision_sight === 'object' ? metadata.vision_sight : null;
     if (sight && sight.description && sight.inventory) {
+      var inventory = sight.inventory && typeof sight.inventory === 'object' ? sight.inventory : {};
       out.visionSight = {
         model: String(sight.model || ''),
         description: String(sight.description || ''),
-        inventory: sight.inventory
+        inventory: {
+          viewpoint: (inventory.viewpoint || []).slice(0, 4),
+          position: (inventory.position || []).slice(0, 6),
+          things: (inventory.things || []).slice(0, 8),
+          colors: (inventory.colors || []).slice(0, 8),
+          setting: (inventory.setting || []).slice(0, 4),
+          background: (inventory.background || []).slice(0, 4),
+          lighting: (inventory.lighting || []).slice(0, 4),
+          surface: (inventory.surface || []).slice(0, 4),
+          details: (inventory.details || []).slice(0, 8)
+        }
       };
     }
     return out;
@@ -722,7 +733,7 @@
       var suggestions = getSelectionPoseSuggestedTags(item.metadata, existingTags);
       suggestions.forEach(function (term) {
         var groups = getChecklistRequirementsForTag(term);
-        if (!groups.length || !qaSightSupportsTerm(item.metadata, term)) return;
+        if (groups.length !== 1 || !qaSightSupportsTerm(item.metadata, term)) return;
         var key = String(term || '').toLowerCase();
         if (!buckets[key]) buckets[key] = { term: term, groups: groups.slice(), files: [] };
         buckets[key].files.push(item.fileName);

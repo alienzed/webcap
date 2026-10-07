@@ -831,6 +831,7 @@ def vision_schema_assist_route():
                 records,
                 data.get("existingGroups"),
                 current_assignments=data.get("currentAssignments"),
+                existing_only=bool(data.get("existingOnly")),
             )
             job = enqueue_llm("schema", director_model, contract, context={}, label="Vision Tag Assist")
             return jsonify({

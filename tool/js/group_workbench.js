@@ -288,15 +288,10 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
   if (typeof setStatus === 'function') {
     setStatus((allHaveTerm ? 'Removed' : 'Added') + ' "' + term + '" on ' + changed + ' Grid item' + (changed === 1 ? '' : 's') + '.');
   }
-  if (
-    typeof window !== 'undefined' &&
-    typeof window.handleGuidedTagPassGridTermMutation === 'function'
-  ) {
-    window.handleGuidedTagPassGridTermMutation(requirementLabel, term, {
-      removed: allHaveTerm,
-      changed: changed
-    });
-  }
+  window.handleGuidedTagPassGridTermMutation(requirementLabel, term, {
+    removed: allHaveTerm,
+    changed: changed
+  });
   if (typeof opts.onAfterMutation === 'function') {
     opts.onAfterMutation();
   } else {

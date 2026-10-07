@@ -52,7 +52,7 @@ def test_schema_assist_keeps_scan_ephemeral_and_schema_mutations_explicit():
     assert "check.disabled = false;" in script
     assert "function canonicalExistingGroup(name)" in script
     assert "function runDiscovery()" in script
-    assert "Run Scan Set from Set Tools first." in script
+    assert "Run Set Intelligence from Set Tools first." in script
     assert "getCurrentSetMediaFileNames()" in script
     assert "function currentVocabularyGroup()" in script
     assert "function skipCurrentVocabularyGroup()" in script
@@ -66,7 +66,7 @@ def test_discover_vocabulary_is_single_action_and_one_group_at_a_time():
     script = _read("tool/js/vision_schema_assist.js")
 
     assert html.count('id="vision-schema-scan-btn"') == 0
-    assert 'id="discover-vocabulary-set-btn"' in html
+    assert 'id="set-intelligence-open-btn"' in html
     assert "Structured Sight</strong>" not in html
     assert "vision-schema-evidence-column" not in html
     assert "Merge Selected Vocabulary" not in html
@@ -96,7 +96,7 @@ def test_guided_tag_pass_reuses_grid_and_keeps_new_vocabulary_out_of_primary_flo
     grid_tiles = _read("tool/js/media_grid_tiles.js")
     workbench = _read("tool/js/group_workbench.js")
 
-    assert 'id="guided-tag-pass-open-btn"' in html
+    assert 'id="set-intelligence-open-btn"' in html
     assert 'id="media-grid-guided-pass"' in html
     assert "window.openGuidedTagPass = openGuidedTagPass;" in script
     assert "if (!candidate || !candidate.existing) return;" in script

@@ -14,6 +14,9 @@
     statusPayload: null,
     analysis: null,
     schema: null,
+    tagCandidates: null,
+    mode: 'vocabulary',
+    scopeFiles: [],
     error: ''
   };
 
@@ -86,27 +89,27 @@
     var host = el('vision-schema-evidence');
     if (!host) throw new Error('Schema Assist evidence host is missing.');
     host.innerHTML = '';
-    var patterns = schemaState.analysis && Array.isArray(schemaState.analysis.patterns)
-      ? schemaState.analysis.patterns
+    var evidence = schemaState.analysis && Array.isArray(schemaState.analysis.evidence)
+      ? schemaState.analysis.evidence
       : [];
-    if (!patterns.length) {
+    if (!evidence.length) {
       var empty = document.createElement('div');
       empty.className = 'vision-schema-empty';
-      empty.textContent = schemaState.statusPayload && schemaState.statusPayload.cached
-        ? 'Run Build Suggestions to organize the available Sight evidence.'
-        : 'Run a Sight scan to discover recurring visual patterns.';
+      empty.textContent = schemaState.statusPayload && Number(schemaState.statusPayload.structured || 0)
+        ? 'Structured Sight is ready. Build vocabulary or tag candidates.'
+        : 'Run a Sight scan to collect structured visual evidence.';
       host.appendChild(empty);
       return;
     }
-    patterns.slice(0, 80).forEach(function (pattern) {
+    evidence.slice(0, 100).forEach(function (entry) {
       var row = document.createElement('div');
       row.className = 'vision-schema-pattern';
       var label = document.createElement('strong');
-      label.textContent = String(pattern.label || '');
+      label.textContent = String(entry.label || '');
       var count = document.createElement('span');
-      count.textContent = String(pattern.count || 0) + ' items';
+      count.textContent = String(entry.count || 0) + ' items';
       var examples = document.createElement('small');
-      examples.textContent = (pattern.examples || []).slice(0, 4).join(' · ');
+      examples.textContent = String(entry.category || '') + ((entry.examples || []).length ? ' · ' + (entry.examples || []).slice(0, 4).join(' · ') : '');
       row.appendChild(label);
       row.appendChild(count);
       row.appendChild(examples);
@@ -131,17 +134,88 @@
     return select;
   }
 
+  function renderTagCandidates(host) {
+    var result = schemaState.tagCandidates;
+    var items = result && Array.isArray(result.items) ? result.items : [];
+    if (!items.length) {
+      var empty = document.createElement('div');
+      empty.className = 'vision-schema-empty';
+      empty.textContent = result ? 'No confident missing tags were found for this scope.' : 'Build Tag Candidates to map structured Sight onto your current vocabulary.';
+      host.appendChild(empty);
+      return;
+    }
+
+    items.forEach(function (item) {
+      var card = document.createElement('div');
+      card.className = 'vision-tag-item-card';
+      card.dataset.file = String(item.file || '');
+
+      var header = document.createElement('div');
+      header.className = 'vision-tag-item-header';
+      var file = document.createElement('strong');
+      file.textContent = String(item.file || '');
+      var count = document.createElement('span');
+      count.textContent = String((item.candidates || []).length) + ' candidate' + ((item.candidates || []).length === 1 ? '' : 's');
+      header.appendChild(file);
+      header.appendChild(count);
+      card.appendChild(header);
+
+      if (!(item.candidates || []).length) {
+        var none = document.createElement('div');
+        none.className = 'vision-schema-empty vision-tag-none';
+        none.textContent = 'No confident additions.';
+        card.appendChild(none);
+      }
+
+      (item.candidates || []).forEach(function (candidate, candidateIndex) {
+        var row = document.createElement('label');
+        row.className = 'vision-tag-candidate-row';
+        row.dataset.candidateIndex = String(candidateIndex);
+
+        var check = document.createElement('input');
+        check.type = 'checkbox';
+        check.className = 'vision-tag-candidate-check';
+        check.checked = candidate.confidence === 'high';
+
+        var copy = document.createElement('span');
+        copy.className = 'vision-tag-candidate-copy';
+        var term = document.createElement('strong');
+        term.textContent = String(candidate.group || '') + ': ' + String(candidate.term || '');
+        var meta = document.createElement('span');
+        meta.textContent = String(candidate.confidence || '') + ' confidence' + (candidate.existing ? ' · existing vocabulary' : ' · new term');
+        copy.appendChild(term);
+        copy.appendChild(meta);
+        if (candidate.why) {
+          var why = document.createElement('small');
+          why.textContent = String(candidate.why || '');
+          copy.appendChild(why);
+        }
+
+        row.appendChild(check);
+        row.appendChild(copy);
+        card.appendChild(row);
+      });
+      host.appendChild(card);
+    });
+  }
+
   function renderProposals() {
     var host = el('vision-schema-proposals');
     if (!host) throw new Error('Schema Assist proposal host is missing.');
     host.innerHTML = '';
+
+    if (schemaState.mode === 'tags') {
+      renderTagCandidates(host);
+      return;
+    }
+
     var groups = schemaState.schema && Array.isArray(schemaState.schema.groups)
       ? schemaState.schema.groups
       : [];
     if (!groups.length) {
       var empty = document.createElement('div');
       empty.className = 'vision-schema-empty';
-      empty.textContent = schemaState.schema ? 'The Director did not find useful vocabulary to add.' : 'Schema suggestions will appear here.';
+      empty.textContent = schemaState.schema ? 'The Director did not find useful vocabulary to add.' : 'Vocabulary suggestions will appear here.';
       host.appendChild(empty);
       return;
     }
@@ -239,15 +313,20 @@
 
   function renderProgress() {
     var payload = schemaState.statusPayload || {};
-    var total = Number(payload.total || 0);
-    var cached = Number(payload.cached || 0);
+    var scope = {};
+    (schemaState.scopeFiles || []).forEach(function (fileName) { scope[String(fileName || '')] = true; });
+    var scopedItems = (payload.items || []).filter(function (item) {
+      return !schemaState.scopeFiles.length || !!scope[String(item.file || '')];
+    });
+    var total = scopedItems.length;
+    var cached = scopedItems.filter(function (item) { return !!item.structured; }).length;
     var percent = total > 0 ? Math.max(0, Math.min(100, cached / total * 100)) : 0;
     var fill = el('vision-schema-progress-fill');
     var text = el('vision-schema-progress-text');
     if (!fill || !text) throw new Error('Schema Assist progress controls are missing.');
     fill.style.width = percent.toFixed(1) + '%';
     text.textContent = total
-      ? (String(cached) + ' / ' + String(total) + ' media have current Sight for ' + (schemaState.visionModel || 'the selected Vision model'))
+      ? (String(cached) + ' / ' + String(total) + ' visible media have structured Sight for ' + (schemaState.visionModel || 'the selected Vision model'))
       : 'No supported media in this Set.';
   }
 
@@ -256,25 +335,39 @@
     var scanBtn = el('vision-schema-scan-btn');
     var stopBtn = el('vision-schema-stop-btn');
     var suggestBtn = el('vision-schema-suggest-btn');
+    var tagBtn = el('vision-schema-tags-btn');
     var applyBtn = el('vision-schema-apply-btn');
-    if (!modal || !scanBtn || !stopBtn || !suggestBtn || !applyBtn) {
+    if (!modal || !scanBtn || !stopBtn || !suggestBtn || !tagBtn || !applyBtn) {
       throw new Error('Schema Assist UI is incomplete.');
     }
     modal.classList.toggle('hidden', !schemaState.open);
     var schemaBusy = schemaState.schemaStarting || !!schemaState.schemaJobId;
     scanBtn.disabled = schemaState.scanRunning || schemaBusy;
-    scanBtn.textContent = schemaState.statusPayload && Number(schemaState.statusPayload.cached || 0)
-      ? 'Resume / Refresh Sight'
-      : 'Scan Set';
+    scanBtn.textContent = schemaState.statusPayload && Number(schemaState.statusPayload.structured || 0)
+      ? 'Scan Missing Sight'
+      : 'Scan Visible';
     stopBtn.classList.toggle('hidden', !schemaState.scanRunning && !schemaBusy);
-    suggestBtn.disabled = schemaState.scanRunning || schemaBusy || !(schemaState.statusPayload && Number(schemaState.statusPayload.cached || 0) >= 2);
-    applyBtn.disabled = schemaState.scanRunning || schemaBusy || !(schemaState.schema && schemaState.schema.groups && schemaState.schema.groups.length);
+    var structuredReady = schemaState.statusPayload && Number(schemaState.statusPayload.structured || 0) > 0;
+    suggestBtn.disabled = schemaState.scanRunning || schemaBusy || !structuredReady;
+    tagBtn.disabled = schemaState.scanRunning || schemaBusy || !structuredReady;
+    applyBtn.textContent = schemaState.mode === 'tags' ? 'Apply Selected Tags' : 'Merge Selected Vocabulary';
+    applyBtn.disabled = schemaState.scanRunning || schemaBusy || (
+      schemaState.mode === 'tags'
+        ? !(schemaState.tagCandidates && Array.isArray(schemaState.tagCandidates.items) && schemaState.tagCandidates.items.length)
+        : !(schemaState.schema && schemaState.schema.groups && schemaState.schema.groups.length)
+    );
+    var heading = el('vision-schema-proposal-heading');
+    var headingNote = el('vision-schema-proposal-note');
+    if (heading) heading.textContent = schemaState.mode === 'tags' ? 'Tag Candidates' : 'Schema Suggestions';
+    if (headingNote) headingNote.textContent = schemaState.mode === 'tags'
+      ? 'Toggle confident additions, including proposed new terms, then apply.'
+      : 'Director-organized vocabulary grounded in structured Sight.';
     renderProgress();
     renderEvidence();
     renderProposals();
   }
 
-  function saveSight(folder, model, media, description) {
+  function saveSight(folder, model, media, sight) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -283,8 +376,33 @@
         folder: folder,
         visionModel: model,
         media: media,
-        description: description
+        sight: sight
       })
+    });
+  }
+
+  function requestStructuredSight(folder, model, media) {
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'scan_sight',
+        folder: folder,
+        visionModel: model,
+        media: media
+      })
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Vision Sight did not return a queued job.');
+      schemaState.currentVisionJobId = String(payload.job.jobId || '');
+      trackTransientLlmJob(payload.job);
+      return waitForCaptionAssistJob(payload.job);
+    }).then(function (job) {
+      schemaState.currentVisionJobId = '';
+      var sight = job.result && job.result.sight;
+      if (!sight || !sight.description || !sight.inventory) {
+        throw new Error('Vision Sight completed without structured evidence.');
+      }
+      return sight;
     });
   }
 
@@ -294,18 +412,10 @@
     if (index >= pending.length) return Promise.resolve(true);
 
     var fileName = pending[index];
-    var mediaItem = findMediaItem(fileName);
-    setStatus('Vision sight · ' + String(index + 1) + ' / ' + String(pending.length) + ' remaining');
-    return requestVisionImageCaptionDescription(mediaItem, {
-      model: model,
-      onJob: function (job) {
-        schemaState.currentVisionJobId = String(job.jobId || '');
-        return null;
-      }
-    }).then(function (result) {
-      schemaState.currentVisionJobId = '';
+    setStatus('Structured Sight · ' + String(index + 1) + ' / ' + String(pending.length));
+    return requestStructuredSight(folder, model, fileName).then(function (sight) {
       if (schemaState.scanStopRequested) return false;
-      return saveSight(folder, model, fileName, result.text);
+      return saveSight(folder, model, fileName, sight);
     }).then(function (saved) {
       if (saved === false) return false;
       return refreshStatus();
@@ -330,6 +440,11 @@
 
     schemaState.folder = folder;
     schemaState.visionModel = model;
+    schemaState.scopeFiles = getVisibleMediaSelectionForTraining();
+    if (!schemaState.scopeFiles.length) {
+      setStatus('No visible media to scan.', true);
+      return;
+    }
     schemaState.scanRunning = true;
     schemaState.scanStopRequested = false;
     schemaState.schema = null;
@@ -338,8 +453,10 @@
     setStatus('Checking cached Vision sight…');
 
     refreshStatus().then(function (payload) {
+      var scope = {};
+      schemaState.scopeFiles.forEach(function (fileName) { scope[String(fileName || '')] = true; });
       var pending = (payload.items || []).filter(function (item) {
-        return !item.cached;
+        return !!scope[String(item.file || '')] && !item.structured;
       }).map(function (item) {
         return item.file;
       });
@@ -352,7 +469,7 @@
       }
       return analyze();
     }).then(function () {
-      if (!schemaState.scanStopRequested) setStatus('Sight scan complete. Review recurring evidence or build suggestions.');
+      if (!schemaState.scanStopRequested) setStatus('Structured Sight complete. Build tag candidates or vocabulary suggestions.');
     }).catch(function (err) {
       if (schemaState.scanStopRequested) {
         setStatus('Sight scan stopped. Completed items are cached.');

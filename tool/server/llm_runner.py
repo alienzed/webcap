@@ -201,6 +201,12 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         if client == "caption" and operation == "vision_schema_sight":
             from .vision_schema_assist import normalize_vision_schema_sight_result
             result["sight"] = normalize_vision_schema_sight_result(llm_result["text"])
+        if client == "caption" and operation == "vision_vocabulary_sight":
+            from .vision_schema_assist import normalize_vision_vocabulary_sight_result
+            result["vocabularySight"] = normalize_vision_vocabulary_sight_result(
+                llm_result["text"],
+                context.get("existingGroups"),
+            )
         return result
 
     if client == "generate":
@@ -231,6 +237,19 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
     if client == "schema":
         operation = str((frozen_contract or {}).get("operation") or "").strip()
         if operation == "vision_schema_suggest":
+            from .vision_schema_contract import normalize_result
+            return {
+                "schema": normalize_result(
+                    llm_result.get("data"),
+                    sight_evidence=(frozen_contract or {}).get("sight_evidence") or [],
+                    existing_groups=(frozen_contract or {}).get("existing_groups") or [],
+                ),
+                "model": llm_result["model"],
+                "finishReason": llm_result.get("finishReason"),
+                "usage": llm_result.get("usage"),
+                "timings": llm_result.get("timings"),
+            }
+        if operation == "vision_schema_challenge":
             from .vision_schema_contract import normalize_result
             return {
                 "schema": normalize_result(

@@ -1706,6 +1706,24 @@ def test_individual_story_development_jobs_do_not_mutate_story_before_final_appl
 
 
 
+def test_vision_sight_ingest_keeps_successful_model_output_when_structure_is_bad():
+    result = llm_runner._client_result(
+        "caption",
+        {},
+        {
+            "text": "not json at all",
+            "model": "vl",
+            "usage": None,
+            "timings": None,
+        },
+        frozen_contract={"operation": "vision_schema_sight"},
+    )
+
+    assert result["text"] == "not json at all"
+    assert result["sight"] is None
+    assert "invalid Sight JSON" in result["structureWarning"]
+
+
 def test_caption_client_runs_through_shared_llm_lane(llm_root, monkeypatch):
     captured = {}
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)

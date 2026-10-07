@@ -1805,3 +1805,74 @@ def test_llm_targeted_cancel_accepts_already_finished_transient_receipt(llm_root
     result = llm_runner.action("cancel_job", job_id=job["jobId"])
 
     assert result["job"]["status"] == "completed"
+
+
+
+def test_llm_qa_job_returns_normalized_structured_findings(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "text": "{}",
+            "data": {
+                "summary": "One semantic issue.",
+                "findings": [{
+                    "category": "captioning",
+                    "priority": "normal",
+                    "confidence": "high",
+                    "title": "Terminology drift",
+                    "summary": "Two captions name the same concept differently.",
+                    "why": "One concept may be fragmented across wording.",
+                    "files": ["one.jpg", "two.jpg"],
+                    "evidence": ["red / crimson"],
+                }],
+            },
+            "model": "qwen",
+            "usage": None,
+            "timings": None,
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "qa",
+        "qwen",
+        {
+            "operation": "qa_deep_scan",
+            "prompt": "Analyze.",
+            "output": "json",
+            "source_files": ["one.jpg", "two.jpg"],
+        },
+        label="QA Deep Scan",
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "completed"
+    assert finished["client"] == "qa"
+    assert finished["result"]["analysis"]["findings"][0]["title"] == "Terminology drift"
+
+
+def test_llm_qa_client_rejects_unowned_operations(llm_root, monkeypatch):
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime,
+        "run_contract",
+        lambda *_args, **_kwargs: {
+            "text": "{}",
+            "data": {"summary": "No issues.", "findings": []},
+            "model": "qwen",
+        },
+    )
+
+    job = llm_runner.enqueue(
+        "qa",
+        "qwen",
+        {"operation": "write_prompt", "prompt": "No.", "output": "json"},
+        label="QA Deep Scan",
+    )
+    llm_runner._advance_queue()
+
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "failed"
+    assert "Unsupported QA LLM operation" in finished["error"]

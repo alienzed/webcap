@@ -25,7 +25,9 @@ def test_schema_assist_is_contextual_and_reuses_existing_vision_and_schema_paths
     assert html.index('src="/static/js/caption_vision.js"') < html.index('src="/static/js/vision_schema_assist.js"')
 
     assert "operation: 'analyze'" in script
-    assert "operation: 'synthesize'" in script
+    assert "operation: 'synthesize_vocabulary'" in script
+    assert "operation: 'challenge_vocabulary'" in script
+    assert "operation: 'scan_vocabulary_sight'" in script
     assert "operation: 'suggest_tags'" in script
     assert "waitForCaptionAssistJob(payload.job)" in script
     assert "mergeChecklistSchemaVocabulary(mutations)" in script
@@ -107,3 +109,17 @@ def test_guided_tag_pass_reuses_grid_and_keeps_new_vocabulary_out_of_primary_flo
     assert "window.syncGuidedTagPassWorkbenchHighlight" in grid_tiles
     assert "window.openGuidedTagPass({ source: 'grid' });" in grid_actions
     assert "openMediaGridSurface();" in script
+
+
+
+def test_discover_vocabulary_runs_fresh_visual_pass_then_synthesis_and_challenge():
+    script = _read("tool/js/vision_schema_assist.js")
+    css = _read("tool/css/modals.css")
+
+    assert "function ensureVocabularySight()" in script
+    assert "function runVocabularySynthesis()" in script
+    assert "function runVocabularyChallenge(draftSchema)" in script
+    assert script.index("return ensureVocabularySight();") < script.index("return runVocabularySynthesis();")
+    assert script.index("return runVocabularySynthesis();") < script.index("return runVocabularyChallenge(draft);")
+    assert "vision-schema-evidence-thumbs" in script
+    assert ".vision-schema-evidence-thumbs img" in css

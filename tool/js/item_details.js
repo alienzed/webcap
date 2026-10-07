@@ -1654,9 +1654,11 @@ function refreshMediaResolutionCache(options) {
           ? ('Generated metadata for ' + generatedCount + ' media item' + (generatedCount === 1 ? '' : 's') + '.')
           : ('Metadata is current (' + checkedCount + ' media item' + (checkedCount === 1 ? '' : 's') + ' checked).');
         setStatus(options.successStatus || metadataStatus);
-        window.dispatchEvent(new CustomEvent('webcap:media-metadata-updated', {
-          detail: { folder: requestFolder, rows: rows, folderLoadSequence: options.folderLoadSequence || 0 }
-        }));
+        if (!options.suppressUpdatedEvent) {
+          window.dispatchEvent(new CustomEvent('webcap:media-metadata-updated', {
+            detail: { folder: requestFolder, rows: rows, folderLoadSequence: options.folderLoadSequence || 0 }
+          }));
+        }
         if (state.currentItem) {
           setStatus(buildSelectedMediaStatus(state.currentItem));
           renderItemMetadataPanel();

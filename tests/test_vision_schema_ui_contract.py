@@ -16,16 +16,20 @@ def test_schema_assist_is_contextual_and_reuses_existing_vision_and_schema_paths
     assert 'id="vision-schema-open-btn"' in html
     assert html.index('id="vision-schema-open-btn"') < html.index('id="checklist-settings-btn"')
     assert 'id="vision-schema-modal"' in html
+    assert 'id="vision-schema-tags-btn"' in html
+    assert 'id="vision-schema-proposal-heading"' in html
     assert 'src="/static/js/vision_schema_assist.js"' in html
     assert html.index('src="/static/js/caption_vision.js"') < html.index('src="/static/js/vision_schema_assist.js"')
 
-    assert "requestVisionImageCaptionDescription(mediaItem" in script
+    assert "operation: 'scan_sight'" in script
     assert "operation: 'save_sight'" in script
     assert "operation: 'analyze'" in script
     assert "operation: 'synthesize'" in script
+    assert "operation: 'suggest_tags'" in script
     assert "waitForCaptionAssistJob(payload.job)" in script
     assert "cancelCaptionAssistJob(schemaState.currentVisionJobId)" in script
     assert "mergeChecklistSchemaVocabulary(mutations)" in script
+    assert "assignChecklistTagToMediaKey(item.key, candidate.group, candidate.term" in script
 
     assert "function addChecklistGroup(requirementLabel, options)" in checklist
     assert "function mergeChecklistKeywordTermsForRequirement(requirementLabel, terms, options)" in checklist
@@ -47,3 +51,16 @@ def test_schema_assist_keeps_scan_ephemeral_and_schema_mutations_explicit():
     assert "function canonicalExistingGroup(name)" in script
     assert "vision-schema-example-thumb" in script
     assert "applyBtn.onclick = applySelected;" in script
+
+
+
+def test_schema_assist_materializes_only_explicitly_selected_tag_candidates():
+    script = _read("tool/js/vision_schema_assist.js")
+
+    assert "check.checked = candidate.confidence === 'high';" in script
+    assert "function selectedTagCandidates()" in script
+    assert "function applySelectedTags()" in script
+    assert "candidate.existing" in script
+    assert "mergeChecklistSchemaVocabulary(vocabularyMutations)" in script
+    assert "assignChecklistTagToMediaKey(item.key, candidate.group, candidate.term, { skipRefresh: true })" in script
+    assert "schemaState.scopeFiles = getVisibleMediaSelectionForTraining();" in script

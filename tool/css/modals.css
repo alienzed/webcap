@@ -3023,3 +3023,91 @@ html[data-theme="dark"] .app-settings-environment-check {
   object-fit: cover;
   display: block;
 }
+
+
+.vision-tag-item-card {
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  background: var(--panel-soft);
+}
+
+.vision-tag-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.vision-tag-item-header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vision-tag-item-header span,
+.vision-tag-candidate-copy span,
+.vision-tag-candidate-copy small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.vision-tag-candidate-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-soft);
+  cursor: pointer;
+}
+
+.vision-tag-candidate-row:first-of-type {
+  border-top: 0;
+}
+
+.vision-tag-candidate-row input {
+  margin-top: 3px;
+}
+
+.vision-tag-candidate-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vision-tag-candidate-copy strong {
+  font-size: 13px;
+}
+
+.vision-tag-candidate-copy small {
+  line-height: 1.35;
+}
+
+.vision-tag-none {
+  padding: 8px 0;
+  border: 0;
+  text-align: left;
+}
+
+
+.vision-tag-item-thumb {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.vision-tag-item-file {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}

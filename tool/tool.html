@@ -2448,9 +2448,10 @@
                 </div>
                 <div class="vision-schema-toolbar">
                     <div class="vision-schema-stage-actions">
-                        <button id="vision-schema-scan-btn" type="button" class="review-captions-btn">Scan Set</button>
+                        <button id="vision-schema-scan-btn" type="button" class="review-captions-btn">Scan Visible</button>
                         <button id="vision-schema-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
-                        <button id="vision-schema-suggest-btn" type="button" class="review-captions-btn" disabled>Build Suggestions</button>
+                        <button id="vision-schema-tags-btn" type="button" class="review-captions-btn" disabled>Build Tag Candidates</button>
+                        <button id="vision-schema-suggest-btn" type="button" class="review-captions-btn" disabled>Discover Vocabulary</button>
                     </div>
                     <div id="vision-schema-status" class="vision-schema-status" aria-live="polite"></div>
                 </div>
@@ -2462,8 +2463,8 @@
                     <section class="vision-schema-column vision-schema-evidence-column">
                         <div class="vision-schema-section-heading">
                             <div>
-                                <strong>Recurring Sight</strong>
-                                <span>WebCap-mined evidence from cached Vision descriptions.</span>
+                                <strong>Structured Sight</strong>
+                                <span>Recurring visual evidence from cached descriptions and inventories.</span>
                             </div>
                         </div>
                         <div id="vision-schema-evidence" class="vision-schema-evidence"></div>
@@ -2471,8 +2472,8 @@
                     <section class="vision-schema-column vision-schema-proposal-column">
                         <div class="vision-schema-section-heading">
                             <div>
-                                <strong>Schema Suggestions</strong>
-                                <span>Director-organized vocabulary grounded in the evidence at left.</span>
+                                <strong id="vision-schema-proposal-heading">Tag Candidates</strong>
+                                <span id="vision-schema-proposal-note">Map structured Sight onto your current annotation vocabulary.</span>
                             </div>
                         </div>
                         <div id="vision-schema-proposals" class="vision-schema-proposals"></div>

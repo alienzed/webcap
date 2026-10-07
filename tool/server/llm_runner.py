@@ -198,6 +198,9 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 llm_result["text"],
                 context.get("visionGroups"),
             )
+        if client == "caption" and operation == "vision_schema_sight":
+            from .vision_schema_assist import normalize_vision_schema_sight_result
+            result["sight"] = normalize_vision_schema_sight_result(llm_result["text"])
         return result
 
     if client == "generate":
@@ -227,20 +230,34 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
 
     if client == "schema":
         operation = str((frozen_contract or {}).get("operation") or "").strip()
-        if operation != "vision_schema_suggest":
-            raise RuntimeError("Unsupported Schema Assist LLM operation: " + (operation or "empty"))
-        from .vision_schema_contract import normalize_result
-        return {
-            "schema": normalize_result(
-                llm_result.get("data"),
-                pattern_evidence=(frozen_contract or {}).get("pattern_evidence") or [],
-                existing_groups=(frozen_contract or {}).get("existing_groups") or [],
-            ),
-            "model": llm_result["model"],
-            "finishReason": llm_result.get("finishReason"),
-            "usage": llm_result.get("usage"),
-            "timings": llm_result.get("timings"),
-        }
+        if operation == "vision_schema_suggest":
+            from .vision_schema_contract import normalize_result
+            return {
+                "schema": normalize_result(
+                    llm_result.get("data"),
+                    sight_evidence=(frozen_contract or {}).get("sight_evidence") or [],
+                    existing_groups=(frozen_contract or {}).get("existing_groups") or [],
+                ),
+                "model": llm_result["model"],
+                "finishReason": llm_result.get("finishReason"),
+                "usage": llm_result.get("usage"),
+                "timings": llm_result.get("timings"),
+            }
+        if operation == "vision_tag_suggest":
+            from .vision_schema_contract import normalize_assignment_result
+            return {
+                "tagCandidates": normalize_assignment_result(
+                    llm_result.get("data"),
+                    existing_groups=(frozen_contract or {}).get("existing_groups") or [],
+                    allowed_files=(frozen_contract or {}).get("source_files") or [],
+                    current_assignments=(frozen_contract or {}).get("current_assignments") or {},
+                ),
+                "model": llm_result["model"],
+                "finishReason": llm_result.get("finishReason"),
+                "usage": llm_result.get("usage"),
+                "timings": llm_result.get("timings"),
+            }
+        raise RuntimeError("Unsupported Schema Assist LLM operation: " + (operation or "empty"))
 
     if client == "test":
         operation = str((frozen_contract or {}).get("operation") or "").strip()
@@ -485,13 +502,16 @@ def _execute_claimed(job_id, gpu_reserved):
                 chat_kwargs["context_size"] = overrides["contextSize"]
             messages = contract.get("messages")
             caption_operation = str(contract.get("operation") or "").strip()
-            if client == "caption" and caption_operation in {"caption_vision_validate", "vision_image_caption"}:
+            if client == "caption" and caption_operation in {"caption_vision_validate", "vision_image_caption", "vision_schema_sight"}:
                 from .storyboard_llm_runtime import prepare_caption_vision_messages
                 chat_kwargs["allow_image_data_urls"] = True
                 messages = prepare_caption_vision_messages(model_id, messages)
                 if caption_operation == "caption_vision_validate":
                     from .caption_vision import CAPTION_VISION_RESPONSE_SCHEMA
                     chat_kwargs["response_schema"] = CAPTION_VISION_RESPONSE_SCHEMA
+                elif caption_operation == "vision_schema_sight":
+                    from .vision_schema_assist import VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA
+                    chat_kwargs["response_schema"] = VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA
             llm_result = run_freeform_chat(
                 model_id,
                 messages,

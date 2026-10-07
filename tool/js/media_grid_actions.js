@@ -141,6 +141,23 @@ function mediaGridSelectRange(fromKey, toKey) {
   }
 }
 
+function mediaGridReplaceSelection(mediaKeys) {
+  if (!mediaGridState.open) throw new Error('Media Grid must be open before replacing its selection.');
+  var allowed = {};
+  (Array.isArray(mediaGridState.items) ? mediaGridState.items : []).forEach(function (item) {
+    if (item && item.key) allowed[String(item.key)] = true;
+  });
+  var selected = new Set();
+  (Array.isArray(mediaKeys) ? mediaKeys : []).forEach(function (rawKey) {
+    var key = String(rawKey || '');
+    if (key && allowed[key]) selected.add(key);
+  });
+  mediaGridState.selectedKeys = selected;
+  mediaGridState.lastSelectedKey = selected.size ? Array.from(selected)[selected.size - 1] : '';
+  mediaGridRenderSelectionState();
+  return selected.size;
+}
+
 function mediaGridSelectAll() {
   mediaGridState.items.forEach(function (item) {
     mediaGridState.selectedKeys.add(item.key);

@@ -23,6 +23,7 @@ def test_set_scan_is_primary_set_tools_intelligence_entry_point():
     assert "getCurrentSetMediaFileNames()" in scan
     assert "includeFaceFocus: true" in scan
     assert "includeSelectionPose: true" in scan
+    assert "suppressUpdatedEvent: true" in scan
     assert "if (!model)" in scan
     assert "Skipped — no Vision model selected." in scan
     assert "operation: 'scan_sight'" in scan
@@ -42,5 +43,6 @@ def test_set_scan_reuses_existing_caches_and_keeps_llm_optional():
     assert "currentVisionModel" not in scan
     assert "getCaptionVisionModelId()" in scan
     assert "director" not in scan.lower()
+    assert "operation: 'scan_sight'" not in _read("tool/js/vision_schema_assist.js")
     assert 'record["vision_sight"]' in media
     assert '"inventory": dict(vision_sight.get("inventory") or {})' in media

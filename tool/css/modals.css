@@ -3030,27 +3030,6 @@ html[data-theme="dark"] .app-settings-environment-check {
 }
 
 
-.vision-schema-raw {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding: 14px 18px 18px;
-  border-top: 1px solid var(--border-soft);
-  background: var(--panel-soft);
-}
-
-.vision-schema-raw.hidden {
-  display: none;
-}
-
-.vision-schema-raw-output {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: var(--text);
-  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
 .vision-schema-body {
   flex: 1 1 auto;
   min-height: 0;

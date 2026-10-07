@@ -318,3 +318,125 @@ def test_save_vision_sight_preserves_existing_media_analysis_blocks(tmp_path, mo
         "thing": "bikini top",
         "color": "red",
     }
+
+
+
+def test_schema_aware_vocabulary_sight_normalizes_known_groups_and_keeps_unknown_dimensions():
+    payload = vision_schema_assist.normalize_vision_vocabulary_sight_payload(
+        {
+            "groups": [
+                {"group": "BT Shape", "observations": ["tiny triangle", "narrow cups"]},
+                {"group": "Viewpoint", "observations": ["front"]},
+                {"group": "Invented Dimension", "observations": ["metal rings"]},
+            ],
+            "other": [
+                {"suggestedGroup": "BT Shape", "observations": ["micro triangle"]},
+                {"suggestedGroup": "Connector", "observations": ["gold ring"]},
+            ],
+        },
+        [
+            {"group": "BT Shape", "terms": ["triangle"]},
+            {"group": "Viewpoint", "terms": ["front", "side"]},
+        ],
+    )
+
+    by_group = {row["group"]: row["observations"] for row in payload["groups"]}
+    assert by_group["BT Shape"] == ["tiny triangle", "narrow cups", "micro triangle"]
+    assert by_group["Viewpoint"] == ["front"]
+    assert {row["suggestedGroup"] for row in payload["other"]} == {"Invented Dimension", "Connector"}
+
+
+def test_vocabulary_sight_signature_changes_when_group_vocabulary_changes():
+    first = vision_schema_assist.vision_vocabulary_group_signature([
+        {"group": "BT Shape", "terms": ["triangle"]},
+    ])
+    same = vision_schema_assist.vision_vocabulary_group_signature([
+        {"group": "BT Shape", "terms": ["triangle"]},
+    ])
+    changed = vision_schema_assist.vision_vocabulary_group_signature([
+        {"group": "BT Shape", "terms": ["triangle", "micro triangle"]},
+    ])
+    assert first == same
+    assert first != changed
+
+
+def test_schema_aware_mining_keeps_bounded_singletons_for_semantic_consolidation():
+    analysis = vision_schema_assist.mine_vocabulary_sight_records([
+        {
+            "file": "a.jpg",
+            "groups": [{"group": "BT Shape", "observations": ["tiny triangle"]}],
+            "other": [],
+        },
+        {
+            "file": "b.jpg",
+            "groups": [{"group": "BT Shape", "observations": ["micro triangle"]}],
+            "other": [],
+        },
+        {
+            "file": "c.jpg",
+            "groups": [{"group": "BT Shape", "observations": ["tiny triangle"]}],
+            "other": [{"suggestedGroup": "Connector", "observations": ["metal ring"]}],
+        },
+    ])
+    labels = {(row["suggestedGroup"], row["label"], row["count"]) for row in analysis["evidence"]}
+    assert ("BT Shape", "tiny triangle", 2) in labels
+    assert ("BT Shape", "micro triangle", 1) in labels
+    assert ("Connector", "metal ring", 1) in labels
+
+
+def test_vocabulary_challenge_contract_stays_grounded_and_orders_existing_groups_first():
+    analysis = {
+        "itemCount": 3,
+        "evidence": [
+            {
+                "id": "g001",
+                "source": "schema",
+                "category": "group",
+                "suggestedGroup": "BT Shape",
+                "label": "micro triangle",
+                "media": ["a.jpg", "b.jpg"],
+                "count": 2,
+                "examples": ["a.jpg", "b.jpg"],
+                "contexts": [],
+            },
+            {
+                "id": "g002",
+                "source": "other",
+                "category": "other",
+                "suggestedGroup": "Connector",
+                "label": "metal ring",
+                "media": ["b.jpg", "c.jpg"],
+                "count": 2,
+                "examples": ["b.jpg", "c.jpg"],
+                "contexts": [],
+            },
+        ],
+    }
+    existing = [{"group": "BT Shape", "terms": ["triangle"]}]
+    challenge = vision_schema_contract.build_challenge_request(
+        analysis,
+        existing,
+        {"groups": []},
+    )
+    result = vision_schema_contract.normalize_result(
+        {
+            "groups": [
+                {
+                    "name": "Connector",
+                    "targetGroup": "",
+                    "rationale": "Recurring hardware.",
+                    "terms": [{"term": "ring", "evidenceIds": ["g002"]}],
+                },
+                {
+                    "name": "BT Shape",
+                    "targetGroup": "BT Shape",
+                    "rationale": "Recurring shape distinction.",
+                    "terms": [{"term": "micro triangle", "evidenceIds": ["g001"]}],
+                },
+            ]
+        },
+        sight_evidence=challenge["sight_evidence"],
+        existing_groups=challenge["existing_groups"],
+    )
+    assert challenge["operation"] == "vision_schema_challenge"
+    assert [row["name"] for row in result["groups"]] == ["BT Shape", "Connector"]

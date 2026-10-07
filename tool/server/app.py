@@ -879,10 +879,8 @@ def vision_schema_assist_route():
                 existing_groups,
                 files=requested_files,
             )
-            if int(analysis.get("openItemCount") or 0) < 2:
-                raise ValueError("Vocabulary discovery needs open Vision sight for at least two media items.")
-            if int(analysis.get("schemaAwareItemCount") or 0) < int(analysis.get("openItemCount") or 0):
-                raise ValueError("Vocabulary discovery needs the fresh schema-aware Vision pass for the full Set.")
+            if int(analysis.get("evidenceCount") or 0) < 1:
+                raise ValueError("Vocabulary discovery needs at least one usable Vision observation.")
             contract = build_vision_schema_request(analysis, existing_groups)
             job = enqueue_llm("schema", director_model, contract, context={}, label="Vocabulary Synthesis")
             return jsonify({"ok": True, "analysis": analysis, "job": job}), 202

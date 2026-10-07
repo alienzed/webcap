@@ -2802,7 +2802,6 @@ html[data-theme="dark"] .app-settings-environment-check {
 
 .set-scan-subtitle,
 .set-scan-summary span,
-.set-scan-stage span,
 .set-scan-footer {
   color: var(--muted);
   font-size: 12px;
@@ -2830,56 +2829,84 @@ html[data-theme="dark"] .app-settings-environment-check {
   transition: width 160ms ease;
 }
 
-.set-scan-stages {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding: 14px 18px;
-}
-
-.set-scan-stage {
+.set-intelligence-next {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 11px;
+  gap: 12px;
+  margin: 18px;
+  padding: 16px;
   border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: var(--panel-soft);
-  opacity: 0.58;
-}
-
-.set-scan-stage.is-active,
-.set-scan-stage.is-complete {
-  opacity: 1;
-}
-
-.set-scan-stage.is-active {
-  border-color: var(--accent);
-}
-
-.set-scan-stage.is-complete strong::before {
-  content: '\2713 ';
-}
-
-.set-scan-raw-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: min(480px, 52vh);
-  overflow: auto;
-  margin: 0 18px 14px;
-  padding: 12px;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel-soft);
 }
 
-.set-scan-raw-wrap.hidden {
+.set-intelligence-next.hidden {
   display: none;
 }
 
+.set-intelligence-next-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.set-intelligence-next-copy strong {
+  font-size: 16px;
+}
+
+.set-intelligence-next-copy span,
+.set-intelligence-secondary-actions {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.set-intelligence-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.set-intelligence-link-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.set-intelligence-link-btn:hover,
+.set-intelligence-link-btn:focus-visible {
+  color: var(--text);
+  outline: none;
+}
+
+.set-scan-details {
+  margin: 0 18px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.set-scan-details.hidden {
+  display: none;
+}
+
+.set-scan-details summary {
+  cursor: pointer;
+  padding: 9px 11px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .set-scan-raw-output {
+  max-height: min(420px, 48vh);
   margin: 0;
+  overflow: auto;
+  padding: 0 11px 11px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--text);
@@ -2891,11 +2918,6 @@ html[data-theme="dark"] .app-settings-environment-check {
   border-top: 1px solid var(--border-soft);
 }
 
-@media (max-width: 760px) {
-  .set-scan-stages {
-    grid-template-columns: 1fr;
-  }
-}
 
 .vision-schema-modal {
   position: fixed;

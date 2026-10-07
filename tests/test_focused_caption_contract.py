@@ -275,6 +275,8 @@ def test_caption_vision_supports_video_first_frame_and_keeps_focus_toggle_visibl
     assert "toggle.disabled = !modelAvailable;" in vision
     assert "Vision checking first video frame" in vision
     assert "checks run automatically for each caption candidate" in vision
+    assert "Vision enabled · no Vision model is currently available." in vision
+    assert "Vision enabled · loading Vision models" in vision
 
 
 def test_standalone_vision_caption_is_preview_adjacent_and_requires_explicit_editor_use():

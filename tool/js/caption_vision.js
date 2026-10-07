@@ -406,7 +406,15 @@ function syncCaptionVisionUi() {
   status.classList.add('hidden');
   status.textContent = '';
 
-  if (!candidateVisible || !captionVisionEnabled || !supported) return;
+  if (!candidateVisible || !captionVisionEnabled) return;
+  if (!modelAvailable) {
+    status.textContent = captionVisionCapabilities.loaded
+      ? 'Vision enabled · no Vision model is currently available.'
+      : 'Vision enabled · loading Vision models…';
+    status.classList.remove('hidden');
+    return;
+  }
+  if (!mediaSupported) return;
 
   if (captionVisionActiveTask) {
     status.textContent = isCaptionVisionVideo(mediaItem.fileName)

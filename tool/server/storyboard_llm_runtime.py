@@ -591,7 +591,7 @@ def stop_active_request(model_ref=""):
     settings = _active_runtime_settings(model_ref)
     if settings.get("mode", "local") == "remote":
         with _use_runtime(settings.get("runtime_id", "")):
-            assert_stop_supported()
+            assert_stop_supported(model_ref)
 
     # Signal first so work that currently owns a runtime lifecycle lock can
     # unwind itself instead of making Stop wait for that lifecycle step.

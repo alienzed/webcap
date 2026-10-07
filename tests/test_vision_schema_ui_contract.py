@@ -79,8 +79,10 @@ def test_guided_tag_pass_reuses_grid_and_keeps_new_vocabulary_out_of_primary_flo
     assert "window.openGuidedTagPass = openGuidedTagPass;" in script
     assert "appendRawResponse(fileName, result.text);" in script
     assert "if (!candidate || !candidate.existing) return;" in script
-    assert "mediaGridState.selectedKeys = selected;" in script
-    assert "window.handleGuidedTagPassGridTermMutation" in workbench
+    assert "mediaGridReplaceSelection(Array.from(selected));" in script
+    assert "mediaGridState." not in script
+    assert "onTermMutation" in workbench
+    assert "handleGuidedTagPassGridTermMutation" not in workbench
     assert "window.syncGuidedTagPassWorkbenchHighlight" in grid_tiles
     assert "window.openGuidedTagPass({ source: 'grid' });" in grid_actions
     assert "openMediaGridSurface();" in script

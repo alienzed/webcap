@@ -621,7 +621,7 @@
       return ensureVocabularySight();
     }).then(function (ready) {
       if (ready === false || schemaState.workStopRequested) return false;
-      setStatus('Both visual passes are ready. Making sense of the vocabulary…');
+      setStatus('Usable visual evidence is ready. Making sense of the vocabulary…');
       return runVocabularySynthesis();
     }).then(function (draft) {
       if (!draft || schemaState.workStopRequested) return false;

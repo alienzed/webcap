@@ -311,6 +311,27 @@ function toggleGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term,
   return true;
 }
 
+function addGroupWorkbenchTermForMediaKeys(mediaKeys, requirementLabel, term) {
+  var keys = getDistinctGroupWorkbenchMediaKeys(mediaKeys);
+  if (!keys.length) {
+    if (typeof setStatus === 'function') setStatus('Select Grid thumbnails to tag them.');
+    return false;
+  }
+  var changed = 0;
+  keys.forEach(function (key) {
+    var ok = assignChecklistTagToMediaKey(key, requirementLabel, term, { skipSave: true, skipRefresh: true });
+    if (ok) changed += 1;
+  });
+  if (changed) {
+    saveChecklistToFolderState();
+    refreshTagDrivenPanelsForMediaKey((state.currentItem && state.currentItem.key) || '');
+  }
+  if (typeof setStatus === 'function') {
+    setStatus('Added "' + term + '" on ' + changed + ' Grid item' + (changed === 1 ? '' : 's') + '.');
+  }
+  return true;
+}
+
 function getGroupWorkbenchGridUsageState(requirementLabel, term, mediaKeys) {
   var total = Array.isArray(mediaKeys) ? mediaKeys.length : 0;
   if (total <= 0) return 'none';

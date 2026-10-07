@@ -942,6 +942,20 @@
     applyGuidedTagPassStep();
   }
 
+  function applyGuidedTagPassTerm() {
+    var step = getGuidedTagPassStep();
+    if (!step || !mediaGridIsOpen()) return;
+    var keys = mediaGridGetSelectedKeysSnapshot();
+    if (!keys.length) {
+      mediaGridSetStatus('Select at least one Grid item or Skip.');
+      return;
+    }
+    if (!addGroupWorkbenchTermForMediaKeys(keys, step.group, step.term)) {
+      throw new Error('Guided Tag Pass could not apply the current tag.');
+    }
+    advanceGuidedTagPass();
+  }
+
   function skipGuidedTagPassStep() {
     if (!schemaState.guidedPass) return;
     advanceGuidedTagPass();
@@ -951,6 +965,7 @@
     var opts = options || {};
     var hadPass = !!schemaState.guidedPass;
     schemaState.guidedPass = null;
+    if (mediaGridIsOpen()) mediaGridSetGuidedPresentation(false);
     if (hadPass && opts.keepGridOpen !== false && mediaGridIsOpen()) {
       mediaGridSetStatus(opts.completed ? 'Guided Tag Pass complete.' : 'Guided Tag Pass ended.');
       renderMediaGridSurface();
@@ -962,15 +977,21 @@
     var progress = el('media-grid-guided-pass-progress');
     var label = el('media-grid-guided-pass-label');
     var launchBtn = el('media-grid-guided-pass-btn');
-    if (!bar || !progress || !label || !launchBtn) throw new Error('Guided Tag Pass Grid controls are missing.');
+    var applyBtn = el('media-grid-guided-pass-apply-btn');
+    if (!bar || !progress || !label || !launchBtn || !applyBtn) throw new Error('Guided Tag Pass Grid controls are missing.');
     var pass = schemaState.guidedPass;
     var step = getGuidedTagPassStep();
     var canLaunch = isSetFolderPath(state && state.folder);
-    bar.classList.toggle('hidden', !pass || !step);
+    var active = !!pass && !!step;
+    bar.classList.toggle('hidden', !active);
     launchBtn.classList.toggle('hidden', !!pass || !canLaunch);
-    if (!pass || !step) return;
+    mediaGridSetGuidedPresentation(active);
+    if (!active) return;
+    var selectedCount = mediaGridGetSelectedKeysSnapshot().length;
     progress.textContent = String(pass.index + 1) + ' / ' + String(pass.steps.length);
     label.textContent = step.group + ' · ' + step.term + ' — ' + String(step.highFiles.length) + ' likely';
+    applyBtn.disabled = selectedCount <= 0;
+    applyBtn.textContent = 'Apply to ' + String(selectedCount);
   }
 
   function syncGuidedTagPassWorkbenchHighlight() {
@@ -1296,6 +1317,7 @@
 
   window.openVisionSchemaAssist = open;
   window.openGuidedTagPass = openGuidedTagPass;
+  window.applyGuidedTagPassTerm = applyGuidedTagPassTerm;
   window.skipGuidedTagPassStep = skipGuidedTagPassStep;
   window.exitGuidedTagPass = exitGuidedTagPass;
   window.renderGuidedTagPassGridChrome = renderGuidedTagPassGridChrome;

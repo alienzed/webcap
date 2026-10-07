@@ -121,6 +121,18 @@ def test_media_grid_selection_highlight_is_visually_strong():
     assert "inset 0 0 0 4px" in css
 
 
+def test_guided_grid_uses_owned_apply_chrome_without_changing_normal_grid_layout():
+    html = _read("tool/tool.html")
+    actions = _read("tool/js/media_grid_actions.js")
+    css = _read("tool/css/media_grid.css")
+
+    assert 'id="media-grid-guided-pass-apply-btn"' in html
+    assert "click the highlighted tag on the right" not in html
+    assert "function mediaGridSetGuidedPresentation(active)" in actions
+    assert ".workspace-surface-grid.sidebar-hidden.media-grid-guided-active" in css
+    assert ".workspace-surface-grid.media-grid-guided-active .workbench-panel" in css
+
+
 def test_grid_initializes_after_all_classic_scripts_are_loaded():
     actions = _read("tool/js/media_grid_actions.js")
 

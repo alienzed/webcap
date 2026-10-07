@@ -39,9 +39,10 @@ function mediaGridWireSurface() {
   if (els.surface.__wired) return;
   els.surface.__wired = true;
   var guidedBtn = document.getElementById('media-grid-guided-pass-btn');
+  var guidedApplyBtn = document.getElementById('media-grid-guided-pass-apply-btn');
   var guidedSkipBtn = document.getElementById('media-grid-guided-pass-skip-btn');
   var guidedExitBtn = document.getElementById('media-grid-guided-pass-exit-btn');
-  if (!els.selectAllBtn || !els.clearBtn || !els.closeBtn || !guidedBtn || !guidedSkipBtn || !guidedExitBtn) {
+  if (!els.selectAllBtn || !els.clearBtn || !els.closeBtn || !guidedBtn || !guidedApplyBtn || !guidedSkipBtn || !guidedExitBtn) {
     throw new Error('Media Grid surface controls are missing.');
   }
   els.selectAllBtn.onclick = mediaGridSelectAll;
@@ -49,6 +50,9 @@ function mediaGridWireSurface() {
   els.closeBtn.onclick = closeMediaGridSurface;
   guidedBtn.onclick = function () {
     window.openGuidedTagPass({ source: 'grid' });
+  };
+  guidedApplyBtn.onclick = function () {
+    window.applyGuidedTagPassTerm();
   };
   guidedSkipBtn.onclick = function () {
     window.skipGuidedTagPassStep();
@@ -58,6 +62,11 @@ function mediaGridWireSurface() {
   };
 }
 
+
+function mediaGridSetGuidedPresentation(active) {
+  if (!ui || !ui.appEl) throw new Error('Media Grid host is missing.');
+  ui.appEl.classList.toggle('media-grid-guided-active', !!active);
+}
 
 function openMediaGridSurface() {
   var items = mediaGridGetVisibleItems();

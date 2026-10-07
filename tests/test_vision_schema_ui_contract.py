@@ -102,9 +102,13 @@ def test_guided_tag_pass_reuses_grid_and_keeps_new_vocabulary_out_of_primary_flo
 
     assert 'id="set-intelligence-open-btn"' in html
     assert 'id="media-grid-guided-pass"' in html
+    assert 'id="media-grid-guided-pass-apply-btn"' in html
     assert "window.openGuidedTagPass = openGuidedTagPass;" in script
+    assert "window.applyGuidedTagPassTerm = applyGuidedTagPassTerm;" in script
     assert "if (!candidate || !candidate.existing) return;" in script
     assert "mediaGridReplaceSelection(Array.from(selected));" in script
+    assert "addGroupWorkbenchTermForMediaKeys(keys, step.group, step.term)" in script
+    assert "function addGroupWorkbenchTermForMediaKeys" in workbench
     assert "mediaGridState." not in script
     assert "onTermMutation" in workbench
     assert "handleGuidedTagPassGridTermMutation" not in workbench

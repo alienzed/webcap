@@ -120,8 +120,25 @@
 
 .media-grid-guided-pass-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex: 0 0 auto;
+}
+
+.media-grid-guided-pass-actions .media-grid-btn {
+  min-height: 38px;
+  padding: 9px 16px;
+  font-size: 13px;
+}
+
+.media-grid-guided-pass-apply-btn {
+  min-width: 124px;
+  border-color: rgba(245, 158, 11, 0.58);
+  background: #b45309;
+}
+
+.media-grid-guided-pass-apply-btn:hover {
+  border-color: rgba(253, 230, 138, 0.72);
+  background: #92400e;
 }
 
 .app.shell-revamp.workspace-surface-grid .group-workbench-term-btn.guided-tag-target {
@@ -631,6 +648,15 @@ body.media-grid-viewer-open {
 
 .app.shell-revamp.workspace-surface-grid.sidebar-hidden .workbench-panel {
   grid-area: workbench;
+}
+
+.app.shell-revamp.workspace-surface-grid.sidebar-hidden.media-grid-guided-active {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "preview";
+}
+
+.app.shell-revamp.workspace-surface-grid.media-grid-guided-active .workbench-panel {
+  display: none;
 }
 
 .app.shell-revamp.workspace-surface-grid #caption-checklist-panel.group-tools-card.checklist-panel {

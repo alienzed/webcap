@@ -321,6 +321,8 @@ def test_focus_caption_vision_phrases_are_ephemeral_editable_and_one_deep_prefet
     assert "captionAssistCandidate.text = next;" in primer
     assert "insertBtn.addEventListener('pointerdown'" in primer
     assert "loadFocusedCaptionVisionPhrases();" in primer
+    assert "isCaptionVisionSupportedMedia(state.currentItem.fileName)" in primer
+    assert "Vision phrases failed: " in focus
     assert ".caption-vision-phrase-insert" in css
 
 

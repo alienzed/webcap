@@ -375,6 +375,8 @@ function syncFocusedCaptionVisionPhrasesUi() {
     focusOpen &&
     captionAssistCandidate &&
     mediaKey &&
+    state.currentItem &&
+    isCaptionVisionSupportedMedia(state.currentItem.fileName) &&
     captionAssistCandidate.mediaKey === mediaKey
   );
   trigger.classList.toggle('hidden', !candidateReady);
@@ -1066,7 +1068,7 @@ function blendFocusedCaptionVisionPhrase(phrase) {
   var request = buildCaptionAssistRequest(mediaItem);
   var currentDraft = String(candidate.text || '').trim();
   request.draft = currentDraft
-    ? (currentDraft + (/\s$/.test(currentDraft) ? '' : ' ') + detail)
+    ? (currentDraft + (/[.!?]$/.test(currentDraft) ? ' ' : ', ') + detail)
     : detail;
   if (!request.model) {
     setStatus('Select a Director model before blending the Vision phrase.');

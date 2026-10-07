@@ -250,13 +250,6 @@ function loadFocusedCaptionVisionPhrases() {
 
   focusedCaptionVisionPhrases.enabled = true;
   if (
-    focusedCaptionVisionPhrases.mediaKey === mediaItem.key &&
-    focusedCaptionVisionPhrases.phrases.length
-  ) {
-    syncFocusedCaptionVisionPhrasesUi();
-    return syncFocusedCaptionVisionPhrasePrefetch().then(function () { return true; });
-  }
-  if (
     focusedCaptionVisionPhrases.task &&
     focusedCaptionVisionPhrases.task.mediaKey === mediaItem.key
   ) {
@@ -280,6 +273,7 @@ function loadFocusedCaptionVisionPhrases() {
       focusedCaptionVisionPhrases.task = null;
       focusedCaptionVisionPhrases.error = String(err && err.message ? err.message : err);
       syncFocusedCaptionVisionPhrasesUi();
+      setStatus('Vision phrases failed: ' + focusedCaptionVisionPhrases.error);
       reportConsoleError('Focus Caption Vision phrases', err);
     }
     return false;

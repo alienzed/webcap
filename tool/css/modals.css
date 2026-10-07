@@ -2928,6 +2928,39 @@ html[data-theme="dark"] .app-settings-environment-check {
 
 .vision-schema-header,
 .vision-schema-toolbar,
+
+.vision-schema-evidence-details {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.vision-schema-evidence-details summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.vision-schema-evidence-details p {
+  margin: 8px 0;
+  line-height: 1.45;
+}
+
+.vision-schema-evidence-detail-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.45fr) minmax(0, 1fr);
+  gap: 4px 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.vision-schema-evidence-detail-row small {
+  grid-column: 2;
+  color: var(--muted);
+}
+
 .vision-schema-footer {
   flex: 0 0 auto;
   display: flex;

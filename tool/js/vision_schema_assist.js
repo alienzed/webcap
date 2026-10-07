@@ -50,7 +50,7 @@
     for (var i = 0; i < items.length; i += 1) {
       if (items[i] && String(items[i].fileName || '') === String(fileName || '')) return items[i];
     }
-    return { key: String(fileName || ''), fileName: String(fileName || '') };
+    return null;
   }
 
   function existingGroupsPayload() {
@@ -168,12 +168,22 @@
 
       var header = document.createElement('div');
       header.className = 'vision-tag-item-header';
+      var thumb = document.createElement('img');
+      thumb.className = 'vision-tag-item-thumb';
+      thumb.loading = 'lazy';
+      thumb.alt = String(item.file || '');
+      thumb.src = '/caption/media?folder=' + encodeURIComponent(schemaState.folder) +
+        '&media=' + encodeURIComponent(String(item.file || ''));
+      var fileWrap = document.createElement('div');
+      fileWrap.className = 'vision-tag-item-file';
       var file = document.createElement('strong');
       file.textContent = String(item.file || '');
       var count = document.createElement('span');
       count.textContent = String((item.candidates || []).length) + ' candidate' + ((item.candidates || []).length === 1 ? '' : 's');
-      header.appendChild(file);
-      header.appendChild(count);
+      fileWrap.appendChild(file);
+      fileWrap.appendChild(count);
+      header.appendChild(thumb);
+      header.appendChild(fileWrap);
       card.appendChild(header);
 
       if (!(item.candidates || []).length) {
@@ -372,9 +382,14 @@
     suggestBtn.disabled = schemaState.scanRunning || schemaBusy || allStructured < 2;
     tagBtn.disabled = schemaState.scanRunning || schemaBusy || scopedStructured < 1;
     applyBtn.textContent = schemaState.mode === 'tags' ? 'Apply Selected Tags' : 'Merge Selected Vocabulary';
+    var tagCandidateCount = schemaState.tagCandidates && Array.isArray(schemaState.tagCandidates.items)
+      ? schemaState.tagCandidates.items.reduce(function (total, item) {
+          return total + (Array.isArray(item.candidates) ? item.candidates.length : 0);
+        }, 0)
+      : 0;
     applyBtn.disabled = schemaState.scanRunning || schemaBusy || (
       schemaState.mode === 'tags'
-        ? !(schemaState.tagCandidates && Array.isArray(schemaState.tagCandidates.items) && schemaState.tagCandidates.items.length)
+        ? tagCandidateCount < 1
         : !(schemaState.schema && schemaState.schema.groups && schemaState.schema.groups.length)
     );
     var heading = el('vision-schema-proposal-heading');
@@ -469,6 +484,8 @@
     schemaState.scanRunning = true;
     schemaState.scanStopRequested = false;
     schemaState.schema = null;
+    schemaState.tagCandidates = null;
+    schemaState.mode = 'tags';
     schemaState.analysis = null;
     render();
     setStatus('Checking cached Vision sight…');
@@ -538,6 +555,7 @@
 
   function runSuggestions() {
     if (schemaState.scanRunning || schemaState.schemaStarting || schemaState.schemaJobId) return;
+    schemaState.mode = 'vocabulary';
     var director = currentDirectorModel();
     if (!director) {
       setStatus('Select a Director model first.', true);

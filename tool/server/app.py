@@ -911,20 +911,6 @@ def vision_schema_assist_route():
             records = vision_sight_records(folder, vision_model, files=requested_files)
             if not records:
                 raise ValueError("Tag Assist needs structured Vision sight for the selected media.")
-            if requested_files:
-                available_files = {row["file"] for row in records}
-                missing_files = [
-                    str(value or "").strip()
-                    for value in requested_files
-                    if str(value or "").strip() and str(value or "").strip() not in available_files
-                ]
-                if missing_files:
-                    raise ValueError(
-                        "Structured Vision sight is missing for {} selected media item{}. Scan visible media first.".format(
-                            len(missing_files),
-                            "" if len(missing_files) == 1 else "s",
-                        )
-                    )
             contract = build_vision_tag_request(
                 records,
                 data.get("existingGroups"),

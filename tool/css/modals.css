@@ -3340,3 +3340,76 @@ html[data-theme="dark"] .app-settings-environment-check {
   flex-direction: column;
   gap: 2px;
 }
+
+
+/* Diagnostics-only Model Lab */
+.model-lab-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.model-lab-model-result {
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.model-lab-model-result > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.model-lab-attempt {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(0, 1.3fr);
+  gap: 8px 14px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.model-lab-attempt > span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.model-lab-attempt details {
+  grid-column: 1 / -1;
+}
+
+.model-lab-attempt pre {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.model-lab-attempt-failed > span,
+.model-lab-attempt-interrupted > span {
+  color: var(--danger);
+}
+
+.model-lab-history-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  margin: 4px 0;
+}
+
+@media (max-width: 900px) {
+  .model-lab-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .model-lab-attempt {
+    grid-template-columns: 1fr;
+  }
+}

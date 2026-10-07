@@ -66,6 +66,21 @@ _monitor_thread = None
 _logger = logging.getLogger(__name__)
 
 
+def _redact_diagnostic_value(value):
+    if isinstance(value, dict):
+        return {key: _redact_diagnostic_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_diagnostic_value(item) for item in value]
+    if isinstance(value, str) and value.startswith("data:image/"):
+        header = value.split(",", 1)[0]
+        return header + ",<embedded image omitted; {} chars>".format(len(value))
+    return value
+
+
+def _diagnostic_contract_json(contract):
+    return json.dumps(_redact_diagnostic_value(contract), indent=2, ensure_ascii=False)
+
+
 def _reserve_gpu():
     from .training_runner import reserve_gpu_for_external_work
     return reserve_gpu_for_external_work(GPU_RESERVATION_OWNER)
@@ -488,7 +503,7 @@ def _execute_claimed(job_id, gpu_reserved):
         _logger.exception(
             "Director/model stage failed before WebCap ingest.\n"
             "--- FROZEN LLM CONTRACT ---\n%s",
-            json.dumps(contract, indent=2, ensure_ascii=False),
+            _diagnostic_contract_json(contract),
         )
         raise RuntimeError(
             "Director/model stage failed before WebCap ingest: " + str(exc)
@@ -514,7 +529,7 @@ def _execute_claimed(job_id, gpu_reserved):
                 "--- FROZEN LLM CONTRACT ---\n%s\n"
                 "--- CLIENT CONTEXT ---\n%s\n"
                 "--- RAW MODEL RESPONSE ---\n%s",
-                json.dumps(contract, indent=2, ensure_ascii=False),
+                _diagnostic_contract_json(contract),
                 json.dumps(context, indent=2, ensure_ascii=False),
                 str(llm_result.get("text") or ""),
             )

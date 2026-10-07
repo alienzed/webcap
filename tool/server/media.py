@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import traceback
 from pathlib import Path
 
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 safe_join_fs_root = app_config.safe_join_fs_root
 
 VIDEO_EXTS = {".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v", ".ogg", ".wmv", ".mpg", ".mpeg"}
+_media_metadata_lock = threading.RLock()
 
 
 def _parse_target_fps(value):
@@ -509,7 +511,43 @@ def write_media_metadata_file(metadata_path, metadata):
                 pass
 
 
-def update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None, summary=None):
+def set_media_metadata_analysis_block(folder_path, file_name, block_name, block):
+    folder_path = Path(folder_path)
+    file_name = str(file_name or "").strip()
+    block_name = str(block_name or "").strip()
+    if not file_name or Path(file_name).name != file_name:
+        raise ValueError("Media metadata block requires a file in the selected folder.")
+    if not block_name:
+        raise ValueError("Media metadata block name is required.")
+    if not isinstance(block, dict):
+        raise ValueError("Media metadata analysis block must be an object.")
+
+    media_path = folder_path / file_name
+    if not media_path.exists() or not media_path.is_file():
+        raise FileNotFoundError("Media file not found")
+
+    metadata_path = folder_path / "media_metadata.json"
+    with _media_metadata_lock:
+        if metadata_path.exists():
+            with open(metadata_path, "r", encoding="utf-8") as handle:
+                metadata = json.load(handle)
+            if not isinstance(metadata, dict):
+                raise RuntimeError("media_metadata.json must contain an object.")
+        else:
+            metadata = {}
+
+        current = metadata.get(file_name)
+        info = dict(current) if isinstance(current, dict) else {}
+        stat = media_path.stat()
+        info["mtime"] = int(stat.st_mtime)
+        info["size"] = int(stat.st_size)
+        info[block_name] = dict(block)
+        metadata[file_name] = info
+        write_media_metadata_file(metadata_path, metadata)
+        return dict(info[block_name])
+
+
+def _update_media_metadata_locked(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None, summary=None):
     folder_path = Path(folder_path)
     metadata_path = folder_path / "media_metadata.json"
     if metadata_path.exists():
@@ -638,6 +676,16 @@ def update_media_metadata(folder_path, include_face_focus=False, include_selecti
     return metadata
 
 
+def update_media_metadata(folder_path, include_face_focus=False, include_selection_pose=False, scoped_filenames=None, summary=None):
+    with _media_metadata_lock:
+        return _update_media_metadata_locked(
+            folder_path,
+            include_face_focus=include_face_focus,
+            include_selection_pose=include_selection_pose,
+            scoped_filenames=scoped_filenames,
+            summary=summary,
+        )
+
 
 def color_suggestions_response(rel_path, file_name):
     rel_path = str(rel_path or "").strip()
@@ -665,10 +713,10 @@ def color_suggestions_response(rel_path, file_name):
 
         cached = info.get("color_suggestions")
         if not isinstance(cached, dict) or cached.get("version") != COLOR_SUGGESTIONS_VERSION:
-            info["color_suggestions"] = analyze_image_color_suggestions(file_path)
-            write_media_metadata_file(folder_path / "media_metadata.json", metadata)
+            cached = analyze_image_color_suggestions(file_path)
+            set_media_metadata_analysis_block(folder_path, file_name, "color_suggestions", cached)
 
-        payload = dict(info["color_suggestions"])
+        payload = dict(cached)
         payload["file"] = file_name
         return jsonify(payload)
     except Exception as exc:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .caption_ops import _resolve_folder, _validate_media_name, list_media_files
 from .caption_vision import VISION_MEDIA_EXTS
-from .media import write_media_metadata_file
+from .media import set_media_metadata_analysis_block
 
 
 VISION_SIGHT_VERSION = 1
@@ -51,7 +51,7 @@ def _current_sight_block(folder_path, media_name, metadata, model):
     return sight if str(sight.get("description") or "").strip() else None
 
 
-def vision_sight_status(folder, model):
+def vision_sight_status(folder, model, include_descriptions=False):
     folder_path = _resolve_folder(folder)
     metadata = _load_metadata(folder_path)
     items = []
@@ -60,11 +60,13 @@ def vision_sight_status(folder, model):
         if media_path.suffix.casefold() not in VISION_MEDIA_EXTS:
             continue
         sight = _current_sight_block(folder_path, media_name, metadata, model)
-        items.append({
+        item = {
             "file": media_name,
             "cached": bool(sight),
-            "description": str((sight or {}).get("description") or ""),
-        })
+        }
+        if include_descriptions:
+            item["description"] = str((sight or {}).get("description") or "")
+        items.append(item)
     cached = sum(1 for item in items if item["cached"])
     return {
         "version": VISION_SIGHT_VERSION,
@@ -92,13 +94,8 @@ def save_vision_sight(folder, media_name, model, description):
     if media_path.suffix.casefold() not in VISION_MEDIA_EXTS:
         raise ValueError("Vision sight supports images and videos.")
 
-    metadata = _load_metadata(folder_path)
-    current = metadata.get(media_name)
-    info = dict(current) if isinstance(current, dict) else {}
     stat = media_path.stat()
-    info["mtime"] = int(stat.st_mtime)
-    info["size"] = int(stat.st_size)
-    info["vision_sight"] = {
+    sight = {
         "version": VISION_SIGHT_VERSION,
         "model": model,
         "description": description,
@@ -106,9 +103,12 @@ def save_vision_sight(folder, media_name, model, description):
         "size": int(stat.st_size),
         "updatedAt": time.time(),
     }
-    metadata[media_name] = info
-    write_media_metadata_file(folder_path / "media_metadata.json", metadata)
-    return dict(info["vision_sight"])
+    return set_media_metadata_analysis_block(
+        folder_path,
+        media_name,
+        "vision_sight",
+        sight,
+    )
 
 
 def _tokens(text):
@@ -166,7 +166,7 @@ def mine_sight_records(records, limit=180):
 
 
 def mine_vision_sight(folder, model):
-    status = vision_sight_status(folder, model)
+    status = vision_sight_status(folder, model, include_descriptions=True)
     records = [
         {"file": item["file"], "description": item["description"]}
         for item in status["items"]

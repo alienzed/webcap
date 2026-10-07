@@ -219,6 +219,13 @@
       if (!metadataResult || metadataResult.ok === false) {
         throw new Error((metadataResult && metadataResult.error) || 'WebCap Set analysis failed.');
       }
+      var warnings = Array.isArray(metadataResult.warnings) ? metadataResult.warnings : [];
+      setScanSetStage(
+        'metadata',
+        warnings.length
+          ? ('Complete with ' + String(warnings.length) + ' optional analyzer warning' + (warnings.length === 1 ? '' : 's') + '.')
+          : 'WebCap analysis is current.'
+      );
       if (setScanState.stopRequested) return false;
       return runSetScanVision(folder, files, setScanState.visionModel);
     }).then(function (visionSuccess) {

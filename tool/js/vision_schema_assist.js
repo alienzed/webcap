@@ -428,8 +428,8 @@
     var schemaBusy = schemaState.schemaStarting || !!schemaState.schemaJobId;
     var hasVocabularyReview = !schemaState.guidedLaunch &&
       !!(schemaState.schema && schemaState.schema.groups && schemaState.schema.groups.length);
-    scanBtn.classList.toggle('hidden', !!schemaState.guidedLaunch || hasVocabularyReview);
-    scanBtn.disabled = schemaState.scanRunning || schemaBusy;
+    scanBtn.classList.add('hidden');
+    scanBtn.disabled = true;
     scanBtn.textContent = 'Discover Vocabulary';
     progressWrap.classList.toggle('hidden', hasVocabularyReview);
 
@@ -441,8 +441,8 @@
       return (!schemaState.scopeFiles.length || !!scope[String(item.file || '')]) && !!item.structured;
     }).length;
     var scopedTotal = schemaState.scopeFiles.length;
-    tagBtn.classList.toggle('hidden', !schemaState.guidedLaunch);
-    tagBtn.disabled = schemaState.scanRunning || schemaBusy || !scopedTotal || scopedStructured < scopedTotal;
+    tagBtn.classList.add('hidden');
+    tagBtn.disabled = true;
     tagBtn.textContent = 'Build Guided Pass';
 
     var heading = el('vision-schema-proposal-heading');
@@ -547,7 +547,7 @@
     schemaState.folder = folder;
     schemaState.visionModel = model;
     if (!schemaState.guidedLaunch || !schemaState.scopeFiles.length) {
-      schemaState.scopeFiles = getVisibleMediaSelectionForTraining();
+      schemaState.scopeFiles = getCurrentSetMediaFileNames();
     }
     if (!schemaState.scopeFiles.length) {
       setStatus('No visible media to scan.', true);
@@ -611,14 +611,37 @@
       setStatus('Select a Director model first.', true);
       return;
     }
-    schemaState.scopeFiles = getVisibleMediaSelectionForTraining();
+    schemaState.scopeFiles = getCurrentSetMediaFileNames();
     if (!schemaState.scopeFiles.length) {
-      setStatus('No visible media to analyze.', true);
+      setStatus('This Set has no media to analyze.', true);
       return;
     }
     schemaState.mode = 'vocabulary';
     schemaState.reviewIndex = 0;
-    runScan({ discoverAfter: true });
+    setStatus('Checking current Set Scan…');
+    refreshStatus().then(function (payload) {
+      var wanted = {};
+      schemaState.scopeFiles.forEach(function (fileName) { wanted[fileName] = true; });
+      var structured = (payload.items || []).filter(function (item) {
+        return !!wanted[String(item.file || '')] && !!item.structured;
+      }).length;
+      if (structured < schemaState.scopeFiles.length) {
+        setStatus(
+          'Set Scan is incomplete for this Vision model (' + String(structured) + ' / ' +
+          String(schemaState.scopeFiles.length) + '). Run Scan Set from Set Tools first.',
+          true
+        );
+        return null;
+      }
+      setStatus('Set intelligence ready. Finding recurring vocabulary…');
+      return analyze().then(function () {
+        runSuggestions();
+        return true;
+      });
+    }).catch(function (err) {
+      setStatus('Could not read Set intelligence: ' + String(err && err.message ? err.message : err), true);
+      reportConsoleError('Discover Vocabulary', err);
+    });
   }
 
   function stopWork() {
@@ -1147,10 +1170,24 @@
     schemaState.guidedLaunch = true;
     schemaState.rawResponses = [];
     render();
-    setStatus('Loading current Sight coverage…');
-    refreshStatus().then(function () {
+    setStatus('Checking current Set intelligence…');
+    refreshStatus().then(function (payload) {
       if (!schemaState.open || !schemaState.guidedLaunch) return;
-      runScan();
+      var wanted = {};
+      schemaState.scopeFiles.forEach(function (fileName) { wanted[fileName] = true; });
+      var structured = (payload.items || []).filter(function (item) {
+        return !!wanted[String(item.file || '')] && !!item.structured;
+      }).length;
+      if (structured < schemaState.scopeFiles.length) {
+        setStatus(
+          'Set Scan is incomplete for this Vision model (' + String(structured) + ' / ' +
+          String(schemaState.scopeFiles.length) + '). Run Scan Set from Set Tools first.',
+          true
+        );
+        return;
+      }
+      setStatus('Set intelligence ready. Building Guided Tag Pass…');
+      runTagSuggestions();
     }).catch(function (err) {
       setStatus('Could not start Guided Tag Pass: ' + String(err && err.message ? err.message : err), true);
       reportConsoleError('Guided Tag Pass', err);
@@ -1181,10 +1218,10 @@
     schemaState.guidedLaunch = false;
     schemaState.rawResponses = [];
     render();
-    setStatus('Loading current Sight coverage…');
+    setStatus('Loading current Set intelligence…');
     refreshStatus().then(function () {
       if (!schemaState.open || schemaState.guidedLaunch) return;
-      setStatus('Ready to discover recurring vocabulary.');
+      runDiscovery();
     }).catch(function (err) {
       setStatus('Could not load Discover Vocabulary: ' + String(err && err.message ? err.message : err), true);
       reportConsoleError('Discover Vocabulary', err);
@@ -1200,6 +1237,7 @@
 
   function bind() {
     var openBtn = el('vision-schema-open-btn');
+    var setToolsOpenBtn = el('discover-vocabulary-set-btn');
     var guidedOpenBtn = el('guided-tag-pass-open-btn');
     var closeBtn = el('vision-schema-close-btn');
     var scanBtn = el('vision-schema-scan-btn');
@@ -1208,10 +1246,11 @@
     var skipBtn = el('vision-schema-skip-btn');
     var applyBtn = el('vision-schema-apply-btn');
     var modal = el('vision-schema-modal');
-    if (!openBtn || !guidedOpenBtn || !closeBtn || !scanBtn || !stopBtn || !tagBtn || !skipBtn || !applyBtn || !modal) {
+    if (!openBtn || !setToolsOpenBtn || !guidedOpenBtn || !closeBtn || !scanBtn || !stopBtn || !tagBtn || !skipBtn || !applyBtn || !modal) {
       throw new Error('Schema Assist controls are missing.');
     }
     openBtn.onclick = open;
+    setToolsOpenBtn.onclick = open;
     guidedOpenBtn.onclick = function () { openGuidedTagPass({ source: 'set' }); };
     closeBtn.onclick = close;
     scanBtn.onclick = runDiscovery;

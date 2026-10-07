@@ -570,23 +570,25 @@ def _remote_http_json_cancellable(path, method="GET", payload=None, timeout=30):
         connection.close()
 
 
-def _active_runtime_settings():
-    with _activity_lock:
-        active_model = str(_activity.get("model") or "").strip()
+def _active_runtime_settings(model_ref=""):
+    active_model = str(model_ref or "").strip()
+    if not active_model:
+        with _activity_lock:
+            active_model = str(_activity.get("model") or "").strip()
     if not active_model:
         return _director_config()
     runtime_id, _model_id = _split_model_ref(active_model)
     return _runtime_settings(runtime_id)
 
 
-def assert_stop_supported():
-    settings = _active_runtime_settings()
+def assert_stop_supported(model_ref=""):
+    settings = _active_runtime_settings(model_ref)
     if settings.get("mode", "local") == "local":
         assert_hard_stop_supported()
 
 
-def stop_active_request():
-    settings = _active_runtime_settings()
+def stop_active_request(model_ref=""):
+    settings = _active_runtime_settings(model_ref)
     if settings.get("mode", "local") == "remote":
         with _use_runtime(settings.get("runtime_id", "")):
             assert_stop_supported()

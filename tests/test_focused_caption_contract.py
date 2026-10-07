@@ -266,6 +266,17 @@ def test_focus_caption_vision_is_opt_in_actionable_and_one_deep():
     assert "maybeRunCaptionVisionForCandidate(candidate)" in primer
 
 
+def test_caption_vision_supports_video_first_frame_and_keeps_focus_toggle_visible_without_models():
+    vision = _read("tool/js/caption_vision.js")
+
+    assert "mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg" in vision
+    assert "function isCaptionVisionVideo(fileName)" in vision
+    assert "toggleWrap.classList.toggle('hidden', !candidateVisible || !mediaSupported);" in vision
+    assert "toggle.disabled = !modelAvailable;" in vision
+    assert "Vision checking first video frame" in vision
+    assert "checks run automatically for each caption candidate" in vision
+
+
 def test_standalone_vision_caption_is_preview_adjacent_and_requires_explicit_editor_use():
     html = _read("tool/tool.html")
     vision = _read("tool/js/caption_vision.js")

@@ -840,7 +840,7 @@ def cancel_job(job_id):
         if str(result.get("status") or "") == "stopping":
             from .storyboard_llm_runtime import stop_active_request
             try:
-                stop_active_request()
+                stop_active_request(_job_model_id(result))
             except (ValueError, RuntimeError) as exc:
                 _logger.warning("LLM runtime could not be interrupted; abandoning its result: %s", exc)
         return {"job": _job_view(result), "queue": snapshot(include_terminal=False)}
@@ -853,8 +853,12 @@ def reset():
         active_id = str(current.get("activeJobId") or "")
         if active_id:
             from .storyboard_llm_runtime import stop_active_request
+            active_job = next(
+                (job for job in current.get("jobs", []) if str(job.get("id") or "") == active_id),
+                None,
+            )
             try:
-                stop_active_request()
+                stop_active_request(_job_model_id(active_job))
             except (ValueError, RuntimeError) as exc:
                 # Some externally-owned or generic remote runtimes cannot be
                 # interrupted. The job remains stopping and its eventual result

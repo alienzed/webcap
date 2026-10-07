@@ -21,7 +21,11 @@ var visionImageCaptionState = {
 };
 
 function isCaptionVisionSupportedMedia(fileName) {
-  return /\.(jpe?g|png|webp|bmp|gif)$/i.test(String(fileName || ''));
+  return /\.(jpe?g|png|webp|bmp|gif|mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(String(fileName || ''));
+}
+
+function isCaptionVisionVideo(fileName) {
+  return /\.(mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(String(fileName || ''));
 }
 
 function loadCaptionVisionCapabilities() {
@@ -385,15 +389,16 @@ function syncCaptionVisionUi() {
     mediaItem &&
     captionAssistCandidate.mediaKey === mediaItem.key
   );
-  var supported = !!(
-    captionVisionCapabilities.models.length &&
-    mediaItem &&
-    isCaptionVisionSupportedMedia(mediaItem.fileName)
-  );
+  var mediaSupported = !!(mediaItem && isCaptionVisionSupportedMedia(mediaItem.fileName));
+  var modelAvailable = !!captionVisionCapabilities.models.length;
+  var supported = mediaSupported && modelAvailable;
 
-  toggleWrap.classList.toggle('hidden', !candidateVisible || !supported);
+  toggleWrap.classList.toggle('hidden', !candidateVisible || !mediaSupported);
   toggle.checked = !!captionVisionEnabled;
-  toggle.disabled = false;
+  toggle.disabled = !modelAvailable;
+  toggleWrap.title = modelAvailable
+    ? 'Scan for incorrect or omitted visual details using the selected Vision model.'
+    : (captionVisionCapabilities.loaded ? 'No Vision model is available.' : 'Vision models are still loading.');
   syncVisionImageCaptionActionUi();
 
   findings.innerHTML = '';
@@ -404,7 +409,9 @@ function syncCaptionVisionUi() {
   if (!candidateVisible || !captionVisionEnabled || !supported) return;
 
   if (captionVisionActiveTask) {
-    status.textContent = 'Vision checking image…';
+    status.textContent = isCaptionVisionVideo(mediaItem.fileName)
+      ? 'Vision checking first video frame…'
+      : 'Vision checking image…';
     status.classList.remove('hidden');
     return;
   }
@@ -414,7 +421,7 @@ function syncCaptionVisionUi() {
     return;
   }
   if (!captionVisionResult) {
-    status.textContent = 'Vision ready.';
+    status.textContent = 'Vision enabled · checks run automatically for each caption candidate.';
     status.classList.remove('hidden');
     return;
   }
@@ -519,10 +526,10 @@ function syncVisionImageCaptionSelection(mediaKey) {
 function requestVisionImageCaptionDescription(mediaItem, options) {
   var opts = options || {};
   if (!mediaItem || !mediaItem.key || !mediaItem.fileName) {
-    return Promise.reject(new Error('Vision Caption requires a selected image.'));
+    return Promise.reject(new Error('Vision Caption requires selected media.'));
   }
   if (!isCaptionVisionSupportedMedia(mediaItem.fileName)) {
-    return Promise.reject(new Error('Vision Caption currently supports image files only.'));
+    return Promise.reject(new Error('Vision Caption supports images and the first frame of videos.'));
   }
   return loadCaptionVisionCapabilities().then(function () {
     var model = String(opts.model || getCaptionVisionModelId() || '');
@@ -558,11 +565,11 @@ function requestVisionImageCaptionDescription(mediaItem, options) {
 function runVisionImageCaption() {
   var mediaItem = state && state.currentItem;
   if (!mediaItem || !mediaItem.key || !mediaItem.fileName) {
-    setStatus('Select an image first.');
+    setStatus('Select media first.');
     return Promise.resolve(false);
   }
   if (!isCaptionVisionSupportedMedia(mediaItem.fileName)) {
-    setStatus('Vision Caption currently supports image files only.');
+    setStatus('Vision Caption supports images and the first frame of videos.');
     return Promise.resolve(false);
   }
   if (visionImageCaptionState.pending) {

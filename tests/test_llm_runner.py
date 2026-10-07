@@ -1484,7 +1484,7 @@ def test_llm_reset_cancels_all_queued_jobs_without_touching_runtime(llm_root, mo
     monkeypatch.setattr(
         storyboard_llm_runtime,
         "stop_active_request",
-        lambda: pytest.fail("Idle queued LLM reset must not touch the runtime."),
+        lambda _model="": pytest.fail("Idle queued LLM reset must not touch the runtime."),
     )
     first = llm_runner.enqueue(
         "generate",
@@ -1518,7 +1518,7 @@ def test_llm_reset_marks_active_stopping_and_clears_successors(llm_root, monkeyp
     llm_runner.execution_claim_next(llm_runner.EXECUTION_LANE)
     llm_runner.execution_mark_running(active["id"])
     calls = []
-    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: calls.append("stop") or True)
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda model="": calls.append(model) or True)
 
     result = llm_runner.reset()
 
@@ -1526,7 +1526,7 @@ def test_llm_reset_marks_active_stopping_and_clears_successors(llm_root, monkeyp
     assert [job["jobId"] for job in result["jobs"]] == [active["id"]]
     assert result["jobs"][0]["status"] == "stopping"
     assert llm_runner.job_status(queued["id"])["status"] == "cancelled"
-    assert calls == ["stop"]
+    assert calls == ["qwen"]
 
 
 def test_llm_reset_idle_releases_owned_gpu(llm_root, monkeypatch):
@@ -1770,13 +1770,30 @@ def test_llm_targeted_stop_interrupts_active_without_cancelling_successor(llm_ro
     queued = llm_runner.enqueue("caption", {"operation": "chat", "model": "remote", "messages": []})
     llm_runner.execution_claim_next("llm", expected_job_id=active["jobId"])
     llm_runner.execution_mark_running(active["jobId"])
-    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda: calls.append("stop") or True)
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda model="": calls.append(model) or True)
 
     result = llm_runner.action("cancel_job", job_id=active["jobId"])
 
     assert result["job"]["status"] == "stopping"
     assert llm_runner.job_status(queued["jobId"])["status"] == "queued"
-    assert calls == ["stop"]
+    assert calls == ["qwen"]
+
+
+def test_llm_targeted_stop_uses_active_jobs_exact_model_identity(llm_root, monkeypatch):
+    calls = []
+    active = llm_runner.execution_enqueue(
+        llm_runner.EXECUTION_LANE,
+        {"contract": {"operation": "freeform_chat", "messages": [{"role": "user", "content": "hello"}]}, "clientContext": {}},
+        metadata={"client": "caption", "modelId": "remote-vl::vision-model"},
+    )
+    llm_runner.execution_claim_next(llm_runner.EXECUTION_LANE, expected_job_id=active["id"])
+    llm_runner.execution_mark_running(active["id"])
+    monkeypatch.setattr(storyboard_llm_runtime, "stop_active_request", lambda model="": calls.append(model) or True)
+
+    result = llm_runner.action("cancel_job", job_id=active["id"])
+
+    assert result["job"]["status"] == "stopping"
+    assert calls == ["remote-vl::vision-model"]
 
 
 def test_llm_targeted_cancel_accepts_already_finished_transient_receipt(llm_root):

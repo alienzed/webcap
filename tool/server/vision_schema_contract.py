@@ -76,7 +76,9 @@ def build_request(analysis, existing_groups):
     compact_evidence = [
         {
             "id": str(row.get("id") or ""),
+            "source": str(row.get("source") or ""),
             "category": str(row.get("category") or ""),
+            "suggestedGroup": str(row.get("suggestedGroup") or ""),
             "label": str(row.get("label") or ""),
             "count": int(row.get("count") or 0),
             "examples": list(row.get("examples") or [])[:6],
@@ -116,6 +118,7 @@ def build_request(analysis, existing_groups):
         "[GROUNDING]\n"
         "Every proposed term must cite one or more supplied evidence IDs. "
         "Use an exact existing group name in targetGroup when extending it. Use an empty targetGroup for a genuinely new group. "
+        "Evidence may come from an open visual pass or a fresh schema-aware visual pass. A schema-aware suggestedGroup is a strong organizational hint, not a forced answer. "
         "Evidence counts, filenames, and contexts are supplied by WebCap; semantic grouping and naming are your task. "
         "Existing terms are organizational context, not visual evidence: do not infer that an existing term appears unless the Sight evidence supports it.\n\n"
         "[INPUT]\n"
@@ -124,6 +127,60 @@ def build_request(analysis, existing_groups):
     )
     return {
         "operation": "vision_schema_suggest",
+        "output": "json",
+        "prompt": prompt,
+        "response_schema": _response_schema(),
+        "sight_evidence": list(evidence or []),
+        "existing_groups": normalized_existing,
+    }
+
+
+def build_challenge_request(analysis, existing_groups, draft_schema):
+    evidence = analysis.get("evidence") if isinstance(analysis, dict) else []
+    normalized_existing = _normalize_existing_groups(existing_groups)
+    draft_groups = draft_schema.get("groups") if isinstance(draft_schema, dict) else []
+    compact_evidence = [
+        {
+            "id": str(row.get("id") or ""),
+            "source": str(row.get("source") or ""),
+            "category": str(row.get("category") or ""),
+            "suggestedGroup": str(row.get("suggestedGroup") or ""),
+            "label": str(row.get("label") or ""),
+            "count": int(row.get("count") or 0),
+            "examples": list(row.get("examples") or [])[:6],
+        }
+        for row in evidence
+        if isinstance(row, dict) and row.get("id")
+    ]
+    payload = {
+        "dataset": {
+            "itemsWithSight": int((analysis or {}).get("itemCount") or 0),
+            "evidence": compact_evidence,
+        },
+        "existingGroups": normalized_existing,
+        "draftVocabulary": draft_groups if isinstance(draft_groups, list) else [],
+    }
+    prompt = (
+        "[ROLE]\n"
+        "You are the final challenge pass for annotation-vocabulary discovery. "
+        "A first reasoning pass proposed a draft vocabulary from two independent Vision reads.\n\n"
+        "[GOAL]\n"
+        "Stress-test the draft before a human sees it. Return the corrected vocabulary proposals, not commentary. "
+        "Preserve useful existing-group extensions, merge duplicate or synonymous proposed terms, restore recurring distinctions "
+        "that the draft collapsed too aggressively, remove weak or ungrounded suggestions, and add genuinely missing groups only "
+        "when the supplied evidence shows an important visual dimension that existing groups do not cover. "
+        "It is acceptable for the vocabulary to be somewhat overcomplete: terms are available language, not requirements to use every term. "
+        "Missing a meaningful recurring distinction is worse than retaining an extra plausible term.\n\n"
+        "[GROUNDING]\n"
+        "Every returned term must cite supplied evidence IDs. Use exact existing group names in targetGroup when extending them. "
+        "Use an empty targetGroup only for a genuinely new group. Existing terms are context, not proof that a concept is visible. "
+        "Do not invent evidence, filenames, or counts.\n\n"
+        "[INPUT]\n"
+        + json.dumps(payload, ensure_ascii=False)
+        + "\n\n[OUTPUT]\nReturn only JSON matching the supplied schema."
+    )
+    return {
+        "operation": "vision_schema_challenge",
         "output": "json",
         "prompt": prompt,
         "response_schema": _response_schema(),
@@ -211,7 +268,16 @@ def normalize_result(data, sight_evidence=None, existing_groups=None):
             "terms": terms,
         })
 
-    return {"version": 2, "groups": normalized_groups}
+    existing_order = {
+        row["group"].casefold(): index
+        for index, row in enumerate(existing)
+    }
+    normalized_groups.sort(key=lambda group: (
+        0 if group["targetGroup"] else 1,
+        existing_order.get(str(group["targetGroup"] or "").casefold(), 10**6),
+        str(group["name"] or "").casefold(),
+    ))
+    return {"version": 3, "groups": normalized_groups}
 
 
 

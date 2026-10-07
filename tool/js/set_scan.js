@@ -10,7 +10,9 @@
     visionModel: '',
     currentVisionJobId: '',
     rawResponses: [],
-    stage: 'ready'
+    completed: 0,
+    total: 0,
+    phase: 'idle'
   };
 
   function el(id) {
@@ -21,76 +23,62 @@
     return fetch(url, options || {}).then(function (response) {
       return response.json().then(function (payload) {
         if (!response.ok || !payload || payload.ok === false) {
-          throw new Error((payload && payload.error) || (response.statusText || 'Set Scan request failed.'));
+          throw new Error((payload && payload.error) || (response.statusText || 'Set Intelligence request failed.'));
         }
         return payload;
       });
     });
   }
 
-  function setScanSetStage(stage, message) {
-    setScanState.stage = stage;
-    var stageEl = el('set-scan-stage');
-    var statusEl = el('set-scan-status');
-    if (!stageEl || !statusEl) throw new Error('Set Scan status controls are missing.');
-    var labels = {
-      metadata: 'WebCap analysis',
-      vision: 'Vision Sight',
-      ready: 'Reusable intelligence'
-    };
-    stageEl.textContent = labels[stage] || stage;
-    statusEl.textContent = String(message || '');
-    renderSetScanStages();
-  }
-
-  function renderSetScanStages() {
+  function renderSetIntelligence() {
     var modal = el('set-scan-modal');
     var stopBtn = el('set-scan-stop-btn');
     var progressFill = el('set-scan-progress-fill');
-    if (!modal || !stopBtn || !progressFill) throw new Error('Set Scan UI is incomplete.');
+    var next = el('set-intelligence-next');
+    var details = el('set-scan-details');
+    var output = el('set-scan-raw-output');
+    if (!modal || !stopBtn || !progressFill || !next || !details || !output) {
+      throw new Error('Set Intelligence UI is incomplete.');
+    }
 
     modal.classList.toggle('hidden', !setScanState.open);
     stopBtn.classList.toggle('hidden', !setScanState.running);
-
-    var stageOrder = ['metadata', 'vision', 'ready'];
-    var activeIndex = stageOrder.indexOf(setScanState.stage);
-    var stageNodes = document.querySelectorAll('#set-scan-stages .set-scan-stage');
-    Array.prototype.forEach.call(stageNodes, function (node) {
-      var stage = String(node.getAttribute('data-stage') || '');
-      var index = stageOrder.indexOf(stage);
-      node.classList.toggle('is-active', index === activeIndex && setScanState.running);
-      node.classList.toggle('is-complete', index < activeIndex || (!setScanState.running && stage === 'ready' && setScanState.stage === 'ready'));
-    });
+    next.classList.toggle('hidden', setScanState.phase !== 'complete');
 
     var percent = 0;
-    if (setScanState.stage === 'metadata') percent = 20;
-    if (setScanState.stage === 'vision') percent = 60;
-    if (setScanState.stage === 'ready') percent = setScanState.running ? 90 : 100;
+    if (setScanState.phase === 'preparing') percent = 8;
+    if (setScanState.phase === 'scanning') {
+      percent = setScanState.total
+        ? 10 + Math.round((setScanState.completed / setScanState.total) * 85)
+        : 12;
+    }
+    if (setScanState.phase === 'complete') percent = 100;
     progressFill.style.width = String(percent) + '%';
 
-    renderSetScanRaw();
-  }
-
-  function renderSetScanRaw() {
-    var wrap = el('set-scan-raw-wrap');
-    var output = el('set-scan-raw-output');
-    if (!wrap || !output) throw new Error('Set Scan raw output controls are missing.');
-    wrap.classList.toggle('hidden', !setScanState.rawResponses.length);
+    details.classList.toggle('hidden', !setScanState.rawResponses.length);
     output.textContent = setScanState.rawResponses.map(function (entry) {
       return '--- ' + String(entry.file || '') + ' ---\n' + String(entry.text || '');
     }).join('\n\n');
-    wrap.scrollTop = wrap.scrollHeight;
   }
 
-  function appendSetScanRaw(fileName, text) {
+  function setSetIntelligenceStatus(title, message) {
+    var stageEl = el('set-scan-stage');
+    var statusEl = el('set-scan-status');
+    if (!stageEl || !statusEl) throw new Error('Set Intelligence status controls are missing.');
+    stageEl.textContent = String(title || '');
+    statusEl.textContent = String(message || '');
+    renderSetIntelligence();
+  }
+
+  function appendRawResponse(fileName, text) {
     setScanState.rawResponses.push({
       file: String(fileName || ''),
       text: String(text || '')
     });
-    renderSetScanRaw();
+    renderSetIntelligence();
   }
 
-  function saveSetScanSight(folder, model, media, sight) {
+  function saveSight(folder, model, media, sight) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -104,7 +92,7 @@
     });
   }
 
-  function requestSetScanSight(folder, model, media) {
+  function requestSight(folder, model, media) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -116,7 +104,7 @@
       })
     }).then(function (payload) {
       if (!payload.job || !payload.job.jobId) {
-        throw new Error('Vision Sight did not return a queued job.');
+        throw new Error('Set Intelligence Vision scan did not return a queued job.');
       }
       setScanState.currentVisionJobId = String(payload.job.jobId || '');
       trackTransientLlmJob(payload.job);
@@ -125,7 +113,7 @@
       setScanState.currentVisionJobId = '';
       var sight = job && job.result && job.result.sight;
       if (!sight || !sight.description || !sight.inventory) {
-        throw new Error('Vision Sight completed without structured evidence.');
+        throw new Error('Set Intelligence Vision scan completed without structured evidence.');
       }
       return {
         sight: sight,
@@ -134,30 +122,32 @@
     });
   }
 
-  function scanSetVisionNext(pending, index, folder, model) {
+  function scanNext(pending, index, folder, model) {
     if (setScanState.stopRequested || !setScanState.open) return Promise.resolve(false);
     if (String(state.folder || '') !== folder) {
-      throw new Error('Set changed while Scan Set was running.');
+      throw new Error('Set changed while Set Intelligence was scanning.');
     }
     if (index >= pending.length) return Promise.resolve(true);
 
+    setScanState.completed = index;
+    setSetIntelligenceStatus(
+      'Scanning Set',
+      String(index + 1) + ' of ' + String(pending.length) + ' items needing visual understanding'
+    );
+
     var fileName = pending[index];
-    setScanSetStage('vision', String(index + 1) + ' / ' + String(pending.length) + ' missing Sight');
-    return requestSetScanSight(folder, model, fileName).then(function (result) {
+    return requestSight(folder, model, fileName).then(function (result) {
       if (setScanState.stopRequested) return false;
-      appendSetScanRaw(fileName, result.text);
-      return saveSetScanSight(folder, model, fileName, result.sight);
+      appendRawResponse(fileName, result.text);
+      return saveSight(folder, model, fileName, result.sight);
     }).then(function (saved) {
       if (saved === false || setScanState.stopRequested) return false;
-      return scanSetVisionNext(pending, index + 1, folder, model);
+      setScanState.completed = index + 1;
+      return scanNext(pending, index + 1, folder, model);
     });
   }
 
-  function runSetScanVision(folder, files, model) {
-    if (!model) {
-      setScanSetStage('vision', 'Skipped — no Vision model selected.');
-      return Promise.resolve(true);
-    }
+  function scanVision(folder, files, model) {
     return requestJson(
       '/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model)
     ).then(function (payload) {
@@ -169,34 +159,37 @@
         return String(item.file || '');
       }).filter(Boolean);
 
+      setScanState.total = pending.length;
+      setScanState.completed = 0;
+      setScanState.phase = 'scanning';
+
       if (!pending.length) {
-        setScanSetStage('vision', 'Current for ' + String(files.length) + ' media item' + (files.length === 1 ? '' : 's') + '.');
+        setSetIntelligenceStatus('Set understood', 'Current visual understanding is already reusable.');
         return true;
       }
-      return scanSetVisionNext(pending, 0, folder, model);
+      return scanNext(pending, 0, folder, model);
     });
   }
 
-  function finishSetScan(success, message) {
+  function finishScan(message) {
     setScanState.running = false;
     setScanState.currentVisionJobId = '';
-    if (success) {
-      setScanSetStage('ready', message || 'Set intelligence is current.');
-      window.setStatus(message || 'Set intelligence is current.');
-    }
-    renderSetScanStages();
+    setScanState.phase = 'complete';
+    setSetIntelligenceStatus('Set understood', message || 'Ready for the next decision.');
+    window.setStatus('Set Intelligence is ready.');
   }
 
-  function runSetScan() {
+  function runSetIntelligence() {
     if (setScanState.running) return;
+
     var folder = String(state && state.folder || '');
     var files = getCurrentSetMediaFileNames();
     if (!folder || !isSetFolderContext(folder, state && state.items)) {
-      window.setStatus('Open a Set before scanning.');
+      window.setStatus('Open a Set before using Set Intelligence.');
       return;
     }
     if (!files.length) {
-      window.setStatus('This Set has no media to scan.');
+      window.setStatus('This Set has no media to analyze.');
       return;
     }
 
@@ -207,8 +200,10 @@
     setScanState.stopRequested = false;
     setScanState.currentVisionJobId = '';
     setScanState.rawResponses = [];
-    setScanSetStage('metadata', 'Checking ' + String(files.length) + ' Set media item' + (files.length === 1 ? '' : 's') + '…');
-    renderSetScanStages();
+    setScanState.completed = 0;
+    setScanState.total = 0;
+    setScanState.phase = 'preparing';
+    setSetIntelligenceStatus('Understanding Set', 'Preparing ' + String(files.length) + ' media item' + (files.length === 1 ? '' : 's') + '…');
 
     Promise.all([
       loadCaptionVisionCapabilities(),
@@ -216,112 +211,129 @@
         includeFaceFocus: true,
         includeSelectionPose: true,
         suppressUpdatedEvent: true,
-        successStatus: 'WebCap Set analysis is current.'
+        successStatus: 'Supporting Set analysis is current.'
       })
     ]).then(function (results) {
       setScanState.visionModel = String(getCaptionVisionModelId() || '').trim();
+      if (!setScanState.visionModel) {
+        throw new Error('Select an available Vision model before running Set Intelligence.');
+      }
       var metadataResult = results[1];
       if (!metadataResult || metadataResult.ok === false) {
-        throw new Error((metadataResult && metadataResult.error) || 'WebCap Set analysis failed.');
+        throw new Error((metadataResult && metadataResult.error) || 'Supporting Set analysis failed.');
       }
-      var warnings = Array.isArray(metadataResult.warnings) ? metadataResult.warnings : [];
-      setScanSetStage(
-        'metadata',
-        warnings.length
-          ? ('Complete with ' + String(warnings.length) + ' optional analyzer warning' + (warnings.length === 1 ? '' : 's') + '.')
-          : 'WebCap analysis is current.'
-      );
       if (setScanState.stopRequested) return false;
-      return runSetScanVision(folder, files, setScanState.visionModel);
+      return scanVision(folder, files, setScanState.visionModel);
     }).then(function (visionSuccess) {
       if (visionSuccess === false || setScanState.stopRequested) return false;
-      setScanSetStage('ready', 'Refreshing reusable Set intelligence…');
       return refreshMediaResolutionCache({
         includeFaceFocus: true,
         includeSelectionPose: true,
-        successStatus: 'Set intelligence is current.'
+        successStatus: 'Set Intelligence is current.'
       }).then(function (result) {
         if (!result || result.ok === false) {
-          throw new Error((result && result.error) || 'Final Set intelligence refresh failed.');
+          throw new Error((result && result.error) || 'Set Intelligence refresh failed.');
         }
         return true;
       });
     }).then(function (success) {
       if (success === false || setScanState.stopRequested) {
-        finishSetScan(false);
-        setScanSetStage('ready', 'Scan stopped. Completed analysis remains cached.');
-        window.setStatus('Set scan stopped. Completed analysis remains cached.');
+        setScanState.running = false;
+        setScanState.phase = 'idle';
+        setSetIntelligenceStatus('Scan stopped', 'Completed understanding remains cached.');
+        window.setStatus('Set Intelligence stopped. Completed understanding remains cached.');
         return;
       }
-      var modelNote = setScanState.visionModel
-        ? ' Vision Sight is current for the selected model.'
-        : ' Vision Sight was skipped because no Vision model is selected.';
-      finishSetScan(true, 'Set scan complete.' + modelNote);
+      finishScan('Ready to shape the vocabulary, or skip ahead if this Set is already mature.');
     }).catch(function (err) {
       setScanState.running = false;
       setScanState.currentVisionJobId = '';
-      setScanSetStage(setScanState.stage || 'ready', 'Scan failed: ' + String(err && err.message ? err.message : err));
-      reportConsoleError('Scan Set', err);
-      window.setStatus('Set scan failed.');
-      renderSetScanStages();
+      setScanState.phase = 'idle';
+      setSetIntelligenceStatus('Set Intelligence unavailable', String(err && err.message ? err.message : err));
+      reportConsoleError('Set Intelligence', err);
+      window.setStatus('Set Intelligence failed.');
     });
   }
 
-  function stopSetScan() {
+  function stopSetIntelligence() {
     if (!setScanState.running) return;
     setScanState.stopRequested = true;
     var jobId = setScanState.currentVisionJobId;
     setScanState.currentVisionJobId = '';
-    setScanSetStage(setScanState.stage, 'Stopping…');
+    setSetIntelligenceStatus('Stopping', 'Completed understanding will remain cached.');
     if (jobId) {
       cancelCaptionAssistJob(jobId).catch(function (err) {
-        reportConsoleError('Scan Set', err);
+        reportConsoleError('Set Intelligence', err);
       });
     }
   }
 
-  function openSetScan() {
+  function openSetIntelligence() {
     var folder = String(state && state.folder || '');
     if (!folder || !isSetFolderContext(folder, state && state.items)) {
-      window.setStatus('Open a Set before scanning.');
+      window.setStatus('Open a Set before using Set Intelligence.');
       return;
     }
     setScanState.open = true;
-    renderSetScanStages();
-    runSetScan();
+    renderSetIntelligence();
+    runSetIntelligence();
   }
 
-  function closeSetScan() {
-    if (setScanState.running) stopSetScan();
+  function closeSetIntelligence() {
+    if (setScanState.running) stopSetIntelligence();
     setScanState.open = false;
-    renderSetScanStages();
+    renderSetIntelligence();
   }
 
-  function bindSetScan() {
-    var openBtn = el('set-scan-open-btn');
+  function continueToVocabulary() {
+    closeSetIntelligence();
+    openVisionSchemaAssist();
+  }
+
+  function continueToGuidedTagging() {
+    closeSetIntelligence();
+    openGuidedTagPass({ source: 'set' });
+  }
+
+  function continueToQa() {
+    closeSetIntelligence();
+    setWorkspaceSurface('reviewOutput');
+    setReviewDetailTab('qa');
+  }
+
+  function bindSetIntelligence() {
+    var openBtn = el('set-intelligence-open-btn');
     var closeBtn = el('set-scan-close-btn');
     var stopBtn = el('set-scan-stop-btn');
+    var primaryBtn = el('set-intelligence-primary-btn');
+    var guidedBtn = el('set-intelligence-guided-btn');
+    var qaBtn = el('set-intelligence-qa-btn');
     var modal = el('set-scan-modal');
-    if (!openBtn || !closeBtn || !stopBtn || !modal) {
-      throw new Error('Set Scan controls are missing.');
+    if (!openBtn || !closeBtn || !stopBtn || !primaryBtn || !guidedBtn || !qaBtn || !modal) {
+      throw new Error('Set Intelligence controls are missing.');
     }
-    openBtn.onclick = openSetScan;
-    closeBtn.onclick = closeSetScan;
-    stopBtn.onclick = stopSetScan;
+
+    openBtn.onclick = openSetIntelligence;
+    closeBtn.onclick = closeSetIntelligence;
+    stopBtn.onclick = stopSetIntelligence;
+    primaryBtn.onclick = continueToVocabulary;
+    guidedBtn.onclick = continueToGuidedTagging;
+    qaBtn.onclick = continueToQa;
+
     modal.addEventListener('click', function (event) {
-      if (event.target === modal) closeSetScan();
+      if (event.target === modal) closeSetIntelligence();
     });
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && setScanState.open) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        closeSetScan();
+        closeSetIntelligence();
       }
     }, true);
   }
 
-  window.openSetScan = openSetScan;
-  window.stopSetScan = stopSetScan;
+  window.openSetIntelligence = openSetIntelligence;
+  window.stopSetIntelligence = stopSetIntelligence;
 
-  bindSetScan();
+  bindSetIntelligence();
 })();

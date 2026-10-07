@@ -13,7 +13,7 @@ import sys
 from . import config as app_config
 from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
 from .caption_vision import build_caption_vision_messages, build_vision_image_caption_messages, resolve_caption_vision_media
-from .vision_schema_assist import mine_vision_sight, save_vision_sight, vision_sight_status
+from .vision_schema_assist import build_vision_schema_sight_messages, mine_vision_sight, save_vision_sight, vision_sight_status
 from .vision_schema_contract import build_request as build_vision_schema_request
 from .originals import copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
 from .file_ops import duplicate_folder_response, duplicate_media_response, open_in_explorer_response, open_path_in_explorer_response, open_in_vscode_response, rename_response
@@ -761,6 +761,28 @@ def vision_schema_assist_route():
         operation = str(data.get("operation") or "").strip()
         folder = str(data.get("folder") or "").strip()
         vision_model = str(data.get("visionModel") or "").strip()
+        if operation == "scan_sight":
+            vision_ids = {str(item.get("id") or "") for item in list_vision_models()}
+            if not vision_model or vision_model not in vision_ids:
+                raise ValueError("Select an available Vision model.")
+            relative_media = resolve_caption_vision_media(
+                folder,
+                data.get("media", ""),
+            )
+            messages = build_vision_schema_sight_messages(relative_media)
+            job = enqueue_llm(
+                "caption",
+                vision_model,
+                {
+                    "operation": "vision_schema_sight",
+                    "messages": messages,
+                },
+                context={
+                    "runtimeOverrides": {"maxTokens": 900},
+                },
+                label="Vision Sight",
+            )
+            return jsonify({"ok": True, "job": job}), 202
         if operation == "save_sight":
             return jsonify({
                 "ok": True,
@@ -768,7 +790,7 @@ def vision_schema_assist_route():
                     folder,
                     data.get("media", ""),
                     vision_model,
-                    data.get("description", ""),
+                    data.get("sight"),
                 ),
             })
         if operation == "analyze":

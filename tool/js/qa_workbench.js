@@ -20,6 +20,13 @@
     view: 'overview',
     trainingFocus: '',
     findings: [],
+    deterministicFindings: [],
+    aiFindings: [],
+    aiSummary: '',
+    aiScopeSignature: '',
+    deepScanJobId: '',
+    deepScanStatus: '',
+    deepScanInputSignature: '',
     observations: [],
     dispositions: {},
     browseIndex: 0,
@@ -78,6 +85,177 @@
       String(state.folder || ''),
       (items || []).map(function (item) { return item.fileName; }).join('\n')
     ].join('\u0001');
+  }
+
+  function qaRequestJson(url, options) {
+    return fetch(url, options || {}).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload || payload.ok === false) {
+          throw new Error(payload && payload.error ? payload.error : (response.statusText || 'Request failed'));
+        }
+        return payload;
+      });
+    });
+  }
+
+  function qaBuildDeepScanItems(items) {
+    return (items || []).map(function (item) {
+      var key = item && item.key;
+      return {
+        fileName: String(item && item.fileName || ''),
+        caption: String(item && item.caption || ''),
+        groupedTags: getChecklistAssignmentEntriesForMediaKey(key).map(function (entry) {
+          return {
+            group: String(entry && entry.requirement || ''),
+            term: String(entry && entry.term || '')
+          };
+        }),
+        tags: getTagsForMediaKey(key).slice()
+      };
+    });
+  }
+
+  function qaBuildDeepScanSignature(items) {
+    return JSON.stringify({
+      folder: String(state.folder || ''),
+      trainingFocus: qaWorkbenchState.trainingFocus,
+      items: qaBuildDeepScanItems(items)
+    });
+  }
+
+  function qaDeepScanFindingPayload() {
+    return qaWorkbenchState.deterministicFindings.map(function (finding) {
+      return {
+        category: finding.category,
+        title: finding.title,
+        summary: finding.summary,
+        files: (finding.files || []).slice(0, 12)
+      };
+    });
+  }
+
+  function qaNormalizeAiFindings(analysis, model) {
+    var rows = analysis && Array.isArray(analysis.findings) ? analysis.findings : [];
+    return rows.map(function (finding) {
+      var files = Array.isArray(finding.files) ? finding.files.slice() : [];
+      var evidence = Array.isArray(finding.evidence) ? finding.evidence.slice(0, 4) : [];
+      return {
+        id: qaStableId(['ai', finding.category, finding.title].concat(files)),
+        category: String(finding.category || 'consistency'),
+        priority: String(finding.priority || 'normal'),
+        confidence: String(finding.confidence || 'medium'),
+        title: String(finding.title || ''),
+        summary: String(finding.summary || ''),
+        why: String(finding.why || ''),
+        files: files,
+        facts: [{ value: String(files.length), label: 'affected items' }],
+        meta: evidence,
+        source: 'ai',
+        sourceLabel: 'AI · ' + String(model || 'Director')
+      };
+    });
+  }
+
+  function qaMergeFindings() {
+    var ai = qaWorkbenchState.aiScopeSignature === qaWorkbenchState.deepScanInputSignature
+      ? qaWorkbenchState.aiFindings
+      : [];
+    qaWorkbenchState.findings = qaSortFindings(
+      qaWorkbenchState.deterministicFindings.concat(ai)
+    );
+  }
+
+  function qaWaitForDeepScan(job) {
+    if (!job || !job.jobId) throw new Error('QA Deep Scan did not return a queued job.');
+    qaWorkbenchState.deepScanJobId = String(job.jobId || '');
+
+    function poll(current) {
+      var status = String(current && current.status || '');
+      if (status === 'completed') return Promise.resolve(current);
+      if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
+        var error = new Error(current.error || ('QA Deep Scan job ' + status + '.'));
+        error.jobStatus = status;
+        throw error;
+      }
+      return new Promise(function (resolve) {
+        setTimeout(resolve, status === 'queued' ? 2000 : 1000);
+      }).then(function () {
+        return qaRequestJson('/fs/director/job?job=' + encodeURIComponent(qaWorkbenchState.deepScanJobId) + '&consume=1');
+      }).then(function (payload) {
+        return poll(payload.job);
+      });
+    }
+
+    return poll(job);
+  }
+
+  function qaRunDeepScan() {
+    if (qaWorkbenchState.deepScanJobId) return;
+    var items = qaGetTrainingItems();
+    if (!items.length) throw new Error('QA Deep Scan requires at least one training item.');
+    var model = String(getDirectorModelPreference() || '').trim();
+    if (!model) throw new Error('Select a Director model before running Deep QA Scan.');
+
+    var signature = qaBuildDeepScanSignature(items);
+    qaWorkbenchState.deepScanInputSignature = signature;
+    qaWorkbenchState.deepScanStatus = 'Deep scan queued…';
+    renderQaWorkbench();
+
+    qaRequestJson('/fs/qa/deep-scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder: String(state.folder || ''),
+        model: model,
+        trainingFocus: qaWorkbenchState.trainingFocus,
+        items: qaBuildDeepScanItems(items),
+        deterministicFindings: qaDeepScanFindingPayload()
+      })
+    }).then(function (payload) {
+      qaWorkbenchState.deepScanStatus = 'Deep scan running…';
+      renderQaWorkbench();
+      return qaWaitForDeepScan(payload.job);
+    }).then(function (job) {
+      qaWorkbenchState.deepScanJobId = '';
+      var currentSignature = qaBuildDeepScanSignature(qaGetTrainingItems());
+      if (currentSignature !== signature) {
+        qaWorkbenchState.deepScanStatus = 'Scan finished, but QA inputs changed; result discarded.';
+        renderQaWorkbench();
+        return;
+      }
+      var analysis = job.result && job.result.analysis;
+      if (!analysis || !Array.isArray(analysis.findings)) {
+        throw new Error('QA Deep Scan completed without structured findings.');
+      }
+      qaWorkbenchState.aiFindings = qaNormalizeAiFindings(analysis, job.result.model);
+      qaWorkbenchState.aiSummary = String(analysis.summary || '');
+      qaWorkbenchState.aiScopeSignature = signature;
+      qaWorkbenchState.deepScanInputSignature = signature;
+      qaWorkbenchState.deepScanStatus = qaWorkbenchState.aiFindings.length
+        ? 'AI added ' + qaWorkbenchState.aiFindings.length + ' finding' + (qaWorkbenchState.aiFindings.length === 1 ? '' : 's') + '.'
+        : 'AI scan found nothing useful to add.';
+      qaMergeFindings();
+      renderQaWorkbench();
+    }).catch(function (err) {
+      qaWorkbenchState.deepScanJobId = '';
+      qaWorkbenchState.deepScanStatus = 'Deep scan failed.';
+      window.reportConsoleError('QA Deep Scan', err);
+      renderQaWorkbench();
+    });
+  }
+
+  function qaCancelDeepScan() {
+    if (!qaWorkbenchState.deepScanJobId) return;
+    var jobId = qaWorkbenchState.deepScanJobId;
+    qaWorkbenchState.deepScanStatus = 'Stopping deep scan…';
+    renderQaWorkbench();
+    qaRequestJson('/fs/director/job', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation: 'cancel_job', jobId: jobId })
+    }).catch(function (err) {
+      window.reportConsoleError('QA Deep Scan', err);
+    });
   }
 
   function qaBuildGroupStats(items) {
@@ -646,13 +824,16 @@
     if (recommendations.length) heroActions.appendChild(qaCreateButton('Browse Recommendations', 'qa-primary', 'browse-next'));
     var deepWrap = document.createElement('div');
     deepWrap.className = 'qa-deep-scan-wrap';
-    var deep = qaCreateButton('✦ Deep QA Scan', '', '', '');
-    deep.id = 'review-output-assistant-btn';
-    deep.title = 'Optional LLM-assisted scan of the current training selection';
+    var deep = qaCreateButton(
+      qaWorkbenchState.deepScanJobId ? 'Stop Deep Scan' : '✦ Deep QA Scan',
+      '',
+      qaWorkbenchState.deepScanJobId ? 'deep-scan-stop' : 'deep-scan'
+    );
+    deep.title = 'Optional structured LLM scan of the current training selection';
     deepWrap.appendChild(deep);
     var note = document.createElement('span');
     note.className = 'qa-deep-scan-note';
-    note.textContent = 'Optional · LLM';
+    note.textContent = qaWorkbenchState.deepScanStatus || (qaWorkbenchState.aiFindings.length ? 'AI findings active · LLM' : 'Optional · LLM');
     deepWrap.appendChild(note);
     heroActions.appendChild(deepWrap);
     hero.appendChild(heroActions);
@@ -847,7 +1028,7 @@
     article.className = 'qa-recommendation';
     var eyebrow = document.createElement('div');
     eyebrow.className = 'qa-recommendation-eyebrow';
-    eyebrow.textContent = QA_CATEGORY_LABELS[finding.category] + ' · ' + (finding.priority === 'high' ? 'High impact' : 'Recommendation') + ' · ' + finding.confidence + ' confidence';
+    eyebrow.textContent = QA_CATEGORY_LABELS[finding.category] + ' · ' + (finding.priority === 'high' ? 'High impact' : 'Recommendation') + ' · ' + finding.confidence + ' confidence' + (finding.sourceLabel ? ' · ' + finding.sourceLabel : '');
     article.appendChild(eyebrow);
     var title = document.createElement('h2');
     title.className = 'qa-recommendation-title';
@@ -924,8 +1105,9 @@
     [
       finding.priority === 'high' ? 'High impact' : 'Normal priority',
       finding.confidence + ' confidence',
-      qaFileCountText((finding.files || []).length)
-    ].concat(finding.meta || []).slice(0, 6).forEach(function (value) {
+      qaFileCountText((finding.files || []).length),
+      finding.sourceLabel || ''
+    ].filter(Boolean).concat(finding.meta || []).slice(0, 6).forEach(function (value) {
       var chip = document.createElement('span');
       chip.textContent = value;
       meta.appendChild(chip);
@@ -1060,6 +1242,13 @@
       qaWorkbenchState.dispositions = {};
       qaWorkbenchState.browseIndex = 0;
       qaWorkbenchState.statusMessage = '';
+      qaWorkbenchState.aiFindings = [];
+      qaWorkbenchState.aiSummary = '';
+      qaWorkbenchState.aiScopeSignature = '';
+      if (!qaWorkbenchState.deepScanJobId) {
+        qaWorkbenchState.deepScanStatus = '';
+        qaWorkbenchState.deepScanInputSignature = '';
+      }
     }
 
     qaWorkbenchState.folderKey = folderKey;
@@ -1068,7 +1257,9 @@
     }
     qaWorkbenchState.scopeKey = scopeKey;
     var result = qaComputeFindings(items);
-    qaWorkbenchState.findings = result.findings;
+    qaWorkbenchState.deterministicFindings = result.findings;
+    qaWorkbenchState.deepScanInputSignature = qaBuildDeepScanSignature(items);
+    qaMergeFindings();
     qaWorkbenchState.observations = result.observations;
     var recommendations = qaGetRecommendations();
     if (qaWorkbenchState.returnFindingId) {
@@ -1093,7 +1284,6 @@
     } else {
       qaRenderOverview(root, data.items, data.health);
     }
-    window.bindReviewAssistantButton();
   }
 
   function qaStartBrowsing(category) {
@@ -1160,6 +1350,14 @@
   }
 
   function qaHandleAction(action, value) {
+    if (action === 'deep-scan') {
+      qaRunDeepScan();
+      return;
+    }
+    if (action === 'deep-scan-stop') {
+      qaCancelDeepScan();
+      return;
+    }
     if (action === 'view') {
       qaSetView(value);
       return;

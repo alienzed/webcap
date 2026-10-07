@@ -218,6 +218,9 @@
       if (!setScanState.visionModel) {
         throw new Error('Select an available Vision model before running Set Intelligence.');
       }
+      if (!String(getDirectorModelPreference() || '').trim()) {
+        throw new Error('Select a Director model before running Set Intelligence.');
+      }
       var metadataResult = results[1];
       if (!metadataResult || metadataResult.ok === false) {
         throw new Error((metadataResult && metadataResult.error) || 'Supporting Set analysis failed.');

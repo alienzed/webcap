@@ -200,6 +200,7 @@
     setScanState.stopRequested = false;
     setScanState.currentVisionJobId = '';
     setScanState.rawResponses = [];
+    el('set-scan-details').open = false;
     setScanState.completed = 0;
     setScanState.total = 0;
     setScanState.phase = 'preparing';

@@ -1241,13 +1241,16 @@
     var scopeKey = qaBuildScopeKey(items);
     var folderChanged = !!qaWorkbenchState.folderKey && qaWorkbenchState.folderKey !== folderKey;
     var scopeChanged = !!qaWorkbenchState.scopeKey && qaWorkbenchState.scopeKey !== scopeKey;
+    var inputSignature = qaBuildDeepScanSignature(items);
+    var inputsChanged = !!qaWorkbenchState.deepScanInputSignature
+      && qaWorkbenchState.deepScanInputSignature !== inputSignature;
 
     if (folderChanged) {
       qaWorkbenchState.trainingFocus = '';
       qaWorkbenchState.parentFocusSet = undefined;
       qaWorkbenchState.returnFindingId = '';
     }
-    if (folderChanged || scopeChanged) {
+    if (folderChanged || scopeChanged || inputsChanged) {
       qaWorkbenchState.dispositions = {};
       qaWorkbenchState.browseIndex = 0;
       qaWorkbenchState.statusMessage = '';
@@ -1256,18 +1259,17 @@
       qaWorkbenchState.aiScopeSignature = '';
       if (!qaWorkbenchState.deepScanJobId) {
         qaWorkbenchState.deepScanStatus = '';
-        qaWorkbenchState.deepScanInputSignature = '';
       }
     }
 
     qaWorkbenchState.folderKey = folderKey;
-    if (!force && !scopeChanged && qaWorkbenchState.scopeKey === scopeKey && qaWorkbenchState.findings.length + qaWorkbenchState.observations.length > 0) {
+    qaWorkbenchState.deepScanInputSignature = inputSignature;
+    if (!force && !scopeChanged && !inputsChanged && qaWorkbenchState.scopeKey === scopeKey && qaWorkbenchState.findings.length + qaWorkbenchState.observations.length > 0) {
       return { items: items, health: qaBuildHealth(items) };
     }
     qaWorkbenchState.scopeKey = scopeKey;
     var result = qaComputeFindings(items);
     qaWorkbenchState.deterministicFindings = result.findings;
-    qaWorkbenchState.deepScanInputSignature = qaBuildDeepScanSignature(items);
     qaMergeFindings();
     qaWorkbenchState.observations = result.observations;
     var recommendations = qaGetRecommendations();

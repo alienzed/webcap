@@ -14,6 +14,7 @@
     statusPayload: null,
     analysis: null,
     schema: null,
+    reviewIndex: 0,
     tagCandidates: null,
     mode: 'vocabulary',
     scopeFiles: [],
@@ -251,6 +252,55 @@
     });
   }
 
+  function currentVocabularyGroup() {
+    var groups = schemaState.schema && Array.isArray(schemaState.schema.groups)
+      ? schemaState.schema.groups
+      : [];
+    if (!groups.length) return null;
+    var index = Math.max(0, Math.min(Number(schemaState.reviewIndex || 0), groups.length - 1));
+    schemaState.reviewIndex = index;
+    return groups[index];
+  }
+
+  function updateVocabularyReviewControls() {
+    var applyBtn = el('vision-schema-apply-btn');
+    var skipBtn = el('vision-schema-skip-btn');
+    var footerNote = el('vision-schema-footer-note');
+    if (!applyBtn || !skipBtn || !footerNote) throw new Error('Vocabulary review controls are missing.');
+
+    if (schemaState.guidedLaunch) {
+      skipBtn.classList.add('hidden');
+      applyBtn.classList.add('hidden');
+      footerNote.textContent = 'Sight is cached in the Set; nothing is tagged until you act in Grid.';
+      return;
+    }
+
+    var groups = schemaState.schema && Array.isArray(schemaState.schema.groups)
+      ? schemaState.schema.groups
+      : [];
+    var group = currentVocabularyGroup();
+    var card = el('vision-schema-proposals').querySelector('.vision-schema-group-card');
+    var selected = card
+      ? Array.prototype.filter.call(card.querySelectorAll('.vision-schema-term-check'), function (check) {
+          return !!check.checked;
+        }).length
+      : 0;
+    var schemaBusy = schemaState.schemaStarting || !!schemaState.schemaJobId;
+
+    skipBtn.classList.toggle('hidden', !group);
+    applyBtn.classList.toggle('hidden', !group);
+    skipBtn.disabled = schemaBusy || schemaState.scanRunning;
+    applyBtn.disabled = schemaBusy || schemaState.scanRunning || selected < 1;
+
+    if (group) {
+      footerNote.textContent =
+        String(selected) + ' term' + (selected === 1 ? '' : 's') + ' selected · Group ' +
+        String(schemaState.reviewIndex + 1) + ' of ' + String(groups.length);
+    } else {
+      footerNote.textContent = 'Discovery changes vocabulary only; it does not tag media.';
+    }
+  }
+
   function renderProposals() {
     var host = el('vision-schema-proposals');
     if (!host) throw new Error('Schema Assist proposal host is missing.');
@@ -267,100 +317,70 @@
     if (!groups.length) {
       var empty = document.createElement('div');
       empty.className = 'vision-schema-empty';
-      empty.textContent = schemaState.schema ? 'The Director did not find useful vocabulary to add.' : 'Vocabulary suggestions will appear here.';
+      empty.textContent = schemaState.schema
+        ? 'The Director did not find useful vocabulary to add.'
+        : 'Run Discover Vocabulary to find recurring concepts worth adding.';
       host.appendChild(empty);
       return;
     }
 
-    groups.forEach(function (group, groupIndex) {
-      var card = document.createElement('div');
-      card.className = 'vision-schema-group-card';
-      card.dataset.groupIndex = String(groupIndex);
+    var group = currentVocabularyGroup();
+    var groupIndex = schemaState.reviewIndex;
+    var card = document.createElement('div');
+    card.className = 'vision-schema-group-card';
+    card.dataset.groupIndex = String(groupIndex);
 
-      var top = document.createElement('div');
-      top.className = 'vision-schema-group-top';
-      var name = document.createElement('input');
-      name.type = 'text';
-      name.className = 'vision-schema-group-name';
-      name.value = String(group.name || '');
-      name.title = 'Group name used when creating a new group';
-      var target = createTargetSelect(group);
-      top.appendChild(name);
-      top.appendChild(target);
-      card.appendChild(top);
+    var progress = document.createElement('div');
+    progress.className = 'vision-schema-review-progress';
+    progress.textContent = 'Group ' + String(groupIndex + 1) + ' of ' + String(groups.length);
+    card.appendChild(progress);
 
-      if (group.rationale) {
-        var rationale = document.createElement('div');
-        rationale.className = 'vision-schema-group-rationale';
-        rationale.textContent = String(group.rationale || '');
-        card.appendChild(rationale);
-      }
+    var top = document.createElement('div');
+    top.className = 'vision-schema-group-top';
+    var name = document.createElement('input');
+    name.type = 'text';
+    name.className = 'vision-schema-group-name';
+    name.value = String(group.name || '');
+    name.title = 'Group name used when creating a new group';
+    var target = createTargetSelect(group);
+    top.appendChild(name);
+    top.appendChild(target);
+    card.appendChild(top);
 
-      (group.terms || []).forEach(function (term, termIndex) {
-        var row = document.createElement('div');
-        row.className = 'vision-schema-term-row' + (term.alreadyExists ? ' vision-schema-existing' : '');
-        row.dataset.termIndex = String(termIndex);
+    (group.terms || []).forEach(function (term, termIndex) {
+      var row = document.createElement('div');
+      row.className = 'vision-schema-term-row' + (term.alreadyExists ? ' vision-schema-existing' : '');
+      row.dataset.termIndex = String(termIndex);
 
-        var check = document.createElement('input');
-        check.type = 'checkbox';
-        check.className = 'vision-schema-term-check';
-        check.checked = !term.alreadyExists;
-        check.disabled = false;
-        check.title = term.alreadyExists
-          ? 'Already present in the suggested target; select it if you redirect this proposal elsewhere'
-          : 'Merge this term';
+      var check = document.createElement('input');
+      check.type = 'checkbox';
+      check.className = 'vision-schema-term-check';
+      check.checked = !term.alreadyExists;
+      check.disabled = false;
+      check.title = term.alreadyExists
+        ? 'Already present in the suggested target; select it if you redirect this proposal elsewhere'
+        : 'Add this term';
+      check.addEventListener('change', updateVocabularyReviewControls);
 
-        var termName = document.createElement('input');
-        termName.type = 'text';
-        termName.className = 'vision-schema-term-name';
-        termName.value = String(term.term || '');
-        termName.disabled = false;
+      var termName = document.createElement('input');
+      termName.type = 'text';
+      termName.className = 'vision-schema-term-name';
+      termName.value = String(term.term || '');
+      termName.disabled = false;
 
-        var support = document.createElement('span');
-        support.className = 'vision-schema-term-support';
-        support.textContent = term.alreadyExists
-          ? 'already present'
-          : String(term.support || 0) + ' supporting items';
+      var support = document.createElement('span');
+      support.className = 'vision-schema-term-support';
+      support.textContent = term.alreadyExists
+        ? 'already present'
+        : String(term.support || 0) + ' items';
 
-        row.appendChild(check);
-        row.appendChild(termName);
-        row.appendChild(support);
-
-        var evidence = document.createElement('div');
-        evidence.className = 'vision-schema-term-evidence';
-        (term.evidence || []).slice(0, 4).forEach(function (value) {
-          var chip = document.createElement('span');
-          chip.className = 'vision-schema-evidence-chip';
-          chip.textContent = String(value || '');
-          evidence.appendChild(chip);
-        });
-        (term.examples || []).slice(0, 4).forEach(function (value) {
-          var fileName = String(value || '');
-          var ext = fileName.split('.').pop().toLowerCase();
-          var isImage = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'].indexOf(ext) !== -1;
-          if (isImage) {
-            var thumb = document.createElement('span');
-            thumb.className = 'vision-schema-example-thumb';
-            thumb.title = fileName;
-            var img = document.createElement('img');
-            img.alt = fileName;
-            img.loading = 'lazy';
-            img.src = '/caption/media?folder=' + encodeURIComponent(schemaState.folder) +
-              '&media=' + encodeURIComponent(fileName);
-            thumb.appendChild(img);
-            evidence.appendChild(thumb);
-            return;
-          }
-          var chip = document.createElement('span');
-          chip.className = 'vision-schema-example-chip';
-          chip.textContent = fileName;
-          evidence.appendChild(chip);
-        });
-        row.appendChild(evidence);
-        card.appendChild(row);
-      });
-      host.appendChild(card);
+      row.appendChild(check);
+      row.appendChild(termName);
+      row.appendChild(support);
+      card.appendChild(row);
     });
+
+    host.appendChild(card);
   }
 
   function renderProgress() {
@@ -386,64 +406,63 @@
     var modal = el('vision-schema-modal');
     var scanBtn = el('vision-schema-scan-btn');
     var stopBtn = el('vision-schema-stop-btn');
-    var suggestBtn = el('vision-schema-suggest-btn');
     var tagBtn = el('vision-schema-tags-btn');
     var applyBtn = el('vision-schema-apply-btn');
     var footerNote = el('vision-schema-footer-note');
     var body = el('vision-schema-body');
     var title = el('vision-schema-title');
     var subtitle = el('vision-schema-subtitle');
-    if (!modal || !scanBtn || !stopBtn || !suggestBtn || !tagBtn || !applyBtn || !footerNote || !body || !title || !subtitle) {
+    if (!modal || !scanBtn || !stopBtn || !tagBtn || !applyBtn || !footerNote || !body || !title || !subtitle) {
       throw new Error('Schema Assist UI is incomplete.');
     }
+
     modal.classList.toggle('hidden', !schemaState.open);
+    modal.classList.toggle('vision-schema-guided', !!schemaState.guidedLaunch);
     title.textContent = schemaState.guidedLaunch ? 'Guided Tag Pass' : 'Discover Vocabulary';
     subtitle.textContent = schemaState.guidedLaunch
       ? 'Review raw Vision output before building an existing-vocabulary pass.'
-      : 'Build a reusable annotation schema from batch Vision sight.';
+      : 'Find recurring concepts and decide what belongs in this Set\'s vocabulary.';
     body.classList.toggle('hidden', schemaState.guidedLaunch);
-    suggestBtn.classList.toggle('hidden', schemaState.guidedLaunch);
-    applyBtn.classList.toggle('hidden', schemaState.guidedLaunch);
-    footerNote.textContent = schemaState.guidedLaunch
-      ? 'Sight is cached in the Set; nothing is tagged until you act in Grid.'
-      : 'Nothing changes until you apply selected vocabulary.';
+
     var schemaBusy = schemaState.schemaStarting || !!schemaState.schemaJobId;
+    scanBtn.classList.toggle('hidden', !!schemaState.guidedLaunch);
     scanBtn.disabled = schemaState.scanRunning || schemaBusy;
-    scanBtn.textContent = schemaState.statusPayload && Number(schemaState.statusPayload.structured || 0)
-      ? 'Scan Missing Sight'
-      : 'Scan Visible';
+    scanBtn.textContent = schemaState.schema && schemaState.schema.groups && schemaState.schema.groups.length
+      ? 'Discover Again'
+      : 'Discover Vocabulary';
+
     stopBtn.classList.toggle('hidden', !schemaState.scanRunning && !schemaBusy);
+
     var scope = {};
     (schemaState.scopeFiles || []).forEach(function (fileName) { scope[String(fileName || '')] = true; });
     var scopedStructured = ((schemaState.statusPayload && schemaState.statusPayload.items) || []).filter(function (item) {
       return (!schemaState.scopeFiles.length || !!scope[String(item.file || '')]) && !!item.structured;
     }).length;
-    var allStructured = Number(schemaState.statusPayload && schemaState.statusPayload.structured || 0);
-    suggestBtn.disabled = schemaState.scanRunning || schemaBusy || allStructured < 2;
     var scopedTotal = schemaState.scopeFiles.length;
+    tagBtn.classList.toggle('hidden', !schemaState.guidedLaunch);
     tagBtn.disabled = schemaState.scanRunning || schemaBusy || !scopedTotal || scopedStructured < scopedTotal;
-    tagBtn.textContent = schemaState.guidedLaunch ? 'Build Guided Pass' : 'Build Tag Candidates';
-    applyBtn.textContent = schemaState.mode === 'tags' ? 'Apply Selected Tags' : 'Merge Selected Vocabulary';
-    var tagCandidateCount = schemaState.tagCandidates && Array.isArray(schemaState.tagCandidates.items)
-      ? schemaState.tagCandidates.items.reduce(function (total, item) {
-          return total + (Array.isArray(item.candidates) ? item.candidates.length : 0);
-        }, 0)
-      : 0;
-    applyBtn.disabled = schemaState.scanRunning || schemaBusy || (
-      schemaState.mode === 'tags'
-        ? tagCandidateCount < 1
-        : !(schemaState.schema && schemaState.schema.groups && schemaState.schema.groups.length)
-    );
+    tagBtn.textContent = 'Build Guided Pass';
+
     var heading = el('vision-schema-proposal-heading');
     var headingNote = el('vision-schema-proposal-note');
-    if (heading) heading.textContent = schemaState.mode === 'tags' ? 'Tag Candidates' : 'Schema Suggestions';
-    if (headingNote) headingNote.textContent = schemaState.mode === 'tags'
-      ? 'Toggle confident additions, including proposed new terms, then apply.'
-      : 'Director-organized vocabulary grounded in structured Sight.';
+    if (heading) heading.textContent = schemaState.mode === 'tags' ? 'Tag Candidates' : 'Vocabulary Changes';
+    if (headingNote) {
+      if (schemaState.mode === 'tags') {
+        headingNote.textContent = 'Map structured Sight onto the current vocabulary.';
+      } else {
+        var groups = schemaState.schema && Array.isArray(schemaState.schema.groups)
+          ? schemaState.schema.groups
+          : [];
+        headingNote.textContent = groups.length
+          ? 'Review one proposed group at a time.'
+          : 'Discovery will organize recurring visual concepts into proposed groups and terms.';
+      }
+    }
+
     renderProgress();
     renderRawResponses();
-    renderEvidence();
     renderProposals();
+    updateVocabularyReviewControls();
   }
 
   function saveSight(folder, model, media, sight) {
@@ -508,7 +527,9 @@
     });
   }
 
-  function runScan() {
+  function runScan(options) {
+    var opts = options || {};
+    var discoverAfter = !!opts.discoverAfter && !schemaState.guidedLaunch;
     if (schemaState.scanRunning || schemaState.schemaStarting || schemaState.schemaJobId) return;
     var folder = currentFolder();
     var model = currentVisionModel();
@@ -533,8 +554,9 @@
     schemaState.scanRunning = true;
     schemaState.scanStopRequested = false;
     schemaState.schema = null;
+    schemaState.reviewIndex = 0;
     schemaState.tagCandidates = null;
-    schemaState.mode = 'tags';
+    schemaState.mode = schemaState.guidedLaunch ? 'tags' : 'vocabulary';
     schemaState.analysis = null;
     render();
     setStatus('Checking cached Vision sight…');
@@ -552,16 +574,19 @@
     }).then(function () {
       if (schemaState.scanStopRequested) {
         setStatus('Sight scan stopped. Completed items are cached.');
-        return null;
+        return false;
       }
-      if (schemaState.guidedLaunch) return null;
-      return analyze();
-    }).then(function () {
+      if (schemaState.guidedLaunch) return true;
+      setStatus('Sight ready. Finding recurring vocabulary…');
+      return analyze().then(function () { return true; });
+    }).then(function (success) {
+      if (!success) return false;
       if (!schemaState.scanStopRequested) {
         setStatus(schemaState.guidedLaunch
           ? 'Vision review complete. Build the Guided Pass when the responses look useful.'
-          : 'Structured Sight complete. Build tag candidates or vocabulary suggestions.');
+          : 'Sight ready. Organizing vocabulary…');
       }
+      return true;
     }).catch(function (err) {
       if (schemaState.scanStopRequested) {
         setStatus('Sight scan stopped. Completed items are cached.');
@@ -569,11 +594,29 @@
         setStatus('Sight scan failed: ' + String(err && err.message ? err.message : err), true);
         reportConsoleError('Schema Assist', err);
       }
-    }).then(function () {
+      return false;
+    }).then(function (success) {
       schemaState.scanRunning = false;
       schemaState.currentVisionJobId = '';
       render();
+      if (success && discoverAfter && !schemaState.scanStopRequested) runSuggestions();
     });
+  }
+
+  function runDiscovery() {
+    if (schemaState.scanRunning || schemaState.schemaStarting || schemaState.schemaJobId) return;
+    if (!currentDirectorModel()) {
+      setStatus('Select a Director model first.', true);
+      return;
+    }
+    schemaState.scopeFiles = getVisibleMediaSelectionForTraining();
+    if (!schemaState.scopeFiles.length) {
+      setStatus('No visible media to analyze.', true);
+      return;
+    }
+    schemaState.mode = 'vocabulary';
+    schemaState.reviewIndex = 0;
+    runScan({ discoverAfter: true });
   }
 
   function stopWork() {
@@ -661,9 +704,10 @@
       var result = job.result && job.result.schema;
       if (!result || !Array.isArray(result.groups)) throw new Error('Schema Assist completed without structured suggestions.');
       schemaState.schema = result;
+      schemaState.reviewIndex = 0;
       setStatus(result.groups.length
-        ? ('Schema Assist proposed ' + String(result.groups.length) + ' group' + (result.groups.length === 1 ? '' : 's') + '.')
-        : 'Schema Assist found no useful vocabulary to add.');
+        ? ('Found ' + String(result.groups.length) + ' vocabulary group' + (result.groups.length === 1 ? '' : 's') + ' to review.')
+        : 'No useful vocabulary additions were found.');
       render();
     }).catch(function (err) {
       if (token !== schemaState.schemaRequestToken) return;
@@ -1022,6 +1066,27 @@
     return mutations;
   }
 
+  function advanceVocabularyReview(message) {
+    var groups = schemaState.schema && Array.isArray(schemaState.schema.groups)
+      ? schemaState.schema.groups
+      : [];
+    schemaState.reviewIndex += 1;
+    if (!groups.length || schemaState.reviewIndex >= groups.length) {
+      schemaState.schema = null;
+      schemaState.reviewIndex = 0;
+      setStatus((message ? message + ' ' : '') + 'Vocabulary review complete.');
+      render();
+      return;
+    }
+    setStatus(message || 'Ready for the next group.');
+    render();
+  }
+
+  function skipCurrentVocabularyGroup() {
+    if (!currentVocabularyGroup()) return;
+    advanceVocabularyReview('Skipped group.');
+  }
+
   function applySelected() {
     if (schemaState.mode === 'tags') {
       applySelectedTags();
@@ -1029,18 +1094,16 @@
     }
     var mutations = selectedProposalMutations();
     if (!mutations.length) {
-      setStatus('Select at least one proposed term to merge.', true);
+      setStatus('Select at least one proposed term to add.', true);
       return;
     }
     var merged = mergeChecklistSchemaVocabulary(mutations);
     var addedGroups = Number(merged.addedGroups || 0);
     var addedTerms = Number(merged.addedTerms || 0);
-    setStatus(
-      'Merged ' + String(addedTerms) + ' term' + (addedTerms === 1 ? '' : 's') +
-      (addedGroups ? (' across ' + String(addedGroups) + ' new group' + (addedGroups === 1 ? '' : 's')) : '') + '.'
-    );
-    schemaState.schema = null;
-    render();
+    var message =
+      'Added ' + String(addedTerms) + ' term' + (addedTerms === 1 ? '' : 's') +
+      (addedGroups ? (' in ' + String(addedGroups) + ' new group' + (addedGroups === 1 ? '' : 's')) : '') + '.';
+    advanceVocabularyReview(message);
   }
 
   function guidedScopeFiles(options) {
@@ -1073,6 +1136,7 @@
     schemaState.scopeFiles = files.slice();
     schemaState.scanStopRequested = false;
     schemaState.schema = null;
+    schemaState.reviewIndex = 0;
     schemaState.tagCandidates = null;
     schemaState.mode = 'tags';
     schemaState.analysis = null;
@@ -1106,19 +1170,20 @@
     schemaState.scopeFiles = getVisibleMediaSelectionForTraining();
     schemaState.scanStopRequested = false;
     schemaState.schema = null;
+    schemaState.reviewIndex = 0;
     schemaState.tagCandidates = null;
-    schemaState.mode = 'tags';
+    schemaState.mode = 'vocabulary';
     schemaState.analysis = null;
     schemaState.guidedLaunch = false;
     schemaState.rawResponses = [];
     render();
     setStatus('Loading current Sight coverage…');
     refreshStatus().then(function () {
-      if (schemaState.statusPayload && schemaState.statusPayload.structured) return analyze();
-      return null;
+      if (!schemaState.open || schemaState.guidedLaunch) return;
+      setStatus('Ready to discover recurring vocabulary.');
     }).catch(function (err) {
-      setStatus('Could not load Schema Assist: ' + String(err && err.message ? err.message : err), true);
-      reportConsoleError('Schema Assist', err);
+      setStatus('Could not load Discover Vocabulary: ' + String(err && err.message ? err.message : err), true);
+      reportConsoleError('Discover Vocabulary', err);
     });
   }
 
@@ -1135,24 +1200,20 @@
     var closeBtn = el('vision-schema-close-btn');
     var scanBtn = el('vision-schema-scan-btn');
     var stopBtn = el('vision-schema-stop-btn');
-    var suggestBtn = el('vision-schema-suggest-btn');
     var tagBtn = el('vision-schema-tags-btn');
+    var skipBtn = el('vision-schema-skip-btn');
     var applyBtn = el('vision-schema-apply-btn');
     var modal = el('vision-schema-modal');
-    if (!openBtn || !guidedOpenBtn || !closeBtn || !scanBtn || !stopBtn || !suggestBtn || !tagBtn || !applyBtn || !modal) {
+    if (!openBtn || !guidedOpenBtn || !closeBtn || !scanBtn || !stopBtn || !tagBtn || !skipBtn || !applyBtn || !modal) {
       throw new Error('Schema Assist controls are missing.');
     }
     openBtn.onclick = open;
     guidedOpenBtn.onclick = function () { openGuidedTagPass({ source: 'set' }); };
     closeBtn.onclick = close;
-    scanBtn.onclick = runScan;
+    scanBtn.onclick = runDiscovery;
     stopBtn.onclick = stopWork;
-    suggestBtn.onclick = function () {
-      schemaState.mode = 'vocabulary';
-      render();
-      runSuggestions();
-    };
     tagBtn.onclick = runTagSuggestions;
+    skipBtn.onclick = skipCurrentVocabularyGroup;
     applyBtn.onclick = applySelected;
     modal.addEventListener('click', function (event) {
       if (event.target === modal) close();

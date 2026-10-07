@@ -13,6 +13,16 @@ def _items():
                 {"group": "Color", "term": "red"},
             ],
             "tags": ["triangle", "red"],
+            "analysis": {
+                "faceFocus": {"bucket": "medium", "faceCount": 1, "largestHeightPct": 18.0},
+                "selectionPose": {"faceDirection": "front", "expression": "neutral", "bodyOrientation": "front", "poseClass": "standing", "armPosition": "down"},
+                "sceneComplexity": {"bucket": "simple", "score": 0.2},
+                "visionSight": {
+                    "model": "vl",
+                    "description": "Front standing view of a red triangle top.",
+                    "inventory": {"viewpoint": ["front"], "position": ["standing"]},
+                },
+            },
         },
         {
             "fileName": "two.jpg",
@@ -46,6 +56,9 @@ def test_qa_deep_scan_contract_is_structured_semantic_and_scope_grounded():
     assert "You cannot see the media" in contract["prompt"]
     assert "Teach bikini design details consistently." in contract["prompt"]
     assert "BT Shape: triangle" in contract["prompt"]
+    assert "NORMALIZED VISUAL ANALYSIS" in contract["prompt"]
+    assert "Face Focus" in contract["prompt"]
+    assert "Vision Sight" in contract["prompt"]
     assert "DETERMINISTIC QA FINDINGS" in contract["prompt"]
 
 

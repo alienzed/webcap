@@ -230,20 +230,34 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
 
     if client == "schema":
         operation = str((frozen_contract or {}).get("operation") or "").strip()
-        if operation != "vision_schema_suggest":
-            raise RuntimeError("Unsupported Schema Assist LLM operation: " + (operation or "empty"))
-        from .vision_schema_contract import normalize_result
-        return {
-            "schema": normalize_result(
-                llm_result.get("data"),
-                sight_evidence=(frozen_contract or {}).get("sight_evidence") or [],
-                existing_groups=(frozen_contract or {}).get("existing_groups") or [],
-            ),
-            "model": llm_result["model"],
-            "finishReason": llm_result.get("finishReason"),
-            "usage": llm_result.get("usage"),
-            "timings": llm_result.get("timings"),
-        }
+        if operation == "vision_schema_suggest":
+            from .vision_schema_contract import normalize_result
+            return {
+                "schema": normalize_result(
+                    llm_result.get("data"),
+                    sight_evidence=(frozen_contract or {}).get("sight_evidence") or [],
+                    existing_groups=(frozen_contract or {}).get("existing_groups") or [],
+                ),
+                "model": llm_result["model"],
+                "finishReason": llm_result.get("finishReason"),
+                "usage": llm_result.get("usage"),
+                "timings": llm_result.get("timings"),
+            }
+        if operation == "vision_tag_suggest":
+            from .vision_schema_contract import normalize_assignment_result
+            return {
+                "tagCandidates": normalize_assignment_result(
+                    llm_result.get("data"),
+                    existing_groups=(frozen_contract or {}).get("existing_groups") or [],
+                    allowed_files=(frozen_contract or {}).get("source_files") or [],
+                    current_assignments=(frozen_contract or {}).get("current_assignments") or {},
+                ),
+                "model": llm_result["model"],
+                "finishReason": llm_result.get("finishReason"),
+                "usage": llm_result.get("usage"),
+                "timings": llm_result.get("timings"),
+            }
+        raise RuntimeError("Unsupported Schema Assist LLM operation: " + (operation or "empty"))
 
     if client == "test":
         operation = str((frozen_contract or {}).get("operation") or "").strip()

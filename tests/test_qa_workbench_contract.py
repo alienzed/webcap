@@ -72,6 +72,9 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "metadata.selection_pose" in qa
     assert "metadata.vision_sight" in qa
     assert "qaBuildVisualAgreementFindings" in qa
+    assert "qaPrimeDeterministicSources" in qa
+    assert "ensurePruneCandidatesForCurrentFolder(false)" in qa
+    assert "ensureDuplicateCandidatesForCurrentFolder(false)" in qa
     assert "getSelectionPoseSuggestedTags" in qa
     assert "qaSightSupportsTerm" in qa
     assert "qaWorkbenchState.deterministicFindings.concat(ai)" in qa

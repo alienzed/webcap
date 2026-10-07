@@ -177,14 +177,16 @@
         check.type = 'checkbox';
         check.className = 'vision-schema-term-check';
         check.checked = !term.alreadyExists;
-        check.disabled = !!term.alreadyExists;
-        check.title = term.alreadyExists ? 'Already present in this group' : 'Merge this term';
+        check.disabled = false;
+        check.title = term.alreadyExists
+          ? 'Already present in the suggested target; select it if you redirect this proposal elsewhere'
+          : 'Merge this term';
 
         var termName = document.createElement('input');
         termName.type = 'text';
         termName.className = 'vision-schema-term-name';
         termName.value = String(term.term || '');
-        termName.disabled = !!term.alreadyExists;
+        termName.disabled = false;
 
         var support = document.createElement('span');
         support.className = 'vision-schema-term-support';
@@ -204,10 +206,26 @@
           chip.textContent = String(value || '');
           evidence.appendChild(chip);
         });
-        (term.examples || []).slice(0, 3).forEach(function (value) {
+        (term.examples || []).slice(0, 4).forEach(function (value) {
+          var fileName = String(value || '');
+          var ext = fileName.split('.').pop().toLowerCase();
+          var isImage = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'].indexOf(ext) !== -1;
+          if (isImage) {
+            var thumb = document.createElement('span');
+            thumb.className = 'vision-schema-example-thumb';
+            thumb.title = fileName;
+            var img = document.createElement('img');
+            img.alt = fileName;
+            img.loading = 'lazy';
+            img.src = '/caption/media?folder=' + encodeURIComponent(schemaState.folder) +
+              '&media=' + encodeURIComponent(fileName);
+            thumb.appendChild(img);
+            evidence.appendChild(thumb);
+            return;
+          }
           var chip = document.createElement('span');
           chip.className = 'vision-schema-example-chip';
-          chip.textContent = String(value || '');
+          chip.textContent = fileName;
           evidence.appendChild(chip);
         });
         row.appendChild(evidence);
@@ -385,6 +403,7 @@
     var folder = schemaState.folder;
     var visionModel = schemaState.visionModel;
     var groups = existingGroupsPayload();
+    schemaState.scanStopRequested = false;
     schemaState.schema = null;
     setStatus('Schema Assist organizing recurring visual evidence…');
     render();
@@ -427,6 +446,17 @@
     });
   }
 
+  function canonicalExistingGroup(name) {
+    var wanted = String(name || '').trim().toLowerCase();
+    if (!wanted) return '';
+    var groups = Array.isArray(checklistItems) ? checklistItems : [];
+    for (var i = 0; i < groups.length; i += 1) {
+      var current = String(groups[i] || '').trim();
+      if (current.toLowerCase() === wanted) return current;
+    }
+    return '';
+  }
+
   function selectedProposalMutations() {
     var mutations = [];
     var cards = el('vision-schema-proposals').querySelectorAll('.vision-schema-group-card');
@@ -444,9 +474,11 @@
         if (term && terms.indexOf(term) === -1) terms.push(term);
       });
       if (!terms.length) return;
+      var requested = selectedGroup || newName;
+      var canonical = canonicalExistingGroup(requested);
       mutations.push({
-        group: selectedGroup || newName,
-        create: !selectedGroup,
+        group: canonical || requested,
+        create: !selectedGroup && !canonical,
         terms: terms
       });
     });

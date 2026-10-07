@@ -131,7 +131,12 @@
   function activityTitle(item) {
     var kind = kindLabel(item);
     if (item.kind === 'director') {
-      var client = item.client === 'generate' ? 'Generate' : item.client === 'storyboard' ? 'Storyboard' : item.client === 'test' ? 'Test' : item.client === 'chat' ? 'Chat' : '';
+      var client = item.client === 'generate' ? 'Generate'
+        : item.client === 'storyboard' ? 'Storyboard'
+        : item.client === 'test' ? 'Test'
+        : item.client === 'chat' ? 'Chat'
+        : item.client === 'schema' ? 'Schema Assist'
+        : '';
       return client ? kind + ' · ' + client : kind;
     }
     return item.label ? kind + ' · ' + String(item.label) : kind;

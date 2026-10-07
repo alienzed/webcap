@@ -41,4 +41,7 @@ def test_schema_assist_keeps_scan_ephemeral_and_schema_mutations_explicit():
     assert "scanStopRequested" in script
     assert "Nothing changes until you apply selected vocabulary." in _read("tool/tool.html")
     assert "check.checked = !term.alreadyExists;" in script
+    assert "check.disabled = false;" in script
+    assert "function canonicalExistingGroup(name)" in script
+    assert "vision-schema-example-thumb" in script
     assert "applyBtn.onclick = applySelected;" in script

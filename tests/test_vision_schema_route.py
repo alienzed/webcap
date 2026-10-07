@@ -135,6 +135,48 @@ def test_vision_tag_suggestions_queue_current_structured_sight(tmp_path, monkeyp
     assert seen["contract"]["source_files"] == ["b.jpg"]
 
 
+def test_vision_tag_suggestions_accept_partial_structured_sight(tmp_path, monkeypatch):
+    set_root = tmp_path / "set"
+    set_root.mkdir()
+    for name in ("a.jpg", "b.jpg"):
+        (set_root / name).write_bytes(name.encode("utf-8"))
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", Path(tmp_path))
+
+    from tool.server import vision_schema_assist
+    vision_schema_assist.save_vision_sight(
+        "set",
+        "a.jpg",
+        "vl",
+        _sight(
+            "Front view of a red triangle top.",
+            viewpoint=["front"],
+            things=[{"name": "bikini top", "qualities": ["triangle"]}],
+        ),
+    )
+
+    seen = {}
+    def fake_enqueue(client, model_id, contract, context=None, label=""):
+        seen.update(client=client, model=model_id, contract=contract, context=context, label=label)
+        return {"jobId": "tags-partial-1", "status": "queued", "queuePosition": 1}
+    monkeypatch.setattr(app_module, "enqueue_llm", fake_enqueue)
+
+    response = app_module.app.test_client().post("/fs/vision_schema", json={
+        "operation": "suggest_tags",
+        "folder": "set",
+        "visionModel": "vl",
+        "directorModel": "director",
+        "files": ["a.jpg", "b.jpg"],
+        "existingGroups": [{"group": "Viewpoint", "terms": ["front", "side"]}],
+        "currentAssignments": {},
+        "existingOnly": True,
+    })
+
+    assert response.status_code == 202
+    payload = response.get_json()
+    assert payload["files"] == ["a.jpg"]
+    assert seen["contract"]["source_files"] == ["a.jpg"]
+
+
 def test_structured_sight_scan_uses_caption_vision_lane_and_response_contract(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()

@@ -1595,7 +1595,10 @@ function refreshMediaResolutionCache(options) {
   setStatus('Checking metadata...');
   return new Promise(function (resolve) {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/fs/media_metadata?folder=' + encodeURIComponent(requestFolder));
+    var metadataUrl = '/fs/media_metadata?folder=' + encodeURIComponent(requestFolder);
+    if (options.includeFaceFocus) metadataUrl += '&face_focus=1';
+    if (options.includeSelectionPose) metadataUrl += '&selection_pose=1';
+    xhr.open('GET', metadataUrl);
     xhr.onreadystatechange = function () {
       if (xhr.readyState !== 4) return;
       if (state.folder !== requestFolder || (options.folderLoadSequence && options.folderLoadSequence !== folderLoadSequence)) {

@@ -676,18 +676,24 @@
     var sight = metadata && metadata.vision_sight && typeof metadata.vision_sight === 'object'
       ? metadata.vision_sight
       : null;
-    if (!sight) return false;
-    var haystack = (
-      String(sight.description || '') + ' ' +
-      JSON.stringify(sight.inventory || {})
-    ).toLowerCase().replace(/[_-]+/g, ' ');
+    var inventory = sight && sight.inventory && typeof sight.inventory === 'object' ? sight.inventory : null;
+    if (!inventory) return false;
+
+    function normalizeList(values) {
+      return (Array.isArray(values) ? values : []).map(function (value) {
+        return String(value || '').toLowerCase().replace(/[_-]+/g, ' ').trim();
+      }).filter(Boolean);
+    }
+
     var wanted = String(term || '').toLowerCase().replace(/[_-]+/g, ' ').trim();
-    var aliases = {
+    var viewpointAliases = {
       'side': ['side'],
       'front': ['front'],
       'three quarter': ['three quarter', '3/4'],
       'rear': ['rear', 'back view', 'from behind'],
-      'three quarter rear': ['three quarter rear', 'rear three quarter'],
+      'three quarter rear': ['three quarter rear', 'rear three quarter']
+    };
+    var positionAliases = {
       'standing': ['standing'],
       'sitting': ['sitting', 'seated'],
       'kneeling': ['kneeling', 'crouched'],
@@ -699,8 +705,13 @@
       'surprised': ['surprised'],
       'neutral expression': ['neutral expression']
     };
-    var terms = aliases[wanted] || [wanted];
-    return terms.some(function (value) { return value && haystack.indexOf(value) !== -1; });
+    var source = viewpointAliases[wanted]
+      ? normalizeList(inventory.viewpoint)
+      : normalizeList(inventory.position);
+    var aliases = viewpointAliases[wanted] || positionAliases[wanted] || [];
+    return aliases.some(function (alias) {
+      return source.some(function (value) { return value === alias || value.indexOf(alias + ' ') === 0; });
+    });
   }
 
   function qaBuildVisualAgreementFindings(items) {

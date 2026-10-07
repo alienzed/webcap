@@ -161,6 +161,9 @@ function mediaGridRenderSharedWorkbench() {
     onAfterMutation: function () {
       if (typeof mediaGridRefreshAfterMutation === 'function') mediaGridRefreshAfterMutation();
       else if (typeof mediaGridRenderSelectionState === 'function') mediaGridRenderSelectionState();
+    },
+    onTermMutation: function (requirementLabel, term, details) {
+      window.handleGuidedTagPassGridTermMutation(requirementLabel, term, details);
     }
   });
   window.syncGuidedTagPassWorkbenchHighlight();

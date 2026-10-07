@@ -537,12 +537,6 @@ def _execute_claimed(job_id, gpu_reserved):
                 if caption_operation == "caption_vision_validate":
                     from .caption_vision import CAPTION_VISION_RESPONSE_SCHEMA
                     chat_kwargs["response_schema"] = CAPTION_VISION_RESPONSE_SCHEMA
-                elif caption_operation == "vision_schema_sight":
-                    from .vision_schema_assist import VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA
-                    chat_kwargs["response_schema"] = VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA
-                elif caption_operation == "vision_vocabulary_sight":
-                    from .vision_schema_assist import VISION_VOCABULARY_SIGHT_RESPONSE_SCHEMA
-                    chat_kwargs["response_schema"] = VISION_VOCABULARY_SIGHT_RESPONSE_SCHEMA
             llm_result = run_freeform_chat(
                 model_id,
                 messages,

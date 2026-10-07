@@ -631,7 +631,28 @@ def _run_vision_model(run, model):
                 )
             continue
 
-        media = resolve_caption_vision_media(run["folder"], file_name)
+        try:
+            media = resolve_caption_vision_media(run["folder"], file_name)
+        except Exception as exc:
+            _skip_attempt(
+                run,
+                "vision_open",
+                "vision",
+                model_ref,
+                file_name,
+                "Media preparation failed: " + str(exc),
+            )
+            if run["groups"]:
+                _skip_attempt(
+                    run,
+                    "vision_group_aware",
+                    "vision",
+                    model_ref,
+                    file_name,
+                    "Media preparation failed: " + str(exc),
+                )
+            continue
+
         attempt = _probe_job(
             run,
             kind="vision_open",
@@ -865,21 +886,58 @@ def _runner(run_id):
 
         vision_refs = []
         for model in run.get("allVisionModels") or []:
-            if model["modelRef"] not in vision_refs:
-                vision_refs.append(model["modelRef"])
+            if model["modelRef"] in vision_refs:
+                continue
+            vision_refs.append(model["modelRef"])
+            try:
                 _run_vision_model(run, model)
-                if _active_stop_event(run_id).is_set():
-                    raise ModelLabStopped("Model Lab stop requested.")
+            except ModelLabStopped:
+                raise
+            except Exception as exc:
+                _skip_attempt(
+                    run,
+                    "vision_model_error",
+                    "vision",
+                    model["modelRef"],
+                    "",
+                    "Vision model stage failed: " + str(exc),
+                )
+            if _active_stop_event(run_id).is_set():
+                raise ModelLabStopped("Model Lab stop requested.")
 
         if run.get("referenceDirectorRef"):
             for model in run.get("visionModels") or []:
-                _run_reference_director_for_vision(run, model)
+                try:
+                    _run_reference_director_for_vision(run, model)
+                except ModelLabStopped:
+                    raise
+                except Exception as exc:
+                    _skip_attempt(
+                        run,
+                        "vision_vocabulary_error",
+                        "director",
+                        run.get("referenceDirectorRef"),
+                        model["modelRef"],
+                        "Vision vocabulary evaluation failed: " + str(exc),
+                    )
                 if _active_stop_event(run_id).is_set():
                     raise ModelLabStopped("Model Lab stop requested.")
 
         _persist_progress(run, phase="director", currentModelRef="", currentFile="", currentKind="")
         for model in run.get("directorModels") or []:
-            _run_director_model(run, model)
+            try:
+                _run_director_model(run, model)
+            except ModelLabStopped:
+                raise
+            except Exception as exc:
+                _skip_attempt(
+                    run,
+                    "director_model_error",
+                    "director",
+                    model["modelRef"],
+                    "",
+                    "Director model stage failed: " + str(exc),
+                )
             if _active_stop_event(run_id).is_set():
                 raise ModelLabStopped("Model Lab stop requested.")
 

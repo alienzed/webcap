@@ -1,6 +1,6 @@
 # Vision Schema Assist
 
-Status: shared Structured Sight infrastructure with focused vocabulary discovery and separate tag materialization workflows.
+Status: consumer workflows built on the shared Set Scan / Structured Sight infrastructure.
 
 ## Product lanes
 
@@ -10,14 +10,15 @@ Vision Schema Assist provides shared visual evidence, but the user-facing workfl
 
 Purpose: improve an immature or incomplete annotation vocabulary at the Set level.
 
-1. The user opens **Discover Vocabulary** and clicks one primary action: **Discover Vocabulary**.
-2. WebCap reuses current structured Sight where possible and scans only missing visible media.
-3. WebCap deterministically aggregates recurring visual evidence.
-4. The Director synthesizes recurring vocabulary proposals against the existing groups and terms.
-5. The user reviews **one proposed group at a time**.
-6. Each review shows only the information needed for the vocabulary decision: proposed group / merge target, proposed terms, and support counts.
-7. The user can edit, select, skip, or **Add Selected to Vocabulary**.
-8. Accepting or skipping advances to the next proposed group.
+1. The user runs **Set Tools → Scan Set** to build reusable Set intelligence.
+2. The user opens **Discover Vocabulary** from Set Tools or the contextual Groups shortcut.
+3. WebCap verifies that current Structured Sight exists for the whole Set and refuses to synthesize from a partial scan.
+4. WebCap deterministically aggregates recurring visual evidence.
+5. The Director synthesizes recurring vocabulary proposals against the existing groups and terms.
+6. The user reviews **one proposed group at a time**.
+7. Each review shows the vocabulary decision by default: proposed group / merge target, proposed terms, and support counts. Grounded rationale/evidence/examples are available behind an optional reveal.
+8. The user can edit, select, skip, or **Add Selected to Vocabulary**.
+9. Accepting or skipping advances to the next proposed group.
 
 Discover Vocabulary does **not** tag media and does not act as an alternate captioning workflow. Structured Sight, thumbnails, evidence IDs, and synthesis rationale remain supporting machinery rather than the primary review surface.
 
@@ -25,13 +26,13 @@ Discover Vocabulary does **not** tag media and does not act as an alternate capt
 
 Purpose: apply an already-useful vocabulary to media.
 
-A text Director receives structured Sight, current groups/terms, and current assignments, then proposes confident missing tags per media item. Existing vocabulary is preferred. Guided Tag Pass and other assisted-caption/tagging surfaces own the user interaction for materializing those tags.
+A text Director receives current structured Sight, current groups/terms, and current assignments, then proposes confident missing tags per media item. Existing vocabulary is preferred. Guided Tag Pass owns the user interaction for materializing those tags in Grid and does not launch its own Vision scan.
 
 The shared backend may reuse the same Sight cache and suggestion routes, but Discover Vocabulary must not expose tag-materialization controls in its primary workflow.
 
 ## Shared Structured Sight
 
-1. **Structured Sight** scans media with the selected Vision model.
+1. **Set Scan** owns Structured Sight generation with the selected Vision model; Discover Vocabulary and Guided Tagging only consume it.
 2. One replaceable `vision_sight` analysis block per media item is cached in `media_metadata.json`.
 3. Each block keeps a concise description plus a structured visual inventory: viewpoint, position, things + qualities, thing-bound colors, setting/background, lighting, surface/support, and distinctive details.
 4. Changing the Vision model, changing the media, or bumping the analyzer version makes structured evidence stale.

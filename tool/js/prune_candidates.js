@@ -79,15 +79,18 @@ function applyPruneCandidatePayload(folder, scopeFiles, scopeKey, payload) {
   state.pruneCandidatesError = '';
   state.pruneCandidatesDirty = false;
   syncPruneCandidateConsumers();
+  refreshQaWorkbench();
 }
 
-function ensurePruneCandidatesForCurrentFolder(force) {
+function ensurePruneCandidatesForCurrentFolder(force, requestedScopeFiles) {
   var folder = String(state.folder || '').trim();
   if (!folder) {
     resetPruneCandidateState('ready');
     return Promise.resolve([]);
   }
-  var scopeFiles = pruneCandidateScopeFiles();
+  var scopeFiles = Array.isArray(requestedScopeFiles)
+    ? requestedScopeFiles.slice()
+    : pruneCandidateScopeFiles();
   var scopeKey = pruneCandidateScopeKey(scopeFiles);
   if (!force && !state.pruneCandidatesDirty && state.pruneCandidatesFolder === folder && state.pruneCandidatesScopeKey === scopeKey && state.pruneCandidatesStatus === 'ready') {
     return Promise.resolve(state.pruneCandidates.slice());

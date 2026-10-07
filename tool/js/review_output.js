@@ -298,11 +298,15 @@ function updateSetFolderScopedUi() {
   var reviewAvailable = getReviewAvailability().enabled;
   var reviewBtn = document.getElementById('sidebar-open-review-output-btn');
   var trainingBtn = document.getElementById('sidebar-open-training-btn');
+  var scanBtn = document.getElementById('set-scan-open-btn');
+  var discoverBtn = document.getElementById('discover-vocabulary-set-btn');
   var guidedTagBtn = document.getElementById('guided-tag-pass-open-btn');
   var drawer = document.getElementById('sidebar-set-actions-drawer');
   var createSetBtn = document.getElementById('create-set-from-results-btn');
   if (reviewBtn) reviewBtn.classList.toggle('hidden', !reviewAvailable);
   if (trainingBtn) trainingBtn.classList.toggle('hidden', !inSetFolder);
+  if (scanBtn) scanBtn.classList.toggle('hidden', !inSetFolder || !Array.isArray(state.items) || !state.items.length);
+  if (discoverBtn) discoverBtn.classList.toggle('hidden', !inSetFolder || !Array.isArray(state.items) || !state.items.length);
   if (guidedTagBtn) guidedTagBtn.classList.toggle('hidden', !inSetFolder || !Array.isArray(state.items) || !state.items.length);
   if (drawer) drawer.classList.toggle('hidden', !inSetFolder && (!createSetBtn || createSetBtn.classList.contains('hidden')));
 }

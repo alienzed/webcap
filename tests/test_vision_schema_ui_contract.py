@@ -16,21 +16,18 @@ def test_schema_assist_is_contextual_and_reuses_existing_vision_and_schema_paths
     assert 'id="vision-schema-open-btn"' in html
     assert html.index('id="vision-schema-open-btn"') < html.index('id="checklist-settings-btn"')
     assert 'id="vision-schema-modal"' in html
-    assert 'id="vision-schema-scan-btn"' in html
-    assert 'id="vision-schema-tags-btn"' in html
+    assert 'id="vision-schema-scan-btn"' not in html
+    assert 'id="vision-schema-tags-btn"' not in html
     assert 'id="vision-schema-skip-btn"' in html
     assert 'id="vision-schema-proposal-heading"' in html
     assert 'id="vision-schema-suggest-btn"' not in html
     assert 'src="/static/js/vision_schema_assist.js"' in html
     assert html.index('src="/static/js/caption_vision.js"') < html.index('src="/static/js/vision_schema_assist.js"')
 
-    assert "operation: 'scan_sight'" in script
-    assert "operation: 'save_sight'" in script
     assert "operation: 'analyze'" in script
     assert "operation: 'synthesize'" in script
     assert "operation: 'suggest_tags'" in script
     assert "waitForCaptionAssistJob(payload.job)" in script
-    assert "cancelCaptionAssistJob(schemaState.currentVisionJobId)" in script
     assert "mergeChecklistSchemaVocabulary(mutations)" in script
     assert "assignChecklistTagToMediaKey(item.key, candidate.group, candidate.term" in script
 
@@ -45,7 +42,7 @@ def test_schema_assist_keeps_scan_ephemeral_and_schema_mutations_explicit():
 
     assert "localStorage" not in script
     assert "sessionStorage" not in script
-    assert "scanStopRequested" in script
+    assert "workStopRequested" in script
     assert "schemaStarting" in script
     assert "schemaRequestToken" in script
     html = _read("tool/tool.html")
@@ -55,10 +52,10 @@ def test_schema_assist_keeps_scan_ephemeral_and_schema_mutations_explicit():
     assert "check.disabled = false;" in script
     assert "function canonicalExistingGroup(name)" in script
     assert "function runDiscovery()" in script
-    assert "runScan({ discoverAfter: true });" in script
+    assert "Run Scan Set from Set Tools first." in script
+    assert "getCurrentSetMediaFileNames()" in script
     assert "function currentVocabularyGroup()" in script
     assert "function skipCurrentVocabularyGroup()" in script
-    assert "scanBtn.onclick = runDiscovery;" in script
     assert "skipBtn.onclick = skipCurrentVocabularyGroup;" in script
     assert "applyBtn.onclick = applySelected;" in script
 
@@ -68,8 +65,8 @@ def test_discover_vocabulary_is_single_action_and_one_group_at_a_time():
     html = _read("tool/tool.html")
     script = _read("tool/js/vision_schema_assist.js")
 
-    assert html.count('id="vision-schema-scan-btn"') == 1
-    assert ">Discover Vocabulary</button>" in html
+    assert html.count('id="vision-schema-scan-btn"') == 0
+    assert 'id="discover-vocabulary-set-btn"' in html
     assert "Structured Sight</strong>" not in html
     assert "vision-schema-evidence-column" not in html
     assert "Merge Selected Vocabulary" not in html
@@ -88,7 +85,8 @@ def test_schema_assist_materializes_only_explicitly_selected_tag_candidates():
     assert "candidate.existing" in script
     assert "mergeChecklistSchemaVocabulary(vocabularyMutations)" in script
     assert "assignChecklistTagToMediaKey(item.key, candidate.group, candidate.term, { skipRefresh: true })" in script
-    assert "schemaState.scopeFiles = getVisibleMediaSelectionForTraining();" in script
+    assert "schemaState.scopeFiles = getCurrentSetMediaFileNames();" in script
+    assert "return getVisibleMediaSelectionForTraining();" in script
 
 
 def test_guided_tag_pass_reuses_grid_and_keeps_new_vocabulary_out_of_primary_flow():
@@ -100,9 +98,7 @@ def test_guided_tag_pass_reuses_grid_and_keeps_new_vocabulary_out_of_primary_flo
 
     assert 'id="guided-tag-pass-open-btn"' in html
     assert 'id="media-grid-guided-pass"' in html
-    assert 'id="vision-schema-raw-output"' in html
     assert "window.openGuidedTagPass = openGuidedTagPass;" in script
-    assert "appendRawResponse(fileName, result.text);" in script
     assert "if (!candidate || !candidate.existing) return;" in script
     assert "mediaGridReplaceSelection(Array.from(selected));" in script
     assert "mediaGridState." not in script

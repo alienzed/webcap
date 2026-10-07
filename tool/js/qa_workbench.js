@@ -35,7 +35,9 @@
     scopeKey: '',
     parentFocusSet: undefined,
     returnFindingId: '',
-    statusMessage: ''
+    statusMessage: '',
+    externalAnalysisAttemptKey: '',
+    externalAnalysisRunning: false
   };
 
   function qaCloneFocusSet(focusSet) {
@@ -88,6 +90,44 @@
     ].join('\u0001');
   }
 
+  function qaPrimeDeterministicSources(items) {
+    var scopeKey = qaBuildScopeKey(items);
+    if (!items.length || qaWorkbenchState.externalAnalysisAttemptKey === scopeKey) return;
+    qaWorkbenchState.externalAnalysisAttemptKey = scopeKey;
+
+    var scopeFiles = items.map(function (item) {
+      return String(item && item.fileName || '');
+    }).filter(Boolean);
+    var pruneReady = state.pruneCandidatesStatus === 'ready'
+      && state.pruneCandidatesFolder === String(state.folder || '')
+      && state.pruneCandidatesScopeKey === pruneCandidateScopeKey(scopeFiles);
+    var duplicateReady = state.duplicateCandidatesStatus === 'ready'
+      && state.duplicateCandidatesFolder === String(state.folder || '')
+      && state.duplicateCandidatesScopeKey === duplicateCandidateScopeKey(scopeFiles);
+    var jobs = [];
+
+    if (!pruneReady) {
+      jobs.push(ensurePruneCandidatesForCurrentFolder(false, scopeFiles).catch(function (err) {
+        reportConsoleError('QA · Prune analysis', err);
+        return [];
+      }));
+    }
+    if (!duplicateReady) {
+      jobs.push(ensureDuplicateCandidatesForCurrentFolder(false, scopeFiles).catch(function (err) {
+        reportConsoleError('QA · Duplicate analysis', err);
+        return [];
+      }));
+    }
+    if (!jobs.length) return;
+
+    qaWorkbenchState.externalAnalysisRunning = true;
+    Promise.all(jobs).then(function () {
+      qaWorkbenchState.externalAnalysisRunning = false;
+      if (qaBuildScopeKey(qaGetTrainingItems()) !== scopeKey) return;
+      renderQaWorkbench(true);
+    });
+  }
+
   function qaRequestJson(url, options) {
     return fetch(url, options || {}).then(function (response) {
       return response.json().then(function (payload) {
@@ -97,6 +137,56 @@
         return payload;
       });
     });
+  }
+
+  function qaBuildCompactAnalysis(item) {
+    var metadata = item && item.metadata && typeof item.metadata === 'object' ? item.metadata : {};
+    var out = {};
+    var face = metadata.face_focus && typeof metadata.face_focus === 'object' ? metadata.face_focus : null;
+    if (face) {
+      out.faceFocus = {
+        bucket: String(face.bucket || 'unknown'),
+        faceCount: Number(face.face_count || 0),
+        largestHeightPct: Number(face.largest_height_pct || 0)
+      };
+    }
+    var pose = metadata.selection_pose && typeof metadata.selection_pose === 'object' ? metadata.selection_pose : null;
+    if (pose) {
+      out.selectionPose = {
+        faceDirection: String(pose.face_direction || 'unknown'),
+        expression: String(pose.expression_primary || 'unknown'),
+        bodyOrientation: String(pose.body_orientation || 'unknown'),
+        poseClass: String(pose.pose_class || 'unknown'),
+        armPosition: String(pose.arm_position || 'unknown')
+      };
+    }
+    var complexity = metadata.scene_complexity && typeof metadata.scene_complexity === 'object' ? metadata.scene_complexity : null;
+    if (complexity) {
+      out.sceneComplexity = {
+        bucket: String(complexity.bucket || 'unknown'),
+        score: Number(complexity.score || 0)
+      };
+    }
+    var sight = metadata.vision_sight && typeof metadata.vision_sight === 'object' ? metadata.vision_sight : null;
+    if (sight && sight.description && sight.inventory) {
+      var inventory = sight.inventory && typeof sight.inventory === 'object' ? sight.inventory : {};
+      out.visionSight = {
+        model: String(sight.model || ''),
+        description: String(sight.description || ''),
+        inventory: {
+          viewpoint: (inventory.viewpoint || []).slice(0, 4),
+          position: (inventory.position || []).slice(0, 6),
+          things: (inventory.things || []).slice(0, 8),
+          colors: (inventory.colors || []).slice(0, 8),
+          setting: (inventory.setting || []).slice(0, 4),
+          background: (inventory.background || []).slice(0, 4),
+          lighting: (inventory.lighting || []).slice(0, 4),
+          surface: (inventory.surface || []).slice(0, 4),
+          details: (inventory.details || []).slice(0, 8)
+        }
+      };
+    }
+    return out;
   }
 
   function qaBuildDeepScanItems(items) {
@@ -111,7 +201,8 @@
             term: String(entry && entry.term || '')
           };
         }),
-        tags: getTagsForMediaKey(key).slice()
+        tags: getTagsForMediaKey(key).slice(),
+        analysis: qaBuildCompactAnalysis(item)
       };
     });
   }
@@ -632,6 +723,82 @@
     }];
   }
 
+  function qaSightSupportsTerm(metadata, term) {
+    var sight = metadata && metadata.vision_sight && typeof metadata.vision_sight === 'object'
+      ? metadata.vision_sight
+      : null;
+    var inventory = sight && sight.inventory && typeof sight.inventory === 'object' ? sight.inventory : null;
+    if (!inventory) return false;
+
+    function normalizeList(values) {
+      return (Array.isArray(values) ? values : []).map(function (value) {
+        return String(value || '').toLowerCase().replace(/[_-]+/g, ' ').trim();
+      }).filter(Boolean);
+    }
+
+    var wanted = String(term || '').toLowerCase().replace(/[_-]+/g, ' ').trim();
+    var viewpointAliases = {
+      'side': ['side'],
+      'front': ['front'],
+      'three quarter': ['three quarter', '3/4'],
+      'rear': ['rear', 'back view', 'from behind'],
+      'three quarter rear': ['three quarter rear', 'rear three quarter']
+    };
+    var positionAliases = {
+      'standing': ['standing'],
+      'sitting': ['sitting', 'seated'],
+      'kneeling': ['kneeling', 'crouched'],
+      'lying on her back': ['lying on her back', 'reclining'],
+      'arms up': ['arms up', 'arms raised', 'both arms up'],
+      'one arm up': ['one arm up', 'one arm raised'],
+      'arms spread': ['arms spread', 'arms out'],
+      'smiling': ['smiling', 'smile'],
+      'surprised': ['surprised'],
+      'neutral expression': ['neutral expression']
+    };
+    var source = viewpointAliases[wanted]
+      ? normalizeList(inventory.viewpoint)
+      : normalizeList(inventory.position);
+    var aliases = viewpointAliases[wanted] || positionAliases[wanted] || [];
+    return aliases.some(function (alias) {
+      return source.some(function (value) { return value === alias || value.indexOf(alias + ' ') === 0; });
+    });
+  }
+
+  function qaBuildVisualAgreementFindings(items) {
+    var buckets = {};
+    (items || []).forEach(function (item) {
+      if (!item || !item.key || !item.metadata) return;
+      var existingTags = getTagsForMediaKey(item.key).slice();
+      var suggestions = getSelectionPoseSuggestedTags(item.metadata, existingTags);
+      suggestions.forEach(function (term) {
+        var groups = getChecklistRequirementsForTag(term);
+        if (groups.length !== 1 || !qaSightSupportsTerm(item.metadata, term)) return;
+        var key = String(term || '').toLowerCase();
+        if (!buckets[key]) buckets[key] = { term: term, groups: groups.slice(), files: [] };
+        buckets[key].files.push(item.fileName);
+      });
+    });
+    return Object.keys(buckets).map(function (key) {
+      var row = buckets[key];
+      return {
+        id: qaStableId(['visual-agreement', row.term].concat(row.files)),
+        category: 'consistency',
+        priority: row.files.length > 1 ? 'high' : 'normal',
+        confidence: 'high',
+        title: 'Independent visual signals suggest missing "' + row.term + '"',
+        summary: qaFileCountText(row.files.length) + ' have matching MediaPipe and Vision evidence but are not tagged "' + row.term + '".',
+        why: 'Two independent visual signals agree on a term that already exists in the Set vocabulary, making these strong annotation-review candidates.',
+        files: row.files.slice(),
+        facts: [
+          { value: '2', label: 'agreeing visual sources' },
+          { value: String(row.groups[0] || ''), label: 'annotation group' }
+        ],
+        sourceLabel: 'WebCap + Vision'
+      };
+    }).slice(0, 6);
+  }
+
   function qaBuildObservations(items) {
     var total = items.length;
     if (total < 30) return [];
@@ -694,6 +861,7 @@
       .concat(qaBuildPruneFindings(items))
       .concat(qaBuildDuplicateFindings(items))
       .concat(qaBuildAssociationFindings(items))
+      .concat(qaBuildVisualAgreementFindings(items))
       .concat(qaBuildCaptionFindings(items));
     return {
       findings: qaSortFindings(findings),
@@ -1287,6 +1455,8 @@
     if (reviewWorkspaceState.detailTab !== 'qa') return;
     var root = document.getElementById('qa-workbench');
     if (!root) throw new Error('QA workbench root is missing.');
+    var currentItems = qaGetTrainingItems();
+    qaPrimeDeterministicSources(currentItems);
     var data = qaRefreshComputedState(!!force);
     if (qaWorkbenchState.view === 'browse') {
       qaRenderBrowse(root, data.items);
@@ -1474,6 +1644,15 @@
   function getQaTrainingItemsForAssistant() {
     return qaGetTrainingItems();
   }
+
+  window.addEventListener('webcap:media-metadata-updated', function (event) {
+    var detail = event && event.detail ? event.detail : {};
+    if (String(detail.folder || '') !== String(state.folder || '')) return;
+    qaWorkbenchState.externalAnalysisAttemptKey = '';
+    if (normalizeWorkspaceSurface(workspaceState.surface) !== 'reviewOutput') return;
+    if (reviewWorkspaceState.detailTab !== 'qa') return;
+    renderQaWorkbench(true);
+  });
 
   window.renderQaWorkbench = renderQaWorkbench;
   window.refreshQaWorkbench = function () { renderQaWorkbench(true); };

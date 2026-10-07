@@ -1595,7 +1595,10 @@ function refreshMediaResolutionCache(options) {
   setStatus('Checking metadata...');
   return new Promise(function (resolve) {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/fs/media_metadata?folder=' + encodeURIComponent(requestFolder));
+    var metadataUrl = '/fs/media_metadata?folder=' + encodeURIComponent(requestFolder);
+    if (options.includeFaceFocus) metadataUrl += '&face_focus=1';
+    if (options.includeSelectionPose) metadataUrl += '&selection_pose=1';
+    xhr.open('GET', metadataUrl);
     xhr.onreadystatechange = function () {
       if (xhr.readyState !== 4) return;
       if (state.folder !== requestFolder || (options.folderLoadSequence && options.folderLoadSequence !== folderLoadSequence)) {
@@ -1625,8 +1628,9 @@ function refreshMediaResolutionCache(options) {
         var checkedCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Checked') || 0);
         var pendingCount = Number(xhr.getResponseHeader('X-WebCap-Metadata-Pending') || 0);
         var optionalWarningsHeader = xhr.getResponseHeader('X-WebCap-Optional-Analysis-Warnings') || '';
+        var optionalWarnings = [];
         if (optionalWarningsHeader) {
-          var optionalWarnings = JSON.parse(optionalWarningsHeader);
+          optionalWarnings = JSON.parse(optionalWarningsHeader);
           (optionalWarnings || []).forEach(function (warning) {
             var message = String(warning || '').trim();
             if (!message || reportedOptionalAnalysisWarnings[message]) return;
@@ -1651,9 +1655,11 @@ function refreshMediaResolutionCache(options) {
           ? ('Generated metadata for ' + generatedCount + ' media item' + (generatedCount === 1 ? '' : 's') + '.')
           : ('Metadata is current (' + checkedCount + ' media item' + (checkedCount === 1 ? '' : 's') + ' checked).');
         setStatus(options.successStatus || metadataStatus);
-        window.dispatchEvent(new CustomEvent('webcap:media-metadata-updated', {
-          detail: { folder: requestFolder, rows: rows, folderLoadSequence: options.folderLoadSequence || 0 }
-        }));
+        if (!options.suppressUpdatedEvent) {
+          window.dispatchEvent(new CustomEvent('webcap:media-metadata-updated', {
+            detail: { folder: requestFolder, rows: rows, folderLoadSequence: options.folderLoadSequence || 0 }
+          }));
+        }
         if (state.currentItem) {
           setStatus(buildSelectedMediaStatus(state.currentItem));
           renderItemMetadataPanel();
@@ -1664,7 +1670,8 @@ function refreshMediaResolutionCache(options) {
           rows: rows,
           generated: generatedCount,
           checked: checkedCount,
-          pending: pendingCount
+          pending: pendingCount,
+          warnings: optionalWarnings.slice()
         });
       } catch (e) {
         mediaMetadataLoading = false;

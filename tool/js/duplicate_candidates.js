@@ -45,15 +45,18 @@ function applyDuplicateCandidatePayload(folder, scopeFiles, scopeKey, payload) {
   state.duplicateCandidatesError = '';
   state.duplicateCandidatesDirty = false;
   renderDuplicateCandidatesReport();
+  refreshQaWorkbench();
 }
 
-function ensureDuplicateCandidatesForCurrentFolder(force) {
+function ensureDuplicateCandidatesForCurrentFolder(force, requestedScopeFiles) {
   var folder = String(state.folder || '').trim();
   if (!folder) {
     resetDuplicateCandidateState('ready');
     return Promise.resolve([]);
   }
-  var scopeFiles = duplicateCandidateScopeFiles();
+  var scopeFiles = Array.isArray(requestedScopeFiles)
+    ? requestedScopeFiles.slice()
+    : duplicateCandidateScopeFiles();
   var scopeKey = duplicateCandidateScopeKey(scopeFiles);
   if (!force && !state.duplicateCandidatesDirty && state.duplicateCandidatesFolder === folder && state.duplicateCandidatesScopeKey === scopeKey && state.duplicateCandidatesStatus === 'ready') {
     return Promise.resolve(state.duplicateCandidateGroups.slice());

@@ -955,6 +955,14 @@ def media_metadata_response(rel_path, include_face_focus=False, include_selectio
                 record["selection_pose_body_orientation"] = selection_pose.get("body_orientation", "unknown")
                 record["selection_pose_pose_class"] = selection_pose.get("pose_class", "unknown")
                 record["selection_pose_arm_position"] = selection_pose.get("arm_position", "unknown")
+            vision_sight = info.get("vision_sight") if isinstance(info.get("vision_sight"), dict) else None
+            if vision_sight:
+                record["vision_sight"] = {
+                    "version": vision_sight.get("version"),
+                    "model": str(vision_sight.get("model") or ""),
+                    "description": str(vision_sight.get("description") or ""),
+                    "inventory": dict(vision_sight.get("inventory") or {}),
+                }
             color_suggestions = info.get("color_suggestions") if isinstance(info.get("color_suggestions"), dict) else None
             if color_suggestions and color_suggestions.get("version") == COLOR_SUGGESTIONS_VERSION:
                 record["color_suggestions"] = color_suggestions

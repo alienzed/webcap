@@ -3,6 +3,21 @@
 Status: product / IA proposal  
 Audit basis: current `main` review, metadata, annotation, focus-set, prune, duplicate, Assistant, and per-item QA code as of 2026-10-06.
 
+## Current Set intelligence integration
+
+The implemented Set intelligence flow now provides QA with normalized evidence from the shared **Scan Set** operation rather than asking QA to own media analysis.
+
+Current behavior:
+
+- deterministic QA still works without any LLM or Vision model;
+- QA primes the existing Prune and Duplicate analyzers for its current scope instead of requiring the user to visit those reports first;
+- Face Focus, MediaPipe Selection Pose, Scene Complexity, and cached Vision Sight can be supplied as compact QA evidence;
+- one high-confidence deterministic producer may promote a likely missing known tag only when independent MediaPipe and structured Sight evidence agree;
+- optional Deep QA receives the same normalized evidence alongside captions, grouped tags, flat tags, and deterministic findings;
+- QA remains an attention funnel and never silently repairs annotations or captions.
+
+This preserves the original rule below: **many signal producers -> normalized QA findings -> prioritized human review**.
+
 ## Executive direction
 
 The existing Review workspace is organized around reports and artifacts. The proposed replacement is organized around a human constraint:

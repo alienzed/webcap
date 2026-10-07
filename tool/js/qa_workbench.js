@@ -107,13 +107,13 @@
     var jobs = [];
 
     if (!pruneReady) {
-      jobs.push(ensurePruneCandidatesForCurrentFolder(false).catch(function (err) {
+      jobs.push(ensurePruneCandidatesForCurrentFolder(false, scopeFiles).catch(function (err) {
         reportConsoleError('QA · Prune analysis', err);
         return [];
       }));
     }
     if (!duplicateReady) {
-      jobs.push(ensureDuplicateCandidatesForCurrentFolder(false).catch(function (err) {
+      jobs.push(ensureDuplicateCandidatesForCurrentFolder(false, scopeFiles).catch(function (err) {
         reportConsoleError('QA · Duplicate analysis', err);
         return [];
       }));

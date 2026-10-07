@@ -389,10 +389,11 @@
     var suggestBtn = el('vision-schema-suggest-btn');
     var tagBtn = el('vision-schema-tags-btn');
     var applyBtn = el('vision-schema-apply-btn');
+    var footerNote = el('vision-schema-footer-note');
     var body = el('vision-schema-body');
     var title = el('vision-schema-title');
     var subtitle = el('vision-schema-subtitle');
-    if (!modal || !scanBtn || !stopBtn || !suggestBtn || !tagBtn || !applyBtn || !body || !title || !subtitle) {
+    if (!modal || !scanBtn || !stopBtn || !suggestBtn || !tagBtn || !applyBtn || !footerNote || !body || !title || !subtitle) {
       throw new Error('Schema Assist UI is incomplete.');
     }
     modal.classList.toggle('hidden', !schemaState.open);
@@ -403,6 +404,9 @@
     body.classList.toggle('hidden', schemaState.guidedLaunch);
     suggestBtn.classList.toggle('hidden', schemaState.guidedLaunch);
     applyBtn.classList.toggle('hidden', schemaState.guidedLaunch);
+    footerNote.textContent = schemaState.guidedLaunch
+      ? 'Sight is cached in the Set; nothing is tagged until you act in Grid.'
+      : 'Nothing changes until you apply selected vocabulary.';
     var schemaBusy = schemaState.schemaStarting || !!schemaState.schemaJobId;
     scanBtn.disabled = schemaState.scanRunning || schemaBusy;
     scanBtn.textContent = schemaState.statusPayload && Number(schemaState.statusPayload.structured || 0)
@@ -777,24 +781,20 @@
         var group = String(candidate.group || '');
         var term = String(candidate.term || '');
         var confidence = String(candidate.confidence || '');
-        if (!group || !term || (confidence !== 'high' && confidence !== 'medium')) return;
+        if (!group || !term || confidence !== 'high') return;
         var key = group.toLowerCase() + '\u0000' + term.toLowerCase();
         if (!byKey[key]) {
-          byKey[key] = { group: group, term: term, highFiles: [], mediumFiles: [] };
+          byKey[key] = { group: group, term: term, highFiles: [] };
         }
-        var target = confidence === 'high' ? byKey[key].highFiles : byKey[key].mediumFiles;
-        if (target.indexOf(fileName) === -1) target.push(fileName);
+        if (byKey[key].highFiles.indexOf(fileName) === -1) byKey[key].highFiles.push(fileName);
       });
     });
     return Object.keys(byKey).map(function (key) {
       return byKey[key];
     }).filter(function (step) {
-      return step.highFiles.length || step.mediumFiles.length;
+      return step.highFiles.length;
     }).sort(function (a, b) {
       if (b.highFiles.length !== a.highFiles.length) return b.highFiles.length - a.highFiles.length;
-      var bTotal = b.highFiles.length + b.mediumFiles.length;
-      var aTotal = a.highFiles.length + a.mediumFiles.length;
-      if (bTotal !== aTotal) return bTotal - aTotal;
       var groupCmp = a.group.localeCompare(b.group);
       return groupCmp || a.term.localeCompare(b.term);
     });
@@ -1059,16 +1059,16 @@
     var folder = currentFolder();
     var model = currentVisionModel();
     if (!folder) {
-      setStatus('Open a Set before starting Guided Tag Pass.', true);
+      window.setStatus('Open a Set before starting Guided Tag Pass.');
       return;
     }
     if (!model) {
-      setStatus('Select a Vision model first.', true);
+      window.setStatus('Select a Vision model first.');
       return;
     }
     var files = guidedScopeFiles(options);
     if (!files.length) {
-      setStatus('No visible media to review.', true);
+      window.setStatus('No visible media to review.');
       return;
     }
     schemaState.open = true;

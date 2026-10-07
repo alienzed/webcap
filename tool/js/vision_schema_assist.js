@@ -1208,7 +1208,7 @@
     schemaState.open = true;
     schemaState.folder = folder;
     schemaState.visionModel = model;
-    schemaState.scopeFiles = getVisibleMediaSelectionForTraining();
+    schemaState.scopeFiles = getCurrentSetMediaFileNames();
     schemaState.scanStopRequested = false;
     schemaState.schema = null;
     schemaState.reviewIndex = 0;

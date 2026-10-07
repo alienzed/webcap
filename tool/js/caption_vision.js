@@ -721,17 +721,22 @@ function setCaptionVisionEnabled(enabled) {
   clearCaptionVisionResult();
   if (!captionVisionEnabled) {
     cancelCurrentCaptionVision();
+    if (isFocusedCaptionOpen()) setFocusedCaptionVisionSightEnabled(false);
     syncFocusedCaptionVisionPreference();
     return;
   }
 
   loadCaptionVisionCapabilities().then(function () {
-    if (captionAssistCandidate) {
-      return runCaptionVisionForCandidate(captionAssistCandidate).then(function () {
-        return syncFocusedCaptionVisionPreference();
-      });
+    if (isFocusedCaptionOpen()) setFocusedCaptionVisionSightEnabled(true);
+    if (!captionAssistCandidate) return syncFocusedCaptionVisionPreference();
+
+    var tasks = [runCaptionVisionForCandidate(captionAssistCandidate)];
+    if (isFocusedCaptionOpen()) {
+      tasks.push(loadFocusedCaptionVisionPhrases());
     }
-    return syncFocusedCaptionVisionPreference();
+    return Promise.all(tasks).then(function () {
+      return syncFocusedCaptionVisionPreference();
+    });
   });
 }
 

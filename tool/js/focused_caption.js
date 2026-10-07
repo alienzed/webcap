@@ -205,6 +205,23 @@ function isFocusedCaptionVisionPhrasesEnabled() {
   return !!focusedCaptionVisionPhrases.enabled;
 }
 
+function setFocusedCaptionVisionSightEnabled(enabled) {
+  focusedCaptionVisionPhrases.enabled = !!enabled;
+  if (focusedCaptionVisionPhrases.enabled) {
+    syncFocusedCaptionVisionPhrasesUi();
+    return true;
+  }
+
+  clearFocusedCaptionVisionPhrases();
+  var prefetch = focusedCaptionPrefetch;
+  if (prefetch && prefetch.phraseTask) {
+    var task = prefetch.phraseTask;
+    prefetch.phraseTask = null;
+    cancelFocusedCaptionVisionPhraseTask(task, 'Focus Caption Vision sight');
+  }
+  return false;
+}
+
 function clearFocusedCaptionVisionPhrases(options) {
   var opts = options || {};
   var task = focusedCaptionVisionPhrases.task;
@@ -745,7 +762,7 @@ function startFocusedCaption(targetMediaKey) {
   }
 
   focusedCaptionState.open = true;
-  focusedCaptionVisionPhrases.enabled = false;
+  focusedCaptionVisionPhrases.enabled = !!captionVisionEnabled;
   focusedCaptionState.folder = String((state && state.folder) || '');
   loadCaptionVisionCapabilities();
   focusedCaptionState.itemKeys = itemKeys;
@@ -871,6 +888,7 @@ window.syncFocusedCaptionVisionPreference = syncFocusedCaptionVisionPreference;
 window.extractFocusedCaptionVisionPhrases = extractFocusedCaptionVisionPhrases;
 window.loadFocusedCaptionVisionPhrases = loadFocusedCaptionVisionPhrases;
 window.isFocusedCaptionVisionPhrasesEnabled = isFocusedCaptionVisionPhrasesEnabled;
+window.setFocusedCaptionVisionSightEnabled = setFocusedCaptionVisionSightEnabled;
 window.clearFocusedCaptionVisionPhrases = clearFocusedCaptionVisionPhrases;
 window.focusedCaptionVisionPhrases = focusedCaptionVisionPhrases;
 window.beginFocusedCaptionRequest = beginFocusedCaptionRequest;

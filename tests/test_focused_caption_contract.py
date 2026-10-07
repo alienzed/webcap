@@ -341,7 +341,7 @@ def test_focus_caption_vision_phrases_are_ephemeral_editable_and_one_deep_prefet
     assert "phraseTask: null" in focus
     assert "beginFocusedCaptionPrefetchPhrases(prefetch, target.item)" in focus
     assert "cancelFocusedCaptionVisionPhraseTask(prefetch.phraseTask" in focus
-    assert "focusedCaptionVisionPhrases.enabled = false;" in focus
+    assert "focusedCaptionVisionPhrases.enabled = !!captionVisionEnabled;" in focus
     assert "localStorage" not in focus
     assert "sessionStorage" not in focus
 
@@ -366,6 +366,23 @@ def test_focus_caption_vision_phrase_blend_reuses_caption_assist_without_tag_mut
     assert "assignChecklistTagToMediaKey" not in blend
     assert "cancelFocusedCaptionPrefetch()" in blend
     assert "startFocusedCaptionPrefetch(sourceMediaKey)" in blend
+
+
+def test_focus_vision_checkbox_runs_qa_and_sight_together():
+    vision = _read("tool/js/caption_vision.js")
+    focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
+
+    start = vision.index("function setCaptionVisionEnabled(enabled)")
+    end = vision.index("function syncCaptionVisionCapabilitiesFromPayload", start)
+    toggle = vision[start:end]
+    assert "setFocusedCaptionVisionSightEnabled(true)" in toggle
+    assert "loadFocusedCaptionVisionPhrases()" in toggle
+    assert "runCaptionVisionForCandidate(captionAssistCandidate)" in toggle
+    assert "setFocusedCaptionVisionSightEnabled(false)" in toggle
+    assert "focusedCaptionVisionPhrases.enabled = !!captionVisionEnabled;" in focus
+    assert "setFocusedCaptionVisionSightEnabled(true);" in primer
+    assert "loadFocusedCaptionVisionPhrases();" in primer
 
 
 def test_caption_vision_preference_is_config_backed_not_browser_persistent():

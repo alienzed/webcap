@@ -1207,14 +1207,11 @@ function runCaptionAssist() {
     );
     if (isFocusedCaptionOpen()) {
       if (captionVisionEnabled) {
-        maybeRunCaptionVisionForCandidate(candidate).then(function () {
-          if (isFocusedCaptionOpen() && state.currentItem && state.currentItem.key === sourceMediaKey) {
-            startFocusedCaptionPrefetch(sourceMediaKey);
-          }
-        });
-      } else {
-        startFocusedCaptionPrefetch(sourceMediaKey);
+        setFocusedCaptionVisionSightEnabled(true);
+        maybeRunCaptionVisionForCandidate(candidate);
+        loadFocusedCaptionVisionPhrases();
       }
+      startFocusedCaptionPrefetch(sourceMediaKey);
     }
     return true;
   }).catch(function (err) {

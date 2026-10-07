@@ -116,6 +116,16 @@ def test_guided_tag_pass_reuses_grid_and_keeps_new_vocabulary_out_of_primary_flo
 
 
 
+def test_vocabulary_completion_promotes_guided_tagging_next_step():
+    script = _read("tool/js/vision_schema_assist.js")
+    css = _read("tool/css/modals.css")
+
+    assert "Continue to Guided Tagging" in script
+    assert "Vocabulary is ready. Next: review likely tag matches in Grid." in script
+    assert "openGuidedTagPass({ source: 'set' });" in script
+    assert ".vision-schema-continue-btn" in css
+
+
 def test_discover_vocabulary_runs_fresh_visual_pass_then_synthesis_and_challenge():
     script = _read("tool/js/vision_schema_assist.js")
     css = _read("tool/css/modals.css")

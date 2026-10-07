@@ -554,6 +554,22 @@ def _skip_attempt(run, kind, role, model_ref, file_name, reason):
     })
 
 
+def _failed_attempt(run, kind, role, model_ref, file_name, error):
+    _append_attempt(run, {
+        "id": "p-" + secrets.token_hex(6),
+        "kind": kind,
+        "role": role,
+        "modelRef": model_ref,
+        "file": file_name,
+        "status": "failed",
+        "startedAt": _now_iso(),
+        "finishedAt": _now_iso(),
+        "jobId": "",
+        "error": str(error or ""),
+        "result": {},
+    })
+
+
 def _vision_records(run, model_ref):
     open_records = []
     vocabulary_records = []
@@ -894,7 +910,7 @@ def _runner(run_id):
             except ModelLabStopped:
                 raise
             except Exception as exc:
-                _skip_attempt(
+                _failed_attempt(
                     run,
                     "vision_model_error",
                     "vision",
@@ -912,7 +928,7 @@ def _runner(run_id):
                 except ModelLabStopped:
                     raise
                 except Exception as exc:
-                    _skip_attempt(
+                    _failed_attempt(
                         run,
                         "vision_vocabulary_error",
                         "director",
@@ -930,7 +946,7 @@ def _runner(run_id):
             except ModelLabStopped:
                 raise
             except Exception as exc:
-                _skip_attempt(
+                _failed_attempt(
                     run,
                     "director_model_error",
                     "director",

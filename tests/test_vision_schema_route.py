@@ -163,3 +163,86 @@ def test_structured_sight_scan_uses_caption_vision_lane_and_response_contract(tm
     assert seen["label"] == "Vision Sight"
     assert seen["contract"]["operation"] == "vision_schema_sight"
     assert seen["context"]["runtimeOverrides"]["maxTokens"] == 900
+
+
+
+def test_vocabulary_sight_scan_uses_fresh_group_aware_vision_contract(tmp_path, monkeypatch):
+    set_root = tmp_path / "set"
+    set_root.mkdir()
+    (set_root / "a.jpg").write_bytes(b"a")
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", Path(tmp_path))
+    monkeypatch.setattr(app_module, "list_vision_models", lambda: [{"id": "vl"}])
+    monkeypatch.setattr(app_module, "resolve_caption_vision_media", lambda folder, media: "data:image/jpeg;base64,YQ==")
+
+    seen = {}
+    def fake_enqueue(client, model_id, contract, context=None, label=""):
+        seen.update(client=client, model=model_id, contract=contract, context=context, label=label)
+        return {"jobId": "vocab-sight-1", "status": "queued", "queuePosition": 1}
+    monkeypatch.setattr(app_module, "enqueue_llm", fake_enqueue)
+
+    groups = [{"group": "BT Shape", "terms": ["triangle"]}]
+    response = app_module.app.test_client().post("/fs/vision_schema", json={
+        "operation": "scan_vocabulary_sight",
+        "folder": "set",
+        "visionModel": "vl",
+        "media": "a.jpg",
+        "existingGroups": groups,
+    })
+
+    assert response.status_code == 202
+    assert seen["client"] == "caption"
+    assert seen["contract"]["operation"] == "vision_vocabulary_sight"
+    assert seen["context"]["existingGroups"] == groups
+    assert seen["label"] == "Vocabulary Vision"
+
+
+def test_vocabulary_challenge_queues_schema_contract_from_both_visual_passes(tmp_path, monkeypatch):
+    set_root = tmp_path / "set"
+    set_root.mkdir()
+    (set_root / "a.jpg").write_bytes(b"a")
+    (set_root / "b.jpg").write_bytes(b"b")
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", Path(tmp_path))
+
+    from tool.server import vision_schema_assist
+    groups = [{"group": "BT Shape", "terms": ["triangle"]}]
+    for name in ("a.jpg", "b.jpg"):
+        vision_schema_assist.save_vision_sight(
+            "set",
+            name,
+            "vl",
+            _sight(
+                "Triangle top.",
+                things=[{"name": "bikini top", "qualities": ["triangle"]}],
+            ),
+        )
+        vision_schema_assist.save_vision_vocabulary_sight(
+            "set",
+            name,
+            "vl",
+            groups,
+            {
+                "groups": [{"group": "BT Shape", "observations": ["micro triangle"]}],
+                "other": [],
+            },
+        )
+
+    seen = {}
+    def fake_enqueue(client, model_id, contract, context=None, label=""):
+        seen.update(client=client, model=model_id, contract=contract, context=context, label=label)
+        return {"jobId": "challenge-1", "status": "queued", "queuePosition": 1}
+    monkeypatch.setattr(app_module, "enqueue_llm", fake_enqueue)
+
+    response = app_module.app.test_client().post("/fs/vision_schema", json={
+        "operation": "challenge_vocabulary",
+        "folder": "set",
+        "visionModel": "vl",
+        "directorModel": "director",
+        "existingGroups": groups,
+        "draftSchema": {"groups": []},
+    })
+
+    assert response.status_code == 202
+    assert seen["client"] == "schema"
+    assert seen["contract"]["operation"] == "vision_schema_challenge"
+    assert seen["label"] == "Vocabulary Challenge"
+    assert any(row.get("source") == "schema" for row in seen["contract"]["sight_evidence"])

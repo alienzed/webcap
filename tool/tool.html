@@ -2461,10 +2461,9 @@
                 </div>
                 <div class="vision-schema-toolbar">
                     <div class="vision-schema-stage-actions">
-                        <button id="vision-schema-scan-btn" type="button" class="review-captions-btn">Scan Visible</button>
+                        <button id="vision-schema-scan-btn" type="button" class="review-captions-btn">Discover Vocabulary</button>
                         <button id="vision-schema-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
-                        <button id="vision-schema-tags-btn" type="button" class="review-captions-btn" disabled>Build Tag Candidates</button>
-                        <button id="vision-schema-suggest-btn" type="button" class="review-captions-btn" disabled>Discover Vocabulary</button>
+                        <button id="vision-schema-tags-btn" type="button" class="review-captions-btn hidden" disabled>Build Guided Pass</button>
                     </div>
                     <div id="vision-schema-status" class="vision-schema-status" aria-live="polite"></div>
                 </div>
@@ -2476,28 +2475,22 @@
                     <pre id="vision-schema-raw-output" class="vision-schema-raw-output"></pre>
                 </section>
                 <div id="vision-schema-body" class="vision-schema-body">
-                    <section class="vision-schema-column vision-schema-evidence-column">
-                        <div class="vision-schema-section-heading">
-                            <div>
-                                <strong>Structured Sight</strong>
-                                <span>Recurring visual evidence from cached descriptions and inventories.</span>
-                            </div>
-                        </div>
-                        <div id="vision-schema-evidence" class="vision-schema-evidence"></div>
-                    </section>
                     <section class="vision-schema-column vision-schema-proposal-column">
                         <div class="vision-schema-section-heading">
                             <div>
-                                <strong id="vision-schema-proposal-heading">Tag Candidates</strong>
-                                <span id="vision-schema-proposal-note">Map structured Sight onto your current annotation vocabulary.</span>
+                                <strong id="vision-schema-proposal-heading">Vocabulary Changes</strong>
+                                <span id="vision-schema-proposal-note">Discover recurring concepts worth adding to the vocabulary.</span>
                             </div>
                         </div>
                         <div id="vision-schema-proposals" class="vision-schema-proposals"></div>
                     </section>
                 </div>
                 <div class="vision-schema-footer">
-                    <span id="vision-schema-footer-note">Nothing changes until you apply selected vocabulary.</span>
-                    <button id="vision-schema-apply-btn" type="button" class="review-captions-btn" disabled>Merge Selected Vocabulary</button>
+                    <span id="vision-schema-footer-note">Discovery changes vocabulary only; it does not tag media.</span>
+                    <div class="vision-schema-footer-actions">
+                        <button id="vision-schema-skip-btn" type="button" class="review-captions-btn hidden">Skip</button>
+                        <button id="vision-schema-apply-btn" type="button" class="review-captions-btn hidden" disabled>Add Selected to Vocabulary</button>
+                    </div>
                 </div>
             </div>
         </div>

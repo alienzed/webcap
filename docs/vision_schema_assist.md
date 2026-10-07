@@ -49,7 +49,7 @@ Open Sight observes without seeing the existing annotation vocabulary. The fresh
 
 WebCap owns evidence identity, filenames, support counts, existing group vocabulary, and current assignments. The Director owns semantic mapping and normalization.
 
-Vocabulary discovery can propose a term only by citing supplied structured evidence IDs. During ingest, WebCap discards unknown evidence IDs and derives support media/counts itself.
+Vocabulary discovery can propose a term only by citing supplied structured evidence IDs. During ingest, WebCap rejects unknown evidence IDs loudly and derives support media/counts itself.
 
 Tag materialization can use only supplied media filenames and existing group names. Existing terms are canonicalized to the configured spelling. A new term may be proposed only within a supplied existing group. Candidates already assigned to that media item are discarded during ingest.
 

@@ -434,18 +434,38 @@ def mine_sight_records(records, limit=240):
     }
 
 
+def vision_sight_records(folder, model, files=None):
+    status = vision_sight_status(folder, model, include_sight=True)
+    wanted = {
+        str(value or "").strip()
+        for value in (files or [])
+        if str(value or "").strip()
+    }
+    records = []
+    for item in status["items"]:
+        if wanted and item["file"] not in wanted:
+            continue
+        sight = item.get("sight") if isinstance(item.get("sight"), dict) else {}
+        description = str(sight.get("description") or "").strip()
+        inventory = sight.get("inventory") if isinstance(sight.get("inventory"), dict) else None
+        if not item.get("structured") or not description or inventory is None:
+            continue
+        records.append({
+            "file": item["file"],
+            "description": description,
+            "inventory": inventory,
+        })
+    return records
+
+
 def mine_vision_sight(folder, model):
     status = vision_sight_status(folder, model, include_sight=True)
-    records = [
-        {
-            "file": item["file"],
-            "description": item["sight"]["description"],
-            "inventory": item["sight"]["inventory"],
-        }
-        for item in status["items"]
-        if item["cached"] and item["sight"]["description"]
-    ]
+    records = vision_sight_records(folder, model)
     analysis = mine_sight_records(records)
     analysis["visionModel"] = str(model or "")
-    analysis["coverage"] = {"cached": status["cached"], "total": status["total"]}
+    analysis["coverage"] = {
+        "cached": status["cached"],
+        "structured": status["structured"],
+        "total": status["total"],
+    }
     return analysis

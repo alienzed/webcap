@@ -642,6 +642,19 @@ function isSetFolderContext(path, mediaItems) {
   return Array.isArray(mediaItems) && mediaItems.length > 0;
 }
 
+function getCurrentSetMediaFileNames() {
+  var seen = {};
+  var out = [];
+  (state && Array.isArray(state.items) ? state.items : []).forEach(function (item) {
+    var fileName = String(item && item.fileName || '').trim();
+    var ext = getFileExtension(fileName);
+    if (!fileName || !MEDIA_EXTENSIONS[ext] || seen[fileName]) return;
+    seen[fileName] = true;
+    out.push(fileName);
+  });
+  return out;
+}
+
 function getFileExtension(name) {
   var idx = name.lastIndexOf('.');
   if (idx === -1) {

@@ -20,6 +20,7 @@
     guidedPass: null,
     vocabularyScanIndex: 0,
     vocabularyScanTotal: 0,
+    vocabularyComplete: false,
     error: ''
   };
 
@@ -373,6 +374,18 @@
       return;
     }
 
+    if (schemaState.vocabularyComplete) {
+      skipBtn.classList.add('hidden');
+      applyBtn.classList.remove('hidden');
+      applyBtn.disabled = false;
+      applyBtn.textContent = 'Continue to Guided Tagging';
+      applyBtn.classList.add('vision-schema-continue-btn');
+      footerNote.textContent = 'Vocabulary is ready. Next: review likely tag matches in Grid.';
+      return;
+    }
+
+    applyBtn.textContent = 'Add Selected to Vocabulary';
+    applyBtn.classList.remove('vision-schema-continue-btn');
     var groups = actionableVocabularyGroups();
     var group = currentVocabularyGroup();
     var card = el('vision-schema-proposals').querySelector('.vision-schema-group-card');
@@ -411,9 +424,11 @@
     if (!groups.length) {
       var empty = document.createElement('div');
       empty.className = 'vision-schema-empty';
-      empty.textContent = schemaState.schema
-        ? 'The Director did not find useful vocabulary to add.'
-        : 'Run Discover Vocabulary to find recurring concepts worth adding.';
+      empty.textContent = schemaState.vocabularyComplete
+        ? 'Vocabulary review complete. Ready to apply the mature vocabulary across the Set.'
+        : (schemaState.schema
+          ? 'The Director did not find useful vocabulary to add.'
+          : 'Run Discover Vocabulary to find recurring concepts worth adding.');
       host.appendChild(empty);
       return;
     }
@@ -600,6 +615,7 @@
     schemaState.mode = 'vocabulary';
     schemaState.reviewIndex = 0;
     schemaState.schema = null;
+    schemaState.vocabularyComplete = false;
     schemaState.workStopRequested = false;
     schemaState.schemaStarting = true;
     setStatus('Checking current Set Intelligence…');
@@ -632,6 +648,7 @@
       schemaState.schema = finalSchema;
       schemaState.schema.groups = actionableVocabularyGroups();
       schemaState.reviewIndex = 0;
+      schemaState.vocabularyComplete = schemaState.schema.groups.length === 0;
       schemaState.schemaStarting = false;
       setStatus(finalSchema.groups.length
         ? ('Found ' + String(finalSchema.groups.length) + ' vocabulary group' + (finalSchema.groups.length === 1 ? '' : 's') + ' to review.')
@@ -1107,6 +1124,7 @@
     if (!groups.length || schemaState.reviewIndex >= groups.length) {
       schemaState.schema = null;
       schemaState.reviewIndex = 0;
+      schemaState.vocabularyComplete = true;
       setStatus((message ? message + ' ' : '') + 'Vocabulary review complete.');
       render();
       return;
@@ -1121,6 +1139,11 @@
   }
 
   function applySelected() {
+    if (schemaState.vocabularyComplete && schemaState.mode === 'vocabulary') {
+      close();
+      openGuidedTagPass({ source: 'set' });
+      return;
+    }
     if (schemaState.mode === 'tags') {
       applySelectedTags();
       return;
@@ -1143,6 +1166,9 @@
     var opts = options || {};
     if (opts.source === 'grid' && mediaGridIsOpen()) {
       return mediaGridGetVisibleFileNamesSnapshot();
+    }
+    if (opts.source === 'set') {
+      return getCurrentSetMediaFileNames();
     }
     return getVisibleMediaSelectionForTraining();
   }
@@ -1221,6 +1247,7 @@
     schemaState.analysis = null;
     schemaState.vocabularyScanIndex = 0;
     schemaState.vocabularyScanTotal = 0;
+    schemaState.vocabularyComplete = false;
     schemaState.guidedLaunch = false;
     render();
     setStatus('Loading current Set intelligence…');

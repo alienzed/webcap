@@ -55,6 +55,8 @@ Analyzer names and internal stages are not primary UI.
 
 Raw Vision responses remain available only under collapsed **Scan details** when new model output exists. They are diagnostic evidence, not a review task.
 
+Per-media Vision quality is allowed to degrade without failing the Set-level workflow. A model response that cannot be normalized into reusable structured Sight is kept visible diagnostically, skipped as evidence, and does not abort the remaining scan. Vocabulary discovery may proceed from partial usable coverage; complete Set coverage is not a success requirement.
+
 Stop is explicit. Completed cached Sight remains valid.
 
 ## Data ownership
@@ -90,7 +92,7 @@ The schema-aware Vision evidence is cached separately from open Sight in `media_
 
 Discovery does not assign tags to media. Current terms are supplied to the Director during synthesis as vocabulary context, not to the fresh Vision pass as answer choices.
 
-Support counts are visible. Representative thumbnails plus rationale/evidence are available behind an optional reveal. Slightly overcomplete vocabulary is acceptable: proposed terms are available language, not requirements to use every term. Missing a meaningful recurring distinction is more costly than retaining an extra plausible term.
+Support counts are visible. Representative thumbnails plus rationale/evidence are available behind an optional reveal. Review only surfaces groups with an actionable vocabulary change; groups whose proposals are already fully present are skipped. Slightly overcomplete vocabulary is acceptable: proposed terms are available language, not requirements to use every term. Missing a meaningful recurring distinction is more costly than retaining an extra plausible term.
 
 ## Guided Tagging
 

@@ -111,6 +111,8 @@ def test_guided_tag_pass_reuses_grid_and_keeps_new_vocabulary_out_of_primary_flo
     assert "window.syncGuidedTagPassWorkbenchHighlight" in grid_tiles
     assert "window.openGuidedTagPass({ source: 'grid' });" in grid_actions
     assert "openMediaGridSurface();" in script
+    assert "Guided Tagging needs at least one usable Set Intelligence result" in script
+    assert "Set Scan is incomplete for this Vision model" not in script
 
 
 

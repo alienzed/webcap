@@ -102,7 +102,7 @@ def test_schema_contract_derives_support_from_cited_structured_evidence():
                 "name": "Connector",
                 "targetGroup": "BT Connector",
                 "rationale": "Recurring connector construction.",
-                "terms": [{"term": "ring", "evidenceIds": ["e001", "e002", "invented"]}],
+                "terms": [{"term": "ring", "evidenceIds": ["e001", "e002"]}],
             }]
         },
         sight_evidence=contract["sight_evidence"],
@@ -441,3 +441,99 @@ def test_vocabulary_challenge_contract_stays_grounded_and_orders_existing_groups
     )
     assert challenge["operation"] == "vision_schema_challenge"
     assert [row["name"] for row in result["groups"]] == ["BT Shape", "Connector"]
+
+
+
+def test_schema_contract_rejects_unknown_evidence_ids_loudly():
+    analysis = {
+        "itemCount": 2,
+        "evidence": [{
+            "id": "e001",
+            "category": "detail",
+            "label": "metal ring",
+            "media": ["a.jpg", "b.jpg"],
+            "count": 2,
+            "examples": ["a.jpg", "b.jpg"],
+            "contexts": [],
+        }],
+    }
+    try:
+        vision_schema_contract.normalize_result(
+            {
+                "groups": [{
+                    "name": "Connector",
+                    "targetGroup": "",
+                    "rationale": "Hardware.",
+                    "terms": [{"term": "ring", "evidenceIds": ["e001", "invented"]}],
+                }]
+            },
+            sight_evidence=analysis["evidence"],
+            existing_groups=[],
+        )
+    except ValueError as exc:
+        assert "unknown evidence ID" in str(exc)
+        assert "invented" in str(exc)
+    else:
+        raise AssertionError("Unknown evidence IDs must fail loudly.")
+
+
+def test_schema_contract_merges_duplicate_groups_and_terms_without_dropping_evidence():
+    evidence = [
+        {
+            "id": "e001",
+            "category": "detail",
+            "label": "metal ring",
+            "media": ["a.jpg"],
+            "count": 1,
+            "examples": ["a.jpg"],
+            "contexts": [],
+        },
+        {
+            "id": "e002",
+            "category": "detail",
+            "label": "round connector",
+            "media": ["b.jpg"],
+            "count": 1,
+            "examples": ["b.jpg"],
+            "contexts": [],
+        },
+    ]
+    result = vision_schema_contract.normalize_result(
+        {
+            "groups": [
+                {
+                    "name": "Connector",
+                    "targetGroup": "",
+                    "rationale": "Hardware.",
+                    "terms": [{"term": "ring", "evidenceIds": ["e001"]}],
+                },
+                {
+                    "name": "Connector",
+                    "targetGroup": "",
+                    "rationale": "Repeated connector form.",
+                    "terms": [{"term": "RING", "evidenceIds": ["e002"]}],
+                },
+            ]
+        },
+        sight_evidence=evidence,
+        existing_groups=[],
+    )
+    assert len(result["groups"]) == 1
+    assert len(result["groups"][0]["terms"]) == 1
+    assert result["groups"][0]["terms"][0]["evidenceIds"] == ["e001", "e002"]
+    assert result["groups"][0]["terms"][0]["support"] == 2
+
+
+def test_vocabulary_sight_rejects_malformed_nested_output_loudly():
+    try:
+        vision_schema_assist.normalize_vision_vocabulary_sight_payload(
+            {
+                "groups": [{"group": "BT Shape", "observations": "triangle"}],
+                "other": [],
+            },
+            [{"group": "BT Shape", "terms": []}],
+        )
+    except ValueError as exc:
+        assert "observations must be an array" in str(exc)
+    else:
+        raise AssertionError("Malformed vocabulary sight must fail loudly.")

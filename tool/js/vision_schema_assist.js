@@ -475,7 +475,7 @@
       if (structured < schemaState.scopeFiles.length) {
         setStatus(
           'Set Scan is incomplete for this Vision model (' + String(structured) + ' / ' +
-          String(schemaState.scopeFiles.length) + '). Run Scan Set from Set Tools first.',
+          String(schemaState.scopeFiles.length) + '). Run Set Intelligence from Set Tools first.',
           true
         );
         return null;
@@ -1025,7 +1025,7 @@
       if (structured < schemaState.scopeFiles.length) {
         setStatus(
           'Set Scan is incomplete for this Vision model (' + String(structured) + ' / ' +
-          String(schemaState.scopeFiles.length) + '). Run Scan Set from Set Tools first.',
+          String(schemaState.scopeFiles.length) + '). Run Set Intelligence from Set Tools first.',
           true
         );
         return;

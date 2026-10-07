@@ -48,15 +48,12 @@ function mediaGridWireSurface() {
   els.clearBtn.onclick = mediaGridClearSelection;
   els.closeBtn.onclick = closeMediaGridSurface;
   guidedBtn.onclick = function () {
-    if (typeof window.openGuidedTagPass !== 'function') throw new Error('Guided Tag Pass is not available.');
     window.openGuidedTagPass({ source: 'grid' });
   };
   guidedSkipBtn.onclick = function () {
-    if (typeof window.skipGuidedTagPassStep !== 'function') throw new Error('Guided Tag Pass skip is not available.');
     window.skipGuidedTagPassStep();
   };
   guidedExitBtn.onclick = function () {
-    if (typeof window.exitGuidedTagPass !== 'function') throw new Error('Guided Tag Pass exit is not available.');
     window.exitGuidedTagPass();
   };
 }
@@ -94,9 +91,7 @@ function openMediaGridSurface() {
 
 function closeMediaGridSurface() {
   closeMediaGridViewer();
-  if (typeof window.exitGuidedTagPass === 'function') {
-    window.exitGuidedTagPass({ keepGridOpen: false, silent: true });
-  }
+  window.exitGuidedTagPass({ keepGridOpen: false, silent: true });
   mediaGridHideSurfaceShell();
   var previousWorkspaceState = mediaGridState.previousWorkspaceState;
   mediaGridResetSessionState();
@@ -123,9 +118,7 @@ function renderMediaGridSurfaceHeader() {
   els.clearBtn.disabled = selectedCount <= 0;
   els.selectAllBtn.disabled = totalCount <= 0 || selectedCount === totalCount;
   mediaGridSyncSurfaceFilterControls();
-  if (typeof window.renderGuidedTagPassGridChrome === 'function') {
-    window.renderGuidedTagPassGridChrome();
-  }
+  window.renderGuidedTagPassGridChrome();
 }
 
 

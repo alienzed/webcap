@@ -49,7 +49,6 @@ function resetPruneCandidateState(status) {
   state.pruneCandidatesPopulation = 0;
   state.pruneCandidatesDirty = false;
   syncPruneCandidateConsumers();
-  refreshQaWorkbench();
 }
 
 function invalidatePruneCandidates() {
@@ -80,6 +79,7 @@ function applyPruneCandidatePayload(folder, scopeFiles, scopeKey, payload) {
   state.pruneCandidatesError = '';
   state.pruneCandidatesDirty = false;
   syncPruneCandidateConsumers();
+  refreshQaWorkbench();
 }
 
 function ensurePruneCandidatesForCurrentFolder(force) {

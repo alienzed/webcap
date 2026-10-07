@@ -2317,6 +2317,7 @@
                     <button id="diagnostics-tab-h3" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="h3" role="tab" aria-selected="false" aria-controls="diagnostics-panel-h3" tabindex="-1">H3 Calibration</button>
                     <button id="diagnostics-tab-models" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="models" role="tab" aria-selected="false" aria-controls="diagnostics-panel-models" tabindex="-1">Director Models</button>
                     <button id="diagnostics-tab-benchmark" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="benchmark" role="tab" aria-selected="false" aria-controls="diagnostics-panel-benchmark" tabindex="-1">Benchmark</button>
+                    <button id="diagnostics-tab-model-lab" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="model-lab" role="tab" aria-selected="false" aria-controls="diagnostics-panel-model-lab" tabindex="-1">Model Lab</button>
                 </div>
                 <div class="app-settings-tab-panels diagnostics-panels">
                     <div id="diagnostics-panel-health" class="app-settings-panel diagnostics-panel" data-diagnostics-panel="health" role="tabpanel" aria-labelledby="diagnostics-tab-health">
@@ -2419,6 +2420,40 @@
                             </div>
                             <div id="director-model-test-activity" class="director-model-test-activity" aria-live="polite"></div>
                             <div id="director-model-test-results"><p class="app-settings-help">No results yet.</p></div>
+                        </section>
+                    </div>
+                    <div id="diagnostics-panel-model-lab" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="model-lab" role="tabpanel" aria-labelledby="diagnostics-tab-model-lab" hidden>
+                        <section class="app-settings-section" id="model-lab-settings">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Model Lab <span id="model-lab-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
+                                <div class="app-settings-section-copy">Run persistent, diagnostics-only Vision and Director probes against the current Set. Individual failures are recorded and the suite continues.</div>
+                            </div>
+                            <div id="model-lab-source" class="app-settings-help">Open this tab from a Set to prepare a representative sample.</div>
+                            <label class="app-settings-field"><span class="app-settings-field-label">Sample items</span><input id="model-lab-sample-count" type="number" min="2" max="24" value="8"></label>
+                            <div class="model-lab-grid">
+                                <div>
+                                    <div class="director-model-test-model-header"><span class="app-settings-field-label">Vision models</span><button id="model-lab-vision-all" type="button" class="review-captions-btn">All</button></div>
+                                    <div id="model-lab-vision-models" class="director-model-test-models"></div>
+                                    <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Reference Vision for Director tests</span><select id="model-lab-reference-vision"></select></label>
+                                </div>
+                                <div>
+                                    <div class="director-model-test-model-header"><span class="app-settings-field-label">Director models</span><button id="model-lab-director-all" type="button" class="review-captions-btn">All</button></div>
+                                    <div id="model-lab-director-models" class="director-model-test-models"></div>
+                                    <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Reference Director for Vision tests</span><select id="model-lab-reference-director"></select></label>
+                                </div>
+                            </div>
+                            <div class="app-settings-actions app-settings-actions-inline">
+                                <button id="model-lab-run" type="button">Run Model Lab</button>
+                                <button id="model-lab-stop" type="button" class="hidden">Stop</button>
+                                <button id="model-lab-resume" type="button" class="review-captions-btn hidden">Resume</button>
+                                <button id="model-lab-refresh" type="button" class="review-captions-btn">Refresh</button>
+                            </div>
+                            <div id="model-lab-activity" class="director-model-test-activity" aria-live="polite"></div>
+                            <div id="model-lab-results"><p class="app-settings-help">No Model Lab run selected.</p></div>
+                            <details class="director-model-assessment-raw">
+                                <summary><strong>Model Lab History</strong><span class="app-settings-help">Persistent diagnostics evidence. Production Set state is not modified.</span></summary>
+                                <div class="app-settings-disclosure-body"><div id="model-lab-history"></div></div>
+                            </details>
                         </section>
                     </div>
                 </div>
@@ -2674,6 +2709,7 @@
         <script src="/static/js/app_settings.js"></script>
         <script src="/static/js/diagnostics.js"></script>
         <script src="/static/js/director_model_test.js"></script>
+        <script src="/static/js/model_lab.js"></script>
         <script src="/static/js/smart_set.js"></script>
         <script src="/static/js/media_context_actions.js"></script>
         <script src="/static/js/ui_event_wiring.js"></script>

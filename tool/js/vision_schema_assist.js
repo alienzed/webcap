@@ -18,6 +18,8 @@
     scopeFiles: [],
     guidedLaunch: false,
     guidedPass: null,
+    vocabularyScanIndex: 0,
+    vocabularyScanTotal: 0,
     error: ''
   };
 
@@ -81,6 +83,113 @@
 
   function schemaStatusUrl(folder, model) {
     return '/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model);
+  }
+
+  function requestVocabularyStatus(folder, model, groups) {
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'vocabulary_status',
+        folder: folder,
+        visionModel: model,
+        existingGroups: groups
+      })
+    });
+  }
+
+  function saveVocabularySight(folder, model, media, groups, sight) {
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'save_vocabulary_sight',
+        folder: folder,
+        visionModel: model,
+        media: media,
+        existingGroups: groups,
+        sight: sight
+      })
+    });
+  }
+
+  function requestVocabularySight(folder, model, media, groups) {
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'scan_vocabulary_sight',
+        folder: folder,
+        visionModel: model,
+        media: media,
+        existingGroups: groups
+      })
+    }).then(function (payload) {
+      var jobId = String(payload.job && payload.job.jobId || '');
+      if (!jobId) throw new Error('Vocabulary Vision did not return a queued job.');
+      schemaState.schemaJobId = jobId;
+      trackTransientLlmJob(payload.job);
+      render();
+      return waitForCaptionAssistJob(payload.job);
+    }).then(function (job) {
+      schemaState.schemaJobId = '';
+      var sight = job && job.result && job.result.vocabularySight;
+      if (!sight || !Array.isArray(sight.groups) || !Array.isArray(sight.other)) {
+        throw new Error('Vocabulary Vision completed without structured evidence.');
+      }
+      return sight;
+    });
+  }
+
+  function scanVocabularyNext(pending, index, folder, model, groups) {
+    if (schemaState.workStopRequested || !schemaState.open) return Promise.resolve(false);
+    if (folder !== schemaState.folder || model !== schemaState.visionModel) {
+      throw new Error('Set context changed during vocabulary discovery.');
+    }
+    if (index >= pending.length) return Promise.resolve(true);
+
+    schemaState.vocabularyScanIndex = index;
+    schemaState.vocabularyScanTotal = pending.length;
+    setStatus(
+      'Fresh visual pass ' + String(index + 1) + ' of ' + String(pending.length) +
+      ' — checking the image against your group structure…'
+    );
+    render();
+
+    var fileName = pending[index];
+    return requestVocabularySight(folder, model, fileName, groups).then(function (sight) {
+      if (schemaState.workStopRequested) return false;
+      return saveVocabularySight(folder, model, fileName, groups, sight);
+    }).then(function (saved) {
+      if (saved === false || schemaState.workStopRequested) return false;
+      schemaState.vocabularyScanIndex = index + 1;
+      return scanVocabularyNext(pending, index + 1, folder, model, groups);
+    });
+  }
+
+  function ensureVocabularySight() {
+    var folder = schemaState.folder;
+    var model = schemaState.visionModel;
+    var groups = existingGroupsPayload();
+    if (!groups.length) {
+      throw new Error('Discover Vocabulary needs at least one annotation group to guide the fresh visual pass.');
+    }
+    return requestVocabularyStatus(folder, model, groups).then(function (payload) {
+      var wanted = {};
+      schemaState.scopeFiles.forEach(function (fileName) { wanted[fileName] = true; });
+      var pending = (payload.items || []).filter(function (item) {
+        return !!wanted[String(item.file || '')] && !item.cached;
+      }).map(function (item) {
+        return String(item.file || '');
+      }).filter(Boolean);
+      schemaState.vocabularyScanIndex = 0;
+      schemaState.vocabularyScanTotal = pending.length;
+      if (!pending.length) {
+        setStatus('Fresh schema-aware visual evidence is already reusable.');
+        return true;
+      }
+      return scanVocabularyNext(pending, 0, folder, model, groups);
+    });
   }
 
   function setStatus(message, error) {
@@ -465,7 +574,12 @@
     }
     schemaState.mode = 'vocabulary';
     schemaState.reviewIndex = 0;
-    setStatus('Checking current Set Scan…');
+    schemaState.schema = null;
+    schemaState.workStopRequested = false;
+    schemaState.schemaStarting = true;
+    setStatus('Checking current Set Intelligence…');
+    render();
+
     refreshStatus().then(function (payload) {
       var wanted = {};
       schemaState.scopeFiles.forEach(function (fileName) { wanted[fileName] = true; });
@@ -473,21 +587,40 @@
         return !!wanted[String(item.file || '')] && !!item.structured;
       }).length;
       if (structured < schemaState.scopeFiles.length) {
-        setStatus(
-          'Set Scan is incomplete for this Vision model (' + String(structured) + ' / ' +
-          String(schemaState.scopeFiles.length) + '). Run Set Intelligence from Set Tools first.',
-          true
+        throw new Error(
+          'Set Intelligence is incomplete for this Vision model (' + String(structured) + ' / ' +
+          String(schemaState.scopeFiles.length) + '). Run Set Intelligence from Set Tools first.'
         );
-        return null;
       }
-      setStatus('Set intelligence ready. Finding recurring vocabulary…');
-      return analyze().then(function () {
-        runSuggestions();
-        return true;
-      });
+      setStatus('Open visual evidence is ready. Starting a fresh group-aware visual pass…');
+      return ensureVocabularySight();
+    }).then(function (ready) {
+      if (ready === false || schemaState.workStopRequested) return false;
+      setStatus('Both visual passes are ready. Making sense of the vocabulary…');
+      return runVocabularySynthesis();
+    }).then(function (draft) {
+      if (!draft || schemaState.workStopRequested) return false;
+      setStatus('Challenging the draft for missed distinctions and weak vocabulary…');
+      return runVocabularyChallenge(draft);
+    }).then(function (finalSchema) {
+      if (!finalSchema || schemaState.workStopRequested) return;
+      schemaState.schema = finalSchema;
+      schemaState.reviewIndex = 0;
+      schemaState.schemaStarting = false;
+      setStatus(finalSchema.groups.length
+        ? ('Found ' + String(finalSchema.groups.length) + ' vocabulary group' + (finalSchema.groups.length === 1 ? '' : 's') + ' to review.')
+        : 'The discovery passes did not find useful vocabulary additions.');
+      render();
     }).catch(function (err) {
-      setStatus('Could not read Set intelligence: ' + String(err && err.message ? err.message : err), true);
-      reportConsoleError('Discover Vocabulary', err);
+      schemaState.schemaStarting = false;
+      schemaState.schemaJobId = '';
+      if (schemaState.workStopRequested) {
+        setStatus('Vocabulary discovery stopped.');
+      } else {
+        setStatus('Discover Vocabulary failed: ' + String(err && err.message ? err.message : err), true);
+        reportConsoleError('Discover Vocabulary', err);
+      }
+      render();
     });
   }
 
@@ -521,30 +654,19 @@
     });
   }
 
-  function runSuggestions() {
-    if (schemaState.schemaStarting || schemaState.schemaJobId) return;
-    schemaState.mode = 'vocabulary';
+  function runVocabularySynthesis() {
     var director = currentDirectorModel();
-    if (!director) {
-      setStatus('Select a Director model first.', true);
-      return;
-    }
     var folder = schemaState.folder;
     var visionModel = schemaState.visionModel;
     var groups = existingGroupsPayload();
     var token = schemaState.schemaRequestToken + 1;
     schemaState.schemaRequestToken = token;
-    schemaState.workStopRequested = false;
-    schemaState.schemaStarting = true;
-    schemaState.schema = null;
-    setStatus('Schema Assist organizing recurring visual evidence…');
-    render();
 
-    requestJson('/fs/vision_schema', {
+    return requestJson('/fs/vision_schema', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        operation: 'synthesize',
+        operation: 'synthesize_vocabulary',
         folder: folder,
         visionModel: visionModel,
         directorModel: director,
@@ -553,45 +675,58 @@
       })
     }).then(function (payload) {
       var jobId = String(payload.job && payload.job.jobId || '');
-      if (!jobId) throw new Error('Schema Assist did not return a queued job.');
-      if (
-        token !== schemaState.schemaRequestToken ||
-        schemaState.workStopRequested ||
-        !schemaState.open ||
-        folder !== schemaState.folder ||
-        visionModel !== schemaState.visionModel
-      ) {
-        schemaState.schemaStarting = false;
-        return cancelCaptionAssistJob(jobId).then(function () { return null; });
-      }
+      if (!jobId) throw new Error('Vocabulary synthesis did not return a queued job.');
       schemaState.analysis = payload.analysis || schemaState.analysis;
-      schemaState.schemaStarting = false;
       schemaState.schemaJobId = jobId;
+      trackTransientLlmJob(payload.job);
       render();
       return waitForCaptionAssistJob(payload.job);
     }).then(function (job) {
-      if (!job || token !== schemaState.schemaRequestToken) return;
       schemaState.schemaJobId = '';
-      if (!schemaState.open || folder !== schemaState.folder || visionModel !== schemaState.visionModel) return;
+      if (!job || token !== schemaState.schemaRequestToken) return null;
       var result = job.result && job.result.schema;
-      if (!result || !Array.isArray(result.groups)) throw new Error('Schema Assist completed without structured suggestions.');
-      schemaState.schema = result;
-      schemaState.reviewIndex = 0;
-      setStatus(result.groups.length
-        ? ('Found ' + String(result.groups.length) + ' vocabulary group' + (result.groups.length === 1 ? '' : 's') + ' to review.')
-        : 'No useful vocabulary additions were found.');
-      render();
-    }).catch(function (err) {
-      if (token !== schemaState.schemaRequestToken) return;
-      schemaState.schemaStarting = false;
-      schemaState.schemaJobId = '';
-      if (schemaState.workStopRequested) {
-        setStatus('Schema Assist stopped.');
-      } else {
-        setStatus('Schema Assist failed: ' + String(err && err.message ? err.message : err), true);
-        reportConsoleError('Schema Assist', err);
+      if (!result || !Array.isArray(result.groups)) {
+        throw new Error('Vocabulary synthesis completed without structured suggestions.');
       }
+      return result;
+    });
+  }
+
+  function runVocabularyChallenge(draftSchema) {
+    var director = currentDirectorModel();
+    var folder = schemaState.folder;
+    var visionModel = schemaState.visionModel;
+    var token = schemaState.schemaRequestToken + 1;
+    schemaState.schemaRequestToken = token;
+
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'challenge_vocabulary',
+        folder: folder,
+        visionModel: visionModel,
+        directorModel: director,
+        files: schemaState.scopeFiles.slice(),
+        existingGroups: existingGroupsPayload(),
+        draftSchema: draftSchema
+      })
+    }).then(function (payload) {
+      var jobId = String(payload.job && payload.job.jobId || '');
+      if (!jobId) throw new Error('Vocabulary challenge did not return a queued job.');
+      schemaState.analysis = payload.analysis || schemaState.analysis;
+      schemaState.schemaJobId = jobId;
+      trackTransientLlmJob(payload.job);
       render();
+      return waitForCaptionAssistJob(payload.job);
+    }).then(function (job) {
+      schemaState.schemaJobId = '';
+      if (!job || token !== schemaState.schemaRequestToken) return null;
+      var result = job.result && job.result.schema;
+      if (!result || !Array.isArray(result.groups)) {
+        throw new Error('Vocabulary challenge completed without structured suggestions.');
+      }
+      return result;
     });
   }
 
@@ -1059,6 +1194,8 @@
     schemaState.tagCandidates = null;
     schemaState.mode = 'vocabulary';
     schemaState.analysis = null;
+    schemaState.vocabularyScanIndex = 0;
+    schemaState.vocabularyScanTotal = 0;
     schemaState.guidedLaunch = false;
     render();
     setStatus('Loading current Set intelligence…');

@@ -210,6 +210,10 @@ function cancelFocusedCaptionVisionPhraseTask(task, label) {
   });
 }
 
+function isFocusedCaptionVisionPhrasesEnabled() {
+  return !!focusedCaptionVisionPhrases.enabled;
+}
+
 function clearFocusedCaptionVisionPhrases(options) {
   var opts = options || {};
   var task = focusedCaptionVisionPhrases.task;
@@ -875,6 +879,8 @@ window.cancelFocusedCaptionPrefetch = cancelFocusedCaptionPrefetch;
 window.syncFocusedCaptionVisionPreference = syncFocusedCaptionVisionPreference;
 window.extractFocusedCaptionVisionPhrases = extractFocusedCaptionVisionPhrases;
 window.loadFocusedCaptionVisionPhrases = loadFocusedCaptionVisionPhrases;
+window.isFocusedCaptionVisionPhrasesEnabled = isFocusedCaptionVisionPhrasesEnabled;
+window.clearFocusedCaptionVisionPhrases = clearFocusedCaptionVisionPhrases;
 window.focusedCaptionVisionPhrases = focusedCaptionVisionPhrases;
 window.beginFocusedCaptionRequest = beginFocusedCaptionRequest;
 window.isFocusedCaptionRequestCurrent = isFocusedCaptionRequestCurrent;

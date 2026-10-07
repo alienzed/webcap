@@ -357,6 +357,22 @@ def test_caption_vision_preference_is_config_backed_not_browser_persistent():
     assert '@app.route("/app/config/vision_model", methods=["POST"])' in app
 
 
+def test_vision_model_change_refreshes_focus_phrases_and_rebuilds_prefetch_without_qa_toggle():
+    vision = _read("tool/js/caption_vision.js")
+    focus = _read("tool/js/focused_caption.js")
+
+    start = vision.index("function handleCaptionVisionModelChange()")
+    end = vision.index("function wireCaptionVisionUi()", start)
+    handler = vision[start:end]
+    assert "isFocusedCaptionVisionPhrasesEnabled()" in handler
+    assert "clearFocusedCaptionVisionPhrases({ keepEnabled: true });" in handler
+    assert "return cancelFocusedCaptionPrefetch();" in handler
+    assert "return startFocusedCaptionPrefetch(state.currentItem.key)" in handler
+    assert "loadFocusedCaptionVisionPhrases();" in handler
+    assert "captionVisionEnabled &&\n      isFocusedCaptionOpen()" not in handler
+    assert "window.isFocusedCaptionVisionPhrasesEnabled = isFocusedCaptionVisionPhrasesEnabled;" in focus
+
+
 def test_caption_vision_lifecycle_is_request_scoped_and_transition_safe():
     vision = _read("tool/js/caption_vision.js")
     focus = _read("tool/js/focused_caption.js")

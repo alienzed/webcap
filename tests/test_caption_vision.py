@@ -25,6 +25,19 @@ def test_vision_message_builders_preserve_first_frame_data_urls():
     assert qa[1]["content"][1]["image_url"]["url"] == data_url
 
 
+def test_resolve_caption_vision_media_embeds_image_bytes(tmp_path, monkeypatch):
+    from tool.server import config as app_config
+
+    source = tmp_path / "item.jpg"
+    source.write_bytes(b"image-bytes")
+    monkeypatch.setattr(app_config, "FS_ROOT", tmp_path)
+
+    resolved = caption_vision.resolve_caption_vision_media("", "item.jpg")
+
+    assert resolved.startswith("data:image/jpeg;base64,")
+    assert resolved.endswith("aW1hZ2UtYnl0ZXM=")
+
+
 def test_resolve_caption_vision_media_uses_first_video_frame(tmp_path, monkeypatch):
     from tool.server import config as app_config
 

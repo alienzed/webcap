@@ -147,7 +147,19 @@ def resolve_caption_vision_media(folder, media_name):
     if suffix in VIDEO_EXTS:
         first_frame = extract_boundary_frame_png(media_path, "first")
         return "data:image/png;base64," + base64.b64encode(first_frame).decode("ascii")
-    return relative.as_posix()
+
+    mime_by_suffix = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+        ".gif": "image/gif",
+    }
+    mime_type = mime_by_suffix.get(suffix)
+    if not mime_type:
+        raise ValueError("Vision image format is unsupported.")
+    return "data:" + mime_type + ";base64," + base64.b64encode(media_path.read_bytes()).decode("ascii")
 
 
 def build_caption_vision_messages(caption, groups, media_relative_path):

@@ -77,6 +77,68 @@
   line-height: 1.35;
 }
 
+
+.media-grid-guided-pass {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  border: 1px solid rgba(245, 158, 11, 0.42);
+  border-radius: 8px;
+  background: rgba(120, 53, 15, 0.16);
+}
+
+.media-grid-guided-pass.hidden {
+  display: none;
+}
+
+.media-grid-guided-pass-copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.media-grid-guided-pass-progress {
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.media-grid-guided-pass-label {
+  color: #78350f;
+  font-size: 15px;
+}
+
+.media-grid-guided-pass-hint {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.media-grid-guided-pass-actions {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.app.shell-revamp.workspace-surface-grid .group-workbench-term-btn.guided-tag-target {
+  outline: 3px solid rgba(245, 158, 11, 0.78);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.16);
+}
+
+html[data-theme="dark"] .media-grid-guided-pass {
+  background: rgba(120, 53, 15, 0.28);
+}
+
+html[data-theme="dark"] .media-grid-guided-pass-progress,
+html[data-theme="dark"] .media-grid-guided-pass-label {
+  color: #fbbf24;
+}
+
 .media-grid-surface-canvas {
   flex: 1 1 auto;
   min-height: 0;

@@ -45,6 +45,7 @@ function applyDuplicateCandidatePayload(folder, scopeFiles, scopeKey, payload) {
   state.duplicateCandidatesError = '';
   state.duplicateCandidatesDirty = false;
   renderDuplicateCandidatesReport();
+  refreshQaWorkbench();
 }
 
 function ensureDuplicateCandidatesForCurrentFolder(force) {

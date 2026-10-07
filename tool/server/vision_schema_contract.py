@@ -286,6 +286,11 @@ def build_assignment_request(records, existing_groups, current_assignments=None,
         "groups": normalized_existing,
         "items": compact_items,
     }
+    vocabulary_boundary = (
+        "- Use only supplied existing terms; never invent or rename vocabulary.\n"
+        if existing_only else
+        "- New terms should be short reusable vocabulary, not prose.\n"
+    )
     prompt = (
         "[ROLE]\n"
         "You map visual Sight evidence onto WebCap's mature annotation vocabulary. "
@@ -305,8 +310,8 @@ def build_assignment_request(records, existing_groups, current_assignments=None,
         "- Prefer high confidence. Use medium only when useful and visually well supported. Omit weak or speculative candidates.\n"
         "- Respect the group meaning. A term must belong semantically to the exact group you name.\n"
         "- Preserve existing term spelling exactly when using existing vocabulary.\n"
-        "- New terms should be short reusable vocabulary, not prose.\n"
-        "- Empty candidates is a successful result when nothing should be added.\n\n"
+        + vocabulary_boundary
+        + "- Empty candidates is a successful result when nothing should be added.\n\n"
         "[INPUT]\n"
         + json.dumps(payload, ensure_ascii=False)
         + "\n\n[OUTPUT]\nReturn only JSON matching the supplied schema."

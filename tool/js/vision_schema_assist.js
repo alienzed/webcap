@@ -409,10 +409,11 @@
     var tagBtn = el('vision-schema-tags-btn');
     var applyBtn = el('vision-schema-apply-btn');
     var footerNote = el('vision-schema-footer-note');
+    var progressWrap = el('vision-schema-progress-wrap');
     var body = el('vision-schema-body');
     var title = el('vision-schema-title');
     var subtitle = el('vision-schema-subtitle');
-    if (!modal || !scanBtn || !stopBtn || !tagBtn || !applyBtn || !footerNote || !body || !title || !subtitle) {
+    if (!modal || !scanBtn || !stopBtn || !tagBtn || !applyBtn || !footerNote || !progressWrap || !body || !title || !subtitle) {
       throw new Error('Schema Assist UI is incomplete.');
     }
 
@@ -425,11 +426,12 @@
     body.classList.toggle('hidden', schemaState.guidedLaunch);
 
     var schemaBusy = schemaState.schemaStarting || !!schemaState.schemaJobId;
-    scanBtn.classList.toggle('hidden', !!schemaState.guidedLaunch);
+    var hasVocabularyReview = !schemaState.guidedLaunch &&
+      !!(schemaState.schema && schemaState.schema.groups && schemaState.schema.groups.length);
+    scanBtn.classList.toggle('hidden', !!schemaState.guidedLaunch || hasVocabularyReview);
     scanBtn.disabled = schemaState.scanRunning || schemaBusy;
-    scanBtn.textContent = schemaState.schema && schemaState.schema.groups && schemaState.schema.groups.length
-      ? 'Discover Again'
-      : 'Discover Vocabulary';
+    scanBtn.textContent = 'Discover Vocabulary';
+    progressWrap.classList.toggle('hidden', hasVocabularyReview);
 
     stopBtn.classList.toggle('hidden', !schemaState.scanRunning && !schemaBusy);
 

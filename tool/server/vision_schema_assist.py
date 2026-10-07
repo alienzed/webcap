@@ -161,8 +161,8 @@ VISION_VOCABULARY_SIGHT_RESPONSE_SCHEMA = {
 
 VISION_VOCABULARY_SIGHT_SYSTEM_PROMPT = (
     "You are performing a fresh second visual inspection for annotation-vocabulary discovery. "
-    "You are given existing annotation groups and their current terms only as semantic context for what each group means. "
-    "Do not treat current terms as a closed vocabulary and do not simply select or repeat them. "
+    "You are given existing annotation group names as semantic lenses for the inspection. "
+    "You are not given the current terms, so describe what you actually see rather than trying to match existing vocabulary. "
     "For every supplied group that has clearly visible relevant evidence, report compact observations in your own literal visual wording. "
     "Use short noun/adjective phrases rather than sentences, and prefer common stable wording over stylistic synonyms. "
     "Then report other visually meaningful concepts that do not fit any supplied group, with a concise suggested group name. "
@@ -304,7 +304,11 @@ def _normalize_vocabulary_groups(groups):
 
 def vision_vocabulary_group_signature(groups):
     normalized = _normalize_vocabulary_groups(groups)
-    payload = json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    payload = json.dumps(
+        [row["group"] for row in normalized],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:20]
 
 
@@ -315,10 +319,9 @@ def build_vision_vocabulary_sight_messages(media_reference, existing_groups):
     text = (
         "Inspect this image again from scratch. Do not rely on any earlier visual answer. "
         "For each supplied group that applies, list concise visible observations that could reveal missing or overly broad vocabulary. "
-        "Current terms help explain the group meaning but are not answer choices. "
         "Also list important visible concepts that do not fit the supplied groups under other. "
         "Do not decide the final vocabulary; just produce fresh visual evidence.\n\n"
-        + json.dumps({"groups": groups}, ensure_ascii=False)
+        + json.dumps({"groups": [row["group"] for row in groups]}, ensure_ascii=False)
     )
     return [
         {"role": "system", "content": VISION_VOCABULARY_SIGHT_SYSTEM_PROMPT},

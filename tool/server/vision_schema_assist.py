@@ -239,7 +239,7 @@ def _load_metadata(folder_path):
     return payload if isinstance(payload, dict) else {}
 
 
-def _current_sight_block(folder_path, media_name, metadata, model):
+def _cached_sight_block(folder_path, media_name, metadata, model):
     media_path = Path(folder_path) / media_name
     if not media_path.exists() or not media_path.is_file():
         return None
@@ -250,7 +250,7 @@ def _current_sight_block(folder_path, media_name, metadata, model):
     if not isinstance(sight, dict):
         return None
     stat = media_path.stat()
-    if sight.get("version") != VISION_SIGHT_VERSION:
+    if int(sight.get("version") or 0) not in {1, VISION_SIGHT_VERSION}:
         return None
     if str(sight.get("model") or "") != str(model or ""):
         return None
@@ -258,7 +258,14 @@ def _current_sight_block(folder_path, media_name, metadata, model):
         return None
     if int(sight.get("size") or -1) != int(stat.st_size):
         return None
-    if not str(sight.get("description") or "").strip() or not isinstance(sight.get("inventory"), dict):
+    if not str(sight.get("description") or "").strip():
+        return None
+    return sight
+
+
+def _structured_sight_block(folder_path, media_name, metadata, model):
+    sight = _cached_sight_block(folder_path, media_name, metadata, model)
+    if not sight or sight.get("version") != VISION_SIGHT_VERSION or not isinstance(sight.get("inventory"), dict):
         return None
     return sight
 
@@ -271,23 +278,27 @@ def vision_sight_status(folder, model, include_sight=False):
         media_path = folder_path / media_name
         if media_path.suffix.casefold() not in VISION_MEDIA_EXTS:
             continue
-        sight = _current_sight_block(folder_path, media_name, metadata, model)
+        sight = _cached_sight_block(folder_path, media_name, metadata, model)
+        structured = _structured_sight_block(folder_path, media_name, metadata, model)
         item = {
             "file": media_name,
             "cached": bool(sight),
+            "structured": bool(structured),
         }
         if include_sight:
             item["sight"] = {
-                "description": str((sight or {}).get("description") or ""),
-                "inventory": dict((sight or {}).get("inventory") or {}),
+                "description": str((structured or {}).get("description") or ""),
+                "inventory": dict((structured or {}).get("inventory") or {}),
             }
         items.append(item)
     cached = sum(1 for item in items if item["cached"])
+    structured = sum(1 for item in items if item["structured"])
     return {
         "version": VISION_SIGHT_VERSION,
         "model": str(model or ""),
         "total": len(items),
         "cached": cached,
+        "structured": structured,
         "pending": max(0, len(items) - cached),
         "items": items,
     }

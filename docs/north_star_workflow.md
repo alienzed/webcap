@@ -10,10 +10,10 @@ From WebCap's perspective, the workflow starts when a set folder exists and cont
 
 1. Open a set folder.
 2. Curate media with explicit, reversible operations.
-3. For AI-assisted annotation work, run **Scan Set** once to build reusable deterministic analysis and optional Vision Sight.
+3. For AI-assisted annotation work, enter **Set Intelligence** once to build reusable Vision-grounded understanding of the Set.
 4. When vocabulary is immature, use **Discover Vocabulary** before materializing tags.
-5. Use normal annotation or **Guided Tag Pass** to apply the mature vocabulary.
-6. Use **Quality Assurance** as the final attention funnel; optional model intelligence augments rather than replaces deterministic QA.
+5. Use normal annotation or **Guided Tagging** to apply the mature vocabulary.
+6. Use **Quality Assurance** as the final attention funnel, with semantic model reasoning supported by WebCap's deterministic evidence.
 7. Caption and review items while filtering or building focus sets as needed throughout the workflow.
 8. Open Training and select a model.
 9. Inspect or edit the setup's persistent config and dataset TOMLs.

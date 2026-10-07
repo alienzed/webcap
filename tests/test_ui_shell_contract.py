@@ -660,6 +660,13 @@ def test_phase_40_shell_owns_global_presentation_not_training_internals():
     assert "typeof window.renderShellSystemStatus" not in test_bench
     assert ".shell-workload-indicator {" in css
     assert ".shell-workload-indicator.is-active" in css
+    assert "function shellManagedActivityLane(active, gpuOwner)" in shell
+    assert "function shellWorkloadIcon(lane)" in shell
+    assert "shell-workload-icon--llm" in shell
+    assert "shell-workload-icon--inference" in shell
+    assert "shell-workload-icon--training" in shell
+    assert "is-' + workload.lane" in shell
+    assert ".shell-workload-indicator.is-active.is-work .shell-workload-icon--idle" in css
     assert "animation: shell-workload-spin 0.9s linear infinite;" in css
     assert "@keyframes shell-workload-spin" in css
     assert "color: var(--accent);" in css

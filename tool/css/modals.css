@@ -3092,3 +3092,22 @@ html[data-theme="dark"] .app-settings-environment-check {
   border: 0;
   text-align: left;
 }
+
+
+.vision-tag-item-thumb {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.vision-tag-item-file {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}

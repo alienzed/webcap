@@ -458,9 +458,9 @@ def vision_sight_records(folder, model, files=None):
     return records
 
 
-def mine_vision_sight(folder, model):
+def mine_vision_sight(folder, model, files=None):
     status = vision_sight_status(folder, model, include_sight=True)
-    records = vision_sight_records(folder, model)
+    records = vision_sight_records(folder, model, files=files)
     analysis = mine_sight_records(records)
     analysis["visionModel"] = str(model or "")
     analysis["coverage"] = {

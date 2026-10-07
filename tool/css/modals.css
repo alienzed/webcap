@@ -2983,6 +2983,23 @@ html[data-theme="dark"] .app-settings-environment-check {
   color: var(--muted);
 }
 
+.vision-schema-evidence-thumbs {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.vision-schema-evidence-thumbs img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
 .vision-schema-footer {
   flex: 0 0 auto;
   display: flex;

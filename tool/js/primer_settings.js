@@ -1164,6 +1164,7 @@ function runCaptionAssist() {
   var item = getPrimerResetCurrentMediaItem();
   if (!item) return Promise.resolve(false);
   var sourceKey = item.key;
+  var startedFocused = isFocusedCaptionOpen();
   if (!getDirectorModelPreference('webcap.director.model')) {
     setStatus('Select a Director model before using Caption Assist.');
     return Promise.resolve(false);
@@ -1172,14 +1173,14 @@ function runCaptionAssist() {
   captionAssistSightPreparation = true;
   setStatus('Caption Assist: preparing visual evidence…');
   return loadCaptionVisionCapabilities().then(function () {
-    if (!state.currentItem || state.currentItem.key !== sourceKey) return false;
+    if (!state.currentItem || state.currentItem.key !== sourceKey || startedFocused !== isFocusedCaptionOpen()) return false;
     return refreshSetIntelligenceItem(item, {
       open: !existingSight || !existingSight.description || !existingSight.inventory,
       context: true
     });
   }).then(function (prepared) {
     if (prepared === false) return false;
-    if (!state.currentItem || state.currentItem.key !== sourceKey) return false;
+    if (!state.currentItem || state.currentItem.key !== sourceKey || startedFocused !== isFocusedCaptionOpen()) return false;
     return runCaptionAssistAfterSight();
   }).catch(function (err) {
     reportConsoleError('Caption Assist Sight', err);

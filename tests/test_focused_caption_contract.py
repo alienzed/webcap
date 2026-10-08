@@ -45,8 +45,8 @@ def test_focus_review_scope_is_existing_saved_captions_only_and_session_ephemera
     focus = _read("tool/js/focused_caption.js")
 
     keys = focus.split("function getFocusedCaptionEntryKeys", 1)[1].split("function syncFocusedCaptionControls", 1)[0]
-    assert "if (!reviewMode) return true;" in keys
-    assert "return !!String(item.caption || '').trim();" in keys
+    assert "var allItems = getFilteredMediaItems(false).filter" in keys
+    assert "return !reviewMode || !!String(item.caption || '').trim();" in keys
     assert "No saved captions are available in the current visible scope." in focus
     assert "focusedCaptionState.mode = 'caption';" in focus
     assert "reviewed" not in focus.split("var focusedCaptionState = {", 1)[1].split("};", 1)[0].lower()
@@ -65,6 +65,15 @@ def test_focus_review_uses_local_checks_and_optional_item_scoped_vision():
     assert "loadFocusedCaptionVisionPhrases();" in presenter
     assert "startFocusedCaptionPrefetch(candidate.mediaKey);" in presenter
 
+
+
+def test_focus_review_hides_standalone_vision_caption_action_like_focus_caption():
+    vision = _read("tool/js/caption_vision.js")
+
+    action = vision.split("function syncVisionImageCaptionActionUi()", 1)[1].split("function syncVisionImageCaptionModal()", 1)[0]
+    assert "preview-open-focus-caption-btn" in action
+    assert "preview-open-focus-review-btn" in action
+    assert "btn.classList.toggle('hidden', !supported || focusedCaptionOpen);" in action
 
 def test_focus_review_keep_does_not_rewrite_unchanged_caption_and_save_advances_changed_caption():
     primer = _read("tool/js/primer_settings.js")

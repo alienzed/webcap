@@ -370,12 +370,28 @@
   }
 
   function qaMergeFindings() {
-    var ai = qaWorkbenchState.aiScopeSignature === qaWorkbenchState.deepScanInputSignature
-      ? qaWorkbenchState.aiFindings
-      : [];
     qaWorkbenchState.findings = qaSortFindings(
-      qaWorkbenchState.deterministicFindings.concat(ai)
+      qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.aiFindings)
     );
+  }
+
+  function qaReconcileAiFindingsToCurrentInputs() {
+    var current = qaItemInputSignatures();
+    var invalid = {};
+    Object.keys(current).forEach(function (file) {
+      if (
+        qaWorkbenchState.aiItemSignatures[file] &&
+        qaWorkbenchState.aiItemSignatures[file] !== current[file]
+      ) {
+        invalid[file] = true;
+      }
+    });
+    if (Object.keys(invalid).length) {
+      qaWorkbenchState.aiFindings = qaWorkbenchState.aiFindings.filter(function (finding) {
+        return !(finding.files || []).some(function (file) { return invalid[file]; });
+      });
+    }
+    qaRefreshAiCoverage();
   }
 
   function qaWaitForDeepScan(job) {
@@ -1694,8 +1710,12 @@
     if (folderChanged || scopeChanged || inputsChanged || !qaWorkbenchState.deepScanInputSignature) {
       qaWorkbenchState.browseIndex = 0;
       qaWorkbenchState.statusMessage = '';
-      qaRestoreReview(inputSignature);
-      if (!qaWorkbenchState.deepScanJobId) {
+      if (qaWorkbenchState.deepScanSessionActive) {
+        qaReconcileAiFindingsToCurrentInputs();
+      } else {
+        qaRestoreReview(inputSignature);
+      }
+      if (!qaWorkbenchState.deepScanJobId && !qaWorkbenchState.deepScanSessionActive) {
         qaWorkbenchState.deepScanStatus = '';
       }
     }

@@ -984,9 +984,8 @@ function handleCaptionVisionModelChange() {
   }).then(function () {
     if (!isFocusedCaptionOpen() || !state || !state.currentItem) return false;
     return startFocusedCaptionPrefetch(state.currentItem.key).then(function (result) {
-      if (focusPhrasesEnabled && captionAssistCandidate) {
-        loadFocusedCaptionVisionPhrases();
-      }
+      // A model switch refreshes the structured check; it must not
+      // silently launch a second Vision Extras pixel request.
       return result;
     });
   });

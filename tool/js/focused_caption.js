@@ -33,7 +33,7 @@ function isFocusedCaptionReviewMode() {
 }
 
 function focusedCaptionModeLabel() {
-  return focusedCaptionState.mode === 'review' ? 'Caption Assist · Review' : 'Caption Assist · Write';
+  return 'Caption Assist';
 }
 
 function resetFocusedCaptionUseArm() {
@@ -443,68 +443,9 @@ function syncFocusedCaptionVisionPreference() {
   return beginFocusedCaptionPrefetchVision(prefetch, mediaItem, prefetch.candidate);
 }
 
-function startFocusedCaptionPrefetch(sourceMediaKey) {
-  if (!focusedCaptionState.open) return Promise.resolve(false);
-  if (String(focusedCaptionState.itemKey || '') !== String(sourceMediaKey || '')) return Promise.resolve(false);
-
-  var target = getNextFocusedCaptionTarget(focusedCaptionState.itemIndex);
-  if (!target) return cancelFocusedCaptionPrefetch();
-
-  var request = buildCaptionAssistRequest(target.item);
-  var fingerprint = captionAssistRequestFingerprint(target.item, request);
-  if (
-    focusedCaptionPrefetch &&
-    focusedCaptionPrefetch.itemKey === target.itemKey &&
-    focusedCaptionPrefetch.fingerprint === fingerprint
-  ) {
-    return focusedCaptionPrefetch.promise || Promise.resolve(!!focusedCaptionPrefetch.candidate);
-  }
-
-  return cancelFocusedCaptionPrefetch().then(function () {
-    if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== String(sourceMediaKey || '')) {
-      return false;
-    }
-    var prefetch = {
-      itemKey: target.itemKey,
-      index: target.index,
-      fingerprint: fingerprint,
-      jobId: '',
-      promise: null,
-      candidate: null,
-      visionTask: null,
-      discarded: false
-    };
-    focusedCaptionPrefetch = prefetch;
-
-    if (isFocusedCaptionReviewMode()) {
-      prefetch.candidate = buildFocusedReviewCandidate(target.item);
-      prefetch.promise = Promise.resolve(prefetch.candidate);
-      return prefetch.promise;
-    }
-
-    if (!request.model) {
-      focusedCaptionPrefetch = null;
-      return false;
-    }
-    prefetch.promise = requestCaptionAssistCandidate(target.item, request, {
-      onJob: function (job) {
-        prefetch.jobId = String(job.jobId || '');
-        if (prefetch.discarded) return cancelCaptionAssistJob(prefetch.jobId);
-        return null;
-      }
-    }).then(function (candidate) {
-      if (prefetch.discarded || focusedCaptionPrefetch !== prefetch) return null;
-      prefetch.candidate = candidate;
-      return candidate;
-    }).catch(function (err) {
-      if (!prefetch.discarded && focusedCaptionPrefetch === prefetch) {
-        focusedCaptionPrefetch = null;
-        reportConsoleError('Focus Caption', err);
-      }
-      return null;
-    });
-    return prefetch.promise;
-  });
+function startFocusedCaptionPrefetch() {
+  // Sight must be prepared before the Director, so speculative candidates are invalid.
+  return cancelFocusedCaptionPrefetch();
 }
 
 function useFocusedCaptionPrefetchForCurrentItem() {
@@ -909,8 +850,9 @@ function startFocusedCaption(targetMediaKey, mode, options) {
   navigateFocusedCaptionToIndex(0, 1);
 }
 
-function startFocusedReview(targetMediaKey, options) {
-  startFocusedCaption(targetMediaKey, 'review', options);
+function startFocusedReview(targetMediaKey) {
+  // QA hands off the item, not historical findings; Caption Assist starts fresh.
+  startFocusedCaption(targetMediaKey, 'caption');
 }
 
 function startFocusedCaptionForMediaItem(mediaItem) {

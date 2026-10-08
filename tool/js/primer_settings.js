@@ -1166,7 +1166,7 @@ function runCaptionAssist() {
   var existingSight = item.metadata && item.metadata.vision_sight;
   setStatus('Caption Assist: preparing visual evidence…');
   return refreshSetIntelligenceItem(item, {
-    open: !existingSight || !existingSight.structured && !existingSight.observations,
+    open: !existingSight || !existingSight.description || !existingSight.inventory,
     context: true
   }).then(function () {
     if (!state.currentItem || state.currentItem.key !== sourceKey) return false;

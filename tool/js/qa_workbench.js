@@ -266,7 +266,13 @@
   // QA review state is derived data, scoped to the exact inputs that produced it.
   // No media or user-authored Set state is written by this cache.
   function qaSavedReviewKey(signature) {
-    return 'webcap.qa.review.v1:' + String(signature || '');
+    // Keep storage keys bounded even for large Sets; stored signatures verify collisions.
+    var hash = 2166136261;
+    var value = String(signature || '');
+    for (var i = 0; i < value.length; i += 1) {
+      hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+    }
+    return 'webcap.qa.review.v1:' + (hash >>> 0).toString(16);
   }
 
   function qaSaveReview() {
@@ -903,8 +909,19 @@
     return health;
   }
 
+  function qaFindingActionRank(finding) {
+    // An item-specific, evidence-backed discrepancy is more useful than rarity alone.
+    var concrete = finding.files && finding.files.length;
+    if (!concrete) return 0;
+    if (finding.source === 'ai' && ['captioning', 'consistency'].indexOf(finding.category) !== -1) return 3;
+    if (['captioning', 'consistency'].indexOf(finding.category) !== -1) return 2;
+    return 1;
+  }
+
   function qaSortFindings(findings) {
     return findings.slice().sort(function (a, b) {
+      var action = qaFindingActionRank(b) - qaFindingActionRank(a);
+      if (action) return action;
       var priority = qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
       if (priority) return priority;
       var ai = QA_CATEGORY_ORDER.indexOf(a.category);
@@ -1258,7 +1275,7 @@
     progress.appendChild(track);
     var handledText = document.createElement('span');
     handledText.className = 'qa-muted';
-    handledText.textContent = handled + ' handled this session';
+    handledText.textContent = handled + ' reviewed';
     progress.appendChild(handledText);
     container.appendChild(progress);
 

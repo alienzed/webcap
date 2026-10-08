@@ -47,20 +47,21 @@ Current versioned evidence is reused. No separate scan manifest or durable workf
 
 ### Visibility
 
-The default surface exposes only information the user can act on:
+The Set Intelligence surface must expose the state that changes the user's next decision, at readable sizes:
 
-- one scan/progress state;
-- completion;
-- one prominent next decision: **Discover Vocabulary**;
+- **Open Sight** coverage: current saved results versus media still missing reusable open evidence;
+- **Context Sight** coverage: current results, saved-but-stale results, and genuinely missing results;
+- current scan/progress state and failures;
+- one prominent next decision: **Discover Vocabulary** once the intelligence pass is complete;
 - quieter skip-ahead actions for **Guided Tagging** and **Quality Assurance**.
 
-Analyzer names and internal stages are not primary UI.
+Open Sight and Context Sight are visible because their coverage determines whether the workflow should continue, resume, or refresh. Lower-level analyzer internals remain supporting implementation detail.
 
-The collapsed **Vision report** exposes raw responses from the current browser run and can reconstruct normalized Open Sight and Context Sight from cached Set metadata after reopening or restarting the app. It is diagnostic evidence, not a review task; opening the report never starts a scan.
+The collapsed **Vision report** stays directly visible as a readable reference surface and shows how many saved responses are available. It can expose raw responses from the current browser run and reconstruct normalized Open Sight and Context Sight from cached Set metadata after reopening or restarting the app. Opening the report never starts a scan.
 
 Per-media Vision quality is allowed to degrade without failing the Set-level workflow. A model response that cannot be normalized into reusable structured Sight is kept visible diagnostically, skipped as evidence, and does not abort the remaining scan. Vocabulary discovery may proceed from partial usable coverage; complete Set coverage is not a success requirement.
 
-Stop is explicit. Completed cached Sight remains valid. Reopening Set Intelligence first inspects that cache; rescanning is an explicit **Run Again** action when reusable evidence exists.
+Stop is explicit. Completed cached Sight remains valid. Reopening Set Intelligence first inspects that cache. The main scan action is semantic: **Resume** for missing work and **Refresh Context Sight** when saved Context Sight is stale because its vocabulary/template context changed. A fully current Set does not present a misleading rerun action.
 
 ## Data ownership
 

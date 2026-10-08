@@ -9,6 +9,7 @@ var captionVisionActiveTask = null;
 var captionVisionTaskSequence = 0;
 var captionVisionResult = null;
 var captionVisionError = '';
+var captionVisionPreviewCaretIndex = null;
 var visionImageCaptionState = {
   open: false,
   mediaKey: '',
@@ -194,6 +195,7 @@ function captionVisionApplyPatchToText(captionText, patch, caretIndex) {
 function filterCaptionVisionFindings(mediaItem, captionText, findings) {
   var text = String(captionText || '');
   return (Array.isArray(findings) ? findings : []).filter(function (finding) {
+    if (String(finding && finding.confidence || '').toLowerCase() === 'low') return false;
     return !!captionVisionValidatePatch(text, finding);
   });
 }
@@ -403,6 +405,25 @@ function getCaptionVisionCaretIndex() {
   return range.toString().length;
 }
 
+function setCaptionVisionCaretIndex(index) {
+  var candidateEl = getCaptionVisionCandidateTextElement();
+  var target = Math.max(0, Number(index) || 0);
+  var walker = document.createTreeWalker(candidateEl, NodeFilter.SHOW_TEXT);
+  var node;
+  while ((node = walker.nextNode())) {
+    if (target <= node.nodeValue.length) {
+      var range = document.createRange();
+      range.setStart(node, target);
+      range.collapse(true);
+      var selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+    target -= node.nodeValue.length;
+  }
+}
+
 function setCaptionVisionCandidatePreview(text, active) {
   var candidateEl = getCaptionVisionCandidateTextElement();
   candidateEl.textContent = String(text || '');
@@ -411,7 +432,13 @@ function setCaptionVisionCandidatePreview(text, active) {
 
 function restoreCaptionVisionCandidatePreview() {
   if (!captionAssistCandidate) return;
+  var candidateEl = getCaptionVisionCandidateTextElement();
+  var restoreCaret = captionVisionPreviewCaretIndex;
   setCaptionVisionCandidatePreview(captionAssistCandidate.text, false);
+  if (restoreCaret !== null && document.activeElement === candidateEl) {
+    setCaptionVisionCaretIndex(restoreCaret);
+  }
+  captionVisionPreviewCaretIndex = null;
 }
 
 function captionVisionPatchLabel(finding) {
@@ -441,7 +468,7 @@ function applyCaptionVisionFinding(finding) {
     setStatus('Caption changed; this Vision suggestion is no longer applicable.');
     return;
   }
-  var caretIndex = getCaptionVisionCaretIndex();
+  var caretIndex = captionVisionPreviewCaretIndex !== null ? captionVisionPreviewCaretIndex : getCaptionVisionCaretIndex();
   captionAssistCandidate.text = captionVisionApplyPatchToText(captionAssistCandidate.text, patch, caretIndex);
   if (state && state.currentItem && captionAssistCandidate.mediaKey === state.currentItem.key) {
     var liveRequest = buildCaptionAssistRequest(state.currentItem);
@@ -481,8 +508,9 @@ function renderCaptionVisionFinding(finding) {
   button.addEventListener('mouseenter', function () {
     var currentPatch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
     if (!currentPatch) return;
+    captionVisionPreviewCaretIndex = getCaptionVisionCaretIndex();
     setCaptionVisionCandidatePreview(
-      captionVisionApplyPatchToText(captionAssistCandidate.text, currentPatch, getCaptionVisionCaretIndex()),
+      captionVisionApplyPatchToText(captionAssistCandidate.text, currentPatch, captionVisionPreviewCaretIndex),
       true
     );
   });
@@ -490,8 +518,9 @@ function renderCaptionVisionFinding(finding) {
   button.addEventListener('focus', function () {
     var currentPatch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
     if (!currentPatch) return;
+    captionVisionPreviewCaretIndex = getCaptionVisionCaretIndex();
     setCaptionVisionCandidatePreview(
-      captionVisionApplyPatchToText(captionAssistCandidate.text, currentPatch, getCaptionVisionCaretIndex()),
+      captionVisionApplyPatchToText(captionAssistCandidate.text, currentPatch, captionVisionPreviewCaretIndex),
       true
     );
   });

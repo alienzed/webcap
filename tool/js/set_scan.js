@@ -985,6 +985,15 @@
       });
     }
     return Promise.resolve().then(function () {
+      if (opts.open === 'missing') {
+        return requestJson('/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model))
+          .then(function (report) {
+            var row = (report.items || []).find(function (entry) { return entry.file === file; });
+            if (!row) throw new Error('Open Sight status did not include ' + file + '.');
+            open = !row.structured;
+          });
+      }
+    }).then(function () {
       if (open) return stage('Open Sight',
         function () { return requestSight(folder, model, file); },
         function (sight) { return saveSight(folder, model, file, sight); });

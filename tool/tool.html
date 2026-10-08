@@ -2500,6 +2500,30 @@
                     <span id="set-scan-status" aria-live="polite"></span>
                 </div>
                 <div class="set-scan-progress-track"><span id="set-scan-progress-fill"></span></div>
+                <div class="set-scan-evidence-grid" aria-label="Set Intelligence coverage">
+                    <section id="set-scan-open-card" class="set-scan-evidence-card">
+                        <div class="set-scan-evidence-card-header">
+                            <div>
+                                <strong>Open Sight</strong>
+                                <span>Broad image read, independent of vocabulary</span>
+                            </div>
+                            <span id="set-scan-open-badge" class="set-scan-evidence-badge">Checking</span>
+                        </div>
+                        <div id="set-scan-open-count" class="set-scan-evidence-count">—</div>
+                        <div id="set-scan-open-detail" class="set-scan-evidence-detail">Checking saved coverage…</div>
+                    </section>
+                    <section id="set-scan-context-card" class="set-scan-evidence-card">
+                        <div class="set-scan-evidence-card-header">
+                            <div>
+                                <strong>Context Sight</strong>
+                                <span>Second image read guided by groups, terms, and caption structure</span>
+                            </div>
+                            <span id="set-scan-context-badge" class="set-scan-evidence-badge">Checking</span>
+                        </div>
+                        <div id="set-scan-context-count" class="set-scan-evidence-count">—</div>
+                        <div id="set-scan-context-detail" class="set-scan-evidence-detail">Checking saved coverage…</div>
+                    </section>
+                </div>
                 <div id="set-intelligence-next" class="set-intelligence-next hidden">
                     <div class="set-intelligence-next-copy">
                         <strong>Next: review the vocabulary</strong>
@@ -2512,7 +2536,7 @@
                     </div>
                 </div>
                 <details id="set-scan-details" class="set-scan-details hidden">
-                    <summary>Vision report</summary>
+                    <summary><strong>Vision report</strong><span id="set-scan-report-count">0 saved responses</span></summary>
                     <div class="set-scan-report-toolbar">
                         <label for="set-scan-response-select">Response</label>
                         <select id="set-scan-response-select" class="form-control"></select>
@@ -2522,7 +2546,7 @@
                 <div class="set-scan-footer">
                     <span id="set-scan-note">Uses the selected Vision model. Existing scan data is reused when it is still current.</span>
                     <div class="set-scan-footer-actions">
-                        <button id="set-scan-rescan-btn" type="button" class="set-intelligence-link-btn hidden">Run Again</button>
+                        <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
                         <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
                     </div>
                 </div>

@@ -248,6 +248,66 @@ def test_caption_vision_route_accepts_remote_ollama_vision_model(monkeypatch):
     assert captured["contract"]["messages"][1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
 
 
+
+def test_vision_caption_extras_prompt_is_compact_and_caption_aware():
+    messages = caption_vision.build_vision_caption_extras_messages(
+        "a woman in a red dress standing indoors",
+        "set/item.jpg",
+    )
+
+    assert "compact annotation-ready wording" in caption_vision.VISION_CAPTION_EXTRAS_SYSTEM_PROMPT
+    assert "one to four words" in caption_vision.VISION_CAPTION_EXTRAS_SYSTEM_PROMPT
+    assert "not already represented by the caption" in caption_vision.VISION_CAPTION_EXTRAS_SYSTEM_PROMPT
+    payload = json.loads(messages[1]["content"][0]["text"].split("\n\n", 1)[1])
+    assert payload["caption"] == "a woman in a red dress standing indoors"
+    assert messages[1]["content"][1]["image_url"]["url"] == "file://set/item.jpg"
+
+
+def test_vision_caption_extras_normalizer_deduplicates_compact_values():
+    result = caption_vision.normalize_vision_caption_extras_result(json.dumps({
+        "extras": [" braid ", "table lamp", "Braid", "hoop earrings"],
+    }))
+
+    assert result == {"extras": ["braid", "table lamp", "hoop earrings"]}
+
+
+def test_vision_caption_extras_route_queues_structured_multimodal_job(monkeypatch):
+    from tool.server import app as app_module
+
+    captured = {}
+    monkeypatch.setattr(
+        app_module,
+        "list_vision_models",
+        lambda reload=False: [{"id": "local::vision"}],
+    )
+    monkeypatch.setattr(
+        app_module,
+        "resolve_caption_vision_media",
+        lambda folder, media: "set/" + media,
+    )
+
+    def enqueue(client, model, contract, context=None, label=""):
+        captured.update(client=client, model=model, contract=contract, context=context, label=label)
+        return {"jobId": "vision-extras-test"}
+
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
+
+    with app_module.app.test_client() as client:
+        response = client.post("/caption/vision-extras", json={
+            "model": "local::vision",
+            "folder": "set",
+            "media": "item.jpg",
+            "caption": "a woman in a red dress",
+        })
+
+    assert response.status_code == 202
+    assert captured["client"] == "caption"
+    assert captured["model"] == "local::vision"
+    assert captured["contract"]["operation"] == "vision_caption_extras"
+    assert captured["contract"]["messages"][1]["content"][1]["image_url"]["url"] == "file://set/item.jpg"
+    assert captured["context"]["runtimeOverrides"]["maxTokens"] == 192
+    assert captured["label"] == "Vision Extras"
+
 def test_caption_vision_prompt_verifies_before_reporting_and_accepts_empty_success():
     from tool.server.caption_vision import CAPTION_VISION_SYSTEM_PROMPT, build_caption_vision_messages
 

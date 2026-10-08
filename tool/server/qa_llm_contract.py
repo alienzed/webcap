@@ -46,6 +46,19 @@ def _normalize_analysis(value):
                 "description": description,
                 "inventory": inventory,
             }
+    context = value.get("contextSight")
+    if isinstance(context, dict):
+        caption = _clean(context.get("caption"))[:1200]
+        matches = []
+        for match in (context.get("matches") or [])[:16]:
+            if not isinstance(match, dict):
+                continue
+            group = _clean(match.get("group"))
+            terms = [_clean(term) for term in (match.get("terms") or [])[:16] if _clean(term)]
+            if group and terms:
+                matches.append({"group": group, "terms": terms})
+        if caption or matches:
+            out["contextSight"] = {"caption": caption, "matches": matches}
     return out
 
 
@@ -214,6 +227,8 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "Reduce how much material a human must inspect while preserving confidence that meaningful training problems are noticed. "
         "Silence is better than weak advice. Return zero findings when there is nothing genuinely useful to add.\n\n"
         "[LOOK FOR]\n"
+        "- actionable missing or conflicting grouped tags: compare saved assignments against cached Open Sight and Context Sight; identify exact files and groups\\n"
+        "- caption omissions and contradictions: compare saved captions with assigned tags and cached visual descriptions\\n"
         "- semantic vocabulary drift: synonyms, near-synonyms, inconsistent naming, spelling or hyphenation families that may fragment one concept\n"
         "- natural-language oddity: copy residue, contradictory wording, inconsistent subject naming, or unusually different descriptive granularity\n"
         "- meaningful cross-group or caption/tag relationships whose exceptions deserve human inspection\n"
@@ -223,6 +238,9 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "[BOUNDARIES]\n"
         "- This is analysis only. Do not rewrite captions and do not tell WebCap to mutate data.\n"
         "- You cannot see the media directly. Treat normalized visual analysis as supplied evidence, not as perfect ground truth, and never claim direct visual verification.\n"
+        "- Open Sight is vocabulary-agnostic; Context Sight follows current vocabulary. Their agreement is stronger than either one alone.\\n"
+        "- Context Sight matches are candidate observations, not proof that a tag must be added. Cross-check them.\\n"
+        "- Prefer specific corrections that can be made in the existing item editor; explain what to inspect and why.\\n"
         "- Prefer issues supported by agreement between independent sources such as annotations, MediaPipe, Face Focus, or Vision Sight.\n"
         "- Do not invent desired categories, missing visual attributes, or training goals not supported by the supplied focus and data.\n"
         "- Rare does not mean wrong. Common does not mean bad. Association does not mean correctness.\n"

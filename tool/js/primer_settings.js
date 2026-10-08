@@ -155,7 +155,7 @@ function useCaptionAssistCandidate() {
   }
 
   cancelEditorAutosaveForCaption(state.folder, mediaItem.fileName);
-  var unchangedReview = isFocusedCaptionReviewMode() && nextCaption === String(mediaItem.caption || '');
+  var unchangedReview = isFocusedCaptionReviewMode() && nextCaption.trim() === String(mediaItem.caption || '').trim();
   return cancelCurrentCaptionVision().then(function () {
     if (unchangedReview) return true;
     return saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key, {
@@ -604,9 +604,9 @@ function syncCaptionAssistCandidateUi() {
   regenerateBtn.disabled = !!pending;
   var useArmed = focusOpen && !reviewMode && visible && isFocusedCaptionUseArmedForCandidate(candidate);
   useBtn.classList.toggle('is-armed', !!useArmed);
-  var reviewChanged = reviewMode && visible && String(candidate.text || '') !== String((state.currentItem && state.currentItem.caption) || '');
+  var reviewChanged = reviewMode && visible && String(candidate.text || '').trim() !== String((state.currentItem && state.currentItem.caption) || '').trim();
   useBtn.textContent = reviewMode
-    ? (reviewChanged ? 'Save → Next' : 'Looks Good → Next')
+    ? (reviewChanged ? 'Save → Next' : 'Keep → Next')
     : (useArmed ? 'Press Enter again' : 'Apply Caption');
 
   regenerateBtn.textContent = '\u21bb';

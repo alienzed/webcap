@@ -18,6 +18,10 @@ def test_set_intelligence_is_the_single_set_tools_entry_point():
     assert 'id="guided-tag-pass-open-btn"' not in html
     assert 'id="set-scan-modal"' in html
     assert 'id="set-scan-response-select"' in html
+    assert 'id="set-scan-open-card"' in html
+    assert 'id="set-scan-context-card"' in html
+    assert 'id="set-scan-open-count"' in html
+    assert 'id="set-scan-context-count"' in html
     assert 'id="set-scan-rescan-btn"' in html
     assert 'id="set-intelligence-primary-btn"' in html
     assert 'id="set-intelligence-guided-btn"' in html
@@ -50,14 +54,19 @@ def test_set_intelligence_requires_llm_observation_and_interpretation():
     assert 'record["vision_sight"]' in media
 
 
-def test_set_intelligence_hides_supporting_analyzers_and_raw_output_by_default():
+def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secondary():
     html = _read("tool/tool.html")
     scan = _read("tool/js/set_scan.js")
 
     assert "WebCap analysis</strong>" not in html
     assert "Face Focus, MediaPipe pose" not in html
+    assert 'id="set-scan-open-card"' in html
+    assert 'id="set-scan-context-card"' in html
+    assert "Broad image read, independent of vocabulary" in html
+    assert "Second image read guided by groups, terms, and caption structure" in html
     assert 'id="set-scan-details"' in html
-    assert '<summary>Vision report</summary>' in html
+    assert "<strong>Vision report</strong>" in html
+    assert 'id="set-scan-report-count"' in html
     assert "currentRawResponse" in scan
     assert "rawResponses" in scan
     assert "rawResponseIndex" in scan
@@ -65,11 +74,28 @@ def test_set_intelligence_hides_supporting_analyzers_and_raw_output_by_default()
     assert "showRawResponse(fileName, 'Context Sight', result.text);" in scan
     assert "responseSelect.onchange = selectRawResponse;" in scan
     assert "rescanBtn.onclick = runSetIntelligence;" in scan
+    assert "'Resume ' + String(openMissing) + ' Open Sight'" in scan
+    assert "'Resume ' + String(contextMissing) + ' Context Sight'" in scan
+    assert "'Refresh ' + String(contextStale) + ' Context Sight'" in scan
+    assert "rescanBtn.classList.toggle('hidden', !actionLabel);" in scan
     assert "operation: 'intelligence_report'" in scan
     assert "function restoreCachedIntelligence(" in scan
-    assert "if (setScanState.hasRun) return;" in scan
+    assert "if (setScanState.hasRun) return;" not in scan
+    assert "Checking saved Open Sight and Context Sight against the current Set" in scan
     assert "function recordSetIntelligenceFailure(" in scan
     assert "Set understood with gaps" in scan
     assert "Previous report preserved." in scan
     assert "setScanState.hasRun = false;" in scan
     assert "Next: review the vocabulary" in html
+
+
+def test_set_intelligence_coverage_is_designed_for_readability_not_microcopy():
+    css = _read("tool/css/modals.css")
+
+    assert ".set-scan-evidence-grid" in css
+    assert "font-size: 30px;" in css
+    assert ".set-scan-evidence-detail" in css
+    assert ".set-scan-details summary" in css
+    assert "font-size: 15px;" in css
+    assert ".set-scan-subtitle" in css
+    assert "font-size: 14px;" in css

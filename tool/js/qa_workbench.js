@@ -397,6 +397,7 @@
   function qaWaitForDeepScan(job) {
     if (!job || !job.jobId) throw new Error('QA Deep Scan did not return a queued job.');
     qaWorkbenchState.deepScanJobId = String(job.jobId || '');
+    renderQaWorkbench();
 
     function poll(current) {
       var status = String(current && current.status || '');
@@ -1776,7 +1777,16 @@
     qaSetView('browse');
   }
 
-  function qaInspectFiles(files, source, findingId) {
+  function qaSelectFiles(files, source, findingId) {
+    var clean = (files || []).filter(Boolean);
+    if (!clean.length) return;
+    qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
+    qaWorkbenchState.returnFindingId = String(findingId || '');
+    qaWorkbenchState.statusMessage = '';
+    selectByFileName(clean[0], clean, source || 'Quality Assurance', 'qa', { preserveMediaFilters: true });
+  }
+
+  function qaReviewCaptionFiles(files, source, findingId) {
     var clean = (files || []).filter(Boolean);
     if (!clean.length) return;
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
@@ -1800,7 +1810,11 @@
   function qaInspectFinding(findingId) {
     var finding = qaWorkbenchState.findings.find(function (row) { return row.id === findingId; });
     if (!finding || !finding.files || !finding.files.length) return;
-    qaInspectFiles(finding.files, 'QA · ' + finding.title, finding.id);
+    if (finding.category === 'captioning') {
+      qaReviewCaptionFiles(finding.files, 'QA · ' + finding.title, finding.id);
+      return;
+    }
+    qaSelectFiles(finding.files, 'QA · ' + finding.title, finding.id);
   }
 
   function qaInspectHealth(kind) {
@@ -1814,7 +1828,7 @@
       mismatch: 'Tag Mismatch',
       invalidAr: 'Invalid AR'
     };
-    qaInspectFiles(files, 'QA · ' + (labels[kind] || 'Dataset Health'), '');
+    qaSelectFiles(files, 'QA · ' + (labels[kind] || 'Dataset Health'), '');
   }
 
   function returnToQaWorkbenchFromFocusSet() {

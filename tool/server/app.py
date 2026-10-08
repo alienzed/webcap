@@ -880,6 +880,13 @@ def vision_schema_assist_route():
                 item for item in context_status.get("items", [])
                 if not wanted or str(item.get("file") or "") in wanted
             ]
+            latest_context_records = vision_vocabulary_sight_records(
+                folder,
+                vision_model,
+                data.get("existingGroups"),
+                files=requested_files,
+                current_context=False,
+            )
             return jsonify({
                 "ok": True,
                 "open": {
@@ -889,6 +896,7 @@ def vision_schema_assist_route():
                 },
                 "context": {
                     "items": context_items,
+                    "records": latest_context_records,
                     "cached": sum(1 for item in context_items if item.get("cached")),
                     "available": sum(1 for item in context_items if item.get("available")),
                     "total": len(context_items),

@@ -19,8 +19,10 @@ CAPTION_VISION_RESPONSE_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "description": {"type": "string"},
-                    "type": {"type": "string", "enum": ["omitted", "incorrect"]},
+                    "action": {"type": "string", "enum": ["add", "replace", "remove"]},
+                    "sourceText": {"type": "string"},
+                    "replacementText": {"type": "string"},
+                    "anchorText": {"type": "string"},
                     "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
                     "knownTag": {
                         "anyOf": [
@@ -37,7 +39,14 @@ CAPTION_VISION_RESPONSE_SCHEMA = {
                         ]
                     },
                 },
-                "required": ["description", "type", "confidence", "knownTag"],
+                "required": [
+                    "action",
+                    "sourceText",
+                    "replacementText",
+                    "anchorText",
+                    "confidence",
+                    "knownTag",
+                ],
                 "additionalProperties": False,
             },
         }
@@ -148,16 +157,19 @@ def build_vision_image_caption_messages(media_relative_path):
 
 
 CAPTION_VISION_SYSTEM_PROMPT = (
-    "You verify a training caption against one image. "
-    "For each candidate discrepancy, check both the image and the current caption before reporting it. "
-    "Report a finding only when the image provides clear visual evidence and the caption fails to express the same fact, "
-    "or expresses a conflicting fact. Treat semantically equivalent wording as present even when it differs from the "
-    "supplied tag spelling. Use each annotation group as semantic context for what its known tag options describe and "
-    "which caption phrase they correspond to. Prioritize visually meaningful, repeatable attributes represented by the "
-    "supplied groups and exact known tag options; novel details should be rare and genuinely useful for training. "
-    "An empty findings list is a successful result when the caption accurately represents the image. "
-    "When a finding clearly maps to one supplied known tag, return that exact group and tag spelling. "
-    "Keep descriptions concise and factual. Return JSON only."
+    "You verify a training caption against one image and return only exact, actionable caption edits. "
+    "Report a finding only when the image provides clear visual evidence and the current caption is meaningfully missing "
+    "that fact or expresses a conflicting fact. Treat semantically equivalent wording as already present. "
+    "Every finding must be one deterministic edit: add, replace, or remove. "
+    "For replace/remove, sourceText MUST be an exact substring copied from the supplied current caption. "
+    "For replace, replacementText is the exact replacement wording. For remove, replacementText must be empty. "
+    "For add, replacementText is the compact annotation-ready wording to add; sourceText must be empty. "
+    "For add, anchorText may be one exact substring copied from the caption when there is a clearly appropriate insertion "
+    "location; otherwise return an empty anchorText so WebCap can offer insertion at the user's caret. "
+    "Do not return explanations, warnings, stylistic rewrites, or approximate source text. "
+    "Prefer short concrete wording and at most a few high-value edits. "
+    "Use annotation groups as semantic context; knownTag is optional and must use exact supplied group/term spelling. "
+    "An empty findings list is correct when there is no precise edit worth offering. Return JSON only."
 )
 
 
@@ -233,13 +245,15 @@ def build_caption_vision_messages(caption, groups, media_relative_path):
         "instructions": {
             "maxFindings": 4,
             "confidence": ["low", "medium", "high"],
-            "types": ["omitted", "incorrect"],
-            "knownTag": "Use null unless the finding clearly maps to one exact supplied group option.",
+            "actions": ["add", "replace", "remove"],
+            "knownTag": "Use null unless the proposed edit clearly maps to one exact supplied group option.",
         },
         "responseShape": {
             "findings": [{
-                "description": "short visual discrepancy",
-                "type": "omitted|incorrect",
+                "action": "add|replace|remove",
+                "sourceText": "exact current-caption substring for replace/remove; otherwise empty",
+                "replacementText": "text to add/replace with; empty for remove",
+                "anchorText": "optional exact current-caption substring for anchored add; otherwise empty",
                 "confidence": "low|medium|high",
                 "knownTag": {"group": "exact supplied group", "term": "exact supplied option"},
             }]
@@ -247,8 +261,8 @@ def build_caption_vision_messages(caption, groups, media_relative_path):
     }
     text = (
         "Verify the current training caption against the image and annotation vocabulary. "
-        "Return at most four findings that meet the system criteria. Returning {\"findings\": []} is correct when "
-        "the caption already covers the meaningful visual facts.\n\n"
+        "Return at most four exact caption edits. Do not return a finding unless it can be represented by the response "
+        "shape without prose interpretation. Returning {\\\"findings\\\": []} is correct when no precise edit is warranted.\n\n"
         + json.dumps(payload, ensure_ascii=False)
     )
     return [
@@ -292,11 +306,25 @@ def normalize_caption_vision_result(raw_text, groups):
     for raw in findings[:4]:
         if not isinstance(raw, dict):
             continue
-        description = str(raw.get("description") or "").strip()
-        finding_type = str(raw.get("type") or "").strip().lower()
+        action = str(raw.get("action") or "").strip().lower()
+        source_text = str(raw.get("sourceText") or "").strip()
+        replacement_text = str(raw.get("replacementText") or "").strip()
+        anchor_text = str(raw.get("anchorText") or "").strip()
         confidence = str(raw.get("confidence") or "").strip().lower()
-        if not description or finding_type not in {"omitted", "incorrect"} or confidence not in {"low", "medium", "high"}:
+        if action not in {"add", "replace", "remove"} or confidence not in {"low", "medium", "high"}:
             continue
+        if action == "add":
+            if source_text or not replacement_text:
+                continue
+        elif action == "replace":
+            if not source_text or not replacement_text or source_text == replacement_text:
+                continue
+            anchor_text = ""
+        else:
+            if not source_text or replacement_text:
+                continue
+            anchor_text = ""
+
         known = None
         raw_known = raw.get("knownTag")
         if isinstance(raw_known, dict):
@@ -309,19 +337,23 @@ def normalize_caption_vision_result(raw_text, groups):
                     "group": display_groups[group_key],
                     "term": allowed[group_key][term_key],
                 }
+
         key = (
-            finding_type,
-            " ".join(description.casefold().split()),
-            str((known or {}).get("group") or "").casefold(),
-            str((known or {}).get("term") or "").casefold(),
+            action,
+            source_text.casefold(),
+            replacement_text.casefold(),
+            anchor_text.casefold(),
         )
         if key in seen:
             continue
         seen.add(key)
         normalized.append({
-            "description": description,
-            "type": finding_type,
+            "action": action,
+            "sourceText": source_text,
+            "replacementText": replacement_text,
+            "anchorText": anchor_text,
             "confidence": confidence,
             "knownTag": known,
         })
     return {"findings": normalized}
+

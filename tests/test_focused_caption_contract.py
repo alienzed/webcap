@@ -550,7 +550,9 @@ def test_normal_caption_assist_has_persistent_generating_presentation():
     assert "var assistVisible = !!(!focusOpen && mediaKey && isCaptionAssistPresentationOpenFor(mediaKey));" in primer
     assert "var panelVisible = focusVisible || assistVisible;" in primer
     assert "var pending = panelVisible && isCaptionAssistRunning();" in primer
-    assert "loadingEl.classList.toggle('hidden', !pending || visible);" in primer
+    assert "var loadingVisible = !visible && (focusOpen || pending);" in primer
+    assert "loadingEl.classList.toggle('hidden', !loadingVisible);" in primer
+    assert "loadingTextEl.textContent = pending ? 'Generating caption…' : 'Preparing caption…';" in primer
     assert "textEl.classList.toggle('hidden', !visible);" in primer
     assert "useBtn.classList.toggle('hidden', !visible);" in primer
     assert "regenerateBtn.classList.toggle('hidden', !visible);" in primer

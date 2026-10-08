@@ -1418,7 +1418,8 @@ function wirePrimerCaptionResetUi() {
         renderFileList();
         return;
       }
-      if (!captionAssistCandidate) return;
+      var mediaKey = state && state.currentItem && state.currentItem.key;
+      if (!captionAssistCandidate && !isCaptionAssistPresentationOpenFor(mediaKey)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       dismissCaptionAssistCandidate();

@@ -1459,6 +1459,35 @@ def director_job_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/qa/review", methods=["GET", "POST"])
+def qa_review_route():
+    try:
+        from .folder_state import write_folder_state_atomic
+        folder = str((request.get_json(silent=True) or {}).get("folder") or "").strip() if request.method == "POST" else str(request.args.get("folder") or "").strip()
+        folder_path = _resolve_folder(folder)
+        review_path = folder_path / ".webcap_qa_review.json"
+        if request.method == "GET":
+            if not review_path.exists():
+                return jsonify({"ok": True, "review": None})
+            with review_path.open("r", encoding="utf-8") as stream:
+                return jsonify({"ok": True, "review": json.load(stream)})
+        review = (request.get_json(silent=True) or {}).get("review")
+        if not isinstance(review, dict) or review.get("version") != 1:
+            raise ValueError("QA review payload is invalid.")
+        temp_path = review_path.with_name(review_path.name + ".tmp")
+        try:
+            with temp_path.open("w", encoding="utf-8") as stream:
+                json.dump(review, stream, ensure_ascii=False)
+            os.replace(temp_path, review_path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+        return jsonify({"ok": True})
+    except Exception as exc:
+        app.logger.exception("QA REVIEW STATE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/qa/deep-scan", methods=["POST"])
 def qa_deep_scan_route():
     data = request.get_json(silent=True) or {}

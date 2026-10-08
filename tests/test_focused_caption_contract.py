@@ -277,7 +277,7 @@ def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
     assert "function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments)" in primer
     assert "checklistGroupTermAppearsInCaptionText(group, term, mediaKey, captionText)" in primer
     assert "request.assignments" in primer
-    assert "Candidate omitted selected annotations: " in primer
+    assert "(reviewMode ? 'Caption' : 'Candidate') + ' omitted selected annotations: '" in primer
     assert "Caption Assist candidate failed annotation validation." in primer
     assert "useBtn.textContent = reviewMode" in primer
     assert "'Save → Next'" in primer

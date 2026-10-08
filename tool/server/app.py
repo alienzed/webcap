@@ -1522,7 +1522,13 @@ def qa_deep_scan_route():
             "qa",
             str(data.get("model") or "").strip(),
             contract,
-            context={},
+            context={
+                "captionsByFile": {
+                    str(item.get("fileName") or "").strip(): str(item.get("caption") or "")
+                    for item in items
+                    if isinstance(item, dict) and str(item.get("fileName") or "").strip()
+                },
+            },
             label="QA Deep Scan",
         )
         return jsonify({"ok": True, "job": job}), 202

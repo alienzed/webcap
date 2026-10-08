@@ -311,7 +311,6 @@ function buildFocusedReviewCandidate(mediaItem) {
   ) {
     captionText = String(ui.editorEl.value || '');
   }
-  captionText = captionText.trim();
   return {
     mediaKey: String(mediaItem.key || ''),
     text: captionText,
@@ -827,7 +826,7 @@ function hasFocusedReviewUnsavedChanges() {
     captionAssistCandidate &&
     state && state.currentItem &&
     captionAssistCandidate.mediaKey === state.currentItem.key &&
-    String(captionAssistCandidate.text || '').trim() !== String(state.currentItem.caption || '').trim()
+    String(captionAssistCandidate.text || '') !== String(state.currentItem.caption || '')
   );
 }
 
@@ -1012,7 +1011,11 @@ function wireFocusedCaption() {
       var panel = document.getElementById('editor-caption-candidate');
       if (panel && panel.contains(event.target)) return;
       if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-open-focus-review-btn, #preview-focus-caption-skip-btn')) return;
-      if (!stopFocusedCaption(focusedCaptionModeLabel() + ' ended.')) return;
+      if (!stopFocusedCaption(focusedCaptionModeLabel() + ' ended.')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       renderFileList();
     }, true);
   }

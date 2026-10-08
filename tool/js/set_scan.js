@@ -116,13 +116,21 @@
       ? Math.max(0, coverage.contextAvailable - coverage.contextCurrent)
       : 0;
     var actionLabel = '';
-    if (!setScanState.running && setScanState.hasRun && coverage.known) {
-      if (openMissing) actionLabel = 'Resume ' + String(openMissing) + ' Open Sight';
-      else if (contextMissing) actionLabel = 'Resume ' + String(contextMissing) + ' Context Sight';
-      else if (contextStale) actionLabel = 'Refresh ' + String(contextStale) + ' Context Sight';
+    if (!setScanState.running) {
+      if (!setScanState.hasRun || !coverage.known) {
+        actionLabel = 'Run Set Intelligence';
+      } else if (openMissing) {
+        actionLabel = 'Resume ' + String(openMissing) + ' Open Sight';
+      } else if (contextMissing) {
+        actionLabel = 'Resume ' + String(contextMissing) + ' Context Sight';
+      } else if (contextStale) {
+        actionLabel = 'Refresh ' + String(contextStale) + ' Context Sight';
+      } else {
+        actionLabel = 'Refresh Set Intelligence';
+      }
     }
-    rescanBtn.classList.toggle('hidden', !actionLabel);
-    rescanBtn.textContent = actionLabel || 'Resume Set Intelligence';
+    rescanBtn.classList.toggle('hidden', setScanState.running);
+    rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
 
     var percent = 0;
     if (setScanState.phase === 'preparing') percent = 8;
@@ -327,7 +335,17 @@
       return requestCachedIntelligenceReport(folder, files, model, context).then(function (payload) {
         var openCount = Number(payload && payload.open && payload.open.structured || 0);
         var contextAvailable = Number(payload && payload.context && payload.context.available || 0);
-        if (!openCount && !contextAvailable) return false;
+        if (!openCount && !contextAvailable) {
+          setScanState.folder = folder;
+          setScanState.files = files.slice();
+          setScanState.visionModel = model;
+          setScanState.hasRun = false;
+          setScanState.running = false;
+          setCachedReportResponses(payload);
+          applyCoveragePayload(payload, files.length, context.groups.length > 0);
+          setScanState.phase = 'idle';
+          return false;
+        }
         setScanState.folder = folder;
         setScanState.files = files.slice();
         setScanState.visionModel = model;
@@ -815,11 +833,20 @@
     restoreCachedIntelligence(folder, files).then(function (restored) {
       if (!setScanState.open || restored) return;
       setScanState.hasRun = false;
-      runSetIntelligence();
+      setScanState.phase = 'idle';
+      setSetIntelligenceStatus(
+        'Ready to scan',
+        'No saved Set Intelligence is available for this Set. Run it when the GPU and selected models are ready.'
+      );
     }).catch(function (err) {
       reportConsoleError('Set Intelligence cached report', err);
       if (!setScanState.open) return;
-      runSetIntelligence();
+      setScanState.hasRun = false;
+      setScanState.phase = 'idle';
+      setSetIntelligenceStatus(
+        'Ready to scan',
+        'Saved intelligence could not be checked. Run Set Intelligence when you are ready; opening this view does not start model work.'
+      );
     });
   }
 

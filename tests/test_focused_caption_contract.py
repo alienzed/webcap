@@ -542,6 +542,45 @@ def test_focus_caption_enhancements_do_not_change_normal_caption_assist_contract
     assert "applyEditorTextAndTriggerInput(nextCaption);" in primer
 
 
+def test_normal_caption_assist_has_persistent_generating_presentation():
+    primer = _read("tool/js/primer_settings.js")
+
+    assert "var captionAssistPresentationMediaKey = '';" in primer
+    assert "function isCaptionAssistPresentationOpenFor(mediaKey)" in primer
+    assert "var assistVisible = !!(!focusOpen && mediaKey && isCaptionAssistPresentationOpenFor(mediaKey));" in primer
+    assert "var panelVisible = focusVisible || assistVisible;" in primer
+    assert "var pending = panelVisible && isCaptionAssistRunning();" in primer
+    assert "loadingEl.classList.toggle('hidden', !pending || visible);" in primer
+    assert "textEl.classList.toggle('hidden', !visible);" in primer
+    assert "useBtn.classList.toggle('hidden', !visible);" in primer
+    assert "regenerateBtn.classList.toggle('hidden', !visible);" in primer
+
+
+def test_normal_caption_assist_regenerate_stays_open_and_can_cancel():
+    primer = _read("tool/js/primer_settings.js")
+
+    run_start = primer.index("function runCaptionAssist()")
+    run_end = primer.index("window.repairCaptionAssistCandidate", run_start)
+    run = primer[run_start:run_end]
+    assert "if (!focusRequest) captionAssistPresentationMediaKey = sourceMediaKey;" in run
+    assert "captionAssistPendingJobId = 'submitting';" in run
+    assert "(!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey))" in run
+
+    wire_start = primer.index("function wirePrimerCaptionResetUi()")
+    wire = primer[wire_start:]
+    regenerate_start = wire.index("candidateRegenerateBtn.addEventListener")
+    regenerate_end = wire.index("if (!focusPrevBtn.__captionAssistBound)", regenerate_start)
+    regenerate = wire[regenerate_start:regenerate_end]
+    assert "captionAssistCandidate = null;" in regenerate
+    assert "syncCaptionAssistCandidateUi();" not in regenerate
+    assert "return runCaptionAssistFromUi();" in regenerate
+
+    assert "function cancelCaptionAssistGeneration()" in primer
+    assert "if (!isFocusedCaptionOpen()) {\n        cancelCaptionAssistGeneration();" in wire
+    assert "if (isCaptionAssistRunning()) return cancelCaptionAssistGeneration();" in primer
+    assert "if (!captionAssistCandidate && !isCaptionAssistPresentationOpenFor(mediaKey)) return;" in wire
+
+
 def test_focus_caption_outside_click_refreshes_list_without_double_handling_backdrop():
     focus = _read("tool/js/focused_caption.js")
 

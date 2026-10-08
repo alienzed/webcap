@@ -27,7 +27,8 @@ def test_schema_assist_is_contextual_and_reuses_existing_vision_and_schema_paths
     assert "operation: 'analyze'" in script
     assert "operation: 'synthesize_vocabulary'" in script
     assert "operation: 'challenge_vocabulary'" in script
-    assert "operation: 'scan_vocabulary_sight'" in script
+    assert "operation: 'scan_vocabulary_sight'" not in script
+    assert "captionTemplate: currentCaptionTemplate()" in script
     assert "operation: 'suggest_tags'" in script
     assert "waitForCaptionAssistJob(payload.job)" in script
     assert "mergeChecklistSchemaVocabulary(mutations)" in script
@@ -130,13 +131,15 @@ def test_vocabulary_completion_promotes_guided_tagging_next_step():
     assert ".vision-schema-continue-btn" in css
 
 
-def test_discover_vocabulary_runs_fresh_visual_pass_then_synthesis_and_challenge():
+def test_discover_vocabulary_reuses_two_pass_sight_then_synthesizes_and_challenges():
     script = _read("tool/js/vision_schema_assist.js")
     css = _read("tool/css/modals.css")
 
     assert "function ensureVocabularySight()" in script
     assert "function runVocabularySynthesis()" in script
     assert "function runVocabularyChallenge(draftSchema)" in script
+    assert "Run Set Intelligence first." in script
+    assert "operation: 'scan_vocabulary_sight'" not in script
     assert script.index("return ensureVocabularySight();") < script.index("return runVocabularySynthesis();")
     assert script.index("return runVocabularySynthesis();") < script.index("return runVocabularyChallenge(draft);")
     assert "vision-schema-evidence-thumbs" in script

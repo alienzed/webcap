@@ -396,17 +396,26 @@ def test_context_sight_mining_keeps_exact_matches_and_caption_evidence():
         },
         {
             "file": "c.jpg",
-            "caption": "Side view of a bandeau top.",
+            "caption": "Side view of a bandeau top with metal rings.",
             "matches": [
                 {"group": "BT Shape", "terms": ["bandeau"]},
                 {"group": "Viewpoint", "terms": ["side"]},
             ],
+            "diagnostics": {
+                "unmatched": [
+                    {"group": "BT Shape", "terms": ["halter"], "reason": "unknown_term"},
+                    {"group": "Connector", "terms": ["ring"], "reason": "unknown_group"},
+                ],
+                "unmatchedCount": 2,
+            },
         },
     ])
-    labels = {(row["suggestedGroup"], row["label"], row["count"]) for row in analysis["evidence"]}
-    assert ("BT Shape", "triangle", 2) in labels
-    assert ("Viewpoint", "front", 2) in labels
-    assert ("BT Shape", "bandeau", 1) in labels
+    labels = {(row["suggestedGroup"], row["label"], row["count"], row["source"]) for row in analysis["evidence"]}
+    assert ("BT Shape", "triangle", 2, "context") in labels
+    assert ("Viewpoint", "front", 2, "context") in labels
+    assert ("BT Shape", "bandeau", 1, "context") in labels
+    assert ("BT Shape", "halter", 1, "context_unmatched") in labels
+    assert ("Connector", "ring", 1, "context_unmatched") in labels
     assert analysis["captions"][0]["file"] == "a.jpg"
 
 

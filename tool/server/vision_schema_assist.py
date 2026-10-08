@@ -12,7 +12,7 @@ from .media import set_media_metadata_analysis_block
 VISION_SIGHT_VERSION = 2
 VISION_SCHEMA_MINING_VERSION = 2
 VISION_VOCABULARY_SIGHT_VERSION = 2
-VISION_VOCABULARY_MINING_VERSION = 1
+VISION_VOCABULARY_MINING_VERSION = 2
 
 VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA = {
     "type": "object",
@@ -280,7 +280,14 @@ def _normalize_vocabulary_groups(groups):
         if not name or key in seen:
             continue
         seen.add(key)
-        terms = _clean_list(raw.get("terms"), 32)
+        terms = []
+        term_seen = set()
+        for raw_term in raw.get("terms") if isinstance(raw.get("terms"), list) else []:
+            term = _clean(raw_term)
+            term_key = term.casefold()
+            if term and term_key not in term_seen:
+                term_seen.add(term_key)
+                terms.append(term)
         out.append({"group": name, "terms": terms})
     return out
 

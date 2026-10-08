@@ -83,6 +83,15 @@ Each analyzer owns its own versioning/invalidation rules. Set Intelligence does 
 
 Director proposals, Guided Tag steps, and modal progress remain ephemeral. Completed Deep QA findings and QA review dispositions are saved as Set-owned review state in `.webcap_qa_review.json`; reusable per-image Sight remains in `media_metadata.json`. The review stores compact input fingerprints, not a duplicate of the underlying captions or image metadata.
 
+## Item-level checks and refresh
+
+- Caption Assist is the common item-level correction surface: write a caption or review an existing one, with progressive navigation when desired.
+- An automatic structured Vision caption check runs for the current candidate when a Vision model is available; speculative Vision scanning of future items is not part of navigation.
+- **Recheck Vision** explicitly reruns the current item's caption discrepancy check. **Refresh Sight** explicitly replaces that item's cached Open Sight and Context Sight using the currently selected Vision model. Neither action scans the Set.
+- Item Sight refresh uses the existing `scan_sight`, `scan_vocabulary_sight`, `save_sight`, and `save_vocabulary_sight` operations. A valid observation is saved immediately. Failed normalization or inference must not overwrite the previously saved observation.
+- QA-provided correction findings remain separate from fresh Vision findings while both are presented within the same caption correction UI. The user explicitly chooses edits.
+- Full-Set Vision scanning remains an explicit Set Intelligence operation; normal QA consumes cached evidence and uses bounded Director batches, not a mandatory full-media rescan.
+
 ## Discover Vocabulary
 
 Purpose: decide **what the Set vocabulary should contain**.

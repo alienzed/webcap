@@ -992,7 +992,7 @@
       if (context && visionContext.groups.length) return stage('Context Sight',
         function () { return requestContextSight(folder, model, file, visionContext); },
         function (sight) { return saveContextSight(folder, model, file, visionContext, sight); });
-      if (context) failures.push('Context Sight: no groups configured.');
+      if (context) reportConsoleWarning('Sight refresh ' + file, 'Context Sight requires at least one annotation group; continuing with Open Sight.');
     }).then(function () {
       if (failures.length) throw new Error(failures.join(' | '));
       window.setStatus('Sight refreshed for ' + file + '.');

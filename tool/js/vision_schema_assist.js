@@ -797,6 +797,57 @@
     });
   }
 
+  function requestTagSuggestionBatch(batchFiles, batchIndex, batchCount, context) {
+    if (context.token !== schemaState.schemaRequestToken || schemaState.workStopRequested) {
+      return Promise.resolve(null);
+    }
+    setStatus(
+      'Preparing tag candidates · batch ' + String(batchIndex + 1) + ' of ' + String(batchCount) +
+      ' · ' + String(batchFiles.length) + ' media'
+    );
+    render();
+
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'suggest_tags',
+        folder: context.folder,
+        visionModel: context.visionModel,
+        directorModel: context.director,
+        files: batchFiles,
+        existingGroups: context.groups,
+        captionTemplate: context.captionTemplate,
+        currentAssignments: currentAssignmentsPayload(batchFiles),
+        existingOnly: context.existingOnly
+      })
+    }).then(function (payload) {
+      var jobId = String(payload.job && payload.job.jobId || '');
+      if (!jobId) throw new Error('Vision Tag Assist did not return a queued job.');
+      if (
+        context.token !== schemaState.schemaRequestToken ||
+        schemaState.workStopRequested ||
+        !schemaState.open ||
+        context.folder !== schemaState.folder ||
+        context.visionModel !== schemaState.visionModel
+      ) {
+        return cancelCaptionAssistJob(jobId).then(function () { return null; });
+      }
+      schemaState.schemaJobId = jobId;
+      trackTransientLlmJob(payload.job);
+      render();
+      return waitForCaptionAssistJob(payload.job);
+    }).then(function (job) {
+      schemaState.schemaJobId = '';
+      if (!job || context.token !== schemaState.schemaRequestToken || schemaState.workStopRequested) return null;
+      var result = job.result && job.result.tagCandidates;
+      if (!result || !Array.isArray(result.items)) {
+        throw new Error('Vision Tag Assist completed without structured candidates.');
+      }
+      return result;
+    });
+  }
+
   function runTagSuggestions() {
     if (schemaState.schemaStarting || schemaState.schemaJobId) return;
     var director = currentDirectorModel();
@@ -822,48 +873,37 @@
     schemaState.schemaStarting = true;
     schemaState.mode = 'tags';
     schemaState.tagCandidates = null;
-    setStatus('Mapping structured Sight onto existing groups and tags…');
-    render();
 
-    requestJson('/fs/vision_schema', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operation: 'suggest_tags',
-        folder: folder,
-        visionModel: visionModel,
-        directorModel: director,
-        files: files,
-        existingGroups: existingGroupsPayload(),
-        captionTemplate: currentCaptionTemplate(),
-        currentAssignments: currentAssignmentsPayload(files),
-        existingOnly: !!schemaState.guidedLaunch
-      })
-    }).then(function (payload) {
-      var jobId = String(payload.job && payload.job.jobId || '');
-      if (!jobId) throw new Error('Vision Tag Assist did not return a queued job.');
-      if (
-        token !== schemaState.schemaRequestToken ||
-        schemaState.workStopRequested ||
-        !schemaState.open ||
-        folder !== schemaState.folder ||
-        visionModel !== schemaState.visionModel
-      ) {
-        schemaState.schemaStarting = false;
-        return cancelCaptionAssistJob(jobId).then(function () { return null; });
-      }
+    var batchSize = 60;
+    var batches = [];
+    for (var offset = 0; offset < files.length; offset += batchSize) {
+      batches.push(files.slice(offset, offset + batchSize));
+    }
+    var context = {
+      token: token,
+      folder: folder,
+      visionModel: visionModel,
+      director: director,
+      groups: existingGroupsPayload(),
+      captionTemplate: currentCaptionTemplate(),
+      existingOnly: !!schemaState.guidedLaunch
+    };
+    var combined = { version: 1, items: [] };
+
+    function runBatch(index) {
+      if (index >= batches.length) return Promise.resolve(combined);
+      return requestTagSuggestionBatch(batches[index], index, batches.length, context).then(function (result) {
+        if (!result) return null;
+        combined.items = combined.items.concat(result.items || []);
+        return runBatch(index + 1);
+      });
+    }
+
+    runBatch(0).then(function (result) {
       schemaState.schemaStarting = false;
-      schemaState.schemaJobId = jobId;
-      render();
-      return waitForCaptionAssistJob(payload.job);
-    }).then(function (job) {
-      if (!job || token !== schemaState.schemaRequestToken) return;
       schemaState.schemaJobId = '';
+      if (!result || token !== schemaState.schemaRequestToken || schemaState.workStopRequested) return;
       if (!schemaState.open || folder !== schemaState.folder || visionModel !== schemaState.visionModel) return;
-      var result = job.result && job.result.tagCandidates;
-      if (!result || !Array.isArray(result.items)) {
-        throw new Error('Vision Tag Assist completed without structured candidates.');
-      }
       schemaState.tagCandidates = result;
       if (schemaState.guidedLaunch) {
         if (startGuidedTagPass(result)) return;

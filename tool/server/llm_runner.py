@@ -238,6 +238,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "analysis": normalize_result(
                 llm_result.get("data"),
                 allowed_files=(frozen_contract or {}).get("source_files") or [],
+                captions_by_file=context.get("captionsByFile") or {},
             ),
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),

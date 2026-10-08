@@ -47,10 +47,15 @@
 
     var percent = 0;
     if (setScanState.phase === 'preparing') percent = 8;
-    if (setScanState.phase === 'scanning') {
+    if (setScanState.phase === 'scanning-open') {
       percent = setScanState.total
-        ? 10 + Math.round((setScanState.completed / setScanState.total) * 85)
-        : 12;
+        ? 10 + Math.round((setScanState.completed / setScanState.total) * 38)
+        : 10;
+    }
+    if (setScanState.phase === 'scanning-context') {
+      percent = setScanState.total
+        ? 50 + Math.round((setScanState.completed / setScanState.total) * 45)
+        : 50;
     }
     if (setScanState.phase === 'complete') percent = 100;
     progressFill.style.width = String(percent) + '%';
@@ -74,12 +79,25 @@
     renderSetIntelligence();
   }
 
-  function showRawResponse(fileName, text) {
+  function showRawResponse(fileName, passLabel, text) {
     setScanState.currentRawResponse = {
-      file: String(fileName || ''),
+      file: String(fileName || '') + ' · ' + String(passLabel || 'Vision'),
       text: String(text || '')
     };
     renderSetIntelligence();
+  }
+
+  function setIntelligenceVisionContext() {
+    var primer = statsGetPrimerOptionsFromDom();
+    return {
+      groups: (Array.isArray(checklistItems) ? checklistItems : []).map(function (group) {
+        return {
+          group: String(group || ''),
+          terms: getChecklistKeywordTermsForRequirement(group)
+        };
+      }).filter(function (row) { return !!row.group; }),
+      captionTemplate: String(primer && primer.template || '')
+    };
   }
 
   function saveSight(folder, model, media, sight) {
@@ -123,6 +141,65 @@
     });
   }
 
+  function requestContextStatus(folder, model, context) {
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'vocabulary_status',
+        folder: folder,
+        visionModel: model,
+        existingGroups: context.groups,
+        captionTemplate: context.captionTemplate
+      })
+    });
+  }
+
+  function requestContextSight(folder, model, media, context) {
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'scan_vocabulary_sight',
+        folder: folder,
+        visionModel: model,
+        media: media,
+        existingGroups: context.groups,
+        captionTemplate: context.captionTemplate
+      })
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) {
+        throw new Error('Set Intelligence Context Sight did not return a queued job.');
+      }
+      setScanState.currentVisionJobId = String(payload.job.jobId || '');
+      trackTransientLlmJob(payload.job);
+      return waitForCaptionAssistJob(payload.job);
+    }).then(function (job) {
+      setScanState.currentVisionJobId = '';
+      return {
+        sight: job && job.result && job.result.vocabularySight || null,
+        text: String(job && job.result && job.result.text || ''),
+        warning: String(job && job.result && job.result.structureWarning || '')
+      };
+    });
+  }
+
+  function saveContextSight(folder, model, media, context, sight) {
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'save_vocabulary_sight',
+        folder: folder,
+        visionModel: model,
+        media: media,
+        existingGroups: context.groups,
+        captionTemplate: context.captionTemplate,
+        sight: sight
+      })
+    });
+  }
+
   function scanNext(pending, index, folder, model) {
     if (setScanState.stopRequested || !setScanState.open) return Promise.resolve(false);
     if (String(state.folder || '') !== folder) {
@@ -132,8 +209,8 @@
 
     setScanState.completed = index;
     setSetIntelligenceStatus(
-      'Scanning Set',
-      String(index + 1) + ' of ' + String(pending.length) + ' items needing visual understanding'
+      'Open Sight',
+      String(index + 1) + ' of ' + String(pending.length) + ' · reading the image without vocabulary guidance'
     );
 
     var fileName = pending[index];
@@ -145,7 +222,7 @@
     }).then(function (result) {
       if (result === false || setScanState.stopRequested) return false;
       if (!result) return true;
-      showRawResponse(fileName, result.text);
+      showRawResponse(fileName, 'Open Sight', result.text);
       if (!result.sight) {
         reportConsoleError(
           'Set Intelligence',
@@ -175,13 +252,82 @@
 
       setScanState.total = pending.length;
       setScanState.completed = 0;
-      setScanState.phase = 'scanning';
+      setScanState.phase = 'scanning-open';
 
       if (!pending.length) {
-        setSetIntelligenceStatus('Set understood', 'Current visual understanding is already reusable.');
+        setScanState.total = 1;
+        setScanState.completed = 1;
+        setSetIntelligenceStatus('Open Sight', 'Vocabulary-agnostic visual understanding is already reusable.');
         return true;
       }
       return scanNext(pending, 0, folder, model);
+    });
+  }
+
+  function scanContextNext(pending, index, folder, model, context) {
+    if (setScanState.stopRequested || !setScanState.open) return Promise.resolve(false);
+    if (String(state.folder || '') !== folder) {
+      throw new Error('Set changed while Context Sight was scanning.');
+    }
+    if (index >= pending.length) return Promise.resolve(true);
+
+    setScanState.completed = index;
+    setSetIntelligenceStatus(
+      'Context Sight',
+      String(index + 1) + ' of ' + String(pending.length) + ' · reading the image with groups, tags, and caption structure'
+    );
+
+    var fileName = pending[index];
+    return requestContextSight(folder, model, fileName, context).catch(function (err) {
+      setScanState.currentVisionJobId = '';
+      if (setScanState.stopRequested) return false;
+      reportConsoleError('Set Intelligence Context Sight ' + fileName, err);
+      return null;
+    }).then(function (result) {
+      if (result === false || setScanState.stopRequested) return false;
+      if (!result) return true;
+      showRawResponse(fileName, 'Context Sight', result.text);
+      if (!result.sight) {
+        reportConsoleError(
+          'Set Intelligence',
+          new Error(result.warning || ('Vision returned unstructured Context Sight for ' + fileName + '.'))
+        );
+        return true;
+      }
+      return saveContextSight(folder, model, fileName, context, result.sight);
+    }).then(function (saved) {
+      if (saved === false || setScanState.stopRequested) return false;
+      setScanState.completed = index + 1;
+      return scanContextNext(pending, index + 1, folder, model, context);
+    });
+  }
+
+  function scanContextVision(folder, files, model, context) {
+    setScanState.phase = 'scanning-context';
+    if (!context.groups.length) {
+      setScanState.total = 1;
+      setScanState.completed = 1;
+      setSetIntelligenceStatus('Context Sight', 'No annotation groups are configured, so the second visual read is skipped.');
+      return Promise.resolve(true);
+    }
+    return requestContextStatus(folder, model, context).then(function (payload) {
+      var wanted = {};
+      files.forEach(function (fileName) { wanted[fileName] = true; });
+      var pending = (payload.items || []).filter(function (item) {
+        return !!wanted[String(item.file || '')] && !item.cached;
+      }).map(function (item) {
+        return String(item.file || '');
+      }).filter(Boolean);
+
+      setScanState.total = pending.length;
+      setScanState.completed = 0;
+      if (!pending.length) {
+        setScanState.total = 1;
+        setScanState.completed = 1;
+        setSetIntelligenceStatus('Context Sight', 'Template- and vocabulary-guided visual understanding is already reusable.');
+        return true;
+      }
+      return scanContextNext(pending, 0, folder, model, context);
     });
   }
 
@@ -220,6 +366,8 @@
     setScanState.phase = 'preparing';
     setSetIntelligenceStatus('Understanding Set', 'Preparing ' + String(files.length) + ' media item' + (files.length === 1 ? '' : 's') + '…');
 
+    var visionContext = null;
+
     Promise.all([
       loadCaptionVisionCapabilities(),
       refreshMediaResolutionCache({
@@ -241,7 +389,11 @@
         throw new Error((metadataResult && metadataResult.error) || 'Supporting Set analysis failed.');
       }
       if (setScanState.stopRequested) return false;
+      visionContext = setIntelligenceVisionContext();
       return scanVision(folder, files, setScanState.visionModel);
+    }).then(function (openSuccess) {
+      if (openSuccess === false || setScanState.stopRequested) return false;
+      return scanContextVision(folder, files, setScanState.visionModel, visionContext);
     }).then(function (visionSuccess) {
       if (visionSuccess === false || setScanState.stopRequested) return false;
       return refreshMediaResolutionCache({

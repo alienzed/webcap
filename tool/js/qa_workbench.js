@@ -605,8 +605,8 @@
     qaRunNextDeepScanBatch();
   }
 
-  function qaSetIntelligenceEvidenceUpdated() {
-    qaRefreshAiCoverage();
+  function qaInputsUpdated() {
+    qaReconcileAiFindingsToCurrentInputs();
     if (
       qaWorkbenchState.deepScanSessionActive &&
       !qaWorkbenchState.deepScanJobId &&
@@ -2011,5 +2011,5 @@
   window.returnToQaWorkbenchFromFocusSet = returnToQaWorkbenchFromFocusSet;
   window.getQaTrainingFocus = getQaTrainingFocus;
   window.getQaTrainingItemsForAssistant = getQaTrainingItemsForAssistant;
-  window.qaSetIntelligenceEvidenceUpdated = qaSetIntelligenceEvidenceUpdated;
+  window.qaInputsUpdated = qaInputsUpdated;
 })();

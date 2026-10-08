@@ -34,9 +34,12 @@ It is a full-Set operation. Filters and Focus Sets do not silently narrow it.
 
 The intelligence path is fundamentally model-driven:
 
-- the selected **Vision** model observes the media and produces structured Sight;
+- the selected **Vision** model performs an **Open Sight** read with no vocabulary guidance;
+- the same Vision model performs a fresh **Context Sight** read using the current group names, exact terms, and caption template as preferred annotation language and structural guidance;
 - the selected **Director** model is required for the semantic interpretation workflows that follow;
 - WebCap's deterministic metadata, Face Focus, MediaPipe pose, Scene Complexity, Prune, Duplicate, and other signals remain supporting evidence and constraints.
+
+Context Sight stays image-first: it produces a compact visual caption plus exact supplied terms that clearly match the image. The groups, terms, and template guide attention and wording; they are not a requirement to force a value into every dimension.
 
 Vision and Director availability are therefore required before Set Intelligence runs. The workflow must not present a successful deterministic-only scan as equivalent to semantic Set understanding.
 
@@ -70,6 +73,7 @@ Current blocks may include:
 - `face_focus`;
 - `selection_pose`;
 - `vision_sight`;
+- `vision_vocabulary_sight` (Context Sight);
 - other analyzer-owned blocks.
 
 Each analyzer owns its own versioning/invalidation rules. Set Intelligence does not create a second cache.
@@ -80,17 +84,17 @@ Director proposals, Guided Tag steps, QA dispositions, and modal progress remain
 
 Purpose: decide **what the Set vocabulary should contain**.
 
-Vocabulary discovery deliberately uses multiple reasoning passes before human curation:
+Vocabulary discovery deliberately reuses the visual work already completed by Set Intelligence:
 
-1. Reuse the Set Intelligence **open Sight** pass: structured, vocabulary-agnostic visual atoms.
-2. Run a fresh **group-aware, term-unconstrained Vision pass**. Vision receives existing group names as semantic lenses, but not the current terms. It reports visible observations inside those groups plus important concepts that do not fit them.
+1. Reuse **Open Sight**: structured, vocabulary-agnostic visual evidence.
+2. Reuse **Context Sight**: the fresh second pixel read containing a template-guided caption plus exact current-vocabulary matches.
 3. Combine both evidence sources and let the Director synthesize canonical terms, extend existing groups, and propose genuinely missing groups.
 4. Run a separate Director **challenge pass** against that draft to recover missed distinctions, merge synonyms, and remove weak or ungrounded proposals.
 5. Only then begin human curation, one group at a time. Existing groups are reviewed before proposed new groups.
 
-The schema-aware Vision evidence is cached separately from open Sight in `media_metadata.json`. It is invalidated by media, Vision-model, or group-structure changes. Editing terms alone does not require the pixels to be inspected again.
+Context Sight is cached separately from Open Sight in `media_metadata.json`. Its current-context signature includes the Vision model, media identity, group names, exact terms, and caption template. Re-running Set Intelligence refreshes it when that context changes. The latest valid Context Sight remains reusable as visual evidence after vocabulary review changes the term list, so Guided Tagging does not need another pixel scan.
 
-Discovery does not assign tags to media. Current terms are supplied to the Director during synthesis as vocabulary context, not to the fresh Vision pass as answer choices.
+Discovery does not assign tags to media and does not perform its own Vision scan.
 
 Support counts are visible. Representative thumbnails plus rationale/evidence are available behind an optional reveal. Review only surfaces groups with an actionable vocabulary change; groups whose proposals are already fully present are skipped. Slightly overcomplete vocabulary is acceptable: proposed terms are available language, not requirements to use every term. Missing a meaningful recurring distinction is more costly than retaining an extra plausible term.
 
@@ -98,9 +102,9 @@ Support counts are visible. Representative thumbnails plus rationale/evidence ar
 
 Purpose: apply **existing vocabulary** efficiently.
 
-It consumes current Set intelligence plus current vocabulary and assignments. It does not scan media or invent new vocabulary in the primary flow.
+After vocabulary review, the Director prepares per-item candidate assignments from both cached visual reads against the **final vocabulary** and current assignments. This preparation does not inspect pixels again and does not invent vocabulary in the Guided flow.
 
-The interaction remains in Grid: one tag proposition, likely media preselected, explicit human correction/application, then the next proposition. Completing Vocabulary review presents **Continue to Guided Tagging** as the primary next action and launches this Grid flow directly.
+The interaction remains in Grid: one tag proposition, likely media preselected, explicit human correction/application, then the next proposition. Guided Tagging consumes the prepared candidates; it does not reinterpret the image itself. Completing Vocabulary review presents **Continue to Guided Tagging** as the primary next action and launches this Grid flow directly.
 
 ## Quality Assurance
 

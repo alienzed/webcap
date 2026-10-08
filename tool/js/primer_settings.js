@@ -1156,6 +1156,29 @@ function blendFocusedCaptionVisionPhrase(phrase) {
 }
 
 function runCaptionAssist() {
+  var item = getPrimerResetCurrentMediaItem();
+  if (!item) return Promise.resolve(false);
+  var sourceKey = item.key;
+  if (!getDirectorModelPreference('webcap.director.model')) {
+    setStatus('Select a Director model before using Caption Assist.');
+    return Promise.resolve(false);
+  }
+  var existingSight = item.metadata && item.metadata.vision_sight;
+  setStatus('Caption Assist: preparing visual evidence…');
+  return refreshSetIntelligenceItem(item, {
+    open: !existingSight || !existingSight.structured && !existingSight.observations,
+    context: true
+  }).then(function () {
+    if (!state.currentItem || state.currentItem.key !== sourceKey) return false;
+    return runCaptionAssistAfterSight();
+  }).catch(function (err) {
+    reportConsoleError('Caption Assist Sight', err);
+    setStatus('Caption Assist could not prepare Sight: ' + String(err && err.message || err));
+    return false;
+  });
+}
+
+function runCaptionAssistAfterSight() {
   var mediaItem = getPrimerResetCurrentMediaItem();
   if (!mediaItem) {
     setStatus('Select a media item first.');

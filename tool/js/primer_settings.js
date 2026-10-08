@@ -1232,13 +1232,9 @@ function runCaptionAssistAfterSight() {
     if (captionVisionEnabled) {
       maybeRunCaptionVisionForCandidate(candidate);
     }
-    if (isFocusedCaptionOpen()) {
-      if (captionVisionEnabled) {
-        setFocusedCaptionVisionSightEnabled(true);
-        loadFocusedCaptionVisionPhrases();
-      }
-      startFocusedCaptionPrefetch(sourceMediaKey);
-    }
+    // The item pipeline has already obtained fresh Context Sight. Do not
+    // enqueue an unrelated Vision Extras read or speculative next-item LLM.
+
     return true;
   }).catch(function (err) {
     if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;

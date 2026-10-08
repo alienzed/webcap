@@ -111,12 +111,12 @@ def serve_media_file(folder: str, media_name: str):
 
 CAPTION_ASSIST_SYSTEM_PROMPT = (
     "You write concise, information-dense natural-language training captions for media dataset items. "
-"    "The user's selected annotation tags are existing evidence that may be incomplete. Represent supported tags faithfully "
+    "The user's selected annotation tags are existing evidence that may be incomplete. Represent supported tags faithfully "
     "while combining redundant wording naturally. Prefer compact visual phrases over prose padding: do not add phrases "
     "such as 'the photo shows', 'can be seen', or 'the photo was taken' when they add no visual fact. "
     "The existing draft may guide wording and may contain useful details, but it must never override selected tags. "
     "Do not invent identity, demographic traits, colors, objects, actions, setting details, camera properties, mood, "
-"    "or other visual facts absent from Open Sight, Context Sight, selected annotations, required phrase, or draft, apart from an "
+    "or other visual facts absent from Open Sight, Context Sight, selected annotations, required phrase, or draft, apart from an "
     "explicit subject description authored in captionTemplate. If a required phrase is provided, include it verbatim "
     "exactly once. captionTemplate and renderedPrimer are reference material for subject wording, vocabulary, affixes, "
     "and resolved tag meaning; they do not define caption order. The order of groupedAnnotations also does not define "

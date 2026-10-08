@@ -73,7 +73,7 @@ def test_focus_review_hides_standalone_vision_caption_action_like_focus_caption(
     vision = _read("tool/js/caption_vision.js")
 
     action = vision.split("function syncVisionImageCaptionActionUi()", 1)[1].split("function syncVisionImageCaptionModal()", 1)[0]
-    assert "var focusedCaptionOpen = isFocusedCaptionOpen();" in action
+    assert "var focusedCaptionOpen = !!(window.focusedCaptionState && window.focusedCaptionState.open);" in action
     assert "preview-open-focus-caption-btn" not in action
     assert "preview-open-focus-review-btn" not in action
     assert "btn.classList.toggle('hidden', !supported || focusedCaptionOpen);" in action
@@ -175,7 +175,7 @@ def test_caption_vision_uses_focused_workflow_state_contract_not_focus_button_do
     vision = _read("tool/js/caption_vision.js")
 
     action = vision.split("function syncVisionImageCaptionActionUi()", 1)[1].split("function syncVisionImageCaptionModal()", 1)[0]
-    assert "var focusedCaptionOpen = isFocusedCaptionOpen();" in action
+    assert "var focusedCaptionOpen = !!(window.focusedCaptionState && window.focusedCaptionState.open);" in action
     assert "preview-open-focus-caption-btn" not in action
     assert "preview-open-focus-review-btn" not in action
 

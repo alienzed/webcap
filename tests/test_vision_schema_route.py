@@ -143,7 +143,7 @@ def test_vision_tag_suggestions_queue_both_visual_reads(tmp_path, monkeypatch):
     assert "Black bandeau top from the side." in seen["contract"]["prompt"]
 
 
-def test_vision_tag_suggestions_accept_partial_structured_sight(tmp_path, monkeypatch):def test_vision_tag_suggestions_accept_partial_structured_sight(tmp_path, monkeypatch):
+def test_vision_tag_suggestions_accept_partial_structured_sight(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()
     for name in ("a.jpg", "b.jpg"):

@@ -480,7 +480,7 @@ function applyCaptionVisionFinding(finding) {
   var patch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
   if (!patch) {
     rejectCaptionVisionFinding(finding);
-    setStatus('Caption changed; this Vision suggestion is no longer applicable.');
+    setStatus('Caption changed; this suggestion is no longer applicable.');
     return;
   }
   var caretIndex = captionVisionPreviewCaretIndex !== null ? captionVisionPreviewCaretIndex : getCaptionVisionCaretIndex();
@@ -509,7 +509,7 @@ function applyCaptionVisionFinding(finding) {
   if (isFocusedCaptionOpen()) resetFocusedCaptionUseArm();
   rejectCaptionVisionFinding(finding);
   syncCaptionAssistCandidateUi();
-  setStatus('Applied Vision caption edit.');
+  setStatus('Applied caption edit.');
 }
 
 function renderCaptionVisionFinding(finding) {
@@ -572,7 +572,9 @@ function syncCaptionVisionUi() {
   var toggle = document.getElementById('editor-caption-vision-toggle');
   var status = document.getElementById('editor-caption-vision-status');
   var findings = document.getElementById('editor-caption-vision-findings');
-  if (!toggleWrap || !toggle || !status || !findings) return;
+  if (!toggleWrap || !toggle || !status || !findings) {
+    throw new Error('Caption Vision controls are missing.');
+  }
 
   var mediaItem = state && state.currentItem;
   var candidateVisible = !!(
@@ -584,14 +586,6 @@ function syncCaptionVisionUi() {
   var modelAvailable = !!captionVisionCapabilities.models.length;
   var supported = mediaSupported && modelAvailable;
 
-  toggleWrap.classList.toggle('hidden', !candidateVisible || !mediaSupported);
-  toggle.checked = !!captionVisionEnabled;
-  toggle.disabled = !modelAvailable;
-  toggleWrap.title = modelAvailable
-    ? 'Scan for incorrect or omitted visual details using the selected Vision model.'
-    : (captionVisionCapabilities.loaded ? 'No Vision model is available.' : 'Vision models are still loading.');
-  syncVisionImageCaptionActionUi();
-
   findings.innerHTML = '';
   findings.classList.add('hidden');
   status.classList.add('hidden');
@@ -601,17 +595,27 @@ function syncCaptionVisionUi() {
     candidateVisible &&
     captionVisionResult &&
     captionVisionResult.mediaKey === mediaItem.key &&
-    captionVisionResult.captionText === String(captionAssistCandidate.text || '')
+    captionVisionResult.captionText === String(captionAssistCandidate.text || '') &&
+    !captionVisionResult.requestFingerprint
   );
+
+  toggleWrap.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  toggle.checked = !!captionVisionEnabled;
+  toggle.disabled = !modelAvailable;
+  toggleWrap.title = modelAvailable
+    ? 'Scan for incorrect or omitted visual details using the selected Vision model.'
+    : (captionVisionCapabilities.loaded ? 'No Vision model is available.' : 'Vision models are still loading.');
+  syncVisionImageCaptionActionUi();
+
   if (!candidateVisible || (!captionVisionEnabled && !suppliedResultVisible)) return;
-  if (!modelAvailable) {
+  if (!suppliedResultVisible && !modelAvailable) {
     status.textContent = captionVisionCapabilities.loaded
       ? 'Vision enabled · no Vision model is currently available.'
       : 'Vision enabled · loading Vision models…';
     status.classList.remove('hidden');
     return;
   }
-  if (!mediaSupported) return;
+  if (!suppliedResultVisible && !mediaSupported) return;
 
   if (captionVisionActiveTask) {
     status.textContent = isCaptionVisionVideo(mediaItem.fileName)
@@ -631,7 +635,9 @@ function syncCaptionVisionUi() {
     return;
   }
   if (!captionVisionResult.findings.length) {
-    status.textContent = 'Vision found no meaningful discrepancy.';
+    status.textContent = suppliedResultVisible
+      ? 'No remaining actionable caption discrepancies.'
+      : 'Vision found no meaningful discrepancy.';
     status.classList.remove('hidden');
     return;
   }

@@ -1086,14 +1086,26 @@ def _list_local_models_passive():
             if "-00001-of-" in entry.name.casefold()
         ]
         if first_shards:
-            model_path = sorted(first_shards, key=lambda entry: entry.name.casefold())[0]
-        elif len(main_files) == 1:
-            model_path = main_files[0]
+            candidates = [sorted(first_shards, key=lambda entry: entry.name.casefold())[0]]
         else:
-            continue
-        model = record(path.name, model_path, multimodal=bool(mmproj_files))
-        if model is not None:
-            models.append(model)
+            candidates = main_files
+
+        for model_path in candidates:
+            # Match each projector to its own model rather than treating all
+            # GGUFs in a directory as one model.
+            stem = model_path.stem.casefold()
+            matching_projectors = [
+                projector for projector in mmproj_files
+                if projector.stem.casefold().startswith(stem + ".mmproj")
+                or projector.stem.casefold().startswith(stem + "-mmproj")
+            ]
+            # Legacy single-model directories may use a generic mmproj name.
+            if len(candidates) == 1 and not matching_projectors:
+                matching_projectors = mmproj_files
+            model_id = path.name if len(candidates) == 1 else model_path.stem
+            model = record(model_id, model_path, multimodal=bool(matching_projectors))
+            if model is not None:
+                models.append(model)
 
     models.sort(key=lambda model: model["label"].casefold())
     return models

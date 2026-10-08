@@ -155,7 +155,9 @@ function useCaptionAssistCandidate() {
   }
 
   cancelEditorAutosaveForCaption(state.folder, mediaItem.fileName);
+  var unchangedReview = isFocusedCaptionReviewMode() && nextCaption === String(mediaItem.caption || '');
   return cancelCurrentCaptionVision().then(function () {
+    if (unchangedReview) return true;
     return saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key, {
       skipRenderFileList: true
     });
@@ -163,6 +165,7 @@ function useCaptionAssistCandidate() {
     captionAssistCandidate = null;
     syncCaptionAssistCandidateUi();
     ui.editorEl.value = nextCaption;
+    setStatus(unchangedReview ? 'Caption accepted.' : 'Caption saved.');
     return advanceFocusedCaption();
   }).catch(function (err) {
     syncCaptionAssistCandidateUi();
@@ -537,6 +540,7 @@ function syncCaptionAssistCandidateUi() {
   var mediaKey = state && state.currentItem && state.currentItem.key;
   var candidate = captionAssistCandidate;
   var focusOpen = isFocusedCaptionOpen();
+  var reviewMode = focusOpen && isFocusedCaptionReviewMode();
   var visible = !!(candidate && mediaKey && candidate.mediaKey === mediaKey && candidate.text);
   var focusVisible = !!(focusOpen && mediaKey);
   var assistVisible = !!(!focusOpen && mediaKey && isCaptionAssistPresentationOpenFor(mediaKey));
@@ -547,7 +551,7 @@ function syncCaptionAssistCandidateUi() {
 
   panel.classList.toggle('hidden', !panelVisible);
   panel.classList.toggle('is-focus-caption', focusVisible);
-  titleEl.textContent = focusOpen ? 'Focus Caption' : 'Caption Assist';
+  titleEl.textContent = reviewMode ? 'Focus Review' : (focusOpen ? 'Focus Caption' : 'Caption Assist');
 
   progressEl.classList.toggle('hidden', !focusOpen);
   progressEl.textContent = focusOpen ? getFocusedCaptionProgressText() : '';
@@ -555,14 +559,16 @@ function syncCaptionAssistCandidateUi() {
   var loadingVisible = !visible && (focusOpen || pending);
   loadingEl.classList.toggle('hidden', !loadingVisible);
   if (loadingVisible) {
-    loadingTextEl.textContent = pending ? 'Generating caption…' : 'Preparing caption…';
+    loadingTextEl.textContent = pending
+      ? 'Generating caption…'
+      : (reviewMode ? 'Preparing review…' : 'Preparing caption…');
   }
 
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
   omissionsEl.innerHTML = '';
   if (omittedAssignments.length) {
     var omissionText = document.createElement('span');
-    omissionText.textContent = 'Candidate omitted selected annotations: ' + omittedAssignments.join(' · ');
+    omissionText.textContent = (reviewMode ? 'Caption' : 'Candidate') + ' omitted selected annotations: ' + omittedAssignments.join(' · ');
     omissionsEl.appendChild(omissionText);
     var fixOmissionsBtn = document.createElement('button');
     fixOmissionsBtn.type = 'button';
@@ -596,20 +602,25 @@ function syncCaptionAssistCandidateUi() {
   regenerateBtn.classList.toggle('hidden', !visible);
   useBtn.disabled = !!pending;
   regenerateBtn.disabled = !!pending;
-  var useArmed = focusOpen && visible && isFocusedCaptionUseArmedForCandidate(candidate);
+  var useArmed = focusOpen && !reviewMode && visible && isFocusedCaptionUseArmedForCandidate(candidate);
   useBtn.classList.toggle('is-armed', !!useArmed);
-  useBtn.textContent = useArmed ? 'Press Enter again' : 'Apply Caption';
+  var reviewChanged = reviewMode && visible && String(candidate.text || '') !== String((state.currentItem && state.currentItem.caption) || '');
+  useBtn.textContent = reviewMode
+    ? (reviewChanged ? 'Save → Next' : 'Looks Good → Next')
+    : (useArmed ? 'Press Enter again' : 'Apply Caption');
 
   regenerateBtn.textContent = '\u21bb';
   regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);
-  regenerateBtn.title = focusOpen && captionVisionEnabled
-    ? 'Regenerate caption and recheck Vision'
-    : 'Generate another caption candidate';
+  regenerateBtn.title = reviewMode
+    ? 'Ask the Director for a rewritten caption'
+    : (focusOpen && captionVisionEnabled
+      ? 'Regenerate caption and recheck Vision'
+      : 'Generate another caption candidate');
   regenerateBtn.setAttribute('aria-label', regenerateBtn.title);
 
   dismissBtn.textContent = '\u00d7';
   dismissBtn.title = focusOpen
-    ? 'Exit Focus Caption'
+    ? ('Exit ' + (reviewMode ? 'Focus Review' : 'Focus Caption'))
     : (pending ? 'Cancel generation and close Caption Assist' : 'Dismiss candidate and stay on this item');
   dismissBtn.setAttribute('aria-label', dismissBtn.title);
 

@@ -565,8 +565,9 @@ function syncCaptionAssistCandidateUi() {
 
   renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);
   textEl.classList.toggle('hidden', !visible);
-  textEl.setAttribute('contenteditable', focusOpen && visible ? 'true' : 'false');
-  textEl.setAttribute('role', focusOpen && visible ? 'textbox' : 'document');
+  textEl.setAttribute('contenteditable', visible ? 'true' : 'false');
+  textEl.setAttribute('role', visible ? 'textbox' : 'document');
+  textEl.setAttribute('aria-multiline', visible ? 'true' : 'false');
   var candidateText = visible ? String(candidate.text || '') : '';
   if (document.activeElement !== textEl || String(textEl.textContent || '') !== candidateText) {
     textEl.textContent = candidateText;
@@ -1321,13 +1322,20 @@ function wirePrimerCaptionResetUi() {
     throw new Error('Caption Assist controls are missing.');
   }
 
-  if (!candidateTextEl.__focusedCaptionEditBound) {
-    candidateTextEl.__focusedCaptionEditBound = true;
+  if (!candidateTextEl.__captionAssistEditBound) {
+    candidateTextEl.__captionAssistEditBound = true;
     candidateTextEl.addEventListener('input', function () {
-      if (!isFocusedCaptionOpen() || !captionAssistCandidate || !state.currentItem) return;
+      if (!captionAssistCandidate || !state.currentItem) return;
       if (captionAssistCandidate.mediaKey !== state.currentItem.key) return;
       captionAssistCandidate.text = String(candidateTextEl.textContent || '');
-      resetFocusedCaptionUseArm();
+      cancelCurrentCaptionVision();
+      clearCaptionVisionResult();
+      if (isFocusedCaptionOpen()) {
+        resetFocusedCaptionUseArm();
+        if (focusedCaptionVisionPhrases.enabled) {
+          clearFocusedCaptionVisionPhrases({ keepEnabled: true });
+        }
+      }
     });
   }
 

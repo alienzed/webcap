@@ -85,9 +85,9 @@ Director proposals, Guided Tag steps, and modal progress remain ephemeral. Compl
 
 ## Item-level checks and refresh
 
-- Caption Assist is the common item-level correction surface: write a caption or review an existing one, with progressive navigation when desired.
-- An automatic structured Vision caption check runs for the current candidate when a Vision model is available; speculative Vision scanning of future items is not part of navigation.
-- **Recheck Vision** explicitly reruns the current item's caption discrepancy check. **Refresh Sight** explicitly replaces that item's cached Open Sight and Context Sight using the currently selected Vision model. Neither action scans the Set.
+- Caption Assist has one purpose: produce an editable final caption from this item's evidence, whether or not a caption already exists. The preview header opens progressive navigation; the editor entry stays on the current item.
+- Caption Assist reuses healthy Open Sight when available, refreshes the current item's Context Sight, and only then asks the Director LLM to synthesize a candidate from those observations, its saved caption, and its tags. Other items' captions and historical QA findings are not synthesis inputs. Speculative next-item Director/Vision requests are disabled.
+- **Recheck Vision** separately reruns a targeted caption-to-image discrepancy check when explicitly requested. **Refresh Sight** explicitly replaces the item's Open Sight, Context Sight, or both. Neither action scans the Set.
 - Item Sight refresh uses the existing `scan_sight`, `scan_vocabulary_sight`, `save_sight`, and `save_vocabulary_sight` operations. A valid observation is saved immediately. Failed normalization or inference must not overwrite the previously saved observation.
 - QA-provided correction findings remain separate from fresh Vision findings while both are presented within the same caption correction UI. The user explicitly chooses edits.
 - Full-Set Vision scanning remains an explicit Set Intelligence operation; normal QA consumes cached evidence and uses bounded Director batches, not a mandatory full-media rescan.

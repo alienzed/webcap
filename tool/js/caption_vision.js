@@ -468,7 +468,7 @@ function syncVisionImageCaptionActionUi() {
   var btn = document.getElementById('preview-vision-caption-btn');
   if (!btn) throw new Error('Vision Caption preview action is missing.');
   var mediaItem = state && state.currentItem;
-  var focusedCaptionOpen = isFocusedCaptionOpen();
+  var focusedCaptionOpen = !!(window.focusedCaptionState && window.focusedCaptionState.open);
   var supported = !!(
     captionVisionCapabilities.models.length &&
     mediaItem &&

@@ -38,6 +38,10 @@ def test_set_intelligence_requires_llm_observation_and_interpretation():
     assert "Select a Director model before running Set Intelligence." in scan
     assert "operation: 'scan_sight'" in scan
     assert "operation: 'save_sight'" in scan
+    assert "operation: 'scan_vocabulary_sight'" in scan
+    assert "operation: 'save_vocabulary_sight'" in scan
+    assert "captionTemplate: context.captionTemplate" in scan
+    assert "existingGroups: context.groups" in scan
     assert "Skipped — no Vision model selected." not in scan
     assert "includeFaceFocus: true" in scan
     assert "includeSelectionPose: true" in scan
@@ -53,6 +57,7 @@ def test_set_intelligence_hides_supporting_analyzers_and_raw_output_by_default()
     assert 'id="set-scan-details"' in html
     assert '<summary>Latest Vision response</summary>' in html
     assert "currentRawResponse" in scan
-    assert "showRawResponse(fileName, result.text);" in scan
+    assert "showRawResponse(fileName, 'Open Sight', result.text);" in scan
+    assert "showRawResponse(fileName, 'Context Sight', result.text);" in scan
     assert "rawResponses" not in scan
     assert "Next: review the vocabulary" in html

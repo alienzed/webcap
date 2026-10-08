@@ -989,10 +989,9 @@
         function () { return requestSight(folder, model, file); },
         function (sight) { return saveSight(folder, model, file, sight); });
     }).then(function () {
-      if (context && visionContext.groups.length) return stage('Context Sight',
+      if (context) return stage('Context Sight',
         function () { return requestContextSight(folder, model, file, visionContext); },
         function (sight) { return saveContextSight(folder, model, file, visionContext, sight); });
-      if (context) reportConsoleWarning('Sight refresh ' + file, 'Context Sight requires at least one annotation group; continuing with Open Sight.');
     }).then(function () {
       if (failures.length) throw new Error(failures.join(' | '));
       window.setStatus('Sight refreshed for ' + file + '.');

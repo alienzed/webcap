@@ -378,6 +378,39 @@
     });
   }
 
+  function publishSetIntelligenceMetadata(media, blockName, block) {
+    var fileName = String(media || '');
+    if (!fileName || !block || typeof block !== 'object') {
+      throw new Error('Set Intelligence saved evidence is invalid.');
+    }
+    var item = (state.items || []).find(function (candidate) {
+      return candidate && String(candidate.fileName || '') === fileName;
+    });
+    if (!item) {
+      throw new Error('Set Intelligence could not publish saved evidence for ' + fileName + '.');
+    }
+    if (!item.metadata || typeof item.metadata !== 'object') item.metadata = {};
+    item.metadata[blockName] = block;
+    if (
+      state.currentItem &&
+      state.currentItem !== item &&
+      String(state.currentItem.fileName || '') === fileName
+    ) {
+      if (!state.currentItem.metadata || typeof state.currentItem.metadata !== 'object') {
+        state.currentItem.metadata = {};
+      }
+      state.currentItem.metadata[blockName] = block;
+    }
+    if (
+      typeof renderQaWorkbench === 'function' &&
+      typeof normalizeWorkspaceSurface === 'function' &&
+      typeof workspaceState !== 'undefined' &&
+      normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput'
+    ) {
+      renderQaWorkbench();
+    }
+  }
+
   function saveSight(folder, model, media, sight) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
@@ -389,6 +422,9 @@
         media: media,
         sight: sight
       })
+    }).then(function (payload) {
+      publishSetIntelligenceMetadata(media, 'vision_sight', payload.sight);
+      return payload;
     });
   }
 
@@ -475,11 +511,14 @@
         captionTemplate: context.captionTemplate,
         sight: sight
       })
+    }).then(function (payload) {
+      publishSetIntelligenceMetadata(media, 'vision_vocabulary_sight', payload.sight);
+      return payload;
     });
   }
 
   function scanNext(pending, index, folder, model) {
-    if (setScanState.stopRequested || !setScanState.open) return Promise.resolve(false);
+    if (setScanState.stopRequested) return Promise.resolve(false);
     if (String(state.folder || '') !== folder) {
       throw new Error('Set changed while Set Intelligence was scanning.');
     }
@@ -557,7 +596,7 @@
   }
 
   function scanContextNext(pending, index, folder, model, context) {
-    if (setScanState.stopRequested || !setScanState.open) return Promise.resolve(false);
+    if (setScanState.stopRequested) return Promise.resolve(false);
     if (String(state.folder || '') !== folder) {
       throw new Error('Set changed while Context Sight was scanning.');
     }
@@ -851,7 +890,6 @@
   }
 
   function closeSetIntelligence() {
-    if (setScanState.running) stopSetIntelligence();
     setScanState.open = false;
     renderSetIntelligence();
   }

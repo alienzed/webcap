@@ -1462,7 +1462,6 @@ def director_job_route():
 @app.route("/fs/qa/review", methods=["GET", "POST"])
 def qa_review_route():
     try:
-        from .folder_state import write_folder_state_atomic
         folder = str((request.get_json(silent=True) or {}).get("folder") or "").strip() if request.method == "POST" else str(request.args.get("folder") or "").strip()
         folder_path = _resolve_folder(folder)
         review_path = folder_path / ".webcap_qa_review.json"

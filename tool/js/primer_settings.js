@@ -878,7 +878,9 @@ function buildCaptionAssistRequest(mediaItem) {
     preferredCaptionSequence: getPreferredCaptionSequence(),
     template: primer.template,
     renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
-    draft: getCaptionAssistDraftForMediaItem(mediaItem)
+    draft: getCaptionAssistDraftForMediaItem(mediaItem),
+    openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null,
+    contextSight: mediaItem.metadata && mediaItem.metadata.vision_vocabulary_sight || null
   };
 }
 

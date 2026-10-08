@@ -1782,7 +1782,19 @@
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = String(findingId || '');
     qaWorkbenchState.statusMessage = '';
-    selectByFileName(clean[0], clean, source || 'Quality Assurance', 'qa', { preserveMediaFilters: true });
+
+    var target = (state.items || []).find(function (item) {
+      return item && item.fileName === clean[0];
+    });
+    if (!target) throw new Error('QA review target is missing from the current Set: ' + clean[0]);
+
+    activateFocusSet(clean, source || 'Quality Assurance', 'qa');
+    selectPathMedia(target).then(function () {
+      startFocusedReview(target.key);
+    }).catch(function (err) {
+      reportConsoleError('QA · Focus Review', err);
+      setStatus('Could not open QA Focus Review: ' + String(err && err.message ? err.message : err));
+    });
   }
 
   function qaInspectFinding(findingId) {

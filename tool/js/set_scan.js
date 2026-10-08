@@ -22,7 +22,8 @@
       total: 0,
       openCurrent: 0,
       contextCurrent: 0,
-      contextAvailable: 0
+      contextAvailable: 0,
+      contextRequired: true
     }
   };
 
@@ -41,17 +42,20 @@
     });
   }
 
-  function setCoverage(total, openCurrent, contextCurrent, contextAvailable) {
+  function setCoverage(total, openCurrent, contextCurrent, contextAvailable, contextRequired) {
     setScanState.coverage = {
       known: true,
       total: Math.max(0, Number(total) || 0),
       openCurrent: Math.max(0, Number(openCurrent) || 0),
       contextCurrent: Math.max(0, Number(contextCurrent) || 0),
-      contextAvailable: Math.max(0, Number(contextAvailable) || 0)
+      contextAvailable: Math.max(0, Number(contextAvailable) || 0),
+      contextRequired: contextRequired === undefined
+        ? setScanState.coverage.contextRequired !== false
+        : !!contextRequired
     };
   }
 
-  function applyCoveragePayload(payload, scopedTotal) {
+  function applyCoveragePayload(payload, scopedTotal, contextRequired) {
     var openItems = payload && payload.open && Array.isArray(payload.open.items) ? payload.open.items : [];
     var contextItems = payload && payload.context && Array.isArray(payload.context.items) ? payload.context.items : [];
     var total = Number(scopedTotal);
@@ -59,7 +63,7 @@
     var openCurrent = openItems.filter(function (item) { return !!(item && item.structured); }).length;
     var contextCurrent = contextItems.filter(function (item) { return !!(item && item.cached); }).length;
     var contextAvailable = contextItems.filter(function (item) { return !!(item && item.available); }).length;
-    setCoverage(total, openCurrent, contextCurrent, contextAvailable);
+    setCoverage(total, openCurrent, contextCurrent, contextAvailable, contextRequired);
   }
 
   function setEvidenceCard(card, badge, count, detail, stateName, badgeText, countText, detailText) {
@@ -105,8 +109,12 @@
     var coverage = setScanState.coverage;
     var totalCoverage = coverage.known ? coverage.total : 0;
     var openMissing = coverage.known ? Math.max(0, totalCoverage - coverage.openCurrent) : 0;
-    var contextMissing = coverage.known ? Math.max(0, totalCoverage - coverage.contextAvailable) : 0;
-    var contextStale = coverage.known ? Math.max(0, coverage.contextAvailable - coverage.contextCurrent) : 0;
+    var contextMissing = coverage.known && coverage.contextRequired
+      ? Math.max(0, totalCoverage - coverage.contextAvailable)
+      : 0;
+    var contextStale = coverage.known && coverage.contextRequired
+      ? Math.max(0, coverage.contextAvailable - coverage.contextCurrent)
+      : 0;
     var actionLabel = '';
     if (!setScanState.running && setScanState.hasRun && coverage.known) {
       if (openMissing) actionLabel = 'Resume ' + String(openMissing) + ' Open Sight';
@@ -155,7 +163,13 @@
       var contextState = 'missing';
       var contextBadgeText = 'Missing';
       var contextDetailText = '';
-      if (coverage.contextCurrent >= totalCoverage) {
+      var contextCountText = String(coverage.contextCurrent) + ' / ' + String(totalCoverage);
+      if (!coverage.contextRequired) {
+        contextState = 'current';
+        contextBadgeText = 'Not required';
+        contextCountText = '—';
+        contextDetailText = 'No annotation groups are configured, so Context Sight is skipped.';
+      } else if (coverage.contextCurrent >= totalCoverage) {
         contextState = 'current';
         contextBadgeText = 'Current';
         contextDetailText = 'All Context Sight matches the current vocabulary and caption template.';
@@ -184,7 +198,7 @@
         contextDetail,
         contextState,
         contextBadgeText,
-        String(coverage.contextCurrent) + ' / ' + String(totalCoverage),
+        contextCountText,
         contextDetailText
       );
     }
@@ -320,8 +334,11 @@
         setScanState.hasRun = true;
         setScanState.running = false;
         setCachedReportResponses(payload);
-        applyCoveragePayload(payload, files.length);
-        var complete = openCount >= files.length && Number(payload && payload.context && payload.context.cached || 0) >= files.length;
+        applyCoveragePayload(payload, files.length, context.groups.length > 0);
+        var complete = openCount >= files.length && (
+          !context.groups.length ||
+          Number(payload && payload.context && payload.context.cached || 0) >= files.length
+        );
         setScanState.phase = complete ? 'complete' : 'idle';
         if (complete) {
           setSetIntelligenceStatus('Set understood', 'Cached two-pass Set Intelligence is current. Review the report or continue.');
@@ -504,7 +521,8 @@
         files.length,
         scopedItems.filter(function (item) { return !!item.structured; }).length,
         setScanState.coverage.known ? setScanState.coverage.contextCurrent : 0,
-        setScanState.coverage.known ? setScanState.coverage.contextAvailable : 0
+        setScanState.coverage.known ? setScanState.coverage.contextAvailable : 0,
+        setScanState.coverage.contextRequired
       );
       setScanState.total = pending.length;
       setScanState.completed = 0;
@@ -572,11 +590,15 @@
   function scanContextVision(folder, files, model, context) {
     setScanState.phase = 'scanning-context';
     if (!context.groups.length) {
+      setScanState.coverage.contextRequired = false;
+      setScanState.coverage.contextCurrent = 0;
+      setScanState.coverage.contextAvailable = 0;
       setScanState.total = 1;
       setScanState.completed = 1;
       setSetIntelligenceStatus('Context Sight', 'No annotation groups are configured, so the second visual read is skipped.');
       return Promise.resolve(true);
     }
+    setScanState.coverage.contextRequired = true;
     return requestContextStatus(folder, model, context).then(function (payload) {
       var wanted = {};
       files.forEach(function (fileName) { wanted[fileName] = true; });
@@ -596,7 +618,8 @@
         files.length,
         setScanState.coverage.known ? setScanState.coverage.openCurrent : files.length,
         scopedItems.filter(function (item) { return !!item.cached; }).length,
-        scopedItems.filter(function (item) { return !!item.available; }).length
+        scopedItems.filter(function (item) { return !!item.available; }).length,
+        true
       );
       setScanState.total = pending.length;
       setScanState.completed = 0;
@@ -713,7 +736,7 @@
           visionContext
         ).then(function (payload) {
           setCachedReportResponses(payload);
-          applyCoveragePayload(payload, files.length);
+          applyCoveragePayload(payload, files.length, visionContext.groups.length > 0);
           return true;
         });
       });
@@ -778,7 +801,8 @@
         total: 0,
         openCurrent: 0,
         contextCurrent: 0,
-        contextAvailable: 0
+        contextAvailable: 0,
+        contextRequired: true
       };
       setScanState.rawResponses = [];
       setScanState.rawResponseIndex = -1;

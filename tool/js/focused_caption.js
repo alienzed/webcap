@@ -178,7 +178,7 @@ function cancelFocusedCaptionVisionPhraseTask(task, label) {
   if (!jobId || task.result) return Promise.resolve(true);
   return cancelCaptionAssistJob(jobId).catch(function (err) {
     reportConsoleWarning(
-      label || 'Focus Caption Vision phrases',
+      label || 'Focus Caption Vision extras',
       'Could not cancel Vision phrase job: ' + String(err && err.message ? err.message : err)
     );
     return false;
@@ -269,8 +269,8 @@ function loadFocusedCaptionVisionPhrases() {
       focusedCaptionVisionPhrases.task = null;
       focusedCaptionVisionPhrases.error = String(err && err.message ? err.message : err);
       syncFocusedCaptionVisionPhrasesUi();
-      setStatus('Vision phrases failed: ' + focusedCaptionVisionPhrases.error);
-      reportConsoleError('Focus Caption Vision phrases', err);
+      setStatus('Vision extras failed: ' + focusedCaptionVisionPhrases.error);
+      reportConsoleError('Focus Caption Vision extras', err);
     }
     return false;
   });
@@ -319,7 +319,7 @@ function cancelFocusedCaptionPrefetch() {
     cancellations.push(cancelCaptionVisionTask(prefetch.visionTask, 'Focus Caption Vision'));
   }
   if (prefetch.phraseTask && !prefetch.phraseTask.result) {
-    cancellations.push(cancelFocusedCaptionVisionPhraseTask(prefetch.phraseTask, 'Focus Caption Vision phrases'));
+    cancellations.push(cancelFocusedCaptionVisionPhraseTask(prefetch.phraseTask, 'Focus Caption Vision extras'));
   }
   if (!cancellations.length) return Promise.resolve(true);
   return Promise.all(cancellations).then(function () { return true; });
@@ -349,7 +349,7 @@ function beginFocusedCaptionPrefetchPhrases(prefetch, mediaItem) {
   prefetch.phraseTask = task;
   task.promise.catch(function (err) {
     if (!task.cancelled && !prefetch.discarded && focusedCaptionPrefetch === prefetch) {
-      reportConsoleError('Focus Caption Vision phrases', err);
+      reportConsoleError('Focus Caption Vision extras', err);
     }
     return null;
   });
@@ -480,7 +480,7 @@ function useFocusedCaptionPrefetchForCurrentItem() {
             setFocusedCaptionVisionPhraseResult(result);
           }
         }).catch(function (err) {
-          if (!phraseTask.cancelled) reportConsoleError('Focus Caption Vision phrases', err);
+          if (!phraseTask.cancelled) reportConsoleError('Focus Caption Vision extras', err);
         });
       }
     }

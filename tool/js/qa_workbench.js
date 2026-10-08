@@ -267,12 +267,25 @@
   var qaReviewLoadToken = 0;
   var qaReviewSaveChain = Promise.resolve();
 
+  function qaItemInputSignatures() {
+    var signatures = {};
+    qaBuildDeepScanItems(qaGetTrainingItems()).forEach(function (item) {
+      var source = JSON.stringify(item);
+      var hash = 2166136261;
+      for (var i = 0; i < source.length; i += 1) {
+        hash = Math.imul(hash ^ source.charCodeAt(i), 16777619);
+      }
+      signatures[item.fileName] = (hash >>> 0).toString(16);
+    });
+    return signatures;
+  }
+
   function qaReviewPayload() {
     return {
       version: 1,
       scopeKey: qaWorkbenchState.scopeKey,
       trainingFocus: qaWorkbenchState.trainingFocus,
-      itemInputs: qaBuildDeepScanItems(qaGetTrainingItems()),
+      itemSignatures: qaItemInputSignatures(),
       aiFindings: qaWorkbenchState.aiFindings,
       aiSummary: qaWorkbenchState.aiSummary,
       dispositions: qaWorkbenchState.dispositions
@@ -310,13 +323,11 @@
           || qaWorkbenchState.trainingFocus !== focus) return;
       var saved = payload.review;
       if (!saved || saved.scopeKey !== scopeKey || saved.trainingFocus !== focus) return;
-      var before = {};
-      (saved.itemInputs || []).forEach(function (item) {
-        before[item.fileName] = JSON.stringify(item);
-      });
+      var before = saved.itemSignatures || {};
       var changed = {};
-      qaBuildDeepScanItems(qaGetTrainingItems()).forEach(function (item) {
-        if (before[item.fileName] !== JSON.stringify(item)) changed[item.fileName] = true;
+      var current = qaItemInputSignatures();
+      Object.keys(current).forEach(function (file) {
+        if (before[file] !== current[file]) changed[file] = true;
       });
       qaWorkbenchState.aiFindings = (saved.aiFindings || []).filter(function (finding) {
         return !(finding.files || []).some(function (file) { return changed[file]; });

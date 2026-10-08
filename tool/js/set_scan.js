@@ -378,10 +378,14 @@
     });
   }
 
-  function publishSetIntelligenceMetadata(media, blockName, block) {
+  function publishSetIntelligenceMetadata(folder, media, blockName, block) {
+    var expectedFolder = String(folder || '');
     var fileName = String(media || '');
-    if (!fileName || !block || typeof block !== 'object') {
+    if (!expectedFolder || !fileName || !block || typeof block !== 'object') {
       throw new Error('Set Intelligence saved evidence is invalid.');
+    }
+    if (String(state.folder || '') !== expectedFolder) {
+      throw new Error('Set changed before saved Set Intelligence evidence could be published.');
     }
     var item = (state.items || []).find(function (candidate) {
       return candidate && String(candidate.fileName || '') === fileName;
@@ -416,7 +420,7 @@
         sight: sight
       })
     }).then(function (payload) {
-      publishSetIntelligenceMetadata(media, 'vision_sight', payload.sight);
+      publishSetIntelligenceMetadata(folder, media, 'vision_sight', payload.sight);
       return payload;
     });
   }
@@ -505,7 +509,7 @@
         sight: sight
       })
     }).then(function (payload) {
-      publishSetIntelligenceMetadata(media, 'vision_vocabulary_sight', payload.sight);
+      publishSetIntelligenceMetadata(folder, media, 'vision_vocabulary_sight', payload.sight);
       return payload;
     });
   }

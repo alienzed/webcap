@@ -305,7 +305,7 @@
     qaWorkbenchState.aiScopeSignature = '';
     qaWorkbenchState.dispositions = {};
     qaRequestJson('/fs/qa/review?folder=' + encodeURIComponent(folder)).then(function (payload) {
-      if (token !== qaReviewLoadToken || String(state.folder || '') !== folder
+      if (token !== qaReviewLoadToken || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting || String(state.folder || '') !== folder
           || qaBuildScopeKey(qaGetTrainingItems()) !== scopeKey
           || qaWorkbenchState.trainingFocus !== focus) return;
       var saved = payload.review;
@@ -376,6 +376,7 @@
     if (!model) throw new Error('Select a Director model before running Deep QA Scan.');
 
     var signature = qaBuildDeepScanSignature(items);
+    ++qaReviewLoadToken;
     qaWorkbenchState.deepScanInputSignature = signature;
     qaWorkbenchState.deepScanSubmitting = true;
     qaWorkbenchState.deepScanStatus = 'Starting deep scan…';

@@ -867,17 +867,6 @@ function wireFocusedCaption() {
       startFocusedCaption((state.currentItem && state.currentItem.key) || '');
     });
   }
-  if (!reviewBtn.__focusedCaptionReviewBound) {
-    reviewBtn.__focusedCaptionReviewBound = true;
-    reviewBtn.addEventListener('click', function () {
-      if (isFocusedCaptionReviewMode()) {
-        if (!stopFocusedCaption('Focus Review ended.')) return;
-        renderFileList();
-        return;
-      }
-      startFocusedReview((state.currentItem && state.currentItem.key) || '');
-    });
-  }
   if (!ui.previewFocusCaptionSkipBtnEl.__focusedCaptionBound) {
     ui.previewFocusCaptionSkipBtnEl.__focusedCaptionBound = true;
     ui.previewFocusCaptionSkipBtnEl.addEventListener('click', function () {

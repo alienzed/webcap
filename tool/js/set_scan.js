@@ -946,6 +946,60 @@
     return !!setScanState.running;
   }
 
+  // Explicit item-level refresh, independent of the full-Set workflow.
+  // Each valid observation is saved immediately; failed reads keep older evidence.
+  var itemSightRefreshActive = false;
+  function refreshSetIntelligenceItem(mediaItem, options) {
+    var opts = options || {};
+    var open = opts.open !== false;
+    var context = opts.context !== false;
+    if (!open && !context) return Promise.resolve(false);
+    if (!mediaItem || !mediaItem.fileName) return Promise.reject(new Error('Select a media item to refresh Sight.'));
+    if (setScanState.running || itemSightRefreshActive) {
+      return Promise.reject(new Error('A Sight scan is already running.'));
+    }
+    var folder = String(state.folder || '');
+    var file = String(mediaItem.fileName);
+    var model = String(getCaptionVisionModelId() || '').trim();
+    if (!folder || !model) return Promise.reject(new Error('Select a Set and Vision model first.'));
+    var visionContext = setIntelligenceVisionContext();
+    itemSightRefreshActive = true;
+    var failures = [];
+    function stage(label, request, save) {
+      return request().then(function (result) {
+        if (!result.sight) throw new Error(result.warning || (label + ' returned no structured observation.'));
+        return save(result.sight).then(function () {
+          if (result.warning) {
+            reportConsoleWarning('Sight refresh ' + file, label + ': ' + result.warning);
+          }
+          return true;
+        });
+      }).catch(function (err) {
+        failures.push(label + ': ' + String(err && err.message || err));
+        reportConsoleError('Sight refresh ' + file, err);
+        return false;
+      });
+    }
+    return Promise.resolve().then(function () {
+      if (open) return stage('Open Sight',
+        function () { return requestSight(folder, model, file); },
+        function (sight) { return saveSight(folder, model, file, sight); });
+    }).then(function () {
+      if (context && visionContext.groups.length) return stage('Context Sight',
+        function () { return requestContextSight(folder, model, file, visionContext); },
+        function (sight) { return saveContextSight(folder, model, file, visionContext, sight); });
+      if (context) failures.push('Context Sight: no groups configured.');
+    }).then(function () {
+      if (failures.length) throw new Error(failures.join(' | '));
+      window.setStatus('Sight refreshed for ' + file + '.');
+      return true;
+    }).finally(function () {
+      setScanState.currentVisionJobId = '';
+      itemSightRefreshActive = false;
+    });
+  }
+
+  window.refreshSetIntelligenceItem = refreshSetIntelligenceItem;
   window.openSetIntelligence = openSetIntelligence;
   window.stopSetIntelligence = stopSetIntelligence;
   window.isSetIntelligenceRunning = isSetIntelligenceRunning;

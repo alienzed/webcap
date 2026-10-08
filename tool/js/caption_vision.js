@@ -649,12 +649,9 @@ function syncCaptionVisionUi() {
       ? 'Vision checking first video frame…'
       : 'Vision checking image…';
     status.classList.remove('hidden');
-    return;
-  }
-  if (captionVisionError) {
+  } else if (captionVisionError) {
     status.textContent = 'Vision check failed: ' + captionVisionError;
     status.classList.remove('hidden');
-    return;
   }
   if (!captionVisionResult && !captionQaResult) {
     status.textContent = 'Vision checks run automatically for each caption candidate.';

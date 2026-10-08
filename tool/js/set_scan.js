@@ -401,12 +401,7 @@
       }
       state.currentItem.metadata[blockName] = block;
     }
-    if (
-      normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput' &&
-      reviewWorkspaceState.detailTab === 'qa'
-    ) {
-      renderQaWorkbench();
-    }
+    qaSetIntelligenceEvidenceUpdated();
   }
 
   function saveSight(folder, model, media, sight) {
@@ -943,8 +938,13 @@
     }, true);
   }
 
+  function isSetIntelligenceRunning() {
+    return !!setScanState.running;
+  }
+
   window.openSetIntelligence = openSetIntelligence;
   window.stopSetIntelligence = stopSetIntelligence;
+  window.isSetIntelligenceRunning = isSetIntelligenceRunning;
 
   bindSetIntelligence();
 })();

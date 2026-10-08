@@ -23,6 +23,7 @@ from .vision_schema_assist import (
     vision_sight_records,
     vision_sight_status,
     vision_vocabulary_sight_status,
+    vision_vocabulary_sight_records,
 )
 from .vision_schema_contract import (
     build_assignment_request as build_vision_tag_request,
@@ -808,7 +809,8 @@ def vision_schema_assist_route():
                 folder,
                 data.get("media", ""),
             )
-            messages = build_vision_vocabulary_sight_messages(relative_media, existing_groups)
+            caption_template = str(data.get("captionTemplate") or "")
+            messages = build_vision_vocabulary_sight_messages(relative_media, existing_groups, caption_template)
             job = enqueue_llm(
                 "caption",
                 vision_model,
@@ -820,7 +822,7 @@ def vision_schema_assist_route():
                     "runtimeOverrides": {"maxTokens": 900},
                     "existingGroups": existing_groups,
                 },
-                label="Vocabulary Vision",
+                label="Context Vision",
             )
             return jsonify({"ok": True, "job": job}), 202
         if operation == "save_sight":
@@ -842,6 +844,7 @@ def vision_schema_assist_route():
                     vision_model,
                     data.get("existingGroups"),
                     data.get("sight"),
+                    caption_template=str(data.get("captionTemplate") or ""),
                 ),
             })
         if operation == "vocabulary_status":
@@ -851,6 +854,7 @@ def vision_schema_assist_route():
                     folder,
                     vision_model,
                     data.get("existingGroups"),
+                    caption_template=str(data.get("captionTemplate") or ""),
                 ),
             })
         if operation == "analyze":
@@ -878,6 +882,7 @@ def vision_schema_assist_route():
                 vision_model,
                 existing_groups,
                 files=requested_files,
+                caption_template=str(data.get("captionTemplate") or ""),
             )
             if int(analysis.get("evidenceCount") or 0) < 1:
                 raise ValueError("Vocabulary discovery needs at least one usable Vision observation.")
@@ -895,6 +900,7 @@ def vision_schema_assist_route():
                 vision_model,
                 existing_groups,
                 files=requested_files,
+                caption_template=str(data.get("captionTemplate") or ""),
             )
             contract = build_vision_schema_challenge_request(
                 analysis,
@@ -911,11 +917,21 @@ def vision_schema_assist_route():
             records = vision_sight_records(folder, vision_model, files=requested_files)
             if not records:
                 raise ValueError("Tag Assist needs structured Vision sight for the selected media.")
+            existing_groups = data.get("existingGroups")
+            context_records = vision_vocabulary_sight_records(
+                folder,
+                vision_model,
+                existing_groups,
+                files=requested_files,
+                current_context=False,
+            )
             contract = build_vision_tag_request(
                 records,
-                data.get("existingGroups"),
+                existing_groups,
                 current_assignments=data.get("currentAssignments"),
                 existing_only=bool(data.get("existingOnly")),
+                context_records=context_records,
+                caption_template=str(data.get("captionTemplate") or ""),
             )
             job = enqueue_llm("schema", director_model, contract, context={}, label="Vision Tag Assist")
             return jsonify({

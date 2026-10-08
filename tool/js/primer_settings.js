@@ -1229,9 +1229,8 @@ function runCaptionAssistAfterSight() {
         ? 'Caption Assist candidate failed annotation validation.'
         : 'AI caption candidate ready.'
     );
-    if (captionVisionEnabled) {
-      maybeRunCaptionVisionForCandidate(candidate);
-    }
+    // The current item's fresh Context Sight preceded this Director result.
+    // A second pixel read is only requested by the explicit Recheck Vision action.
     // The item pipeline has already obtained fresh Context Sight. Do not
     // enqueue an unrelated Vision Extras read or speculative next-item LLM.
 

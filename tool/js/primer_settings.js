@@ -1169,13 +1169,12 @@ function runCaptionAssist() {
     setStatus('Select a Director model before using Caption Assist.');
     return Promise.resolve(false);
   }
-  var existingSight = item.metadata && item.metadata.vision_sight;
   captionAssistSightPreparation = true;
   setStatus('Caption Assist: preparing visual evidence…');
   return loadCaptionVisionCapabilities().then(function () {
     if (!state.currentItem || state.currentItem.key !== sourceKey || startedFocused !== isFocusedCaptionOpen()) return false;
     return refreshSetIntelligenceItem(item, {
-      open: !existingSight || !existingSight.description || !existingSight.inventory,
+      open: 'missing',
       context: true
     });
   }).then(function (prepared) {

@@ -431,89 +431,10 @@ function syncFocusedCaptionVisionPhrasesUi() {
   var row = document.getElementById('editor-caption-vision-phrases');
   var trigger = document.getElementById('editor-caption-vision-phrases-btn');
   if (!row || !trigger) throw new Error('Focus Caption Vision extras controls are missing.');
-
-  var focusOpen = isFocusedCaptionOpen();
-  var mediaKey = state && state.currentItem && state.currentItem.key;
-  var candidateReady = !!(
-    focusOpen &&
-    captionAssistCandidate &&
-    mediaKey &&
-    state.currentItem &&
-    isCaptionVisionSupportedMedia(state.currentItem.fileName) &&
-    captionAssistCandidate.mediaKey === mediaKey
-  );
-  trigger.classList.toggle('hidden', !candidateReady);
-  trigger.classList.toggle('is-pending', !!focusedCaptionVisionPhrases.pending);
-  trigger.disabled = !candidateReady || !!focusedCaptionVisionPhrases.pending;
-  trigger.textContent = focusedCaptionVisionPhrases.pending ? 'Loading extras…' : 'Refresh extras';
-
   row.innerHTML = '';
-  if (!candidateReady) {
-    row.classList.add('hidden');
-    return;
-  }
-
-  var label = document.createElement('div');
-  label.className = 'caption-vision-sight-label';
-  label.textContent = 'Vision extras';
-  row.appendChild(label);
-
-  if (focusedCaptionVisionPhrases.pending) {
-    var pending = document.createElement('div');
-    pending.className = 'caption-vision-description';
-    pending.textContent = 'Reading the media…';
-    row.appendChild(pending);
-    row.classList.remove('hidden');
-    return;
-  }
-
-  if (focusedCaptionVisionPhrases.error) {
-    var error = document.createElement('div');
-    error.className = 'caption-vision-description caption-vision-description-error';
-    error.textContent = 'Vision extras failed: ' + focusedCaptionVisionPhrases.error;
-    row.appendChild(error);
-    row.classList.remove('hidden');
-    return;
-  }
-
-  var matching = focusedCaptionVisionPhrases.mediaKey === mediaKey;
-  var phrases = matching ? focusedCaptionVisionPhrases.phrases : [];
-
-  var chips = document.createElement('div');
-  chips.className = 'caption-vision-phrase-list';
-  phrases.forEach(function (phrase) {
-    var chip = document.createElement('span');
-    chip.className = 'caption-vision-phrase';
-
-    var insertBtn = document.createElement('button');
-    insertBtn.type = 'button';
-    insertBtn.className = 'caption-vision-phrase-insert';
-    insertBtn.textContent = phrase;
-    insertBtn.title = 'Insert this phrase at the caption cursor';
-    insertBtn.addEventListener('pointerdown', function (event) {
-      event.preventDefault();
-    });
-    insertBtn.addEventListener('click', function () {
-      insertFocusedCaptionVisionPhrase(phrase);
-    });
-    chip.appendChild(insertBtn);
-
-    var blendBtn = document.createElement('button');
-    blendBtn.type = 'button';
-    blendBtn.className = 'caption-vision-phrase-blend';
-    blendBtn.textContent = 'Blend';
-    blendBtn.title = 'Ask Caption Assist to blend this visual detail into the candidate';
-    blendBtn.addEventListener('pointerdown', function (event) {
-      event.preventDefault();
-    });
-    blendBtn.addEventListener('click', function () {
-      blendFocusedCaptionVisionPhrase(phrase);
-    });
-    chip.appendChild(blendBtn);
-    chips.appendChild(chip);
-  });
-  if (phrases.length) row.appendChild(chips);
-  row.classList.toggle('hidden', !phrases.length);
+  row.classList.add('hidden');
+  trigger.classList.add('hidden');
+  trigger.disabled = true;
 }
 
 function syncCaptionAssistCandidateUi() {

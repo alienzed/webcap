@@ -79,7 +79,7 @@ Current blocks may include:
 
 Each analyzer owns its own versioning/invalidation rules. Set Intelligence does not create a second cache.
 
-Director proposals, Guided Tag steps, QA dispositions, and modal progress remain ephemeral.
+Director proposals, Guided Tag steps, and modal progress remain ephemeral. Completed Deep QA findings and QA review dispositions are saved as Set-owned review state in `.webcap_qa_review.json`; reusable per-image Sight remains in `media_metadata.json`. The review stores compact input fingerprints, not a duplicate of the underlying captions or image metadata.
 
 ## Discover Vocabulary
 

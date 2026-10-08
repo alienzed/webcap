@@ -592,17 +592,22 @@ function useFocusedCaptionPrefetchForCurrentItem() {
 
 function getFocusedCaptionEntryKeys(targetMediaKey, mode) {
   var reviewMode = mode === 'review';
-  var items = getFilteredMediaItems(false).filter(function (item) {
-    if (!item || !item.key) return false;
-    if (!reviewMode) return true;
-    return !!String(item.caption || '').trim();
+  var allItems = getFilteredMediaItems(false).filter(function (item) {
+    return !!(item && item.key);
   });
-  var keys = items.map(function (item) { return item.key; });
-  if (!keys.length) return [];
+  if (!allItems.length) return [];
+
   var targetKey = String(targetMediaKey || '').trim();
-  var targetIndex = keys.indexOf(targetKey);
-  if (targetIndex <= 0) return keys;
-  return keys.slice(targetIndex).concat(keys.slice(0, targetIndex));
+  var targetIndex = allItems.findIndex(function (item) { return item.key === targetKey; });
+  var ordered = targetIndex > 0
+    ? allItems.slice(targetIndex).concat(allItems.slice(0, targetIndex))
+    : allItems;
+
+  return ordered.filter(function (item) {
+    return !reviewMode || !!String(item.caption || '').trim();
+  }).map(function (item) {
+    return item.key;
+  });
 }
 
 function syncFocusedCaptionControls() {
@@ -713,7 +718,7 @@ function stopFocusedCaption(message) {
 function prepareFocusedCaptionCurrentItem() {
   if (!focusedCaptionState.open) return Promise.resolve(false);
   if (!state.currentItem || !state.currentItem.key) {
-    stopFocusedCaption('Focus Caption stopped because there is no selected media item.');
+    stopFocusedCaption(focusedCaptionModeLabel() + ' stopped because there is no selected media item.');
     return Promise.resolve(false);
   }
   if (state.currentItem.key !== focusedCaptionState.itemKey) {
@@ -752,9 +757,9 @@ function syncFocusedCaptionSelection(mediaKey) {
 
 function finishFocusedCaption() {
   var completedCount = focusedCaptionState.itemKeys.length;
+  var label = focusedCaptionModeLabel();
   stopFocusedCaption();
   renderFileList();
-  var label = focusedCaptionModeLabel();
   showFocusedCaptionToast(label + ' complete · ' + completedCount + ' item' + (completedCount === 1 ? '' : 's'));
   setStatus(label + ' complete.');
   return Promise.resolve(false);
@@ -858,7 +863,7 @@ function regenerateFocusedCaption() {
 
 function startFocusedCaption(targetMediaKey, mode) {
   if (isCaptionAssistRunning()) {
-    setStatus('Finish the current Caption Assist request before starting Focus Caption.');
+    setStatus('Finish the current Caption Assist request before starting another focused caption workflow.');
     return;
   }
   if (isFocusedAnnotationOpen()) {

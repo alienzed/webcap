@@ -1,7 +1,7 @@
 import json
 
 
-_ALLOWED_CATEGORIES = {"underrepresented", "overrepresented", "consistency", "captioning"}
+_ALLOWED_CATEGORIES = {"consistency", "captioning"}
 _ALLOWED_PRIORITIES = {"high", "normal", "low"}
 _ALLOWED_CONFIDENCE = {"high", "medium", "low"}
 

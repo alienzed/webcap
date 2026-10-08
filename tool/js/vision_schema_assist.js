@@ -58,10 +58,12 @@
     return String(primer && primer.template || '');
   }
 
-  function discoverySessionKey(folder, model, files) {
+  function discoverySessionKey(folder, model, files, directorModel, captionTemplate) {
     return [
       String(folder || ''),
       String(model || ''),
+      String(directorModel || ''),
+      String(captionTemplate || ''),
       (files || []).map(function (fileName) { return String(fileName || ''); }).join('\n')
     ].join('\u0001');
   }
@@ -80,7 +82,13 @@
     schemaState.vocabularyComplete = false;
     schemaState.failedDiscoveryStage = '';
     schemaState.discoveryStage = 'idle';
-    schemaState.discoverySessionKey = discoverySessionKey(folder, model, files);
+    schemaState.discoverySessionKey = discoverySessionKey(
+      folder,
+      model,
+      files,
+      currentDirectorModel(),
+      currentCaptionTemplate()
+    );
     schemaState.error = '';
   }
 
@@ -1343,7 +1351,13 @@
       return;
     }
     var files = getCurrentSetMediaFileNames();
-    var sessionKey = discoverySessionKey(folder, model, files);
+    var sessionKey = discoverySessionKey(
+      folder,
+      model,
+      files,
+      currentDirectorModel(),
+      currentCaptionTemplate()
+    );
     var sameSession = schemaState.discoverySessionKey === sessionKey && schemaState.mode === 'vocabulary';
 
     schemaState.open = true;

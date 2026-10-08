@@ -17,6 +17,8 @@ def test_set_intelligence_is_the_single_set_tools_entry_point():
     assert 'id="discover-vocabulary-set-btn"' not in html
     assert 'id="guided-tag-pass-open-btn"' not in html
     assert 'id="set-scan-modal"' in html
+    assert 'id="set-scan-response-select"' in html
+    assert 'id="set-scan-rescan-btn"' in html
     assert 'id="set-intelligence-primary-btn"' in html
     assert 'id="set-intelligence-guided-btn"' in html
     assert 'id="set-intelligence-qa-btn"' in html
@@ -55,9 +57,13 @@ def test_set_intelligence_hides_supporting_analyzers_and_raw_output_by_default()
     assert "WebCap analysis</strong>" not in html
     assert "Face Focus, MediaPipe pose" not in html
     assert 'id="set-scan-details"' in html
-    assert '<summary>Latest Vision response</summary>' in html
+    assert '<summary>Vision report</summary>' in html
     assert "currentRawResponse" in scan
+    assert "rawResponses" in scan
+    assert "rawResponseIndex" in scan
     assert "showRawResponse(fileName, 'Open Sight', result.text);" in scan
     assert "showRawResponse(fileName, 'Context Sight', result.text);" in scan
-    assert "rawResponses" not in scan
+    assert "responseSelect.onchange = selectRawResponse;" in scan
+    assert "rescanBtn.onclick = runSetIntelligence;" in scan
+    assert "if (!setScanState.hasRun) runSetIntelligence();" in scan
     assert "Next: review the vocabulary" in html

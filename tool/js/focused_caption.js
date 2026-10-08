@@ -179,7 +179,7 @@ function cancelFocusedCaptionVisionPhraseTask(task, label) {
   return cancelCaptionAssistJob(jobId).catch(function (err) {
     reportConsoleWarning(
       label || 'Focus Caption Vision extras',
-      'Could not cancel Vision phrase job: ' + String(err && err.message ? err.message : err)
+      'Could not cancel Vision extras job: ' + String(err && err.message ? err.message : err)
     );
     return false;
   });
@@ -201,7 +201,7 @@ function setFocusedCaptionVisionSightEnabled(enabled) {
   if (prefetch && prefetch.phraseTask) {
     var task = prefetch.phraseTask;
     prefetch.phraseTask = null;
-    cancelFocusedCaptionVisionPhraseTask(task, 'Focus Caption Vision sight');
+    cancelFocusedCaptionVisionPhraseTask(task, 'Focus Caption Vision extras');
   }
   return false;
 }

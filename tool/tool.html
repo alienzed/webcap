@@ -1787,6 +1787,13 @@
                         </div>
                         <button id="editor-caption-candidate-dismiss" class="editor-caption-candidate-close" type="button" title="Dismiss candidate and stay on this item" aria-label="Dismiss candidate and stay on this item">&times;</button>
                     </div>
+                    <details id="editor-caption-details" style="margin: 0.3rem 0;">
+                        <summary title="Inspect the evidence used for this caption" style="cursor:pointer;font-size:0.85em;">ⓘ Details</summary>
+                        <pre id="editor-caption-evidence" style="max-height:16rem;overflow:auto;white-space:pre-wrap;font-size:0.8em;"></pre>
+                        <div id="editor-caption-details-actions"><select id="editor-caption-refresh-sight-mode" class="hidden" aria-label="Sight to refresh" title="Choose the saved Sight evidence to refresh for this item"><option value="both">Both Sights</option><option value="open">Open Sight</option><option value="context">Context Sight</option></select>
+                            <button id="editor-caption-refresh-sight" class="caption-vision-phrases-trigger hidden" type="button" title="Refresh Open Sight and Context Sight for this item only">Refresh Sight</button>
+                            <button id="editor-caption-vision-recheck" class="caption-vision-phrases-trigger hidden" type="button" title="Run a fresh visual caption check for this item only">Recheck vision</button></div>
+                    </details>
                     <div id="editor-caption-focus-loading" class="editor-caption-focus-loading hidden" role="status">
                         <span class="editor-caption-focus-spinner" aria-hidden="true"></span>
                         <strong id="editor-caption-focus-loading-text">Generating caption…</strong>
@@ -1803,9 +1810,6 @@
                                 <input id="editor-caption-vision-toggle" type="checkbox">
                                 <span>Vision</span>
                             </label>
-                            <select id="editor-caption-refresh-sight-mode" class="hidden" aria-label="Sight to refresh" title="Choose the saved Sight evidence to refresh for this item"><option value="both">Both Sights</option><option value="open">Open Sight</option><option value="context">Context Sight</option></select>
-                            <button id="editor-caption-refresh-sight" class="caption-vision-phrases-trigger hidden" type="button" title="Refresh Open Sight and Context Sight for this item only">Refresh Sight</button>
-                            <button id="editor-caption-vision-recheck" class="caption-vision-phrases-trigger hidden" type="button" title="Run a fresh visual caption check for this item only">Recheck vision</button>
                             <button id="editor-caption-vision-phrases-btn" class="caption-vision-phrases-trigger hidden" type="button" title="Ask Vision for additional short descriptive details">Find extras</button>
                         </div>
                         <div class="editor-caption-candidate-actions-right">

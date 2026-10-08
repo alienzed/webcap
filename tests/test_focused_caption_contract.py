@@ -679,7 +679,8 @@ def test_caption_assist_candidate_is_manually_editable_in_normal_and_focus_modes
     assert "captionAssistCandidate.text = String(candidateTextEl.textContent || '');" in primer
     assert "getCaptionAssistOmittedAssignments(" in primer.split("candidateTextEl.addEventListener('input'", 1)[1]
     assert "clearCaptionVisionResult();" in primer.split("candidateTextEl.addEventListener('input'", 1)[1]
-    assert "clearFocusedCaptionVisionPhrases({ keepEnabled: true });" in primer.split("candidateTextEl.addEventListener('input'", 1)[1]
+    edit_block = primer.split("candidateTextEl.addEventListener('input'", 1)[1].split("if (!visionPhrasesBtn.__focusedCaptionPhrasesBound)", 1)[0]
+    assert "clearFocusedCaptionVisionPhrases({ keepEnabled: true });" not in edit_block
     assert '.editor-caption-candidate-text[contenteditable="true"]' in css
 
 
@@ -697,3 +698,18 @@ def test_focus_caption_vision_extras_use_current_edited_candidate_and_no_prose_d
     assert "caption-vision-description" not in primer.split("function syncFocusedCaptionVisionPhrasesUi()", 1)[1].split("function syncCaptionAssistCandidateUi()", 1)[0]
     assert "'/caption/vision-extras'" in vision
     assert "window.requestVisionCaptionExtras = requestVisionCaptionExtras;" in vision
+
+
+def test_inserting_one_vision_extra_keeps_the_remaining_extras_visible():
+    primer = _read("tool/js/primer_settings.js")
+
+    start = primer.index("function insertFocusedCaptionVisionPhrase(phrase)")
+    end = primer.index("function syncFocusedCaptionVisionPhrasesUi()", start)
+    insert = primer[start:end]
+
+    assert "focusedCaptionVisionPhrases.phrases = focusedCaptionVisionPhrases.phrases.filter" in insert
+    assert "String(extra || '').trim().toLowerCase() !== value.toLowerCase()" in insert
+    assert "clearFocusedCaptionVisionPhrases" not in insert
+    assert "syncCaptionAssistCandidateUi();" in insert
+    assert "getCaptionAssistOmittedAssignments(" in insert
+    assert "clearCaptionVisionResult();" in insert

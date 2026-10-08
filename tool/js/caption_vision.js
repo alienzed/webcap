@@ -55,9 +55,7 @@ function loadCaptionVisionCapabilities() {
 }
 
 function getCaptionVisionModelId() {
-  var preferred = typeof getVisionModelPreference === 'function'
-    ? String(getVisionModelPreference() || '')
-    : '';
+  var preferred = String(getVisionModelPreference() || '');
   var available = (captionVisionCapabilities.models || []).some(function (model) {
     return String(model && model.id || '') === preferred;
   });

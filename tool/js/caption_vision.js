@@ -4,7 +4,7 @@ var captionVisionCapabilities = {
   models: [],
   defaultModel: ''
 };
-var captionVisionEnabled = false;
+var captionVisionEnabled = true;
 var captionVisionActiveTask = null;
 var captionVisionTaskSequence = 0;
 var captionVisionResult = null;
@@ -603,7 +603,8 @@ function syncCaptionVisionUi() {
     !captionVisionResult.requestFingerprint
   );
 
-  toggleWrap.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  // Vision checks are part of Caption Assist, not an optional checkbox.
+  toggleWrap.classList.add('hidden');
   toggle.checked = !!captionVisionEnabled;
   toggle.disabled = !modelAvailable;
   toggleWrap.title = modelAvailable

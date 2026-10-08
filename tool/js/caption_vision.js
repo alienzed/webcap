@@ -469,13 +469,17 @@ function syncVisionImageCaptionActionUi() {
   if (!btn) throw new Error('Vision Caption preview action is missing.');
   var mediaItem = state && state.currentItem;
   var focusCaptionBtn = document.getElementById('preview-open-focus-caption-btn');
-  var focusCaptionOpen = !!(focusCaptionBtn && focusCaptionBtn.getAttribute('aria-pressed') === 'true');
+  var focusReviewBtn = document.getElementById('preview-open-focus-review-btn');
+  var focusedCaptionOpen = !!(
+    (focusCaptionBtn && focusCaptionBtn.getAttribute('aria-pressed') === 'true') ||
+    (focusReviewBtn && focusReviewBtn.getAttribute('aria-pressed') === 'true')
+  );
   var supported = !!(
     captionVisionCapabilities.models.length &&
     mediaItem &&
     isCaptionVisionSupportedMedia(mediaItem.fileName)
   );
-  btn.classList.toggle('hidden', !supported || focusCaptionOpen);
+  btn.classList.toggle('hidden', !supported || focusedCaptionOpen);
   btn.disabled = !!visionImageCaptionState.pending;
 }
 

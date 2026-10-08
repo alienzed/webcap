@@ -2768,11 +2768,12 @@ html[data-theme="dark"] .app-settings-environment-check {
 }
 
 .set-scan-dialog {
-  width: min(900px, calc(100vw - 36px));
+  width: min(980px, calc(100vw - 36px));
   max-height: calc(100vh - 36px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--panel);
@@ -2804,7 +2805,12 @@ html[data-theme="dark"] .app-settings-environment-check {
 .set-scan-summary span,
 .set-scan-footer {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.set-scan-summary strong {
+  font-size: 17px;
 }
 
 .set-scan-summary {
@@ -2827,6 +2833,92 @@ html[data-theme="dark"] .app-settings-environment-check {
   border-radius: inherit;
   background: var(--accent);
   transition: width 160ms ease;
+}
+
+.set-scan-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 18px 0;
+}
+
+.set-scan-evidence-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.set-scan-evidence-card.is-current {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-soft));
+}
+
+.set-scan-evidence-card.is-running {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border-soft));
+}
+
+.set-scan-evidence-card.is-stale,
+.set-scan-evidence-card.is-partial {
+  border-style: dashed;
+}
+
+.set-scan-evidence-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.set-scan-evidence-card-header > div {
+  min-width: 0;
+}
+
+.set-scan-evidence-card-header strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.set-scan-evidence-card-header span:not(.set-scan-evidence-badge) {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.set-scan-evidence-badge {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.set-scan-evidence-badge.is-current,
+.set-scan-evidence-badge.is-running {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-soft));
+  color: var(--text);
+}
+
+.set-scan-evidence-count {
+  margin-top: 14px;
+  font-size: 30px;
+  font-weight: 720;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.set-scan-evidence-detail {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .set-intelligence-next {
@@ -2857,7 +2949,8 @@ html[data-theme="dark"] .app-settings-environment-check {
 .set-intelligence-next-copy span,
 .set-intelligence-secondary-actions {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .set-intelligence-secondary-actions {
@@ -2896,10 +2989,20 @@ html[data-theme="dark"] .app-settings-environment-check {
 }
 
 .set-scan-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   cursor: pointer;
-  padding: 9px 11px;
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.set-scan-details summary span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .set-scan-report-toolbar {
@@ -2911,7 +3014,7 @@ html[data-theme="dark"] .app-settings-environment-check {
 
 .set-scan-report-toolbar label {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .set-scan-report-toolbar select {
@@ -2927,7 +3030,7 @@ html[data-theme="dark"] .app-settings-environment-check {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--text);
-  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .set-scan-footer-actions {
@@ -2939,6 +3042,12 @@ html[data-theme="dark"] .app-settings-environment-check {
 .set-scan-footer {
   justify-content: space-between;
   border-top: 1px solid var(--border-soft);
+}
+
+@media (max-width: 760px) {
+  .set-scan-evidence-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 

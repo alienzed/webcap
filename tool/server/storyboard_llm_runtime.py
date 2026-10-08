@@ -1020,11 +1020,17 @@ def _list_models_for_current_runtime(reload=False):
     return models
 
 
-def _list_local_models_passive():
+def _list_local_models_passive(warnings=None):
     """Discover configured local GGUFs without starting or probing llama.cpp."""
+    warnings = warnings if warnings is not None else []
+    def warn(path, message):
+        _logger.warning("%s: %s", path, message)
+        warnings.append({"runtimeId": "local", "runtimeName": "Local", "path": str(path), "error": str(message)})
+
     settings = _runtime_settings("local")
     models_dir = Path(settings["models_dir"])
     if not models_dir.exists():
+        warn(models_dir, "Configured local models directory does not exist")
         return []
     if not models_dir.is_dir():
         raise NotADirectoryError("Director models directory is not a directory: " + str(models_dir))
@@ -1042,7 +1048,7 @@ def _list_local_models_passive():
         try:
             size_bytes = int(model_path.stat().st_size)
         except OSError as exc:
-            _logger.info("Skipping unavailable local Director model %s: %s", model_path.name, exc)
+            warn(model_path, "Cannot read model file: " + str(exc))
             return None
         input_modalities = ["text", "image"] if multimodal else ["text"]
         return {
@@ -1079,7 +1085,7 @@ def _list_local_models_passive():
                 if entry.is_file() and entry.suffix.casefold() == ".gguf"
             ]
         except OSError as exc:
-            _logger.warning("Skipping unreadable local model folder %s: %s", path, exc)
+            warn(path, "Cannot read model folder: " + str(exc))
             continue
         main_files = [entry for entry in ggufs if not is_sidecar(entry)]
         mmproj_files = [entry for entry in ggufs if "mmproj" in entry.name.casefold()]
@@ -1091,7 +1097,8 @@ def _list_local_models_passive():
             candidates = [sorted(first_shards, key=lambda entry: entry.name.casefold())[0]]
         else:
             candidates = main_files
-
+        if not candidates and mmproj_files:
+            warn(path, "Projector found without a model GGUF")
         for model_path in candidates:
             # Match each projector to its own model rather than treating all
             # GGUFs in a directory as one model.
@@ -1105,6 +1112,9 @@ def _list_local_models_passive():
             if len(candidates) == 1 and not matching_projectors:
                 matching_projectors = mmproj_files
             model_id = path.name if len(candidates) == 1 else model_path.stem
+            if len(matching_projectors) > 1:
+                warn(model_path, "Ambiguous projector pairing; multiple projectors match")
+                matching_projectors = []
             model = record(model_id, model_path, multimodal=bool(matching_projectors))
             if model is not None:
                 models.append(model)
@@ -1112,10 +1122,10 @@ def _list_local_models_passive():
     models.sort(key=lambda model: model["label"].casefold())
     return models
 
-def list_local_vision_models():
+def list_local_vision_models(warnings=None):
     models = []
     with _use_runtime("local"):
-        for model in _list_local_models_passive():
+        for model in _list_local_models_passive(warnings=warnings):
             modalities = model.get("inputModalities") if isinstance(model, dict) else []
             if "image" not in (modalities or []):
                 continue
@@ -1158,7 +1168,7 @@ def list_vision_models(reload=False):
     warnings = []
 
     try:
-        models.extend(list_local_vision_models())
+        models.extend(list_local_vision_models(warnings=warnings))
     except Exception as exc:
         warnings.append({"runtimeId": "local", "runtimeName": "Local", "error": str(exc)})
 
@@ -1187,7 +1197,9 @@ def list_vision_models(reload=False):
                     try:
                         capabilities = _ollama_model_capabilities(model_id, refresh=reload)
                     except Exception as exc:
-                        _logger.info("Could not inspect Ollama model capabilities for %s: %s", model_id, exc)
+                        _logger.warning("Could not inspect Ollama model capabilities for %s: %s", model_id, exc)
+                        warnings.append({"runtimeId": runtime_id, "runtimeName": runtime_name,
+                                         "modelId": model_id, "error": "Capability inspection failed: " + str(exc)})
                         continue
                     if "vision" not in capabilities:
                         continue

@@ -2902,6 +2902,23 @@ html[data-theme="dark"] .app-settings-environment-check {
   font-size: 12px;
 }
 
+.set-scan-report-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px 9px;
+}
+
+.set-scan-report-toolbar label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.set-scan-report-toolbar select {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .set-scan-raw-output {
   max-height: min(420px, 48vh);
   margin: 0;
@@ -2911,6 +2928,12 @@ html[data-theme="dark"] .app-settings-environment-check {
   overflow-wrap: anywhere;
   color: var(--text);
   font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.set-scan-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .set-scan-footer {

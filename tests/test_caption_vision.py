@@ -257,7 +257,7 @@ def test_vision_caption_extras_prompt_is_compact_and_caption_aware():
 
     assert "compact annotation-ready wording" in caption_vision.VISION_CAPTION_EXTRAS_SYSTEM_PROMPT
     assert "one to four words" in caption_vision.VISION_CAPTION_EXTRAS_SYSTEM_PROMPT
-    assert "not already represented by the caption" in caption_vision.VISION_CAPTION_EXTRAS_SYSTEM_PROMPT
+    assert "additional visible details that would meaningfully extend the caption" in caption_vision.VISION_CAPTION_EXTRAS_SYSTEM_PROMPT
     payload = json.loads(messages[1]["content"][0]["text"].split("\n\n", 1)[1])
     assert payload["caption"] == "a woman in a red dress standing indoors"
     assert messages[1]["content"][1]["image_url"]["url"] == "file://set/item.jpg"

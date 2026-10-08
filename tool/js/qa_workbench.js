@@ -1399,7 +1399,7 @@
     normal.textContent = Math.max(0, recommendations.length - high) + ' normal-priority';
     summary.appendChild(normal);
     var handledEl = document.createElement('span');
-    handledEl.textContent = handled + ' handled this session';
+    handledEl.textContent = handled + ' handled';
     summary.appendChild(handledEl);
     container.appendChild(summary);
 

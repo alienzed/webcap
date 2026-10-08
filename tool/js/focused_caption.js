@@ -817,6 +817,14 @@ function skipFocusedCaptionItem() {
 
 function regenerateFocusedCaption() {
   if (!focusedCaptionState.open) return Promise.resolve(false);
+  if (isFocusedCaptionReviewMode()) {
+    var reviewItem = state && state.currentItem;
+    var reviewRequest = reviewItem ? buildCaptionAssistRequest(reviewItem) : null;
+    if (!reviewRequest || !reviewRequest.model) {
+      setStatus('Select a Director model before generating a rewritten review caption.');
+      return Promise.resolve(false);
+    }
+  }
   var mediaKey = String(focusedCaptionState.itemKey || '');
   return cancelFocusedCaptionCurrentRequest().then(function () {
     return cancelFocusedCaptionPrefetch();

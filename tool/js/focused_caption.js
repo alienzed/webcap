@@ -629,8 +629,10 @@ function syncFocusedCaptionControls() {
     return;
   }
 
-  startBtn.classList.toggle('hidden', !hasItem || annotationOpen || (focusedCaptionState.open && reviewMode));
-  reviewBtn.classList.toggle('hidden', !hasItem || annotationOpen || (focusedCaptionState.open && !reviewMode));
+  // One progressive Caption Assist entry point. Keep the legacy review
+  // control wired for existing callers, but do not show a competing button.
+  startBtn.classList.toggle('hidden', !hasItem || annotationOpen);
+  reviewBtn.classList.add('hidden');
 
   startBtn.classList.toggle('active', focusedCaptionState.open && !reviewMode);
   reviewBtn.classList.toggle('active', focusedCaptionState.open && reviewMode);
@@ -638,10 +640,10 @@ function syncFocusedCaptionControls() {
   reviewBtn.setAttribute('aria-pressed', focusedCaptionState.open && reviewMode ? 'true' : 'false');
 
   if (!focusedCaptionState.open) {
-    startBtn.setAttribute('aria-label', 'Start Caption Assist writing');
-    startBtn.title = 'Caption Assist · Write: suggest captions progressively for the visible items';
+    startBtn.setAttribute('aria-label', 'Start Caption Assist');
+    startBtn.title = 'Caption Assist: use Open Sight, fresh Context Sight, and the Director for each item';
     if (startGlyphEl) startGlyphEl.textContent = '\u2728';
-    if (startLabelEl) startLabelEl.textContent = 'Write Captions';
+    if (startLabelEl) startLabelEl.textContent = 'Caption Assist';
 
     reviewBtn.setAttribute('aria-label', 'Start Caption Assist review');
     reviewBtn.title = 'Caption Assist · Review: check saved captions progressively, including QA findings';
@@ -653,9 +655,9 @@ function syncFocusedCaptionControls() {
     return;
   }
 
-  var activeBtn = reviewMode ? reviewBtn : startBtn;
-  var activeLabel = reviewMode ? reviewLabelEl : startLabelEl;
-  var activeGlyph = reviewMode ? reviewGlyphEl : startGlyphEl;
+  var activeBtn = startBtn;
+  var activeLabel = startLabelEl;
+  var activeGlyph = startGlyphEl;
   activeBtn.classList.remove('hidden');
   activeBtn.setAttribute('aria-label', 'Exit ' + focusedCaptionModeLabel());
   activeBtn.title = 'Exit ' + focusedCaptionModeLabel() + ' (Esc)';

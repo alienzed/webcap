@@ -31,7 +31,9 @@ def test_focus_review_reuses_focus_caption_shell_without_a_full_scan_or_backend_
     assert "function startFocusedReview(targetMediaKey)" in focus
     assert "startFocusedCaption(targetMediaKey, 'review');" in focus
     assert "function buildFocusedReviewCandidate(mediaItem)" in focus
-    assert "var captionText = String(mediaItem.caption || '').trim();" in focus
+    assert "var captionText = String(mediaItem.caption || '');" in focus
+    assert "state.currentItem.key === mediaItem.key" in focus
+    assert "captionText = String(ui.editorEl.value || '');" in focus
     assert "requestCaptionAssistCandidate(target.item, request" in focus
     review_prefetch = focus.split("if (isFocusedCaptionReviewMode()) {", 1)[1].split("if (!request.model)", 1)[0]
     assert "buildFocusedReviewCandidate(target.item)" in review_prefetch
@@ -71,8 +73,9 @@ def test_focus_review_hides_standalone_vision_caption_action_like_focus_caption(
     vision = _read("tool/js/caption_vision.js")
 
     action = vision.split("function syncVisionImageCaptionActionUi()", 1)[1].split("function syncVisionImageCaptionModal()", 1)[0]
-    assert "preview-open-focus-caption-btn" in action
-    assert "preview-open-focus-review-btn" in action
+    assert "var focusedCaptionOpen = isFocusedCaptionOpen();" in action
+    assert "preview-open-focus-caption-btn" not in action
+    assert "preview-open-focus-review-btn" not in action
     assert "btn.classList.toggle('hidden', !supported || focusedCaptionOpen);" in action
 
 def test_focus_review_keep_does_not_rewrite_unchanged_caption_and_save_advances_changed_caption():
@@ -124,6 +127,57 @@ def test_focus_review_navigation_protects_unsaved_edits_but_explicit_skip_discar
     assert "hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits" in move
     assert "Use Save → Next, or Skip to discard them." in move
     assert "return moveFocusedCaption(1, { discardReviewEdits: true });" in focus
+
+
+def test_focus_review_seeds_current_item_from_live_editor_without_cancelling_pending_work():
+    focus = _read("tool/js/focused_caption.js")
+
+    builder = focus.split("function buildFocusedReviewCandidate", 1)[1].split("function presentFocusedReviewCandidate", 1)[0]
+    assert "var captionText = String(mediaItem.caption || '');" in builder
+    assert "state.currentItem.key === mediaItem.key" in builder
+    assert "ui && ui.editorEl" in builder
+    assert "captionText = String(ui.editorEl.value || '');" in builder
+    assert "cancelEditorAutosaveForCaption" not in builder
+
+
+def test_focus_review_exit_guard_is_central_and_all_shared_exit_paths_respect_it():
+    focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
+    shell = _read("tool/js/workspace_shell.js")
+    annotation = _read("tool/js/focused_annotation.js")
+
+    stop = focus.split("function stopFocusedCaption(message, options)", 1)[1].split("function prepareFocusedCaptionCurrentItem", 1)[0]
+    assert "hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits" in stop
+    assert "Use Save → Next, or Skip before exiting." in stop
+    assert "return false;" in stop
+    assert "return true;" in stop
+
+    dismiss = primer.split("function dismissCaptionAssistCandidate()", 1)[1].split("function cancelCaptionAssistGeneration", 1)[0]
+    assert "if (!stopFocusedCaption('Focus Caption ended.')) return Promise.resolve(false);" in dismiss
+
+    assert "if (!stopFocusedCaption('Focus Caption ended.')) return false;" in shell
+    assert "if (isFocusedCaptionOpen() && !stopFocusedCaption('Focus Caption ended.')) return false;" in shell
+    assert "this.value = String(state && state.folder || '');" in shell
+
+    start_annotation = annotation.split("function startFocusedAnnotation(targetMediaKey)", 1)[1].split("function ", 1)[0]
+    assert "if (!stopFocusedCaption('Focus Caption ended.')) return;" in start_annotation
+
+
+def test_focus_review_empty_live_draft_stays_visible_and_is_treated_as_an_edit():
+    primer = _read("tool/js/primer_settings.js")
+
+    assert "var visible = !!(candidate && mediaKey && candidate.mediaKey === mediaKey && (reviewMode || candidate.text));" in primer
+    assert "var unchangedReview = isFocusedCaptionReviewMode() && nextCaption === String(mediaItem.caption || '');" in primer
+    assert "var reviewChanged = reviewMode && visible && String(candidate.text || '') !== String((state.currentItem && state.currentItem.caption) || '');" in primer
+
+
+def test_caption_vision_uses_focused_workflow_state_contract_not_focus_button_dom():
+    vision = _read("tool/js/caption_vision.js")
+
+    action = vision.split("function syncVisionImageCaptionActionUi()", 1)[1].split("function syncVisionImageCaptionModal()", 1)[0]
+    assert "var focusedCaptionOpen = isFocusedCaptionOpen();" in action
+    assert "preview-open-focus-caption-btn" not in action
+    assert "preview-open-focus-review-btn" not in action
 
 def test_caption_assist_surfaces_only_unreviewed_empty_groups_with_candidate():
     html = _read("tool/tool.html")
@@ -633,7 +687,7 @@ def test_focus_caption_is_immediate_cancelable_keyboard_driven_and_focus_only():
     assert "cancelFocusedCaptionCurrentRequest" in focus
     assert "showFocusedCaptionToast(label + ' complete" in focus
     assert "if (nextSurface !== 'default' && isFocusedCaptionOpen())" in shell
-    assert "if (isFocusedCaptionOpen()) stopFocusedCaption('Focus Caption ended.');" in shell
+    assert "if (!stopFocusedCaption('Focus Caption ended.')) return false;" in shell
     assert "--focus-caption-left" in css
     assert ".editor-caption-candidate-text {" in css
     assert ".editor-caption-candidate.is-focus-caption .editor-caption-candidate-text" not in css
@@ -702,7 +756,9 @@ def test_focus_caption_outside_click_refreshes_list_without_double_handling_back
     outside_start = focus.index("if (!document.__focusedCaptionOutsideClickBound)")
     outside_end = focus.index("if (!window.__focusedCaptionResizeBound)", outside_start)
     outside = focus[outside_start:outside_end]
-    assert "stopFocusedCaption(focusedCaptionModeLabel() + ' ended.');" in outside
+    assert "if (!stopFocusedCaption(focusedCaptionModeLabel() + ' ended.')) {" in outside
+    assert "event.preventDefault();" in outside
+    assert "event.stopImmediatePropagation();" in outside
     assert "renderFileList();" in outside
 
 

@@ -182,6 +182,14 @@ function refreshAppSettingsVisionModels(configuredModel) {
       if (!response.ok || !payload || payload.ok === false) {
         throw new Error(payload && payload.error ? payload.error : 'Could not load Vision models.');
       }
+      var warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+      warnings.forEach(function (warning) {
+        var target = String(warning.path || warning.modelId || warning.runtimeName || 'Vision discovery');
+        var message = String(warning.error || 'Unknown error');
+        if (typeof window.reportConsoleError === 'function') {
+          window.reportConsoleError('Vision discovery: ' + target, new Error(message));
+        }
+      });
       var models = Array.isArray(payload.models) ? payload.models : [];
       var saved = configured || String(payload.configuredModel || '').trim();
       if (!models.length) {

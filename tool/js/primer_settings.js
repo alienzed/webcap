@@ -155,7 +155,7 @@ function useCaptionAssistCandidate() {
   }
 
   cancelEditorAutosaveForCaption(state.folder, mediaItem.fileName);
-  var unchangedReview = isFocusedCaptionReviewMode() && nextCaption.trim() === String(mediaItem.caption || '').trim();
+  var unchangedReview = isFocusedCaptionReviewMode() && nextCaption === String(mediaItem.caption || '');
   return cancelCurrentCaptionVision().then(function () {
     if (unchangedReview) return true;
     return saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key, {
@@ -203,7 +203,7 @@ function cancelCaptionAssistGeneration() {
 
 function dismissCaptionAssistCandidate() {
   if (isFocusedCaptionOpen()) {
-    stopFocusedCaption('Focus Caption ended.');
+    if (!stopFocusedCaption('Focus Caption ended.')) return Promise.resolve(false);
     renderFileList();
     return Promise.resolve(true);
   }
@@ -541,7 +541,7 @@ function syncCaptionAssistCandidateUi() {
   var candidate = captionAssistCandidate;
   var focusOpen = isFocusedCaptionOpen();
   var reviewMode = focusOpen && isFocusedCaptionReviewMode();
-  var visible = !!(candidate && mediaKey && candidate.mediaKey === mediaKey && candidate.text);
+  var visible = !!(candidate && mediaKey && candidate.mediaKey === mediaKey && (reviewMode || candidate.text));
   var focusVisible = !!(focusOpen && mediaKey);
   var assistVisible = !!(!focusOpen && mediaKey && isCaptionAssistPresentationOpenFor(mediaKey));
   var panelVisible = focusVisible || assistVisible;
@@ -604,7 +604,7 @@ function syncCaptionAssistCandidateUi() {
   regenerateBtn.disabled = !!pending;
   var useArmed = focusOpen && !reviewMode && visible && isFocusedCaptionUseArmedForCandidate(candidate);
   useBtn.classList.toggle('is-armed', !!useArmed);
-  var reviewChanged = reviewMode && visible && String(candidate.text || '').trim() !== String((state.currentItem && state.currentItem.caption) || '').trim();
+  var reviewChanged = reviewMode && visible && String(candidate.text || '') !== String((state.currentItem && state.currentItem.caption) || '');
   useBtn.textContent = reviewMode
     ? (reviewChanged ? 'Save → Next' : 'Keep → Next')
     : (useArmed ? 'Press Enter again' : 'Apply Caption');
@@ -1440,7 +1440,7 @@ function wirePrimerCaptionResetUi() {
     candidatePanel.addEventListener('click', function (event) {
       if (event.target !== candidatePanel) return;
       if (isFocusedCaptionOpen()) {
-        stopFocusedCaption('Focus Caption ended.');
+        if (!stopFocusedCaption('Focus Caption ended.')) return;
         renderFileList();
         return;
       }
@@ -1455,7 +1455,7 @@ function wirePrimerCaptionResetUi() {
       if (isFocusedCaptionOpen()) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        stopFocusedCaption('Focus Caption ended.');
+        if (!stopFocusedCaption('Focus Caption ended.')) return;
         renderFileList();
         return;
       }

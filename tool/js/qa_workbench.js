@@ -253,15 +253,30 @@
     return rows.map(function (finding) {
       var files = Array.isArray(finding.files) ? finding.files.slice() : [];
       var evidence = Array.isArray(finding.evidence) ? finding.evidence.slice(0, 4) : [];
+      var confidence = String(finding.confidence || 'medium');
+      var patches = Array.isArray(finding.patches) ? finding.patches.map(function (patch) {
+        return {
+          file: String(patch && patch.file || ''),
+          action: String(patch && patch.action || ''),
+          sourceText: String(patch && patch.sourceText || ''),
+          replacementText: String(patch && patch.replacementText || ''),
+          anchorText: String(patch && patch.anchorText || ''),
+          confidence: confidence,
+          knownTag: null
+        };
+      }).filter(function (patch) {
+        return !!patch.file;
+      }) : [];
       return {
         id: qaStableId(['ai', finding.category, finding.title].concat(files)),
         category: String(finding.category || 'consistency'),
         priority: String(finding.priority || 'normal'),
-        confidence: String(finding.confidence || 'medium'),
+        confidence: confidence,
         title: String(finding.title || ''),
         summary: String(finding.summary || ''),
         why: String(finding.why || ''),
         files: files,
+        patches: patches,
         facts: [{ value: String(files.length), label: 'affected items' }],
         meta: evidence,
         source: 'ai',
@@ -1798,9 +1813,27 @@
     });
     if (!target) throw new Error('QA review target is missing from the current Set: ' + clean[0]);
 
+    var finding = qaWorkbenchState.findings.find(function (row) {
+      return row.id === String(findingId || '');
+    });
+    var discrepanciesByMediaKey = {};
+    if (finding && Array.isArray(finding.patches)) {
+      finding.patches.forEach(function (patch) {
+        var item = (state.items || []).find(function (candidate) {
+          return candidate && candidate.fileName === patch.file;
+        });
+        if (!item || !item.key) return;
+        if (!discrepanciesByMediaKey[item.key]) discrepanciesByMediaKey[item.key] = [];
+        discrepanciesByMediaKey[item.key].push(patch);
+      });
+    }
+
     activateFocusSet(clean, source || 'Quality Assurance', 'qa');
     selectPathMedia(target).then(function () {
-      startFocusedReview(target.key);
+      startFocusedReview(target.key, {
+        discrepanciesByMediaKey: discrepanciesByMediaKey,
+        sourceLabel: finding && finding.sourceLabel ? finding.sourceLabel : 'QA'
+      });
     }).catch(function (err) {
       reportConsoleError('QA · Focus Review', err);
       setStatus('Could not open QA Focus Review: ' + String(err && err.message ? err.message : err));

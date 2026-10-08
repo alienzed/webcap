@@ -277,7 +277,7 @@ def build_caption_vision_messages(caption, groups, media_relative_path):
     ], normalized_groups
 
 
-def normalize_caption_vision_result(raw_text, groups):
+def normalize_caption_vision_result(raw_text, groups, caption_text=""):
     text = str(raw_text or "").strip()
     if text.startswith("```"):
         lines = text.splitlines()
@@ -301,6 +301,7 @@ def normalize_caption_vision_result(raw_text, groups):
         display_groups[group_key] = group["group"]
         allowed[group_key] = {term.casefold(): term for term in group["options"]}
 
+    caption = str(caption_text or "")
     normalized = []
     seen = set()
     for raw in findings[:4]:
@@ -316,12 +317,18 @@ def normalize_caption_vision_result(raw_text, groups):
         if action == "add":
             if source_text or not replacement_text:
                 continue
+            if anchor_text and caption.count(anchor_text) != 1:
+                continue
         elif action == "replace":
             if not source_text or not replacement_text or source_text == replacement_text:
+                continue
+            if caption.count(source_text) != 1:
                 continue
             anchor_text = ""
         else:
             if not source_text or replacement_text:
+                continue
+            if caption.count(source_text) != 1:
                 continue
             anchor_text = ""
 

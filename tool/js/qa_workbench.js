@@ -263,55 +263,76 @@
     });
   }
 
-  // QA review state is derived data, scoped to the exact inputs that produced it.
-  // No media or user-authored Set state is written by this cache.
-  function qaSavedReviewKey(signature) {
-    // Keep storage keys bounded even for large Sets; stored signatures verify collisions.
-    var hash = 2166136261;
-    var value = String(signature || '');
-    for (var i = 0; i < value.length; i += 1) {
-      hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
-    }
-    return 'webcap.qa.review.v1:' + (hash >>> 0).toString(16);
+  // A Set-owned review receipt, not a duplicate copy of image metadata.
+  var qaReviewLoadToken = 0;
+  var qaReviewSaveChain = Promise.resolve();
+
+  function qaReviewPayload() {
+    return {
+      version: 1,
+      scopeKey: qaWorkbenchState.scopeKey,
+      trainingFocus: qaWorkbenchState.trainingFocus,
+      itemInputs: qaBuildDeepScanItems(qaGetTrainingItems()),
+      aiFindings: qaWorkbenchState.aiFindings,
+      aiSummary: qaWorkbenchState.aiSummary,
+      dispositions: qaWorkbenchState.dispositions
+    };
   }
 
   function qaSaveReview() {
-    if (!qaWorkbenchState.deepScanInputSignature) return;
-    try {
-      localStorage.setItem(qaSavedReviewKey(qaWorkbenchState.deepScanInputSignature), JSON.stringify({
-        signature: qaWorkbenchState.deepScanInputSignature,
-        aiScopeSignature: qaWorkbenchState.aiScopeSignature,
-        aiFindings: qaWorkbenchState.aiFindings,
-        aiSummary: qaWorkbenchState.aiSummary,
-        dispositions: qaWorkbenchState.dispositions
-      }));
-    } catch (err) {
+    var folder = String(state.folder || '');
+    var review = qaReviewPayload();
+    qaReviewSaveChain = qaReviewSaveChain.catch(function () {}).then(function () {
+      return qaRequestJson('/fs/qa/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: folder, review: review })
+      });
+    }).catch(function (err) {
       window.reportConsoleError('QA · Save review', err);
-      qaWorkbenchState.statusMessage = 'QA review could not be saved locally.';
-    }
+      qaWorkbenchState.statusMessage = 'QA review could not be saved.';
+    });
+    return qaReviewSaveChain;
   }
 
   function qaRestoreReview(signature) {
+    var token = ++qaReviewLoadToken;
+    var folder = String(state.folder || '');
+    var scopeKey = qaBuildScopeKey(qaGetTrainingItems());
+    var focus = qaWorkbenchState.trainingFocus;
     qaWorkbenchState.aiFindings = [];
     qaWorkbenchState.aiSummary = '';
     qaWorkbenchState.aiScopeSignature = '';
     qaWorkbenchState.dispositions = {};
-    try {
-      var raw = localStorage.getItem(qaSavedReviewKey(signature));
-      if (!raw) return;
-      var saved = JSON.parse(raw);
-      if (!saved || saved.signature !== signature) return;
-      if (saved.aiScopeSignature === signature && Array.isArray(saved.aiFindings)) {
-        qaWorkbenchState.aiFindings = saved.aiFindings;
-        qaWorkbenchState.aiSummary = String(saved.aiSummary || '');
-        qaWorkbenchState.aiScopeSignature = signature;
-      }
+    qaRequestJson('/fs/qa/review?folder=' + encodeURIComponent(folder)).then(function (payload) {
+      if (token !== qaReviewLoadToken || String(state.folder || '') !== folder
+          || qaBuildScopeKey(qaGetTrainingItems()) !== scopeKey
+          || qaWorkbenchState.trainingFocus !== focus) return;
+      var saved = payload.review;
+      if (!saved || saved.scopeKey !== scopeKey || saved.trainingFocus !== focus) return;
+      var before = {};
+      (saved.itemInputs || []).forEach(function (item) {
+        before[item.fileName] = JSON.stringify(item);
+      });
+      var changed = {};
+      qaBuildDeepScanItems(qaGetTrainingItems()).forEach(function (item) {
+        if (before[item.fileName] !== JSON.stringify(item)) changed[item.fileName] = true;
+      });
+      qaWorkbenchState.aiFindings = (saved.aiFindings || []).filter(function (finding) {
+        return !(finding.files || []).some(function (file) { return changed[file]; });
+      });
+      qaWorkbenchState.aiSummary = String(saved.aiSummary || '');
+      qaWorkbenchState.aiScopeSignature = signature;
       qaWorkbenchState.dispositions = saved.dispositions && typeof saved.dispositions === 'object'
         ? saved.dispositions : {};
-    } catch (err) {
+      qaMergeFindings();
+      renderQaWorkbench();
+    }).catch(function (err) {
+      if (token !== qaReviewLoadToken) return;
       window.reportConsoleError('QA · Restore review', err);
       qaWorkbenchState.statusMessage = 'Saved QA review could not be restored.';
-    }
+      renderQaWorkbench();
+    });
   }
 
   function qaMergeFindings() {

@@ -658,6 +658,8 @@ def caption_assist_route():
             rendered_primer=data.get("renderedPrimer", ""),
             preferred_sequence=data.get("preferredCaptionSequence", ""),
             corrections=data.get("corrections"),
+            open_sight=data.get("openSight"),
+            context_sight=data.get("contextSight"),
         )
         job = enqueue_llm(
             "caption",

@@ -605,7 +605,6 @@ function syncCaptionVisionUi() {
   toggleWrap.title = modelAvailable
     ? 'Scan for incorrect or omitted visual details using the selected Vision model.'
     : (captionVisionCapabilities.loaded ? 'No Vision model is available.' : 'Vision models are still loading.');
-  syncVisionImageCaptionActionUi();
 
   if (!candidateVisible || (!captionVisionEnabled && !suppliedResultVisible)) return;
   if (!suppliedResultVisible && !modelAvailable) {
@@ -653,7 +652,6 @@ window.setCaptionDiscrepancyFindingsForCandidate = setCaptionDiscrepancyFindings
 
 function getVisionImageCaptionEls() {
   var els = {
-    actionBtn: document.getElementById('preview-vision-caption-btn'),
     modal: document.getElementById('vision-image-caption-modal'),
     model: document.getElementById('vision-image-caption-model'),
     loading: document.getElementById('vision-image-caption-loading'),
@@ -668,20 +666,6 @@ function getVisionImageCaptionEls() {
     if (!els[key]) throw new Error('Vision Caption UI is missing: ' + key);
   });
   return els;
-}
-
-function syncVisionImageCaptionActionUi() {
-  var btn = document.getElementById('preview-vision-caption-btn');
-  if (!btn) throw new Error('Vision Caption preview action is missing.');
-  var mediaItem = state && state.currentItem;
-  var focusedCaptionOpen = !!(window.focusedCaptionState && window.focusedCaptionState.open);
-  var supported = !!(
-    captionVisionCapabilities.models.length &&
-    mediaItem &&
-    isCaptionVisionSupportedMedia(mediaItem.fileName)
-  );
-  btn.classList.toggle('hidden', !supported || focusedCaptionOpen);
-  btn.disabled = !!visionImageCaptionState.pending;
 }
 
 function syncVisionImageCaptionModal() {
@@ -703,7 +687,6 @@ function syncVisionImageCaptionModal() {
     state.currentItem.key === visionImageCaptionState.mediaKey
   );
   els.cancelBtn.classList.toggle('hidden', !open || !visionImageCaptionState.pending);
-  syncVisionImageCaptionActionUi();
 }
 
 function cancelVisionImageCaptionRequest() {
@@ -912,14 +895,6 @@ function useVisionImageCaptionInEditor() {
 
 function wireVisionImageCaptionUi() {
   var els = getVisionImageCaptionEls();
-  if (!els.actionBtn.__visionImageCaptionBound) {
-    els.actionBtn.__visionImageCaptionBound = true;
-    els.actionBtn.addEventListener('click', function (event) {
-      event.preventDefault();
-      event.stopPropagation();
-      runVisionImageCaption();
-    });
-  }
   if (!els.closeBtn.__visionImageCaptionBound) {
     els.closeBtn.__visionImageCaptionBound = true;
     els.closeBtn.addEventListener('click', closeVisionImageCaption);
@@ -1048,7 +1023,6 @@ window.captionVisionRequestFingerprint = captionVisionRequestFingerprint;
 window.adoptCaptionVisionPrefetch = adoptCaptionVisionPrefetch;
 window.isCaptionVisionSupportedMedia = isCaptionVisionSupportedMedia;
 window.getCaptionVisionModelId = getCaptionVisionModelId;
-window.syncVisionImageCaptionActionUi = syncVisionImageCaptionActionUi;
 window.syncVisionImageCaptionSelection = syncVisionImageCaptionSelection;
 window.runVisionImageCaption = runVisionImageCaption;
 window.requestVisionImageCaptionDescription = requestVisionImageCaptionDescription;

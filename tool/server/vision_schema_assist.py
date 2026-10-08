@@ -11,7 +11,7 @@ from .media import set_media_metadata_analysis_block
 
 VISION_SIGHT_VERSION = 2
 VISION_SCHEMA_MINING_VERSION = 2
-VISION_VOCABULARY_SIGHT_VERSION = 1
+VISION_VOCABULARY_SIGHT_VERSION = 2
 VISION_VOCABULARY_MINING_VERSION = 1
 
 VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA = {
@@ -120,35 +120,19 @@ VISION_SCHEMA_SIGHT_SYSTEM_PROMPT = (
 VISION_VOCABULARY_SIGHT_RESPONSE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["groups", "other"],
+    "required": ["caption", "matches"],
     "properties": {
-        "groups": {
+        "caption": {"type": "string", "minLength": 1},
+        "matches": {
             "type": "array",
             "maxItems": 40,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["group", "observations"],
+                "required": ["group", "terms"],
                 "properties": {
                     "group": {"type": "string", "minLength": 1},
-                    "observations": {
-                        "type": "array",
-                        "maxItems": 16,
-                        "items": {"type": "string", "minLength": 1},
-                    },
-                },
-            },
-        },
-        "other": {
-            "type": "array",
-            "maxItems": 20,
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["suggestedGroup", "observations"],
-                "properties": {
-                    "suggestedGroup": {"type": "string", "minLength": 1},
-                    "observations": {
+                    "terms": {
                         "type": "array",
                         "maxItems": 16,
                         "items": {"type": "string", "minLength": 1},
@@ -160,14 +144,13 @@ VISION_VOCABULARY_SIGHT_RESPONSE_SCHEMA = {
 }
 
 VISION_VOCABULARY_SIGHT_SYSTEM_PROMPT = (
-    "You are performing a fresh second visual inspection for annotation-vocabulary discovery. "
-    "You are given existing annotation group names as semantic lenses for the inspection. "
-    "You are not given the current terms, so describe what you actually see rather than trying to match existing vocabulary. "
-    "For every supplied group that has clearly visible relevant evidence, report compact observations in your own literal visual wording. "
-    "Use short noun/adjective phrases rather than sentences, and prefer common stable wording over stylistic synonyms. "
-    "Then report other visually meaningful concepts that do not fit any supplied group, with a concise suggested group name. "
-    "This pass is for discovering missing vocabulary, not assigning tags. Report only what is clearly visible in this image. "
-    "Do not infer intent, identity, mood, or hidden attributes. Return JSON only."
+    "You perform a fresh second visual read of one image using the Set's annotation language as context. "
+    "Focus on the image first. Build a concise caption from clearly visible details in the image. "
+    "Prefer exact supplied terms when they clearly match what you see. "
+    "Use the supplied caption template to guide ordering, emphasis, and visual relationships. "
+    "Treat the supplied groups and terms as preferred annotation language. "
+    "Return the caption plus the exact supplied terms you used, grouped under their supplied group names. "
+    "Keep the response compact and visual. Return JSON only."
 )
 
 
@@ -302,26 +285,35 @@ def _normalize_vocabulary_groups(groups):
     return out
 
 
-def vision_vocabulary_group_signature(groups):
+def vision_vocabulary_group_signature(groups, caption_template=""):
     normalized = _normalize_vocabulary_groups(groups)
     payload = json.dumps(
-        [row["group"] for row in normalized],
+        {
+            "groups": normalized,
+            "captionTemplate": str(caption_template or "").strip(),
+        },
         ensure_ascii=False,
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:20]
 
 
-def build_vision_vocabulary_sight_messages(media_reference, existing_groups):
+def build_vision_vocabulary_sight_messages(media_reference, existing_groups, caption_template=""):
     groups = _normalize_vocabulary_groups(existing_groups)
     if not groups:
-        raise ValueError("Vocabulary discovery needs at least one existing annotation group.")
+        raise ValueError("Context Sight needs at least one existing annotation group.")
     text = (
-        "Inspect this image again from scratch. Do not rely on any earlier visual answer. "
-        "For each supplied group that applies, list concise visible observations that could reveal missing or overly broad vocabulary. "
-        "Also list important visible concepts that do not fit the supplied groups under other. "
-        "Do not decide the final vocabulary; just produce fresh visual evidence.\n\n"
-        + json.dumps({"groups": [row["group"] for row in groups]}, ensure_ascii=False)
+        "Make a fresh visual read of this image. "
+        "Build the caption from clearly visible details in the image. "
+        "Prefer exact supplied terms when they clearly match what you see. "
+        "Use the caption template to guide ordering, emphasis, and relationships.\n\n"
+        + json.dumps(
+            {
+                "captionTemplate": str(caption_template or "").strip(),
+                "groups": groups,
+            },
+            ensure_ascii=False,
+        )
     )
     return [
         {"role": "system", "content": VISION_VOCABULARY_SIGHT_SYSTEM_PROMPT},
@@ -337,82 +329,47 @@ def build_vision_vocabulary_sight_messages(media_reference, existing_groups):
 
 def normalize_vision_vocabulary_sight_payload(data, existing_groups):
     if not isinstance(data, dict):
-        raise ValueError("Vocabulary sight response must be an object.")
-    if not isinstance(data.get("groups"), list):
-        raise ValueError("Vocabulary sight response is missing its groups array.")
-    if not isinstance(data.get("other"), list):
-        raise ValueError("Vocabulary sight response is missing its other array.")
+        raise ValueError("Context Sight response must be an object.")
+    caption = _clean(data.get("caption"), 1600)
+    if not caption:
+        raise ValueError("Context Sight response is missing its caption.")
+    if not isinstance(data.get("matches"), list):
+        raise ValueError("Context Sight response is missing its matches array.")
 
     groups = _normalize_vocabulary_groups(existing_groups)
-    allowed = {row["group"].casefold(): row["group"] for row in groups}
+    allowed_groups = {row["group"].casefold(): row for row in groups}
     grouped = {row["group"]: [] for row in groups}
 
-    def add_observations(target, values, label):
-        if not isinstance(values, list):
-            raise ValueError(label + " observations must be an array.")
-        seen = {value.casefold() for value in target}
-        for raw in values:
-            value = _clean(raw)
-            if not value:
-                raise ValueError(label + " contains an empty observation.")
-            key = value.casefold()
-            if key not in seen:
-                seen.add(key)
-                target.append(value)
-
-    unknown = []
-    for index, raw in enumerate(data["groups"], start=1):
+    for index, raw in enumerate(data["matches"], start=1):
         if not isinstance(raw, dict):
-            raise ValueError("Vocabulary sight group {} is not an object.".format(index))
+            raise ValueError("Context Sight match {} is not an object.".format(index))
         raw_group = _clean(raw.get("group"), 120)
         if not raw_group:
-            raise ValueError("Vocabulary sight group {} has an empty name.".format(index))
-        observations = raw.get("observations")
-        canonical = allowed.get(raw_group.casefold())
-        if canonical:
-            add_observations(grouped[canonical], observations, "Vocabulary sight group '{}'".format(raw_group))
-        else:
-            values = []
-            add_observations(values, observations, "Vocabulary sight group '{}'".format(raw_group))
-            if values:
-                unknown.append({"suggestedGroup": raw_group, "observations": values})
-
-    for index, raw in enumerate(data["other"], start=1):
-        if not isinstance(raw, dict):
-            raise ValueError("Vocabulary sight other item {} is not an object.".format(index))
-        suggested = _clean(raw.get("suggestedGroup"), 120)
-        if not suggested:
-            raise ValueError("Vocabulary sight other item {} has an empty suggestedGroup.".format(index))
-        observations = raw.get("observations")
-        canonical = allowed.get(suggested.casefold())
-        if canonical:
-            add_observations(grouped[canonical], observations, "Vocabulary sight other '{}'".format(suggested))
-        else:
-            values = []
-            add_observations(values, observations, "Vocabulary sight other '{}'".format(suggested))
-            if values:
-                unknown.append({"suggestedGroup": suggested, "observations": values})
-
-    other_by_key = {}
-    for row in unknown:
-        key = row["suggestedGroup"].casefold()
-        target = other_by_key.setdefault(key, {
-            "suggestedGroup": row["suggestedGroup"],
-            "observations": [],
-        })
-        add_observations(
-            target["observations"],
-            row["observations"],
-            "Vocabulary sight other '{}'".format(row["suggestedGroup"]),
-        )
+            raise ValueError("Context Sight match {} has an empty group.".format(index))
+        raw_terms = raw.get("terms")
+        if not isinstance(raw_terms, list):
+            raise ValueError("Context Sight match '{}' terms must be an array.".format(raw_group))
+        target = allowed_groups.get(raw_group.casefold())
+        if target is None:
+            continue
+        exact_terms = {term.casefold(): term for term in target["terms"]}
+        seen = {term.casefold() for term in grouped[target["group"]]}
+        for raw_term in raw_terms:
+            term = _clean(raw_term)
+            if not term:
+                raise ValueError("Context Sight match '{}' contains an empty term.".format(raw_group))
+            canonical = exact_terms.get(term.casefold())
+            if canonical and canonical.casefold() not in seen:
+                seen.add(canonical.casefold())
+                grouped[target["group"]].append(canonical)
 
     return {
-        "groups": [
-            {"group": row["group"], "observations": grouped[row["group"]]}
+        "caption": caption,
+        "matches": [
+            {"group": row["group"], "terms": grouped[row["group"]]}
             for row in groups
             if grouped[row["group"]]
         ],
-        "other": list(other_by_key.values()),
     }
 
 
@@ -531,7 +488,7 @@ def save_vision_sight(folder, media_name, model, sight_payload):
     )
 
 
-def _cached_vocabulary_sight_block(folder_path, media_name, metadata, model, group_signature):
+def _valid_vocabulary_sight_block(folder_path, media_name, metadata, model):
     media_path = Path(folder_path) / media_name
     if not media_path.exists() or not media_path.is_file():
         return None
@@ -546,47 +503,61 @@ def _cached_vocabulary_sight_block(folder_path, media_name, metadata, model, gro
         return None
     if str(sight.get("model") or "") != str(model or ""):
         return None
-    if str(sight.get("groupSignature") or "") != str(group_signature or ""):
-        return None
     if int(sight.get("mtime") or -1) != int(stat.st_mtime):
         return None
     if int(sight.get("size") or -1) != int(stat.st_size):
         return None
-    if not isinstance(sight.get("groups"), list) or not isinstance(sight.get("other"), list):
+    if not str(sight.get("caption") or "").strip() or not isinstance(sight.get("matches"), list):
         return None
     return sight
 
 
-def vision_vocabulary_sight_status(folder, model, existing_groups, include_sight=False):
+def _cached_vocabulary_sight_block(folder_path, media_name, metadata, model, context_signature):
+    sight = _valid_vocabulary_sight_block(folder_path, media_name, metadata, model)
+    if not sight:
+        return None
+    if str(sight.get("contextSignature") or "") != str(context_signature or ""):
+        return None
+    return sight
+
+
+def vision_vocabulary_sight_status(folder, model, existing_groups, include_sight=False, caption_template=""):
     folder_path = _resolve_folder(folder)
     metadata = _load_metadata(folder_path)
-    signature = vision_vocabulary_group_signature(existing_groups)
+    signature = vision_vocabulary_group_signature(existing_groups, caption_template)
     items = []
     for media_name in list_media_files(folder):
         media_path = folder_path / media_name
         if media_path.suffix.casefold() not in VISION_MEDIA_EXTS:
             continue
-        sight = _cached_vocabulary_sight_block(folder_path, media_name, metadata, model, signature)
-        item = {"file": media_name, "cached": bool(sight)}
-        if include_sight and sight:
+        latest = _valid_vocabulary_sight_block(folder_path, media_name, metadata, model)
+        current = latest if latest and str(latest.get("contextSignature") or "") == signature else None
+        item = {
+            "file": media_name,
+            "cached": bool(current),
+            "available": bool(latest),
+        }
+        if include_sight and current:
             item["sight"] = {
-                "groups": list(sight.get("groups") or []),
-                "other": list(sight.get("other") or []),
+                "caption": str(current.get("caption") or ""),
+                "matches": list(current.get("matches") or []),
             }
         items.append(item)
     cached = sum(1 for item in items if item["cached"])
+    available = sum(1 for item in items if item["available"])
     return {
         "version": VISION_VOCABULARY_SIGHT_VERSION,
         "model": str(model or ""),
-        "groupSignature": signature,
+        "contextSignature": signature,
         "total": len(items),
         "cached": cached,
+        "available": available,
         "pending": max(0, len(items) - cached),
         "items": items,
     }
 
 
-def save_vision_vocabulary_sight(folder, media_name, model, existing_groups, sight_payload):
+def save_vision_vocabulary_sight(folder, media_name, model, existing_groups, sight_payload, caption_template=""):
     folder_path = _resolve_folder(folder)
     media_name = _validate_media_name(media_name)
     model = str(model or "").strip()
@@ -594,22 +565,22 @@ def save_vision_vocabulary_sight(folder, media_name, model, existing_groups, sig
         raise ValueError("Vision model is required.")
     normalized_groups = _normalize_vocabulary_groups(existing_groups)
     if not normalized_groups:
-        raise ValueError("Vocabulary discovery needs at least one existing annotation group.")
+        raise ValueError("Context Sight needs at least one existing annotation group.")
     sight_payload = normalize_vision_vocabulary_sight_payload(sight_payload, normalized_groups)
 
     media_path = folder_path / media_name
     if not media_path.exists() or not media_path.is_file():
         raise FileNotFoundError("Media file not found")
     if media_path.suffix.casefold() not in VISION_MEDIA_EXTS:
-        raise ValueError("Vocabulary sight supports images and videos.")
+        raise ValueError("Context Sight supports images and videos.")
 
     stat = media_path.stat()
     sight = {
         "version": VISION_VOCABULARY_SIGHT_VERSION,
         "model": model,
-        "groupSignature": vision_vocabulary_group_signature(normalized_groups),
-        "groups": sight_payload["groups"],
-        "other": sight_payload["other"],
+        "contextSignature": vision_vocabulary_group_signature(normalized_groups, caption_template),
+        "caption": sight_payload["caption"],
+        "matches": sight_payload["matches"],
         "mtime": int(stat.st_mtime),
         "size": int(stat.st_size),
         "updatedAt": time.time(),
@@ -757,12 +728,19 @@ def mine_vision_sight(folder, model, files=None):
     return analysis
 
 
-def vision_vocabulary_sight_records(folder, model, existing_groups, files=None):
-    status = vision_vocabulary_sight_status(
-        folder,
-        model,
-        existing_groups,
-        include_sight=True,
+def vision_vocabulary_sight_records(
+    folder,
+    model,
+    existing_groups,
+    files=None,
+    caption_template="",
+    current_context=True,
+):
+    folder_path = _resolve_folder(folder)
+    metadata = _load_metadata(folder_path)
+    signature = (
+        vision_vocabulary_group_signature(existing_groups, caption_template)
+        if current_context else ""
     )
     wanted = {
         str(value or "").strip()
@@ -770,16 +748,23 @@ def vision_vocabulary_sight_records(folder, model, existing_groups, files=None):
         if str(value or "").strip()
     }
     records = []
-    for item in status["items"]:
-        if wanted and item["file"] not in wanted:
+    for media_name in list_media_files(folder):
+        if wanted and media_name not in wanted:
             continue
-        sight = item.get("sight") if isinstance(item.get("sight"), dict) else None
-        if not item.get("cached") or sight is None:
+        media_path = folder_path / media_name
+        if media_path.suffix.casefold() not in VISION_MEDIA_EXTS:
+            continue
+        sight = (
+            _cached_vocabulary_sight_block(folder_path, media_name, metadata, model, signature)
+            if current_context
+            else _valid_vocabulary_sight_block(folder_path, media_name, metadata, model)
+        )
+        if not sight:
             continue
         records.append({
-            "file": item["file"],
-            "groups": list(sight.get("groups") or []),
-            "other": list(sight.get("other") or []),
+            "file": media_name,
+            "caption": str(sight.get("caption") or ""),
+            "matches": list(sight.get("matches") or []),
         })
     return records
 
@@ -787,52 +772,52 @@ def vision_vocabulary_sight_records(folder, model, existing_groups, files=None):
 def mine_vocabulary_sight_records(records, limit=360, singleton_limit_per_group=18):
     buckets = {}
     dimension_order = []
+    captions = []
 
-    def add(media, source, suggested_group, label):
-        label = _clean(label)
-        suggested_group = _clean(suggested_group, 120)
-        if not label or not suggested_group:
+    def add(media, group, term, context):
+        group = _clean(group, 120)
+        term = _clean(term)
+        if not group or not term:
             return
-        dimension_key = (source, suggested_group.casefold())
-        if dimension_key not in dimension_order:
-            dimension_order.append(dimension_key)
-        key = (source, suggested_group.casefold(), label.casefold())
+        group_key = group.casefold()
+        key = (group_key, term.casefold())
+        if group_key not in dimension_order:
+            dimension_order.append(group_key)
         row = buckets.get(key)
         if row is None:
             row = {
-                "source": source,
-                "category": "group" if source == "schema" else "other",
-                "suggestedGroup": suggested_group,
-                "label": label,
+                "source": "context",
+                "category": "group",
+                "suggestedGroup": group,
+                "label": term,
                 "media": set(),
+                "contexts": [],
             }
             buckets[key] = row
         row["media"].add(media)
+        context = _clean(context, 420)
+        if context and context not in row["contexts"] and len(row["contexts"]) < 2:
+            row["contexts"].append(context)
 
     prepared_count = 0
     for record in records if isinstance(records, list) else []:
         if not isinstance(record, dict):
             continue
         media = str(record.get("file") or "").strip()
-        if not media:
+        caption = _clean(record.get("caption"), 1600)
+        if not media or not caption:
             continue
         prepared_count += 1
-        for group_row in record.get("groups") if isinstance(record.get("groups"), list) else []:
-            if not isinstance(group_row, dict):
+        captions.append({"file": media, "caption": caption})
+        for match in record.get("matches") if isinstance(record.get("matches"), list) else []:
+            if not isinstance(match, dict):
                 continue
-            group = _clean(group_row.get("group"), 120)
-            for observation in group_row.get("observations") if isinstance(group_row.get("observations"), list) else []:
-                add(media, "schema", group, observation)
-        for other_row in record.get("other") if isinstance(record.get("other"), list) else []:
-            if not isinstance(other_row, dict):
-                continue
-            suggested = _clean(other_row.get("suggestedGroup"), 120)
-            for observation in other_row.get("observations") if isinstance(other_row.get("observations"), list) else []:
-                add(media, "other", suggested, observation)
+            group = _clean(match.get("group"), 120)
+            for term in match.get("terms") if isinstance(match.get("terms"), list) else []:
+                add(media, group, term, caption)
 
     recurring = [row for row in buckets.values() if len(row["media"]) >= 2]
     recurring.sort(key=lambda row: (
-        0 if row["source"] == "schema" else 1,
         row["suggestedGroup"].casefold(),
         -len(row["media"]),
         row["label"].casefold(),
@@ -841,7 +826,7 @@ def mine_vocabulary_sight_records(records, limit=360, singleton_limit_per_group=
     singleton_by_dimension = defaultdict(list)
     for row in buckets.values():
         if len(row["media"]) == 1:
-            singleton_by_dimension[(row["source"], row["suggestedGroup"].casefold())].append(row)
+            singleton_by_dimension[row["suggestedGroup"].casefold()].append(row)
     singletons = []
     for dimension in dimension_order:
         rows = singleton_by_dimension.get(dimension, [])
@@ -861,23 +846,26 @@ def mine_vocabulary_sight_records(records, limit=360, singleton_limit_per_group=
             "count": len(media),
             "media": media,
             "examples": media[:6],
-            "contexts": [],
+            "contexts": row["contexts"][:2],
         })
     return {
         "version": VISION_VOCABULARY_MINING_VERSION,
         "itemCount": prepared_count,
         "evidenceCount": len(evidence),
         "evidence": evidence,
+        "captions": captions,
     }
 
 
-def mine_vision_vocabulary(folder, model, existing_groups, files=None):
+def mine_vision_vocabulary(folder, model, existing_groups, files=None, caption_template=""):
     open_records = vision_sight_records(folder, model, files=files)
     vocabulary_records = vision_vocabulary_sight_records(
         folder,
         model,
         existing_groups,
         files=files,
+        caption_template=caption_template,
+        current_context=True,
     )
     open_analysis = mine_sight_records(open_records, limit=180)
     vocabulary_analysis = mine_vocabulary_sight_records(vocabulary_records)
@@ -890,6 +878,22 @@ def mine_vision_vocabulary(folder, model, existing_groups, files=None):
         copied["suggestedGroup"] = ""
         evidence.append(copied)
     evidence.extend(vocabulary_analysis.get("evidence") or [])
+    for index, row in enumerate(vocabulary_analysis.get("captions") or [], start=1):
+        file_name = str(row.get("file") or "").strip()
+        caption = _clean(row.get("caption"), 420)
+        if not file_name or not caption:
+            continue
+        evidence.append({
+            "id": "c{:03d}".format(index),
+            "source": "context_caption",
+            "category": "caption",
+            "suggestedGroup": "",
+            "label": caption,
+            "count": 1,
+            "media": [file_name],
+            "examples": [file_name],
+            "contexts": [],
+        })
 
     return {
         "version": VISION_VOCABULARY_MINING_VERSION,
@@ -904,3 +908,4 @@ def mine_vision_vocabulary(folder, model, existing_groups, files=None):
             "schemaAware": len(vocabulary_records),
         },
     }
+

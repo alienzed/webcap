@@ -585,8 +585,8 @@ def _vision_records(run, model_ref):
             if isinstance(sight, dict):
                 vocabulary_records.append({
                     "file": file_name,
-                    "groups": list(sight.get("groups") or []),
-                    "other": list(sight.get("other") or []),
+                    "caption": str(sight.get("caption") or ""),
+                    "matches": list(sight.get("matches") or []),
                 })
     return open_records, vocabulary_records
 

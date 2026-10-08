@@ -930,7 +930,7 @@ function openFocusedAnnotationTermsEditor() {
 
 function startFocusedAnnotation(targetMediaKey) {
   if (isFocusedCaptionOpen()) {
-    stopFocusedCaption('Focus Caption ended.');
+    if (!stopFocusedCaption('Focus Caption ended.')) return;
   }
   var next = FocusedAnnotationNavigation.start(getFocusedAnnotationNavigationScope(), targetMediaKey);
   if (next.outcome !== 'active') {

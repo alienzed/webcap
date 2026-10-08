@@ -627,6 +627,22 @@ function syncCaptionVisionUi() {
   var refreshMode = document.getElementById('editor-caption-refresh-sight-mode');
   if (!refreshMode) throw new Error('Sight refresh mode control is missing.');
   refreshMode.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  var details = document.getElementById('editor-caption-details');
+  var evidence = document.getElementById('editor-caption-evidence');
+  if (!details || !evidence) throw new Error('Caption Assist evidence disclosure is missing.');
+  details.classList.toggle('hidden', !candidateVisible);
+  if (candidateVisible && details.open) {
+    var request = buildCaptionAssistRequest(mediaItem);
+    evidence.textContent = JSON.stringify({
+      openSight: request.openSight,
+      contextSight: request.contextSight,
+      directorInputs: request,
+      captionCandidate: captionAssistCandidate.text,
+      visualCheck: captionVisionResult,
+      visualCheckError: captionVisionError
+    }, null, 2);
+  }
+
   recheck.disabled = !!captionVisionActiveTask || !modelAvailable;
   recheck.title = modelAvailable
     ? 'Run a fresh visual check for this caption and item only.'

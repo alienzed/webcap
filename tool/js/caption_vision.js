@@ -263,6 +263,7 @@ function createCaptionVisionTask(mediaItem, captionText) {
     id: ++captionVisionTaskSequence,
     mediaKey: String(mediaItem && mediaItem.key || ''),
     captionText: String(captionText || '').trim(),
+    model: getCaptionVisionModelId(),
     jobId: '',
     cancelled: false,
     result: null,
@@ -373,6 +374,12 @@ function runCaptionVisionForCandidate(candidate) {
   if (!isCaptionVisionSupportedMedia(state.currentItem.fileName)) return Promise.resolve(false);
 
   var previous = captionVisionActiveTask;
+  if (previous && !previous.cancelled &&
+      previous.mediaKey === candidate.mediaKey &&
+      previous.captionText === String(candidate.text || '').trim() &&
+      previous.model === getCaptionVisionModelId()) {
+    return previous.promise.then(function () { return !!previous.result; });
+  }
   if (previous) {
     captionVisionActiveTask = null;
     cancelCaptionVisionTask(previous, 'Caption Vision');

@@ -624,6 +624,9 @@ function syncCaptionVisionUi() {
   var refreshSight = document.getElementById('editor-caption-refresh-sight');
   if (!refreshSight) throw new Error('Per-item Sight refresh control is missing.');
   refreshSight.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  var refreshMode = document.getElementById('editor-caption-refresh-sight-mode');
+  if (!refreshMode) throw new Error('Sight refresh mode control is missing.');
+  refreshMode.classList.toggle('hidden', !candidateVisible || !mediaSupported);
   recheck.disabled = !!captionVisionActiveTask || !modelAvailable;
   recheck.title = modelAvailable
     ? 'Run a fresh visual check for this caption and item only.'
@@ -1020,7 +1023,8 @@ function wireCaptionVisionUi() {
       if (!state.currentItem) return;
       var item = state.currentItem;
       refreshSight.disabled = true;
-      refreshSetIntelligenceItem(item, { open: true, context: true }).catch(function (err) {
+      var mode = document.getElementById('editor-caption-refresh-sight-mode').value;
+      refreshSetIntelligenceItem(item, { open: mode !== 'context', context: mode !== 'open' }).catch(function (err) {
         reportConsoleError('Item Sight refresh', err);
         window.setStatus(String(err && err.message || err));
       }).finally(function () {

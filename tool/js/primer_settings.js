@@ -397,9 +397,29 @@ function insertFocusedCaptionVisionPhrase(phrase) {
 
   captionAssistCandidate.text = next;
   resetFocusedCaptionUseArm();
+
+  var liveRequest = buildCaptionAssistRequest(state.currentItem);
+  captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
+    captionAssistCandidate.mediaKey,
+    captionAssistCandidate.text,
+    liveRequest.assignments
+  );
+  captionAssistCandidate.omittedCorrections = getCaptionAssistOmittedCorrections(
+    captionAssistCandidate.mediaKey,
+    captionAssistCandidate.text,
+    liveRequest.assignments
+  );
+  cancelCurrentCaptionVision();
+  clearCaptionVisionResult();
+
+  focusedCaptionVisionPhrases.phrases = focusedCaptionVisionPhrases.phrases.filter(function (extra) {
+    return String(extra || '').trim().toLowerCase() !== value.toLowerCase();
+  });
+
   textEl.textContent = next;
   textEl.focus();
   setFocusedCaptionCandidateCaretOffset(textEl, left.length + inserted.length);
+  syncCaptionAssistCandidateUi();
   setStatus('Inserted Vision extra.');
   return true;
 }
@@ -1335,9 +1355,6 @@ function wirePrimerCaptionResetUi() {
       clearCaptionVisionResult();
       if (isFocusedCaptionOpen()) {
         resetFocusedCaptionUseArm();
-        if (focusedCaptionVisionPhrases.enabled) {
-          clearFocusedCaptionVisionPhrases({ keepEnabled: true });
-        }
       }
       syncCaptionAssistCandidateUi();
     });

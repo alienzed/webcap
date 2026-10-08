@@ -583,11 +583,17 @@
       if (
         sessionToken !== qaWorkbenchState.deepScanSessionToken ||
         !qaWorkbenchState.deepScanSessionActive ||
-        qaWorkbenchState.deepScanStopRequested ||
+        qaWorkbenchState.deepScanStopRequested
+      ) {
+        return false;
+      }
+      if (
         String(state.folder || '') !== sessionFolder ||
         qaBuildScopeKey(qaGetTrainingItems()) !== sessionScopeKey ||
         qaWorkbenchState.trainingFocus !== sessionFocus
       ) {
+        qaInvalidateDeepScanSession('Deep QA stopped because its review context changed.');
+        renderQaWorkbench();
         return false;
       }
       qaWorkbenchState.deepScanJobId = '';

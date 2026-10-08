@@ -112,10 +112,20 @@ var debouncedSaveFolderState = debounceCreate(600);
 var primerResetUndoState = null; // { mediaKey, text }
 var captionAssistPendingJobId = '';
 var captionAssistCandidate = null; // { mediaKey, text, missingGroups, omittedAssignments }
+var captionAssistPresentationMediaKey = '';
 var primerTemplateAssistPendingJobId = '';
 
 function isCaptionAssistRunning() {
   return !!captionAssistPendingJobId;
+}
+
+function isCaptionAssistPresentationOpenFor(mediaKey) {
+  var key = String(mediaKey || '').trim();
+  return !!(key && captionAssistPresentationMediaKey === key);
+}
+
+function closeCaptionAssistPresentation() {
+  captionAssistPresentationMediaKey = '';
 }
 
 function clearCaptionAssistCandidate() {
@@ -135,6 +145,7 @@ function useCaptionAssistCandidate() {
 
   var nextCaption = String(captionAssistCandidate.text || '');
   if (!isFocusedCaptionOpen()) {
+    closeCaptionAssistPresentation();
     captionAssistCandidate = null;
     applyEditorTextAndTriggerInput(nextCaption);
     syncCaptionAssistCandidateUi();
@@ -160,12 +171,41 @@ function useCaptionAssistCandidate() {
   });
 }
 
+function cancelCaptionAssistGeneration() {
+  if (isFocusedCaptionOpen()) return cancelFocusedCaptionCurrentRequest();
+
+  var pendingJobId = String(captionAssistPendingJobId || '');
+  var wasRunning = !!pendingJobId;
+  closeCaptionAssistPresentation();
+  captionAssistPendingJobId = '';
+  captionAssistCandidate = null;
+  updatePrimerCaptionResetUi();
+
+  return cancelCurrentCaptionVision().then(function () {
+    clearCaptionVisionResult();
+    if (!pendingJobId || pendingJobId === 'submitting') return false;
+    return cancelCaptionAssistJob(pendingJobId).catch(function (err) {
+      reportConsoleWarning(
+        'Caption Assist',
+        'Could not cancel active Caption Assist job: ' + String(err && err.message ? err.message : err)
+      );
+      return false;
+    });
+  }).then(function () {
+    syncCaptionAssistCandidateUi();
+    if (wasRunning) setStatus('Caption Assist generation cancelled.');
+    return wasRunning;
+  });
+}
+
 function dismissCaptionAssistCandidate() {
   if (isFocusedCaptionOpen()) {
     stopFocusedCaption('Focus Caption ended.');
     renderFileList();
     return Promise.resolve(true);
   }
+  if (isCaptionAssistRunning()) return cancelCaptionAssistGeneration();
+  closeCaptionAssistPresentation();
   clearCaptionAssistCandidate();
   setStatus('AI caption candidate dismissed.');
   return Promise.resolve(true);
@@ -487,8 +527,9 @@ function syncCaptionAssistCandidateUi() {
   var focusOpen = isFocusedCaptionOpen();
   var visible = !!(candidate && mediaKey && candidate.mediaKey === mediaKey && candidate.text);
   var focusVisible = !!(focusOpen && mediaKey);
-  var panelVisible = visible || focusVisible;
-  var pending = focusOpen && isCaptionAssistRunning();
+  var assistVisible = !!(!focusOpen && mediaKey && isCaptionAssistPresentationOpenFor(mediaKey));
+  var panelVisible = focusVisible || assistVisible;
+  var pending = panelVisible && isCaptionAssistRunning();
   var omittedAssignments = visible && Array.isArray(candidate.omittedAssignments) ? candidate.omittedAssignments : [];
   var missingGroups = visible ? getCaptionAssistMissingGroups(mediaKey) : [];
 
@@ -499,9 +540,9 @@ function syncCaptionAssistCandidateUi() {
   progressEl.classList.toggle('hidden', !focusOpen);
   progressEl.textContent = focusOpen ? getFocusedCaptionProgressText() : '';
 
-  loadingEl.classList.toggle('hidden', !focusOpen || visible);
-  if (focusOpen && !visible) {
-    loadingTextEl.textContent = pending ? 'Generating caption…' : 'Preparing caption…';
+  loadingEl.classList.toggle('hidden', !pending || visible);
+  if (pending && !visible) {
+    loadingTextEl.textContent = 'Generating caption…';
   }
 
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
@@ -522,7 +563,7 @@ function syncCaptionAssistCandidateUi() {
   }
 
   renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);
-  textEl.classList.toggle('hidden', focusOpen && !visible);
+  textEl.classList.toggle('hidden', !visible);
   textEl.setAttribute('contenteditable', focusOpen && visible ? 'true' : 'false');
   textEl.setAttribute('role', focusOpen && visible ? 'textbox' : 'document');
   var candidateText = visible ? String(candidate.text || '') : '';
@@ -537,8 +578,10 @@ function syncCaptionAssistCandidateUi() {
   nextBtn.disabled = focusOpen && !canNavigateFocusedCaption(1);
   cancelBtn.classList.toggle('hidden', !pending);
 
-  useBtn.classList.toggle('hidden', focusOpen && !visible);
-  regenerateBtn.classList.toggle('hidden', focusOpen && !visible);
+  useBtn.classList.toggle('hidden', !visible);
+  regenerateBtn.classList.toggle('hidden', !visible);
+  useBtn.disabled = !!pending;
+  regenerateBtn.disabled = !!pending;
   var useArmed = focusOpen && visible && isFocusedCaptionUseArmedForCandidate(candidate);
   useBtn.classList.toggle('is-armed', !!useArmed);
   useBtn.textContent = useArmed ? 'Press Enter again' : 'Apply Caption';
@@ -551,7 +594,9 @@ function syncCaptionAssistCandidateUi() {
   regenerateBtn.setAttribute('aria-label', regenerateBtn.title);
 
   dismissBtn.textContent = '\u00d7';
-  dismissBtn.title = focusOpen ? 'Exit Focus Caption' : 'Dismiss candidate and stay on this item';
+  dismissBtn.title = focusOpen
+    ? 'Exit Focus Caption'
+    : (pending ? 'Cancel generation and close Caption Assist' : 'Dismiss candidate and stay on this item');
   dismissBtn.setAttribute('aria-label', dismissBtn.title);
 
   syncCaptionVisionUi();
@@ -1007,17 +1052,19 @@ function repairCaptionAssistCandidate(corrections) {
 
   var sourceMediaKey = mediaItem.key;
   var focusRequest = isFocusedCaptionOpen() ? beginFocusedCaptionRequest(sourceMediaKey) : null;
-  if (focusRequest) {
-    captionAssistPendingJobId = 'submitting';
-    updatePrimerCaptionResetUi();
-  }
+  if (!focusRequest) captionAssistPresentationMediaKey = sourceMediaKey;
+  captionAssistPendingJobId = 'submitting';
+  updatePrimerCaptionResetUi();
   setStatus('Caption Assist revising candidate...');
   return cancelCurrentCaptionVision().then(function () {
     return cancelFocusedCaptionPrefetch();
   }).then(function () {
     return requestCaptionAssistCandidate(mediaItem, request, {
       onJob: function (job) {
-        if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+        if (
+          (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) ||
+          (!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey))
+        ) {
           return cancelCaptionAssistJob(String(job.jobId || ''));
         }
         captionAssistPendingJobId = String(job.jobId || '');
@@ -1028,6 +1075,7 @@ function repairCaptionAssistCandidate(corrections) {
     });
   }).then(function (nextCandidate) {
     if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
+    if (!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey)) return false;
     if (!state.currentItem || state.currentItem.key !== sourceMediaKey) {
       setStatus('Caption repair finished, but the selected media item changed; result was not applied.');
       return false;
@@ -1053,6 +1101,7 @@ function repairCaptionAssistCandidate(corrections) {
     return true;
   }).catch(function (err) {
     if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
+    if (!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey)) return false;
     setStatus('Caption repair failed: ' + String(err && err.message ? err.message : err));
     reportConsoleError('Caption Assist', err);
     return false;
@@ -1177,14 +1226,16 @@ function runCaptionAssist() {
 
   var sourceMediaKey = mediaItem.key;
   var focusRequest = isFocusedCaptionOpen() ? beginFocusedCaptionRequest(sourceMediaKey) : null;
-  if (focusRequest) {
-    captionAssistPendingJobId = 'submitting';
-    updatePrimerCaptionResetUi();
-  }
+  if (!focusRequest) captionAssistPresentationMediaKey = sourceMediaKey;
+  captionAssistPendingJobId = 'submitting';
+  updatePrimerCaptionResetUi();
   setStatus('Caption Assist queued...');
   return requestCaptionAssistCandidate(mediaItem, request, {
     onJob: function (job) {
-      if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
+      if (
+        (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) ||
+        (!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey))
+      ) {
         return cancelCaptionAssistJob(String(job.jobId || ''));
       }
       captionAssistPendingJobId = String(job.jobId || '');
@@ -1194,7 +1245,9 @@ function runCaptionAssist() {
     }
   }).then(function (candidate) {
     if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
+    if (!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey)) return false;
     if (!state.currentItem || state.currentItem.key !== sourceMediaKey) {
+      if (!focusRequest) closeCaptionAssistPresentation();
       setStatus('Caption Assist finished, but the selected media item changed; result was not applied.');
       return false;
     }
@@ -1218,6 +1271,8 @@ function runCaptionAssist() {
     return true;
   }).catch(function (err) {
     if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
+    if (!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey)) return false;
+    if (!focusRequest) closeCaptionAssistPresentation();
     setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));
     return false;
   }).then(function (result) {
@@ -1299,7 +1354,6 @@ function wirePrimerCaptionResetUi() {
       }
       cancelCurrentCaptionVision().then(function () {
         captionAssistCandidate = null;
-        syncCaptionAssistCandidateUi();
         return runCaptionAssistFromUi();
       });
     });
@@ -1320,7 +1374,10 @@ function wirePrimerCaptionResetUi() {
   if (!focusCancelBtn.__captionAssistBound) {
     focusCancelBtn.__captionAssistBound = true;
     focusCancelBtn.addEventListener('click', function () {
-      if (!isFocusedCaptionOpen()) return;
+      if (!isFocusedCaptionOpen()) {
+        cancelCaptionAssistGeneration();
+        return;
+      }
       cancelFocusedCaptionCurrentRequest().then(function () {
         if (isFocusedCaptionOpen()) {
           syncCaptionAssistCandidateUi();

@@ -487,6 +487,14 @@ function applyCaptionVisionFinding(finding) {
   }
   var caretIndex = captionVisionPreviewCaretIndex !== null ? captionVisionPreviewCaretIndex : getCaptionVisionCaretIndex();
   captionAssistCandidate.text = captionVisionApplyPatchToText(captionAssistCandidate.text, patch, caretIndex);
+  if (captionVisionResult) {
+    captionVisionResult.captionText = String(captionAssistCandidate.text || '');
+    captionVisionResult.findings = filterCaptionVisionFindings(
+      state.currentItem,
+      captionAssistCandidate.text,
+      captionVisionResult.findings
+    );
+  }
   if (state && state.currentItem && captionAssistCandidate.mediaKey === state.currentItem.key) {
     var liveRequest = buildCaptionAssistRequest(state.currentItem);
     captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(

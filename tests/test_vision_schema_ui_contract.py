@@ -61,6 +61,8 @@ def test_schema_assist_keeps_scan_ephemeral_and_schema_mutations_explicit():
     assert "function restartDiscovery()" in script
     assert "schemaState.draftSchema = draft;" in script
     assert "resumeStage === 'challenge'" in script
+    assert "currentDirectorModel()" in script.split("function discoverySessionKey", 1)[1].split("function resetDiscoverySession", 1)[0]
+    assert "currentCaptionTemplate()" in script.split("function resetDiscoverySession", 1)[1].split("function findMediaItem", 1)[0]
     assert "Discover Vocabulary needs at least one usable Set Intelligence result" in script
     assert "Set Intelligence is incomplete for this Vision model" not in script
     assert "function actionableVocabularyGroups()" in script

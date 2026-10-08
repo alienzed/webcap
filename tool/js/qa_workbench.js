@@ -24,6 +24,9 @@
     aiFindings: [],
     aiSummary: '',
     aiScopeSignature: '',
+    aiItemSignatures: {},
+    aiCoverageValid: 0,
+    aiCoverageTotal: 0,
     deepScanJobId: '',
     deepScanSubmitting: false,
     deepScanStatus: '',
@@ -285,7 +288,7 @@
       version: 1,
       scopeKey: qaWorkbenchState.scopeKey,
       trainingFocus: qaWorkbenchState.trainingFocus,
-      itemSignatures: qaItemInputSignatures(),
+      itemSignatures: Object.assign({}, qaWorkbenchState.aiItemSignatures),
       aiFindings: qaWorkbenchState.aiFindings,
       aiSummary: qaWorkbenchState.aiSummary,
       dispositions: qaWorkbenchState.dispositions
@@ -316,6 +319,9 @@
     qaWorkbenchState.aiFindings = [];
     qaWorkbenchState.aiSummary = '';
     qaWorkbenchState.aiScopeSignature = '';
+    qaWorkbenchState.aiItemSignatures = {};
+    qaWorkbenchState.aiCoverageValid = 0;
+    qaWorkbenchState.aiCoverageTotal = 0;
     qaWorkbenchState.dispositions = {};
     qaRequestJson('/fs/qa/review?folder=' + encodeURIComponent(folder)).then(function (payload) {
       if (token !== qaReviewLoadToken || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting || String(state.folder || '') !== folder
@@ -323,17 +329,27 @@
           || qaWorkbenchState.trainingFocus !== focus) return;
       var saved = payload.review;
       if (!saved || saved.scopeKey !== scopeKey || saved.trainingFocus !== focus) return;
-      var before = saved.itemSignatures || {};
+      var before = saved.itemSignatures && typeof saved.itemSignatures === 'object'
+        ? saved.itemSignatures
+        : {};
       var changed = {};
       var current = qaItemInputSignatures();
+      var validCount = 0;
       Object.keys(current).forEach(function (file) {
-        if (before[file] !== current[file]) changed[file] = true;
+        if (before[file] !== current[file]) {
+          changed[file] = true;
+        } else {
+          validCount += 1;
+        }
       });
       qaWorkbenchState.aiFindings = (saved.aiFindings || []).filter(function (finding) {
         return !(finding.files || []).some(function (file) { return changed[file]; });
       });
       qaWorkbenchState.aiSummary = String(saved.aiSummary || '');
       qaWorkbenchState.aiScopeSignature = signature;
+      qaWorkbenchState.aiItemSignatures = Object.assign({}, before);
+      qaWorkbenchState.aiCoverageValid = validCount;
+      qaWorkbenchState.aiCoverageTotal = Object.keys(current).length;
       qaWorkbenchState.dispositions = saved.dispositions && typeof saved.dispositions === 'object'
         ? saved.dispositions : {};
       qaMergeFindings();
@@ -423,6 +439,9 @@
       qaWorkbenchState.aiFindings = qaNormalizeAiFindings(analysis, job.result.model);
       qaWorkbenchState.aiSummary = String(analysis.summary || '');
       qaWorkbenchState.aiScopeSignature = signature;
+      qaWorkbenchState.aiItemSignatures = qaItemInputSignatures();
+      qaWorkbenchState.aiCoverageTotal = Object.keys(qaWorkbenchState.aiItemSignatures).length;
+      qaWorkbenchState.aiCoverageValid = qaWorkbenchState.aiCoverageTotal;
       qaWorkbenchState.deepScanInputSignature = signature;
       qaSaveReview();
       qaWorkbenchState.deepScanStatus = qaWorkbenchState.aiFindings.length
@@ -1121,7 +1140,13 @@
     deepWrap.appendChild(deep);
     var note = document.createElement('span');
     note.className = 'qa-deep-scan-note';
-    note.textContent = qaWorkbenchState.deepScanStatus || (qaWorkbenchState.aiFindings.length ? 'AI findings active · LLM' : 'Optional · LLM');
+    var coveragePartial = qaWorkbenchState.aiCoverageTotal > 0
+      && qaWorkbenchState.aiCoverageValid < qaWorkbenchState.aiCoverageTotal;
+    note.textContent = qaWorkbenchState.deepScanStatus || (
+      coveragePartial
+        ? ('AI findings retained · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' inputs still current')
+        : (qaWorkbenchState.aiFindings.length ? 'AI findings active · LLM' : 'Optional · LLM')
+    );
     deepWrap.appendChild(note);
     heroActions.appendChild(deepWrap);
     hero.appendChild(heroActions);

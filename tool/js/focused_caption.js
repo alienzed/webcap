@@ -143,32 +143,16 @@ function armOrUseFocusedCaptionCandidate() {
   return Promise.resolve(true);
 }
 
-function extractFocusedCaptionVisionPhrases(text) {
-  var clean = String(text || '').replace(/\s+/g, ' ').trim();
-  if (!clean) return [];
-  var phrases = [];
-  var seen = {};
-  clean.split(/[,.]+/).forEach(function (raw) {
-    var phrase = String(raw || '').trim();
-    if (!phrase) return;
-    var key = phrase.toLowerCase();
-    if (seen[key]) return;
-    seen[key] = true;
-    phrases.push(phrase);
-  });
-  if (!phrases.length) phrases.push(clean);
-  return phrases.slice(0, 12);
-}
-
-function createFocusedCaptionVisionPhraseTask(mediaItem) {
+function createFocusedCaptionVisionPhraseTask(mediaItem, captionText) {
   var task = {
     mediaKey: String(mediaItem && mediaItem.key || ''),
+    captionText: String(captionText || ''),
     jobId: '',
     cancelled: false,
     result: null,
     promise: null
   };
-  task.promise = requestVisionImageCaptionDescription(mediaItem, {
+  task.promise = requestVisionCaptionExtras(mediaItem, task.captionText, {
     onJob: function (job) {
       task.jobId = String(job && job.jobId || '');
       if (!task.cancelled) return null;
@@ -178,8 +162,8 @@ function createFocusedCaptionVisionPhraseTask(mediaItem) {
     if (task.cancelled || !result) return null;
     task.result = {
       mediaKey: String(result.mediaKey || task.mediaKey),
-      description: String(result.text || ''),
-      phrases: extractFocusedCaptionVisionPhrases(result.text),
+      description: '',
+      phrases: Array.isArray(result.extras) ? result.extras.slice() : [],
       model: String(result.model || '')
     };
     return task.result;
@@ -269,7 +253,7 @@ function loadFocusedCaptionVisionPhrases() {
   }
 
   clearFocusedCaptionVisionPhrases({ keepEnabled: true });
-  var task = createFocusedCaptionVisionPhraseTask(mediaItem);
+  var task = createFocusedCaptionVisionPhraseTask(mediaItem, captionAssistCandidate.text);
   focusedCaptionVisionPhrases.mediaKey = mediaItem.key;
   focusedCaptionVisionPhrases.pending = true;
   focusedCaptionVisionPhrases.task = task;
@@ -361,7 +345,7 @@ function beginFocusedCaptionPrefetchPhrases(prefetch, mediaItem) {
   if (!focusedCaptionVisionPhrases.enabled || !prefetch || !mediaItem) return Promise.resolve(false);
   if (!isCaptionVisionSupportedMedia(mediaItem.fileName)) return Promise.resolve(false);
   if (prefetch.phraseTask) return prefetch.phraseTask.promise;
-  var task = createFocusedCaptionVisionPhraseTask(mediaItem);
+  var task = createFocusedCaptionVisionPhraseTask(mediaItem, prefetch.candidate ? prefetch.candidate.text : '');
   prefetch.phraseTask = task;
   task.promise.catch(function (err) {
     if (!task.cancelled && !prefetch.discarded && focusedCaptionPrefetch === prefetch) {
@@ -885,7 +869,6 @@ window.advanceFocusedCaption = advanceFocusedCaption;
 window.startFocusedCaptionPrefetch = startFocusedCaptionPrefetch;
 window.cancelFocusedCaptionPrefetch = cancelFocusedCaptionPrefetch;
 window.syncFocusedCaptionVisionPreference = syncFocusedCaptionVisionPreference;
-window.extractFocusedCaptionVisionPhrases = extractFocusedCaptionVisionPhrases;
 window.loadFocusedCaptionVisionPhrases = loadFocusedCaptionVisionPhrases;
 window.isFocusedCaptionVisionPhrasesEnabled = isFocusedCaptionVisionPhrasesEnabled;
 window.setFocusedCaptionVisionSightEnabled = setFocusedCaptionVisionSightEnabled;

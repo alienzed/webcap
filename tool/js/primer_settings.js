@@ -540,9 +540,10 @@ function syncCaptionAssistCandidateUi() {
   progressEl.classList.toggle('hidden', !focusOpen);
   progressEl.textContent = focusOpen ? getFocusedCaptionProgressText() : '';
 
-  loadingEl.classList.toggle('hidden', !pending || visible);
-  if (pending && !visible) {
-    loadingTextEl.textContent = 'Generating caption…';
+  var loadingVisible = !visible && (focusOpen || pending);
+  loadingEl.classList.toggle('hidden', !loadingVisible);
+  if (loadingVisible) {
+    loadingTextEl.textContent = pending ? 'Generating caption…' : 'Preparing caption…';
   }
 
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);

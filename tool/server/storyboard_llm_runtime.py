@@ -1064,7 +1064,9 @@ def _list_local_models_passive():
     root_projectors = [entry for entry in entries if entry.is_file() and entry.suffix.casefold() == ".gguf" and "mmproj" in entry.name.casefold()]
     for path in entries:
         if path.is_file() and path.suffix.casefold() == ".gguf" and not is_sidecar(path):
-            model = record(path.stem, path, multimodal=bool(root_projectors))
+            stem = re.sub(r"(?i)[._-](?:q[0-9]+(?:_[a-z0-9]+)*|f16|bf16)$", "", path.stem).casefold()
+            paired = any(p.stem.casefold().startswith(stem + ".mmproj") or p.stem.casefold().startswith(stem + "-mmproj") for p in root_projectors)
+            model = record(path.stem, path, multimodal=paired)
             if model is not None:
                 models.append(model)
             continue

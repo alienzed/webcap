@@ -307,7 +307,8 @@ def test_standalone_vision_caption_is_preview_adjacent_and_requires_explicit_edi
     shell = _read("tool/js/workspace_shell.js")
     assert "syncVisionImageCaptionSelection(mediaItem.key);" in media
     assert "syncVisionImageCaptionSelection('');" in shell
-    assert 'caption_operation in {"caption_vision_validate", "vision_image_caption"}' in runner
+    assert '"vision_caption_extras"' in runner
+    assert 'caption_operation in {"caption_vision_validate", "vision_image_caption", "vision_caption_extras", "vision_schema_sight", "vision_vocabulary_sight"}' in runner
 
 
 def test_focus_caption_orders_warnings_then_editable_caption_then_vision_sight():

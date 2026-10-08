@@ -642,7 +642,7 @@
       setSetIntelligenceStatus(
         'Set understood with gaps',
         String(failureCount) + ' Vision item failure' + (failureCount === 1 ? '' : 's') +
-        ' occurred. Completed evidence remains usable; see Console for details or Run Again.'
+        ' occurred. Completed evidence remains usable; see Console for details or Resume the missing coverage.'
       );
       window.setStatus('Set Intelligence completed with ' + String(failureCount) + ' Vision gap' + (failureCount === 1 ? '' : 's') + '.');
       return;

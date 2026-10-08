@@ -402,10 +402,8 @@
       state.currentItem.metadata[blockName] = block;
     }
     if (
-      typeof renderQaWorkbench === 'function' &&
-      typeof normalizeWorkspaceSurface === 'function' &&
-      typeof workspaceState !== 'undefined' &&
-      normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput'
+      normalizeWorkspaceSurface(workspaceState.surface) === 'reviewOutput' &&
+      reviewWorkspaceState.detailTab === 'qa'
     ) {
       renderQaWorkbench();
     }

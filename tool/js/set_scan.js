@@ -16,7 +16,14 @@
     failures: [],
     completed: 0,
     total: 0,
-    phase: 'idle'
+    phase: 'idle',
+    coverage: {
+      known: false,
+      total: 0,
+      openCurrent: 0,
+      contextCurrent: 0,
+      contextAvailable: 0
+    }
   };
 
   function el(id) {
@@ -34,6 +41,37 @@
     });
   }
 
+  function setCoverage(total, openCurrent, contextCurrent, contextAvailable) {
+    setScanState.coverage = {
+      known: true,
+      total: Math.max(0, Number(total) || 0),
+      openCurrent: Math.max(0, Number(openCurrent) || 0),
+      contextCurrent: Math.max(0, Number(contextCurrent) || 0),
+      contextAvailable: Math.max(0, Number(contextAvailable) || 0)
+    };
+  }
+
+  function applyCoveragePayload(payload, scopedTotal) {
+    var openItems = payload && payload.open && Array.isArray(payload.open.items) ? payload.open.items : [];
+    var contextItems = payload && payload.context && Array.isArray(payload.context.items) ? payload.context.items : [];
+    var total = Number(scopedTotal);
+    if (!Number.isFinite(total)) total = Math.max(openItems.length, contextItems.length);
+    var openCurrent = openItems.filter(function (item) { return !!(item && item.structured); }).length;
+    var contextCurrent = contextItems.filter(function (item) { return !!(item && item.cached); }).length;
+    var contextAvailable = contextItems.filter(function (item) { return !!(item && item.available); }).length;
+    setCoverage(total, openCurrent, contextCurrent, contextAvailable);
+  }
+
+  function setEvidenceCard(card, badge, count, detail, stateName, badgeText, countText, detailText) {
+    ['current', 'partial', 'stale', 'missing', 'running', 'checking'].forEach(function (name) {
+      card.classList.toggle('is-' + name, name === stateName);
+      badge.classList.toggle('is-' + name, name === stateName);
+    });
+    badge.textContent = badgeText;
+    count.textContent = countText;
+    detail.textContent = detailText;
+  }
+
   function renderSetIntelligence() {
     var modal = el('set-scan-modal');
     var stopBtn = el('set-scan-stop-btn');
@@ -42,15 +80,41 @@
     var details = el('set-scan-details');
     var responseSelect = el('set-scan-response-select');
     var output = el('set-scan-raw-output');
+    var reportCount = el('set-scan-report-count');
     var rescanBtn = el('set-scan-rescan-btn');
-    if (!modal || !stopBtn || !progressFill || !next || !details || !responseSelect || !output || !rescanBtn) {
+    var openCard = el('set-scan-open-card');
+    var openBadge = el('set-scan-open-badge');
+    var openCount = el('set-scan-open-count');
+    var openDetail = el('set-scan-open-detail');
+    var contextCard = el('set-scan-context-card');
+    var contextBadge = el('set-scan-context-badge');
+    var contextCount = el('set-scan-context-count');
+    var contextDetail = el('set-scan-context-detail');
+    if (
+      !modal || !stopBtn || !progressFill || !next || !details || !responseSelect || !output ||
+      !reportCount || !rescanBtn || !openCard || !openBadge || !openCount || !openDetail ||
+      !contextCard || !contextBadge || !contextCount || !contextDetail
+    ) {
       throw new Error('Set Intelligence UI is incomplete.');
     }
 
     modal.classList.toggle('hidden', !setScanState.open);
     stopBtn.classList.toggle('hidden', !setScanState.running);
-    rescanBtn.classList.toggle('hidden', setScanState.running || !setScanState.hasRun);
     next.classList.toggle('hidden', setScanState.phase !== 'complete');
+
+    var coverage = setScanState.coverage;
+    var totalCoverage = coverage.known ? coverage.total : 0;
+    var openMissing = coverage.known ? Math.max(0, totalCoverage - coverage.openCurrent) : 0;
+    var contextMissing = coverage.known ? Math.max(0, totalCoverage - coverage.contextAvailable) : 0;
+    var contextStale = coverage.known ? Math.max(0, coverage.contextAvailable - coverage.contextCurrent) : 0;
+    var actionLabel = '';
+    if (!setScanState.running && setScanState.hasRun && coverage.known) {
+      if (openMissing) actionLabel = 'Resume ' + String(openMissing) + ' Open Sight';
+      else if (contextMissing) actionLabel = 'Resume ' + String(contextMissing) + ' Context Sight';
+      else if (contextStale) actionLabel = 'Refresh ' + String(contextStale) + ' Context Sight';
+    }
+    rescanBtn.classList.toggle('hidden', !actionLabel);
+    rescanBtn.textContent = actionLabel || 'Resume Set Intelligence';
 
     var percent = 0;
     if (setScanState.phase === 'preparing') percent = 8;
@@ -67,10 +131,69 @@
     if (setScanState.phase === 'complete') percent = 100;
     progressFill.style.width = String(percent) + '%';
 
+    if (!coverage.known) {
+      setEvidenceCard(openCard, openBadge, openCount, openDetail, 'checking', 'Checking', '—', 'Looking for saved Open Sight…');
+      setEvidenceCard(contextCard, contextBadge, contextCount, contextDetail, 'checking', 'Checking', '—', 'Looking for saved Context Sight…');
+    } else {
+      var openState = coverage.openCurrent >= totalCoverage
+        ? 'current'
+        : (coverage.openCurrent ? 'partial' : 'missing');
+      if (setScanState.phase === 'scanning-open') openState = 'running';
+      setEvidenceCard(
+        openCard,
+        openBadge,
+        openCount,
+        openDetail,
+        openState,
+        openState === 'current' ? 'Current' : (openState === 'running' ? 'Scanning' : (coverage.openCurrent ? 'Partial' : 'Missing')),
+        String(coverage.openCurrent) + ' / ' + String(totalCoverage),
+        coverage.openCurrent >= totalCoverage
+          ? 'All media have saved reusable Open Sight.'
+          : String(openMissing) + ' media still need Open Sight. Saved results will be reused.'
+      );
+
+      var contextState = 'missing';
+      var contextBadgeText = 'Missing';
+      var contextDetailText = '';
+      if (coverage.contextCurrent >= totalCoverage) {
+        contextState = 'current';
+        contextBadgeText = 'Current';
+        contextDetailText = 'All Context Sight matches the current vocabulary and caption template.';
+      } else if (setScanState.phase === 'scanning-context') {
+        contextState = 'running';
+        contextBadgeText = 'Scanning';
+      } else if (contextStale) {
+        contextState = 'stale';
+        contextBadgeText = 'Refresh needed';
+      } else if (coverage.contextCurrent) {
+        contextState = 'partial';
+        contextBadgeText = 'Partial';
+      }
+      if (!contextDetailText) {
+        var contextParts = [
+          String(coverage.contextCurrent) + ' current'
+        ];
+        if (contextStale) contextParts.push(String(contextStale) + ' saved but stale');
+        if (contextMissing) contextParts.push(String(contextMissing) + ' missing');
+        contextDetailText = contextParts.join(' · ') + '.';
+      }
+      setEvidenceCard(
+        contextCard,
+        contextBadge,
+        contextCount,
+        contextDetail,
+        contextState,
+        contextBadgeText,
+        String(coverage.contextCurrent) + ' / ' + String(totalCoverage),
+        contextDetailText
+      );
+    }
+
     var responses = Array.isArray(setScanState.rawResponses) ? setScanState.rawResponses : [];
     var currentRaw = responses[setScanState.rawResponseIndex] || null;
     setScanState.currentRawResponse = currentRaw;
     details.classList.toggle('hidden', !responses.length);
+    reportCount.textContent = String(responses.length) + ' saved response' + (responses.length === 1 ? '' : 's');
     responseSelect.innerHTML = '';
     responses.forEach(function (response, index) {
       var option = document.createElement('option');
@@ -197,15 +320,22 @@
         setScanState.hasRun = true;
         setScanState.running = false;
         setCachedReportResponses(payload);
+        applyCoveragePayload(payload, files.length);
         var complete = openCount >= files.length && Number(payload && payload.context && payload.context.cached || 0) >= files.length;
         setScanState.phase = complete ? 'complete' : 'idle';
         if (complete) {
           setSetIntelligenceStatus('Set understood', 'Cached two-pass Set Intelligence is current. Review the report or continue.');
         } else {
+          var currentContext = Number(payload && payload.context && payload.context.cached || 0);
+          var staleContext = Math.max(0, contextAvailable - currentContext);
+          var missingContext = Math.max(0, files.length - contextAvailable);
+          var remaining = [];
+          if (openCount < files.length) remaining.push(String(files.length - openCount) + ' Open Sight missing');
+          if (staleContext) remaining.push(String(staleContext) + ' Context Sight stale');
+          if (missingContext) remaining.push(String(missingContext) + ' Context Sight missing');
           setSetIntelligenceStatus(
-            'Cached intelligence found',
-            String(openCount) + ' Open Sight and ' + String(contextAvailable) +
-            ' Context Sight result' + (contextAvailable === 1 ? '' : 's') + ' are available. Run Again to refresh incomplete or stale coverage.'
+            'Saved intelligence found',
+            remaining.join(' · ') + '. Resume only what is missing or stale.'
           );
         }
         return true;
@@ -346,6 +476,10 @@
       return saveSight(folder, model, fileName, result.sight);
     }).then(function (saved) {
       if (saved === false || setScanState.stopRequested) return false;
+      setScanState.coverage.openCurrent = Math.min(
+        setScanState.coverage.total,
+        setScanState.coverage.openCurrent + 1
+      );
       setScanState.completed = index + 1;
       return scanNext(pending, index + 1, folder, model);
     });
@@ -357,12 +491,21 @@
     ).then(function (payload) {
       var wanted = {};
       files.forEach(function (fileName) { wanted[fileName] = true; });
-      var pending = (payload.items || []).filter(function (item) {
-        return !!wanted[String(item.file || '')] && !item.structured;
+      var scopedItems = (payload.items || []).filter(function (item) {
+        return !!wanted[String(item.file || '')];
+      });
+      var pending = scopedItems.filter(function (item) {
+        return !item.structured;
       }).map(function (item) {
         return String(item.file || '');
       }).filter(Boolean);
 
+      setCoverage(
+        files.length,
+        scopedItems.filter(function (item) { return !!item.structured; }).length,
+        setScanState.coverage.known ? setScanState.coverage.contextCurrent : 0,
+        setScanState.coverage.known ? setScanState.coverage.contextAvailable : 0
+      );
       setScanState.total = pending.length;
       setScanState.completed = 0;
       setScanState.phase = 'scanning-open';
@@ -387,10 +530,11 @@
     setScanState.completed = index;
     setSetIntelligenceStatus(
       'Context Sight',
-      String(index + 1) + ' of ' + String(pending.length) + ' · reading the image with groups, tags, and caption structure'
+      String(index + 1) + ' of ' + String(pending.length) + ' · refreshing only missing or stale Context Sight'
     );
 
-    var fileName = pending[index];
+    var pendingItem = pending[index];
+    var fileName = pendingItem.file;
     return requestContextSight(folder, model, fileName, context).catch(function (err) {
       setScanState.currentVisionJobId = '';
       if (setScanState.stopRequested) return false;
@@ -410,6 +554,16 @@
       return saveContextSight(folder, model, fileName, context, result.sight);
     }).then(function (saved) {
       if (saved === false || setScanState.stopRequested) return false;
+      setScanState.coverage.contextCurrent = Math.min(
+        setScanState.coverage.total,
+        setScanState.coverage.contextCurrent + 1
+      );
+      if (!pendingItem.available) {
+        setScanState.coverage.contextAvailable = Math.min(
+          setScanState.coverage.total,
+          setScanState.coverage.contextAvailable + 1
+        );
+      }
       setScanState.completed = index + 1;
       return scanContextNext(pending, index + 1, folder, model, context);
     });
@@ -426,12 +580,24 @@
     return requestContextStatus(folder, model, context).then(function (payload) {
       var wanted = {};
       files.forEach(function (fileName) { wanted[fileName] = true; });
-      var pending = (payload.items || []).filter(function (item) {
-        return !!wanted[String(item.file || '')] && !item.cached;
+      var scopedItems = (payload.items || []).filter(function (item) {
+        return !!wanted[String(item.file || '')];
+      });
+      var pending = scopedItems.filter(function (item) {
+        return !item.cached;
       }).map(function (item) {
-        return String(item.file || '');
-      }).filter(Boolean);
+        return {
+          file: String(item.file || ''),
+          available: !!item.available
+        };
+      }).filter(function (item) { return !!item.file; });
 
+      setCoverage(
+        files.length,
+        setScanState.coverage.known ? setScanState.coverage.openCurrent : files.length,
+        scopedItems.filter(function (item) { return !!item.cached; }).length,
+        scopedItems.filter(function (item) { return !!item.available; }).length
+      );
       setScanState.total = pending.length;
       setScanState.completed = 0;
       if (!pending.length) {
@@ -481,7 +647,8 @@
       phase: setScanState.phase,
       rawResponses: setScanState.rawResponses.slice(),
       rawResponseIndex: setScanState.rawResponseIndex,
-      currentRawResponse: setScanState.currentRawResponse
+      currentRawResponse: setScanState.currentRawResponse,
+      coverage: Object.assign({}, setScanState.coverage)
     };
 
     setScanState.folder = folder;
@@ -539,7 +706,16 @@
         if (!result || result.ok === false) {
           throw new Error((result && result.error) || 'Set Intelligence refresh failed.');
         }
-        return true;
+        return requestCachedIntelligenceReport(
+          folder,
+          files,
+          setScanState.visionModel,
+          visionContext
+        ).then(function (payload) {
+          setCachedReportResponses(payload);
+          applyCoveragePayload(payload, files.length);
+          return true;
+        });
       });
     }).then(function (success) {
       if (success === false || setScanState.stopRequested) {
@@ -559,6 +735,7 @@
         setScanState.rawResponses = previousReport.rawResponses;
         setScanState.rawResponseIndex = previousReport.rawResponseIndex;
         setScanState.currentRawResponse = previousReport.currentRawResponse;
+        setScanState.coverage = previousReport.coverage;
         setSetIntelligenceStatus(
           'Set Intelligence refresh failed',
           String(err && err.message ? err.message : err) + ' Previous report preserved.'
@@ -596,6 +773,13 @@
     if (setScanState.folder && setScanState.folder !== folder) {
       setScanState.hasRun = false;
       setScanState.phase = 'idle';
+      setScanState.coverage = {
+        known: false,
+        total: 0,
+        openCurrent: 0,
+        contextCurrent: 0,
+        contextAvailable: 0
+      };
       setScanState.rawResponses = [];
       setScanState.rawResponseIndex = -1;
       setScanState.currentRawResponse = null;

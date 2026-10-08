@@ -708,6 +708,10 @@
 
   function runSetIntelligence() {
     if (setScanState.running) return;
+    if (itemSightRefreshActive) {
+      window.setStatus('Finish the current item Sight refresh before starting a full Set scan.');
+      return;
+    }
 
     var folder = String(state && state.folder || '');
     var files = getCurrentSetMediaFileNames();

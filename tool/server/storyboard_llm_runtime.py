@@ -7,6 +7,7 @@ import http.client
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -1055,19 +1056,29 @@ def _list_local_models_passive():
         }
 
     models = []
-    for path in models_dir.iterdir():
+    # A broken folder must not hide otherwise usable models.
+    try:
+        entries = list(models_dir.iterdir())
+    except OSError as exc:
+        raise RuntimeError("Cannot enumerate local Director models in " + str(models_dir)) from exc
+    root_projectors = [entry for entry in entries if entry.is_file() and entry.suffix.casefold() == ".gguf" and "mmproj" in entry.name.casefold()]
+    for path in entries:
         if path.is_file() and path.suffix.casefold() == ".gguf" and not is_sidecar(path):
-            model = record(path.stem, path, multimodal=False)
+            model = record(path.stem, path, multimodal=bool(root_projectors))
             if model is not None:
                 models.append(model)
             continue
         if not path.is_dir():
             continue
 
-        ggufs = [
-            entry for entry in path.iterdir()
-            if entry.is_file() and entry.suffix.casefold() == ".gguf"
-        ]
+        try:
+            ggufs = [
+                entry for entry in path.iterdir()
+                if entry.is_file() and entry.suffix.casefold() == ".gguf"
+            ]
+        except OSError as exc:
+            _logger.warning("Skipping unreadable local model folder %s: %s", path, exc)
+            continue
         main_files = [entry for entry in ggufs if not is_sidecar(entry)]
         mmproj_files = [entry for entry in ggufs if "mmproj" in entry.name.casefold()]
         first_shards = [
@@ -1149,10 +1160,14 @@ def list_vision_models(reload=False):
                 raw_models = payload.get("models") if isinstance(payload, dict) else None
                 if not isinstance(raw_models, list):
                     raise RuntimeError("Ollama did not return a model list from /api/tags.")
+                seen_model_ids = set()
                 for entry in raw_models:
                     if not isinstance(entry, dict):
                         continue
                     model_id = str(entry.get("name") or entry.get("model") or "").strip()
+                    if model_id in seen_model_ids or model_id.startswith(("llamacpp:sha256:", "ggml:sha256:")) or re.fullmatch(r"(?:llamacpp|ggml):[0-9a-f]{64}", model_id):
+                        continue
+                    seen_model_ids.add(model_id)
                     if not model_id:
                         continue
                     try:
@@ -1706,8 +1721,12 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             except Exception as exc:
                 _debug_llm_failure(model_ref, time.perf_counter() - request_started, exc)
                 raise
+            reported_model = str(response.get("model") or "").strip() if isinstance(response, dict) else ""
+            if reported_model and reported_model != model_id:
+                raise RuntimeError("Director model identity mismatch: requested " + model_id + ", runtime reported " + reported_model)
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
             result = _completion_result(response, model_ref, allow_truncated=allow_truncated, assessment_evidence=assessment_evidence)
+            result["reportedModel"] = reported_model
             if _remote_is_ollama():
                 remote_model = _ollama_running_model(model_id)
                 result["contextSize"] = int(remote_model.get("contextSize") or 0)

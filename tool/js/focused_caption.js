@@ -656,7 +656,6 @@ function syncFocusedCaptionControls() {
 
     skipBtn.classList.add('hidden');
     skipBtn.disabled = false;
-    syncVisionImageCaptionActionUi();
     return;
   }
 
@@ -678,7 +677,6 @@ function syncFocusedCaptionControls() {
     : 'Next Focus Caption item (Right/Down/S)';
   var skipLabel = skipBtn.querySelector('.preview-header-btn-label');
   if (skipLabel) skipLabel.textContent = reviewMode ? 'Skip' : 'Next';
-  syncVisionImageCaptionActionUi();
 }
 
 function syncFocusedCaptionAfterAssist(sourceMediaKey) {

@@ -303,7 +303,15 @@ function findFocusedCaptionMediaItemByKey(mediaKey) {
 function buildFocusedReviewCandidate(mediaItem) {
   if (!mediaItem || !mediaItem.key) throw new Error('Focus Review requires a media item.');
   var request = buildCaptionAssistRequest(mediaItem);
-  var captionText = String(mediaItem.caption || '').trim();
+  var captionText = String(mediaItem.caption || '');
+  if (
+    state && state.currentItem &&
+    state.currentItem.key === mediaItem.key &&
+    ui && ui.editorEl
+  ) {
+    captionText = String(ui.editorEl.value || '');
+  }
+  captionText = captionText.trim();
   return {
     mediaKey: String(mediaItem.key || ''),
     text: captionText,
@@ -687,8 +695,13 @@ function syncFocusedCaptionAfterAssist(sourceMediaKey) {
   prepareFocusedCaptionCurrentItem();
 }
 
-function stopFocusedCaption(message) {
-  if (!focusedCaptionState.open) return;
+function stopFocusedCaption(message, options) {
+  if (!focusedCaptionState.open) return true;
+  var opts = options || {};
+  if (hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits) {
+    setStatus('This review caption has unsaved edits. Use Save → Next, or Skip before exiting.');
+    return false;
+  }
   var stoppingLabel = focusedCaptionModeLabel();
   if (stoppingLabel === 'Focus Review' && String(message || '') === 'Focus Caption ended.') {
     message = 'Focus Review ended.';
@@ -717,6 +730,7 @@ function stopFocusedCaption(message) {
   syncFocusedCaptionPanelGeometry();
   renderPreviewHeaderMeta();
   if (message) setStatus(message);
+  return true;
 }
 
 function prepareFocusedCaptionCurrentItem() {
@@ -928,7 +942,7 @@ function wireFocusedCaption() {
     ui.previewFocusCaptionBtnEl.__focusedCaptionBound = true;
     ui.previewFocusCaptionBtnEl.addEventListener('click', function () {
       if (focusedCaptionState.open) {
-        stopFocusedCaption(focusedCaptionModeLabel() + ' ended.');
+        if (!stopFocusedCaption(focusedCaptionModeLabel() + ' ended.')) return;
         renderFileList();
         return;
       }
@@ -939,7 +953,7 @@ function wireFocusedCaption() {
     reviewBtn.__focusedCaptionReviewBound = true;
     reviewBtn.addEventListener('click', function () {
       if (isFocusedCaptionReviewMode()) {
-        stopFocusedCaption('Focus Review ended.');
+        if (!stopFocusedCaption('Focus Review ended.')) return;
         renderFileList();
         return;
       }
@@ -962,7 +976,7 @@ function wireFocusedCaption() {
       if (key === 'Escape') {
         event.preventDefault();
         event.stopImmediatePropagation();
-        stopFocusedCaption(focusedCaptionModeLabel() + ' ended.');
+        if (!stopFocusedCaption(focusedCaptionModeLabel() + ' ended.')) return;
         renderFileList();
         return;
       }
@@ -998,7 +1012,7 @@ function wireFocusedCaption() {
       var panel = document.getElementById('editor-caption-candidate');
       if (panel && panel.contains(event.target)) return;
       if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-open-focus-review-btn, #preview-focus-caption-skip-btn')) return;
-      stopFocusedCaption(focusedCaptionModeLabel() + ' ended.');
+      if (!stopFocusedCaption(focusedCaptionModeLabel() + ' ended.')) return;
       renderFileList();
     }, true);
   }

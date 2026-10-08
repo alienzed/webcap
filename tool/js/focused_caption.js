@@ -667,9 +667,11 @@ function syncFocusedCaptionControls() {
 
   skipBtn.classList.remove('hidden');
   skipBtn.disabled = false;
-  skipBtn.title = 'Next ' + focusedCaptionModeLabel() + ' item (Right/Down/S)';
+  skipBtn.title = reviewMode
+    ? 'Skip this review item without saving edits'
+    : 'Next Focus Caption item (Right/Down/S)';
   var skipLabel = skipBtn.querySelector('.preview-header-btn-label');
-  if (skipLabel) skipLabel.textContent = 'Next';
+  if (skipLabel) skipLabel.textContent = reviewMode ? 'Skip' : 'Next';
   syncVisionImageCaptionActionUi();
 }
 
@@ -796,8 +798,23 @@ function navigateFocusedCaptionToIndex(index, direction) {
   });
 }
 
-function moveFocusedCaption(delta) {
+function hasFocusedReviewUnsavedChanges() {
+  return !!(
+    isFocusedCaptionReviewMode() &&
+    captionAssistCandidate &&
+    state && state.currentItem &&
+    captionAssistCandidate.mediaKey === state.currentItem.key &&
+    String(captionAssistCandidate.text || '').trim() !== String(state.currentItem.caption || '').trim()
+  );
+}
+
+function moveFocusedCaption(delta, options) {
   if (!focusedCaptionState.open) return Promise.resolve(false);
+  var opts = options || {};
+  if (hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits) {
+    setStatus('This review caption has unsaved edits. Use Save → Next, or Skip to discard them.');
+    return Promise.resolve(false);
+  }
   var step = delta < 0 ? -1 : 1;
   return cancelFocusedCaptionCurrentRequest().then(function () {
     return cancelCurrentCaptionVision();
@@ -812,7 +829,7 @@ function advanceFocusedCaption() {
 }
 
 function skipFocusedCaptionItem() {
-  return moveFocusedCaption(1);
+  return moveFocusedCaption(1, { discardReviewEdits: true });
 }
 
 function regenerateFocusedCaption() {

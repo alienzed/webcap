@@ -570,6 +570,45 @@ function requestVisionImageCaptionDescription(mediaItem, options) {
   });
 }
 
+function requestVisionCaptionExtras(mediaItem, captionText, options) {
+  var opts = options || {};
+  if (!mediaItem || !mediaItem.key || !mediaItem.fileName) {
+    return Promise.reject(new Error('Vision extras requires selected media.'));
+  }
+  if (!isCaptionVisionSupportedMedia(mediaItem.fileName)) {
+    return Promise.reject(new Error('Vision extras supports images and the first frame of videos.'));
+  }
+  return loadCaptionVisionCapabilities().then(function () {
+    var model = String(opts.model || getCaptionVisionModelId() || '');
+    if (!model) throw new Error('Select an available Vision model.');
+    return captionAssistRequestJson('/caption/vision-extras', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model,
+        folder: String((state && state.folder) || ''),
+        media: String(mediaItem.fileName || ''),
+        caption: String(captionText || '')
+      })
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Vision extras did not return a queued job.');
+      trackTransientLlmJob(payload.job);
+      var hookResult = opts.onJob ? opts.onJob(payload.job) : null;
+      return Promise.resolve(hookResult).then(function () {
+        return waitForCaptionAssistJob(payload.job);
+      });
+    }).then(function (job) {
+      var result = job.result && typeof job.result === 'object' ? job.result : {};
+      var extras = result.visionExtras && Array.isArray(result.visionExtras.extras) ? result.visionExtras.extras : null;
+      if (!extras) throw new Error('Vision extras completed without structured extras.');
+      return {
+        mediaKey: String(mediaItem.key || ''),
+        extras: extras.slice(),
+        model: String(result.model || model)
+      };
+    });
+  });
+}
 function runVisionImageCaption() {
   var mediaItem = state && state.currentItem;
   if (!mediaItem || !mediaItem.key || !mediaItem.fileName) {
@@ -808,6 +847,7 @@ window.syncVisionImageCaptionActionUi = syncVisionImageCaptionActionUi;
 window.syncVisionImageCaptionSelection = syncVisionImageCaptionSelection;
 window.runVisionImageCaption = runVisionImageCaption;
 window.requestVisionImageCaptionDescription = requestVisionImageCaptionDescription;
+window.requestVisionCaptionExtras = requestVisionCaptionExtras;
 
 window.createCaptionVisionTask = createCaptionVisionTask;
 window.cancelCaptionVisionTask = cancelCaptionVisionTask;

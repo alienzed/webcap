@@ -119,7 +119,7 @@ def build_request(analysis, existing_groups):
         "[GROUNDING]\n"
         "Every proposed term must cite one or more supplied evidence IDs. "
         "Use an exact existing group name in targetGroup when extending it. Use an empty targetGroup for a genuinely new group. "
-        "Evidence may come from an open visual pass or a fresh schema-aware visual pass. A schema-aware suggestedGroup is a strong organizational hint, not a forced answer. "
+        "Evidence may come from an open visual pass, exact matches from the context-guided visual pass, or a bounded caption excerpt from that second pixel read. A context-pass suggestedGroup is a strong organizational hint, not a forced answer. "
         "Evidence counts and filenames are supplied by WebCap; semantic grouping and naming are your task. "
         "Existing terms are organizational context, not visual evidence: do not infer that an existing term appears unless the Sight evidence supports it.\n\n"
         "[INPUT]\n"
@@ -404,10 +404,28 @@ def _assignment_response_schema():
     }
 
 
-def build_assignment_request(records, existing_groups, current_assignments=None, existing_only=False):
+def build_assignment_request(
+    records,
+    existing_groups,
+    current_assignments=None,
+    existing_only=False,
+    context_records=None,
+    caption_template="",
+):
     normalized_existing = _normalize_existing_groups(existing_groups)
-    groups_by_key = {row["group"].casefold(): row for row in normalized_existing}
     assignments = current_assignments if isinstance(current_assignments, dict) else {}
+    context_by_file = {}
+    for raw in context_records if isinstance(context_records, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        file_name = str(raw.get("file") or "").strip()
+        caption = _clean(raw.get("caption"), 1600)
+        if file_name and caption:
+            context_by_file[file_name] = {
+                "caption": caption,
+                "matches": list(raw.get("matches") or []) if isinstance(raw.get("matches"), list) else [],
+            }
+
     compact_items = []
     allowed_files = []
     for raw in records if isinstance(records, list) else []:
@@ -419,12 +437,17 @@ def build_assignment_request(records, existing_groups, current_assignments=None,
         if not file_name or not description:
             continue
         allowed_files.append(file_name)
-        compact_items.append({
+        item = {
             "file": file_name,
-            "description": description,
-            "inventory": inventory,
+            "openSight": {
+                "description": description,
+                "inventory": inventory,
+            },
             "currentAssignments": assignments.get(file_name) if isinstance(assignments.get(file_name), list) else [],
-        })
+        }
+        if file_name in context_by_file:
+            item["contextSight"] = context_by_file[file_name]
+        compact_items.append(item)
 
     if not compact_items:
         raise ValueError("Tag Assist needs structured Sight for at least one media item.")
@@ -432,6 +455,7 @@ def build_assignment_request(records, existing_groups, current_assignments=None,
         raise ValueError("Tag Assist needs at least one configured annotation group.")
 
     payload = {
+        "captionTemplate": str(caption_template or "").strip(),
         "groups": normalized_existing,
         "items": compact_items,
     }
@@ -442,21 +466,22 @@ def build_assignment_request(records, existing_groups, current_assignments=None,
     )
     prompt = (
         "[ROLE]\n"
-        "You map visual Sight evidence onto WebCap's mature annotation vocabulary. "
-        "The supplied group names define semantic dimensions. Existing terms are preferred whenever they accurately describe what is visible. "
-        "Treat each group name as semantic context and its terms as canonical values. "
-        "Match by meaning, not surface wording: when Sight uses a synonym or a fuller phrase but an existing term already expresses that value inside the group, return the exact existing term.\n\n"
+        "You map reusable visual evidence onto WebCap's mature annotation vocabulary. "
+        "Each item contains vocabulary-agnostic Open Sight and may also contain Context Sight from a fresh second pixel inspection "
+        "guided by the Set's caption template and annotation vocabulary. Consider both reads together. "
+        "Agreement across the reads is strong support; when they use different wording for the same visible fact, reconcile by meaning. "
+        "The supplied group names define semantic dimensions and their terms are canonical values.\n\n"
         "[GOAL]\n"
-        "For each media item, return only tags that a human can confidently add from the supplied visual evidence. "
+        "For each media item, return tags that a human can confidently add from the supplied visual evidence. "
         + (
-            "Use only exact existing terms from the supplied vocabulary. Do not propose new terms or groups. "
+            "Use exact existing terms from the supplied vocabulary. "
             if existing_only else
             "Use an exact existing term when one fits. When an important clearly visible concept belongs to a supplied group but no existing term expresses it, "
-            "you may propose a concise new term for that same group. Do not create new groups. "
+            "you may propose a concise new term for that same group. "
         )
         + "\n\n"
         "[BOUNDARIES]\n"
-        "- Sight evidence is authoritative; do not infer facts merely because a term exists in the vocabulary.\n"
+        "- Sight evidence is authoritative; vocabulary availability alone is not evidence.\n"
         "- Do not repeat tags already present in currentAssignments.\n"
         "- Prefer high confidence. Use medium only when useful and visually well supported. Omit weak or speculative candidates.\n"
         "- Respect the group meaning. A term must belong semantically to the exact group you name.\n"

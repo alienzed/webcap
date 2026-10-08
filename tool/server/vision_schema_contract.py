@@ -474,7 +474,7 @@ def build_assignment_request(
         "[GOAL]\n"
         "For each media item, return tags that a human can confidently add from the supplied visual evidence. "
         + (
-            "Use exact existing terms from the supplied vocabulary. "
+            "Use only exact existing terms from the supplied vocabulary. Do not propose new terms or groups. "
             if existing_only else
             "Use an exact existing term when one fits. When an important clearly visible concept belongs to a supplied group but no existing term expresses it, "
             "you may propose a concise new term for that same group. "

@@ -12,7 +12,7 @@ import sys
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
-from .caption_vision import build_caption_vision_messages, build_vision_image_caption_messages, resolve_caption_vision_media
+from .caption_vision import build_caption_vision_messages, build_vision_caption_extras_messages, build_vision_image_caption_messages, resolve_caption_vision_media
 from .vision_schema_assist import (
     build_vision_schema_sight_messages,
     build_vision_vocabulary_sight_messages,
@@ -761,6 +761,39 @@ def vision_image_caption_route():
         app.logger.exception("VISION IMAGE CAPTION FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
+
+@app.route("/caption/vision-extras", methods=["POST"])
+def vision_caption_extras_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        model = str(data.get("model") or "").strip()
+        vision_ids = {str(item.get("id") or "") for item in list_vision_models()}
+        if not model or model not in vision_ids:
+            raise ValueError("Select an available Vision model.")
+        relative_media = resolve_caption_vision_media(
+            data.get("folder", ""),
+            data.get("media", ""),
+        )
+        messages = build_vision_caption_extras_messages(
+            data.get("caption", ""),
+            relative_media,
+        )
+        job = enqueue_llm(
+            "caption",
+            model,
+            {
+                "operation": "vision_caption_extras",
+                "messages": messages,
+            },
+            context={
+                "runtimeOverrides": {"maxTokens": 192},
+            },
+            label="Vision Extras",
+        )
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("VISION EXTRAS FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 @app.route("/fs/vision_schema", methods=["GET", "POST"])
 def vision_schema_assist_route():

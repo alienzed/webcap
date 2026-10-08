@@ -344,6 +344,18 @@ def test_context_sight_normalizes_exact_supplied_matches_and_keeps_caption():
     assert "Invented Dimension" not in by_group
 
 
+def test_context_sight_preserves_full_supplied_vocabulary():
+    terms = ["term-{}".format(index) for index in range(48)]
+    messages = vision_schema_assist.build_vision_vocabulary_sight_messages(
+        "file://image.jpg",
+        [{"group": "Position", "terms": terms}],
+        "{position}.",
+    )
+    prompt = messages[1]["content"][0]["text"]
+    assert "term-0" in prompt
+    assert "term-47" in prompt
+
+
 def test_context_sight_signature_tracks_terms_and_caption_template():
     first = vision_schema_assist.vision_vocabulary_group_signature(
         [{"group": "BT Shape", "terms": ["triangle"]}],

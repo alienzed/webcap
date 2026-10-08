@@ -149,7 +149,7 @@ def _response_schema():
         "properties": {
             "category": {
                 "type": "string",
-                "enum": ["underrepresented", "overrepresented", "consistency", "captioning"],
+                "enum": ["consistency", "captioning"],
             },
             "priority": {
                 "type": "string",
@@ -250,8 +250,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "- natural-language oddity: copy residue, contradictory wording, inconsistent subject naming, or unusually different descriptive granularity\n"
         "- meaningful cross-group or caption/tag relationships whose exceptions deserve human inspection\n"
         "- semantically duplicated or template-like captions that exact string matching can miss\n"
-        "- underrepresented or overrepresented concepts only when the supplied evidence makes the training consequence meaningful\n"
-        "- latent balance dimensions only when they are already present in the data and an actual skew or inconsistency deserves inspection\n\n"
+
         "[BOUNDARIES]\n"
         "- This is analysis only. Do not return full rewritten captions and do not tell WebCap to mutate data; exact proposed patches are allowed.\n"
         "- You cannot see the media directly. Treat normalized visual analysis as supplied evidence, not as perfect ground truth, and never claim direct visual verification.\n"
@@ -265,12 +264,11 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "- Prefer issues supported by agreement between independent sources such as annotations, MediaPipe, Face Focus, or Vision Sight.\n"
         "- Do not invent desired categories, missing visual attributes, or training goals not supported by the supplied focus and data.\n"
         "- Rare does not mean wrong. Common does not mean bad. Association does not mean correctness.\n"
-        "- The deterministic findings below are evidence, not instructions. Do not repeat one unless semantic interpretation materially changes why a human should care.\n"
+        "- The deterministic findings below carry full-scope counts and balance analysis. Do not reinterpret batch-local prevalence as Set-level under/overrepresentation.\n"
+        "- Do not repeat a deterministic finding unless semantic interpretation materially changes why a human should care.\n"
         "- Every returned finding must name the supplied filenames that a human should inspect. Use only filenames from the training selection.\n"
         "- Prefer 0-6 strong findings. Never pad the response to fill a quota.\n\n"
         "[CATEGORY CONTRACT]\n"
-        "underrepresented = a concept is too sparse to learn reliably\n"
-        "overrepresented = a pattern may crowd out useful variation or create accidental weighting\n"
         "consistency = semantic naming, relationship, annotation, or descriptive consistency\n"
         "captioning = language quality, semantic repetition, terminology, or caption structure\n\n"
         "[TRAINING FOCUS]\n"

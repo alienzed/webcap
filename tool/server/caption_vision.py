@@ -61,10 +61,10 @@ VISION_CAPTION_EXTRAS_RESPONSE_SCHEMA = {
 
 VISION_CAPTION_EXTRAS_SYSTEM_PROMPT = (
     "You inspect one image alongside its current candidate caption. "
-    "Return only useful visible details that add information not already represented by the caption. "
-    "Each detail should be compact annotation-ready wording, normally one to four words, such as 'braid', 'table lamp', "
-    "'hoop earrings', or 'looking left'. Prefer specific visible nouns or short attributes over prose sentences. "
-    "An empty extras list is correct when the caption already covers the useful visible details. Return JSON only."
+    "Compare them and identify additional visible details that would meaningfully extend the caption. "
+    "Phrase each detail as compact annotation-ready wording, normally one to four words, such as 'braid', 'table lamp', "
+    "'hoop earrings', or 'looking left'. Favor specific visible nouns, attributes, and short relationships. "
+    "An empty extras list is correct when no useful addition is needed. Return JSON only."
 )
 
 

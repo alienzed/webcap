@@ -33,7 +33,7 @@ function isFocusedCaptionReviewMode() {
 }
 
 function focusedCaptionModeLabel() {
-  return focusedCaptionState.mode === 'review' ? 'Focus Review' : 'Focus Caption';
+  return focusedCaptionState.mode === 'review' ? 'Caption Assist · Review' : 'Caption Assist · Write';
 }
 
 function resetFocusedCaptionUseArm() {
@@ -644,15 +644,15 @@ function syncFocusedCaptionControls() {
   reviewBtn.setAttribute('aria-pressed', focusedCaptionState.open && reviewMode ? 'true' : 'false');
 
   if (!focusedCaptionState.open) {
-    startBtn.setAttribute('aria-label', 'Start Focus Caption');
-    startBtn.title = 'Focus Caption: generate and review AI caption candidates across the current visible items';
+    startBtn.setAttribute('aria-label', 'Start Caption Assist writing');
+    startBtn.title = 'Caption Assist · Write: suggest captions progressively for the visible items';
     if (startGlyphEl) startGlyphEl.textContent = '\u2728';
-    if (startLabelEl) startLabelEl.textContent = 'Focus Caption';
+    if (startLabelEl) startLabelEl.textContent = 'Write Captions';
 
-    reviewBtn.setAttribute('aria-label', 'Start Focus Review');
-    reviewBtn.title = 'Focus Review: inspect existing saved captions progressively without a full Set scan';
+    reviewBtn.setAttribute('aria-label', 'Start Caption Assist review');
+    reviewBtn.title = 'Caption Assist · Review: check saved captions progressively, including QA findings';
     if (reviewGlyphEl) reviewGlyphEl.textContent = '\u2713';
-    if (reviewLabelEl) reviewLabelEl.textContent = 'Focus Review';
+    if (reviewLabelEl) reviewLabelEl.textContent = 'Review Captions';
 
     skipBtn.classList.add('hidden');
     skipBtn.disabled = false;

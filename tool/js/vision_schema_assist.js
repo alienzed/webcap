@@ -49,6 +49,11 @@
     return String(getDirectorModelPreference() || '').trim();
   }
 
+  function currentCaptionTemplate() {
+    var primer = statsGetPrimerOptionsFromDom();
+    return String(primer && primer.template || '');
+  }
+
   function findMediaItem(fileName) {
     var items = state && Array.isArray(state.items) ? state.items : [];
     for (var i = 0; i < items.length; i += 1) {
@@ -86,7 +91,7 @@
     return '/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model);
   }
 
-  function requestVocabularyStatus(folder, model, groups) {
+  function requestVocabularyStatus(folder, model, groups, captionTemplate) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -94,85 +99,9 @@
         operation: 'vocabulary_status',
         folder: folder,
         visionModel: model,
-        existingGroups: groups
-      })
-    });
-  }
-
-  function saveVocabularySight(folder, model, media, groups, sight) {
-    return requestJson('/fs/vision_schema', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operation: 'save_vocabulary_sight',
-        folder: folder,
-        visionModel: model,
-        media: media,
         existingGroups: groups,
-        sight: sight
+        captionTemplate: String(captionTemplate || '')
       })
-    });
-  }
-
-  function requestVocabularySight(folder, model, media, groups) {
-    return requestJson('/fs/vision_schema', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operation: 'scan_vocabulary_sight',
-        folder: folder,
-        visionModel: model,
-        media: media,
-        existingGroups: groups
-      })
-    }).then(function (payload) {
-      var jobId = String(payload.job && payload.job.jobId || '');
-      if (!jobId) throw new Error('Vocabulary Vision did not return a queued job.');
-      schemaState.schemaJobId = jobId;
-      trackTransientLlmJob(payload.job);
-      render();
-      return waitForCaptionAssistJob(payload.job);
-    }).then(function (job) {
-      schemaState.schemaJobId = '';
-      return {
-        sight: job && job.result && job.result.vocabularySight || null,
-        warning: String(job && job.result && job.result.structureWarning || '')
-      };
-    });
-  }
-
-  function scanVocabularyNext(pending, index, folder, model, groups) {
-    if (schemaState.workStopRequested || !schemaState.open) return Promise.resolve(false);
-    if (folder !== schemaState.folder || model !== schemaState.visionModel) {
-      throw new Error('Set context changed during vocabulary discovery.');
-    }
-    if (index >= pending.length) return Promise.resolve(true);
-
-    schemaState.vocabularyScanIndex = index;
-    schemaState.vocabularyScanTotal = pending.length;
-    setStatus(
-      'Fresh visual pass ' + String(index + 1) + ' of ' + String(pending.length) +
-      ' — checking the image against your group structure…'
-    );
-    render();
-
-    var fileName = pending[index];
-    return requestVocabularySight(folder, model, fileName, groups).catch(function (err) {
-      schemaState.schemaJobId = '';
-      if (schemaState.workStopRequested) return false;
-      reportConsoleError('Discover Vocabulary item ' + fileName, err);
-      return null;
-    }).then(function (result) {
-      if (result === false || schemaState.workStopRequested) return false;
-      if (!result || !result.sight) {
-        if (result && result.warning) reportConsoleError('Discover Vocabulary', new Error(result.warning));
-        return true;
-      }
-      return saveVocabularySight(folder, model, fileName, groups, result.sight);
-    }).then(function (saved) {
-      if (saved === false || schemaState.workStopRequested) return false;
-      schemaState.vocabularyScanIndex = index + 1;
-      return scanVocabularyNext(pending, index + 1, folder, model, groups);
     });
   }
 
@@ -180,24 +109,24 @@
     var folder = schemaState.folder;
     var model = schemaState.visionModel;
     var groups = existingGroupsPayload();
+    var captionTemplate = currentCaptionTemplate();
     if (!groups.length) {
-      throw new Error('Discover Vocabulary needs at least one annotation group to guide the fresh visual pass.');
+      throw new Error('Discover Vocabulary needs at least one annotation group in Set Intelligence context.');
     }
-    return requestVocabularyStatus(folder, model, groups).then(function (payload) {
+    return requestVocabularyStatus(folder, model, groups, captionTemplate).then(function (payload) {
       var wanted = {};
       schemaState.scopeFiles.forEach(function (fileName) { wanted[fileName] = true; });
-      var pending = (payload.items || []).filter(function (item) {
-        return !!wanted[String(item.file || '')] && !item.cached;
-      }).map(function (item) {
-        return String(item.file || '');
-      }).filter(Boolean);
-      schemaState.vocabularyScanIndex = 0;
-      schemaState.vocabularyScanTotal = pending.length;
-      if (!pending.length) {
-        setStatus('Fresh schema-aware visual evidence is already reusable.');
-        return true;
+      var cached = (payload.items || []).filter(function (item) {
+        return !!wanted[String(item.file || '')] && !!item.cached;
+      }).length;
+      if (!cached) {
+        throw new Error('Discover Vocabulary needs current Context Sight. Run Set Intelligence first.');
       }
-      return scanVocabularyNext(pending, 0, folder, model, groups);
+      setStatus(
+        'Two-pass visual evidence is ready for ' + String(cached) + ' of ' +
+        String(schemaState.scopeFiles.length) + ' media.'
+      );
+      return true;
     });
   }
 
@@ -632,7 +561,7 @@
       }
       setStatus(
         'Open visual evidence is ready for ' + String(structured) + ' of ' +
-        String(schemaState.scopeFiles.length) + ' items. Starting a fresh group-aware visual pass…'
+        String(schemaState.scopeFiles.length) + ' items. Checking Context Sight from Set Intelligence…'
       );
       return ensureVocabularySight();
     }).then(function (ready) {
@@ -714,7 +643,8 @@
         visionModel: visionModel,
         directorModel: director,
         files: schemaState.scopeFiles.slice(),
-        existingGroups: groups
+        existingGroups: groups,
+        captionTemplate: currentCaptionTemplate()
       })
     }).then(function (payload) {
       var jobId = String(payload.job && payload.job.jobId || '');
@@ -752,6 +682,7 @@
         directorModel: director,
         files: schemaState.scopeFiles.slice(),
         existingGroups: existingGroupsPayload(),
+        captionTemplate: currentCaptionTemplate(),
         draftSchema: draftSchema
       })
     }).then(function (payload) {
@@ -811,6 +742,7 @@
         directorModel: director,
         files: files,
         existingGroups: existingGroupsPayload(),
+        captionTemplate: currentCaptionTemplate(),
         currentAssignments: currentAssignmentsPayload(files),
         existingOnly: !!schemaState.guidedLaunch
       })
@@ -1224,7 +1156,7 @@
     render();
     setStatus('Checking current Set intelligence…');
     refreshStatus().then(function (payload) {
-      if (!schemaState.open || !schemaState.guidedLaunch) return;
+      if (!schemaState.open || !schemaState.guidedLaunch) return null;
       var wanted = {};
       schemaState.scopeFiles.forEach(function (fileName) { wanted[fileName] = true; });
       var structured = (payload.items || []).filter(function (item) {
@@ -1232,10 +1164,29 @@
       }).length;
       if (!structured) {
         setStatus('Guided Tagging needs at least one usable Set Intelligence result for this Vision model.', true);
+        return null;
+      }
+      return requestVocabularyStatus(
+        folder,
+        model,
+        existingGroupsPayload(),
+        currentCaptionTemplate()
+      ).then(function (contextPayload) {
+        return { structured: structured, contextPayload: contextPayload };
+      });
+    }).then(function (ready) {
+      if (!ready || !schemaState.open || !schemaState.guidedLaunch) return;
+      var wanted = {};
+      schemaState.scopeFiles.forEach(function (fileName) { wanted[fileName] = true; });
+      var contextAvailable = (ready.contextPayload.items || []).filter(function (item) {
+        return !!wanted[String(item.file || '')] && !!item.available;
+      }).length;
+      if (!contextAvailable) {
+        setStatus('Guided Tagging needs Context Sight from Set Intelligence. Run Set Intelligence first.', true);
         return;
       }
       setStatus(
-        'Using Set intelligence for ' + String(structured) + ' of ' +
+        'Using two-pass Set intelligence for ' + String(Math.min(ready.structured, contextAvailable)) + ' of ' +
         String(schemaState.scopeFiles.length) + ' media. Building Guided Tag Pass…'
       );
       runTagSuggestions();

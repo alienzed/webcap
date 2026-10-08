@@ -689,6 +689,10 @@ function syncFocusedCaptionAfterAssist(sourceMediaKey) {
 
 function stopFocusedCaption(message) {
   if (!focusedCaptionState.open) return;
+  var stoppingLabel = focusedCaptionModeLabel();
+  if (stoppingLabel === 'Focus Review' && String(message || '') === 'Focus Caption ended.') {
+    message = 'Focus Review ended.';
+  }
   invalidateFocusedCaptionRequest();
   var pendingJobId = String(captionAssistPendingJobId || '');
   focusedCaptionState.open = false;

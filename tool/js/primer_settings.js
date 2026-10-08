@@ -155,7 +155,7 @@ function useCaptionAssistCandidate() {
   }
 
   cancelEditorAutosaveForCaption(state.folder, mediaItem.fileName);
-  var unchangedReview = isFocusedCaptionReviewMode() && nextCaption === String(mediaItem.caption || '');
+  var unchangedReview = nextCaption === String(mediaItem.caption || '');
   return cancelCurrentCaptionVision().then(function () {
     if (unchangedReview) return true;
     return saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key, {

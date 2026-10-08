@@ -61,7 +61,9 @@ The collapsed **Vision report** stays directly visible as a readable reference s
 
 Per-media Vision quality is allowed to degrade without failing the Set-level workflow. A model response that cannot be normalized into reusable structured Sight is kept visible diagnostically, skipped as evidence, and does not abort the remaining scan. Vocabulary discovery may proceed from partial usable coverage; complete Set coverage is not a success requirement.
 
-Stop is explicit. Completed cached Sight remains valid. Reopening Set Intelligence first inspects that cache. The main scan action is semantic: **Resume** for missing work and **Refresh Context Sight** when saved Context Sight is stale because its vocabulary/template context changed. A fully current Set does not present a misleading rerun action.
+Opening Set Intelligence is passive: it inspects saved coverage and never starts Vision or claims the GPU. The header action is explicit: **Run Set Intelligence** when no reusable evidence exists, **Resume** for missing work, and **Refresh** when the user wants to refresh stale or current intelligence.
+
+Stop is explicit. Closing the Set Intelligence surface does not stop an active scan; completed work continues to be saved unless the user presses **Stop**. Each successful Open Sight or Context Sight write is published immediately into the matching live media metadata as well as `media_metadata.json`, so downstream QA can use completed items before the full Set scan finishes.
 
 ## Data ownership
 
@@ -114,6 +116,10 @@ Purpose: reduce the amount of material the user must personally inspect.
 The new intelligence value comes from semantic interpretation and cross-signal synthesis. Deterministic systems remain useful evidence producers, but should not be promoted into strong semantic recommendations by themselves.
 
 High-confidence findings should prefer corroborated evidence and exact known actions. Lower-confidence observations should remain available but buried rather than competing with the attention queue.
+
+Deep QA is user-initiated and progressive. It interprets current inputs in bounded Director batches, publishes completed batch findings immediately, and keeps exact per-item input fingerprints so later caption, assignment, or Sight changes make only affected items eligible for reevaluation. If Set Intelligence is still running, an active Deep QA session may wait for newly saved evidence and continue as it arrives.
+
+Captioning findings may carry exact `add`, `replace`, or `remove` patches derived from cached evidence. Replace/remove source text and optional add anchors must match the submitted caption exactly. These patches are proposals only; they are handed to the shared Focus Review / Caption Assist correction UI for explicit preview and acceptance.
 
 Optional raw reports remain reference utilities, not the main QA experience.
 

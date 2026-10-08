@@ -580,11 +580,16 @@
       return qaWaitForDeepScan(payload.job);
     }).then(function (job) {
       if (!job) return false;
-      if (
-        sessionToken !== qaWorkbenchState.deepScanSessionToken ||
-        !qaWorkbenchState.deepScanSessionActive ||
-        qaWorkbenchState.deepScanStopRequested
-      ) {
+      if (sessionToken !== qaWorkbenchState.deepScanSessionToken) {
+        return false;
+      }
+      if (!qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) {
+        qaWorkbenchState.deepScanSessionActive = false;
+        qaWorkbenchState.deepScanSubmitting = false;
+        qaWorkbenchState.deepScanJobId = '';
+        qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
+        qaRefreshAiCoverage();
+        renderQaWorkbench();
         return false;
       }
       if (

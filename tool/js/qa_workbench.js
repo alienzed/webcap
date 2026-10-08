@@ -31,6 +31,7 @@
     aiModel: '',
     deepScanSessionActive: false,
     deepScanStopRequested: false,
+    deepScanSessionToken: 0,
     deepScanJobId: '',
     deepScanSubmitting: false,
     deepScanStatus: '',
@@ -290,16 +291,7 @@
   var qaReviewSaveChain = Promise.resolve();
 
   function qaItemInputSignatures() {
-    var signatures = {};
-    qaBuildDeepScanItems(qaGetTrainingItems()).forEach(function (item) {
-      var source = JSON.stringify(item);
-      var hash = 2166136261;
-      for (var i = 0; i < source.length; i += 1) {
-        hash = Math.imul(hash ^ source.charCodeAt(i), 16777619);
-      }
-      signatures[item.fileName] = (hash >>> 0).toString(16);
-    });
-    return signatures;
+    return qaCurrentItemSignatureMap(qaGetTrainingItems());
   }
 
   function qaReviewPayload() {
@@ -411,7 +403,8 @@
 
   function qaWaitForDeepScan(job) {
     if (!job || !job.jobId) throw new Error('QA Deep Scan did not return a queued job.');
-    qaWorkbenchState.deepScanJobId = String(job.jobId || '');
+    var jobId = String(job.jobId || '');
+    qaWorkbenchState.deepScanJobId = jobId;
     renderQaWorkbench();
 
     function poll(current) {
@@ -425,7 +418,7 @@
       return new Promise(function (resolve) {
         setTimeout(resolve, status === 'queued' ? 2000 : 1000);
       }).then(function () {
-        return qaRequestJson('/fs/director/job?job=' + encodeURIComponent(qaWorkbenchState.deepScanJobId) + '&consume=1');
+        return qaRequestJson('/fs/director/job?job=' + encodeURIComponent(jobId) + '&consume=1');
       }).then(function (payload) {
         return poll(payload.job);
       });
@@ -479,6 +472,31 @@
     qaWorkbenchState.aiCoverageTotal = Object.keys(current).length;
   }
 
+  function qaInvalidateDeepScanSession(message) {
+    var jobId = String(qaWorkbenchState.deepScanJobId || '');
+    qaWorkbenchState.deepScanSessionToken += 1;
+    qaWorkbenchState.deepScanSessionActive = false;
+    qaWorkbenchState.deepScanStopRequested = true;
+    qaWorkbenchState.deepScanSubmitting = false;
+    qaWorkbenchState.deepScanJobId = '';
+    qaWorkbenchState.aiFindings = [];
+    qaWorkbenchState.aiSummary = '';
+    qaWorkbenchState.aiItemSignatures = {};
+    qaWorkbenchState.aiCoverageValid = 0;
+    qaWorkbenchState.aiCoverageTotal = 0;
+    qaWorkbenchState.aiScopeSignature = '';
+    qaWorkbenchState.deepScanStatus = String(message || 'Deep QA context changed; run it again for the current scope.');
+    if (jobId) {
+      qaRequestJson('/fs/director/job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation: 'cancel_job', jobId: jobId })
+      }).catch(function (err) {
+        window.reportConsoleError('QA Deep Scan', err);
+      });
+    }
+  }
+
   function qaRunNextDeepScanBatch() {
     if (!qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) {
       qaWorkbenchState.deepScanSessionActive = false;
@@ -517,6 +535,10 @@
     var batchItems = pending.slice(0, QA_DEEP_SCAN_BATCH_SIZE);
     var batchSignatures = qaCurrentItemSignatureMap(batchItems);
     var model = qaWorkbenchState.aiModel;
+    var sessionToken = qaWorkbenchState.deepScanSessionToken;
+    var sessionFolder = String(state.folder || '');
+    var sessionScopeKey = qaBuildScopeKey(qaGetTrainingItems());
+    var sessionFocus = qaWorkbenchState.trainingFocus;
     qaWorkbenchState.deepScanSubmitting = true;
     qaWorkbenchState.deepScanStatus =
       'Deep QA · interpreting ' + batchItems.length + ' item' + (batchItems.length === 1 ? '' : 's') +
@@ -527,16 +549,41 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        folder: String(state.folder || ''),
+        folder: sessionFolder,
         model: model,
-        trainingFocus: qaWorkbenchState.trainingFocus,
+        trainingFocus: sessionFocus,
         items: qaBuildDeepScanItems(batchItems),
         deterministicFindings: qaDeepScanFindingPayload()
       })
     }).then(function (payload) {
+      if (
+        sessionToken !== qaWorkbenchState.deepScanSessionToken ||
+        !qaWorkbenchState.deepScanSessionActive ||
+        qaWorkbenchState.deepScanStopRequested
+      ) {
+        if (payload.job && payload.job.jobId) {
+          return qaRequestJson('/fs/director/job', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ operation: 'cancel_job', jobId: payload.job.jobId })
+          }).then(function () { return null; });
+        }
+        return null;
+      }
       qaWorkbenchState.deepScanSubmitting = false;
       return qaWaitForDeepScan(payload.job);
     }).then(function (job) {
+      if (!job) return false;
+      if (
+        sessionToken !== qaWorkbenchState.deepScanSessionToken ||
+        !qaWorkbenchState.deepScanSessionActive ||
+        qaWorkbenchState.deepScanStopRequested ||
+        String(state.folder || '') !== sessionFolder ||
+        qaBuildScopeKey(qaGetTrainingItems()) !== sessionScopeKey ||
+        qaWorkbenchState.trainingFocus !== sessionFocus
+      ) {
+        return false;
+      }
       qaWorkbenchState.deepScanJobId = '';
       var currentItems = qaGetTrainingItems();
       var currentSignatures = qaCurrentItemSignatureMap(currentItems);
@@ -564,7 +611,11 @@
       qaMergeFindings();
       renderQaWorkbench();
       return qaRunNextDeepScanBatch();
+    }).then(function (continued) {
+      if (continued === false && sessionToken !== qaWorkbenchState.deepScanSessionToken) return false;
+      return continued;
     }).catch(function (err) {
+      if (sessionToken !== qaWorkbenchState.deepScanSessionToken) return false;
       qaWorkbenchState.deepScanSubmitting = false;
       qaWorkbenchState.deepScanJobId = '';
       if (['cancelled', 'stopped', 'interrupted'].indexOf(String(err && err.jobStatus || '')) !== -1) {
@@ -596,6 +647,7 @@
       qaWorkbenchState.aiCoverageValid = 0;
     }
     qaWorkbenchState.aiModel = model;
+    qaWorkbenchState.deepScanSessionToken += 1;
     qaWorkbenchState.deepScanInputSignature = qaBuildDeepScanSignature(items);
     qaWorkbenchState.deepScanSessionActive = true;
     qaWorkbenchState.deepScanStopRequested = false;
@@ -1726,12 +1778,15 @@
     if (folderChanged || scopeChanged || inputsChanged || !qaWorkbenchState.deepScanInputSignature) {
       qaWorkbenchState.browseIndex = 0;
       qaWorkbenchState.statusMessage = '';
-      if (qaWorkbenchState.deepScanSessionActive) {
+      if (qaWorkbenchState.deepScanSessionActive && (folderChanged || scopeChanged)) {
+        qaInvalidateDeepScanSession('Deep QA stopped because the review scope changed.');
+        qaRestoreReview(inputSignature);
+      } else if (qaWorkbenchState.deepScanSessionActive) {
         qaReconcileAiFindingsToCurrentInputs();
       } else {
         qaRestoreReview(inputSignature);
       }
-      if (!qaWorkbenchState.deepScanJobId && !qaWorkbenchState.deepScanSessionActive) {
+      if (!qaWorkbenchState.deepScanJobId && !qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStatus) {
         qaWorkbenchState.deepScanStatus = '';
       }
     }
@@ -1966,7 +2021,11 @@
     if (action === 'save-focus') {
       var focusInput = document.getElementById('qa-training-focus-input');
       if (!focusInput) throw new Error('QA training focus input is missing.');
-      qaWorkbenchState.trainingFocus = qaNormalizeLabel(focusInput.value).slice(0, 240);
+      var nextFocus = qaNormalizeLabel(focusInput.value).slice(0, 240);
+      if (nextFocus !== qaWorkbenchState.trainingFocus && qaWorkbenchState.deepScanSessionActive) {
+        qaInvalidateDeepScanSession('Deep QA stopped because the training focus changed.');
+      }
+      qaWorkbenchState.trainingFocus = nextFocus;
       renderQaWorkbench();
     }
   }

@@ -33,6 +33,20 @@ The current code is intentionally split by concern:
 - `tool/js/ui.js`
   - shared shell behavior that is not specific to review/output
 
+## Progressive Focus Review
+
+**Focus Review** is the item-by-item bridge between Focus Caption and Set-level QA. It reuses the existing Single Item / Caption Assist presentation instead of introducing another workspace.
+
+- Scope is captured from the current visible items when Focus Review starts.
+- Only items with an existing saved caption are included.
+- The saved caption is presented directly as the editable candidate; opening an item does not call the Director.
+- Existing deterministic caption checks (selected annotations missing from the caption, unreviewed annotation groups) are reused immediately.
+- If Caption Vision is enabled, the current item may run the existing item-scoped Vision validation and compact Vision Extras. The next item may be prefetched one deep with those same item-scoped Vision tasks.
+- The Director is only invoked explicitly through the rewrite/regenerate action.
+- **Keep → Next** advances without rewriting an unchanged caption. **Save → Next** writes an edited/re-generated caption, then advances.
+- Navigation refuses to discard unsaved review edits implicitly; **Skip** is the explicit discard-and-advance action.
+- Review progress is browser-session workflow state only. Focus Review does not add a durable caption-reviewed flag and does not replace aggregate QA.
+
 ## Main Flow
 
 1. User opens Review and sees the current Caption Sheet and Media Metadata.

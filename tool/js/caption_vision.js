@@ -8,6 +8,7 @@ var captionVisionEnabled = true;
 var captionVisionActiveTask = null;
 var captionVisionTaskSequence = 0;
 var captionVisionResult = null;
+var captionQaResult = null;
 var captionVisionError = '';
 var captionVisionPreviewCaretIndex = null;
 var visionImageCaptionState = {
@@ -240,7 +241,7 @@ function setCaptionDiscrepancyFindingsForCandidate(candidate, findings, sourceLa
     throw new Error('Caption discrepancy findings require the current Caption Assist candidate.');
   }
   var normalized = filterCaptionVisionFindings(state.currentItem, candidate.text, findings);
-  captionVisionResult = {
+  captionQaResult = {
     mediaKey: String(candidate.mediaKey || ''),
     captionText: String(candidate.text || ''),
     findings: normalized,
@@ -254,6 +255,7 @@ function setCaptionDiscrepancyFindingsForCandidate(candidate, findings, sourceLa
 
 function clearCaptionVisionResult() {
   captionVisionResult = null;
+  captionQaResult = null;
   captionVisionError = '';
   syncCaptionVisionUi();
 }
@@ -478,9 +480,9 @@ function captionVisionPatchLabel(finding) {
 }
 
 function rejectCaptionVisionFinding(finding) {
-  if (!captionVisionResult || !Array.isArray(captionVisionResult.findings)) return;
-  captionVisionResult.findings = captionVisionResult.findings.filter(function (candidate) {
-    return candidate !== finding;
+  [captionVisionResult, captionQaResult].forEach(function (result) {
+    if (!result || !Array.isArray(result.findings)) return;
+    result.findings = result.findings.filter(function (candidate) { return candidate !== finding; });
   });
   restoreCaptionVisionCandidatePreview();
   syncCaptionVisionUi();
@@ -503,6 +505,10 @@ function applyCaptionVisionFinding(finding) {
       captionAssistCandidate.text,
       captionVisionResult.findings
     );
+  }
+  if (captionQaResult) {
+    captionQaResult.captionText = String(captionAssistCandidate.text || '');
+    captionQaResult.findings = filterCaptionVisionFindings(state.currentItem, captionAssistCandidate.text, captionQaResult.findings);
   }
   if (state && state.currentItem && captionAssistCandidate.mediaKey === state.currentItem.key) {
     var liveRequest = buildCaptionAssistRequest(state.currentItem);
@@ -650,12 +656,13 @@ function syncCaptionVisionUi() {
     status.classList.remove('hidden');
     return;
   }
-  if (!captionVisionResult) {
-    status.textContent = 'Vision enabled · checks run automatically for each caption candidate.';
+  if (!captionVisionResult && !captionQaResult) {
+    status.textContent = 'Vision checks run automatically for each caption candidate.';
     status.classList.remove('hidden');
     return;
   }
-  if (!captionVisionResult.findings.length) {
+  var combinedFindings = (captionQaResult && captionQaResult.findings || []).concat(captionVisionResult && captionVisionResult.findings || []);
+  if (!combinedFindings.length) {
     status.textContent = suppliedResultVisible
       ? 'No remaining actionable caption discrepancies.'
       : 'Vision found no meaningful discrepancy.';
@@ -663,7 +670,7 @@ function syncCaptionVisionUi() {
     return;
   }
 
-  captionVisionResult.findings.forEach(function (finding) {
+  combinedFindings.forEach(function (finding) {
     var pill = renderCaptionVisionFinding(finding);
     if (pill) findings.appendChild(pill);
   });

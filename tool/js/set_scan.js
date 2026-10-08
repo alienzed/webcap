@@ -687,6 +687,7 @@
     setScanState.running = false;
     setScanState.currentVisionJobId = '';
     setScanState.phase = 'complete';
+    qaSetIntelligenceEvidenceUpdated();
     var failureCount = setScanState.failures.length;
     if (failureCount) {
       setSetIntelligenceStatus(
@@ -794,6 +795,7 @@
       if (success === false || setScanState.stopRequested) {
         setScanState.running = false;
         setScanState.phase = 'idle';
+        qaSetIntelligenceEvidenceUpdated();
         setSetIntelligenceStatus('Scan stopped', 'Completed understanding remains cached.');
         window.setStatus('Set Intelligence stopped. Completed understanding remains cached.');
         return;
@@ -802,6 +804,7 @@
     }).catch(function (err) {
       setScanState.running = false;
       setScanState.currentVisionJobId = '';
+      qaSetIntelligenceEvidenceUpdated();
       if (previousReport.hasRun) {
         setScanState.hasRun = true;
         setScanState.phase = previousReport.phase;

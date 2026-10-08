@@ -712,12 +712,12 @@ html[data-theme="dark"] .vision-image-caption-error {
   cursor: progress;
 }
 
-.editor-caption-candidate.is-focus-caption .editor-caption-candidate-text[contenteditable="true"] {
+.editor-caption-candidate-text[contenteditable="true"] {
   outline: none;
   cursor: text;
 }
 
-.editor-caption-candidate.is-focus-caption .editor-caption-candidate-text[contenteditable="true"]:focus {
+.editor-caption-candidate-text[contenteditable="true"]:focus {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 

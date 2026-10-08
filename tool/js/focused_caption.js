@@ -278,7 +278,8 @@ function loadFocusedCaptionVisionPhrases() {
   return task.promise.then(function (result) {
     if (!result || !focusedCaptionState.open || !state.currentItem || state.currentItem.key !== mediaItem.key) return false;
     setFocusedCaptionVisionPhraseResult(result);
-    return syncFocusedCaptionVisionPhrasePrefetch().then(function () { return true; });
+    // Extras are explicitly requested for this item, not the next item.
+    return true;
   }).catch(function (err) {
     if (!task.cancelled && focusedCaptionState.open && state.currentItem && state.currentItem.key === mediaItem.key) {
       focusedCaptionVisionPhrases.pending = false;
@@ -892,7 +893,7 @@ function startFocusedCaption(targetMediaKey, mode, options) {
   focusedCaptionState.discrepancySourceLabel = nextMode === 'review'
     ? String(opts.sourceLabel || '')
     : '';
-  focusedCaptionVisionPhrases.enabled = !!captionVisionEnabled;
+  focusedCaptionVisionPhrases.enabled = false;
   focusedCaptionState.folder = String((state && state.folder) || '');
   loadCaptionVisionCapabilities();
   focusedCaptionState.itemKeys = itemKeys;

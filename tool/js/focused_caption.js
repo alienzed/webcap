@@ -352,9 +352,9 @@ function presentFocusedReviewCandidate(mediaItem) {
       suppliedFindings,
       focusedCaptionState.discrepancySourceLabel || 'QA'
     );
-  } else if (captionVisionEnabled) {
-    maybeRunCaptionVisionForCandidate(candidate);
   }
+  // QA suggestions and the fresh item-level visual check are complementary.
+  if (captionVisionEnabled) maybeRunCaptionVisionForCandidate(candidate);
   startFocusedCaptionPrefetch(candidate.mediaKey);
   return Promise.resolve(true);
 }
@@ -557,8 +557,8 @@ function useFocusedCaptionPrefetchForCurrentItem() {
         suppliedFindings,
         focusedCaptionState.discrepancySourceLabel || 'QA'
       );
-      startFocusedCaptionPrefetch(candidate.mediaKey);
-    } else if (captionVisionEnabled) {
+    }
+    if (captionVisionEnabled) {
       adoptCaptionVisionPrefetch(adoptedPrefetch, candidate).then(function () {
         if (isFocusedCaptionOpen() && state.currentItem && state.currentItem.key === candidate.mediaKey) {
           startFocusedCaptionPrefetch(candidate.mediaKey);

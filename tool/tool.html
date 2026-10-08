@@ -2524,6 +2524,10 @@
                         <div id="set-scan-context-detail" class="set-scan-evidence-detail">Checking saved coverage…</div>
                     </section>
                 </div>
+                <div class="set-scan-run-actions">
+                    <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
+                    <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
+                </div>
                 <div id="set-intelligence-next" class="set-intelligence-next hidden">
                     <div class="set-intelligence-next-copy">
                         <strong>Next: review the vocabulary</strong>
@@ -2544,11 +2548,7 @@
                     <pre id="set-scan-raw-output" class="set-scan-raw-output" aria-live="polite"></pre>
                 </details>
                 <div class="set-scan-footer">
-                    <span id="set-scan-note">Uses the selected Vision model. Existing scan data is reused when it is still current.</span>
-                    <div class="set-scan-footer-actions">
-                        <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
-                        <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
-                    </div>
+                    <span id="set-scan-note">Saved intelligence is reused automatically. Resume or refresh only the coverage shown above.</span>
                 </div>
             </div>
         </div>

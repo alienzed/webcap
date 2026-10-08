@@ -175,7 +175,12 @@ function captionVisionApplyPatchToText(captionText, patch, caretIndex) {
     if (index < 0) {
       index = Number.isFinite(caretIndex) ? Math.max(0, Math.min(text.length, caretIndex)) : text.length;
     }
-    return text.slice(0, index) + patch.replacementText + text.slice(index);
+    var left = text.slice(0, index);
+    var right = text.slice(index);
+    var value = String(patch.replacementText || '').trim();
+    var prefix = left && !/[\s([{"'/-]$/.test(left) ? ' ' : '';
+    var suffix = right && !/^[\s.,;:!?)}\]"'/-]/.test(right) ? ' ' : '';
+    return left + prefix + value + suffix + right;
   }
   if (patch.action === 'replace') {
     return text.slice(0, patch.index) + patch.replacementText + text.slice(patch.index + patch.sourceText.length);
@@ -438,10 +443,21 @@ function applyCaptionVisionFinding(finding) {
   }
   var caretIndex = getCaptionVisionCaretIndex();
   captionAssistCandidate.text = captionVisionApplyPatchToText(captionAssistCandidate.text, patch, caretIndex);
-  rejectCaptionVisionFinding(finding);
-  if (typeof syncCaptionAssistCandidateUi !== 'function') {
-    throw new Error('Caption Assist candidate UI sync is unavailable.');
+  if (state && state.currentItem && captionAssistCandidate.mediaKey === state.currentItem.key) {
+    var liveRequest = buildCaptionAssistRequest(state.currentItem);
+    captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
+      captionAssistCandidate.mediaKey,
+      captionAssistCandidate.text,
+      liveRequest.assignments
+    );
+    captionAssistCandidate.omittedCorrections = getCaptionAssistOmittedCorrections(
+      captionAssistCandidate.mediaKey,
+      captionAssistCandidate.text,
+      liveRequest.assignments
+    );
   }
+  if (isFocusedCaptionOpen()) resetFocusedCaptionUseArm();
+  rejectCaptionVisionFinding(finding);
   syncCaptionAssistCandidateUi();
   setStatus('Applied Vision caption edit.');
 }
@@ -459,6 +475,9 @@ function renderCaptionVisionFinding(finding) {
   button.className = 'caption-vision-patch-action';
   button.textContent = captionVisionPatchLabel(finding);
   button.title = 'Preview this exact caption edit';
+  button.addEventListener('pointerdown', function (event) {
+    event.preventDefault();
+  });
   button.addEventListener('mouseenter', function () {
     var currentPatch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
     if (!currentPatch) return;

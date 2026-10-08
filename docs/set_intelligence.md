@@ -36,12 +36,12 @@ The intelligence path is fundamentally model-driven:
 
 - the selected **Vision** model performs an **Open Sight** read with no vocabulary guidance;
 - the same Vision model performs a fresh **Context Sight** read using the current group names, exact terms, and caption template as preferred annotation language and structural guidance;
-- the selected **Director** model is required for the semantic interpretation workflows that follow;
+- the selected **Director** model is used by the semantic interpretation workflows that follow;
 - WebCap's deterministic metadata, Face Focus, MediaPipe pose, Scene Complexity, Prune, Duplicate, and other signals remain supporting evidence and constraints.
 
 Context Sight stays image-first: it produces a compact visual caption plus exact supplied terms that clearly match the image. The groups, terms, and template guide attention and wording; they are not a requirement to force a value into every dimension.
 
-Vision and Director availability are therefore required before Set Intelligence runs. The workflow must not present a successful deterministic-only scan as equivalent to semantic Set understanding.
+Set Intelligence itself requires the selected **Vision** model because that explicit run performs the pixel reads. Director availability is checked only when a downstream semantic interpretation workflow actually needs it. The workflow must not present a successful deterministic-only scan as equivalent to semantic Set understanding.
 
 Current versioned evidence is reused. No separate scan manifest or durable workflow-state file is created.
 

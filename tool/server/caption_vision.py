@@ -308,25 +308,25 @@ def normalize_caption_vision_result(raw_text, groups, caption_text=""):
         if not isinstance(raw, dict):
             continue
         action = str(raw.get("action") or "").strip().lower()
-        source_text = str(raw.get("sourceText") or "").strip()
-        replacement_text = str(raw.get("replacementText") or "").strip()
-        anchor_text = str(raw.get("anchorText") or "").strip()
+        source_text = str(raw.get("sourceText") or "")
+        replacement_text = str(raw.get("replacementText") or "")
+        anchor_text = str(raw.get("anchorText") or "")
         confidence = str(raw.get("confidence") or "").strip().lower()
         if action not in {"add", "replace", "remove"} or confidence not in {"low", "medium", "high"}:
             continue
         if action == "add":
-            if source_text or not replacement_text:
+            if source_text.strip() or not replacement_text.strip():
                 continue
             if anchor_text and caption.count(anchor_text) != 1:
                 continue
         elif action == "replace":
-            if not source_text or not replacement_text or source_text == replacement_text:
+            if not source_text.strip() or not replacement_text.strip() or source_text == replacement_text:
                 continue
             if caption.count(source_text) != 1:
                 continue
             anchor_text = ""
         else:
-            if not source_text or replacement_text:
+            if not source_text.strip() or replacement_text:
                 continue
             if caption.count(source_text) != 1:
                 continue

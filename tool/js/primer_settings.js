@@ -1155,7 +1155,12 @@ function blendFocusedCaptionVisionPhrase(phrase) {
   });
 }
 
+var captionAssistSightPreparation = false;
 function runCaptionAssist() {
+  if (captionAssistSightPreparation) {
+    setStatus('Caption Assist is preparing Sight for an item.');
+    return Promise.resolve(false);
+  }
   var item = getPrimerResetCurrentMediaItem();
   if (!item) return Promise.resolve(false);
   var sourceKey = item.key;
@@ -1164,6 +1169,7 @@ function runCaptionAssist() {
     return Promise.resolve(false);
   }
   var existingSight = item.metadata && item.metadata.vision_sight;
+  captionAssistSightPreparation = true;
   setStatus('Caption Assist: preparing visual evidence…');
   return loadCaptionVisionCapabilities().then(function () {
     if (!state.currentItem || state.currentItem.key !== sourceKey) return false;
@@ -1179,6 +1185,8 @@ function runCaptionAssist() {
     reportConsoleError('Caption Assist Sight', err);
     setStatus('Caption Assist could not prepare Sight: ' + String(err && err.message || err));
     return false;
+  }).finally(function () {
+    captionAssistSightPreparation = false;
   });
 }
 

@@ -319,9 +319,9 @@ def test_focus_caption_orders_warnings_then_editable_caption_then_vision_sight()
     candidate = html.index('id="editor-caption-candidate-text"')
     sight = html.index('id="editor-caption-vision-phrases"')
     assert findings < candidate < sight
-    assert "clean.split(/[,.]+/)" in focus
-    assert "Vision sees" in primer
-    assert "fullDescription" in primer
+    assert "requestVisionCaptionExtras(mediaItem, task.captionText" in focus
+    assert "Vision extras" in primer
+    assert "fullDescription" not in primer
     assert "insertFocusedCaptionVisionPhrase(phrase)" in primer
     assert "blendFocusedCaptionVisionPhrase(phrase)" in primer
 
@@ -335,8 +335,9 @@ def test_focus_caption_vision_phrases_are_ephemeral_editable_and_one_deep_prefet
     assert 'id="editor-caption-vision-phrases"' in html
     assert 'id="editor-caption-vision-phrases-btn"' in html
     assert "var focusedCaptionVisionPhrases = {" in focus
-    assert "function extractFocusedCaptionVisionPhrases(text)" in focus
-    assert "function createFocusedCaptionVisionPhraseTask(mediaItem)" in focus
+    assert "function extractFocusedCaptionVisionPhrases(text)" not in focus
+    assert "function createFocusedCaptionVisionPhraseTask(mediaItem, captionText)" in focus
+    assert "requestVisionCaptionExtras(mediaItem, task.captionText" in focus
     assert "function loadFocusedCaptionVisionPhrases()" in focus
     assert "phraseTask: null" in focus
     assert "beginFocusedCaptionPrefetchPhrases(prefetch, target.item)" in focus
@@ -354,7 +355,7 @@ def test_focus_caption_vision_phrases_are_ephemeral_editable_and_one_deep_prefet
     assert "insertBtn.addEventListener('pointerdown'" in primer
     assert "loadFocusedCaptionVisionPhrases();" in primer
     assert "isCaptionVisionSupportedMedia(state.currentItem.fileName)" in primer
-    assert "Vision phrases failed: " in focus
+    assert "Vision extras failed: " in focus
     assert ".caption-vision-phrase-insert" in css
 
 
@@ -675,5 +676,23 @@ def test_caption_assist_candidate_is_manually_editable_in_normal_and_focus_modes
     assert "textEl.setAttribute('contenteditable', visible ? 'true' : 'false');" in primer
     assert "textEl.setAttribute('role', visible ? 'textbox' : 'document');" in primer
     assert "captionAssistCandidate.text = String(candidateTextEl.textContent || '');" in primer
-    assert "if (!isFocusedCaptionOpen()" not in primer.split("candidateTextEl.addEventListener('input'", 1)[1].split("});", 1)[0]
+    assert "getCaptionAssistOmittedAssignments(" in primer.split("candidateTextEl.addEventListener('input'", 1)[1]
+    assert "clearCaptionVisionResult();" in primer.split("candidateTextEl.addEventListener('input'", 1)[1]
+    assert "clearFocusedCaptionVisionPhrases({ keepEnabled: true });" in primer.split("candidateTextEl.addEventListener('input'", 1)[1]
     assert '.editor-caption-candidate-text[contenteditable="true"]' in css
+
+
+def test_focus_caption_vision_extras_use_current_edited_candidate_and_no_prose_dump():
+    focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
+    vision = _read("tool/js/caption_vision.js")
+
+    assert "requestVisionCaptionExtras(mediaItem, task.captionText" in focus
+    assert "createFocusedCaptionVisionPhraseTask(mediaItem, captionAssistCandidate.text)" in focus
+    assert "prefetch.candidate ? prefetch.candidate.text : ''" in focus
+    assert "extractFocusedCaptionVisionPhrases" not in focus
+    assert "Vision extras" in primer
+    assert "Refresh extras" in primer
+    assert "caption-vision-description" not in primer.split("function syncFocusedCaptionVisionPhrasesUi()", 1)[1].split("function syncCaptionAssistCandidateUi()", 1)[0]
+    assert "'/caption/vision-extras'" in vision
+    assert "window.requestVisionCaptionExtras = requestVisionCaptionExtras;" in vision

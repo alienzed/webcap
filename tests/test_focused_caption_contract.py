@@ -345,7 +345,10 @@ def test_focus_caption_vision_phrases_are_ephemeral_editable_and_one_deep_prefet
     assert "localStorage" not in focus
     assert "sessionStorage" not in focus
 
-    assert "textEl.setAttribute('contenteditable', focusOpen && visible ? 'true' : 'false');" in primer
+    assert "textEl.setAttribute('contenteditable', visible ? 'true' : 'false');" in primer
+    assert "candidateTextEl.__captionAssistEditBound" in primer
+    assert "captionAssistCandidate.text = String(candidateTextEl.textContent || '');" in primer
+    assert "clearCaptionVisionResult();" in primer
     assert "function insertFocusedCaptionVisionPhrase(phrase)" in primer
     assert "captionAssistCandidate.text = next;" in primer
     assert "insertBtn.addEventListener('pointerdown'" in primer
@@ -663,3 +666,14 @@ def test_caption_assist_modal_close_is_header_right_and_vision_is_footer_left():
 
     assert header < close < body
     assert actions < left < vision < right
+
+
+def test_caption_assist_candidate_is_manually_editable_in_normal_and_focus_modes():
+    primer = _read("tool/js/primer_settings.js")
+    css = _read("tool/css/styles.css")
+
+    assert "textEl.setAttribute('contenteditable', visible ? 'true' : 'false');" in primer
+    assert "textEl.setAttribute('role', visible ? 'textbox' : 'document');" in primer
+    assert "captionAssistCandidate.text = String(candidateTextEl.textContent || '');" in primer
+    assert "if (!isFocusedCaptionOpen()" not in primer.split("candidateTextEl.addEventListener('input'", 1)[1].split("});", 1)[0]
+    assert '.editor-caption-candidate-text[contenteditable="true"]' in css

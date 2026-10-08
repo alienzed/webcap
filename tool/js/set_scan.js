@@ -10,6 +10,9 @@
     visionModel: '',
     currentVisionJobId: '',
     currentRawResponse: null,
+    rawResponses: [],
+    rawResponseIndex: -1,
+    hasRun: false,
     completed: 0,
     total: 0,
     phase: 'idle'
@@ -36,13 +39,16 @@
     var progressFill = el('set-scan-progress-fill');
     var next = el('set-intelligence-next');
     var details = el('set-scan-details');
+    var responseSelect = el('set-scan-response-select');
     var output = el('set-scan-raw-output');
-    if (!modal || !stopBtn || !progressFill || !next || !details || !output) {
+    var rescanBtn = el('set-scan-rescan-btn');
+    if (!modal || !stopBtn || !progressFill || !next || !details || !responseSelect || !output || !rescanBtn) {
       throw new Error('Set Intelligence UI is incomplete.');
     }
 
     modal.classList.toggle('hidden', !setScanState.open);
     stopBtn.classList.toggle('hidden', !setScanState.running);
+    rescanBtn.classList.toggle('hidden', setScanState.running || !setScanState.hasRun);
     next.classList.toggle('hidden', setScanState.phase !== 'complete');
 
     var percent = 0;
@@ -60,11 +66,20 @@
     if (setScanState.phase === 'complete') percent = 100;
     progressFill.style.width = String(percent) + '%';
 
-    var currentRaw = setScanState.currentRawResponse;
-    details.classList.toggle('hidden', !currentRaw);
+    var responses = Array.isArray(setScanState.rawResponses) ? setScanState.rawResponses : [];
+    var currentRaw = responses[setScanState.rawResponseIndex] || null;
+    setScanState.currentRawResponse = currentRaw;
+    details.classList.toggle('hidden', !responses.length);
+    responseSelect.innerHTML = '';
+    responses.forEach(function (response, index) {
+      var option = document.createElement('option');
+      option.value = String(index);
+      option.textContent = String(response.file || 'Vision response');
+      option.selected = index === setScanState.rawResponseIndex;
+      responseSelect.appendChild(option);
+    });
     if (currentRaw) {
-      details.open = true;
-      output.textContent = '--- ' + String(currentRaw.file || '') + ' ---\n' + String(currentRaw.text || '');
+      output.textContent = String(currentRaw.text || '');
     } else {
       output.textContent = '';
     }
@@ -80,10 +95,23 @@
   }
 
   function showRawResponse(fileName, passLabel, text) {
-    setScanState.currentRawResponse = {
+    var response = {
       file: String(fileName || '') + ' · ' + String(passLabel || 'Vision'),
       text: String(text || '')
     };
+    setScanState.rawResponses.push(response);
+    setScanState.rawResponseIndex = setScanState.rawResponses.length - 1;
+    setScanState.currentRawResponse = response;
+    el('set-scan-details').open = true;
+    renderSetIntelligence();
+  }
+
+  function selectRawResponse() {
+    var select = el('set-scan-response-select');
+    var index = Number(select && select.value);
+    if (!Number.isInteger(index) || index < 0 || index >= setScanState.rawResponses.length) return;
+    setScanState.rawResponseIndex = index;
+    setScanState.currentRawResponse = setScanState.rawResponses[index];
     renderSetIntelligence();
   }
 
@@ -357,9 +385,12 @@
     setScanState.files = files.slice();
     setScanState.visionModel = '';
     setScanState.running = true;
+    setScanState.hasRun = true;
     setScanState.stopRequested = false;
     setScanState.currentVisionJobId = '';
     setScanState.currentRawResponse = null;
+    setScanState.rawResponses = [];
+    setScanState.rawResponseIndex = -1;
     el('set-scan-details').open = false;
     setScanState.completed = 0;
     setScanState.total = 0;
@@ -444,9 +475,16 @@
       window.setStatus('Open a Set before using Set Intelligence.');
       return;
     }
+    if (setScanState.folder && setScanState.folder !== folder) {
+      setScanState.hasRun = false;
+      setScanState.phase = 'idle';
+      setScanState.rawResponses = [];
+      setScanState.rawResponseIndex = -1;
+      setScanState.currentRawResponse = null;
+    }
     setScanState.open = true;
     renderSetIntelligence();
-    runSetIntelligence();
+    if (!setScanState.hasRun) runSetIntelligence();
   }
 
   function closeSetIntelligence() {
@@ -475,17 +513,21 @@
     var openBtn = el('set-intelligence-open-btn');
     var closeBtn = el('set-scan-close-btn');
     var stopBtn = el('set-scan-stop-btn');
+    var rescanBtn = el('set-scan-rescan-btn');
+    var responseSelect = el('set-scan-response-select');
     var primaryBtn = el('set-intelligence-primary-btn');
     var guidedBtn = el('set-intelligence-guided-btn');
     var qaBtn = el('set-intelligence-qa-btn');
     var modal = el('set-scan-modal');
-    if (!openBtn || !closeBtn || !stopBtn || !primaryBtn || !guidedBtn || !qaBtn || !modal) {
+    if (!openBtn || !closeBtn || !stopBtn || !rescanBtn || !responseSelect || !primaryBtn || !guidedBtn || !qaBtn || !modal) {
       throw new Error('Set Intelligence controls are missing.');
     }
 
     openBtn.onclick = openSetIntelligence;
     closeBtn.onclick = closeSetIntelligence;
     stopBtn.onclick = stopSetIntelligence;
+    rescanBtn.onclick = runSetIntelligence;
+    responseSelect.onchange = selectRawResponse;
     primaryBtn.onclick = continueToVocabulary;
     guidedBtn.onclick = continueToGuidedTagging;
     qaBtn.onclick = continueToQa;

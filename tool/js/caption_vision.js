@@ -104,15 +104,92 @@ function captionVisionRequestFingerprint(mediaItem, captionText) {
   return JSON.stringify(buildCaptionVisionRequest(mediaItem, captionText));
 }
 
+function captionVisionFindExactOccurrence(text, needle) {
+  var source = String(text || '');
+  var wanted = String(needle || '');
+  if (!wanted) return { count: 0, index: -1 };
+  var count = 0;
+  var index = -1;
+  var from = 0;
+  while (from <= source.length) {
+    var found = source.indexOf(wanted, from);
+    if (found === -1) break;
+    count += 1;
+    if (index === -1) index = found;
+    from = found + Math.max(1, wanted.length);
+  }
+  return { count: count, index: index };
+}
+
+function captionVisionValidatePatch(captionText, finding) {
+  var text = String(captionText || '');
+  var action = String(finding && finding.action || '').toLowerCase();
+  var sourceText = String(finding && finding.sourceText || '');
+  var replacementText = String(finding && finding.replacementText || '');
+  var anchorText = String(finding && finding.anchorText || '');
+
+  if (action === 'add') {
+    if (!replacementText || sourceText) return null;
+    if (!anchorText) {
+      return {
+        action: action,
+        sourceText: '',
+        replacementText: replacementText,
+        anchorText: '',
+        index: -1
+      };
+    }
+    var anchorMatch = captionVisionFindExactOccurrence(text, anchorText);
+    if (anchorMatch.count !== 1) return null;
+    return {
+      action: action,
+      sourceText: '',
+      replacementText: replacementText,
+      anchorText: anchorText,
+      index: anchorMatch.index + anchorText.length
+    };
+  }
+
+  if (action === 'replace' || action === 'remove') {
+    if (!sourceText) return null;
+    if (action === 'replace' && (!replacementText || replacementText === sourceText)) return null;
+    if (action === 'remove' && replacementText) return null;
+    var sourceMatch = captionVisionFindExactOccurrence(text, sourceText);
+    if (sourceMatch.count !== 1) return null;
+    return {
+      action: action,
+      sourceText: sourceText,
+      replacementText: replacementText,
+      anchorText: '',
+      index: sourceMatch.index
+    };
+  }
+  return null;
+}
+
+function captionVisionApplyPatchToText(captionText, patch, caretIndex) {
+  var text = String(captionText || '');
+  if (!patch) return text;
+  if (patch.action === 'add') {
+    var index = patch.index;
+    if (index < 0) {
+      index = Number.isFinite(caretIndex) ? Math.max(0, Math.min(text.length, caretIndex)) : text.length;
+    }
+    return text.slice(0, index) + patch.replacementText + text.slice(index);
+  }
+  if (patch.action === 'replace') {
+    return text.slice(0, patch.index) + patch.replacementText + text.slice(patch.index + patch.sourceText.length);
+  }
+  if (patch.action === 'remove') {
+    return text.slice(0, patch.index) + text.slice(patch.index + patch.sourceText.length);
+  }
+  return text;
+}
+
 function filterCaptionVisionFindings(mediaItem, captionText, findings) {
-  var mediaKey = String(mediaItem && mediaItem.key || '');
-  var text = String(captionText || '').trim();
+  var text = String(captionText || '');
   return (Array.isArray(findings) ? findings : []).filter(function (finding) {
-    if (!finding || String(finding.type || '').toLowerCase() !== 'omitted' || !finding.knownTag) return true;
-    var group = String(finding.knownTag.group || '').trim();
-    var term = String(finding.knownTag.term || '').trim();
-    if (!mediaKey || !group || !term) return true;
-    return !checklistGroupTermAppearsInCaptionText(group, term, mediaKey, text);
+    return !!captionVisionValidatePatch(text, finding);
   });
 }
 
@@ -302,78 +379,121 @@ function adoptCaptionVisionPrefetch(prefetch, candidate) {
   return bindCaptionVisionTaskToCandidate(task, candidate);
 }
 
-function isCaptionVisionKnownTagSelected(mediaKey, group, term) {
-  var wanted = String(term || '').trim().toLowerCase();
-  return getChecklistAssignedTagsForMediaKey(mediaKey, group).some(function (value) {
-    return String(value || '').trim().toLowerCase() === wanted;
-  });
+function getCaptionVisionCandidateTextElement() {
+  var el = document.getElementById('editor-caption-candidate-text');
+  if (!el) throw new Error('Caption Vision candidate text is missing.');
+  return el;
 }
 
-function applyCaptionVisionKnownTag(finding) {
-  if (!finding || !finding.knownTag || !state.currentItem || !captionAssistCandidate) return;
-  var mediaKey = state.currentItem.key;
-  var group = String(finding.knownTag.group || '');
-  var term = String(finding.knownTag.term || '');
-  if (!group || !term) return;
-
-  var alreadySelected = isCaptionVisionKnownTagSelected(mediaKey, group, term);
-  if (!alreadySelected) {
-    assignChecklistTagToMediaKey(mediaKey, group, term);
+function getCaptionVisionCaretIndex() {
+  var candidateEl = getCaptionVisionCandidateTextElement();
+  if (!candidateEl.isContentEditable) return String(captionAssistCandidate && captionAssistCandidate.text || '').length;
+  var selection = window.getSelection();
+  if (!selection || !selection.rangeCount || !candidateEl.contains(selection.anchorNode)) {
+    return String(captionAssistCandidate && captionAssistCandidate.text || '').length;
   }
+  var range = selection.getRangeAt(0).cloneRange();
+  range.selectNodeContents(candidateEl);
+  range.setEnd(selection.anchorNode, selection.anchorOffset);
+  return range.toString().length;
+}
 
-  setStatus(
-    (alreadySelected ? 'Revising caption for ' : 'Selected ' + group + ': ' + term + '. Revising caption for ')
-    + group + ': ' + term + '...'
-  );
-  captionVisionResult = null;
-  captionVisionError = '';
-  repairCaptionAssistCandidate([{
-    group: group,
-    term: term,
-    note: String(finding.description || '').trim()
-  }]);
+function setCaptionVisionCandidatePreview(text, active) {
+  var candidateEl = getCaptionVisionCandidateTextElement();
+  candidateEl.textContent = String(text || '');
+  candidateEl.classList.toggle('is-patch-preview', !!active);
+}
+
+function restoreCaptionVisionCandidatePreview() {
+  if (!captionAssistCandidate) return;
+  setCaptionVisionCandidatePreview(captionAssistCandidate.text, false);
+}
+
+function captionVisionPatchLabel(finding) {
+  var action = String(finding && finding.action || '');
+  var sourceText = String(finding && finding.sourceText || '');
+  var replacementText = String(finding && finding.replacementText || '');
+  if (action === 'add') return '+ ' + replacementText;
+  if (action === 'replace') return sourceText + ' → ' + replacementText;
+  if (action === 'remove') return '− ' + sourceText;
+  return '';
+}
+
+function rejectCaptionVisionFinding(finding) {
+  if (!captionVisionResult || !Array.isArray(captionVisionResult.findings)) return;
+  captionVisionResult.findings = captionVisionResult.findings.filter(function (candidate) {
+    return candidate !== finding;
+  });
+  restoreCaptionVisionCandidatePreview();
+  syncCaptionVisionUi();
+}
+
+function applyCaptionVisionFinding(finding) {
+  if (!captionAssistCandidate) return;
+  var patch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
+  if (!patch) {
+    rejectCaptionVisionFinding(finding);
+    setStatus('Caption changed; this Vision suggestion is no longer applicable.');
+    return;
+  }
+  var caretIndex = getCaptionVisionCaretIndex();
+  captionAssistCandidate.text = captionVisionApplyPatchToText(captionAssistCandidate.text, patch, caretIndex);
+  rejectCaptionVisionFinding(finding);
+  if (typeof syncCaptionAssistCandidateUi !== 'function') {
+    throw new Error('Caption Assist candidate UI sync is unavailable.');
+  }
+  syncCaptionAssistCandidateUi();
+  setStatus('Applied Vision caption edit.');
 }
 
 function renderCaptionVisionFinding(finding) {
-  var row = document.createElement('div');
-  row.className = 'caption-vision-finding caption-vision-confidence-' + String(finding.confidence || 'low');
+  if (!captionAssistCandidate) return null;
+  var patch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
+  if (!patch) return null;
 
-  var copy = document.createElement('div');
-  copy.className = 'caption-vision-finding-copy';
-  var meta = document.createElement('div');
-  meta.className = 'caption-vision-finding-meta';
-  meta.textContent = String(finding.type || '') + ' · ' + String(finding.confidence || '');
-  var text = document.createElement('div');
-  text.className = 'caption-vision-finding-text';
-  text.textContent = String(finding.description || '');
-  copy.appendChild(meta);
-  copy.appendChild(text);
-  row.appendChild(copy);
+  var wrap = document.createElement('span');
+  wrap.className = 'caption-vision-patch';
 
-  if (finding.knownTag) {
-    var group = String(finding.knownTag.group || '');
-    var term = String(finding.knownTag.term || '');
-    var mediaKey = state && state.currentItem ? state.currentItem.key : '';
-    var selected = !!(mediaKey && isCaptionVisionKnownTagSelected(mediaKey, group, term));
-    var button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'caption-vision-tag-action';
-    button.textContent = selected ? 'Fix caption' : 'Apply + fix';
-    button.title = selected
-      ? ('Revise the caption to include ' + group + ': ' + term)
-      : ('Select ' + group + ': ' + term + ' and revise the caption');
-    button.addEventListener('click', function () {
-      applyCaptionVisionKnownTag(finding);
-    });
-    row.appendChild(button);
-  } else {
-    var novel = document.createElement('span');
-    novel.className = 'caption-vision-novel';
-    novel.textContent = 'Novel';
-    novel.title = 'No exact configured tag matched this observation';
-    row.appendChild(novel);
-  }
-  return row;
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'caption-vision-patch-action';
+  button.textContent = captionVisionPatchLabel(finding);
+  button.title = 'Preview this exact caption edit';
+  button.addEventListener('mouseenter', function () {
+    var currentPatch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
+    if (!currentPatch) return;
+    setCaptionVisionCandidatePreview(
+      captionVisionApplyPatchToText(captionAssistCandidate.text, currentPatch, getCaptionVisionCaretIndex()),
+      true
+    );
+  });
+  button.addEventListener('mouseleave', restoreCaptionVisionCandidatePreview);
+  button.addEventListener('focus', function () {
+    var currentPatch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
+    if (!currentPatch) return;
+    setCaptionVisionCandidatePreview(
+      captionVisionApplyPatchToText(captionAssistCandidate.text, currentPatch, getCaptionVisionCaretIndex()),
+      true
+    );
+  });
+  button.addEventListener('blur', restoreCaptionVisionCandidatePreview);
+  button.addEventListener('click', function () {
+    applyCaptionVisionFinding(finding);
+  });
+  wrap.appendChild(button);
+
+  var reject = document.createElement('button');
+  reject.type = 'button';
+  reject.className = 'caption-vision-patch-reject';
+  reject.textContent = '×';
+  reject.title = 'Reject this suggestion';
+  reject.setAttribute('aria-label', 'Reject ' + captionVisionPatchLabel(finding));
+  reject.addEventListener('click', function (event) {
+    event.stopPropagation();
+    rejectCaptionVisionFinding(finding);
+  });
+  wrap.appendChild(reject);
+  return wrap;
 }
 
 function syncCaptionVisionUi() {
@@ -440,9 +560,10 @@ function syncCaptionVisionUi() {
   }
 
   captionVisionResult.findings.forEach(function (finding) {
-    findings.appendChild(renderCaptionVisionFinding(finding));
+    var pill = renderCaptionVisionFinding(finding);
+    if (pill) findings.appendChild(pill);
   });
-  findings.classList.remove('hidden');
+  if (findings.childNodes.length) findings.classList.remove('hidden');
 }
 
 function getVisionImageCaptionEls() {

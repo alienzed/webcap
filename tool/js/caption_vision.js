@@ -953,11 +953,9 @@ function setCaptionVisionEnabled(enabled) {
     if (isFocusedCaptionOpen()) setFocusedCaptionVisionSightEnabled(true);
     if (!captionAssistCandidate) return syncFocusedCaptionVisionPreference();
 
-    var tasks = [runCaptionVisionForCandidate(captionAssistCandidate)];
-    if (isFocusedCaptionOpen()) {
-      tasks.push(loadFocusedCaptionVisionPhrases());
-    }
-    return Promise.all(tasks).then(function () {
+    // The structured Vision check is the default inspection. Vision Extras is
+    // a separate pixel request and must not launch just from enabling the check.
+    return runCaptionVisionForCandidate(captionAssistCandidate).then(function () {
       return syncFocusedCaptionVisionPreference();
     });
   });

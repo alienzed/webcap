@@ -203,7 +203,7 @@ function cancelCaptionAssistGeneration() {
 
 function dismissCaptionAssistCandidate() {
   if (isFocusedCaptionOpen()) {
-    stopFocusedCaption('Focus Caption ended.');
+    if (!stopFocusedCaption('Focus Caption ended.')) return Promise.resolve(false);
     renderFileList();
     return Promise.resolve(true);
   }
@@ -1440,7 +1440,7 @@ function wirePrimerCaptionResetUi() {
     candidatePanel.addEventListener('click', function (event) {
       if (event.target !== candidatePanel) return;
       if (isFocusedCaptionOpen()) {
-        stopFocusedCaption('Focus Caption ended.');
+        if (!stopFocusedCaption('Focus Caption ended.')) return;
         renderFileList();
         return;
       }
@@ -1455,7 +1455,7 @@ function wirePrimerCaptionResetUi() {
       if (isFocusedCaptionOpen()) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        stopFocusedCaption('Focus Caption ended.');
+        if (!stopFocusedCaption('Focus Caption ended.')) return;
         renderFileList();
         return;
       }

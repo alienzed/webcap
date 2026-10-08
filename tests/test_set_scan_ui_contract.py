@@ -68,4 +68,8 @@ def test_set_intelligence_hides_supporting_analyzers_and_raw_output_by_default()
     assert "operation: 'intelligence_report'" in scan
     assert "function restoreCachedIntelligence(" in scan
     assert "if (setScanState.hasRun) return;" in scan
+    assert "function recordSetIntelligenceFailure(" in scan
+    assert "Set understood with gaps" in scan
+    assert "Previous report preserved." in scan
+    assert "setScanState.hasRun = false;" in scan
     assert "Next: review the vocabulary" in html

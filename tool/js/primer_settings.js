@@ -1165,10 +1165,14 @@ function runCaptionAssist() {
   }
   var existingSight = item.metadata && item.metadata.vision_sight;
   setStatus('Caption Assist: preparing visual evidence…');
-  return refreshSetIntelligenceItem(item, {
-    open: !existingSight || !existingSight.description || !existingSight.inventory,
-    context: true
-  }).then(function () {
+  return loadCaptionVisionCapabilities().then(function () {
+    if (!state.currentItem || state.currentItem.key !== sourceKey) return false;
+    return refreshSetIntelligenceItem(item, {
+      open: !existingSight || !existingSight.description || !existingSight.inventory,
+      context: true
+    });
+  }).then(function (prepared) {
+    if (prepared === false) return false;
     if (!state.currentItem || state.currentItem.key !== sourceKey) return false;
     return runCaptionAssistAfterSight();
   }).catch(function (err) {

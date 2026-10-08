@@ -263,6 +263,51 @@
     });
   }
 
+  // QA review state is derived data, scoped to the exact inputs that produced it.
+  // No media or user-authored Set state is written by this cache.
+  function qaSavedReviewKey(signature) {
+    return 'webcap.qa.review.v1:' + String(signature || '');
+  }
+
+  function qaSaveReview() {
+    if (!qaWorkbenchState.deepScanInputSignature) return;
+    try {
+      localStorage.setItem(qaSavedReviewKey(qaWorkbenchState.deepScanInputSignature), JSON.stringify({
+        signature: qaWorkbenchState.deepScanInputSignature,
+        aiScopeSignature: qaWorkbenchState.aiScopeSignature,
+        aiFindings: qaWorkbenchState.aiFindings,
+        aiSummary: qaWorkbenchState.aiSummary,
+        dispositions: qaWorkbenchState.dispositions
+      }));
+    } catch (err) {
+      window.reportConsoleError('QA · Save review', err);
+      qaWorkbenchState.statusMessage = 'QA review could not be saved locally.';
+    }
+  }
+
+  function qaRestoreReview(signature) {
+    qaWorkbenchState.aiFindings = [];
+    qaWorkbenchState.aiSummary = '';
+    qaWorkbenchState.aiScopeSignature = '';
+    qaWorkbenchState.dispositions = {};
+    try {
+      var raw = localStorage.getItem(qaSavedReviewKey(signature));
+      if (!raw) return;
+      var saved = JSON.parse(raw);
+      if (!saved || saved.signature !== signature) return;
+      if (saved.aiScopeSignature === signature && Array.isArray(saved.aiFindings)) {
+        qaWorkbenchState.aiFindings = saved.aiFindings;
+        qaWorkbenchState.aiSummary = String(saved.aiSummary || '');
+        qaWorkbenchState.aiScopeSignature = signature;
+      }
+      qaWorkbenchState.dispositions = saved.dispositions && typeof saved.dispositions === 'object'
+        ? saved.dispositions : {};
+    } catch (err) {
+      window.reportConsoleError('QA · Restore review', err);
+      qaWorkbenchState.statusMessage = 'Saved QA review could not be restored.';
+    }
+  }
+
   function qaMergeFindings() {
     var ai = qaWorkbenchState.aiScopeSignature === qaWorkbenchState.deepScanInputSignature
       ? qaWorkbenchState.aiFindings
@@ -340,6 +385,7 @@
       qaWorkbenchState.aiSummary = String(analysis.summary || '');
       qaWorkbenchState.aiScopeSignature = signature;
       qaWorkbenchState.deepScanInputSignature = signature;
+      qaSaveReview();
       qaWorkbenchState.deepScanStatus = qaWorkbenchState.aiFindings.length
         ? 'AI added ' + qaWorkbenchState.aiFindings.length + ' finding' + (qaWorkbenchState.aiFindings.length === 1 ? '' : 's') + '.'
         : 'AI scan found nothing useful to add.';
@@ -1433,13 +1479,10 @@
       qaWorkbenchState.parentFocusSet = undefined;
       qaWorkbenchState.returnFindingId = '';
     }
-    if (folderChanged || scopeChanged || inputsChanged) {
-      qaWorkbenchState.dispositions = {};
+    if (folderChanged || scopeChanged || inputsChanged || !qaWorkbenchState.deepScanInputSignature) {
       qaWorkbenchState.browseIndex = 0;
       qaWorkbenchState.statusMessage = '';
-      qaWorkbenchState.aiFindings = [];
-      qaWorkbenchState.aiSummary = '';
-      qaWorkbenchState.aiScopeSignature = '';
+      qaRestoreReview(inputSignature);
       if (!qaWorkbenchState.deepScanJobId) {
         qaWorkbenchState.deepScanStatus = '';
       }
@@ -1604,12 +1647,14 @@
       var current = qaGetRecommendations()[qaWorkbenchState.browseIndex];
       if (!current) return;
       qaWorkbenchState.dispositions[current.id] = value;
+      qaSaveReview();
       qaWorkbenchState.statusMessage = qaDispositionLabel(value) + '. This finding remains in Full Report.';
       renderQaWorkbench();
       return;
     }
     if (action === 'reset-dispositions') {
       qaWorkbenchState.dispositions = {};
+      qaSaveReview();
       qaWorkbenchState.statusMessage = '';
       renderQaWorkbench();
       return;

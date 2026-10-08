@@ -401,7 +401,7 @@
       }
       state.currentItem.metadata[blockName] = block;
     }
-    qaSetIntelligenceEvidenceUpdated();
+    qaInputsUpdated();
   }
 
   function saveSight(folder, model, media, sight) {
@@ -687,7 +687,7 @@
     setScanState.running = false;
     setScanState.currentVisionJobId = '';
     setScanState.phase = 'complete';
-    qaSetIntelligenceEvidenceUpdated();
+    qaInputsUpdated();
     var failureCount = setScanState.failures.length;
     if (failureCount) {
       setSetIntelligenceStatus(
@@ -795,7 +795,7 @@
       if (success === false || setScanState.stopRequested) {
         setScanState.running = false;
         setScanState.phase = 'idle';
-        qaSetIntelligenceEvidenceUpdated();
+        qaInputsUpdated();
         setSetIntelligenceStatus('Scan stopped', 'Completed understanding remains cached.');
         window.setStatus('Set Intelligence stopped. Completed understanding remains cached.');
         return;
@@ -804,7 +804,7 @@
     }).catch(function (err) {
       setScanState.running = false;
       setScanState.currentVisionJobId = '';
-      qaSetIntelligenceEvidenceUpdated();
+      qaInputsUpdated();
       if (previousReport.hasRun) {
         setScanState.hasRun = true;
         setScanState.phase = previousReport.phase;

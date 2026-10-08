@@ -1885,30 +1885,14 @@
     });
     if (!target) throw new Error('QA review target is missing from the current Set: ' + clean[0]);
 
-    var finding = qaWorkbenchState.findings.find(function (row) {
-      return row.id === String(findingId || '');
-    });
-    var discrepanciesByMediaKey = {};
-    if (finding && Array.isArray(finding.patches)) {
-      finding.patches.forEach(function (patch) {
-        var item = (state.items || []).find(function (candidate) {
-          return candidate && candidate.fileName === patch.file;
-        });
-        if (!item || !item.key) return;
-        if (!discrepanciesByMediaKey[item.key]) discrepanciesByMediaKey[item.key] = [];
-        discrepanciesByMediaKey[item.key].push(patch);
-      });
-    }
-
+    // QA chooses the items that need attention. Caption Assist performs a
+    // fresh per-item Sight/Director pass, not a replay of historical patches.
     activateFocusSet(clean, source || 'Quality Assurance', 'qa');
     selectPathMedia(target).then(function () {
-      startFocusedReview(target.key, {
-        discrepanciesByMediaKey: discrepanciesByMediaKey,
-        sourceLabel: finding && finding.sourceLabel ? finding.sourceLabel : 'QA'
-      });
+      startFocusedReview(target.key);
     }).catch(function (err) {
-      reportConsoleError('QA · Focus Review', err);
-      setStatus('Could not open QA Focus Review: ' + String(err && err.message ? err.message : err));
+      reportConsoleError('QA · Caption Assist', err);
+      setStatus('Could not open Caption Assist: ' + String(err && err.message ? err.message : err));
     });
   }
 

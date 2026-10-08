@@ -28,8 +28,8 @@ def test_focus_review_reuses_focus_caption_shell_without_a_full_scan_or_backend_
     primer = _read("tool/js/primer_settings.js")
 
     assert 'id="preview-open-focus-review-btn"' in html
-    assert "function startFocusedReview(targetMediaKey)" in focus
-    assert "startFocusedCaption(targetMediaKey, 'review');" in focus
+    assert "function startFocusedReview(targetMediaKey, options)" in focus
+    assert "startFocusedCaption(targetMediaKey, 'review', options);" in focus
     assert "function buildFocusedReviewCandidate(mediaItem)" in focus
     assert "var captionText = String(mediaItem.caption || '');" in focus
     assert "state.currentItem.key === mediaItem.key" in focus
@@ -63,8 +63,9 @@ def test_focus_review_uses_local_checks_and_optional_item_scoped_vision():
     assert "getCaptionAssistOmittedCorrections(" in builder
 
     presenter = focus.split("function presentFocusedReviewCandidate", 1)[1].split("function getNextFocusedCaptionTarget", 1)[0]
+    assert "setCaptionDiscrepancyFindingsForCandidate(" in presenter
     assert "maybeRunCaptionVisionForCandidate(candidate);" in presenter
-    assert "loadFocusedCaptionVisionPhrases();" in presenter
+    assert "loadFocusedCaptionVisionPhrases();" not in presenter
     assert "startFocusedCaptionPrefetch(candidate.mediaKey);" in presenter
 
 

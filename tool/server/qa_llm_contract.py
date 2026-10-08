@@ -253,7 +253,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "- underrepresented or overrepresented concepts only when the supplied evidence makes the training consequence meaningful\n"
         "- latent balance dimensions only when they are already present in the data and an actual skew or inconsistency deserves inspection\n\n"
         "[BOUNDARIES]\n"
-        "- This is analysis only. Do not rewrite captions and do not tell WebCap to mutate data.\n"
+        "- This is analysis only. Do not return full rewritten captions and do not tell WebCap to mutate data; exact proposed patches are allowed.\n"
         "- You cannot see the media directly. Treat normalized visual analysis as supplied evidence, not as perfect ground truth, and never claim direct visual verification.\n"
         "- Open Sight is vocabulary-agnostic; Context Sight follows current vocabulary. Their agreement is stronger than either one alone.\\n"
         "- Context Sight matches are candidate observations, not proof that a tag must be added. Cross-check them.\\n"
@@ -364,6 +364,8 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
             anchor_text = str(patch.get("anchorText") or "").strip()
             if file_name not in normalized_files or action not in {"add", "replace", "remove"}:
                 raise ValueError("QA Deep Scan caption patch is outside its finding.")
+            if file_name not in caption_lookup:
+                raise ValueError("QA Deep Scan caption patch is missing its submitted caption.")
             caption = str(caption_lookup.get(file_name) or "")
             if action == "add":
                 if source_text or not replacement_text:
@@ -373,13 +375,13 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
             elif action == "replace":
                 if not source_text or not replacement_text or source_text == replacement_text:
                     raise ValueError("QA Deep Scan replace patch is invalid.")
-                if caption and caption.count(source_text) != 1:
+                if caption.count(source_text) != 1:
                     raise ValueError("QA Deep Scan replace patch source is not an exact unique caption substring.")
                 anchor_text = ""
             else:
                 if not source_text or replacement_text:
                     raise ValueError("QA Deep Scan remove patch is invalid.")
-                if caption and caption.count(source_text) != 1:
+                if caption.count(source_text) != 1:
                     raise ValueError("QA Deep Scan remove patch source is not an exact unique caption substring.")
                 anchor_text = ""
             key = (file_name, action, source_text, replacement_text, anchor_text)

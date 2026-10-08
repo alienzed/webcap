@@ -306,6 +306,7 @@ function saveMediaAnnotationState(mediaKey) {
         if (!response.ok || !result || result.ok === false) {
           throw new Error(result && result.error ? result.error : 'Failed to save media annotation state.');
         }
+        qaInputsUpdated();
         return true;
       });
     });

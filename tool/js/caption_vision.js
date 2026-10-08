@@ -1031,6 +1031,11 @@ function handleCaptionVisionModelChange() {
 }
 
 function wireCaptionVisionUi() {
+  var details = document.getElementById('editor-caption-details');
+  if (!details) throw new Error('Caption Assist Details is missing.');
+  details.addEventListener('toggle', function () {
+    if (details.open) syncCaptionVisionUi();
+  });
   var refreshSight = document.getElementById('editor-caption-refresh-sight');
   if (!refreshSight) throw new Error('Per-item Sight refresh control is missing.');
   if (!refreshSight.__sightRefreshBound) {

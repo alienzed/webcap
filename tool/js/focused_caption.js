@@ -527,7 +527,6 @@ function useFocusedCaptionPrefetchForCurrentItem() {
 }
 
 function getFocusedCaptionEntryKeys(targetMediaKey, mode) {
-  var reviewMode = false;
   var allItems = getFilteredMediaItems(false).filter(function (item) {
     return !!(item && item.key);
   });
@@ -539,9 +538,7 @@ function getFocusedCaptionEntryKeys(targetMediaKey, mode) {
     ? allItems.slice(targetIndex).concat(allItems.slice(0, targetIndex))
     : allItems;
 
-  return ordered.filter(function (item) {
-    return !reviewMode || !!String(item.caption || '').trim();
-  }).map(function (item) {
+  return ordered.map(function (item) {
     return item.key;
   });
 }
@@ -786,24 +783,12 @@ function skipFocusedCaptionItem() {
 
 function regenerateFocusedCaption() {
   if (!focusedCaptionState.open) return Promise.resolve(false);
-  if (isFocusedCaptionReviewMode()) {
-    var reviewItem = state && state.currentItem;
-    var reviewRequest = reviewItem ? buildCaptionAssistRequest(reviewItem) : null;
-    if (!reviewRequest || !reviewRequest.model) {
-      setStatus('Select a Director model before generating a rewritten review caption.');
-      return Promise.resolve(false);
-    }
-  }
   var mediaKey = String(focusedCaptionState.itemKey || '');
   return cancelFocusedCaptionCurrentRequest().then(function () {
     return cancelFocusedCaptionPrefetch();
   }).then(function () {
     if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== mediaKey) return false;
     clearCaptionAssistCandidate();
-    if (isFocusedCaptionReviewMode()) {
-      setStatus('Generating a rewritten caption for this review item…');
-      return runCaptionAssist();
-    }
     return prepareFocusedCaptionCurrentItem();
   });
 }
@@ -829,12 +814,8 @@ function startFocusedCaption(targetMediaKey, mode, options) {
 
   focusedCaptionState.open = true;
   focusedCaptionState.mode = nextMode;
-  focusedCaptionState.discrepanciesByMediaKey = nextMode === 'review' && opts.discrepanciesByMediaKey
-    ? opts.discrepanciesByMediaKey
-    : {};
-  focusedCaptionState.discrepancySourceLabel = nextMode === 'review'
-    ? String(opts.sourceLabel || '')
-    : '';
+  focusedCaptionState.discrepanciesByMediaKey = {};
+  focusedCaptionState.discrepancySourceLabel = '';
   focusedCaptionVisionPhrases.enabled = false;
   focusedCaptionState.folder = String((state && state.folder) || '');
   loadCaptionVisionCapabilities();

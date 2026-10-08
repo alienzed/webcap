@@ -655,7 +655,7 @@ function syncCaptionVisionUi() {
     status.classList.remove('hidden');
   }
   if (!captionVisionResult && !captionQaResult) {
-    if (!status.textContent) status.textContent = 'Vision checks run automatically for each caption candidate.';
+    if (!status.textContent) status.textContent = 'Fresh Context Sight informed this caption. Use Recheck Vision for a separate caption-to-image check.';
     status.classList.remove('hidden');
     return;
   }

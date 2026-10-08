@@ -300,6 +300,50 @@ function findFocusedCaptionMediaItemByKey(mediaKey) {
   return null;
 }
 
+function buildFocusedReviewCandidate(mediaItem) {
+  if (!mediaItem || !mediaItem.key) throw new Error('Focus Review requires a media item.');
+  var request = buildCaptionAssistRequest(mediaItem);
+  var captionText = String(mediaItem.caption || '').trim();
+  return {
+    mediaKey: String(mediaItem.key || ''),
+    text: captionText,
+    missingGroups: getCaptionAssistMissingGroups(mediaItem.key),
+    omittedAssignments: getCaptionAssistOmittedAssignments(
+      mediaItem.key,
+      captionText,
+      request.assignments
+    ),
+    omittedCorrections: getCaptionAssistOmittedCorrections(
+      mediaItem.key,
+      captionText,
+      request.assignments
+    ),
+    requestFingerprint: captionAssistRequestFingerprint(mediaItem, request),
+    reviewSeed: true
+  };
+}
+
+function presentFocusedReviewCandidate(mediaItem) {
+  if (!isFocusedCaptionReviewMode() || !mediaItem || !state.currentItem || state.currentItem.key !== mediaItem.key) {
+    return Promise.resolve(false);
+  }
+  var candidate = buildFocusedReviewCandidate(mediaItem);
+  captionAssistCandidate = candidate;
+  syncCaptionAssistCandidateUi();
+  setStatus(
+    candidate.omittedAssignments.length
+      ? 'Focus Review found selected annotations missing from this caption.'
+      : 'Caption ready to review.'
+  );
+
+  if (captionVisionEnabled) {
+    maybeRunCaptionVisionForCandidate(candidate);
+    loadFocusedCaptionVisionPhrases();
+  }
+  startFocusedCaptionPrefetch(candidate.mediaKey);
+  return Promise.resolve(true);
+}
+
 function getNextFocusedCaptionTarget(fromIndex) {
   var start = Math.max(-1, Number(fromIndex) || 0);
   for (var index = start + 1; index < focusedCaptionState.itemKeys.length; index += 1) {
@@ -394,7 +438,6 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
   if (!target) return cancelFocusedCaptionPrefetch();
 
   var request = buildCaptionAssistRequest(target.item);
-  if (!request.model) return Promise.resolve(false);
   var fingerprint = captionAssistRequestFingerprint(target.item, request);
   if (
     focusedCaptionPrefetch &&
@@ -420,6 +463,19 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
       discarded: false
     };
     focusedCaptionPrefetch = prefetch;
+
+    if (isFocusedCaptionReviewMode()) {
+      prefetch.candidate = buildFocusedReviewCandidate(target.item);
+      prefetch.promise = Promise.resolve(prefetch.candidate);
+      if (captionVisionEnabled) beginFocusedCaptionPrefetchVision(prefetch, target.item, prefetch.candidate);
+      if (focusedCaptionVisionPhrases.enabled) beginFocusedCaptionPrefetchPhrases(prefetch, target.item);
+      return prefetch.promise;
+    }
+
+    if (!request.model) {
+      focusedCaptionPrefetch = null;
+      return false;
+    }
     prefetch.promise = requestCaptionAssistCandidate(target.item, request, {
       onJob: function (job) {
         prefetch.jobId = String(job.jobId || '');
@@ -500,9 +556,13 @@ function useFocusedCaptionPrefetchForCurrentItem() {
     }
     syncCaptionAssistCandidateUi();
     setStatus(
-      candidate.omittedAssignments.length
-        ? 'Caption Assist candidate failed annotation validation.'
-        : 'AI caption candidate ready.'
+      isFocusedCaptionReviewMode()
+        ? (candidate.omittedAssignments.length
+          ? 'Focus Review found selected annotations missing from this caption.'
+          : 'Caption ready to review.')
+        : (candidate.omittedAssignments.length
+          ? 'Caption Assist candidate failed annotation validation.'
+          : 'AI caption candidate ready.')
     );
     if (captionVisionEnabled) {
       adoptCaptionVisionPrefetch(adoptedPrefetch, candidate).then(function () {
@@ -530,9 +590,12 @@ function useFocusedCaptionPrefetchForCurrentItem() {
   });
 }
 
-function getFocusedCaptionEntryKeys(targetMediaKey) {
+function getFocusedCaptionEntryKeys(targetMediaKey, mode) {
+  var reviewMode = mode === 'review';
   var items = getFilteredMediaItems(false).filter(function (item) {
-    return !!(item && item.key);
+    if (!item || !item.key) return false;
+    if (!reviewMode) return true;
+    return !!String(item.caption || '').trim();
   });
   var keys = items.map(function (item) { return item.key; });
   if (!keys.length) return [];
@@ -544,50 +607,67 @@ function getFocusedCaptionEntryKeys(targetMediaKey) {
 
 function syncFocusedCaptionControls() {
   var startBtn = ui.previewFocusCaptionBtnEl;
+  var reviewBtn = document.getElementById('preview-open-focus-review-btn');
   var skipBtn = ui.previewFocusCaptionSkipBtnEl;
-  if (!startBtn || !skipBtn) {
+  if (!startBtn || !reviewBtn || !skipBtn) {
     throw new Error('Focus Caption controls are missing.');
   }
 
-  var labelEl = startBtn.querySelector('.preview-header-btn-label');
-  var glyphEl = startBtn.querySelector('.btn-glyph');
+  var startLabelEl = startBtn.querySelector('.preview-header-btn-label');
+  var startGlyphEl = startBtn.querySelector('.btn-glyph');
+  var reviewLabelEl = reviewBtn.querySelector('.preview-header-btn-label');
+  var reviewGlyphEl = reviewBtn.querySelector('.btn-glyph');
   var hasItem = !!(state && state.currentItem && state.currentItem.fileName);
   var annotationOpen = isFocusedAnnotationOpen();
+  var reviewMode = isFocusedCaptionReviewMode();
 
   if (
     focusedCaptionState.open &&
     (!hasItem || String(focusedCaptionState.folder || '') !== String((state && state.folder) || ''))
   ) {
-    stopFocusedCaption('Focus Caption ended because the Single Item context changed.');
+    stopFocusedCaption(focusedCaptionModeLabel() + ' ended because the Single Item context changed.');
     return;
   }
 
+  startBtn.classList.toggle('hidden', !hasItem || annotationOpen || (focusedCaptionState.open && reviewMode));
+  reviewBtn.classList.toggle('hidden', !hasItem || annotationOpen || (focusedCaptionState.open && !reviewMode));
+
+  startBtn.classList.toggle('active', focusedCaptionState.open && !reviewMode);
+  reviewBtn.classList.toggle('active', focusedCaptionState.open && reviewMode);
+  startBtn.setAttribute('aria-pressed', focusedCaptionState.open && !reviewMode ? 'true' : 'false');
+  reviewBtn.setAttribute('aria-pressed', focusedCaptionState.open && reviewMode ? 'true' : 'false');
+
   if (!focusedCaptionState.open) {
-    startBtn.classList.toggle('hidden', !hasItem || annotationOpen);
-    startBtn.classList.remove('active');
-    startBtn.setAttribute('aria-pressed', 'false');
     startBtn.setAttribute('aria-label', 'Start Focus Caption');
     startBtn.title = 'Focus Caption: generate and review AI caption candidates across the current visible items';
-    if (glyphEl) glyphEl.textContent = '\u2728';
-    if (labelEl) labelEl.textContent = 'Focus Caption';
+    if (startGlyphEl) startGlyphEl.textContent = '\u2728';
+    if (startLabelEl) startLabelEl.textContent = 'Focus Caption';
+
+    reviewBtn.setAttribute('aria-label', 'Start Focus Review');
+    reviewBtn.title = 'Focus Review: inspect existing saved captions progressively without a full Set scan';
+    if (reviewGlyphEl) reviewGlyphEl.textContent = '\u2713';
+    if (reviewLabelEl) reviewLabelEl.textContent = 'Focus Review';
+
     skipBtn.classList.add('hidden');
     skipBtn.disabled = false;
     syncVisionImageCaptionActionUi();
     return;
   }
 
-  startBtn.classList.remove('hidden');
-  startBtn.classList.add('active');
-  startBtn.setAttribute('aria-pressed', 'true');
-  startBtn.setAttribute('aria-label', 'Exit Focus Caption');
-  startBtn.title = 'Exit Focus Caption (Esc)';
-  if (glyphEl) glyphEl.textContent = '\u00d7';
-  if (labelEl) {
-    labelEl.textContent = 'Exit \u00b7 ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length;
+  var activeBtn = reviewMode ? reviewBtn : startBtn;
+  var activeLabel = reviewMode ? reviewLabelEl : startLabelEl;
+  var activeGlyph = reviewMode ? reviewGlyphEl : startGlyphEl;
+  activeBtn.classList.remove('hidden');
+  activeBtn.setAttribute('aria-label', 'Exit ' + focusedCaptionModeLabel());
+  activeBtn.title = 'Exit ' + focusedCaptionModeLabel() + ' (Esc)';
+  if (activeGlyph) activeGlyph.textContent = '\u00d7';
+  if (activeLabel) {
+    activeLabel.textContent = 'Exit \u00b7 ' + (focusedCaptionState.itemIndex + 1) + ' / ' + focusedCaptionState.itemKeys.length;
   }
+
   skipBtn.classList.remove('hidden');
   skipBtn.disabled = false;
-  skipBtn.title = 'Next Focus Caption item (Right/Down/S)';
+  skipBtn.title = 'Next ' + focusedCaptionModeLabel() + ' item (Right/Down/S)';
   var skipLabel = skipBtn.querySelector('.preview-header-btn-label');
   if (skipLabel) skipLabel.textContent = 'Next';
   syncVisionImageCaptionActionUi();
@@ -609,6 +689,7 @@ function stopFocusedCaption(message) {
   focusedCaptionState.itemKeys = [];
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = '';
+  focusedCaptionState.mode = 'caption';
   captionAssistPendingJobId = '';
   if (pendingJobId && pendingJobId !== 'submitting' && pendingJobId !== 'prefetch') {
     cancelCaptionAssistJob(pendingJobId).catch(function (err) {
@@ -644,11 +725,12 @@ function prepareFocusedCaptionCurrentItem() {
   syncCaptionAssistCandidateUi();
   syncFocusedCaptionPanelGeometry();
   if (isCaptionAssistRunning()) {
-    setStatus('Caption Assist is already running for this Focus Caption item.');
+    setStatus('Caption Assist is already running for this ' + focusedCaptionModeLabel() + ' item.');
     return Promise.resolve(false);
   }
   return useFocusedCaptionPrefetchForCurrentItem().then(function (usedPrefetch) {
     if (usedPrefetch) return true;
+    if (isFocusedCaptionReviewMode()) return presentFocusedReviewCandidate(state.currentItem);
     return runCaptionAssist();
   });
 }
@@ -658,7 +740,7 @@ function syncFocusedCaptionSelection(mediaKey) {
   var key = String(mediaKey || '').trim();
   var index = focusedCaptionState.itemKeys.indexOf(key);
   if (index === -1) {
-    stopFocusedCaption('Focus Caption ended because selection moved outside its captured scope.');
+    stopFocusedCaption(focusedCaptionModeLabel() + ' ended because selection moved outside its captured scope.');
     return;
   }
   focusedCaptionState.itemIndex = index;
@@ -670,8 +752,9 @@ function finishFocusedCaption() {
   var completedCount = focusedCaptionState.itemKeys.length;
   stopFocusedCaption();
   renderFileList();
-  showFocusedCaptionToast('Focus Caption complete · ' + completedCount + ' item' + (completedCount === 1 ? '' : 's'));
-  setStatus('Focus Caption complete.');
+  var label = focusedCaptionModeLabel();
+  showFocusedCaptionToast(label + ' complete · ' + completedCount + ' item' + (completedCount === 1 ? '' : 's'));
+  setStatus(label + ' complete.');
   return Promise.resolve(false);
 }
 
@@ -679,7 +762,7 @@ function navigateFocusedCaptionToIndex(index, direction) {
   if (!focusedCaptionState.open) return Promise.resolve(false);
   var step = direction < 0 ? -1 : 1;
   if (index < 0) {
-    setStatus('Focus Caption is already at the first item.');
+    setStatus(focusedCaptionModeLabel() + ' is already at the first item.');
     return Promise.resolve(false);
   }
   if (index >= focusedCaptionState.itemKeys.length) {
@@ -708,7 +791,7 @@ function navigateFocusedCaptionToIndex(index, direction) {
     if (message.indexOf('outside the current filtered list') !== -1) {
       return navigateFocusedCaptionToIndex(index + step, step);
     }
-    stopFocusedCaption('Focus Caption stopped: ' + message);
+    stopFocusedCaption(focusedCaptionModeLabel() + ' stopped: ' + message);
     return false;
   });
 }
@@ -740,11 +823,15 @@ function regenerateFocusedCaption() {
   }).then(function () {
     if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== mediaKey) return false;
     clearCaptionAssistCandidate();
+    if (isFocusedCaptionReviewMode()) {
+      setStatus('Generating a rewritten caption for this review item…');
+      return runCaptionAssist();
+    }
     return prepareFocusedCaptionCurrentItem();
   });
 }
 
-function startFocusedCaption(targetMediaKey) {
+function startFocusedCaption(targetMediaKey, mode) {
   if (isCaptionAssistRunning()) {
     setStatus('Finish the current Caption Assist request before starting Focus Caption.');
     return;
@@ -753,13 +840,17 @@ function startFocusedCaption(targetMediaKey) {
     stopFocusedAnnotation();
   }
 
-  var itemKeys = getFocusedCaptionEntryKeys(targetMediaKey);
+  var nextMode = mode === 'review' ? 'review' : 'caption';
+  var itemKeys = getFocusedCaptionEntryKeys(targetMediaKey, nextMode);
   if (!itemKeys.length) {
-    setStatus('No media items are available in the current visible scope.');
+    setStatus(nextMode === 'review'
+      ? 'No saved captions are available in the current visible scope.'
+      : 'No media items are available in the current visible scope.');
     return;
   }
 
   focusedCaptionState.open = true;
+  focusedCaptionState.mode = nextMode;
   focusedCaptionVisionPhrases.enabled = !!captionVisionEnabled;
   focusedCaptionState.folder = String((state && state.folder) || '');
   loadCaptionVisionCapabilities();
@@ -772,6 +863,10 @@ function startFocusedCaption(targetMediaKey) {
   syncCaptionAssistCandidateUi();
   syncFocusedCaptionPanelGeometry();
   navigateFocusedCaptionToIndex(0, 1);
+}
+
+function startFocusedReview(targetMediaKey) {
+  startFocusedCaption(targetMediaKey, 'review');
 }
 
 function startFocusedCaptionForMediaItem(mediaItem) {
@@ -791,18 +886,30 @@ function startFocusedCaptionForMediaItem(mediaItem) {
 }
 
 function wireFocusedCaption() {
-  if (!ui.previewFocusCaptionBtnEl || !ui.previewFocusCaptionSkipBtnEl) {
+  var reviewBtn = document.getElementById('preview-open-focus-review-btn');
+  if (!ui.previewFocusCaptionBtnEl || !reviewBtn || !ui.previewFocusCaptionSkipBtnEl) {
     throw new Error('Focus Caption controls are missing.');
   }
   if (!ui.previewFocusCaptionBtnEl.__focusedCaptionBound) {
     ui.previewFocusCaptionBtnEl.__focusedCaptionBound = true;
     ui.previewFocusCaptionBtnEl.addEventListener('click', function () {
       if (focusedCaptionState.open) {
-        stopFocusedCaption('Focus Caption ended.');
+        stopFocusedCaption(focusedCaptionModeLabel() + ' ended.');
         renderFileList();
         return;
       }
       startFocusedCaption((state.currentItem && state.currentItem.key) || '');
+    });
+  }
+  if (!reviewBtn.__focusedCaptionReviewBound) {
+    reviewBtn.__focusedCaptionReviewBound = true;
+    reviewBtn.addEventListener('click', function () {
+      if (isFocusedCaptionReviewMode()) {
+        stopFocusedCaption('Focus Review ended.');
+        renderFileList();
+        return;
+      }
+      startFocusedReview((state.currentItem && state.currentItem.key) || '');
     });
   }
   if (!ui.previewFocusCaptionSkipBtnEl.__focusedCaptionBound) {
@@ -821,7 +928,7 @@ function wireFocusedCaption() {
       if (key === 'Escape') {
         event.preventDefault();
         event.stopImmediatePropagation();
-        stopFocusedCaption('Focus Caption ended.');
+        stopFocusedCaption(focusedCaptionModeLabel() + ' ended.');
         renderFileList();
         return;
       }
@@ -856,8 +963,8 @@ function wireFocusedCaption() {
       if (!focusedCaptionState.open || !event || !event.target) return;
       var panel = document.getElementById('editor-caption-candidate');
       if (panel && panel.contains(event.target)) return;
-      if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-focus-caption-skip-btn')) return;
-      stopFocusedCaption('Focus Caption ended.');
+      if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-open-focus-review-btn, #preview-focus-caption-skip-btn')) return;
+      stopFocusedCaption(focusedCaptionModeLabel() + ' ended.');
       renderFileList();
     }, true);
   }
@@ -873,7 +980,9 @@ function wireFocusedCaption() {
 wireFocusedCaption();
 
 window.isFocusedCaptionOpen = isFocusedCaptionOpen;
+window.isFocusedCaptionReviewMode = isFocusedCaptionReviewMode;
 window.startFocusedCaption = startFocusedCaption;
+window.startFocusedReview = startFocusedReview;
 window.startFocusedCaptionForMediaItem = startFocusedCaptionForMediaItem;
 window.stopFocusedCaption = stopFocusedCaption;
 window.syncFocusedCaptionSelection = syncFocusedCaptionSelection;

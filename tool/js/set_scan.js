@@ -128,6 +128,81 @@
     };
   }
 
+  function setCachedReportResponses(payload) {
+    var responses = [];
+    var openItems = payload && payload.open && Array.isArray(payload.open.items) ? payload.open.items : [];
+    openItems.forEach(function (item) {
+      if (!item || !item.structured || !item.sight) return;
+      responses.push({
+        file: String(item.file || '') + ' · Open Sight',
+        text: JSON.stringify(item.sight, null, 2)
+      });
+    });
+    var contextRecords = payload && payload.context && Array.isArray(payload.context.records)
+      ? payload.context.records
+      : [];
+    contextRecords.forEach(function (record) {
+      if (!record || !record.file) return;
+      responses.push({
+        file: String(record.file || '') + ' · Context Sight',
+        text: JSON.stringify({
+          caption: String(record.caption || ''),
+          matches: Array.isArray(record.matches) ? record.matches : [],
+          diagnostics: record.diagnostics && typeof record.diagnostics === 'object' ? record.diagnostics : {}
+        }, null, 2)
+      });
+    });
+    setScanState.rawResponses = responses;
+    setScanState.rawResponseIndex = responses.length ? responses.length - 1 : -1;
+    setScanState.currentRawResponse = responses.length ? responses[responses.length - 1] : null;
+  }
+
+  function requestCachedIntelligenceReport(folder, files, model, context) {
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'intelligence_report',
+        folder: folder,
+        visionModel: model,
+        files: files,
+        existingGroups: context.groups,
+        captionTemplate: context.captionTemplate
+      })
+    });
+  }
+
+  function restoreCachedIntelligence(folder, files) {
+    return loadCaptionVisionCapabilities().then(function () {
+      var model = String(getCaptionVisionModelId() || '').trim();
+      if (!model) return false;
+      var context = setIntelligenceVisionContext();
+      return requestCachedIntelligenceReport(folder, files, model, context).then(function (payload) {
+        var openCount = Number(payload && payload.open && payload.open.structured || 0);
+        var contextAvailable = Number(payload && payload.context && payload.context.available || 0);
+        if (!openCount && !contextAvailable) return false;
+        setScanState.folder = folder;
+        setScanState.files = files.slice();
+        setScanState.visionModel = model;
+        setScanState.hasRun = true;
+        setScanState.running = false;
+        setCachedReportResponses(payload);
+        var complete = openCount >= files.length && Number(payload && payload.context && payload.context.cached || 0) >= files.length;
+        setScanState.phase = complete ? 'complete' : 'idle';
+        if (complete) {
+          setSetIntelligenceStatus('Set understood', 'Cached two-pass Set Intelligence is current. Review the report or continue.');
+        } else {
+          setSetIntelligenceStatus(
+            'Cached intelligence found',
+            String(openCount) + ' Open Sight and ' + String(contextAvailable) +
+            ' Context Sight result' + (contextAvailable === 1 ? '' : 's') + ' are available. Run Again to refresh incomplete or stale coverage.'
+          );
+        }
+        return true;
+      });
+    });
+  }
+
   function saveSight(folder, model, media, sight) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
@@ -471,6 +546,7 @@
 
   function openSetIntelligence() {
     var folder = String(state && state.folder || '');
+    var files = getCurrentSetMediaFileNames();
     if (!folder || !isSetFolderContext(folder, state && state.items)) {
       window.setStatus('Open a Set before using Set Intelligence.');
       return;
@@ -484,7 +560,17 @@
     }
     setScanState.open = true;
     renderSetIntelligence();
-    if (!setScanState.hasRun) runSetIntelligence();
+    if (setScanState.hasRun) return;
+
+    setSetIntelligenceStatus('Checking Set', 'Looking for reusable Set Intelligence…');
+    restoreCachedIntelligence(folder, files).then(function (restored) {
+      if (!setScanState.open || restored) return;
+      runSetIntelligence();
+    }).catch(function (err) {
+      reportConsoleError('Set Intelligence cached report', err);
+      if (!setScanState.open) return;
+      runSetIntelligence();
+    });
   }
 
   function closeSetIntelligence() {

@@ -21,6 +21,10 @@
     vocabularyScanIndex: 0,
     vocabularyScanTotal: 0,
     vocabularyComplete: false,
+    draftSchema: null,
+    discoveryStage: 'idle',
+    failedDiscoveryStage: '',
+    discoverySessionKey: '',
     error: ''
   };
 
@@ -52,6 +56,32 @@
   function currentCaptionTemplate() {
     var primer = statsGetPrimerOptionsFromDom();
     return String(primer && primer.template || '');
+  }
+
+  function discoverySessionKey(folder, model, files) {
+    return [
+      String(folder || ''),
+      String(model || ''),
+      (files || []).map(function (fileName) { return String(fileName || ''); }).join('\n')
+    ].join('\u0001');
+  }
+
+  function resetDiscoverySession(folder, model, files) {
+    schemaState.folder = String(folder || '');
+    schemaState.visionModel = String(model || '');
+    schemaState.scopeFiles = (files || []).slice();
+    schemaState.schema = null;
+    schemaState.draftSchema = null;
+    schemaState.reviewIndex = 0;
+    schemaState.analysis = null;
+    schemaState.tagCandidates = null;
+    schemaState.vocabularyScanIndex = 0;
+    schemaState.vocabularyScanTotal = 0;
+    schemaState.vocabularyComplete = false;
+    schemaState.failedDiscoveryStage = '';
+    schemaState.discoveryStage = 'idle';
+    schemaState.discoverySessionKey = discoverySessionKey(folder, model, files);
+    schemaState.error = '';
   }
 
   function findMediaItem(fileName) {
@@ -484,13 +514,15 @@
   function render() {
     var modal = el('vision-schema-modal');
     var stopBtn = el('vision-schema-stop-btn');
+    var retryBtn = el('vision-schema-retry-btn');
+    var restartBtn = el('vision-schema-restart-btn');
     var applyBtn = el('vision-schema-apply-btn');
     var footerNote = el('vision-schema-footer-note');
     var progressWrap = el('vision-schema-progress-wrap');
     var body = el('vision-schema-body');
     var title = el('vision-schema-title');
     var subtitle = el('vision-schema-subtitle');
-    if (!modal || !stopBtn || !applyBtn || !footerNote || !progressWrap || !body || !title || !subtitle) {
+    if (!modal || !stopBtn || !retryBtn || !restartBtn || !applyBtn || !footerNote || !progressWrap || !body || !title || !subtitle) {
       throw new Error('Schema Assist UI is incomplete.');
     }
 
@@ -508,6 +540,11 @@
     progressWrap.classList.toggle('hidden', hasVocabularyReview);
 
     stopBtn.classList.toggle('hidden', !schemaBusy);
+    var canRetry = !schemaState.guidedLaunch && !schemaBusy && !!schemaState.failedDiscoveryStage;
+    retryBtn.classList.toggle('hidden', !canRetry);
+    retryBtn.textContent = schemaState.failedDiscoveryStage === 'challenge' ? 'Retry Challenge' : 'Retry Discovery';
+    var canRestart = !schemaState.guidedLaunch && !schemaBusy && schemaState.discoveryStage !== 'idle';
+    restartBtn.classList.toggle('hidden', !canRestart);
 
     var heading = el('vision-schema-proposal-heading');
     var headingNote = el('vision-schema-proposal-note');
@@ -530,27 +567,8 @@
     updateVocabularyReviewControls();
   }
 
-  function runDiscovery() {
-    if (schemaState.schemaStarting || schemaState.schemaJobId) return;
-    if (!currentDirectorModel()) {
-      setStatus('Select a Director model first.', true);
-      return;
-    }
-    schemaState.scopeFiles = getCurrentSetMediaFileNames();
-    if (!schemaState.scopeFiles.length) {
-      setStatus('This Set has no media to analyze.', true);
-      return;
-    }
-    schemaState.mode = 'vocabulary';
-    schemaState.reviewIndex = 0;
-    schemaState.schema = null;
-    schemaState.vocabularyComplete = false;
-    schemaState.workStopRequested = false;
-    schemaState.schemaStarting = true;
-    setStatus('Checking current Set Intelligence…');
-    render();
-
-    refreshStatus().then(function (payload) {
+  function prepareDiscoveryEvidence() {
+    return refreshStatus().then(function (payload) {
       var wanted = {};
       schemaState.scopeFiles.forEach(function (fileName) { wanted[fileName] = true; });
       var structured = (payload.items || []).filter(function (item) {
@@ -564,30 +582,87 @@
         String(schemaState.scopeFiles.length) + ' items. Checking Context Sight from Set Intelligence…'
       );
       return ensureVocabularySight();
-    }).then(function (ready) {
-      if (ready === false || schemaState.workStopRequested) return false;
-      setStatus('Usable visual evidence is ready. Making sense of the vocabulary…');
-      return runVocabularySynthesis();
-    }).then(function (draft) {
-      if (!draft || schemaState.workStopRequested) return false;
-      setStatus('Challenging the draft for missed distinctions and weak vocabulary…');
-      return runVocabularyChallenge(draft);
-    }).then(function (finalSchema) {
-      if (!finalSchema || schemaState.workStopRequested) return;
-      schemaState.schema = finalSchema;
-      schemaState.schema.groups = actionableVocabularyGroups();
+    });
+  }
+
+  function completeDiscovery(finalSchema) {
+    schemaState.schema = finalSchema;
+    schemaState.schema.groups = actionableVocabularyGroups();
+    schemaState.reviewIndex = 0;
+    schemaState.vocabularyComplete = schemaState.schema.groups.length === 0;
+    schemaState.schemaStarting = false;
+    schemaState.failedDiscoveryStage = '';
+    schemaState.discoveryStage = schemaState.vocabularyComplete ? 'complete' : 'review';
+    setStatus(finalSchema.groups.length
+      ? ('Found ' + String(finalSchema.groups.length) + ' vocabulary group' + (finalSchema.groups.length === 1 ? '' : 's') + ' to review.')
+      : 'The discovery passes did not find useful vocabulary additions.');
+    render();
+  }
+
+  function runDiscovery(options) {
+    if (schemaState.schemaStarting || schemaState.schemaJobId) return;
+    if (!currentDirectorModel()) {
+      setStatus('Select a Director model first.', true);
+      return;
+    }
+    var opts = options || {};
+    var resumeStage = String(opts.resumeStage || 'evidence');
+    schemaState.scopeFiles = getCurrentSetMediaFileNames();
+    if (!schemaState.scopeFiles.length) {
+      setStatus('This Set has no media to analyze.', true);
+      return;
+    }
+
+    if (opts.restart) {
+      resetDiscoverySession(schemaState.folder, schemaState.visionModel, schemaState.scopeFiles);
+    } else if (resumeStage !== 'challenge') {
+      schemaState.mode = 'vocabulary';
       schemaState.reviewIndex = 0;
-      schemaState.vocabularyComplete = schemaState.schema.groups.length === 0;
-      schemaState.schemaStarting = false;
-      setStatus(finalSchema.groups.length
-        ? ('Found ' + String(finalSchema.groups.length) + ' vocabulary group' + (finalSchema.groups.length === 1 ? '' : 's') + ' to review.')
-        : 'The discovery passes did not find useful vocabulary additions.');
+      schemaState.schema = null;
+      schemaState.vocabularyComplete = false;
+    }
+
+    schemaState.workStopRequested = false;
+    schemaState.schemaStarting = true;
+    schemaState.failedDiscoveryStage = '';
+    schemaState.error = '';
+
+    var work;
+    if (resumeStage === 'challenge' && schemaState.draftSchema) {
+      schemaState.discoveryStage = 'challenge';
+      setStatus('Retrying the vocabulary challenge…');
       render();
+      work = runVocabularyChallenge(schemaState.draftSchema);
+    } else {
+      schemaState.discoveryStage = 'evidence';
+      setStatus('Checking current Set Intelligence…');
+      render();
+      work = prepareDiscoveryEvidence().then(function (ready) {
+        if (ready === false || schemaState.workStopRequested) return false;
+        schemaState.discoveryStage = 'synthesis';
+        setStatus('Usable visual evidence is ready. Making sense of the vocabulary…');
+        return runVocabularySynthesis();
+      }).then(function (draft) {
+        if (!draft || schemaState.workStopRequested) return false;
+        schemaState.draftSchema = draft;
+        schemaState.discoveryStage = 'challenge';
+        setStatus('Challenging the draft for missed distinctions and weak vocabulary…');
+        return runVocabularyChallenge(draft);
+      });
+    }
+
+    work.then(function (finalSchema) {
+      if (!finalSchema || schemaState.workStopRequested) return;
+      completeDiscovery(finalSchema);
     }).catch(function (err) {
       schemaState.schemaStarting = false;
       schemaState.schemaJobId = '';
+      schemaState.failedDiscoveryStage = schemaState.discoveryStage === 'challenge' && schemaState.draftSchema
+        ? 'challenge'
+        : 'evidence';
+      schemaState.discoveryStage = 'failed';
       if (schemaState.workStopRequested) {
-        setStatus('Vocabulary discovery stopped.');
+        setStatus('Vocabulary discovery stopped. You can resume from here.');
       } else {
         setStatus('Discover Vocabulary failed: ' + String(err && err.message ? err.message : err), true);
         reportConsoleError('Discover Vocabulary', err);
@@ -596,13 +671,31 @@
     });
   }
 
+  function retryDiscovery() {
+    if (!schemaState.failedDiscoveryStage) return;
+    runDiscovery({
+      resumeStage: schemaState.failedDiscoveryStage === 'challenge' && schemaState.draftSchema
+        ? 'challenge'
+        : 'evidence'
+    });
+  }
+
+  function restartDiscovery() {
+    runDiscovery({ restart: true, resumeStage: 'evidence' });
+  }
+
   function stopWork() {
+    var stoppingStage = schemaState.discoveryStage;
     schemaState.workStopRequested = true;
     schemaState.schemaRequestToken += 1;
     var jobs = [];
     if (schemaState.schemaJobId) jobs.push(cancelCaptionAssistJob(schemaState.schemaJobId));
     schemaState.schemaStarting = false;
     schemaState.schemaJobId = '';
+    if (!schemaState.guidedLaunch && ['evidence', 'synthesis', 'challenge'].indexOf(stoppingStage) !== -1) {
+      schemaState.failedDiscoveryStage = stoppingStage === 'challenge' && schemaState.draftSchema ? 'challenge' : 'evidence';
+      schemaState.discoveryStage = 'failed';
+    }
     setStatus('Stopping…');
     Promise.all(jobs).catch(function (err) {
       reportConsoleError('Schema Assist', err);
@@ -704,6 +797,57 @@
     });
   }
 
+  function requestTagSuggestionBatch(batchFiles, batchIndex, batchCount, context) {
+    if (context.token !== schemaState.schemaRequestToken || schemaState.workStopRequested) {
+      return Promise.resolve(null);
+    }
+    setStatus(
+      'Preparing tag candidates · batch ' + String(batchIndex + 1) + ' of ' + String(batchCount) +
+      ' · ' + String(batchFiles.length) + ' media'
+    );
+    render();
+
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'suggest_tags',
+        folder: context.folder,
+        visionModel: context.visionModel,
+        directorModel: context.director,
+        files: batchFiles,
+        existingGroups: context.groups,
+        captionTemplate: context.captionTemplate,
+        currentAssignments: currentAssignmentsPayload(batchFiles),
+        existingOnly: context.existingOnly
+      })
+    }).then(function (payload) {
+      var jobId = String(payload.job && payload.job.jobId || '');
+      if (!jobId) throw new Error('Vision Tag Assist did not return a queued job.');
+      if (
+        context.token !== schemaState.schemaRequestToken ||
+        schemaState.workStopRequested ||
+        !schemaState.open ||
+        context.folder !== schemaState.folder ||
+        context.visionModel !== schemaState.visionModel
+      ) {
+        return cancelCaptionAssistJob(jobId).then(function () { return null; });
+      }
+      schemaState.schemaJobId = jobId;
+      trackTransientLlmJob(payload.job);
+      render();
+      return waitForCaptionAssistJob(payload.job);
+    }).then(function (job) {
+      schemaState.schemaJobId = '';
+      if (!job || context.token !== schemaState.schemaRequestToken || schemaState.workStopRequested) return null;
+      var result = job.result && job.result.tagCandidates;
+      if (!result || !Array.isArray(result.items)) {
+        throw new Error('Vision Tag Assist completed without structured candidates.');
+      }
+      return result;
+    });
+  }
+
   function runTagSuggestions() {
     if (schemaState.schemaStarting || schemaState.schemaJobId) return;
     var director = currentDirectorModel();
@@ -729,48 +873,37 @@
     schemaState.schemaStarting = true;
     schemaState.mode = 'tags';
     schemaState.tagCandidates = null;
-    setStatus('Mapping structured Sight onto existing groups and tags…');
-    render();
 
-    requestJson('/fs/vision_schema', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operation: 'suggest_tags',
-        folder: folder,
-        visionModel: visionModel,
-        directorModel: director,
-        files: files,
-        existingGroups: existingGroupsPayload(),
-        captionTemplate: currentCaptionTemplate(),
-        currentAssignments: currentAssignmentsPayload(files),
-        existingOnly: !!schemaState.guidedLaunch
-      })
-    }).then(function (payload) {
-      var jobId = String(payload.job && payload.job.jobId || '');
-      if (!jobId) throw new Error('Vision Tag Assist did not return a queued job.');
-      if (
-        token !== schemaState.schemaRequestToken ||
-        schemaState.workStopRequested ||
-        !schemaState.open ||
-        folder !== schemaState.folder ||
-        visionModel !== schemaState.visionModel
-      ) {
-        schemaState.schemaStarting = false;
-        return cancelCaptionAssistJob(jobId).then(function () { return null; });
-      }
+    var batchSize = 60;
+    var batches = [];
+    for (var offset = 0; offset < files.length; offset += batchSize) {
+      batches.push(files.slice(offset, offset + batchSize));
+    }
+    var context = {
+      token: token,
+      folder: folder,
+      visionModel: visionModel,
+      director: director,
+      groups: existingGroupsPayload(),
+      captionTemplate: currentCaptionTemplate(),
+      existingOnly: !!schemaState.guidedLaunch
+    };
+    var combined = { version: 1, items: [] };
+
+    function runBatch(index) {
+      if (index >= batches.length) return Promise.resolve(combined);
+      return requestTagSuggestionBatch(batches[index], index, batches.length, context).then(function (result) {
+        if (!result) return null;
+        combined.items = combined.items.concat(result.items || []);
+        return runBatch(index + 1);
+      });
+    }
+
+    runBatch(0).then(function (result) {
       schemaState.schemaStarting = false;
-      schemaState.schemaJobId = jobId;
-      render();
-      return waitForCaptionAssistJob(payload.job);
-    }).then(function (job) {
-      if (!job || token !== schemaState.schemaRequestToken) return;
       schemaState.schemaJobId = '';
+      if (!result || token !== schemaState.schemaRequestToken || schemaState.workStopRequested) return;
       if (!schemaState.open || folder !== schemaState.folder || visionModel !== schemaState.visionModel) return;
-      var result = job.result && job.result.tagCandidates;
-      if (!result || !Array.isArray(result.items)) {
-        throw new Error('Vision Tag Assist completed without structured candidates.');
-      }
       schemaState.tagCandidates = result;
       if (schemaState.guidedLaunch) {
         if (startGuidedTagPass(result)) return;
@@ -1078,6 +1211,8 @@
       schemaState.schema = null;
       schemaState.reviewIndex = 0;
       schemaState.vocabularyComplete = true;
+      schemaState.discoveryStage = 'complete';
+      schemaState.failedDiscoveryStage = '';
       setStatus((message ? message + ' ' : '') + 'Vocabulary review complete.');
       render();
       return;
@@ -1207,29 +1342,36 @@
       setStatus('Select a Vision model first.', true);
       return;
     }
+    var files = getCurrentSetMediaFileNames();
+    var sessionKey = discoverySessionKey(folder, model, files);
+    var sameSession = schemaState.discoverySessionKey === sessionKey && schemaState.mode === 'vocabulary';
+
     schemaState.open = true;
+    schemaState.guidedLaunch = false;
+    schemaState.mode = 'vocabulary';
+    schemaState.workStopRequested = false;
+
+    if (!sameSession) {
+      resetDiscoverySession(folder, model, files);
+      render();
+      setStatus('Loading current Set intelligence…');
+      refreshStatus().then(function () {
+        if (!schemaState.open || schemaState.guidedLaunch) return;
+        runDiscovery({ resumeStage: 'evidence' });
+      }).catch(function (err) {
+        schemaState.failedDiscoveryStage = 'evidence';
+        schemaState.discoveryStage = 'failed';
+        setStatus('Could not load Discover Vocabulary: ' + String(err && err.message ? err.message : err), true);
+        reportConsoleError('Discover Vocabulary', err);
+        render();
+      });
+      return;
+    }
+
     schemaState.folder = folder;
     schemaState.visionModel = model;
-    schemaState.scopeFiles = getCurrentSetMediaFileNames();
-    schemaState.workStopRequested = false;
-    schemaState.schema = null;
-    schemaState.reviewIndex = 0;
-    schemaState.tagCandidates = null;
-    schemaState.mode = 'vocabulary';
-    schemaState.analysis = null;
-    schemaState.vocabularyScanIndex = 0;
-    schemaState.vocabularyScanTotal = 0;
-    schemaState.vocabularyComplete = false;
-    schemaState.guidedLaunch = false;
+    schemaState.scopeFiles = files.slice();
     render();
-    setStatus('Loading current Set intelligence…');
-    refreshStatus().then(function () {
-      if (!schemaState.open || schemaState.guidedLaunch) return;
-      runDiscovery();
-    }).catch(function (err) {
-      setStatus('Could not load Discover Vocabulary: ' + String(err && err.message ? err.message : err), true);
-      reportConsoleError('Discover Vocabulary', err);
-    });
   }
 
   function close() {
@@ -1243,15 +1385,19 @@
     var openBtn = el('vision-schema-open-btn');
     var closeBtn = el('vision-schema-close-btn');
     var stopBtn = el('vision-schema-stop-btn');
+    var retryBtn = el('vision-schema-retry-btn');
+    var restartBtn = el('vision-schema-restart-btn');
     var skipBtn = el('vision-schema-skip-btn');
     var applyBtn = el('vision-schema-apply-btn');
     var modal = el('vision-schema-modal');
-    if (!openBtn || !closeBtn || !stopBtn || !skipBtn || !applyBtn || !modal) {
+    if (!openBtn || !closeBtn || !stopBtn || !retryBtn || !restartBtn || !skipBtn || !applyBtn || !modal) {
       throw new Error('Schema Assist controls are missing.');
     }
     openBtn.onclick = open;
     closeBtn.onclick = close;
     stopBtn.onclick = stopWork;
+    retryBtn.onclick = retryDiscovery;
+    restartBtn.onclick = restartDiscovery;
     skipBtn.onclick = skipCurrentVocabularyGroup;
     applyBtn.onclick = applySelected;
     modal.addEventListener('click', function (event) {

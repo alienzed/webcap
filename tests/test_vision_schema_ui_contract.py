@@ -19,6 +19,8 @@ def test_schema_assist_is_contextual_and_reuses_existing_vision_and_schema_paths
     assert 'id="vision-schema-scan-btn"' not in html
     assert 'id="vision-schema-tags-btn"' not in html
     assert 'id="vision-schema-skip-btn"' in html
+    assert 'id="vision-schema-retry-btn"' in html
+    assert 'id="vision-schema-restart-btn"' in html
     assert 'id="vision-schema-proposal-heading"' in html
     assert 'id="vision-schema-suggest-btn"' not in html
     assert 'src="/static/js/vision_schema_assist.js"' in html
@@ -54,7 +56,11 @@ def test_schema_assist_keeps_scan_ephemeral_and_schema_mutations_explicit():
     assert "check.checked = !term.alreadyExists;" in script
     assert "check.disabled = false;" in script
     assert "function canonicalExistingGroup(name)" in script
-    assert "function runDiscovery()" in script
+    assert "function runDiscovery(options)" in script
+    assert "function retryDiscovery()" in script
+    assert "function restartDiscovery()" in script
+    assert "schemaState.draftSchema = draft;" in script
+    assert "resumeStage === 'challenge'" in script
     assert "Discover Vocabulary needs at least one usable Set Intelligence result" in script
     assert "Set Intelligence is incomplete for this Vision model" not in script
     assert "function actionableVocabularyGroups()" in script
@@ -87,6 +93,8 @@ def test_schema_assist_materializes_only_explicitly_selected_tag_candidates():
     assert "check.checked = candidate.confidence === 'high';" in script
     assert "function selectedTagCandidates()" in script
     assert "function applySelectedTags()" in script
+    assert "var batchSize = 60;" in script
+    assert "function requestTagSuggestionBatch(" in script
     assert "candidate.existing" in script
     assert "mergeChecklistSchemaVocabulary(vocabularyMutations)" in script
     assert "assignChecklistTagToMediaKey(item.key, candidate.group, candidate.term, { skipRefresh: true })" in script

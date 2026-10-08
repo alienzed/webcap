@@ -65,5 +65,7 @@ def test_set_intelligence_hides_supporting_analyzers_and_raw_output_by_default()
     assert "showRawResponse(fileName, 'Context Sight', result.text);" in scan
     assert "responseSelect.onchange = selectRawResponse;" in scan
     assert "rescanBtn.onclick = runSetIntelligence;" in scan
-    assert "if (!setScanState.hasRun) runSetIntelligence();" in scan
+    assert "operation: 'intelligence_report'" in scan
+    assert "function restoreCachedIntelligence(" in scan
+    assert "if (setScanState.hasRun) return;" in scan
     assert "Next: review the vocabulary" in html

@@ -346,6 +346,7 @@ def normalize_vision_vocabulary_sight_payload(data, existing_groups):
     groups = _normalize_vocabulary_groups(existing_groups)
     allowed_groups = {row["group"].casefold(): row for row in groups}
     grouped = {row["group"]: [] for row in groups}
+    unmatched = []
 
     for index, raw in enumerate(data["matches"], start=1):
         if not isinstance(raw, dict):
@@ -358,17 +359,32 @@ def normalize_vision_vocabulary_sight_payload(data, existing_groups):
             raise ValueError("Context Sight match '{}' terms must be an array.".format(raw_group))
         target = allowed_groups.get(raw_group.casefold())
         if target is None:
+            unmatched.append({
+                "group": raw_group,
+                "terms": _clean_list(raw_terms, 16),
+                "reason": "unknown_group",
+            })
             continue
         exact_terms = {term.casefold(): term for term in target["terms"]}
         seen = {term.casefold() for term in grouped[target["group"]]}
+        unknown_terms = []
         for raw_term in raw_terms:
             term = _clean(raw_term)
             if not term:
                 raise ValueError("Context Sight match '{}' contains an empty term.".format(raw_group))
             canonical = exact_terms.get(term.casefold())
-            if canonical and canonical.casefold() not in seen:
-                seen.add(canonical.casefold())
-                grouped[target["group"]].append(canonical)
+            if canonical:
+                if canonical.casefold() not in seen:
+                    seen.add(canonical.casefold())
+                    grouped[target["group"]].append(canonical)
+            elif term.casefold() not in {value.casefold() for value in unknown_terms}:
+                unknown_terms.append(term)
+        if unknown_terms:
+            unmatched.append({
+                "group": target["group"],
+                "terms": unknown_terms,
+                "reason": "unknown_term",
+            })
 
     return {
         "caption": caption,
@@ -377,6 +393,10 @@ def normalize_vision_vocabulary_sight_payload(data, existing_groups):
             for row in groups
             if grouped[row["group"]]
         ],
+        "diagnostics": {
+            "unmatched": unmatched,
+            "unmatchedCount": sum(len(row.get("terms") or []) for row in unmatched),
+        },
     }
 
 
@@ -548,6 +568,7 @@ def vision_vocabulary_sight_status(folder, model, existing_groups, include_sight
             item["sight"] = {
                 "caption": str(current.get("caption") or ""),
                 "matches": list(current.get("matches") or []),
+                "diagnostics": dict(current.get("diagnostics") or {}),
             }
         items.append(item)
     cached = sum(1 for item in items if item["cached"])
@@ -588,6 +609,7 @@ def save_vision_vocabulary_sight(folder, media_name, model, existing_groups, sig
         "contextSignature": vision_vocabulary_group_signature(normalized_groups, caption_template),
         "caption": sight_payload["caption"],
         "matches": sight_payload["matches"],
+        "diagnostics": sight_payload.get("diagnostics") or {"unmatched": [], "unmatchedCount": 0},
         "mtime": int(stat.st_mtime),
         "size": int(stat.st_size),
         "updatedAt": time.time(),
@@ -772,6 +794,7 @@ def vision_vocabulary_sight_records(
             "file": media_name,
             "caption": str(sight.get("caption") or ""),
             "matches": list(sight.get("matches") or []),
+            "diagnostics": dict(sight.get("diagnostics") or {}),
         })
     return records
 

@@ -186,6 +186,21 @@
         }
       };
     }
+    var contextSight = metadata.vision_vocabulary_sight && typeof metadata.vision_vocabulary_sight === 'object'
+      ? metadata.vision_vocabulary_sight
+      : null;
+    if (contextSight && contextSight.caption) {
+      out.contextSight = {
+        model: String(contextSight.model || ''),
+        caption: String(contextSight.caption || ''),
+        matches: (Array.isArray(contextSight.matches) ? contextSight.matches : []).slice(0, 16).map(function (match) {
+          return {
+            group: String(match && match.group || ''),
+            terms: (match && Array.isArray(match.terms) ? match.terms : []).slice(0, 16)
+          };
+        })
+      };
+    }
     return out;
   }
 

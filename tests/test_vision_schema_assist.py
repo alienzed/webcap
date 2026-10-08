@@ -342,6 +342,9 @@ def test_context_sight_normalizes_exact_supplied_matches_and_keeps_caption():
     assert by_group["BT Shape"] == ["triangle"]
     assert by_group["Viewpoint"] == ["front"]
     assert "Invented Dimension" not in by_group
+    assert payload["diagnostics"]["unmatchedCount"] == 2
+    reasons = {row["reason"] for row in payload["diagnostics"]["unmatched"]}
+    assert reasons == {"unknown_group", "unknown_term"}
 
 
 def test_context_sight_preserves_full_supplied_vocabulary():
@@ -407,7 +410,7 @@ def test_context_sight_mining_keeps_exact_matches_and_caption_evidence():
     assert analysis["captions"][0]["file"] == "a.jpg"
 
 
-def test_vocabulary_challenge_contract_stays_grounded_and_orders_existing_groups_first():def test_vocabulary_challenge_contract_stays_grounded_and_orders_existing_groups_first():
+def test_vocabulary_challenge_contract_stays_grounded_and_orders_existing_groups_first():
     analysis = {
         "itemCount": 3,
         "evidence": [

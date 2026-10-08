@@ -143,7 +143,7 @@ def test_vision_tag_suggestions_queue_both_visual_reads(tmp_path, monkeypatch):
     assert "Black bandeau top from the side." in seen["contract"]["prompt"]
 
 
-def test_vision_tag_suggestions_accept_partial_structured_sight(tmp_path, monkeypatch):def test_vision_tag_suggestions_accept_partial_structured_sight(tmp_path, monkeypatch):
+def test_vision_tag_suggestions_accept_partial_structured_sight(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()
     for name in ("a.jpg", "b.jpg"):
@@ -252,7 +252,7 @@ def test_context_sight_scan_uses_template_and_exact_vocabulary(tmp_path, monkeyp
     assert "Prefer exact supplied terms when they clearly match what you see." in prompt_text
 
 
-def test_vocabulary_synthesis_accepts_partial_visual_coverage(tmp_path, monkeypatch):def test_vocabulary_synthesis_accepts_partial_visual_coverage(tmp_path, monkeypatch):
+def test_vocabulary_synthesis_accepts_partial_visual_coverage(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()
     for name in ("a.jpg", "b.jpg", "c.jpg"):
@@ -355,3 +355,46 @@ def test_vocabulary_challenge_queues_schema_contract_from_both_visual_passes(tmp
     assert seen["label"] == "Vocabulary Challenge"
     assert any(row.get("source") == "context" for row in seen["contract"]["sight_evidence"])
     assert any(row.get("source") == "context_caption" for row in seen["contract"]["sight_evidence"])
+
+
+def test_intelligence_report_rehydrates_cached_open_and_context_sight(tmp_path, monkeypatch):
+    set_root = tmp_path / "set"
+    set_root.mkdir()
+    (set_root / "a.jpg").write_bytes(b"a")
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", Path(tmp_path))
+
+    from tool.server import vision_schema_assist
+    groups = [{"group": "Viewpoint", "terms": ["front", "side"]}]
+    vision_schema_assist.save_vision_sight(
+        "set",
+        "a.jpg",
+        "vl",
+        _sight("Front view.", viewpoint=["front"]),
+    )
+    vision_schema_assist.save_vision_vocabulary_sight(
+        "set",
+        "a.jpg",
+        "vl",
+        groups,
+        {
+            "caption": "Front view.",
+            "matches": [{"group": "Viewpoint", "terms": ["front", "three quarter"]}],
+        },
+        caption_template="{viewpoint}.",
+    )
+
+    response = app_module.app.test_client().post("/fs/vision_schema", json={
+        "operation": "intelligence_report",
+        "folder": "set",
+        "visionModel": "vl",
+        "files": ["a.jpg"],
+        "existingGroups": groups,
+        "captionTemplate": "{viewpoint}.",
+    })
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["open"]["structured"] == 1
+    assert payload["context"]["available"] == 1
+    assert payload["context"]["records"][0]["caption"] == "Front view."
+    assert payload["context"]["records"][0]["diagnostics"]["unmatchedCount"] == 1

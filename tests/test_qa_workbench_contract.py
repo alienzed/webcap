@@ -79,7 +79,7 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "ensureDuplicateCandidatesForCurrentFolder(false, scopeFiles)" in qa
     assert "getSelectionPoseSuggestedTags" in qa
     assert "qaSightSupportsTerm" in qa
-    assert "qaWorkbenchState.deterministicFindings.concat(ai)" in qa
+    assert "qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.aiFindings)" in qa
     assert "deepScanSessionToken" in qa
     assert "qaCurrentItemSignatureMap" in qa
     assert "qaPendingDeepScanItems" in qa

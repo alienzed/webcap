@@ -400,14 +400,14 @@ function insertFocusedCaptionVisionPhrase(phrase) {
   textEl.textContent = next;
   textEl.focus();
   setFocusedCaptionCandidateCaretOffset(textEl, left.length + inserted.length);
-  setStatus('Inserted Vision phrase.');
+  setStatus('Inserted Vision extra.');
   return true;
 }
 
 function syncFocusedCaptionVisionPhrasesUi() {
   var row = document.getElementById('editor-caption-vision-phrases');
   var trigger = document.getElementById('editor-caption-vision-phrases-btn');
-  if (!row || !trigger) throw new Error('Focus Caption Vision sight controls are missing.');
+  if (!row || !trigger) throw new Error('Focus Caption Vision extras controls are missing.');
 
   var focusOpen = isFocusedCaptionOpen();
   var mediaKey = state && state.currentItem && state.currentItem.key;
@@ -447,7 +447,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
   if (focusedCaptionVisionPhrases.error) {
     var error = document.createElement('div');
     error.className = 'caption-vision-description caption-vision-description-error';
-    error.textContent = 'Vision sight failed: ' + focusedCaptionVisionPhrases.error;
+    error.textContent = 'Vision extras failed: ' + focusedCaptionVisionPhrases.error;
     row.appendChild(error);
     row.classList.remove('hidden');
     return;
@@ -1127,7 +1127,7 @@ function blendFocusedCaptionVisionPhrase(phrase) {
     candidate.mediaKey !== mediaItem.key ||
     !detail
   ) {
-    setStatus('No Vision phrase is available to blend.');
+    setStatus('No Vision extra is available to blend.');
     return Promise.resolve(false);
   }
   if (captionAssistPendingJobId) {
@@ -1141,7 +1141,7 @@ function blendFocusedCaptionVisionPhrase(phrase) {
     ? (currentDraft + (/[.!?]$/.test(currentDraft) ? ' ' : ', ') + detail)
     : detail;
   if (!request.model) {
-    setStatus('Select a Director model before blending the Vision phrase.');
+    setStatus('Select a Director model before blending the Vision extra.');
     return Promise.resolve(false);
   }
 
@@ -1149,7 +1149,7 @@ function blendFocusedCaptionVisionPhrase(phrase) {
   var focusRequest = beginFocusedCaptionRequest(sourceMediaKey);
   captionAssistPendingJobId = 'submitting';
   updatePrimerCaptionResetUi();
-  setStatus('Blending Vision phrase into caption...');
+  setStatus('Blending Vision extra into caption...');
 
   return cancelCurrentCaptionVision().then(function () {
     return cancelFocusedCaptionPrefetch();
@@ -1161,7 +1161,7 @@ function blendFocusedCaptionVisionPhrase(phrase) {
         }
         captionAssistPendingJobId = String(job.jobId || '');
         updatePrimerCaptionResetUi();
-        setStatus(job.status === 'queued' ? 'Vision phrase blend waiting in the LLM queue...' : 'Blending Vision phrase...');
+        setStatus(job.status === 'queued' ? 'Vision extra blend waiting in the LLM queue...' : 'Blending Vision extra...');
         return null;
       }
     });
@@ -1170,7 +1170,7 @@ function blendFocusedCaptionVisionPhrase(phrase) {
     if (!state.currentItem || state.currentItem.key !== sourceMediaKey) return false;
     captionAssistCandidate = nextCandidate;
     syncCaptionAssistCandidateUi();
-    setStatus('Vision phrase blended.');
+    setStatus('Vision extra blended.');
     if (captionVisionEnabled) {
       return maybeRunCaptionVisionForCandidate(nextCandidate).then(function () {
         if (isFocusedCaptionOpen() && state.currentItem && state.currentItem.key === sourceMediaKey) {
@@ -1182,7 +1182,7 @@ function blendFocusedCaptionVisionPhrase(phrase) {
     return startFocusedCaptionPrefetch(sourceMediaKey);
   }).catch(function (err) {
     if (isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) {
-      setStatus('Vision phrase blend failed: ' + String(err && err.message ? err.message : err));
+      setStatus('Vision extra blend failed: ' + String(err && err.message ? err.message : err));
       reportConsoleError('Caption Assist', err);
     }
     return false;

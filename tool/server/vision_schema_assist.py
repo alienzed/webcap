@@ -846,6 +846,35 @@ def mine_vocabulary_sight_records(records, limit=360, singleton_limit_per_group=
             for term in match.get("terms") if isinstance(match.get("terms"), list) else []:
                 add(media, group, term, caption)
 
+        diagnostics = record.get("diagnostics") if isinstance(record.get("diagnostics"), dict) else {}
+        for unmatched in diagnostics.get("unmatched") if isinstance(diagnostics.get("unmatched"), list) else []:
+            if not isinstance(unmatched, dict):
+                continue
+            group = _clean(unmatched.get("group"), 120)
+            reason = str(unmatched.get("reason") or "").strip()
+            for term in unmatched.get("terms") if isinstance(unmatched.get("terms"), list) else []:
+                term = _clean(term)
+                if not group or not term:
+                    continue
+                key = (group.casefold(), term.casefold())
+                row = buckets.get(key)
+                if row is None:
+                    row = {
+                        "source": "context_unmatched",
+                        "category": "group" if reason == "unknown_term" else "other",
+                        "suggestedGroup": group,
+                        "label": term,
+                        "media": set(),
+                        "contexts": [],
+                    }
+                    buckets[key] = row
+                    if group.casefold() not in dimension_order:
+                        dimension_order.append(group.casefold())
+                row["media"].add(media)
+                context = _clean(caption, 420)
+                if context and context not in row["contexts"] and len(row["contexts"]) < 2:
+                    row["contexts"].append(context)
+
     recurring = [row for row in buckets.values() if len(row["media"]) >= 2]
     recurring.sort(key=lambda row: (
         row["suggestedGroup"].casefold(),

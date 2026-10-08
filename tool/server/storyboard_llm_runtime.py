@@ -1093,7 +1093,7 @@ def _list_local_models_passive():
         for model_path in candidates:
             # Match each projector to its own model rather than treating all
             # GGUFs in a directory as one model.
-            stem = model_path.stem.casefold()
+            stem = re.sub(r"(?i)[._-](?:q[0-9]+(?:_[a-z0-9]+)*|f16|bf16)$", "", model_path.stem).casefold()
             matching_projectors = [
                 projector for projector in mmproj_files
                 if projector.stem.casefold().startswith(stem + ".mmproj")

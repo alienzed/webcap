@@ -534,16 +534,16 @@ def test_schema_contract_merges_duplicate_groups_and_terms_without_dropping_evid
     assert result["groups"][0]["terms"][0]["support"] == 2
 
 
-def test_vocabulary_sight_rejects_malformed_nested_output_loudly():
+def test_context_sight_rejects_malformed_nested_output_loudly():
     try:
         vision_schema_assist.normalize_vision_vocabulary_sight_payload(
             {
-                "groups": [{"group": "BT Shape", "observations": "triangle"}],
-                "other": [],
+                "caption": "Triangle top.",
+                "matches": [{"group": "BT Shape", "terms": "triangle"}],
             },
-            [{"group": "BT Shape", "terms": []}],
+            [{"group": "BT Shape", "terms": ["triangle"]}],
         )
     except ValueError as exc:
-        assert "observations must be an array" in str(exc)
+        assert "terms must be an array" in str(exc)
     else:
-        raise AssertionError("Malformed vocabulary sight must fail loudly.")
+        raise AssertionError("Malformed Context Sight must fail loudly.")

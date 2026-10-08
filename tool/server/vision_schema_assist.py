@@ -307,8 +307,6 @@ def vision_vocabulary_group_signature(groups, caption_template=""):
 
 def build_vision_vocabulary_sight_messages(media_reference, existing_groups, caption_template=""):
     groups = _normalize_vocabulary_groups(existing_groups)
-    if not groups:
-        raise ValueError("Context Sight needs at least one existing annotation group.")
     text = (
         "Make a fresh visual read of this image. "
         "Build the caption from clearly visible details in the image. "

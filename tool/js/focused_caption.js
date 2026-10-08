@@ -4,6 +4,7 @@ var focusedCaptionState = {
   itemKeys: [],
   itemIndex: 0,
   itemKey: '',
+  mode: 'caption',
   requestToken: 0,
   useArmed: false,
   useArmedText: ''
@@ -23,6 +24,14 @@ var focusedCaptionVisionPhrases = {
 
 function isFocusedCaptionOpen() {
   return !!focusedCaptionState.open;
+}
+
+function isFocusedCaptionReviewMode() {
+  return !!(focusedCaptionState.open && focusedCaptionState.mode === 'review');
+}
+
+function focusedCaptionModeLabel() {
+  return focusedCaptionState.mode === 'review' ? 'Focus Review' : 'Focus Caption';
 }
 
 function resetFocusedCaptionUseArm() {
@@ -130,6 +139,11 @@ function armOrUseFocusedCaptionCandidate() {
   if (!candidate || !state.currentItem || candidate.mediaKey !== state.currentItem.key) {
     setStatus(isCaptionAssistRunning() ? 'Focus Caption is still generating.' : 'No caption candidate is ready yet.');
     return Promise.resolve(false);
+  }
+  if (isFocusedCaptionReviewMode()) {
+    resetFocusedCaptionUseArm();
+    syncCaptionAssistCandidateUi();
+    return useCaptionAssistCandidate();
   }
   if (isFocusedCaptionUseArmedForCandidate(candidate)) {
     resetFocusedCaptionUseArm();

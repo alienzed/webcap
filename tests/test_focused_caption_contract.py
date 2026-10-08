@@ -22,6 +22,88 @@ def test_focus_caption_reuses_single_item_ui_and_existing_caption_assist():
     assert "saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key" in primer
 
 
+def test_focus_review_reuses_focus_caption_shell_without_a_full_scan_or_backend_route():
+    html = _read("tool/tool.html")
+    focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
+
+    assert 'id="preview-open-focus-review-btn"' in html
+    assert "function startFocusedReview(targetMediaKey)" in focus
+    assert "startFocusedCaption(targetMediaKey, 'review');" in focus
+    assert "function buildFocusedReviewCandidate(mediaItem)" in focus
+    assert "var captionText = String(mediaItem.caption || '').trim();" in focus
+    assert "requestCaptionAssistCandidate(target.item, request" in focus
+    review_prefetch = focus.split("if (isFocusedCaptionReviewMode()) {", 1)[1].split("if (!request.model)", 1)[0]
+    assert "buildFocusedReviewCandidate(target.item)" in review_prefetch
+    assert "requestCaptionAssistCandidate" not in review_prefetch
+    assert "/caption/" not in focus
+    assert "operation:" not in focus
+    assert "isFocusedCaptionReviewMode()" in primer
+
+
+def test_focus_review_scope_is_existing_saved_captions_only_and_session_ephemeral():
+    focus = _read("tool/js/focused_caption.js")
+
+    keys = focus.split("function getFocusedCaptionEntryKeys", 1)[1].split("function syncFocusedCaptionControls", 1)[0]
+    assert "if (!reviewMode) return true;" in keys
+    assert "return !!String(item.caption || '').trim();" in keys
+    assert "No saved captions are available in the current visible scope." in focus
+    assert "focusedCaptionState.mode = 'caption';" in focus
+    assert "reviewed" not in focus.split("var focusedCaptionState = {", 1)[1].split("};", 1)[0].lower()
+
+
+def test_focus_review_uses_local_checks_and_optional_item_scoped_vision():
+    focus = _read("tool/js/focused_caption.js")
+
+    builder = focus.split("function buildFocusedReviewCandidate", 1)[1].split("function presentFocusedReviewCandidate", 1)[0]
+    assert "getCaptionAssistMissingGroups(mediaItem.key)" in builder
+    assert "getCaptionAssistOmittedAssignments(" in builder
+    assert "getCaptionAssistOmittedCorrections(" in builder
+
+    presenter = focus.split("function presentFocusedReviewCandidate", 1)[1].split("function getNextFocusedCaptionTarget", 1)[0]
+    assert "maybeRunCaptionVisionForCandidate(candidate);" in presenter
+    assert "loadFocusedCaptionVisionPhrases();" in presenter
+    assert "startFocusedCaptionPrefetch(candidate.mediaKey);" in presenter
+
+
+def test_focus_review_keep_does_not_rewrite_unchanged_caption_and_save_advances_changed_caption():
+    primer = _read("tool/js/primer_settings.js")
+
+    use_start = primer.index("function useCaptionAssistCandidate()")
+    use_end = primer.index("function cancelCaptionAssistGeneration()", use_start)
+    use = primer[use_start:use_end]
+
+    assert "var unchangedReview = isFocusedCaptionReviewMode()" in use
+    assert "if (unchangedReview) return true;" in use
+    assert "saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key" in use
+    assert "setStatus(unchangedReview ? 'Caption accepted.' : 'Caption saved.');" in use
+    assert "return advanceFocusedCaption();" in use
+
+
+def test_focus_review_director_rewrite_is_explicit_and_non_destructive_without_model():
+    focus = _read("tool/js/focused_caption.js")
+
+    regenerate = focus.split("function regenerateFocusedCaption()", 1)[1].split("function startFocusedCaption", 1)[0]
+    assert "if (isFocusedCaptionReviewMode())" in regenerate
+    assert "Select a Director model before generating a rewritten review caption." in regenerate
+    assert "return runCaptionAssist();" in regenerate
+    assert regenerate.index("if (!reviewRequest || !reviewRequest.model)") < regenerate.index("clearCaptionAssistCandidate();")
+
+
+def test_focus_review_and_focus_caption_share_navigation_but_show_distinct_mode_controls():
+    html = _read("tool/tool.html")
+    focus = _read("tool/js/focused_caption.js")
+
+    assert 'id="preview-open-focus-caption-btn"' in html
+    assert 'id="preview-open-focus-review-btn"' in html
+    assert 'id="preview-focus-caption-skip-btn"' in html
+    assert "var reviewMode = isFocusedCaptionReviewMode();" in focus
+    assert "reviewBtn.classList.toggle('active', focusedCaptionState.open && reviewMode);" in focus
+    assert "startBtn.classList.toggle('active', focusedCaptionState.open && !reviewMode);" in focus
+    assert "skipBtn.title = 'Next ' + focusedCaptionModeLabel() + ' item (Right/Down/S)';" in focus
+    assert "#preview-open-focus-review-btn" in focus
+
+
 def test_caption_assist_surfaces_only_unreviewed_empty_groups_with_candidate():
     html = _read("tool/tool.html")
     primer = _read("tool/js/primer_settings.js")
@@ -176,7 +258,9 @@ def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
     assert "request.assignments" in primer
     assert "Candidate omitted selected annotations: " in primer
     assert "Caption Assist candidate failed annotation validation." in primer
-    assert "useBtn.textContent = useArmed ? 'Press Enter again' : 'Apply Caption';" in primer
+    assert "useBtn.textContent = reviewMode" in primer
+    assert "'Save → Next'" in primer
+    assert "'Keep → Next'" in primer
     assert "regenerateBtn.textContent = '\\u21bb';" in primer
     assert "regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);" in primer
     assert ".editor-caption-candidate-omissions {" in css
@@ -526,7 +610,7 @@ def test_focus_caption_is_immediate_cancelable_keyboard_driven_and_focus_only():
     assert "armOrUseFocusedCaptionCandidate();" in focus
     assert "Press Enter again to use this caption." in focus
     assert "cancelFocusedCaptionCurrentRequest" in focus
-    assert "showFocusedCaptionToast('Focus Caption complete" in focus
+    assert "showFocusedCaptionToast(label + ' complete" in focus
     assert "if (nextSurface !== 'default' && isFocusedCaptionOpen())" in shell
     assert "if (isFocusedCaptionOpen()) stopFocusedCaption('Focus Caption ended.');" in shell
     assert "--focus-caption-left" in css
@@ -539,7 +623,7 @@ def test_focus_caption_enhancements_do_not_change_normal_caption_assist_contract
 
     assert "var focusOpen = isFocusedCaptionOpen();" in primer
     assert "var focusVisible = !!(focusOpen && mediaKey);" in primer
-    assert "titleEl.textContent = focusOpen ? 'Focus Caption' : 'Caption Assist';" in primer
+    assert "titleEl.textContent = reviewMode ? 'Focus Review' : (focusOpen ? 'Focus Caption' : 'Caption Assist');" in primer
     assert "dismissBtn.textContent = '\\u00d7';" in primer
     assert "if (!isFocusedCaptionOpen()) return runCaptionAssist();" in primer
     assert "if (isFocusedCaptionOpen()) {\n        regenerateFocusedCaption();" in primer
@@ -596,7 +680,7 @@ def test_focus_caption_outside_click_refreshes_list_without_double_handling_back
     outside_start = focus.index("if (!document.__focusedCaptionOutsideClickBound)")
     outside_end = focus.index("if (!window.__focusedCaptionResizeBound)", outside_start)
     outside = focus[outside_start:outside_end]
-    assert "stopFocusedCaption('Focus Caption ended.');" in outside
+    assert "stopFocusedCaption(focusedCaptionModeLabel() + ' ended.');" in outside
     assert "renderFileList();" in outside
 
 
@@ -642,7 +726,9 @@ def test_focus_caption_visual_pass_is_theme_aware_and_compact():
     assert ".editor-caption-focus-shortcuts {" not in css
     assert 'html[data-theme="dark"] .editor-caption-candidate-missing' in css
 
-    assert "useBtn.textContent = useArmed ? 'Press Enter again' : 'Apply Caption';" in primer
+    assert "useBtn.textContent = reviewMode" in primer
+    assert "'Save → Next'" in primer
+    assert "'Keep → Next'" in primer
     assert "Regenerate caption and recheck Vision" in primer
 
 

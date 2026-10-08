@@ -527,7 +527,7 @@ function useFocusedCaptionPrefetchForCurrentItem() {
 }
 
 function getFocusedCaptionEntryKeys(targetMediaKey, mode) {
-  var reviewMode = mode === 'review';
+  var reviewMode = false;
   var allItems = getFilteredMediaItems(false).filter(function (item) {
     return !!(item && item.key);
   });
@@ -685,7 +685,6 @@ function prepareFocusedCaptionCurrentItem() {
   }
   return useFocusedCaptionPrefetchForCurrentItem().then(function (usedPrefetch) {
     if (usedPrefetch) return true;
-    if (isFocusedCaptionReviewMode()) return presentFocusedReviewCandidate(state.currentItem);
     return runCaptionAssist();
   });
 }
@@ -819,7 +818,7 @@ function startFocusedCaption(targetMediaKey, mode, options) {
     stopFocusedAnnotation();
   }
 
-  var nextMode = mode === 'review' ? 'review' : 'caption';
+  var nextMode = 'caption';
   var itemKeys = getFocusedCaptionEntryKeys(targetMediaKey, nextMode);
   if (!itemKeys.length) {
     setStatus(nextMode === 'review'

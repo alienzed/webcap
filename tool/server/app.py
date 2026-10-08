@@ -857,6 +857,43 @@ def vision_schema_assist_route():
                     caption_template=str(data.get("captionTemplate") or ""),
                 ),
             })
+        if operation == "intelligence_report":
+            requested_files = data.get("files") if isinstance(data.get("files"), list) else None
+            open_status = vision_sight_status(folder, vision_model, include_sight=True)
+            context_status = vision_vocabulary_sight_status(
+                folder,
+                vision_model,
+                data.get("existingGroups"),
+                include_sight=True,
+                caption_template=str(data.get("captionTemplate") or ""),
+            )
+            wanted = {
+                str(value or "").strip()
+                for value in (requested_files or [])
+                if str(value or "").strip()
+            }
+            open_items = [
+                item for item in open_status.get("items", [])
+                if not wanted or str(item.get("file") or "") in wanted
+            ]
+            context_items = [
+                item for item in context_status.get("items", [])
+                if not wanted or str(item.get("file") or "") in wanted
+            ]
+            return jsonify({
+                "ok": True,
+                "open": {
+                    "items": open_items,
+                    "structured": sum(1 for item in open_items if item.get("structured")),
+                    "total": len(open_items),
+                },
+                "context": {
+                    "items": context_items,
+                    "cached": sum(1 for item in context_items if item.get("cached")),
+                    "available": sum(1 for item in context_items if item.get("available")),
+                    "total": len(context_items),
+                },
+            })
         if operation == "analyze":
             requested_files = data.get("files") if isinstance(data.get("files"), list) else None
             return jsonify({"ok": True, "analysis": mine_vision_sight(folder, vision_model, files=requested_files)})

@@ -422,7 +422,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
   trigger.classList.toggle('hidden', !candidateReady);
   trigger.classList.toggle('is-pending', !!focusedCaptionVisionPhrases.pending);
   trigger.disabled = !candidateReady || !!focusedCaptionVisionPhrases.pending;
-  trigger.textContent = focusedCaptionVisionPhrases.pending ? 'Loading sight…' : 'Refresh sight';
+  trigger.textContent = focusedCaptionVisionPhrases.pending ? 'Loading extras…' : 'Refresh extras';
 
   row.innerHTML = '';
   if (!candidateReady) {
@@ -432,7 +432,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
 
   var label = document.createElement('div');
   label.className = 'caption-vision-sight-label';
-  label.textContent = 'Vision sees';
+  label.textContent = 'Vision extras';
   row.appendChild(label);
 
   if (focusedCaptionVisionPhrases.pending) {
@@ -454,15 +454,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
   }
 
   var matching = focusedCaptionVisionPhrases.mediaKey === mediaKey;
-  var fullDescription = matching ? String(focusedCaptionVisionPhrases.description || '').trim() : '';
   var phrases = matching ? focusedCaptionVisionPhrases.phrases : [];
-
-  if (fullDescription) {
-    var description = document.createElement('div');
-    description.className = 'caption-vision-description';
-    description.textContent = fullDescription;
-    row.appendChild(description);
-  }
 
   var chips = document.createElement('div');
   chips.className = 'caption-vision-phrase-list';
@@ -498,7 +490,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
     chips.appendChild(chip);
   });
   if (phrases.length) row.appendChild(chips);
-  row.classList.toggle('hidden', !fullDescription && !phrases.length);
+  row.classList.toggle('hidden', !phrases.length);
 }
 
 function syncCaptionAssistCandidateUi() {
@@ -1328,6 +1320,17 @@ function wirePrimerCaptionResetUi() {
       if (!captionAssistCandidate || !state.currentItem) return;
       if (captionAssistCandidate.mediaKey !== state.currentItem.key) return;
       captionAssistCandidate.text = String(candidateTextEl.textContent || '');
+      var liveRequest = buildCaptionAssistRequest(state.currentItem);
+      captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
+        captionAssistCandidate.mediaKey,
+        captionAssistCandidate.text,
+        liveRequest.assignments
+      );
+      captionAssistCandidate.omittedCorrections = getCaptionAssistOmittedCorrections(
+        captionAssistCandidate.mediaKey,
+        captionAssistCandidate.text,
+        liveRequest.assignments
+      );
       cancelCurrentCaptionVision();
       clearCaptionVisionResult();
       if (isFocusedCaptionOpen()) {
@@ -1336,6 +1339,7 @@ function wirePrimerCaptionResetUi() {
           clearFocusedCaptionVisionPhrases({ keepEnabled: true });
         }
       }
+      syncCaptionAssistCandidateUi();
     });
   }
 

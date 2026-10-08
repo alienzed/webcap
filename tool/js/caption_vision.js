@@ -615,6 +615,9 @@ function syncCaptionVisionUi() {
   var recheck = document.getElementById('editor-caption-vision-recheck');
   if (!recheck) throw new Error('Caption Vision recheck control is missing.');
   recheck.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  var refreshSight = document.getElementById('editor-caption-refresh-sight');
+  if (!refreshSight) throw new Error('Per-item Sight refresh control is missing.');
+  refreshSight.classList.toggle('hidden', !candidateVisible || !mediaSupported);
   recheck.disabled = !!captionVisionActiveTask || !modelAvailable;
   recheck.title = modelAvailable
     ? 'Run a fresh visual check for this caption and item only.'
@@ -1007,6 +1010,22 @@ function handleCaptionVisionModelChange() {
 }
 
 function wireCaptionVisionUi() {
+  var refreshSight = document.getElementById('editor-caption-refresh-sight');
+  if (!refreshSight) throw new Error('Per-item Sight refresh control is missing.');
+  if (!refreshSight.__sightRefreshBound) {
+    refreshSight.__sightRefreshBound = true;
+    refreshSight.addEventListener('click', function () {
+      if (!state.currentItem) return;
+      var item = state.currentItem;
+      refreshSight.disabled = true;
+      refreshSetIntelligenceItem(item, { open: true, context: true }).catch(function (err) {
+        reportConsoleError('Item Sight refresh', err);
+        window.setStatus(String(err && err.message || err));
+      }).finally(function () {
+        refreshSight.disabled = false;
+      });
+    });
+  }
   var recheck = document.getElementById('editor-caption-vision-recheck');
   if (!recheck) throw new Error('Caption Vision recheck control is missing.');
   if (!recheck.__captionVisionBound) {

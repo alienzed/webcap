@@ -321,17 +321,14 @@ def test_save_vision_sight_preserves_existing_media_analysis_blocks(tmp_path, mo
 
 
 
-def test_schema_aware_vocabulary_sight_normalizes_known_groups_and_keeps_unknown_dimensions():
+def test_context_sight_normalizes_exact_supplied_matches_and_keeps_caption():
     payload = vision_schema_assist.normalize_vision_vocabulary_sight_payload(
         {
-            "groups": [
-                {"group": "BT Shape", "observations": ["tiny triangle", "narrow cups"]},
-                {"group": "Viewpoint", "observations": ["front"]},
-                {"group": "Invented Dimension", "observations": ["metal rings"]},
-            ],
-            "other": [
-                {"suggestedGroup": "BT Shape", "observations": ["micro triangle"]},
-                {"suggestedGroup": "Connector", "observations": ["gold ring"]},
+            "caption": "Front view of a person in a tiny triangle top.",
+            "matches": [
+                {"group": "BT Shape", "terms": ["TRIANGLE", "micro triangle"]},
+                {"group": "Viewpoint", "terms": ["front"]},
+                {"group": "Invented Dimension", "terms": ["metal rings"]},
             ],
         },
         [
@@ -340,52 +337,65 @@ def test_schema_aware_vocabulary_sight_normalizes_known_groups_and_keeps_unknown
         ],
     )
 
-    by_group = {row["group"]: row["observations"] for row in payload["groups"]}
-    assert by_group["BT Shape"] == ["tiny triangle", "narrow cups", "micro triangle"]
+    assert payload["caption"].startswith("Front view")
+    by_group = {row["group"]: row["terms"] for row in payload["matches"]}
+    assert by_group["BT Shape"] == ["triangle"]
     assert by_group["Viewpoint"] == ["front"]
-    assert {row["suggestedGroup"] for row in payload["other"]} == {"Invented Dimension", "Connector"}
+    assert "Invented Dimension" not in by_group
 
 
-def test_vocabulary_sight_signature_tracks_group_structure_not_terms():
-    first = vision_schema_assist.vision_vocabulary_group_signature([
-        {"group": "BT Shape", "terms": ["triangle"]},
-    ])
-    term_changed = vision_schema_assist.vision_vocabulary_group_signature([
-        {"group": "BT Shape", "terms": ["triangle", "micro triangle"]},
-    ])
-    group_changed = vision_schema_assist.vision_vocabulary_group_signature([
-        {"group": "BT Shape", "terms": ["triangle"]},
-        {"group": "BT Connector", "terms": []},
-    ])
-    assert first == term_changed
-    assert first != group_changed
+def test_context_sight_signature_tracks_terms_and_caption_template():
+    first = vision_schema_assist.vision_vocabulary_group_signature(
+        [{"group": "BT Shape", "terms": ["triangle"]}],
+        "A {bt_shape} caption.",
+    )
+    term_changed = vision_schema_assist.vision_vocabulary_group_signature(
+        [{"group": "BT Shape", "terms": ["triangle", "micro triangle"]}],
+        "A {bt_shape} caption.",
+    )
+    template_changed = vision_schema_assist.vision_vocabulary_group_signature(
+        [{"group": "BT Shape", "terms": ["triangle"]}],
+        "{bt_shape} with {viewpoint}.",
+    )
+    assert first != term_changed
+    assert first != template_changed
 
 
-def test_schema_aware_mining_keeps_bounded_singletons_for_semantic_consolidation():
+def test_context_sight_mining_keeps_exact_matches_and_caption_evidence():
     analysis = vision_schema_assist.mine_vocabulary_sight_records([
         {
             "file": "a.jpg",
-            "groups": [{"group": "BT Shape", "observations": ["tiny triangle"]}],
-            "other": [],
+            "caption": "Front view of a tiny triangle top with metal rings.",
+            "matches": [
+                {"group": "BT Shape", "terms": ["triangle"]},
+                {"group": "Viewpoint", "terms": ["front"]},
+            ],
         },
         {
             "file": "b.jpg",
-            "groups": [{"group": "BT Shape", "observations": ["micro triangle"]}],
-            "other": [],
+            "caption": "Front view of a triangle top.",
+            "matches": [
+                {"group": "BT Shape", "terms": ["triangle"]},
+                {"group": "Viewpoint", "terms": ["front"]},
+            ],
         },
         {
             "file": "c.jpg",
-            "groups": [{"group": "BT Shape", "observations": ["tiny triangle"]}],
-            "other": [{"suggestedGroup": "Connector", "observations": ["metal ring"]}],
+            "caption": "Side view of a bandeau top.",
+            "matches": [
+                {"group": "BT Shape", "terms": ["bandeau"]},
+                {"group": "Viewpoint", "terms": ["side"]},
+            ],
         },
     ])
     labels = {(row["suggestedGroup"], row["label"], row["count"]) for row in analysis["evidence"]}
-    assert ("BT Shape", "tiny triangle", 2) in labels
-    assert ("BT Shape", "micro triangle", 1) in labels
-    assert ("Connector", "metal ring", 1) in labels
+    assert ("BT Shape", "triangle", 2) in labels
+    assert ("Viewpoint", "front", 2) in labels
+    assert ("BT Shape", "bandeau", 1) in labels
+    assert analysis["captions"][0]["file"] == "a.jpg"
 
 
-def test_vocabulary_challenge_contract_stays_grounded_and_orders_existing_groups_first():
+def test_vocabulary_challenge_contract_stays_grounded_and_orders_existing_groups_first():def test_vocabulary_challenge_contract_stays_grounded_and_orders_existing_groups_first():
     analysis = {
         "itemCount": 3,
         "evidence": [

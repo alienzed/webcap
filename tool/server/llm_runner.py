@@ -198,6 +198,9 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 llm_result["text"],
                 context.get("visionGroups"),
             )
+        if client == "caption" and operation == "vision_caption_extras":
+            from .caption_vision import normalize_vision_caption_extras_result
+            result["visionExtras"] = normalize_vision_caption_extras_result(llm_result["text"])
         if client == "caption" and operation == "vision_schema_sight":
             from .vision_schema_assist import normalize_vision_schema_sight_result
             try:
@@ -530,13 +533,16 @@ def _execute_claimed(job_id, gpu_reserved):
                 chat_kwargs["context_size"] = overrides["contextSize"]
             messages = contract.get("messages")
             caption_operation = str(contract.get("operation") or "").strip()
-            if client == "caption" and caption_operation in {"caption_vision_validate", "vision_image_caption", "vision_schema_sight", "vision_vocabulary_sight"}:
+            if client == "caption" and caption_operation in {"caption_vision_validate", "vision_image_caption", "vision_caption_extras", "vision_schema_sight", "vision_vocabulary_sight"}:
                 from .storyboard_llm_runtime import prepare_caption_vision_messages
                 chat_kwargs["allow_image_data_urls"] = True
                 messages = prepare_caption_vision_messages(model_id, messages)
                 if caption_operation == "caption_vision_validate":
                     from .caption_vision import CAPTION_VISION_RESPONSE_SCHEMA
                     chat_kwargs["response_schema"] = CAPTION_VISION_RESPONSE_SCHEMA
+                elif caption_operation == "vision_caption_extras":
+                    from .caption_vision import VISION_CAPTION_EXTRAS_RESPONSE_SCHEMA
+                    chat_kwargs["response_schema"] = VISION_CAPTION_EXTRAS_RESPONSE_SCHEMA
                 elif caption_operation == "vision_schema_sight":
                     from .vision_schema_assist import VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA
                     chat_kwargs["response_schema"] = VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA

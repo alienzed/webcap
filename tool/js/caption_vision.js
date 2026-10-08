@@ -233,6 +233,23 @@ function requestCaptionVisionCandidate(mediaItem, captionText, options) {
   });
 }
 
+function setCaptionDiscrepancyFindingsForCandidate(candidate, findings, sourceLabel) {
+  if (!candidate || !state.currentItem || candidate.mediaKey !== state.currentItem.key) {
+    throw new Error('Caption discrepancy findings require the current Caption Assist candidate.');
+  }
+  var normalized = filterCaptionVisionFindings(state.currentItem, candidate.text, findings);
+  captionVisionResult = {
+    mediaKey: String(candidate.mediaKey || ''),
+    captionText: String(candidate.text || ''),
+    findings: normalized,
+    model: String(sourceLabel || ''),
+    requestFingerprint: ''
+  };
+  captionVisionError = '';
+  syncCaptionVisionUi();
+  return normalized.length;
+}
+
 function clearCaptionVisionResult() {
   captionVisionResult = null;
   captionVisionError = '';
@@ -574,7 +591,13 @@ function syncCaptionVisionUi() {
   status.classList.add('hidden');
   status.textContent = '';
 
-  if (!candidateVisible || !captionVisionEnabled) return;
+  var suppliedResultVisible = !!(
+    candidateVisible &&
+    captionVisionResult &&
+    captionVisionResult.mediaKey === mediaItem.key &&
+    captionVisionResult.captionText === String(captionAssistCandidate.text || '')
+  );
+  if (!candidateVisible || (!captionVisionEnabled && !suppliedResultVisible)) return;
   if (!modelAvailable) {
     status.textContent = captionVisionCapabilities.loaded
       ? 'Vision enabled · no Vision model is currently available.'
@@ -613,6 +636,8 @@ function syncCaptionVisionUi() {
   });
   if (findings.childNodes.length) findings.classList.remove('hidden');
 }
+
+window.setCaptionDiscrepancyFindingsForCandidate = setCaptionDiscrepancyFindingsForCandidate;
 
 function getVisionImageCaptionEls() {
   var els = {

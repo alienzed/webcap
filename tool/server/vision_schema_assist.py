@@ -427,10 +427,6 @@ def _cached_sight_block(folder_path, media_name, metadata, model):
     if not isinstance(sight, dict):
         return None
     stat = media_path.stat()
-    if int(sight.get("version") or 0) not in {1, VISION_SIGHT_VERSION}:
-        return None
-    if str(sight.get("model") or "") != str(model or ""):
-        return None
     if int(sight.get("mtime") or -1) != int(stat.st_mtime):
         return None
     if int(sight.get("size") or -1) != int(stat.st_size):
@@ -442,7 +438,7 @@ def _cached_sight_block(folder_path, media_name, metadata, model):
 
 def _structured_sight_block(folder_path, media_name, metadata, model):
     sight = _cached_sight_block(folder_path, media_name, metadata, model)
-    if not sight or sight.get("version") != VISION_SIGHT_VERSION or not isinstance(sight.get("inventory"), dict):
+    if not sight or not isinstance(sight.get("inventory"), dict):
         return None
     return sight
 

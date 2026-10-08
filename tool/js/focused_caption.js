@@ -478,12 +478,6 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
     if (isFocusedCaptionReviewMode()) {
       prefetch.candidate = buildFocusedReviewCandidate(target.item);
       prefetch.promise = Promise.resolve(prefetch.candidate);
-      if (
-        captionVisionEnabled &&
-        !(focusedCaptionState.discrepanciesByMediaKey[target.item.key] || []).length
-      ) {
-        beginFocusedCaptionPrefetchVision(prefetch, target.item, prefetch.candidate);
-      }
       return prefetch.promise;
     }
 
@@ -500,7 +494,6 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
     }).then(function (candidate) {
       if (prefetch.discarded || focusedCaptionPrefetch !== prefetch) return null;
       prefetch.candidate = candidate;
-      if (captionVisionEnabled) beginFocusedCaptionPrefetchVision(prefetch, target.item, candidate);
       return candidate;
     }).catch(function (err) {
       if (!prefetch.discarded && focusedCaptionPrefetch === prefetch) {

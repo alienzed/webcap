@@ -612,6 +612,13 @@ function syncCaptionVisionUi() {
 
   // Vision checks are part of Caption Assist, not an optional checkbox.
   toggleWrap.classList.add('hidden');
+  var recheck = document.getElementById('editor-caption-vision-recheck');
+  if (!recheck) throw new Error('Caption Vision recheck control is missing.');
+  recheck.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  recheck.disabled = !!captionVisionActiveTask || !modelAvailable;
+  recheck.title = modelAvailable
+    ? 'Run a fresh visual check for this caption and item only.'
+    : 'Select an available Vision model to recheck this item.';
   toggle.checked = !!captionVisionEnabled;
   toggle.disabled = !modelAvailable;
   toggleWrap.title = modelAvailable
@@ -1000,6 +1007,17 @@ function handleCaptionVisionModelChange() {
 }
 
 function wireCaptionVisionUi() {
+  var recheck = document.getElementById('editor-caption-vision-recheck');
+  if (!recheck) throw new Error('Caption Vision recheck control is missing.');
+  if (!recheck.__captionVisionBound) {
+    recheck.__captionVisionBound = true;
+    recheck.addEventListener('click', function () {
+      if (!captionAssistCandidate) return;
+      runCaptionVisionForCandidate(captionAssistCandidate).catch(function (err) {
+        reportConsoleError('Caption Vision recheck', err);
+      });
+    });
+  }
   var toggle = document.getElementById('editor-caption-vision-toggle');
   if (!toggle) throw new Error('Caption Vision toggle is missing.');
   if (!toggle.__captionVisionBound) {

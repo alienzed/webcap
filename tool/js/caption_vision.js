@@ -634,15 +634,13 @@ function syncCaptionVisionUi() {
     ? 'Scan for incorrect or omitted visual details using the selected Vision model.'
     : (captionVisionCapabilities.loaded ? 'No Vision model is available.' : 'Vision models are still loading.');
 
-  if (!candidateVisible || (!captionVisionEnabled && !suppliedResultVisible)) return;
-  if (!suppliedResultVisible && !modelAvailable) {
+  if (!candidateVisible) return;
+  if (!modelAvailable) {
     status.textContent = captionVisionCapabilities.loaded
-      ? 'Vision enabled · no Vision model is currently available.'
-      : 'Vision enabled · loading Vision models…';
+      ? 'No Vision model is currently available.'
+      : 'Loading Vision models…';
     status.classList.remove('hidden');
-    return;
   }
-  if (!suppliedResultVisible && !mediaSupported) return;
 
   if (captionVisionActiveTask) {
     status.textContent = isCaptionVisionVideo(mediaItem.fileName)
@@ -654,7 +652,7 @@ function syncCaptionVisionUi() {
     status.classList.remove('hidden');
   }
   if (!captionVisionResult && !captionQaResult) {
-    status.textContent = 'Vision checks run automatically for each caption candidate.';
+    if (!status.textContent) status.textContent = 'Vision checks run automatically for each caption candidate.';
     status.classList.remove('hidden');
     return;
   }

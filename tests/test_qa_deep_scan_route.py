@@ -50,7 +50,10 @@ def test_qa_deep_scan_route_freezes_current_set_scope(tmp_path, monkeypatch):
     assert seen["client"] == "qa"
     assert seen["model"] == "local::qwen"
     assert seen["label"] == "QA Deep Scan"
-    assert seen["context"] == {}
+    assert seen["context"]["captionsByFile"] == {
+        "one.jpg": "subject wearing a red triangle top",
+        "two.jpg": "subject wearing a crimson triangle top",
+    }
     assert seen["contract"]["operation"] == "qa_deep_scan"
     assert seen["contract"]["source_files"] == ["one.jpg", "two.jpg"]
     assert "Teach garment details consistently." in seen["contract"]["prompt"]

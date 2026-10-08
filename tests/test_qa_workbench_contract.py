@@ -103,6 +103,8 @@ def test_progressive_qa_freezes_batch_identity_and_invalidates_context_changes()
     assert "var sessionScopeKey = qaBuildScopeKey(qaGetTrainingItems());" in qa
     assert "qaInvalidateDeepScanSession('Deep QA stopped because its review context changed.');" in qa
     assert "qaInvalidateDeepScanSession('Deep QA stopped because the review scope changed.');" in qa
+    assert "qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';" in qa
+    assert "qaWorkbenchState.deepScanJobId = '';" in qa
 
 
 def test_qa_isolated_styles_keep_large_editorial_typography():

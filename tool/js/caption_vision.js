@@ -35,6 +35,10 @@ function loadCaptionVisionCapabilities() {
   captionVisionCapabilities.promise = captionAssistRequestJson('/caption/vision-capabilities')
     .then(function (payload) {
       captionVisionCapabilities.loaded = true;
+      (Array.isArray(payload.warnings) ? payload.warnings : []).forEach(function (warning) {
+        var target = String(warning.path || warning.modelId || warning.runtimeName || 'Vision discovery');
+        reportConsoleError('Vision discovery: ' + target, new Error(String(warning.error || 'Unknown error')));
+      });
       captionVisionCapabilities.models = Array.isArray(payload.models) ? payload.models : [];
       captionVisionCapabilities.defaultModel = String(payload.defaultModel || '');
       captionVisionCapabilities.promise = null;

@@ -238,13 +238,19 @@
     });
   }
 
-  function qaDeepScanFindingPayload() {
-    return qaWorkbenchState.deterministicFindings.map(function (finding) {
+  function qaDeepScanFindingPayload(items) {
+    var wanted = {};
+    (items || []).forEach(function (item) {
+      if (item && item.fileName) wanted[item.fileName] = true;
+    });
+    return qaWorkbenchState.deterministicFindings.filter(function (finding) {
+      return (finding.files || []).some(function (file) { return !!wanted[file]; });
+    }).map(function (finding) {
       return {
         category: finding.category,
         title: finding.title,
         summary: finding.summary,
-        files: (finding.files || []).slice(0, 12)
+        files: (finding.files || []).filter(function (file) { return !!wanted[file]; }).slice(0, 12)
       };
     });
   }
@@ -553,7 +559,7 @@
         model: model,
         trainingFocus: sessionFocus,
         items: qaBuildDeepScanItems(batchItems),
-        deterministicFindings: qaDeepScanFindingPayload()
+        deterministicFindings: qaDeepScanFindingPayload(batchItems)
       })
     }).then(function (payload) {
       if (

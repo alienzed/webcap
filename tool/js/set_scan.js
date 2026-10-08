@@ -810,11 +810,11 @@
     }
     setScanState.open = true;
     renderSetIntelligence();
-    if (setScanState.hasRun) return;
 
-    setSetIntelligenceStatus('Checking Set', 'Looking for reusable Set Intelligence…');
+    setSetIntelligenceStatus('Checking Set', 'Checking saved Open Sight and Context Sight against the current Set…');
     restoreCachedIntelligence(folder, files).then(function (restored) {
       if (!setScanState.open || restored) return;
+      setScanState.hasRun = false;
       runSetIntelligence();
     }).catch(function (err) {
       reportConsoleError('Set Intelligence cached report', err);

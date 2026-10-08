@@ -100,9 +100,21 @@ def test_focus_review_and_focus_caption_share_navigation_but_show_distinct_mode_
     assert "var reviewMode = isFocusedCaptionReviewMode();" in focus
     assert "reviewBtn.classList.toggle('active', focusedCaptionState.open && reviewMode);" in focus
     assert "startBtn.classList.toggle('active', focusedCaptionState.open && !reviewMode);" in focus
-    assert "skipBtn.title = 'Next ' + focusedCaptionModeLabel() + ' item (Right/Down/S)';" in focus
+    assert "skipBtn.title = reviewMode" in focus
+    assert "'Skip this review item without saving edits'" in focus
+    assert "skipLabel.textContent = reviewMode ? 'Skip' : 'Next';" in focus
     assert "#preview-open-focus-review-btn" in focus
 
+
+
+def test_focus_review_navigation_protects_unsaved_edits_but_explicit_skip_discards():
+    focus = _read("tool/js/focused_caption.js")
+
+    assert "function hasFocusedReviewUnsavedChanges()" in focus
+    move = focus.split("function moveFocusedCaption(delta, options)", 1)[1].split("function advanceFocusedCaption()", 1)[0]
+    assert "hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits" in move
+    assert "Use Save → Next, or Skip to discard them." in move
+    assert "return moveFocusedCaption(1, { discardReviewEdits: true });" in focus
 
 def test_caption_assist_surfaces_only_unreviewed_empty_groups_with_candidate():
     html = _read("tool/tool.html")

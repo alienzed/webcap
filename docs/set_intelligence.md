@@ -56,11 +56,11 @@ The default surface exposes only information the user can act on:
 
 Analyzer names and internal stages are not primary UI.
 
-Raw Vision responses remain available only under collapsed **Scan details** when new model output exists. They are diagnostic evidence, not a review task.
+The collapsed **Vision report** exposes raw responses from the current browser run and can reconstruct normalized Open Sight and Context Sight from cached Set metadata after reopening or restarting the app. It is diagnostic evidence, not a review task; opening the report never starts a scan.
 
 Per-media Vision quality is allowed to degrade without failing the Set-level workflow. A model response that cannot be normalized into reusable structured Sight is kept visible diagnostically, skipped as evidence, and does not abort the remaining scan. Vocabulary discovery may proceed from partial usable coverage; complete Set coverage is not a success requirement.
 
-Stop is explicit. Completed cached Sight remains valid.
+Stop is explicit. Completed cached Sight remains valid. Reopening Set Intelligence first inspects that cache; rescanning is an explicit **Run Again** action when reusable evidence exists.
 
 ## Data ownership
 
@@ -96,13 +96,13 @@ Context Sight is cached separately from Open Sight in `media_metadata.json`. Its
 
 Discovery does not assign tags to media and does not perform its own Vision scan.
 
-Support counts are visible. Representative thumbnails plus rationale/evidence are available behind an optional reveal. Review only surfaces groups with an actionable vocabulary change; groups whose proposals are already fully present are skipped. Slightly overcomplete vocabulary is acceptable: proposed terms are available language, not requirements to use every term. Missing a meaningful recurring distinction is more costly than retaining an extra plausible term.
+Support counts are visible. Representative thumbnails plus rationale/evidence are available behind an optional reveal. Review only surfaces groups with an actionable vocabulary change; groups whose proposals are already fully present are skipped. Closing and reopening Discover Vocabulary preserves the current browser-session review. A failed challenge can be retried from the saved synthesis draft; **Restart Discovery** is the explicit full Director rerun. Slightly overcomplete vocabulary is acceptable: proposed terms are available language, not requirements to use every term. Missing a meaningful recurring distinction is more costly than retaining an extra plausible term.
 
 ## Guided Tagging
 
 Purpose: apply **existing vocabulary** efficiently.
 
-After vocabulary review, the Director prepares per-item candidate assignments from both cached visual reads against the **final vocabulary** and current assignments. This preparation does not inspect pixels again and does not invent vocabulary in the Guided flow.
+After vocabulary review, the Director prepares per-item candidate assignments from both cached visual reads against the **final vocabulary** and current assignments. Large Sets are prepared in bounded batches so the per-response item limit cannot silently truncate the Guided pass. This preparation does not inspect pixels again and does not invent vocabulary in the Guided flow.
 
 The interaction remains in Grid: one tag proposition, likely media preselected, explicit human correction/application, then the next proposition. Guided Tagging consumes the prepared candidates; it does not reinterpret the image itself. Completing Vocabulary review presents **Continue to Guided Tagging** as the primary next action and launches this Grid flow directly.
 

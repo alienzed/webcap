@@ -564,6 +564,7 @@
           String(err && err.message ? err.message : err) + ' Previous report preserved.'
         );
       } else {
+        setScanState.hasRun = false;
         setScanState.phase = 'idle';
         setSetIntelligenceStatus('Set Intelligence unavailable', String(err && err.message ? err.message : err));
       }

@@ -46,6 +46,69 @@ CAPTION_VISION_RESPONSE_SCHEMA = {
     "additionalProperties": False,
 }
 
+VISION_CAPTION_EXTRAS_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "extras": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {"type": "string", "minLength": 1},
+        }
+    },
+    "required": ["extras"],
+    "additionalProperties": False,
+}
+
+VISION_CAPTION_EXTRAS_SYSTEM_PROMPT = (
+    "You inspect one image alongside its current candidate caption. "
+    "Return only useful visible details that add information not already represented by the caption. "
+    "Each detail should be compact annotation-ready wording, normally one to four words, such as 'braid', 'table lamp', "
+    "'hoop earrings', or 'looking left'. Prefer specific visible nouns or short attributes over prose sentences. "
+    "An empty extras list is correct when the caption already covers the useful visible details. Return JSON only."
+)
+
+
+def build_vision_caption_extras_messages(caption, media_relative_path):
+    current_caption = str(caption or "").strip()
+    text = (
+        "Inspect the image and current candidate caption. Return compact visible extras that would add useful information.\n\n"
+        + json.dumps({"caption": current_caption}, ensure_ascii=False)
+    )
+    return [
+        {"role": "system", "content": VISION_CAPTION_EXTRAS_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": text},
+                {"type": "image_url", "image_url": {"url": _vision_media_url(media_relative_path)}},
+            ],
+        },
+    ]
+
+
+def normalize_vision_caption_extras_result(raw_text):
+    text = str(raw_text or "").strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Vision extras model returned invalid JSON.") from exc
+    extras = payload.get("extras") if isinstance(payload, dict) else None
+    if not isinstance(extras, list):
+        raise ValueError("Vision extras response is missing extras.")
+
+    normalized = []
+    seen = set()
+    for raw in extras[:10]:
+        value = " ".join(str(raw or "").split()).strip(" ,.;:")
+        if not value:
+            continue
+        key = value.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(value)
+    return {"extras": normalized}
+
 
 VISION_IMAGE_CAPTION_SYSTEM_PROMPT = (
     "You caption one image from visual evidence alone. "

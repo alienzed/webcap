@@ -13,6 +13,7 @@
     rawResponses: [],
     rawResponseIndex: -1,
     hasRun: false,
+    failures: [],
     completed: 0,
     total: 0,
     phase: 'idle'
@@ -83,6 +84,15 @@
     } else {
       output.textContent = '';
     }
+  }
+
+  function recordSetIntelligenceFailure(passLabel, fileName, error) {
+    var message = String(error && error.message ? error.message : error || 'Unknown Vision failure.');
+    setScanState.failures.push({
+      pass: String(passLabel || 'Vision'),
+      file: String(fileName || ''),
+      message: message
+    });
   }
 
   function setSetIntelligenceStatus(title, message) {
@@ -320,6 +330,7 @@
     return requestSight(folder, model, fileName).catch(function (err) {
       setScanState.currentVisionJobId = '';
       if (setScanState.stopRequested) return false;
+      recordSetIntelligenceFailure('Open Sight', fileName, err);
       reportConsoleError('Set Intelligence item ' + fileName, err);
       return null;
     }).then(function (result) {
@@ -327,10 +338,9 @@
       if (!result) return true;
       showRawResponse(fileName, 'Open Sight', result.text);
       if (!result.sight) {
-        reportConsoleError(
-          'Set Intelligence',
-          new Error(result.warning || ('Vision returned unstructured evidence for ' + fileName + '.'))
-        );
+        var sightError = new Error(result.warning || ('Vision returned unstructured evidence for ' + fileName + '.'));
+        recordSetIntelligenceFailure('Open Sight', fileName, sightError);
+        reportConsoleError('Set Intelligence', sightError);
         return true;
       }
       return saveSight(folder, model, fileName, result.sight);
@@ -384,6 +394,7 @@
     return requestContextSight(folder, model, fileName, context).catch(function (err) {
       setScanState.currentVisionJobId = '';
       if (setScanState.stopRequested) return false;
+      recordSetIntelligenceFailure('Context Sight', fileName, err);
       reportConsoleError('Set Intelligence Context Sight ' + fileName, err);
       return null;
     }).then(function (result) {
@@ -391,10 +402,9 @@
       if (!result) return true;
       showRawResponse(fileName, 'Context Sight', result.text);
       if (!result.sight) {
-        reportConsoleError(
-          'Set Intelligence',
-          new Error(result.warning || ('Vision returned unstructured Context Sight for ' + fileName + '.'))
-        );
+        var contextError = new Error(result.warning || ('Vision returned unstructured Context Sight for ' + fileName + '.'));
+        recordSetIntelligenceFailure('Context Sight', fileName, contextError);
+        reportConsoleError('Set Intelligence', contextError);
         return true;
       }
       return saveContextSight(folder, model, fileName, context, result.sight);
@@ -438,6 +448,16 @@
     setScanState.running = false;
     setScanState.currentVisionJobId = '';
     setScanState.phase = 'complete';
+    var failureCount = setScanState.failures.length;
+    if (failureCount) {
+      setSetIntelligenceStatus(
+        'Set understood with gaps',
+        String(failureCount) + ' Vision item failure' + (failureCount === 1 ? '' : 's') +
+        ' occurred. Completed evidence remains usable; see Console for details or Run Again.'
+      );
+      window.setStatus('Set Intelligence completed with ' + String(failureCount) + ' Vision gap' + (failureCount === 1 ? '' : 's') + '.');
+      return;
+    }
     setSetIntelligenceStatus('Set understood', message || 'Ready for the next decision.');
     window.setStatus('Set Intelligence is ready.');
   }
@@ -456,11 +476,20 @@
       return;
     }
 
+    var previousReport = {
+      hasRun: setScanState.hasRun,
+      phase: setScanState.phase,
+      rawResponses: setScanState.rawResponses.slice(),
+      rawResponseIndex: setScanState.rawResponseIndex,
+      currentRawResponse: setScanState.currentRawResponse
+    };
+
     setScanState.folder = folder;
     setScanState.files = files.slice();
     setScanState.visionModel = '';
     setScanState.running = true;
     setScanState.hasRun = true;
+    setScanState.failures = [];
     setScanState.stopRequested = false;
     setScanState.currentVisionJobId = '';
     setScanState.currentRawResponse = null;
@@ -524,8 +553,20 @@
     }).catch(function (err) {
       setScanState.running = false;
       setScanState.currentVisionJobId = '';
-      setScanState.phase = 'idle';
-      setSetIntelligenceStatus('Set Intelligence unavailable', String(err && err.message ? err.message : err));
+      if (previousReport.hasRun) {
+        setScanState.hasRun = true;
+        setScanState.phase = previousReport.phase;
+        setScanState.rawResponses = previousReport.rawResponses;
+        setScanState.rawResponseIndex = previousReport.rawResponseIndex;
+        setScanState.currentRawResponse = previousReport.currentRawResponse;
+        setSetIntelligenceStatus(
+          'Set Intelligence refresh failed',
+          String(err && err.message ? err.message : err) + ' Previous report preserved.'
+        );
+      } else {
+        setScanState.phase = 'idle';
+        setSetIntelligenceStatus('Set Intelligence unavailable', String(err && err.message ? err.message : err));
+      }
       reportConsoleError('Set Intelligence', err);
       window.setStatus('Set Intelligence failed.');
     });

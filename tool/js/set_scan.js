@@ -378,6 +378,36 @@
     });
   }
 
+  function publishSetIntelligenceMetadata(folder, media, blockName, block) {
+    var expectedFolder = String(folder || '');
+    var fileName = String(media || '');
+    if (!expectedFolder || !fileName || !block || typeof block !== 'object') {
+      throw new Error('Set Intelligence saved evidence is invalid.');
+    }
+    if (String(state.folder || '') !== expectedFolder) {
+      throw new Error('Set changed before saved Set Intelligence evidence could be published.');
+    }
+    var item = (state.items || []).find(function (candidate) {
+      return candidate && String(candidate.fileName || '') === fileName;
+    });
+    if (!item) {
+      throw new Error('Set Intelligence could not publish saved evidence for ' + fileName + '.');
+    }
+    if (!item.metadata || typeof item.metadata !== 'object') item.metadata = {};
+    item.metadata[blockName] = block;
+    if (
+      state.currentItem &&
+      state.currentItem !== item &&
+      String(state.currentItem.fileName || '') === fileName
+    ) {
+      if (!state.currentItem.metadata || typeof state.currentItem.metadata !== 'object') {
+        state.currentItem.metadata = {};
+      }
+      state.currentItem.metadata[blockName] = block;
+    }
+    qaInputsUpdated();
+  }
+
   function saveSight(folder, model, media, sight) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
@@ -389,6 +419,9 @@
         media: media,
         sight: sight
       })
+    }).then(function (payload) {
+      publishSetIntelligenceMetadata(folder, media, 'vision_sight', payload.sight);
+      return payload;
     });
   }
 
@@ -475,11 +508,14 @@
         captionTemplate: context.captionTemplate,
         sight: sight
       })
+    }).then(function (payload) {
+      publishSetIntelligenceMetadata(folder, media, 'vision_vocabulary_sight', payload.sight);
+      return payload;
     });
   }
 
   function scanNext(pending, index, folder, model) {
-    if (setScanState.stopRequested || !setScanState.open) return Promise.resolve(false);
+    if (setScanState.stopRequested) return Promise.resolve(false);
     if (String(state.folder || '') !== folder) {
       throw new Error('Set changed while Set Intelligence was scanning.');
     }
@@ -557,7 +593,7 @@
   }
 
   function scanContextNext(pending, index, folder, model, context) {
-    if (setScanState.stopRequested || !setScanState.open) return Promise.resolve(false);
+    if (setScanState.stopRequested) return Promise.resolve(false);
     if (String(state.folder || '') !== folder) {
       throw new Error('Set changed while Context Sight was scanning.');
     }
@@ -655,6 +691,7 @@
     setScanState.running = false;
     setScanState.currentVisionJobId = '';
     setScanState.phase = 'complete';
+    qaInputsUpdated();
     var failureCount = setScanState.failures.length;
     if (failureCount) {
       setSetIntelligenceStatus(
@@ -671,6 +708,10 @@
 
   function runSetIntelligence() {
     if (setScanState.running) return;
+    if (itemSightRefreshActive) {
+      window.setStatus('Finish the current item Sight refresh before starting a full Set scan.');
+      return;
+    }
 
     var folder = String(state && state.folder || '');
     var files = getCurrentSetMediaFileNames();
@@ -724,9 +765,6 @@
       if (!setScanState.visionModel) {
         throw new Error('Select an available Vision model before running Set Intelligence.');
       }
-      if (!String(getDirectorModelPreference() || '').trim()) {
-        throw new Error('Select a Director model before running Set Intelligence.');
-      }
       var metadataResult = results[1];
       if (!metadataResult || metadataResult.ok === false) {
         throw new Error((metadataResult && metadataResult.error) || 'Supporting Set analysis failed.');
@@ -762,6 +800,7 @@
       if (success === false || setScanState.stopRequested) {
         setScanState.running = false;
         setScanState.phase = 'idle';
+        qaInputsUpdated();
         setSetIntelligenceStatus('Scan stopped', 'Completed understanding remains cached.');
         window.setStatus('Set Intelligence stopped. Completed understanding remains cached.');
         return;
@@ -770,6 +809,7 @@
     }).catch(function (err) {
       setScanState.running = false;
       setScanState.currentVisionJobId = '';
+      qaInputsUpdated();
       if (previousReport.hasRun) {
         setScanState.hasRun = true;
         setScanState.phase = previousReport.phase;
@@ -851,7 +891,6 @@
   }
 
   function closeSetIntelligence() {
-    if (setScanState.running) stopSetIntelligence();
     setScanState.open = false;
     renderSetIntelligence();
   }
@@ -907,8 +946,75 @@
     }, true);
   }
 
+  function isSetIntelligenceRunning() {
+    return !!setScanState.running;
+  }
+
+  // Explicit item-level refresh, independent of the full-Set workflow.
+  // Each valid observation is saved immediately; failed reads keep older evidence.
+  var itemSightRefreshActive = false;
+  function refreshSetIntelligenceItem(mediaItem, options) {
+    var opts = options || {};
+    var open = opts.open !== false;
+    var context = opts.context !== false;
+    if (!open && !context) return Promise.resolve(false);
+    if (!mediaItem || !mediaItem.fileName) return Promise.reject(new Error('Select a media item to refresh Sight.'));
+    if (setScanState.running || itemSightRefreshActive) {
+      return Promise.reject(new Error('A Sight scan is already running.'));
+    }
+    var folder = String(state.folder || '');
+    var file = String(mediaItem.fileName);
+    var model = String(getCaptionVisionModelId() || '').trim();
+    if (!folder || !model) return Promise.reject(new Error('Select a Set and Vision model first.'));
+    var visionContext = setIntelligenceVisionContext();
+    itemSightRefreshActive = true;
+    var failures = [];
+    function stage(label, request, save) {
+      return request().then(function (result) {
+        if (!result.sight) throw new Error(result.warning || (label + ' returned no structured observation.'));
+        return save(result.sight).then(function () {
+          if (result.warning) {
+            reportConsoleWarning('Sight refresh ' + file, label + ': ' + result.warning);
+          }
+          return true;
+        });
+      }).catch(function (err) {
+        failures.push(label + ': ' + String(err && err.message || err));
+        reportConsoleError('Sight refresh ' + file, err);
+        return false;
+      });
+    }
+    return Promise.resolve().then(function () {
+      if (opts.open === 'missing') {
+        return requestJson('/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model))
+          .then(function (report) {
+            var row = (report.items || []).find(function (entry) { return entry.file === file; });
+            if (!row) throw new Error('Open Sight status did not include ' + file + '.');
+            open = !row.structured;
+          });
+      }
+    }).then(function () {
+      if (open) return stage('Open Sight',
+        function () { return requestSight(folder, model, file); },
+        function (sight) { return saveSight(folder, model, file, sight); });
+    }).then(function () {
+      if (context) return stage('Context Sight',
+        function () { return requestContextSight(folder, model, file, visionContext); },
+        function (sight) { return saveContextSight(folder, model, file, visionContext, sight); });
+    }).then(function () {
+      if (failures.length) throw new Error(failures.join(' | '));
+      window.setStatus('Sight refreshed for ' + file + '.');
+      return true;
+    }).finally(function () {
+      setScanState.currentVisionJobId = '';
+      itemSightRefreshActive = false;
+    });
+  }
+
+  window.refreshSetIntelligenceItem = refreshSetIntelligenceItem;
   window.openSetIntelligence = openSetIntelligence;
   window.stopSetIntelligence = stopSetIntelligence;
+  window.isSetIntelligenceRunning = isSetIntelligenceRunning;
 
   bindSetIntelligence();
 })();

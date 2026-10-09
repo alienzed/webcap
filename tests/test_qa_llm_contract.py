@@ -76,10 +76,46 @@ def test_qa_deep_scan_normalizer_rejects_invented_files():
                     "why": "Splitting one concept across wording may weaken consistency.",
                     "files": ["invented.jpg"],
                     "evidence": ["red / crimson"],
+                    "patches": [],
                 }],
             },
             allowed_files=["one.jpg", "two.jpg"],
         )
+
+
+def test_qa_deep_scan_normalizer_validates_exact_caption_patches():
+    result = normalize_result(
+        {
+            "summary": "One exact caption correction.",
+            "findings": [{
+                "category": "captioning",
+                "priority": "normal",
+                "confidence": "high",
+                "title": "Color wording conflicts",
+                "summary": "The caption uses the wrong configured color.",
+                "why": "Cached visual evidence and annotations agree on red.",
+                "files": ["one.jpg"],
+                "evidence": ["Color: red"],
+                "patches": [{
+                    "file": "one.jpg",
+                    "action": "replace",
+                    "sourceText": "red",
+                    "replacementText": "crimson",
+                    "anchorText": "",
+                }],
+            }],
+        },
+        allowed_files=["one.jpg"],
+        captions_by_file={"one.jpg": "subject wearing a red triangle bikini top"},
+    )
+
+    assert result["findings"][0]["patches"][0]["sourceText"] == "red"
+
+
+def test_qa_deep_scan_schema_keeps_batched_director_out_of_representation_categories():
+    contract = build_request(_items())
+    category = contract["response_schema"]["properties"]["findings"]["items"]["properties"]["category"]
+    assert category["enum"] == ["consistency", "captioning"]
 
 
 def test_qa_deep_scan_allows_clean_set_with_zero_findings():

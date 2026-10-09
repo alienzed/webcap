@@ -1,6 +1,6 @@
 # Review / Output Workspace
 
-Last reviewed against code: 2026-08-24
+Last reviewed against code: 2026-10-08
 
 This document describes the shipped `Review / Output` workspace.
 
@@ -41,11 +41,23 @@ The current code is intentionally split by concern:
 - Only items with an existing saved caption are included.
 - The saved caption is presented directly as the editable candidate; opening an item does not call the Director.
 - Existing deterministic caption checks (selected annotations missing from the caption, unreviewed annotation groups) are reused immediately.
-- If Caption Vision is enabled, the current item may run the existing item-scoped Vision validation and compact Vision Extras. The next item may be prefetched one deep with those same item-scoped Vision tasks.
-- The Director is only invoked by an explicit corrective action such as **Fix**, **Blend**, or rewrite/regenerate.
+- Caption discrepancies use one shared exact-edit contract: compact `add`, `replace`, and `remove` pills above the candidate caption. Hover/focus previews one patch locally without mutation; accepting applies that exact patch; rejecting dismisses it.
+- QA may seed Focus Review with exact patches already derived by the Director from cached Set Intelligence. When no seeded discrepancy exists and Caption Vision is enabled, Focus Review may use the existing item-scoped Vision validation as the fallback. It does not run a separate Vision Extras pass.
+- The Director is not required merely to open or step through Focus Review. Full rewrite/regenerate remains an explicit separate action.
 - **Keep → Next** advances without rewriting an unchanged caption. **Save → Next** writes an edited/re-generated caption, then advances.
 - Navigation refuses to discard unsaved review edits implicitly; **Skip** is the explicit discard-and-advance action.
 - Review progress is browser-session workflow state only. Focus Review does not add a durable caption-reviewed flag and does not replace aggregate QA.
+
+## Shared Caption Correction Contract
+
+Caption Assist, Focus Review, and QA caption handoffs share the same correction interaction rather than owning competing editors.
+
+- Models may propose only exact actionable patches: **add**, **replace**, or **remove**.
+- Replace/remove patches are actionable only while their exact source text occurs uniquely in the current candidate caption.
+- Anchored adds require one exact unique anchor; otherwise the add is inserted at the user's current candidate caret.
+- Low-confidence or prose-only observations do not become correction pills.
+- WebCap applies accepted patches locally and deterministically. Preview and acceptance never require a second model call.
+- QA routes captioning findings into Focus Review; non-caption QA findings continue to use normal focused selection/inspection.
 
 ## Main Flow
 

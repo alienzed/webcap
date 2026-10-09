@@ -473,6 +473,22 @@ function buildMediaContextMenuActions(mediaItem, key) {
       startFocusedCaptionForMediaItem(mediaItem);
     }
   });
+  if (isCaptionVisionSupportedMedia(fileName)) {
+    actions.push({
+      label: 'Vision Caption...',
+      run: function () {
+        var select = state.currentItem && state.currentItem.key === mediaItem.key
+          ? Promise.resolve()
+          : selectPathMedia(mediaItem);
+        return select.then(function () {
+          return runVisionImageCaption();
+        }).catch(function (err) {
+          reportConsoleError('Vision Caption', err);
+          setStatus('Vision Caption failed: ' + String(err && err.message ? err.message : err));
+        });
+      }
+    });
+  }
   actions.push({
     label: 'Copy Tags',
     run: function () {

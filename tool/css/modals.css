@@ -3079,8 +3079,7 @@ html[data-theme="dark"] .app-settings-environment-check {
 
 .vision-schema-dialog {
   width: min(760px, calc(100vw - 36px));
-  height: min(760px, calc(100vh - 36px));
-  min-height: 520px;
+  max-height: min(760px, calc(100dvh - 36px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -3090,9 +3089,6 @@ html[data-theme="dark"] .app-settings-environment-check {
   color: var(--text);
   box-shadow: 0 18px 52px rgba(0, 0, 0, 0.34);
 }
-
-.vision-schema-header,
-.vision-schema-toolbar,
 
 .vision-schema-evidence-details {
   margin-top: 12px;
@@ -3152,8 +3148,16 @@ html[data-theme="dark"] .app-settings-environment-check {
 }
 
 .vision-schema-header {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 14px;
   border-bottom: 1px solid var(--border-soft);
+}
+
+.vision-schema-header > div {
+  min-width: 0;
 }
 
 .vision-schema-header h2 {
@@ -3170,8 +3174,11 @@ html[data-theme="dark"] .app-settings-environment-check {
 }
 
 .vision-schema-toolbar {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border-soft);
+  gap: 12px;
+  padding: 12px 18px 8px;
 }
 
 .vision-schema-stage-actions {
@@ -3183,7 +3190,7 @@ html[data-theme="dark"] .app-settings-environment-check {
   min-width: 0;
   color: var(--muted);
   font-size: 13px;
-  text-align: right;
+  text-align: left;
 }
 
 .vision-schema-progress-wrap {
@@ -3192,7 +3199,7 @@ html[data-theme="dark"] .app-settings-environment-check {
 }
 
 .vision-schema-progress-track {
-  height: 5px;
+  height: 7px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--hover);
@@ -3213,18 +3220,16 @@ html[data-theme="dark"] .app-settings-environment-check {
 
 
 .vision-schema-body {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   display: block;
-  overflow: hidden;
+  overflow-y: auto;
   border-top: 1px solid var(--border-soft);
 }
 
 .vision-schema-column {
   min-width: 0;
   min-height: 0;
-  height: 100%;
-  overflow: auto;
   padding: 18px 20px 24px;
 }
 
@@ -3379,7 +3384,11 @@ html[data-theme="dark"] .app-settings-environment-check {
 @media (max-width: 900px) {
   .vision-schema-dialog {
     width: calc(100vw - 24px);
-    height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+
+  .vision-schema-toolbar {
+    flex-wrap: wrap;
   }
 }
 

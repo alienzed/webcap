@@ -4,11 +4,13 @@ var captionVisionCapabilities = {
   models: [],
   defaultModel: ''
 };
-var captionVisionEnabled = false;
+var captionVisionEnabled = true;
 var captionVisionActiveTask = null;
 var captionVisionTaskSequence = 0;
 var captionVisionResult = null;
+var captionQaResult = null;
 var captionVisionError = '';
+var captionVisionPreviewCaretIndex = null;
 var visionImageCaptionState = {
   open: false,
   mediaKey: '',
@@ -34,6 +36,10 @@ function loadCaptionVisionCapabilities() {
   captionVisionCapabilities.promise = captionAssistRequestJson('/caption/vision-capabilities')
     .then(function (payload) {
       captionVisionCapabilities.loaded = true;
+      (Array.isArray(payload.warnings) ? payload.warnings : []).forEach(function (warning) {
+        var target = String(warning.path || warning.modelId || warning.runtimeName || 'Vision discovery');
+        reportConsoleError('Vision discovery: ' + target, new Error(String(warning.error || 'Unknown error')));
+      });
       captionVisionCapabilities.models = Array.isArray(payload.models) ? payload.models : [];
       captionVisionCapabilities.defaultModel = String(payload.defaultModel || '');
       captionVisionCapabilities.promise = null;
@@ -54,9 +60,7 @@ function loadCaptionVisionCapabilities() {
 }
 
 function getCaptionVisionModelId() {
-  var preferred = typeof getVisionModelPreference === 'function'
-    ? String(getVisionModelPreference() || '')
-    : '';
+  var preferred = String(getVisionModelPreference() || '');
   var available = (captionVisionCapabilities.models || []).some(function (model) {
     return String(model && model.id || '') === preferred;
   });
@@ -104,15 +108,98 @@ function captionVisionRequestFingerprint(mediaItem, captionText) {
   return JSON.stringify(buildCaptionVisionRequest(mediaItem, captionText));
 }
 
+function captionVisionFindExactOccurrence(text, needle) {
+  var source = String(text || '');
+  var wanted = String(needle || '');
+  if (!wanted) return { count: 0, index: -1 };
+  var count = 0;
+  var index = -1;
+  var from = 0;
+  while (from <= source.length) {
+    var found = source.indexOf(wanted, from);
+    if (found === -1) break;
+    count += 1;
+    if (index === -1) index = found;
+    from = found + Math.max(1, wanted.length);
+  }
+  return { count: count, index: index };
+}
+
+function captionVisionValidatePatch(captionText, finding) {
+  var text = String(captionText || '');
+  var action = String(finding && finding.action || '').toLowerCase();
+  var sourceText = String(finding && finding.sourceText || '');
+  var replacementText = String(finding && finding.replacementText || '');
+  var anchorText = String(finding && finding.anchorText || '');
+
+  if (action === 'add') {
+    if (!replacementText || sourceText) return null;
+    if (!anchorText) {
+      return {
+        action: action,
+        sourceText: '',
+        replacementText: replacementText,
+        anchorText: '',
+        index: -1
+      };
+    }
+    var anchorMatch = captionVisionFindExactOccurrence(text, anchorText);
+    if (anchorMatch.count !== 1) return null;
+    return {
+      action: action,
+      sourceText: '',
+      replacementText: replacementText,
+      anchorText: anchorText,
+      index: anchorMatch.index + anchorText.length
+    };
+  }
+
+  if (action === 'replace' || action === 'remove') {
+    if (!sourceText) return null;
+    if (action === 'replace' && (!replacementText || replacementText === sourceText)) return null;
+    if (action === 'remove' && replacementText) return null;
+    var sourceMatch = captionVisionFindExactOccurrence(text, sourceText);
+    if (sourceMatch.count !== 1) return null;
+    return {
+      action: action,
+      sourceText: sourceText,
+      replacementText: replacementText,
+      anchorText: '',
+      index: sourceMatch.index
+    };
+  }
+  return null;
+}
+
+function captionVisionApplyPatchToText(captionText, patch, caretIndex) {
+  var text = String(captionText || '');
+  if (!patch) return text;
+  if (patch.action === 'add') {
+    var index = patch.index;
+    if (index < 0) {
+      index = Number.isFinite(caretIndex) ? Math.max(0, Math.min(text.length, caretIndex)) : text.length;
+    }
+    var left = text.slice(0, index);
+    var right = text.slice(index);
+    var value = String(patch.replacementText || '').trim();
+    var prefix = left && !/[\s([{"'/-]$/.test(left) ? ' ' : '';
+    var suffix = right && !/^[\s.,;:!?)}\]"'/-]/.test(right) ? ' ' : '';
+    return left + prefix + value + suffix + right;
+  }
+  if (patch.action === 'replace') {
+    return text.slice(0, patch.index) + patch.replacementText + text.slice(patch.index + patch.sourceText.length);
+  }
+  if (patch.action === 'remove') {
+    return text.slice(0, patch.index) + text.slice(patch.index + patch.sourceText.length);
+  }
+  return text;
+}
+
 function filterCaptionVisionFindings(mediaItem, captionText, findings) {
-  var mediaKey = String(mediaItem && mediaItem.key || '');
-  var text = String(captionText || '').trim();
+  var text = String(captionText || '');
   return (Array.isArray(findings) ? findings : []).filter(function (finding) {
-    if (!finding || String(finding.type || '').toLowerCase() !== 'omitted' || !finding.knownTag) return true;
-    var group = String(finding.knownTag.group || '').trim();
-    var term = String(finding.knownTag.term || '').trim();
-    if (!mediaKey || !group || !term) return true;
-    return !checklistGroupTermAppearsInCaptionText(group, term, mediaKey, text);
+    if (String(finding && finding.confidence || '').toLowerCase() === 'low') return false;
+    return !!captionVisionValidatePatch(text, finding);
   });
 }
 
@@ -149,8 +236,26 @@ function requestCaptionVisionCandidate(mediaItem, captionText, options) {
   });
 }
 
+function setCaptionDiscrepancyFindingsForCandidate(candidate, findings, sourceLabel) {
+  if (!candidate || !state.currentItem || candidate.mediaKey !== state.currentItem.key) {
+    throw new Error('Caption discrepancy findings require the current Caption Assist candidate.');
+  }
+  var normalized = filterCaptionVisionFindings(state.currentItem, candidate.text, findings);
+  captionQaResult = {
+    mediaKey: String(candidate.mediaKey || ''),
+    captionText: String(candidate.text || ''),
+    findings: normalized,
+    model: String(sourceLabel || ''),
+    requestFingerprint: ''
+  };
+  captionVisionError = '';
+  syncCaptionVisionUi();
+  return normalized.length;
+}
+
 function clearCaptionVisionResult() {
   captionVisionResult = null;
+  captionQaResult = null;
   captionVisionError = '';
   syncCaptionVisionUi();
 }
@@ -160,6 +265,7 @@ function createCaptionVisionTask(mediaItem, captionText) {
     id: ++captionVisionTaskSequence,
     mediaKey: String(mediaItem && mediaItem.key || ''),
     captionText: String(captionText || '').trim(),
+    model: getCaptionVisionModelId(),
     jobId: '',
     cancelled: false,
     result: null,
@@ -270,6 +376,12 @@ function runCaptionVisionForCandidate(candidate) {
   if (!isCaptionVisionSupportedMedia(state.currentItem.fileName)) return Promise.resolve(false);
 
   var previous = captionVisionActiveTask;
+  if (previous && !previous.cancelled &&
+      previous.mediaKey === candidate.mediaKey &&
+      previous.captionText === String(candidate.text || '').trim() &&
+      previous.model === getCaptionVisionModelId()) {
+    return previous.promise.then(function () { return !!previous.result; });
+  }
   if (previous) {
     captionVisionActiveTask = null;
     cancelCaptionVisionTask(previous, 'Caption Vision');
@@ -302,78 +414,174 @@ function adoptCaptionVisionPrefetch(prefetch, candidate) {
   return bindCaptionVisionTaskToCandidate(task, candidate);
 }
 
-function isCaptionVisionKnownTagSelected(mediaKey, group, term) {
-  var wanted = String(term || '').trim().toLowerCase();
-  return getChecklistAssignedTagsForMediaKey(mediaKey, group).some(function (value) {
-    return String(value || '').trim().toLowerCase() === wanted;
-  });
+function getCaptionVisionCandidateTextElement() {
+  var el = document.getElementById('editor-caption-candidate-text');
+  if (!el) throw new Error('Caption Vision candidate text is missing.');
+  return el;
 }
 
-function applyCaptionVisionKnownTag(finding) {
-  if (!finding || !finding.knownTag || !state.currentItem || !captionAssistCandidate) return;
-  var mediaKey = state.currentItem.key;
-  var group = String(finding.knownTag.group || '');
-  var term = String(finding.knownTag.term || '');
-  if (!group || !term) return;
-
-  var alreadySelected = isCaptionVisionKnownTagSelected(mediaKey, group, term);
-  if (!alreadySelected) {
-    assignChecklistTagToMediaKey(mediaKey, group, term);
+function getCaptionVisionCaretIndex() {
+  var candidateEl = getCaptionVisionCandidateTextElement();
+  if (!candidateEl.isContentEditable) return String(captionAssistCandidate && captionAssistCandidate.text || '').length;
+  var selection = window.getSelection();
+  if (!selection || !selection.rangeCount || !candidateEl.contains(selection.anchorNode)) {
+    return String(captionAssistCandidate && captionAssistCandidate.text || '').length;
   }
+  var range = selection.getRangeAt(0).cloneRange();
+  range.selectNodeContents(candidateEl);
+  range.setEnd(selection.anchorNode, selection.anchorOffset);
+  return range.toString().length;
+}
 
-  setStatus(
-    (alreadySelected ? 'Revising caption for ' : 'Selected ' + group + ': ' + term + '. Revising caption for ')
-    + group + ': ' + term + '...'
-  );
-  captionVisionResult = null;
-  captionVisionError = '';
-  repairCaptionAssistCandidate([{
-    group: group,
-    term: term,
-    note: String(finding.description || '').trim()
-  }]);
+function setCaptionVisionCaretIndex(index) {
+  var candidateEl = getCaptionVisionCandidateTextElement();
+  var target = Math.max(0, Number(index) || 0);
+  var walker = document.createTreeWalker(candidateEl, NodeFilter.SHOW_TEXT);
+  var node;
+  while ((node = walker.nextNode())) {
+    if (target <= node.nodeValue.length) {
+      var range = document.createRange();
+      range.setStart(node, target);
+      range.collapse(true);
+      var selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+    target -= node.nodeValue.length;
+  }
+}
+
+function setCaptionVisionCandidatePreview(text, active) {
+  var candidateEl = getCaptionVisionCandidateTextElement();
+  candidateEl.textContent = String(text || '');
+  candidateEl.classList.toggle('is-patch-preview', !!active);
+}
+
+function restoreCaptionVisionCandidatePreview() {
+  if (!captionAssistCandidate) return;
+  var candidateEl = getCaptionVisionCandidateTextElement();
+  var restoreCaret = captionVisionPreviewCaretIndex;
+  setCaptionVisionCandidatePreview(captionAssistCandidate.text, false);
+  if (restoreCaret !== null && document.activeElement === candidateEl) {
+    setCaptionVisionCaretIndex(restoreCaret);
+  }
+  captionVisionPreviewCaretIndex = null;
+}
+
+function captionVisionPatchLabel(finding) {
+  var action = String(finding && finding.action || '');
+  var sourceText = String(finding && finding.sourceText || '');
+  var replacementText = String(finding && finding.replacementText || '');
+  if (action === 'add') return '+ ' + replacementText;
+  if (action === 'replace') return sourceText + ' → ' + replacementText;
+  if (action === 'remove') return '− ' + sourceText;
+  return '';
+}
+
+function rejectCaptionVisionFinding(finding) {
+  [captionVisionResult, captionQaResult].forEach(function (result) {
+    if (!result || !Array.isArray(result.findings)) return;
+    result.findings = result.findings.filter(function (candidate) { return candidate !== finding; });
+  });
+  restoreCaptionVisionCandidatePreview();
+  syncCaptionVisionUi();
+}
+
+function applyCaptionVisionFinding(finding) {
+  if (!captionAssistCandidate) return;
+  var patch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
+  if (!patch) {
+    rejectCaptionVisionFinding(finding);
+    setStatus('Caption changed; this suggestion is no longer applicable.');
+    return;
+  }
+  var caretIndex = captionVisionPreviewCaretIndex !== null ? captionVisionPreviewCaretIndex : getCaptionVisionCaretIndex();
+  captionAssistCandidate.text = captionVisionApplyPatchToText(captionAssistCandidate.text, patch, caretIndex);
+  if (captionVisionResult) {
+    captionVisionResult.captionText = String(captionAssistCandidate.text || '');
+    captionVisionResult.findings = filterCaptionVisionFindings(
+      state.currentItem,
+      captionAssistCandidate.text,
+      captionVisionResult.findings
+    );
+  }
+  if (captionQaResult) {
+    captionQaResult.captionText = String(captionAssistCandidate.text || '');
+    captionQaResult.findings = filterCaptionVisionFindings(state.currentItem, captionAssistCandidate.text, captionQaResult.findings);
+  }
+  if (state && state.currentItem && captionAssistCandidate.mediaKey === state.currentItem.key) {
+    var liveRequest = buildCaptionAssistRequest(state.currentItem);
+    captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
+      captionAssistCandidate.mediaKey,
+      captionAssistCandidate.text,
+      liveRequest.assignments
+    );
+    captionAssistCandidate.omittedCorrections = getCaptionAssistOmittedCorrections(
+      captionAssistCandidate.mediaKey,
+      captionAssistCandidate.text,
+      liveRequest.assignments
+    );
+  }
+  if (isFocusedCaptionOpen()) resetFocusedCaptionUseArm();
+  rejectCaptionVisionFinding(finding);
+  syncCaptionAssistCandidateUi();
+  setStatus('Applied caption edit.');
 }
 
 function renderCaptionVisionFinding(finding) {
-  var row = document.createElement('div');
-  row.className = 'caption-vision-finding caption-vision-confidence-' + String(finding.confidence || 'low');
+  if (!captionAssistCandidate) return null;
+  var patch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
+  if (!patch) return null;
 
-  var copy = document.createElement('div');
-  copy.className = 'caption-vision-finding-copy';
-  var meta = document.createElement('div');
-  meta.className = 'caption-vision-finding-meta';
-  meta.textContent = String(finding.type || '') + ' · ' + String(finding.confidence || '');
-  var text = document.createElement('div');
-  text.className = 'caption-vision-finding-text';
-  text.textContent = String(finding.description || '');
-  copy.appendChild(meta);
-  copy.appendChild(text);
-  row.appendChild(copy);
+  var wrap = document.createElement('span');
+  wrap.className = 'caption-vision-patch';
 
-  if (finding.knownTag) {
-    var group = String(finding.knownTag.group || '');
-    var term = String(finding.knownTag.term || '');
-    var mediaKey = state && state.currentItem ? state.currentItem.key : '';
-    var selected = !!(mediaKey && isCaptionVisionKnownTagSelected(mediaKey, group, term));
-    var button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'caption-vision-tag-action';
-    button.textContent = selected ? 'Fix caption' : 'Apply + fix';
-    button.title = selected
-      ? ('Revise the caption to include ' + group + ': ' + term)
-      : ('Select ' + group + ': ' + term + ' and revise the caption');
-    button.addEventListener('click', function () {
-      applyCaptionVisionKnownTag(finding);
-    });
-    row.appendChild(button);
-  } else {
-    var novel = document.createElement('span');
-    novel.className = 'caption-vision-novel';
-    novel.textContent = 'Novel';
-    novel.title = 'No exact configured tag matched this observation';
-    row.appendChild(novel);
-  }
-  return row;
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'caption-vision-patch-action';
+  button.textContent = captionVisionPatchLabel(finding);
+  button.title = 'Preview this exact caption edit';
+  button.addEventListener('pointerdown', function (event) {
+    event.preventDefault();
+  });
+  button.addEventListener('mouseenter', function () {
+    var currentPatch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
+    if (!currentPatch) return;
+    captionVisionPreviewCaretIndex = getCaptionVisionCaretIndex();
+    setCaptionVisionCandidatePreview(
+      captionVisionApplyPatchToText(captionAssistCandidate.text, currentPatch, captionVisionPreviewCaretIndex),
+      true
+    );
+  });
+  button.addEventListener('mouseleave', restoreCaptionVisionCandidatePreview);
+  button.addEventListener('focus', function () {
+    var currentPatch = captionVisionValidatePatch(captionAssistCandidate.text, finding);
+    if (!currentPatch) return;
+    captionVisionPreviewCaretIndex = getCaptionVisionCaretIndex();
+    setCaptionVisionCandidatePreview(
+      captionVisionApplyPatchToText(captionAssistCandidate.text, currentPatch, captionVisionPreviewCaretIndex),
+      true
+    );
+  });
+  button.addEventListener('blur', restoreCaptionVisionCandidatePreview);
+  button.addEventListener('click', function () {
+    applyCaptionVisionFinding(finding);
+  });
+  wrap.appendChild(button);
+
+  var reject = document.createElement('button');
+  reject.type = 'button';
+  reject.className = 'caption-vision-patch-reject';
+  reject.textContent = '×';
+  reject.title = 'Reject this suggestion';
+  reject.setAttribute('aria-label', 'Reject ' + captionVisionPatchLabel(finding));
+  reject.addEventListener('click', function (event) {
+    event.stopPropagation();
+    rejectCaptionVisionFinding(finding);
+  });
+  wrap.appendChild(reject);
+  return wrap;
 }
 
 function syncCaptionVisionUi() {
@@ -381,7 +589,9 @@ function syncCaptionVisionUi() {
   var toggle = document.getElementById('editor-caption-vision-toggle');
   var status = document.getElementById('editor-caption-vision-status');
   var findings = document.getElementById('editor-caption-vision-findings');
-  if (!toggleWrap || !toggle || !status || !findings) return;
+  if (!toggleWrap || !toggle || !status || !findings) {
+    throw new Error('Caption Vision controls are missing.');
+  }
 
   var mediaItem = state && state.currentItem;
   var candidateVisible = !!(
@@ -393,61 +603,98 @@ function syncCaptionVisionUi() {
   var modelAvailable = !!captionVisionCapabilities.models.length;
   var supported = mediaSupported && modelAvailable;
 
-  toggleWrap.classList.toggle('hidden', !candidateVisible || !mediaSupported);
-  toggle.checked = !!captionVisionEnabled;
-  toggle.disabled = !modelAvailable;
-  toggleWrap.title = modelAvailable
-    ? 'Scan for incorrect or omitted visual details using the selected Vision model.'
-    : (captionVisionCapabilities.loaded ? 'No Vision model is available.' : 'Vision models are still loading.');
-  syncVisionImageCaptionActionUi();
-
   findings.innerHTML = '';
   findings.classList.add('hidden');
   status.classList.add('hidden');
   status.textContent = '';
 
-  if (!candidateVisible || !captionVisionEnabled) return;
+  var suppliedResultVisible = !!(
+    candidateVisible &&
+    captionVisionResult &&
+    captionVisionResult.mediaKey === mediaItem.key &&
+    captionVisionResult.captionText === String(captionAssistCandidate.text || '') &&
+    !captionVisionResult.requestFingerprint
+  );
+
+  // Vision checks are part of Caption Assist, not an optional checkbox.
+  toggleWrap.classList.add('hidden');
+  var recheck = document.getElementById('editor-caption-vision-recheck');
+  if (!recheck) throw new Error('Caption Vision recheck control is missing.');
+  recheck.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  var refreshSight = document.getElementById('editor-caption-refresh-sight');
+  if (!refreshSight) throw new Error('Per-item Sight refresh control is missing.');
+  refreshSight.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  var refreshMode = document.getElementById('editor-caption-refresh-sight-mode');
+  if (!refreshMode) throw new Error('Sight refresh mode control is missing.');
+  refreshMode.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  var details = document.getElementById('editor-caption-details');
+  var evidence = document.getElementById('editor-caption-evidence');
+  if (!details || !evidence) throw new Error('Caption Assist evidence disclosure is missing.');
+  details.classList.toggle('hidden', !candidateVisible);
+  if (candidateVisible && details.open) {
+    var request = buildCaptionAssistRequest(mediaItem);
+    evidence.textContent = JSON.stringify({
+      openSight: request.openSight,
+      contextSight: request.contextSight,
+      directorInputs: request,
+      captionCandidate: captionAssistCandidate.text,
+      visualCheck: captionVisionResult,
+      visualCheckError: captionVisionError
+    }, null, 2);
+  }
+
+  recheck.disabled = !!captionVisionActiveTask || !modelAvailable;
+  recheck.title = modelAvailable
+    ? 'Run a fresh visual check for this caption and item only.'
+    : 'Select an available Vision model to recheck this item.';
+  toggle.checked = !!captionVisionEnabled;
+  toggle.disabled = !modelAvailable;
+  toggleWrap.title = modelAvailable
+    ? 'Scan for incorrect or omitted visual details using the selected Vision model.'
+    : (captionVisionCapabilities.loaded ? 'No Vision model is available.' : 'Vision models are still loading.');
+
+  if (!candidateVisible) return;
   if (!modelAvailable) {
     status.textContent = captionVisionCapabilities.loaded
-      ? 'Vision enabled · no Vision model is currently available.'
-      : 'Vision enabled · loading Vision models…';
+      ? 'No Vision model is currently available.'
+      : 'Loading Vision models…';
     status.classList.remove('hidden');
-    return;
   }
-  if (!mediaSupported) return;
 
   if (captionVisionActiveTask) {
     status.textContent = isCaptionVisionVideo(mediaItem.fileName)
       ? 'Vision checking first video frame…'
       : 'Vision checking image…';
     status.classList.remove('hidden');
-    return;
-  }
-  if (captionVisionError) {
+  } else if (captionVisionError) {
     status.textContent = 'Vision check failed: ' + captionVisionError;
     status.classList.remove('hidden');
-    return;
   }
-  if (!captionVisionResult) {
-    status.textContent = 'Vision enabled · checks run automatically for each caption candidate.';
+  if (!captionVisionResult && !captionQaResult) {
+    if (!status.textContent) status.textContent = 'Fresh Context Sight informed this caption. Use Recheck Vision for a separate caption-to-image check.';
     status.classList.remove('hidden');
     return;
   }
-  if (!captionVisionResult.findings.length) {
-    status.textContent = 'Vision found no meaningful discrepancy.';
+  var combinedFindings = (captionQaResult && captionQaResult.findings || []).concat(captionVisionResult && captionVisionResult.findings || []);
+  if (!combinedFindings.length) {
+    status.textContent = suppliedResultVisible
+      ? 'No remaining actionable caption discrepancies.'
+      : 'Vision found no meaningful discrepancy.';
     status.classList.remove('hidden');
     return;
   }
 
-  captionVisionResult.findings.forEach(function (finding) {
-    findings.appendChild(renderCaptionVisionFinding(finding));
+  combinedFindings.forEach(function (finding) {
+    var pill = renderCaptionVisionFinding(finding);
+    if (pill) findings.appendChild(pill);
   });
-  findings.classList.remove('hidden');
+  if (findings.childNodes.length) findings.classList.remove('hidden');
 }
+
+window.setCaptionDiscrepancyFindingsForCandidate = setCaptionDiscrepancyFindingsForCandidate;
 
 function getVisionImageCaptionEls() {
   var els = {
-    actionBtn: document.getElementById('preview-vision-caption-btn'),
     modal: document.getElementById('vision-image-caption-modal'),
     model: document.getElementById('vision-image-caption-model'),
     loading: document.getElementById('vision-image-caption-loading'),
@@ -462,20 +709,6 @@ function getVisionImageCaptionEls() {
     if (!els[key]) throw new Error('Vision Caption UI is missing: ' + key);
   });
   return els;
-}
-
-function syncVisionImageCaptionActionUi() {
-  var btn = document.getElementById('preview-vision-caption-btn');
-  if (!btn) throw new Error('Vision Caption preview action is missing.');
-  var mediaItem = state && state.currentItem;
-  var focusedCaptionOpen = !!(window.focusedCaptionState && window.focusedCaptionState.open);
-  var supported = !!(
-    captionVisionCapabilities.models.length &&
-    mediaItem &&
-    isCaptionVisionSupportedMedia(mediaItem.fileName)
-  );
-  btn.classList.toggle('hidden', !supported || focusedCaptionOpen);
-  btn.disabled = !!visionImageCaptionState.pending;
 }
 
 function syncVisionImageCaptionModal() {
@@ -497,7 +730,6 @@ function syncVisionImageCaptionModal() {
     state.currentItem.key === visionImageCaptionState.mediaKey
   );
   els.cancelBtn.classList.toggle('hidden', !open || !visionImageCaptionState.pending);
-  syncVisionImageCaptionActionUi();
 }
 
 function cancelVisionImageCaptionRequest() {
@@ -706,14 +938,6 @@ function useVisionImageCaptionInEditor() {
 
 function wireVisionImageCaptionUi() {
   var els = getVisionImageCaptionEls();
-  if (!els.actionBtn.__visionImageCaptionBound) {
-    els.actionBtn.__visionImageCaptionBound = true;
-    els.actionBtn.addEventListener('click', function (event) {
-      event.preventDefault();
-      event.stopPropagation();
-      runVisionImageCaption();
-    });
-  }
   if (!els.closeBtn.__visionImageCaptionBound) {
     els.closeBtn.__visionImageCaptionBound = true;
     els.closeBtn.addEventListener('click', closeVisionImageCaption);
@@ -768,11 +992,9 @@ function setCaptionVisionEnabled(enabled) {
     if (isFocusedCaptionOpen()) setFocusedCaptionVisionSightEnabled(true);
     if (!captionAssistCandidate) return syncFocusedCaptionVisionPreference();
 
-    var tasks = [runCaptionVisionForCandidate(captionAssistCandidate)];
-    if (isFocusedCaptionOpen()) {
-      tasks.push(loadFocusedCaptionVisionPhrases());
-    }
-    return Promise.all(tasks).then(function () {
+    // The structured Vision check is the default inspection. Vision Extras is
+    // a separate pixel request and must not launch just from enabling the check.
+    return runCaptionVisionForCandidate(captionAssistCandidate).then(function () {
       return syncFocusedCaptionVisionPreference();
     });
   });
@@ -801,15 +1023,47 @@ function handleCaptionVisionModelChange() {
   }).then(function () {
     if (!isFocusedCaptionOpen() || !state || !state.currentItem) return false;
     return startFocusedCaptionPrefetch(state.currentItem.key).then(function (result) {
-      if (focusPhrasesEnabled && captionAssistCandidate) {
-        loadFocusedCaptionVisionPhrases();
-      }
+      // A model switch refreshes the structured check; it must not
+      // silently launch a second Vision Extras pixel request.
       return result;
     });
   });
 }
 
 function wireCaptionVisionUi() {
+  var details = document.getElementById('editor-caption-details');
+  if (!details) throw new Error('Caption Assist Details is missing.');
+  details.addEventListener('toggle', function () {
+    if (details.open) syncCaptionVisionUi();
+  });
+  var refreshSight = document.getElementById('editor-caption-refresh-sight');
+  if (!refreshSight) throw new Error('Per-item Sight refresh control is missing.');
+  if (!refreshSight.__sightRefreshBound) {
+    refreshSight.__sightRefreshBound = true;
+    refreshSight.addEventListener('click', function () {
+      if (!state.currentItem) return;
+      var item = state.currentItem;
+      refreshSight.disabled = true;
+      var mode = document.getElementById('editor-caption-refresh-sight-mode').value;
+      refreshSetIntelligenceItem(item, { open: mode !== 'context', context: mode !== 'open' }).catch(function (err) {
+        reportConsoleError('Item Sight refresh', err);
+        window.setStatus(String(err && err.message || err));
+      }).finally(function () {
+        refreshSight.disabled = false;
+      });
+    });
+  }
+  var recheck = document.getElementById('editor-caption-vision-recheck');
+  if (!recheck) throw new Error('Caption Vision recheck control is missing.');
+  if (!recheck.__captionVisionBound) {
+    recheck.__captionVisionBound = true;
+    recheck.addEventListener('click', function () {
+      if (!captionAssistCandidate) return;
+      runCaptionVisionForCandidate(captionAssistCandidate).catch(function (err) {
+        reportConsoleError('Caption Vision recheck', err);
+      });
+    });
+  }
   var toggle = document.getElementById('editor-caption-vision-toggle');
   if (!toggle) throw new Error('Caption Vision toggle is missing.');
   if (!toggle.__captionVisionBound) {
@@ -842,7 +1096,6 @@ window.captionVisionRequestFingerprint = captionVisionRequestFingerprint;
 window.adoptCaptionVisionPrefetch = adoptCaptionVisionPrefetch;
 window.isCaptionVisionSupportedMedia = isCaptionVisionSupportedMedia;
 window.getCaptionVisionModelId = getCaptionVisionModelId;
-window.syncVisionImageCaptionActionUi = syncVisionImageCaptionActionUi;
 window.syncVisionImageCaptionSelection = syncVisionImageCaptionSelection;
 window.runVisionImageCaption = runVisionImageCaption;
 window.requestVisionImageCaptionDescription = requestVisionImageCaptionDescription;

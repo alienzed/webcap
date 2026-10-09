@@ -1080,24 +1080,6 @@
                                         <span class="btn-glyph" aria-hidden="true">&#8594;</span>
                                         <span class="preview-header-btn-label">Skip</span>
                                     </button>
-                                    <button
-                                        id="preview-vision-caption-btn"
-                                        type="button"
-                                        class="review-captions-btn hidden"
-                                        title="Describe this image using the selected Vision model"
-                                        aria-label="Caption this image with Vision"
-                                    >
-                                        <span class="btn-glyph vision-caption-binoculars" aria-hidden="true">
-                                            <svg viewBox="0 0 24 24" focusable="false">
-                                                <path d="M8.5 5.5h-2L3.5 16a3 3 0 1 0 5.8 1.1L10 13h4l.7 4.1a3 3 0 1 0 5.8-1.1l-3-10.5h-2"></path>
-                                                <path d="M9 7.5h6"></path>
-                                                <path d="M8.8 11.5h6.4"></path>
-                                                <circle cx="6.5" cy="17" r="2.5"></circle>
-                                                <circle cx="17.5" cy="17" r="2.5"></circle>
-                                            </svg>
-                                        </span>
-                                        <span class="preview-header-btn-label">Caption Image</span>
-                                    </button>
                                 </div>
                             </div>
                             <div id="preview-actions" class="preview-actions hidden" aria-label="Preview actions">
@@ -1805,6 +1787,13 @@
                         </div>
                         <button id="editor-caption-candidate-dismiss" class="editor-caption-candidate-close" type="button" title="Dismiss candidate and stay on this item" aria-label="Dismiss candidate and stay on this item">&times;</button>
                     </div>
+                    <details id="editor-caption-details" style="margin: 0.3rem 0;">
+                        <summary title="Inspect the evidence used for this caption" style="cursor:pointer;font-size:0.85em;">ⓘ Details</summary>
+                        <pre id="editor-caption-evidence" style="max-height:16rem;overflow:auto;white-space:pre-wrap;font-size:0.8em;"></pre>
+                        <div id="editor-caption-details-actions"><select id="editor-caption-refresh-sight-mode" class="hidden" aria-label="Sight to refresh" title="Choose the saved Sight evidence to refresh for this item"><option value="both">Both Sights</option><option value="open">Open Sight</option><option value="context">Context Sight</option></select>
+                            <button id="editor-caption-refresh-sight" class="caption-vision-phrases-trigger hidden" type="button" title="Refresh Open Sight and Context Sight for this item only">Refresh Sight</button>
+                            <button id="editor-caption-vision-recheck" class="caption-vision-phrases-trigger hidden" type="button" title="Run a fresh visual caption check for this item only">Recheck vision</button></div>
+                    </details>
                     <div id="editor-caption-focus-loading" class="editor-caption-focus-loading hidden" role="status">
                         <span class="editor-caption-focus-spinner" aria-hidden="true"></span>
                         <strong id="editor-caption-focus-loading-text">Generating caption…</strong>
@@ -1821,7 +1810,7 @@
                                 <input id="editor-caption-vision-toggle" type="checkbox">
                                 <span>Vision</span>
                             </label>
-                            <button id="editor-caption-vision-phrases-btn" class="caption-vision-phrases-trigger hidden" type="button" title="Refresh Vision sight for this media">Refresh sight</button>
+                            <button id="editor-caption-vision-phrases-btn" class="caption-vision-phrases-trigger hidden" type="button" title="Ask Vision for additional short descriptive details">Find extras</button>
                         </div>
                         <div class="editor-caption-candidate-actions-right">
                             <button id="editor-caption-focus-prev" class="hidden" type="button">← Previous</button>

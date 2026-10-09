@@ -1,7 +1,7 @@
 import json
 
 
-_ALLOWED_CATEGORIES = {"underrepresented", "overrepresented", "consistency", "captioning"}
+_ALLOWED_CATEGORIES = {"consistency", "captioning"}
 _ALLOWED_PRIORITIES = {"high", "normal", "low"}
 _ALLOWED_CONFIDENCE = {"high", "medium", "low"}
 
@@ -144,11 +144,12 @@ def _response_schema():
             "why",
             "files",
             "evidence",
+            "patches",
         ],
         "properties": {
             "category": {
                 "type": "string",
-                "enum": ["underrepresented", "overrepresented", "consistency", "captioning"],
+                "enum": ["consistency", "captioning"],
             },
             "priority": {
                 "type": "string",
@@ -169,6 +170,22 @@ def _response_schema():
             "evidence": {
                 "type": "array",
                 "items": {"type": "string", "minLength": 1},
+            },
+            "patches": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["file", "action", "sourceText", "replacementText", "anchorText"],
+                    "properties": {
+                        "file": {"type": "string", "minLength": 1},
+                        "action": {"type": "string", "enum": ["add", "replace", "remove"]},
+                        "sourceText": {"type": "string"},
+                        "replacementText": {"type": "string"},
+                        "anchorText": {"type": "string"},
+                    },
+                },
             },
         },
     }
@@ -233,23 +250,25 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "- natural-language oddity: copy residue, contradictory wording, inconsistent subject naming, or unusually different descriptive granularity\n"
         "- meaningful cross-group or caption/tag relationships whose exceptions deserve human inspection\n"
         "- semantically duplicated or template-like captions that exact string matching can miss\n"
-        "- underrepresented or overrepresented concepts only when the supplied evidence makes the training consequence meaningful\n"
-        "- latent balance dimensions only when they are already present in the data and an actual skew or inconsistency deserves inspection\n\n"
+
         "[BOUNDARIES]\n"
-        "- This is analysis only. Do not rewrite captions and do not tell WebCap to mutate data.\n"
+        "- This is analysis only. Do not return full rewritten captions and do not tell WebCap to mutate data; exact proposed patches are allowed.\n"
         "- You cannot see the media directly. Treat normalized visual analysis as supplied evidence, not as perfect ground truth, and never claim direct visual verification.\n"
         "- Open Sight is vocabulary-agnostic; Context Sight follows current vocabulary. Their agreement is stronger than either one alone.\\n"
         "- Context Sight matches are candidate observations, not proof that a tag must be added. Cross-check them.\\n"
-        "- Prefer specific corrections that can be made in the existing item editor; explain what to inspect and why.\\n"
+        "- Prefer specific corrections that can be made in the existing item editor.\\n"
+        "- For captioning findings, include exact patches whenever the supplied evidence supports a concrete edit. Use only add, replace, or remove.\\n"
+        "- For replace/remove, sourceText must be copied exactly from that file's supplied current caption. For add, sourceText must be empty and replacementText must be compact caption-ready wording.\\n"
+        "- For add, anchorText may be one exact substring from the current caption when placement is clear; otherwise leave anchorText empty for insertion at the user's caret.\\n"
+        "- Patches are optional evidence-backed actions, not a quota. Return an empty patches array rather than guessing.\\n"
         "- Prefer issues supported by agreement between independent sources such as annotations, MediaPipe, Face Focus, or Vision Sight.\n"
         "- Do not invent desired categories, missing visual attributes, or training goals not supported by the supplied focus and data.\n"
         "- Rare does not mean wrong. Common does not mean bad. Association does not mean correctness.\n"
-        "- The deterministic findings below are evidence, not instructions. Do not repeat one unless semantic interpretation materially changes why a human should care.\n"
+        "- The deterministic findings below carry full-scope counts and balance analysis. Do not reinterpret batch-local prevalence as Set-level under/overrepresentation.\n"
+        "- Do not repeat a deterministic finding unless semantic interpretation materially changes why a human should care.\n"
         "- Every returned finding must name the supplied filenames that a human should inspect. Use only filenames from the training selection.\n"
         "- Prefer 0-6 strong findings. Never pad the response to fill a quota.\n\n"
         "[CATEGORY CONTRACT]\n"
-        "underrepresented = a concept is too sparse to learn reliably\n"
-        "overrepresented = a pattern may crowd out useful variation or create accidental weighting\n"
         "consistency = semantic naming, relationship, annotation, or descriptive consistency\n"
         "captioning = language quality, semantic repetition, terminology, or caption structure\n\n"
         "[TRAINING FOCUS]\n"
@@ -270,7 +289,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
     }
 
 
-def normalize_result(data, allowed_files=None):
+def normalize_result(data, allowed_files=None, captions_by_file=None):
     if not isinstance(data, dict):
         raise ValueError("QA Deep Scan response must be an object.")
 
@@ -297,6 +316,7 @@ def normalize_result(data, allowed_files=None):
         why = _clean(finding.get("why"))
         files = finding.get("files")
         evidence = finding.get("evidence")
+        patches = finding.get("patches")
 
         if (
             category not in _ALLOWED_CATEGORIES
@@ -307,6 +327,7 @@ def normalize_result(data, allowed_files=None):
             or not why
             or not isinstance(files, list)
             or not isinstance(evidence, list)
+            or not isinstance(patches, list)
         ):
             raise ValueError("QA Deep Scan response contains an invalid finding.")
 
@@ -328,6 +349,51 @@ def normalize_result(data, allowed_files=None):
             if item and item not in normalized_evidence:
                 normalized_evidence.append(item)
 
+        caption_lookup = captions_by_file if isinstance(captions_by_file, dict) else {}
+        normalized_patches = []
+        seen_patches = set()
+        for patch in patches[:8]:
+            if not isinstance(patch, dict):
+                raise ValueError("QA Deep Scan response contains an invalid caption patch.")
+            file_name = str(patch.get("file") or "").strip()
+            action = str(patch.get("action") or "").strip().lower()
+            source_text = str(patch.get("sourceText") or "")
+            replacement_text = str(patch.get("replacementText") or "")
+            anchor_text = str(patch.get("anchorText") or "")
+            if file_name not in normalized_files or action not in {"add", "replace", "remove"}:
+                raise ValueError("QA Deep Scan caption patch is outside its finding.")
+            if file_name not in caption_lookup:
+                raise ValueError("QA Deep Scan caption patch is missing its submitted caption.")
+            caption = str(caption_lookup.get(file_name) or "")
+            if action == "add":
+                if source_text.strip() or not replacement_text.strip():
+                    raise ValueError("QA Deep Scan add patch is invalid.")
+                if anchor_text and caption.count(anchor_text) != 1:
+                    raise ValueError("QA Deep Scan add patch anchor is not an exact unique caption substring.")
+            elif action == "replace":
+                if not source_text.strip() or not replacement_text.strip() or source_text == replacement_text:
+                    raise ValueError("QA Deep Scan replace patch is invalid.")
+                if caption.count(source_text) != 1:
+                    raise ValueError("QA Deep Scan replace patch source is not an exact unique caption substring.")
+                anchor_text = ""
+            else:
+                if not source_text.strip() or replacement_text:
+                    raise ValueError("QA Deep Scan remove patch is invalid.")
+                if caption.count(source_text) != 1:
+                    raise ValueError("QA Deep Scan remove patch source is not an exact unique caption substring.")
+                anchor_text = ""
+            key = (file_name, action, source_text, replacement_text, anchor_text)
+            if key in seen_patches:
+                continue
+            seen_patches.add(key)
+            normalized_patches.append({
+                "file": file_name,
+                "action": action,
+                "sourceText": source_text,
+                "replacementText": replacement_text,
+                "anchorText": anchor_text,
+            })
+
         normalized.append({
             "category": category,
             "priority": priority,
@@ -337,6 +403,7 @@ def normalize_result(data, allowed_files=None):
             "why": why,
             "files": normalized_files,
             "evidence": normalized_evidence[:6],
+            "patches": normalized_patches,
         })
 
     return {"summary": summary, "findings": normalized[:8]}

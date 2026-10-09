@@ -79,8 +79,11 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "ensureDuplicateCandidatesForCurrentFolder(false, scopeFiles)" in qa
     assert "getSelectionPoseSuggestedTags" in qa
     assert "qaSightSupportsTerm" in qa
-    assert "qaWorkbenchState.deterministicFindings.concat(ai)" in qa
-    assert "currentSignature !== signature" in qa
+    assert "qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.aiFindings)" in qa
+    assert "deepScanSessionToken" in qa
+    assert "qaCurrentItemSignatureMap" in qa
+    assert "qaPendingDeepScanItems" in qa
+    assert "qaReconcileAiFindingsToCurrentInputs" in qa
     assert "inputsChanged" in qa
     assert "qaWorkbenchState.deepScanInputSignature !== inputSignature" in qa
     assert "sourceLabel: 'AI · '" in qa
@@ -90,6 +93,18 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert '"operation": "qa_deep_scan"' in contract
     assert '"response_schema": _response_schema()' in contract
     assert "window.openAssistant({ mode: 'review-dataset' })" not in qa
+
+
+def test_progressive_qa_freezes_batch_identity_and_invalidates_context_changes():
+    qa = _read("tool/js/qa_workbench.js")
+
+    assert "var sessionToken = qaWorkbenchState.deepScanSessionToken;" in qa
+    assert "var sessionFolder = String(state.folder || '');" in qa
+    assert "var sessionScopeKey = qaBuildScopeKey(qaGetTrainingItems());" in qa
+    assert "qaInvalidateDeepScanSession('Deep QA stopped because its review context changed.');" in qa
+    assert "qaInvalidateDeepScanSession('Deep QA stopped because the review scope changed.');" in qa
+    assert "qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';" in qa
+    assert "qaWorkbenchState.deepScanJobId = '';" in qa
 
 
 def test_qa_isolated_styles_keep_large_editorial_typography():

@@ -79,19 +79,23 @@ def test_caption_vision_result_only_makes_exact_known_tags_actionable():
     result = caption_vision.normalize_caption_vision_result(json.dumps({
         "findings": [
             {
-                "description": "A circular connector is visible.",
-                "type": "omitted",
+                "action": "add",
+                "sourceText": "",
+                "replacementText": "metal ring",
+                "anchorText": "",
                 "confidence": "high",
                 "knownTag": {"group": "connector", "term": "METAL RING"},
             },
             {
-                "description": "A chain-like detail is visible.",
-                "type": "omitted",
+                "action": "add",
+                "sourceText": "",
+                "replacementText": "chain detail",
+                "anchorText": "",
                 "confidence": "medium",
                 "knownTag": {"group": "Connector", "term": "invented chain"},
             },
         ]
-    }), groups)
+    }), groups, caption_text="a bikini")
 
     assert result["findings"][0]["knownTag"] == {
         "group": "Connector",
@@ -103,10 +107,24 @@ def test_caption_vision_result_only_makes_exact_known_tags_actionable():
 def test_caption_vision_result_deduplicates_identical_findings():
     result = caption_vision.normalize_caption_vision_result(json.dumps({
         "findings": [
-            {"description": "A visible detail is missing.", "type": "omitted", "confidence": "high", "knownTag": None},
-            {"description": "A visible detail is missing.", "type": "omitted", "confidence": "high", "knownTag": None},
+            {
+                "action": "add",
+                "sourceText": "",
+                "replacementText": "braid",
+                "anchorText": "",
+                "confidence": "high",
+                "knownTag": None,
+            },
+            {
+                "action": "add",
+                "sourceText": "",
+                "replacementText": "braid",
+                "anchorText": "",
+                "confidence": "high",
+                "knownTag": None,
+            },
         ]
-    }), [])
+    }), [], caption_text="long hair")
 
     assert len(result["findings"]) == 1
 
@@ -166,6 +184,7 @@ def test_caption_vision_route_queues_normalized_multimodal_caption_job(monkeypat
     assert captured["contract"]["messages"][1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
     assert captured["context"]["runtimeOverrides"]["maxTokens"] == 320
     assert captured["context"]["visionGroups"][0]["group"] == "Connector"
+    assert captured["context"]["visionCaption"] == "a bikini"
 
 
 def test_standalone_vision_caption_route_queues_plain_multimodal_caption_job(monkeypatch):
@@ -311,10 +330,10 @@ def test_vision_caption_extras_route_queues_structured_multimodal_job(monkeypatc
 def test_caption_vision_prompt_verifies_before_reporting_and_accepts_empty_success():
     from tool.server.caption_vision import CAPTION_VISION_SYSTEM_PROMPT, build_caption_vision_messages
 
-    assert "check both the image and the current caption before reporting it" in CAPTION_VISION_SYSTEM_PROMPT
-    assert "Treat semantically equivalent wording as present" in CAPTION_VISION_SYSTEM_PROMPT
-    assert "Use each annotation group as semantic context" in CAPTION_VISION_SYSTEM_PROMPT
-    assert "An empty findings list is a successful result" in CAPTION_VISION_SYSTEM_PROMPT
+    assert "return only exact, actionable caption edits" in CAPTION_VISION_SYSTEM_PROMPT
+    assert "Treat semantically equivalent wording as already present" in CAPTION_VISION_SYSTEM_PROMPT
+    assert "Use annotation groups as semantic context" in CAPTION_VISION_SYSTEM_PROMPT
+    assert "An empty findings list is correct" in CAPTION_VISION_SYSTEM_PROMPT
 
     messages, _ = build_caption_vision_messages(
         "a blue floral bikini with crossover-straps and a v-front bottom",

@@ -197,6 +197,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             result["vision"] = normalize_caption_vision_result(
                 llm_result["text"],
                 context.get("visionGroups"),
+                caption_text=context.get("visionCaption") or "",
             )
         if client == "caption" and operation == "vision_caption_extras":
             from .caption_vision import normalize_vision_caption_extras_result
@@ -238,6 +239,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "analysis": normalize_result(
                 llm_result.get("data"),
                 allowed_files=(frozen_contract or {}).get("source_files") or [],
+                captions_by_file=context.get("captionsByFile") or {},
             ),
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),

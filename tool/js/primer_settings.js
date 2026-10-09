@@ -155,7 +155,7 @@ function useCaptionAssistCandidate() {
   }
 
   cancelEditorAutosaveForCaption(state.folder, mediaItem.fileName);
-  var unchangedReview = isFocusedCaptionReviewMode() && nextCaption === String(mediaItem.caption || '');
+  var unchangedReview = nextCaption === String(mediaItem.caption || '');
   return cancelCurrentCaptionVision().then(function () {
     if (unchangedReview) return true;
     return saveCaptionDirect(state.folder, mediaItem.fileName, nextCaption, mediaItem.key, {
@@ -431,89 +431,10 @@ function syncFocusedCaptionVisionPhrasesUi() {
   var row = document.getElementById('editor-caption-vision-phrases');
   var trigger = document.getElementById('editor-caption-vision-phrases-btn');
   if (!row || !trigger) throw new Error('Focus Caption Vision extras controls are missing.');
-
-  var focusOpen = isFocusedCaptionOpen();
-  var mediaKey = state && state.currentItem && state.currentItem.key;
-  var candidateReady = !!(
-    focusOpen &&
-    captionAssistCandidate &&
-    mediaKey &&
-    state.currentItem &&
-    isCaptionVisionSupportedMedia(state.currentItem.fileName) &&
-    captionAssistCandidate.mediaKey === mediaKey
-  );
-  trigger.classList.toggle('hidden', !candidateReady);
-  trigger.classList.toggle('is-pending', !!focusedCaptionVisionPhrases.pending);
-  trigger.disabled = !candidateReady || !!focusedCaptionVisionPhrases.pending;
-  trigger.textContent = focusedCaptionVisionPhrases.pending ? 'Loading extras…' : 'Refresh extras';
-
   row.innerHTML = '';
-  if (!candidateReady) {
-    row.classList.add('hidden');
-    return;
-  }
-
-  var label = document.createElement('div');
-  label.className = 'caption-vision-sight-label';
-  label.textContent = 'Vision extras';
-  row.appendChild(label);
-
-  if (focusedCaptionVisionPhrases.pending) {
-    var pending = document.createElement('div');
-    pending.className = 'caption-vision-description';
-    pending.textContent = 'Reading the media…';
-    row.appendChild(pending);
-    row.classList.remove('hidden');
-    return;
-  }
-
-  if (focusedCaptionVisionPhrases.error) {
-    var error = document.createElement('div');
-    error.className = 'caption-vision-description caption-vision-description-error';
-    error.textContent = 'Vision extras failed: ' + focusedCaptionVisionPhrases.error;
-    row.appendChild(error);
-    row.classList.remove('hidden');
-    return;
-  }
-
-  var matching = focusedCaptionVisionPhrases.mediaKey === mediaKey;
-  var phrases = matching ? focusedCaptionVisionPhrases.phrases : [];
-
-  var chips = document.createElement('div');
-  chips.className = 'caption-vision-phrase-list';
-  phrases.forEach(function (phrase) {
-    var chip = document.createElement('span');
-    chip.className = 'caption-vision-phrase';
-
-    var insertBtn = document.createElement('button');
-    insertBtn.type = 'button';
-    insertBtn.className = 'caption-vision-phrase-insert';
-    insertBtn.textContent = phrase;
-    insertBtn.title = 'Insert this phrase at the caption cursor';
-    insertBtn.addEventListener('pointerdown', function (event) {
-      event.preventDefault();
-    });
-    insertBtn.addEventListener('click', function () {
-      insertFocusedCaptionVisionPhrase(phrase);
-    });
-    chip.appendChild(insertBtn);
-
-    var blendBtn = document.createElement('button');
-    blendBtn.type = 'button';
-    blendBtn.className = 'caption-vision-phrase-blend';
-    blendBtn.textContent = 'Blend';
-    blendBtn.title = 'Ask Caption Assist to blend this visual detail into the candidate';
-    blendBtn.addEventListener('pointerdown', function (event) {
-      event.preventDefault();
-    });
-    blendBtn.addEventListener('click', function () {
-      blendFocusedCaptionVisionPhrase(phrase);
-    });
-    chip.appendChild(blendBtn);
-    chips.appendChild(chip);
-  });
-  if (phrases.length) row.appendChild(chips);
-  row.classList.toggle('hidden', !phrases.length);
+  row.classList.add('hidden');
+  trigger.classList.add('hidden');
+  trigger.disabled = true;
 }
 
 function syncCaptionAssistCandidateUi() {
@@ -957,7 +878,9 @@ function buildCaptionAssistRequest(mediaItem) {
     preferredCaptionSequence: getPreferredCaptionSequence(),
     template: primer.template,
     renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
-    draft: getCaptionAssistDraftForMediaItem(mediaItem)
+    draft: getCaptionAssistDraftForMediaItem(mediaItem),
+    openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null,
+    contextSight: mediaItem.metadata && mediaItem.metadata.vision_vocabulary_sight || null
   };
 }
 
@@ -1232,7 +1155,42 @@ function blendFocusedCaptionVisionPhrase(phrase) {
   });
 }
 
+var captionAssistSightPreparation = false;
 function runCaptionAssist() {
+  if (captionAssistSightPreparation) {
+    setStatus('Caption Assist is preparing Sight for an item.');
+    return Promise.resolve(false);
+  }
+  var item = getPrimerResetCurrentMediaItem();
+  if (!item) return Promise.resolve(false);
+  var sourceKey = item.key;
+  var startedFocused = isFocusedCaptionOpen();
+  if (!getDirectorModelPreference('webcap.director.model')) {
+    setStatus('Select a Director model before using Caption Assist.');
+    return Promise.resolve(false);
+  }
+  captionAssistSightPreparation = true;
+  setStatus('Caption Assist: preparing visual evidence…');
+  return loadCaptionVisionCapabilities().then(function () {
+    if (!state.currentItem || state.currentItem.key !== sourceKey || startedFocused !== isFocusedCaptionOpen()) return false;
+    return refreshSetIntelligenceItem(item, {
+      open: 'missing',
+      context: true
+    });
+  }).then(function (prepared) {
+    if (prepared === false) return false;
+    if (!state.currentItem || state.currentItem.key !== sourceKey || startedFocused !== isFocusedCaptionOpen()) return false;
+    return runCaptionAssistAfterSight();
+  }).catch(function (err) {
+    reportConsoleError('Caption Assist Sight', err);
+    setStatus('Caption Assist could not prepare Sight: ' + String(err && err.message || err));
+    return false;
+  }).finally(function () {
+    captionAssistSightPreparation = false;
+  });
+}
+
+function runCaptionAssistAfterSight() {
   var mediaItem = getPrimerResetCurrentMediaItem();
   if (!mediaItem) {
     setStatus('Select a media item first.');
@@ -1283,16 +1241,11 @@ function runCaptionAssist() {
         ? 'Caption Assist candidate failed annotation validation.'
         : 'AI caption candidate ready.'
     );
-    if (captionVisionEnabled) {
-      maybeRunCaptionVisionForCandidate(candidate);
-    }
-    if (isFocusedCaptionOpen()) {
-      if (captionVisionEnabled) {
-        setFocusedCaptionVisionSightEnabled(true);
-        loadFocusedCaptionVisionPhrases();
-      }
-      startFocusedCaptionPrefetch(sourceMediaKey);
-    }
+    // The current item's fresh Context Sight preceded this Director result.
+    // A second pixel read is only requested by the explicit Recheck Vision action.
+    // The item pipeline has already obtained fresh Context Sight. Do not
+    // enqueue an unrelated Vision Extras read or speculative next-item LLM.
+
     return true;
   }).catch(function (err) {
     if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;

@@ -5,12 +5,14 @@ var focusedCaptionState = {
   itemIndex: 0,
   itemKey: '',
   mode: 'caption',
+  discrepanciesByMediaKey: {},
+  discrepancySourceLabel: '',
   requestToken: 0,
   useArmed: false,
   useArmedText: ''
 };
 
-var focusedCaptionPrefetch = null; // one-deep speculative caption + optional vision assessment/phrases
+var focusedCaptionPrefetch = null; // one-deep speculative caption + optional shared Caption Vision assessment
 var focusedCaptionVisionPhrases = {
   enabled: false,
   mediaKey: '',
@@ -31,7 +33,7 @@ function isFocusedCaptionReviewMode() {
 }
 
 function focusedCaptionModeLabel() {
-  return focusedCaptionState.mode === 'review' ? 'Focus Review' : 'Focus Caption';
+  return 'Caption Assist';
 }
 
 function resetFocusedCaptionUseArm() {
@@ -276,7 +278,8 @@ function loadFocusedCaptionVisionPhrases() {
   return task.promise.then(function (result) {
     if (!result || !focusedCaptionState.open || !state.currentItem || state.currentItem.key !== mediaItem.key) return false;
     setFocusedCaptionVisionPhraseResult(result);
-    return syncFocusedCaptionVisionPhrasePrefetch().then(function () { return true; });
+    // Extras are explicitly requested for this item, not the next item.
+    return true;
   }).catch(function (err) {
     if (!task.cancelled && focusedCaptionState.open && state.currentItem && state.currentItem.key === mediaItem.key) {
       focusedCaptionVisionPhrases.pending = false;
@@ -343,10 +346,16 @@ function presentFocusedReviewCandidate(mediaItem) {
       : 'Caption ready to review.'
   );
 
-  if (captionVisionEnabled) {
-    maybeRunCaptionVisionForCandidate(candidate);
-    loadFocusedCaptionVisionPhrases();
+  var suppliedFindings = focusedCaptionState.discrepanciesByMediaKey[candidate.mediaKey] || [];
+  if (suppliedFindings.length) {
+    setCaptionDiscrepancyFindingsForCandidate(
+      candidate,
+      suppliedFindings,
+      focusedCaptionState.discrepancySourceLabel || 'QA'
+    );
   }
+  // QA suggestions and the fresh item-level visual check are complementary.
+  if (captionVisionEnabled) maybeRunCaptionVisionForCandidate(candidate);
   startFocusedCaptionPrefetch(candidate.mediaKey);
   return Promise.resolve(true);
 }
@@ -382,9 +391,6 @@ function cancelFocusedCaptionPrefetch() {
   }
   if (prefetch.visionTask && !prefetch.visionTask.result) {
     cancellations.push(cancelCaptionVisionTask(prefetch.visionTask, 'Focus Caption Vision'));
-  }
-  if (prefetch.phraseTask && !prefetch.phraseTask.result) {
-    cancellations.push(cancelFocusedCaptionVisionPhraseTask(prefetch.phraseTask, 'Focus Caption Vision extras'));
   }
   if (!cancellations.length) return Promise.resolve(true);
   return Promise.all(cancellations).then(function () { return true; });
@@ -437,73 +443,9 @@ function syncFocusedCaptionVisionPreference() {
   return beginFocusedCaptionPrefetchVision(prefetch, mediaItem, prefetch.candidate);
 }
 
-function startFocusedCaptionPrefetch(sourceMediaKey) {
-  if (!focusedCaptionState.open) return Promise.resolve(false);
-  if (String(focusedCaptionState.itemKey || '') !== String(sourceMediaKey || '')) return Promise.resolve(false);
-
-  var target = getNextFocusedCaptionTarget(focusedCaptionState.itemIndex);
-  if (!target) return cancelFocusedCaptionPrefetch();
-
-  var request = buildCaptionAssistRequest(target.item);
-  var fingerprint = captionAssistRequestFingerprint(target.item, request);
-  if (
-    focusedCaptionPrefetch &&
-    focusedCaptionPrefetch.itemKey === target.itemKey &&
-    focusedCaptionPrefetch.fingerprint === fingerprint
-  ) {
-    return focusedCaptionPrefetch.promise || Promise.resolve(!!focusedCaptionPrefetch.candidate);
-  }
-
-  return cancelFocusedCaptionPrefetch().then(function () {
-    if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== String(sourceMediaKey || '')) {
-      return false;
-    }
-    var prefetch = {
-      itemKey: target.itemKey,
-      index: target.index,
-      fingerprint: fingerprint,
-      jobId: '',
-      promise: null,
-      candidate: null,
-      visionTask: null,
-      phraseTask: null,
-      discarded: false
-    };
-    focusedCaptionPrefetch = prefetch;
-
-    if (isFocusedCaptionReviewMode()) {
-      prefetch.candidate = buildFocusedReviewCandidate(target.item);
-      prefetch.promise = Promise.resolve(prefetch.candidate);
-      if (captionVisionEnabled) beginFocusedCaptionPrefetchVision(prefetch, target.item, prefetch.candidate);
-      if (focusedCaptionVisionPhrases.enabled) beginFocusedCaptionPrefetchPhrases(prefetch, target.item);
-      return prefetch.promise;
-    }
-
-    if (!request.model) {
-      focusedCaptionPrefetch = null;
-      return false;
-    }
-    prefetch.promise = requestCaptionAssistCandidate(target.item, request, {
-      onJob: function (job) {
-        prefetch.jobId = String(job.jobId || '');
-        if (prefetch.discarded) return cancelCaptionAssistJob(prefetch.jobId);
-        return null;
-      }
-    }).then(function (candidate) {
-      if (prefetch.discarded || focusedCaptionPrefetch !== prefetch) return null;
-      prefetch.candidate = candidate;
-      if (captionVisionEnabled) beginFocusedCaptionPrefetchVision(prefetch, target.item, candidate);
-      if (focusedCaptionVisionPhrases.enabled) beginFocusedCaptionPrefetchPhrases(prefetch, target.item);
-      return candidate;
-    }).catch(function (err) {
-      if (!prefetch.discarded && focusedCaptionPrefetch === prefetch) {
-        focusedCaptionPrefetch = null;
-        reportConsoleError('Focus Caption', err);
-      }
-      return null;
-    });
-    return prefetch.promise;
-  });
+function startFocusedCaptionPrefetch() {
+  // Sight must be prepared before the Director, so speculative candidates are invalid.
+  return cancelFocusedCaptionPrefetch();
 }
 
 function useFocusedCaptionPrefetchForCurrentItem() {
@@ -538,29 +480,6 @@ function useFocusedCaptionPrefetchForCurrentItem() {
     focusedCaptionPrefetch = null;
     candidate.missingGroups = getCaptionAssistMissingGroups(candidate.mediaKey);
     captionAssistCandidate = candidate;
-    clearFocusedCaptionVisionPhrases({ keepEnabled: true });
-    if (focusedCaptionVisionPhrases.enabled && adoptedPrefetch.phraseTask) {
-      var phraseTask = adoptedPrefetch.phraseTask;
-      focusedCaptionVisionPhrases.mediaKey = candidate.mediaKey;
-      focusedCaptionVisionPhrases.pending = !phraseTask.result;
-      focusedCaptionVisionPhrases.task = phraseTask;
-      if (phraseTask.result) {
-        setFocusedCaptionVisionPhraseResult(phraseTask.result);
-      } else {
-        phraseTask.promise.then(function (result) {
-          if (
-            result &&
-            focusedCaptionState.open &&
-            state.currentItem &&
-            state.currentItem.key === candidate.mediaKey
-          ) {
-            setFocusedCaptionVisionPhraseResult(result);
-          }
-        }).catch(function (err) {
-          if (!phraseTask.cancelled) reportConsoleError('Focus Caption Vision extras', err);
-        });
-      }
-    }
     syncCaptionAssistCandidateUi();
     setStatus(
       isFocusedCaptionReviewMode()
@@ -571,6 +490,16 @@ function useFocusedCaptionPrefetchForCurrentItem() {
           ? 'Caption Assist candidate failed annotation validation.'
           : 'AI caption candidate ready.')
     );
+    var suppliedFindings = isFocusedCaptionReviewMode()
+      ? (focusedCaptionState.discrepanciesByMediaKey[candidate.mediaKey] || [])
+      : [];
+    if (suppliedFindings.length) {
+      setCaptionDiscrepancyFindingsForCandidate(
+        candidate,
+        suppliedFindings,
+        focusedCaptionState.discrepancySourceLabel || 'QA'
+      );
+    }
     if (captionVisionEnabled) {
       adoptCaptionVisionPrefetch(adoptedPrefetch, candidate).then(function () {
         if (isFocusedCaptionOpen() && state.currentItem && state.currentItem.key === candidate.mediaKey) {
@@ -598,7 +527,6 @@ function useFocusedCaptionPrefetchForCurrentItem() {
 }
 
 function getFocusedCaptionEntryKeys(targetMediaKey, mode) {
-  var reviewMode = mode === 'review';
   var allItems = getFilteredMediaItems(false).filter(function (item) {
     return !!(item && item.key);
   });
@@ -610,9 +538,7 @@ function getFocusedCaptionEntryKeys(targetMediaKey, mode) {
     ? allItems.slice(targetIndex).concat(allItems.slice(0, targetIndex))
     : allItems;
 
-  return ordered.filter(function (item) {
-    return !reviewMode || !!String(item.caption || '').trim();
-  }).map(function (item) {
+  return ordered.map(function (item) {
     return item.key;
   });
 }
@@ -641,8 +567,10 @@ function syncFocusedCaptionControls() {
     return;
   }
 
-  startBtn.classList.toggle('hidden', !hasItem || annotationOpen || (focusedCaptionState.open && reviewMode));
-  reviewBtn.classList.toggle('hidden', !hasItem || annotationOpen || (focusedCaptionState.open && !reviewMode));
+  // One progressive Caption Assist entry point. Keep the legacy review
+  // control wired for existing callers, but do not show a competing button.
+  startBtn.classList.toggle('hidden', !hasItem || annotationOpen);
+  reviewBtn.classList.add('hidden');
 
   startBtn.classList.toggle('active', focusedCaptionState.open && !reviewMode);
   reviewBtn.classList.toggle('active', focusedCaptionState.open && reviewMode);
@@ -650,25 +578,24 @@ function syncFocusedCaptionControls() {
   reviewBtn.setAttribute('aria-pressed', focusedCaptionState.open && reviewMode ? 'true' : 'false');
 
   if (!focusedCaptionState.open) {
-    startBtn.setAttribute('aria-label', 'Start Focus Caption');
-    startBtn.title = 'Focus Caption: generate and review AI caption candidates across the current visible items';
+    startBtn.setAttribute('aria-label', 'Start Caption Assist');
+    startBtn.title = 'Caption Assist: use Open Sight, fresh Context Sight, and the Director for each item';
     if (startGlyphEl) startGlyphEl.textContent = '\u2728';
-    if (startLabelEl) startLabelEl.textContent = 'Focus Caption';
+    if (startLabelEl) startLabelEl.textContent = 'Caption Assist';
 
-    reviewBtn.setAttribute('aria-label', 'Start Focus Review');
-    reviewBtn.title = 'Focus Review: inspect existing saved captions progressively without a full Set scan';
+    reviewBtn.setAttribute('aria-label', 'Start Caption Assist review');
+    reviewBtn.title = 'Caption Assist · Review: check saved captions progressively, including QA findings';
     if (reviewGlyphEl) reviewGlyphEl.textContent = '\u2713';
-    if (reviewLabelEl) reviewLabelEl.textContent = 'Focus Review';
+    if (reviewLabelEl) reviewLabelEl.textContent = 'Review Captions';
 
     skipBtn.classList.add('hidden');
     skipBtn.disabled = false;
-    syncVisionImageCaptionActionUi();
     return;
   }
 
-  var activeBtn = reviewMode ? reviewBtn : startBtn;
-  var activeLabel = reviewMode ? reviewLabelEl : startLabelEl;
-  var activeGlyph = reviewMode ? reviewGlyphEl : startGlyphEl;
+  var activeBtn = startBtn;
+  var activeLabel = startLabelEl;
+  var activeGlyph = startGlyphEl;
   activeBtn.classList.remove('hidden');
   activeBtn.setAttribute('aria-label', 'Exit ' + focusedCaptionModeLabel());
   activeBtn.title = 'Exit ' + focusedCaptionModeLabel() + ' (Esc)';
@@ -684,7 +611,6 @@ function syncFocusedCaptionControls() {
     : 'Next Focus Caption item (Right/Down/S)';
   var skipLabel = skipBtn.querySelector('.preview-header-btn-label');
   if (skipLabel) skipLabel.textContent = reviewMode ? 'Skip' : 'Next';
-  syncVisionImageCaptionActionUi();
 }
 
 function syncFocusedCaptionAfterAssist(sourceMediaKey) {
@@ -713,6 +639,8 @@ function stopFocusedCaption(message, options) {
   focusedCaptionState.itemIndex = 0;
   focusedCaptionState.itemKey = '';
   focusedCaptionState.mode = 'caption';
+  focusedCaptionState.discrepanciesByMediaKey = {};
+  focusedCaptionState.discrepancySourceLabel = '';
   captionAssistPendingJobId = '';
   if (pendingJobId && pendingJobId !== 'submitting' && pendingJobId !== 'prefetch') {
     cancelCaptionAssistJob(pendingJobId).catch(function (err) {
@@ -754,7 +682,6 @@ function prepareFocusedCaptionCurrentItem() {
   }
   return useFocusedCaptionPrefetchForCurrentItem().then(function (usedPrefetch) {
     if (usedPrefetch) return true;
-    if (isFocusedCaptionReviewMode()) return presentFocusedReviewCandidate(state.currentItem);
     return runCaptionAssist();
   });
 }
@@ -856,29 +783,18 @@ function skipFocusedCaptionItem() {
 
 function regenerateFocusedCaption() {
   if (!focusedCaptionState.open) return Promise.resolve(false);
-  if (isFocusedCaptionReviewMode()) {
-    var reviewItem = state && state.currentItem;
-    var reviewRequest = reviewItem ? buildCaptionAssistRequest(reviewItem) : null;
-    if (!reviewRequest || !reviewRequest.model) {
-      setStatus('Select a Director model before generating a rewritten review caption.');
-      return Promise.resolve(false);
-    }
-  }
   var mediaKey = String(focusedCaptionState.itemKey || '');
   return cancelFocusedCaptionCurrentRequest().then(function () {
     return cancelFocusedCaptionPrefetch();
   }).then(function () {
     if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== mediaKey) return false;
     clearCaptionAssistCandidate();
-    if (isFocusedCaptionReviewMode()) {
-      setStatus('Generating a rewritten caption for this review item…');
-      return runCaptionAssist();
-    }
     return prepareFocusedCaptionCurrentItem();
   });
 }
 
-function startFocusedCaption(targetMediaKey, mode) {
+function startFocusedCaption(targetMediaKey, mode, options) {
+  var opts = options || {};
   if (isCaptionAssistRunning()) {
     setStatus('Finish the current Caption Assist request before starting another focused caption workflow.');
     return;
@@ -887,7 +803,7 @@ function startFocusedCaption(targetMediaKey, mode) {
     stopFocusedAnnotation();
   }
 
-  var nextMode = mode === 'review' ? 'review' : 'caption';
+  var nextMode = 'caption';
   var itemKeys = getFocusedCaptionEntryKeys(targetMediaKey, nextMode);
   if (!itemKeys.length) {
     setStatus(nextMode === 'review'
@@ -898,7 +814,9 @@ function startFocusedCaption(targetMediaKey, mode) {
 
   focusedCaptionState.open = true;
   focusedCaptionState.mode = nextMode;
-  focusedCaptionVisionPhrases.enabled = !!captionVisionEnabled;
+  focusedCaptionState.discrepanciesByMediaKey = {};
+  focusedCaptionState.discrepancySourceLabel = '';
+  focusedCaptionVisionPhrases.enabled = false;
   focusedCaptionState.folder = String((state && state.folder) || '');
   loadCaptionVisionCapabilities();
   focusedCaptionState.itemKeys = itemKeys;
@@ -913,7 +831,8 @@ function startFocusedCaption(targetMediaKey, mode) {
 }
 
 function startFocusedReview(targetMediaKey) {
-  startFocusedCaption(targetMediaKey, 'review');
+  // QA hands off the item, not historical findings; Caption Assist starts fresh.
+  startFocusedCaption(targetMediaKey, 'caption');
 }
 
 function startFocusedCaptionForMediaItem(mediaItem) {
@@ -948,17 +867,6 @@ function wireFocusedCaption() {
       startFocusedCaption((state.currentItem && state.currentItem.key) || '');
     });
   }
-  if (!reviewBtn.__focusedCaptionReviewBound) {
-    reviewBtn.__focusedCaptionReviewBound = true;
-    reviewBtn.addEventListener('click', function () {
-      if (isFocusedCaptionReviewMode()) {
-        if (!stopFocusedCaption('Focus Review ended.')) return;
-        renderFileList();
-        return;
-      }
-      startFocusedReview((state.currentItem && state.currentItem.key) || '');
-    });
-  }
   if (!ui.previewFocusCaptionSkipBtnEl.__focusedCaptionBound) {
     ui.previewFocusCaptionSkipBtnEl.__focusedCaptionBound = true;
     ui.previewFocusCaptionSkipBtnEl.addEventListener('click', function () {
@@ -969,7 +877,7 @@ function wireFocusedCaption() {
     document.__focusedCaptionKeyboardBound = true;
     document.addEventListener('keydown', function (event) {
       if (!focusedCaptionState.open || !event || event.defaultPrevented || event.repeat) return;
-      if (typeof isEditableElement === 'function' && isEditableElement(document.activeElement)) return;
+      if (isEditableElement(document.activeElement)) return;
       var key = String(event.key || '');
       var lower = key.toLowerCase();
       if (key === 'Escape') {

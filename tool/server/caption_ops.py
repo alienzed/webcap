@@ -111,12 +111,12 @@ def serve_media_file(folder: str, media_name: str):
 
 CAPTION_ASSIST_SYSTEM_PROMPT = (
     "You write concise, information-dense natural-language training captions for media dataset items. "
-    "The user's selected annotation tags are authoritative factual constraints. Represent every selected tag faithfully "
+    "The user's selected annotation tags are existing evidence that may be incomplete. Represent supported tags faithfully "
     "while combining redundant wording naturally. Prefer compact visual phrases over prose padding: do not add phrases "
     "such as 'the photo shows', 'can be seen', or 'the photo was taken' when they add no visual fact. "
     "The existing draft may guide wording and may contain useful details, but it must never override selected tags. "
     "Do not invent identity, demographic traits, colors, objects, actions, setting details, camera properties, mood, "
-    "or other visual facts that are not present in the selected annotations, required phrase, or draft, apart from an "
+    "or other visual facts absent from Open Sight, Context Sight, selected annotations, required phrase, or draft, apart from an "
     "explicit subject description authored in captionTemplate. If a required phrase is provided, include it verbatim "
     "exactly once. captionTemplate and renderedPrimer are reference material for subject wording, vocabulary, affixes, "
     "and resolved tag meaning; they do not define caption order. The order of groupedAnnotations also does not define "
@@ -143,6 +143,8 @@ def build_caption_assist_messages(
     rendered_primer="",
     preferred_sequence="",
     corrections=None,
+    open_sight=None,
+    context_sight=None,
 ):
     grouped = []
     seen_grouped = set()
@@ -195,7 +197,7 @@ def build_caption_assist_messages(
             "term": term,
             "note": note,
         })
-    if not grouped and not other_tags and not required_phrase and not draft:
+    if not grouped and not other_tags and not required_phrase and not draft and not open_sight and not context_sight:
         raise ValueError("Caption Assist needs selected annotations, a required phrase, or an existing draft.")
 
     payload = {
@@ -207,6 +209,8 @@ def build_caption_assist_messages(
         "renderedPrimer": str(rendered_primer or "").strip(),
         "preferredCaptionSequence": preferred_sequence,
         "corrections": repair_corrections,
+        "openSight": open_sight if isinstance(open_sight, dict) else None,
+        "contextSight": context_sight if isinstance(context_sight, dict) else None,
     }
     if preferred_sequence:
         ordering = (
@@ -229,7 +233,7 @@ def build_caption_assist_messages(
         )
     user_prompt = (
         "Write the caption using these WebCap inputs. Use annotation group names as semantic context for interpreting "
-        "selected values, and express those values as natural caption language. "
+        "selected values, and express those values as natural caption language. Treat fresh Context Sight and reusable Open Sight as visual evidence; do not invent details absent from evidence. "
         + repair_instruction
         + ordering +
         "Do not use annotation group order or captionTemplate placeholder order as caption order.\n\n"

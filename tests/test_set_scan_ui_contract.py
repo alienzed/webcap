@@ -39,9 +39,8 @@ def test_set_intelligence_requires_llm_observation_and_interpretation():
 
     assert "loadCaptionVisionCapabilities()" in scan
     assert "getCaptionVisionModelId()" in scan
-    assert "getDirectorModelPreference()" in scan
     assert "Select an available Vision model before running Set Intelligence." in scan
-    assert "Select a Director model before running Set Intelligence." in scan
+    assert "Select a Director model before running Set Intelligence." not in scan
     assert "operation: 'scan_sight'" in scan
     assert "operation: 'save_sight'" in scan
     assert "operation: 'scan_vocabulary_sight'" in scan

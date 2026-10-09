@@ -658,6 +658,8 @@ def caption_assist_route():
             rendered_primer=data.get("renderedPrimer", ""),
             preferred_sequence=data.get("preferredCaptionSequence", ""),
             corrections=data.get("corrections"),
+            open_sight=data.get("openSight"),
+            context_sight=data.get("contextSight"),
         )
         job = enqueue_llm(
             "caption",
@@ -722,6 +724,7 @@ def caption_vision_check_route():
             context={
                 "runtimeOverrides": {"maxTokens": 320},
                 "visionGroups": groups,
+                "visionCaption": str(data.get("caption") or ""),
             },
             label="Caption Vision",
         )
@@ -1522,7 +1525,13 @@ def qa_deep_scan_route():
             "qa",
             str(data.get("model") or "").strip(),
             contract,
-            context={},
+            context={
+                "captionsByFile": {
+                    str(item.get("fileName") or "").strip(): str(item.get("caption") or "")
+                    for item in items
+                    if isinstance(item, dict) and str(item.get("fileName") or "").strip()
+                },
+            },
             label="QA Deep Scan",
         )
         return jsonify({"ok": True, "job": job}), 202

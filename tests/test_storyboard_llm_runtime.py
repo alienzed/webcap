@@ -2413,3 +2413,62 @@ def test_normalize_freeform_messages_accepts_embedded_image_without_extra_flag()
     ])
 
     assert normalized[0]["content"][1]["image_url"]["url"] == data_url
+
+
+def test_passive_local_discovery_multiple_vision_pairs_in_one_folder(monkeypatch, tmp_path):
+    models_dir = tmp_path / "text_encoders"
+    vision_dir = models_dir / "vision"
+    vision_dir.mkdir(parents=True)
+    names = [
+        "Gliese-Qwen3.5-9B-Abliterated-Caption",
+        "Qwen2-VL-2B-Abliterated-Caption-it",
+        "qwen3.5-9b-nsfw-captioning-v5",
+    ]
+    for name in names:
+        (vision_dir / (name + ".Q8_0.gguf")).write_bytes(b"model")
+        (vision_dir / (name + ".mmproj-q8_0.gguf")).write_bytes(b"projector")
+    (vision_dir / "unrelated.Q8_0.gguf").write_bytes(b"text")
+    monkeypatch.setattr(
+        storyboard_llm_runtime, "_runtime_settings",
+        lambda runtime_id="": {"models_dir": models_dir, "mode": "local"},
+    )
+    models = storyboard_llm_runtime.list_local_vision_models()
+    assert len(models) == 3
+    assert {item["modelId"] for item in models} == {name + ".Q8_0" for name in names}
+    assert all(item["runtimeId"] == "local" for item in models)
+
+
+def test_passive_local_discovery_flat_projector_does_not_mark_other_models_as_vision(monkeypatch, tmp_path):
+    (tmp_path / "vision.Q8_0.gguf").write_bytes(b"model")
+    (tmp_path / "vision.mmproj-q8_0.gguf").write_bytes(b"projector")
+    (tmp_path / "unrelated.gguf").write_bytes(b"text")
+    monkeypatch.setattr(
+        storyboard_llm_runtime, "_runtime_settings",
+        lambda runtime_id="": {"models_dir": tmp_path, "mode": "local"},
+    )
+    by_id = {item["id"]: item for item in storyboard_llm_runtime._list_local_models_passive()}
+    assert by_id["vision.Q8_0"]["inputModalities"] == ["text", "image"]
+    assert by_id["unrelated"]["inputModalities"] == ["text"]
+
+
+def test_vision_discovery_retains_good_model_when_neighbor_folder_unreadable(monkeypatch, tmp_path):
+    models_dir = tmp_path / "models"
+    vision = models_dir / "vision"
+    vision.mkdir(parents=True)
+    (vision / "vl.Q8_0.gguf").write_bytes(b"weights")
+    (vision / "vl.mmproj-q8_0.gguf").write_bytes(b"projector")
+    monkeypatch.setattr(storyboard_llm_runtime, "_runtime_settings",
+                        lambda runtime_id="": {"models_dir": models_dir, "mode": "local"})
+    warnings = []
+    found = storyboard_llm_runtime.list_local_vision_models(warnings=warnings)
+    assert any(model["modelId"] == "vision" for model in found)
+    assert warnings == []
+
+
+def test_vision_discovery_reports_missing_directory(monkeypatch, tmp_path):
+    missing = tmp_path / "not-there"
+    monkeypatch.setattr(storyboard_llm_runtime, "_runtime_settings",
+                        lambda runtime_id="": {"models_dir": missing, "mode": "local"})
+    warnings = []
+    assert storyboard_llm_runtime.list_local_vision_models(warnings=warnings) == []
+    assert warnings and "does not exist" in warnings[0]["error"]

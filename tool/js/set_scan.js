@@ -1023,7 +1023,10 @@
         function (sight) { return saveContextSight(folder, model, file, visionContext, sight); });
     }).then(function () {
       if (opts.isCancelled && opts.isCancelled()) return false;
-      if (failures.length) throw new Error(failures.join(' | '));
+      var fatalFailures = opts.allowOpenFailure
+        ? failures.filter(function (message) { return message.indexOf('Open Sight: ') !== 0; })
+        : failures;
+      if (fatalFailures.length) throw new Error(fatalFailures.join(' | '));
       if (!opts.silent) window.setStatus('Sight refreshed for ' + file + '.');
       return true;
     }).finally(function () {

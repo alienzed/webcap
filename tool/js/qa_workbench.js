@@ -1,6 +1,6 @@
 (function () {
   var QA_RECOMMENDATION_LIMIT = 10;
-  var QA_DEEP_SCAN_BATCH_SIZE = 4;
+  var QA_DEEP_SCAN_BATCH_SIZE = 1;
   var QA_CATEGORY_ORDER = ['underrepresented', 'overrepresented', 'prune', 'consistency', 'captioning'];
   var QA_CATEGORY_LABELS = {
     underrepresented: 'Underrepresented',

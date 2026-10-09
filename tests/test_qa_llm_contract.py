@@ -60,6 +60,9 @@ def test_qa_deep_scan_contract_is_structured_semantic_and_scope_grounded():
     assert "Face Focus" in contract["prompt"]
     assert "Vision Sight" in contract["prompt"]
     assert "DETERMINISTIC QA FINDINGS" in contract["prompt"]
+    assert "Treat unverified statistical associations as investigation hints" in contract["prompt"]
+    assert "QA is about annotation accuracy, not dataset balance" in contract["prompt"]
+    assert "If the exception is a legitimate variation, return no finding." in contract["prompt"]
 
 
 def test_qa_deep_scan_normalizer_rejects_invented_files():

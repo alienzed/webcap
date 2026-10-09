@@ -613,6 +613,10 @@
       if (!analysis || !Array.isArray(analysis.findings)) {
         throw new Error('QA Deep Scan batch completed without structured findings.');
       }
+      if (Array.isArray(analysis.patchWarnings) && analysis.patchWarnings.length) {
+        window.reportConsoleError('QA · Ignored invalid suggested edits',
+          new Error(analysis.patchWarnings.join('; ')));
+      }
       var batchFindings = qaNormalizeAiFindings(analysis, job.result.model).filter(function (finding) {
         return !(finding.files || []).some(function (file) { return changed[file]; });
       });

@@ -515,12 +515,14 @@ function applyCaptionVisionFinding(finding) {
     captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
       captionAssistCandidate.mediaKey,
       captionAssistCandidate.text,
-      liveRequest.assignments
+      liveRequest.assignments,
+      liveRequest.tags
     );
     captionAssistCandidate.omittedCorrections = getCaptionAssistOmittedCorrections(
       captionAssistCandidate.mediaKey,
       captionAssistCandidate.text,
-      liveRequest.assignments
+      liveRequest.assignments,
+      liveRequest.tags
     );
   }
   if (isFocusedCaptionOpen()) resetFocusedCaptionUseArm();

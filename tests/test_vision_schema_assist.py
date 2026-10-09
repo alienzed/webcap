@@ -588,7 +588,16 @@ def test_context_sight_keeps_caption_when_all_optional_matches_are_malformed():
         [{"group": "Shape", "terms": ["triangle"]}],
     )
     assert payload["caption"] == "A triangle top."
-    assert payload["matches"] == []
+    assert payload["matches"] == [{"group": "Shape", "terms": ["triangle"]}]
     assert payload["diagnostics"]["parseWarnings"]
 
 
+
+
+def test_context_sight_missing_matches_keeps_valid_caption():
+    payload = vision_schema_assist.normalize_vision_vocabulary_sight_payload(
+        {"caption": "A clear visual observation."}, [{"group": "Shape", "terms": ["triangle"]}]
+    )
+    assert payload["caption"] == "A clear visual observation."
+    assert payload["matches"] == []
+    assert payload["diagnostics"]["parseWarnings"]

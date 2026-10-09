@@ -429,43 +429,123 @@ function insertFocusedCaptionVisionPhrase(phrase) {
   return true;
 }
 
-function getCaptionAssistSightSuggestions(mediaItem, captionText) {
-  var metadata = mediaItem && mediaItem.metadata || {};
+
+function getCaptionAssistTagSuggestions(mediaItem) {
+  var mediaKey = mediaItem.key;
+  var metadata = mediaItem.metadata || {};
   var context = metadata.vision_vocabulary_sight || {};
   var open = metadata.vision_sight || {};
-  var unmatched = context.diagnostics && context.diagnostics.unmatched || [];
-  var inventory = open.inventory || {};
-  var values = [];
-  unmatched.forEach(function (entry) {
-    if (!entry || !Array.isArray(entry.terms)) return;
-    entry.terms.forEach(function (term) { values.push(term); });
-  });
-  (Array.isArray(inventory.details) ? inventory.details : []).forEach(function (term) {
-    values.push(term);
-  });
-  (Array.isArray(inventory.things) ? inventory.things : []).forEach(function (thing) {
-    if (!thing || !thing.name) return;
-    (Array.isArray(thing.qualities) ? thing.qualities : []).forEach(function (quality) {
-      values.push(String(quality || '') + ' ' + String(thing.name || ''));
+  var suggestions = [];
+  var seen = {};
+  var contextTerms = {};
+  function existingGroup(rawGroup) {
+    var name = String(rawGroup || '').trim().toLowerCase();
+    return (checklistItems || []).find(function (group) {
+      return String(group || '').toLowerCase() === name;
+    }) || '';
+  }
+  function offer(rawGroup, rawTerm, fromContext) {
+    var group = existingGroup(rawGroup);
+    var term = normalizeChecklistTerm(rawTerm);
+    if (!term) return;
+    var lower = term.toLowerCase();
+    if (fromContext) contextTerms[lower] = true;
+    var identity = group.toLowerCase() + '\u0001' + lower;
+    if (seen[identity]) return;
+    seen[identity] = true;
+    if (group && hasChecklistAssignedTagForMediaKey(mediaKey, group, term)) return;
+    if (!group && getUnscopedTagsForMediaKey(mediaKey).some(function (tag) {
+      return normalizeChecklistTerm(tag).toLowerCase() === lower;
+    })) return;
+    var known = !!group && getChecklistKeywordTermsForRequirement(group).some(function (value) {
+      return normalizeChecklistTerm(value).toLowerCase() === lower;
+    });
+    suggestions.push({ group: group, term: term, isNew: !!group && !known });
+  }
+  (Array.isArray(context.matches) ? context.matches : []).forEach(function (entry) {
+    (Array.isArray(entry && entry.terms) ? entry.terms : []).forEach(function (term) {
+      offer(entry.group, term, true);
     });
   });
-  var seen = {};
-  var caption = String(captionText || '');
-  return values.map(function (raw) {
-    return String(raw || '').replace(/\s+/g, ' ').trim();
-  }).filter(function (term) {
-    var key = term.toLowerCase();
-    if (!term || term.length > 65 || term.split(/\s+/).length > 5 ||
-        seen[key] || captionContainsPhrase(caption, term)) return false;
-    seen[key] = true;
-    return true;
-  }).slice(0, 6);
+  (Array.isArray(context.diagnostics && context.diagnostics.unmatched)
+    ? context.diagnostics.unmatched : []).forEach(function (entry) {
+    (Array.isArray(entry && entry.terms) ? entry.terms : []).forEach(function (term) {
+      offer(entry.group, term, true);
+    });
+  });
+  var inventory = open.inventory || {};
+  var extras = (Array.isArray(inventory.details) ? inventory.details : []).slice();
+  (Array.isArray(inventory.things) ? inventory.things : []).forEach(function (thing) {
+    if (!thing || !thing.name) return;
+    extras.push(thing.name);
+    (Array.isArray(thing.qualities) ? thing.qualities : []).forEach(function (quality) {
+      extras.push(String(quality || '') + ' ' + thing.name);
+    });
+  });
+  extras.forEach(function (raw) {
+    var term = normalizeChecklistTerm(raw);
+    if (!term || contextTerms[term.toLowerCase()]) return;
+    var groups = getChecklistRequirementsForTag(term);
+    if (groups.length) groups.forEach(function (group) { offer(group, term, false); });
+    else offer('', term, false); // Unmatched Open Sight details remain unscoped.
+  });
+  return suggestions;
+}
+
+function refreshCaptionAssistAfterTagMutation(mediaKey, message) {
+  var item = state && state.currentItem;
+  if (!captionAssistCandidate || !item || item.key !== mediaKey ||
+      captionAssistCandidate.mediaKey !== mediaKey) return;
+  var request = buildCaptionAssistRequest(item);
+  captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
+    mediaKey, captionAssistCandidate.text, request.assignments, request.tags
+  );
+  captionAssistCandidate.omittedCorrections = getCaptionAssistOmittedCorrections(
+    mediaKey, captionAssistCandidate.text, request.assignments, request.tags
+  );
+  resetFocusedCaptionUseArm();
+  cancelCurrentCaptionVision();
+  clearCaptionVisionResult();
+  syncCaptionAssistCandidateUi();
+  setStatus(message);
+}
+
+function acceptCaptionAssistTagSuggestion(mediaKey, suggestion) {
+  if (!captionAssistCandidate || !state.currentItem || state.currentItem.key !== mediaKey ||
+      captionAssistCandidate.mediaKey !== mediaKey) return false;
+  var group = String(suggestion.group || '');
+  var term = normalizeChecklistTerm(suggestion.term);
+  if (group) {
+    // Vocabulary + item assignment share the normal annotation save path.
+    var added = mergeChecklistKeywordTermsForRequirement(group, [term], { skipRefresh: true });
+    if (!assignChecklistTagToMediaKey(mediaKey, group, term)) {
+      throw new Error('Caption Assist could not assign ' + term + ' to ' + group);
+    }
+    if (added.length) refreshCurrentPrimerDerivedUi();
+  } else if (!addTagToMediaKey(mediaKey, term)) {
+    throw new Error('Caption Assist could not add unscoped tag: ' + term);
+  }
+  refreshCaptionAssistAfterTagMutation(mediaKey, 'Tag added: ' + (group ? group + ' / ' : '') + term);
+  return true;
+}
+
+function removeCaptionAssistAssignedTag(mediaKey, group, term) {
+  if (!captionAssistCandidate || !state.currentItem || state.currentItem.key !== mediaKey ||
+      captionAssistCandidate.mediaKey !== mediaKey) return false;
+  var removed = group
+    ? unassignChecklistTagFromMediaKey(mediaKey, group, term)
+    : removeTagFromMediaKey(mediaKey, term);
+  if (!removed) throw new Error('Caption Assist could not remove tag: ' + term);
+  refreshCaptionAssistAfterTagMutation(mediaKey, 'Tag removed: ' + (group ? group + ' / ' : '') + term);
+  return true;
 }
 
 function syncFocusedCaptionVisionPhrasesUi() {
   var row = document.getElementById('editor-caption-vision-phrases');
   var trigger = document.getElementById('editor-caption-vision-phrases-btn');
-  if (!row || !trigger) throw new Error('Focus Caption Vision extras controls are missing.');
+  if (!row || !trigger) throw new Error('Caption Assist Sight tag controls are missing.');
+  var previousDetails = row.querySelector('details');
+  var wasExpanded = !!(previousDetails && previousDetails.open);
   row.innerHTML = '';
   trigger.classList.add('hidden');
   trigger.disabled = true;
@@ -474,27 +554,68 @@ function syncFocusedCaptionVisionPhrasesUi() {
     row.classList.add('hidden');
     return;
   }
-  var phrases = getCaptionAssistSightSuggestions(state.currentItem, captionAssistCandidate.text);
-  row.classList.toggle('hidden', !phrases.length);
-  if (!phrases.length) return;
+  row.classList.remove('hidden');
+  var item = state.currentItem;
+  var mediaKey = item.key;
   var heading = document.createElement('div');
   heading.className = 'caption-vision-sight-label';
-  heading.textContent = 'Additional details in Sight · optional';
+  heading.textContent = 'Suggested tags from Sight · optional';
   row.appendChild(heading);
-  var list = document.createElement('div');
-  list.className = 'caption-vision-phrase-list';
-  phrases.forEach(function (phrase) {
-    var button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'caption-vision-phrase-insert';
-    button.textContent = '+ ' + phrase;
-    button.title = 'Insert this Sight observation into the candidate caption';
-    button.addEventListener('click', function () {
-      insertFocusedCaptionVisionPhrase(phrase);
+  var suggestions = getCaptionAssistTagSuggestions(item);
+  if (suggestions.length) {
+    var choices = document.createElement('div');
+    choices.className = 'caption-vision-phrase-list';
+    suggestions.forEach(function (suggestion) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'caption-vision-phrase-insert';
+      button.textContent = '+ ' + suggestion.term + ' · ' + (suggestion.group || 'Other') +
+        (suggestion.isNew ? ' (new)' : '');
+      button.title = suggestion.group
+        ? 'Assign to ' + suggestion.group + (suggestion.isNew ? ' and add to group vocabulary' : '')
+        : 'Assign as unscoped tag';
+      button.addEventListener('click', function () {
+        acceptCaptionAssistTagSuggestion(mediaKey, suggestion);
+      });
+      choices.appendChild(button);
     });
-    list.appendChild(button);
+    row.appendChild(choices);
+  } else {
+    var empty = document.createElement('div');
+    empty.className = 'small';
+    empty.textContent = 'No additional tags suggested by saved Sight.';
+    row.appendChild(empty);
+  }
+
+  var assignments = getChecklistAssignmentEntriesForMediaKey(mediaKey).map(function (entry) {
+    return { group: String(entry.requirement || ''), term: String(entry.term || '') };
   });
-  row.appendChild(list);
+  getUnscopedTagsForMediaKey(mediaKey).forEach(function (term) {
+    assignments.push({ group: '', term: term });
+  });
+  if (assignments.length) {
+    var details = document.createElement('details');
+    details.className = 'caption-assist-assigned-tags';
+    details.open = wasExpanded;
+    var summary = document.createElement('summary');
+    summary.textContent = 'Assigned tags (' + assignments.length + ') · click to remove';
+    details.appendChild(summary);
+    var list = document.createElement('div');
+    list.className = 'caption-vision-phrase-list';
+    assignments.forEach(function (entry) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'caption-vision-phrase-insert';
+      button.textContent = '× ' + entry.term + ' · ' + (entry.group || 'Other');
+      button.title = 'Remove tag from this item';
+      button.addEventListener('click', function () {
+        removeCaptionAssistAssignedTag(mediaKey, entry.group, entry.term);
+      });
+      list.appendChild(button);
+    });
+    details.appendChild(list);
+    row.appendChild(details);
+  }
 }
 function syncCaptionAssistCandidateUi() {
   var panel = document.getElementById('editor-caption-candidate');
@@ -589,13 +710,17 @@ function syncCaptionAssistCandidateUi() {
     ? (reviewChanged ? 'Save → Next' : 'Keep → Next')
     : (useArmed ? 'Press Enter again' : 'Apply Caption');
 
-  regenerateBtn.textContent = '\u21bb';
-  regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);
-  regenerateBtn.title = reviewMode
-    ? 'Ask the Director for a rewritten caption'
-    : (focusOpen && captionVisionEnabled
-      ? 'Regenerate caption and recheck Vision'
-      : 'Generate another caption candidate');
+  var currentRequest = visible ? buildCaptionAssistRequest(state.currentItem) : null;
+  var tagsChanged = !!(visible && candidate.annotationsAtGeneration &&
+    candidate.annotationsAtGeneration !== JSON.stringify([currentRequest.assignments, currentRequest.tags]));
+  regenerateBtn.textContent = tagsChanged ? 'Rewrite with current tags' : '\u21bb';
+  regenerateBtn.classList.toggle('is-primary', tagsChanged || !!omittedAssignments.length);
+  regenerateBtn.title = tagsChanged
+    ? 'Generate a new caption using the updated tags'
+    : (reviewMode ? 'Ask the Director for a rewritten caption'
+      : (focusOpen && captionVisionEnabled
+        ? 'Regenerate caption and recheck Vision'
+        : 'Generate another caption candidate'));
   regenerateBtn.setAttribute('aria-label', regenerateBtn.title);
 
   dismissBtn.textContent = '\u00d7';
@@ -1040,7 +1165,8 @@ function requestCaptionAssistCandidate(mediaItem, request, options) {
         request.assignments,
         request.tags
       ),
-      requestFingerprint: captionAssistRequestFingerprint(mediaItem, request)
+      requestFingerprint: captionAssistRequestFingerprint(mediaItem, request),
+      annotationsAtGeneration: JSON.stringify([request.assignments, request.tags])
     };
   });
 }

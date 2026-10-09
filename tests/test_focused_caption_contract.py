@@ -1007,3 +1007,18 @@ def test_caption_assist_surfaces_existing_sight_novel_terms_without_extra_infere
     assert "requestVisionCaptionExtras(" not in ui
     assert "unmatched: (contextSight.diagnostics" in qa
 
+def test_caption_assist_uses_sight_for_explicit_tag_actions():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "tool/js/primer_settings.js").read_text(encoding="utf-8")
+    assert "function getCaptionAssistTagSuggestions(mediaItem)" in source
+    assert "context.matches" in source
+    assert "context.diagnostics && context.diagnostics.unmatched" in source
+    assert "getChecklistRequirementsForTag(term)" in source
+    assert "mergeChecklistKeywordTermsForRequirement(group, [term], { skipRefresh: true })" in source
+    assert "assignChecklistTagToMediaKey(mediaKey, group, term)" in source
+    assert "addTagToMediaKey(mediaKey, term)" in source
+    assert "removeTagFromMediaKey(mediaKey, term)" in source
+    assert "annotationsAtGeneration" in source
+    assert "Rewrite with current tags" in source
+

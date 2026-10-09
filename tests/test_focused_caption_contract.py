@@ -968,3 +968,21 @@ def test_focus_caption_lookahead_is_adopted_without_cancel_on_next():
     assert "startFocusedCaptionPrefetch(candidate.mediaKey);" in adopt
 
 
+
+
+def test_caption_assist_director_failure_reaches_global_console():
+    primer = _read("tool/js/primer_settings.js")
+    flow = primer.split("function runCaptionAssistAfterSight()", 1)[1].split(
+        "window.repairCaptionAssistCandidate", 1
+    )[0]
+    assert "reportConsoleError('Caption Assist', err);" in flow
+    assert "setStatus('Caption Assist failed: '" in flow
+
+
+def test_caption_assist_sight_partial_failure_is_logged_and_not_marked_full_success():
+    primer = _read("tool/js/primer_settings.js")
+    scan = _read("tool/js/set_scan.js")
+    assert "allowOpenFailure: true" in primer
+    assert "reportConsoleError('Sight refresh ' + file, err);" in scan
+    assert "Context Sight ready; Open Sight failed for " in scan
+    assert "fatalFailures.length" in scan

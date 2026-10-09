@@ -1,6 +1,6 @@
 (function () {
   var QA_RECOMMENDATION_LIMIT = 10;
-  var QA_DEEP_SCAN_BATCH_SIZE = 1;
+  
   var QA_CATEGORY_ORDER = ['underrepresented', 'overrepresented', 'prune', 'consistency', 'captioning'];
   var QA_CATEGORY_LABELS = {
     underrepresented: 'Underrepresented',
@@ -519,6 +519,11 @@
     }
 
     var pending = qaPendingDeepScanItems();
+    var candidates = {};
+    qaWorkbenchState.deterministicFindings.forEach(function (finding) {
+      (finding.files || []).forEach(function (file) { candidates[file] = true; });
+    });
+    pending.sort(function (a, b) { return Number(!!candidates[b.fileName]) - Number(!!candidates[a.fileName]); });
     qaRefreshAiCoverage();
     if (!pending.length) {
       if (isSetIntelligenceRunning()) {
@@ -543,7 +548,7 @@
       return;
     }
 
-    var batchItems = pending.slice(0, QA_DEEP_SCAN_BATCH_SIZE);
+    var batchItems = pending.slice(0, 1);
     var batchSignatures = qaCurrentItemSignatureMap(batchItems);
     var model = qaWorkbenchState.aiModel;
     var sessionToken = qaWorkbenchState.deepScanSessionToken;
@@ -551,12 +556,16 @@
     var sessionScopeKey = qaBuildScopeKey(qaGetTrainingItems());
     var sessionFocus = qaWorkbenchState.trainingFocus;
     qaWorkbenchState.deepScanSubmitting = true;
-    qaWorkbenchState.deepScanStatus =
-      'Deep QA · interpreting ' + batchItems.length + ' item' + (batchItems.length === 1 ? '' : 's') +
-      ' · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' current';
+    qaWorkbenchState.deepScanStatus = 'Deep QA · Vision ' + batchItems[0].fileName +
+      ' · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' reviewed';
     renderQaWorkbench();
 
-    qaRequestJson('/fs/qa/deep-scan', {
+    refreshSetIntelligenceItem(batchItems[0], { open: false, context: true }).then(function () {
+      if (sessionToken !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
+      batchSignatures = qaCurrentItemSignatureMap(batchItems);
+      qaWorkbenchState.deepScanStatus = 'Deep QA · Director ' + batchItems[0].fileName;
+      renderQaWorkbench();
+      return qaRequestJson('/fs/qa/deep-scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -565,8 +574,9 @@
         trainingFocus: sessionFocus,
         items: qaBuildDeepScanItems(batchItems),
         deterministicFindings: qaDeepScanFindingPayload(batchItems)
-      })
+      });
     }).then(function (payload) {
+      if (!payload) return null;
       if (
         sessionToken !== qaWorkbenchState.deepScanSessionToken ||
         !qaWorkbenchState.deepScanSessionActive ||
@@ -676,6 +686,7 @@
     if (!items.length) throw new Error('QA Deep Scan requires at least one training item.');
     var model = String(getDirectorModelPreference() || '').trim();
     if (!model) throw new Error('Select a Director model before running Deep QA Scan.');
+    if (!getCaptionVisionModelId()) throw new Error('Select a Vision model before running Deep QA Scan.');
 
     ++qaReviewLoadToken;
     if (qaWorkbenchState.aiModel && qaWorkbenchState.aiModel !== model) {

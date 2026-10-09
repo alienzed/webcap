@@ -1407,6 +1407,11 @@ def _model_record(model_ref):
     runtime_id, model_id = _split_model_ref(model_ref)
     with _use_runtime(runtime_id):
         models = _list_models_for_current_runtime(reload=True)
+    if runtime_id == "local":
+        # Vision discovery is filesystem-based. A local model may be present
+        # before the router advertises it in /models; use the same authoritative
+        # local file discovery instead of rejecting a valid selected model.
+        models = models + _list_local_models_passive()
     for model in models:
         if model["id"] == model_id:
             model["runtimeId"] = runtime_id

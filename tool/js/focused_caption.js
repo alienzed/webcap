@@ -772,10 +772,16 @@ function syncFocusedCaptionSelection(mediaKey) {
 function finishFocusedCaption() {
   var completedCount = focusedCaptionState.itemKeys.length;
   var label = focusedCaptionModeLabel();
+  var wasQa = isFocusedQaReviewMode();
   stopFocusedCaption();
   renderFileList();
-  showFocusedCaptionToast(label + ' complete · ' + completedCount + ' item' + (completedCount === 1 ? '' : 's'));
-  setStatus(label + ' complete.');
+  if (wasQa) {
+    showFocusedCaptionToast('QA Focus Review · reached end of prepared items');
+    setStatus('QA Focus Review reached the end of prepared items. Skip keeps items available for this round.');
+  } else {
+    showFocusedCaptionToast(label + ' complete · ' + completedCount + ' item' + (completedCount === 1 ? '' : 's'));
+    setStatus(label + ' complete.');
+  }
   return Promise.resolve(false);
 }
 
@@ -873,7 +879,7 @@ function startFocusedCaption(targetMediaKey, mode, options) {
   var opts = options || {};
   if (isCaptionAssistRunning()) {
     setStatus('Finish the current Caption Assist request before starting another focused caption workflow.');
-    return;
+    return false;
   }
   if (isFocusedAnnotationOpen()) {
     stopFocusedAnnotation();
@@ -887,7 +893,7 @@ function startFocusedCaption(targetMediaKey, mode, options) {
     setStatus(nextMode === 'review'
       ? 'No saved captions are available in the current visible scope.'
       : 'No media items are available in the current visible scope.');
-    return;
+    return false;
   }
 
   focusedCaptionState.open = true;
@@ -906,6 +912,7 @@ function startFocusedCaption(targetMediaKey, mode, options) {
   syncCaptionAssistCandidateUi();
   syncFocusedCaptionPanelGeometry();
   navigateFocusedCaptionToIndex(0, 1);
+  return true;
 }
 
 function startFocusedQaReview(itemKeys) {
@@ -916,8 +923,7 @@ function startFocusedQaReview(itemKeys) {
     return true;
   }
   if (focusedCaptionState.open && !stopFocusedCaption('Caption Assist ended to begin QA review.')) return false;
-  startFocusedCaption(keys[0], 'qa', { mode: 'qa', itemKeys: keys });
-  return true;
+  return startFocusedCaption(keys[0], 'qa', { mode: 'qa', itemKeys: keys });
 }
 
 function appendFocusedQaReviewItems(itemKeys) {
@@ -928,6 +934,19 @@ function appendFocusedQaReviewItems(itemKeys) {
   syncFocusedCaptionControls();
   syncCaptionAssistCandidateUi();
   return true;
+}
+
+function pruneFocusedQaReviewItems(validKeys) {
+  if (!isFocusedQaReviewMode()) return;
+  var currentKey = focusedCaptionState.itemKey;
+  var valid = {};
+  (validKeys || []).forEach(function (key) { valid[key] = true; });
+  focusedCaptionState.itemKeys = focusedCaptionState.itemKeys.filter(function (key) {
+    return key === currentKey || !!valid[key];
+  });
+  focusedCaptionState.itemIndex = focusedCaptionState.itemKeys.indexOf(currentKey);
+  syncFocusedCaptionControls();
+  syncCaptionAssistCandidateUi();
 }
 
 function resolveFocusedQaReviewItem(disposition) {
@@ -1060,6 +1079,7 @@ window.isFocusedCaptionReviewMode = isFocusedCaptionReviewMode;
 window.isFocusedQaReviewMode = isFocusedQaReviewMode;
 window.startFocusedQaReview = startFocusedQaReview;
 window.appendFocusedQaReviewItems = appendFocusedQaReviewItems;
+window.pruneFocusedQaReviewItems = pruneFocusedQaReviewItems;
 window.resolveFocusedQaReviewItem = resolveFocusedQaReviewItem;
 window.startFocusedCaption = startFocusedCaption;
 window.startFocusedReview = startFocusedReview;

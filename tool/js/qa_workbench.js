@@ -1934,7 +1934,7 @@
         (finding.files || []).indexOf(item.fileName) !== -1 &&
         qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
     }).map(function (finding) {
-      return String(finding.title || '') + (finding.why ? ' — ' + String(finding.why) : '');
+      return String(finding.title || '') + (finding.why || finding.summary ? ' — ' + String(finding.why || finding.summary) : '');
     }).filter(Boolean).slice(0, 3);
   }
 
@@ -1949,8 +1949,13 @@
       return !qaFocusReviewState.handled[key];
     }).length;
     var pending = qaWorkbenchState.aiCoverageTotal - qaWorkbenchState.aiCoverageValid;
-    button.textContent = 'QA Focus Review · ' + ready + ' ready' +
-      (qaWorkbenchState.deepScanSessionActive ? ' · ' + Math.max(0, pending) + ' checking' : '');
+    var failed = Object.keys(qaWorkbenchState.deepScanSkipped).length;
+    var complete = !qaWorkbenchState.deepScanSessionActive && pending === 0 && failed === 0;
+    var suffix = qaWorkbenchState.deepScanSessionActive
+      ? ' · ' + Math.max(0, pending) + ' checking'
+      : (!complete && (pending || failed) ? ' · review incomplete' : '');
+    button.textContent = 'QA Focus Review · ' +
+      (ready ? ready + ' ready' : (complete ? 'No findings remaining' : '0 ready')) + suffix;
   }
 
   function qaFocusReviewMarkHandled(mediaKey, disposition) {
@@ -1971,6 +1976,11 @@
     var session = qaFocusReviewState;
     var key = String(item && item.key || '');
     if (!key || session.prepQueued[key]) return;
+    // The visible first item is prepared on demand by Caption Assist itself.
+    var firstReady = session.items.find(function (entry) {
+      return session.queued[entry.key] && !session.handled[entry.key];
+    });
+    if ((session.autoOpen || session.opening) && firstReady && firstReady.key === key) return;
     session.prepQueued[key] = true;
     var token = session.token;
     session.prepChain = session.prepChain.catch(function () {}).then(function () {
@@ -1995,9 +2005,9 @@
           candidate.model = String(request.model || '');
           persistCaptionAssistCandidate(candidate, true);
         });
-      }).catch(function (err) {
-        reportConsoleError('QA Focus Review · Prepare ' + item.fileName, err);
       });
+    }).catch(function (err) {
+      reportConsoleError('QA Focus Review · Prepare ' + item.fileName, err);
     });
   }
 
@@ -2014,6 +2024,16 @@
       });
     });
     var newKeys = [];
+    session.items.forEach(function (item) {
+      if (!wanted[item.fileName] && session.queued[item.key] && !session.handled[item.key]) {
+        delete session.queued[item.key];
+      }
+    });
+    if (isFocusedQaReviewMode()) {
+      pruneFocusedQaReviewItems(session.items.filter(function (item) {
+        return session.queued[item.key] && !session.handled[item.key];
+      }).map(function (item) { return item.key; }));
+    }
     session.items.forEach(function (item) {
       if (!wanted[item.fileName] || session.handled[item.key] || session.queued[item.key]) return;
       session.queued[item.key] = true;

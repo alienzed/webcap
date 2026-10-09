@@ -881,6 +881,25 @@ def test_inserting_one_vision_extra_keeps_the_remaining_extras_visible():
     assert "getCaptionAssistOmittedAssignments(" in insert
     assert "clearCaptionVisionResult();" in insert
 
+def test_focus_caption_starts_one_ahead_after_normal_director_success():
+    primer = _read("tool/js/primer_settings.js")
+    normal = primer.split("function runCaptionAssistAfterSight()", 1)[1].split(
+        "window.repairCaptionAssistCandidate", 1
+    )[0]
+    cleanup = normal.split("}).then(function (result) {", 1)[1].split(
+        "}, function (err) {", 1
+    )[0]
+
+    assert "captionAssistPendingJobId = '';" in cleanup
+    assert "syncFocusedCaptionAfterAssist(sourceMediaKey);" in cleanup
+    assert "if (result === true && isFocusedCaptionOpen()" in cleanup
+    assert "state.currentItem.key === sourceMediaKey" in cleanup
+    assert "startFocusedCaptionPrefetch(sourceMediaKey);" in cleanup
+    assert cleanup.index("captionAssistPendingJobId = '';") < cleanup.index(
+        "startFocusedCaptionPrefetch(sourceMediaKey);"
+    )
+
+
 def test_focus_caption_lookahead_prepares_next_item_sight_before_director():
     focus = _read("tool/js/focused_caption.js")
     primer = _read("tool/js/primer_settings.js")

@@ -16,7 +16,7 @@ def test_caption_assist_reuses_existing_context_sight():
     assert "context = !row.cached;" in scan
     assert "context: 'missing'" in primer
     assert "context: 'missing'" in focus
-    assert "context: true" in source("tool/js/qa_workbench.js")  # Explicit fresh Deep QA remains separate.
+    assert "refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: 'missing', silent: true })" in source("tool/js/qa_workbench.js")
 
 
 def test_unfinished_candidates_round_trip_through_existing_set_state():

@@ -221,7 +221,9 @@ function useCaptionAssistCandidate() {
     syncCaptionAssistCandidateUi();
     ui.editorEl.value = nextCaption;
     setStatus(unchangedReview ? 'Caption accepted.' : 'Caption saved.');
-    return advanceFocusedCaption();
+    return isFocusedQaReviewMode()
+      ? resolveFocusedQaReviewItem('applied')
+      : advanceFocusedCaption();
   }).catch(function (err) {
     syncCaptionAssistCandidateUi();
     setStatus('Could not save AI caption candidate: ' + String(err && err.message ? err.message : err));
@@ -718,10 +720,14 @@ function syncCaptionAssistCandidateUi() {
 
   panel.classList.toggle('hidden', !panelVisible);
   panel.classList.toggle('is-focus-caption', focusVisible);
-  titleEl.textContent = reviewMode ? 'Focus Review' : (focusOpen ? 'Focus Caption' : 'Caption Assist');
+  titleEl.textContent = isFocusedQaReviewMode() ? 'QA Focus Review' : (reviewMode ? 'Focus Review' : (focusOpen ? 'Focus Caption' : 'Caption Assist'));
 
   progressEl.classList.toggle('hidden', !focusOpen);
   progressEl.textContent = focusOpen ? getFocusedCaptionProgressText() : '';
+  if (isFocusedQaReviewMode() && visible) {
+    progressEl.textContent += String(candidate.text || '') === String((state.currentItem && state.currentItem.caption) || '')
+      ? ' · Caption unchanged' : ' · Caption change proposed';
+  }
 
   var loadingVisible = !visible && (focusOpen || pending);
   loadingEl.classList.toggle('hidden', !loadingVisible);

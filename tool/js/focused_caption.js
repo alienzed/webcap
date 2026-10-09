@@ -29,11 +29,15 @@ function isFocusedCaptionOpen() {
 }
 
 function isFocusedCaptionReviewMode() {
-  return !!(focusedCaptionState.open && focusedCaptionState.mode === 'review');
+  return !!(focusedCaptionState.open && (focusedCaptionState.mode === 'review' || focusedCaptionState.mode === 'qa'));
+}
+
+function isFocusedQaReviewMode() {
+  return !!(focusedCaptionState.open && focusedCaptionState.mode === 'qa');
 }
 
 function focusedCaptionModeLabel() {
-  return 'Caption Assist';
+  return isFocusedQaReviewMode() ? 'QA Focus Review' : 'Caption Assist';
 }
 
 function resetFocusedCaptionUseArm() {
@@ -601,7 +605,8 @@ function syncFocusedCaptionControls() {
   var startBtn = ui.previewFocusCaptionBtnEl;
   var reviewBtn = document.getElementById('preview-open-focus-review-btn');
   var skipBtn = ui.previewFocusCaptionSkipBtnEl;
-  if (!startBtn || !reviewBtn || !skipBtn) {
+  var dismissQaBtn = document.getElementById('preview-focus-caption-dismiss-qa-btn');
+  if (!startBtn || !reviewBtn || !skipBtn || !dismissQaBtn) {
     throw new Error('Focus Caption controls are missing.');
   }
 
@@ -643,6 +648,7 @@ function syncFocusedCaptionControls() {
     if (reviewLabelEl) reviewLabelEl.textContent = 'Review Captions';
 
     skipBtn.classList.add('hidden');
+    dismissQaBtn.classList.add('hidden');
     skipBtn.disabled = false;
     return;
   }
@@ -659,6 +665,7 @@ function syncFocusedCaptionControls() {
   }
 
   skipBtn.classList.remove('hidden');
+  dismissQaBtn.classList.toggle('hidden', !isFocusedQaReviewMode());
   skipBtn.disabled = false;
   skipBtn.title = reviewMode
     ? 'Skip this review item without saving edits'
@@ -683,6 +690,7 @@ function stopFocusedCaption(message, options) {
     return false;
   }
   var stoppingLabel = focusedCaptionModeLabel();
+  var wasQaFocusReview = isFocusedQaReviewMode();
   if (stoppingLabel === 'Focus Review' && String(message || '') === 'Focus Caption ended.') {
     message = 'Focus Review ended.';
   }
@@ -712,6 +720,7 @@ function stopFocusedCaption(message, options) {
   syncFocusedCaptionPanelGeometry();
   renderPreviewHeaderMeta();
   if (message) setStatus(message);
+  if (wasQaFocusReview) qaFocusReviewStopped();
   return true;
 }
 
@@ -870,8 +879,10 @@ function startFocusedCaption(targetMediaKey, mode, options) {
     stopFocusedAnnotation();
   }
 
-  var nextMode = 'caption';
-  var itemKeys = getFocusedCaptionEntryKeys(targetMediaKey, nextMode);
+  var nextMode = opts.mode === 'qa' ? 'qa' : 'caption';
+  var itemKeys = Array.isArray(opts.itemKeys)
+    ? opts.itemKeys.slice()
+    : getFocusedCaptionEntryKeys(targetMediaKey, nextMode);
   if (!itemKeys.length) {
     setStatus(nextMode === 'review'
       ? 'No saved captions are available in the current visible scope.'
@@ -897,6 +908,38 @@ function startFocusedCaption(targetMediaKey, mode, options) {
   navigateFocusedCaptionToIndex(0, 1);
 }
 
+function startFocusedQaReview(itemKeys) {
+  var keys = (itemKeys || []).filter(Boolean);
+  if (!keys.length) return false;
+  if (isFocusedQaReviewMode()) {
+    appendFocusedQaReviewItems(keys);
+    return true;
+  }
+  if (focusedCaptionState.open && !stopFocusedCaption('Caption Assist ended to begin QA review.')) return false;
+  startFocusedCaption(keys[0], 'qa', { mode: 'qa', itemKeys: keys });
+  return true;
+}
+
+function appendFocusedQaReviewItems(itemKeys) {
+  if (!isFocusedQaReviewMode()) return false;
+  (itemKeys || []).forEach(function (key) {
+    if (key && focusedCaptionState.itemKeys.indexOf(key) === -1) focusedCaptionState.itemKeys.push(key);
+  });
+  syncFocusedCaptionControls();
+  syncCaptionAssistCandidateUi();
+  return true;
+}
+
+function resolveFocusedQaReviewItem(disposition) {
+  if (!isFocusedQaReviewMode()) return advanceFocusedCaption();
+  var key = focusedCaptionState.itemKey;
+  qaFocusReviewMarkHandled(key, disposition);
+  var index = focusedCaptionState.itemIndex;
+  focusedCaptionState.itemKeys.splice(index, 1);
+  focusedCaptionState.itemIndex = index - 1;
+  return moveFocusedCaption(1, { discardReviewEdits: true });
+}
+
 function startFocusedReview(targetMediaKey) {
   // QA hands off the item, not historical findings; Caption Assist starts fresh.
   startFocusedCaption(targetMediaKey, 'caption');
@@ -920,7 +963,8 @@ function startFocusedCaptionForMediaItem(mediaItem) {
 
 function wireFocusedCaption() {
   var reviewBtn = document.getElementById('preview-open-focus-review-btn');
-  if (!ui.previewFocusCaptionBtnEl || !reviewBtn || !ui.previewFocusCaptionSkipBtnEl) {
+  var dismissQaBtn = document.getElementById('preview-focus-caption-dismiss-qa-btn');
+  if (!ui.previewFocusCaptionBtnEl || !reviewBtn || !ui.previewFocusCaptionSkipBtnEl || !dismissQaBtn) {
     throw new Error('Focus Caption controls are missing.');
   }
   if (!ui.previewFocusCaptionBtnEl.__focusedCaptionBound) {
@@ -938,6 +982,12 @@ function wireFocusedCaption() {
     ui.previewFocusCaptionSkipBtnEl.__focusedCaptionBound = true;
     ui.previewFocusCaptionSkipBtnEl.addEventListener('click', function () {
       skipFocusedCaptionItem();
+    });
+  }
+  if (!dismissQaBtn.__focusedCaptionBound) {
+    dismissQaBtn.__focusedCaptionBound = true;
+    dismissQaBtn.addEventListener('click', function () {
+      if (isFocusedQaReviewMode()) resolveFocusedQaReviewItem('dismissed');
     });
   }
   if (!document.__focusedCaptionKeyboardBound) {
@@ -985,7 +1035,7 @@ function wireFocusedCaption() {
       if (!focusedCaptionState.open || !event || !event.target) return;
       var panel = document.getElementById('editor-caption-candidate');
       if (panel && panel.contains(event.target)) return;
-      if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-open-focus-review-btn, #preview-focus-caption-skip-btn')) return;
+      if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-open-focus-review-btn, #preview-focus-caption-skip-btn, #preview-focus-caption-dismiss-qa-btn')) return;
       if (!stopFocusedCaption(focusedCaptionModeLabel() + ' ended.')) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -1007,6 +1057,10 @@ wireFocusedCaption();
 
 window.isFocusedCaptionOpen = isFocusedCaptionOpen;
 window.isFocusedCaptionReviewMode = isFocusedCaptionReviewMode;
+window.isFocusedQaReviewMode = isFocusedQaReviewMode;
+window.startFocusedQaReview = startFocusedQaReview;
+window.appendFocusedQaReviewItems = appendFocusedQaReviewItems;
+window.resolveFocusedQaReviewItem = resolveFocusedQaReviewItem;
 window.startFocusedCaption = startFocusedCaption;
 window.startFocusedReview = startFocusedReview;
 window.startFocusedCaptionForMediaItem = startFocusedCaptionForMediaItem;

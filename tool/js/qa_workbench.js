@@ -314,7 +314,7 @@
     };
   }
 
-  function qaSaveReview() {
+  function qaSaveReview(requireSuccess) {
     var folder = String(state.folder || '');
     var review = qaReviewPayload();
     qaReviewSaveChain = qaReviewSaveChain.catch(function () {}).then(function () {
@@ -326,7 +326,7 @@
     }).catch(function (err) {
       window.reportConsoleError('QA · Save review', err);
       qaWorkbenchState.statusMessage = 'QA review could not be saved.';
-      throw err;
+      if (requireSuccess) throw err;
     });
     return qaReviewSaveChain;
   }
@@ -639,7 +639,7 @@
       qaRefreshAiCoverage();
       qaMergeFindings();
       renderQaWorkbench();
-      return qaSaveReview().then(function () { return qaRunNextDeepScanBatch(); });
+      return qaSaveReview(true).then(function () { return qaRunNextDeepScanBatch(); });
     }).then(function (continued) {
       if (continued === false && sessionToken !== qaWorkbenchState.deepScanSessionToken) return false;
       return continued;

@@ -405,12 +405,14 @@ function insertFocusedCaptionVisionPhrase(phrase) {
   captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
     captionAssistCandidate.mediaKey,
     captionAssistCandidate.text,
-    liveRequest.assignments
+    liveRequest.assignments,
+    liveRequest.tags
   );
   captionAssistCandidate.omittedCorrections = getCaptionAssistOmittedCorrections(
     captionAssistCandidate.mediaKey,
     captionAssistCandidate.text,
-    liveRequest.assignments
+    liveRequest.assignments,
+    liveRequest.tags
   );
   cancelCurrentCaptionVision();
   clearCaptionVisionResult();
@@ -810,7 +812,7 @@ function getCaptionAssistMissingGroups(mediaKey) {
   });
 }
 
-function getCaptionAssistOmittedCorrections(mediaKey, captionText, assignments) {
+function getCaptionAssistOmittedCorrections(mediaKey, captionText, assignments, tags) {
   var seen = {};
   var omitted = [];
   (Array.isArray(assignments) ? assignments : []).forEach(function (entry) {
@@ -827,11 +829,23 @@ function getCaptionAssistOmittedCorrections(mediaKey, captionText, assignments) 
       note: 'Selected annotation is missing from the current caption.'
     });
   });
+  (Array.isArray(tags) ? tags : []).forEach(function (value) {
+    var term = String(value || '').trim();
+    if (!term || captionContainsTagWithAllowances(captionText, term)) return;
+    var key = ('\n' + term).toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    omitted.push({
+      group: '',
+      term: term,
+      note: 'Selected tag is missing from the current caption.'
+    });
+  });
   return omitted;
 }
 
-function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments) {
-  return getCaptionAssistOmittedCorrections(mediaKey, captionText, assignments).map(function (entry) {
+function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments, tags) {
+  return getCaptionAssistOmittedCorrections(mediaKey, captionText, assignments, tags).map(function (entry) {
     return entry.group ? (entry.group + ' — ' + entry.term) : entry.term;
   });
 }
@@ -958,12 +972,14 @@ function requestCaptionAssistCandidate(mediaItem, request, options) {
       omittedAssignments: getCaptionAssistOmittedAssignments(
         sourceMediaKey,
         nextCaption,
-        request.assignments
+        request.assignments,
+        request.tags
       ),
       omittedCorrections: getCaptionAssistOmittedCorrections(
         sourceMediaKey,
         nextCaption,
-        request.assignments
+        request.assignments,
+        request.tags
       ),
       requestFingerprint: captionAssistRequestFingerprint(mediaItem, request)
     };
@@ -1314,12 +1330,14 @@ function wirePrimerCaptionResetUi() {
       captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
         captionAssistCandidate.mediaKey,
         captionAssistCandidate.text,
-        liveRequest.assignments
+        liveRequest.assignments,
+        liveRequest.tags
       );
       captionAssistCandidate.omittedCorrections = getCaptionAssistOmittedCorrections(
         captionAssistCandidate.mediaKey,
         captionAssistCandidate.text,
-        liveRequest.assignments
+        liveRequest.assignments,
+        liveRequest.tags
       );
       cancelCurrentCaptionVision();
       clearCaptionVisionResult();

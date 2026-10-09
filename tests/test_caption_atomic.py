@@ -114,13 +114,13 @@ def test_caption_assist_prioritizes_every_selected_tag_without_dropping_details(
         ],
         tags=["bracelet"],
         draft="a person standing",
-        preferred_sequence="subject\\npose\\nclothing\\nhair",
+        preferred_sequence="subject\npose\nclothing\nhair",
         open_sight={"summary": "a person standing"},
         context_sight={"summary": "a person standing"},
     )
     system = messages[0]["content"]
     user = messages[1]["content"]
-    payload = json.loads(user.split("\\n\\n", 1)[1])
+    payload = json.loads(user.split("\n\n", 1)[1])
     assert [entry["tag"] for entry in payload["groupedAnnotations"]] == [
         "triangle bikini", "braid", "standing"
     ]

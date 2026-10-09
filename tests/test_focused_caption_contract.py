@@ -329,7 +329,7 @@ def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
     primer = _read("tool/js/primer_settings.js")
 
     assert 'id="editor-caption-candidate-omissions"' in html
-    assert "function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments)" in primer
+    assert "function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments, tags)" in primer
     assert "checklistGroupTermAppearsInCaptionText(group, term, mediaKey, captionText)" in primer
     assert "request.assignments" in primer
     assert "(reviewMode ? 'Caption' : 'Candidate') + ' omitted selected annotations: '" in primer
@@ -341,6 +341,23 @@ def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
     assert "regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);" in primer
     assert ".editor-caption-candidate-omissions {" in css
     assert ".editor-caption-candidate-regenerate.is-primary {" in css
+
+
+def test_caption_assist_checks_ungrouped_tags_in_all_caption_edit_paths():
+    primer = _read("tool/js/primer_settings.js")
+    focus = _read("tool/js/focused_caption.js")
+    vision = _read("tool/js/caption_vision.js")
+
+    omissions = primer.split("function getCaptionAssistOmittedCorrections(", 1)[1].split(
+        "function getCaptionAssistOmittedAssignments(", 1
+    )[0]
+    assert "Array.isArray(tags)" in omissions
+    assert "captionContainsTagWithAllowances(captionText, term)" in omissions
+    assert "Selected tag is missing from the current caption." in omissions
+    assert "request.tags" in primer
+    assert "liveRequest.tags" in primer
+    assert "request.tags" in focus
+    assert "liveRequest.tags" in vision
 
 
 def test_caption_assist_offscreen_request_uses_target_item_draft():

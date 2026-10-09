@@ -1,6 +1,6 @@
 (function () {
   var QA_RECOMMENDATION_LIMIT = 10;
-  var QA_DEEP_SCAN_BATCH_SIZE = 20;
+  var QA_DEEP_SCAN_BATCH_SIZE = 4;
   var QA_CATEGORY_ORDER = ['underrepresented', 'overrepresented', 'prune', 'consistency', 'captioning'];
   var QA_CATEGORY_LABELS = {
     underrepresented: 'Underrepresented',
@@ -641,7 +641,7 @@
         qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
       } else {
         qaWorkbenchState.deepScanSessionActive = false;
-        qaWorkbenchState.deepScanStatus = 'Deep QA failed.';
+        qaWorkbenchState.deepScanStatus = 'Deep QA failed: ' + String(err && err.message || err);
         window.reportConsoleError('QA Deep Scan', err);
       }
       qaRefreshAiCoverage();

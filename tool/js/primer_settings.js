@@ -381,7 +381,7 @@ function setFocusedCaptionCandidateCaretOffset(textEl, offset) {
 }
 
 function insertFocusedCaptionVisionPhrase(phrase) {
-  if (!isFocusedCaptionOpen() || !captionAssistCandidate || !state.currentItem) return false;
+  if (!captionAssistCandidate || !state.currentItem) return false;
   if (captionAssistCandidate.mediaKey !== state.currentItem.key) return false;
   var textEl = document.getElementById('editor-caption-candidate-text');
   var value = String(phrase || '').trim();
@@ -429,16 +429,73 @@ function insertFocusedCaptionVisionPhrase(phrase) {
   return true;
 }
 
+function getCaptionAssistSightSuggestions(mediaItem, captionText) {
+  var metadata = mediaItem && mediaItem.metadata || {};
+  var context = metadata.vision_vocabulary_sight || {};
+  var open = metadata.vision_sight || {};
+  var unmatched = context.diagnostics && context.diagnostics.unmatched || [];
+  var inventory = open.inventory || {};
+  var values = [];
+  unmatched.forEach(function (entry) {
+    if (!entry || !Array.isArray(entry.terms)) return;
+    entry.terms.forEach(function (term) { values.push(term); });
+  });
+  (Array.isArray(inventory.details) ? inventory.details : []).forEach(function (term) {
+    values.push(term);
+  });
+  (Array.isArray(inventory.things) ? inventory.things : []).forEach(function (thing) {
+    if (!thing || !thing.name) return;
+    (Array.isArray(thing.qualities) ? thing.qualities : []).forEach(function (quality) {
+      values.push(String(quality || '') + ' ' + String(thing.name || ''));
+    });
+  });
+  var seen = {};
+  var caption = String(captionText || '');
+  return values.map(function (raw) {
+    return String(raw || '').replace(/\s+/g, ' ').trim();
+  }).filter(function (term) {
+    var key = term.toLowerCase();
+    if (!term || term.length > 65 || term.split(/\s+/).length > 5 ||
+        seen[key] || captionContainsPhrase(caption, term)) return false;
+    seen[key] = true;
+    return true;
+  }).slice(0, 6);
+}
+
 function syncFocusedCaptionVisionPhrasesUi() {
   var row = document.getElementById('editor-caption-vision-phrases');
   var trigger = document.getElementById('editor-caption-vision-phrases-btn');
   if (!row || !trigger) throw new Error('Focus Caption Vision extras controls are missing.');
   row.innerHTML = '';
-  row.classList.add('hidden');
   trigger.classList.add('hidden');
   trigger.disabled = true;
+  if (!captionAssistCandidate || !state.currentItem ||
+      captionAssistCandidate.mediaKey !== state.currentItem.key) {
+    row.classList.add('hidden');
+    return;
+  }
+  var phrases = getCaptionAssistSightSuggestions(state.currentItem, captionAssistCandidate.text);
+  row.classList.toggle('hidden', !phrases.length);
+  if (!phrases.length) return;
+  var heading = document.createElement('div');
+  heading.className = 'caption-vision-sight-label';
+  heading.textContent = 'Additional details in Sight · optional';
+  row.appendChild(heading);
+  var list = document.createElement('div');
+  list.className = 'caption-vision-phrase-list';
+  phrases.forEach(function (phrase) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'caption-vision-phrase-insert';
+    button.textContent = '+ ' + phrase;
+    button.title = 'Insert this Sight observation into the candidate caption';
+    button.addEventListener('click', function () {
+      insertFocusedCaptionVisionPhrase(phrase);
+    });
+    list.appendChild(button);
+  });
+  row.appendChild(list);
 }
-
 function syncCaptionAssistCandidateUi() {
   var panel = document.getElementById('editor-caption-candidate');
   var titleEl = document.getElementById('editor-caption-candidate-title');

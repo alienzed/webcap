@@ -149,7 +149,10 @@ VISION_VOCABULARY_SIGHT_SYSTEM_PROMPT = (
     "Prefer exact supplied terms when they clearly match what you see. "
     "Use the supplied caption template to guide ordering, emphasis, and visual relationships. "
     "Treat the supplied groups and terms as preferred annotation language. "
-    "Return the caption plus the exact supplied terms you used, grouped under their supplied group names. "
+    "Return the caption plus matching supplied terms, grouped under their supplied group names. "
+    "When a distinctive, clearly visible detail has no supplied term, also report it as a short (one to four word) "
+    "term under the closest existing group or a descriptive new group. Do not force a known term to fit. "
+    "These novel observations are suggestions, not confirmed tags; avoid incidental objects and generic filler. "
     "Keep the response compact and visual. Return JSON only."
 )
 
@@ -311,7 +314,8 @@ def build_vision_vocabulary_sight_messages(media_reference, existing_groups, cap
         "Make a fresh visual read of this image. "
         "Build the caption from clearly visible details in the image. "
         "Prefer exact supplied terms when they clearly match what you see. "
-        "Use the caption template to guide ordering, emphasis, and relationships.\n\n"
+        "Include distinctive, clearly visible details with no matching term as concise novel matches, "
+        "without changing existing vocabulary. Use the caption template to guide ordering, emphasis, and relationships.\n\n"
         + json.dumps(
             {
                 "captionTemplate": str(caption_template or "").strip(),

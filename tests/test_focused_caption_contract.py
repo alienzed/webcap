@@ -986,3 +986,24 @@ def test_caption_assist_sight_partial_failure_is_logged_and_not_marked_full_succ
     assert "reportConsoleError('Sight refresh ' + file, err);" in scan
     assert "Context Sight ready; Open Sight failed for " in scan
     assert "fatalFailures.length" in scan
+
+
+def test_caption_assist_surfaces_existing_sight_novel_terms_without_extra_inference():
+    primer = _read("tool/js/primer_settings.js")
+    qa = _read("tool/js/qa_workbench.js")
+    start = primer.split("function getCaptionAssistSightSuggestions(mediaItem, captionText)", 1)[1].split(
+        "function syncFocusedCaptionVisionPhrasesUi()", 1
+    )[0]
+    ui = primer.split("function syncFocusedCaptionVisionPhrasesUi()", 1)[1].split(
+        "function syncCaptionAssistCandidateUi()", 1
+    )[0]
+    assert "context.diagnostics && context.diagnostics.unmatched" in start
+    assert "inventory.details" in start
+    assert "inventory.things" in start
+    assert "captionContainsPhrase(caption, term)" in start
+    assert ".slice(0, 6)" in start
+    assert "getCaptionAssistSightSuggestions(state.currentItem, captionAssistCandidate.text)" in ui
+    assert "insertFocusedCaptionVisionPhrase(phrase)" in ui
+    assert "requestVisionCaptionExtras(" not in ui
+    assert "unmatched: (contextSight.diagnostics" in qa
+

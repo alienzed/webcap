@@ -208,6 +208,14 @@
             group: String(match && match.group || ''),
             terms: (match && Array.isArray(match.terms) ? match.terms : []).slice(0, 16)
           };
+        }),
+        unmatched: (contextSight.diagnostics && Array.isArray(contextSight.diagnostics.unmatched)
+          ? contextSight.diagnostics.unmatched : []).slice(0, 12).map(function (entry) {
+          return {
+            group: String(entry && entry.group || ''),
+            terms: (entry && Array.isArray(entry.terms) ? entry.terms : []).slice(0, 8),
+            reason: String(entry && entry.reason || '')
+          };
         })
       };
     }

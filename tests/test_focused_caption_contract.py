@@ -922,6 +922,20 @@ def test_focus_caption_lookahead_prepares_next_item_sight_before_director():
     assert "startFocusedCaptionPrefetch(sourceMediaKey);" in primer
 
 
+def test_advance_does_not_cancel_lookahead_during_sight_without_job_id():
+    focus = _read("tool/js/focused_caption.js")
+    cancel = focus.split("function cancelFocusedCaptionCurrentRequest()", 1)[1].split(
+        "function armOrUseFocusedCaptionCandidate()", 1
+    )[0]
+    assert "pendingJobId &&" in cancel
+    assert "pendingJobId === String(focusedCaptionPrefetch.jobId || '')" in cancel
+    # A speculative Sight pass has no Director job ID yet, and must survive Next.
+    move = focus.split("function moveFocusedCaption(delta, options)", 1)[1].split(
+        "function advanceFocusedCaption()", 1
+    )[0]
+    assert "keepPrefetch ? true : cancelFocusedCaptionPrefetch()" in move
+
+
 def test_focus_caption_lookahead_is_adopted_without_cancel_on_next():
     focus = _read("tool/js/focused_caption.js")
     move = focus.split("function moveFocusedCaption(delta, options)", 1)[1].split(

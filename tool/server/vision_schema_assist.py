@@ -520,10 +520,6 @@ def _valid_vocabulary_sight_block(folder_path, media_name, metadata, model):
     if not isinstance(sight, dict):
         return None
     stat = media_path.stat()
-    if int(sight.get("version") or 0) != VISION_VOCABULARY_SIGHT_VERSION:
-        return None
-    if str(sight.get("model") or "") != str(model or ""):
-        return None
     if int(sight.get("mtime") or -1) != int(stat.st_mtime):
         return None
     if int(sight.get("size") or -1) != int(stat.st_size):
@@ -536,8 +532,6 @@ def _valid_vocabulary_sight_block(folder_path, media_name, metadata, model):
 def _cached_vocabulary_sight_block(folder_path, media_name, metadata, model, context_signature):
     sight = _valid_vocabulary_sight_block(folder_path, media_name, metadata, model)
     if not sight:
-        return None
-    if str(sight.get("contextSignature") or "") != str(context_signature or ""):
         return None
     return sight
 
@@ -552,7 +546,7 @@ def vision_vocabulary_sight_status(folder, model, existing_groups, include_sight
         if media_path.suffix.casefold() not in VISION_MEDIA_EXTS:
             continue
         latest = _valid_vocabulary_sight_block(folder_path, media_name, metadata, model)
-        current = latest if latest and str(latest.get("contextSignature") or "") == signature else None
+        current = latest
         item = {
             "file": media_name,
             "cached": bool(current),

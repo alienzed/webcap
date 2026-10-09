@@ -322,12 +322,14 @@ function buildFocusedReviewCandidate(mediaItem) {
     omittedAssignments: getCaptionAssistOmittedAssignments(
       mediaItem.key,
       captionText,
-      request.assignments
+      request.assignments,
+      request.tags
     ),
     omittedCorrections: getCaptionAssistOmittedCorrections(
       mediaItem.key,
       captionText,
-      request.assignments
+      request.assignments,
+      request.tags
     ),
     requestFingerprint: captionAssistRequestFingerprint(mediaItem, request),
     reviewSeed: true

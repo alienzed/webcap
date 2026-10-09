@@ -498,7 +498,7 @@ def test_focus_caption_orders_warnings_then_editable_caption_then_vision_sight()
     sight = html.index('id="editor-caption-vision-phrases"')
     assert findings < candidate < sight
     assert "requestVisionCaptionExtras(mediaItem, task.captionText" in focus
-    assert "Vision extras" in primer
+    assert "Suggested tags from Sight" in primer
     assert "fullDescription" not in primer
     assert "insertFocusedCaptionVisionPhrase(phrase)" in primer
     assert "blendFocusedCaptionVisionPhrase(phrase)" in primer

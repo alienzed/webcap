@@ -580,7 +580,11 @@
       })
     });
     }).then(function (payload) {
-      if (!payload) return null;
+      if (!payload) {
+        qaWorkbenchState.deepScanSubmitting = false;
+        renderQaWorkbench();
+        return null;
+      }
       if (
         sessionToken !== qaWorkbenchState.deepScanSessionToken ||
         !qaWorkbenchState.deepScanSessionActive ||

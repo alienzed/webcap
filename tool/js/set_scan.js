@@ -425,7 +425,7 @@
     });
   }
 
-  function requestSight(folder, model, media) {
+  function requestSight(folder, model, media, isCancelled) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -441,6 +441,11 @@
       }
       setScanState.currentVisionJobId = String(payload.job.jobId || '');
       trackTransientLlmJob(payload.job);
+      if (isCancelled && isCancelled()) {
+        return cancelCaptionAssistJob(setScanState.currentVisionJobId).then(function () {
+          throw new Error('Sight refresh cancelled.');
+        });
+      }
       return waitForCaptionAssistJob(payload.job);
     }).then(function (job) {
       setScanState.currentVisionJobId = '';
@@ -466,7 +471,7 @@
     });
   }
 
-  function requestContextSight(folder, model, media, context) {
+  function requestContextSight(folder, model, media, context, isCancelled) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -484,6 +489,11 @@
       }
       setScanState.currentVisionJobId = String(payload.job.jobId || '');
       trackTransientLlmJob(payload.job);
+      if (isCancelled && isCancelled()) {
+        return cancelCaptionAssistJob(setScanState.currentVisionJobId).then(function () {
+          throw new Error('Sight refresh cancelled.');
+        });
+      }
       return waitForCaptionAssistJob(payload.job);
     }).then(function (job) {
       setScanState.currentVisionJobId = '';
@@ -958,6 +968,7 @@
     var open = opts.open !== false;
     var context = opts.context !== false;
     if (!open && !context) return Promise.resolve(false);
+    if (opts.isCancelled && opts.isCancelled()) return Promise.resolve(false);
     if (!mediaItem || !mediaItem.fileName) return Promise.reject(new Error('Select a media item to refresh Sight.'));
     if (setScanState.running || itemSightRefreshActive) {
       return Promise.reject(new Error('A Sight scan is already running.'));
@@ -970,7 +981,9 @@
     itemSightRefreshActive = true;
     var failures = [];
     function stage(label, request, save) {
+      if (opts.isCancelled && opts.isCancelled()) return Promise.resolve(false);
       return request().then(function (result) {
+        if (opts.isCancelled && opts.isCancelled()) return false;
         if (!result.sight) throw new Error(result.warning || (label + ' returned no structured observation.'));
         return save(result.sight).then(function () {
           if (result.warning) {
@@ -979,6 +992,7 @@
           return true;
         });
       }).catch(function (err) {
+        if (opts.isCancelled && opts.isCancelled()) return false;
         failures.push(label + ': ' + String(err && err.message || err));
         reportConsoleError('Sight refresh ' + file, err);
         return false;
@@ -988,6 +1002,7 @@
       if (opts.open === 'missing') {
         return requestJson('/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model))
           .then(function (report) {
+            if (opts.isCancelled && opts.isCancelled()) return;
             var row = (report.items || []).find(function (entry) { return entry.file === file; });
             if (!row) throw new Error('Open Sight status did not include ' + file + '.');
             open = !row.structured;
@@ -995,15 +1010,16 @@
       }
     }).then(function () {
       if (open) return stage('Open Sight',
-        function () { return requestSight(folder, model, file); },
+        function () { return requestSight(folder, model, file, opts.isCancelled); },
         function (sight) { return saveSight(folder, model, file, sight); });
     }).then(function () {
       if (context) return stage('Context Sight',
-        function () { return requestContextSight(folder, model, file, visionContext); },
+        function () { return requestContextSight(folder, model, file, visionContext, opts.isCancelled); },
         function (sight) { return saveContextSight(folder, model, file, visionContext, sight); });
     }).then(function () {
+      if (opts.isCancelled && opts.isCancelled()) return false;
       if (failures.length) throw new Error(failures.join(' | '));
-      window.setStatus('Sight refreshed for ' + file + '.');
+      if (!opts.silent) window.setStatus('Sight refreshed for ' + file + '.');
       return true;
     }).finally(function () {
       setScanState.currentVisionJobId = '';

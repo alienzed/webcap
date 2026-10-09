@@ -22,6 +22,7 @@
     trainingFocus: '',
     findings: [],
     deterministicFindings: [],
+    statisticalCandidates: [],
     aiFindings: [],
     aiSummary: '',
     aiScopeSignature: '',
@@ -254,12 +255,12 @@
     (items || []).forEach(function (item) {
       if (item && item.fileName) wanted[item.fileName] = true;
     });
-    return qaWorkbenchState.deterministicFindings.filter(function (finding) {
+    return qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.statisticalCandidates).filter(function (finding) {
       return (finding.files || []).some(function (file) { return !!wanted[file]; });
     }).map(function (finding) {
       return {
         category: finding.category,
-        title: finding.title,
+        title: finding.source === 'statistical' ? 'Unverified statistical association: ' + finding.title : finding.title,
         summary: finding.summary,
         files: (finding.files || []).filter(function (file) { return !!wanted[file]; }).slice(0, 12)
       };
@@ -530,7 +531,7 @@
 
     var pending = qaPendingDeepScanItems();
     var candidates = {};
-    qaWorkbenchState.deterministicFindings.forEach(function (finding) {
+    qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.statisticalCandidates).forEach(function (finding) {
       (finding.files || []).forEach(function (file) { candidates[file] = true; });
     });
     pending.sort(function (a, b) { return Number(!!candidates[b.fileName]) - Number(!!candidates[a.fileName]); });
@@ -977,17 +978,18 @@
       var targetLookup = {};
       (filesByKey[row.targetKey] || []).forEach(function (fileName) { targetLookup[fileName] = true; });
       var exceptionFiles = sourceFiles.filter(function (fileName) { return !targetLookup[fileName]; });
-      var sourceLabel = labelByKey[row.sourceKey];
-      var targetLabel = labelByKey[row.targetKey];
+      var sourceLabel = groupByKey[row.sourceKey] + ': ' + labelByKey[row.sourceKey];
+      var targetLabel = groupByKey[row.targetKey] + ': ' + labelByKey[row.targetKey];
       findings.push({
         id: qaStableId(['consistency', sourceLabel, targetLabel]),
+        source: 'statistical',
         category: 'consistency',
         priority: 'normal',
         confidence: 'high',
         title: sourceLabel + ' almost always appears with ' + targetLabel,
         summary: row.co + ' of ' + row.sourceSupport + ' ' + sourceLabel + ' items also use ' + targetLabel + '; ' + row.exceptions + ' exception' + (row.exceptions === 1 ? '' : 's') + ' stand out.',
-        why: 'A near-universal cross-group relationship makes the exceptions worth checking, without assuming they are wrong.',
-        files: sourceFiles.slice(),
+        why: 'This is only a statistical relationship; the exceptions may be legitimate variations rather than annotation errors.',
+        files: exceptionFiles.slice(),
         facts: [
           { value: Math.round(row.confidence * 100) + '%', label: 'association' },
           { value: String(row.exceptions), label: 'exceptions' }
@@ -1277,17 +1279,25 @@
 
   function qaComputeFindings(items) {
     var groups = qaBuildGroupStats(items);
+    var statisticalCandidates = qaBuildAssociationFindings(items);
+    var representationObservations = qaBuildUnderrepresentedFindings(items, groups)
+      .concat(qaBuildOverrepresentedFindings(items, groups));
     var findings = []
-      .concat(qaBuildUnderrepresentedFindings(items, groups))
-      .concat(qaBuildOverrepresentedFindings(items, groups))
       .concat(qaBuildPruneFindings(items))
       .concat(qaBuildDuplicateFindings(items))
-      .concat(qaBuildAssociationFindings(items))
       .concat(qaBuildVisualAgreementFindings(items))
       .concat(qaBuildCaptionFindings(items));
     return {
       findings: qaSortFindings(findings),
-      observations: qaBuildObservations(items),
+      statisticalCandidates: statisticalCandidates,
+      observations: qaBuildObservations(items).concat(representationObservations).concat(statisticalCandidates.map(function (candidate) {
+        return {
+          id: candidate.id,
+          title: 'Unverified pattern: ' + candidate.title,
+          summary: candidate.summary,
+          files: candidate.files.slice()
+        };
+      })),
       health: qaBuildHealth(items)
     };
   }
@@ -1870,6 +1880,7 @@
     qaWorkbenchState.scopeKey = scopeKey;
     var result = qaComputeFindings(items);
     qaWorkbenchState.deterministicFindings = result.findings;
+    qaWorkbenchState.statisticalCandidates = result.statisticalCandidates;
     qaMergeFindings();
     qaWorkbenchState.observations = result.observations;
     var recommendations = qaGetRecommendations();

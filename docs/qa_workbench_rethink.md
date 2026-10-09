@@ -14,6 +14,7 @@ Audit basis: current `main` review, metadata, annotation, focus-set, prune, dupl
 - Every review item shows why it was queued and whether its proposed caption is unchanged. Successful no-findings, uncertain, failed, and not-yet-reviewed work must not be conflated.
 - Existing processing can outlive the overlay; closing it is not the same as cancelling Deep QA. Clearly distinguish an empty *currently ready* queue from a fully examined set.
 - Freshness/refresh controls should identify whether they rerun Sight or Director. No automatic rescan merely for opening the review.
+- Manual Caption, Sight, and Vision refreshes in QA Focus Review temporarily pause unsubmitted background QA work; already-running jobs and the shared FIFO GPU arbiter are unchanged.
 
 **Implementation status:** staged on `feature/qa-focus-review-guided-round` for integration testing; do not consider the workflow accepted until browser tests confirm progressive queue arrival, filters, apply/skip/dismiss, stale candidate treatment, closing/re-entry, and recovery from inference errors.
 

@@ -1019,6 +1019,15 @@
         function () { return requestSight(folder, model, file, opts.isCancelled); },
         function (sight) { return saveSight(folder, model, file, sight); });
     }).then(function () {
+      if (opts.context === 'missing') {
+        return requestContextStatus(folder, model, visionContext).then(function (report) {
+          if (opts.isCancelled && opts.isCancelled()) return;
+          var row = (report.items || []).find(function (entry) { return entry.file === file; });
+          if (!row) throw new Error('Context Sight status did not include ' + file + '.');
+          context = !row.cached;
+        });
+      }
+    }).then(function () {
       if (context) return stage('Context Sight',
         function () { return requestContextSight(folder, model, file, visionContext, opts.isCancelled); },
         function (sight) { return saveContextSight(folder, model, file, visionContext, sight); });

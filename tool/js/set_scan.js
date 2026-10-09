@@ -497,8 +497,13 @@
       return waitForCaptionAssistJob(payload.job);
     }).then(function (job) {
       setScanState.currentVisionJobId = '';
+      var sight = job && job.result && job.result.vocabularySight || null;
+      var warnings = sight && sight.diagnostics && sight.diagnostics.parseWarnings || [];
+      if (warnings.length) {
+        reportConsoleWarning('Context Sight ' + media, warnings.length + ' malformed model match entries skipped: ' + warnings.join(' | '));
+      }
       return {
-        sight: job && job.result && job.result.vocabularySight || null,
+        sight: sight,
         text: String(job && job.result && job.result.text || ''),
         warning: String(job && job.result && job.result.structureWarning || '')
       };

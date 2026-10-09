@@ -381,7 +381,7 @@ function setFocusedCaptionCandidateCaretOffset(textEl, offset) {
 }
 
 function insertFocusedCaptionVisionPhrase(phrase) {
-  if (!isFocusedCaptionOpen() || !captionAssistCandidate || !state.currentItem) return false;
+  if (!captionAssistCandidate || !state.currentItem) return false;
   if (captionAssistCandidate.mediaKey !== state.currentItem.key) return false;
   var textEl = document.getElementById('editor-caption-candidate-text');
   var value = String(phrase || '').trim();

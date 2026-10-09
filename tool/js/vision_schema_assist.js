@@ -616,7 +616,7 @@
     }
     var opts = options || {};
     var resumeStage = String(opts.resumeStage || 'evidence');
-    schemaState.scopeFiles = getCurrentSetMediaFileNames();
+    // Keep the same explicit selection through synthesis, challenge, and retries.
     if (!schemaState.scopeFiles.length) {
       setStatus('This Set has no media to analyze.', true);
       return;
@@ -1238,7 +1238,7 @@
   function applySelected() {
     if (schemaState.vocabularyComplete && schemaState.mode === 'vocabulary') {
       close();
-      openGuidedTagPass({ source: 'set' });
+      openGuidedTagPass({ source: 'set', files: schemaState.scopeFiles.slice() });
       return;
     }
     if (schemaState.mode === 'tags') {
@@ -1261,11 +1261,12 @@
 
   function guidedScopeFiles(options) {
     var opts = options || {};
+    if (Array.isArray(opts.files)) return opts.files.slice();
     if (opts.source === 'grid' && mediaGridIsOpen()) {
       return mediaGridGetVisibleFileNamesSnapshot();
     }
     if (opts.source === 'set') {
-      return getCurrentSetMediaFileNames();
+      return getVisibleMediaSelectionForTraining();
     }
     return getVisibleMediaSelectionForTraining();
   }
@@ -1340,7 +1341,8 @@
     });
   }
 
-  function open() {
+  function open(options) {
+    var opts = options || {};
     var folder = currentFolder();
     var model = currentVisionModel();
     if (!folder) {
@@ -1351,7 +1353,11 @@
       setStatus('Select a Vision model first.', true);
       return;
     }
-    var files = getCurrentSetMediaFileNames();
+    var files = Array.isArray(opts.files) ? opts.files.slice() : getVisibleMediaSelectionForTraining();
+    if (!files.length) {
+      window.setStatus('No media match the current selection for Discover Vocabulary.');
+      return;
+    }
     var sessionKey = discoverySessionKey(
       folder,
       model,

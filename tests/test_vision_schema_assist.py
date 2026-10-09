@@ -579,7 +579,7 @@ def test_context_sight_keeps_valid_matches_and_reports_malformed_entries():
         {"group": "Shape", "terms": ["triangle"]},
         {"group": "View", "terms": ["front"]},
     ]
-    assert len(payload["diagnostics"]["parseWarnings"]) == 3
+    assert len(payload["diagnostics"]["parseWarnings"]) == 4
 
 
 def test_context_sight_keeps_caption_when_all_optional_matches_are_malformed():

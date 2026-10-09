@@ -379,7 +379,9 @@ function renderChecklistGroupTermsModal() {
   var titleEl = document.getElementById('checklist-group-terms-modal-title');
   var inputEl = document.getElementById('checklist-group-terms-input');
   var separatorEl = document.getElementById('checklist-group-primer-separator');
+  var aliasEl = document.getElementById('checklist-group-alias');
   if (!checklistGroupTermsModalState) return;
+  if (aliasEl) aliasEl.value = getRequirementGroupAlias(checklistGroupTermsModalState.requirement);
   if (titleEl) {
     titleEl.textContent = 'Edit Terms: ' + checklistGroupTermsModalState.requirement;
   }
@@ -491,6 +493,14 @@ if (document.getElementById('checklist-group-terms-add-btn')) {
   document.getElementById('checklist-group-terms-add-btn').addEventListener('click', function () {
     var input = document.getElementById('checklist-group-terms-input');
     addChecklistGroupModalTerm(input ? input.value : '');
+  });
+}
+
+if (document.getElementById('checklist-group-alias')) {
+  document.getElementById('checklist-group-alias').addEventListener('change', function () {
+    if (!checklistGroupTermsModalState) return;
+    var label = checklistGroupTermsModalState.requirement;
+    if (setRequirementGroupAlias(label, this.value)) setStatus('Updated group alias for ' + label + '.');
   });
 }
 

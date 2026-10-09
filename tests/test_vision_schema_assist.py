@@ -601,3 +601,17 @@ def test_context_sight_missing_matches_keeps_valid_caption():
     assert payload["caption"] == "A clear visual observation."
     assert payload["matches"] == []
     assert payload["diagnostics"]["parseWarnings"]
+
+def test_context_sight_preserves_group_label_and_uses_alias_for_semantics():
+    groups = [{"group": "BB Back", "alias": "Bikini Bottom Back", "terms": ["thong"]}]
+    messages = vision_schema_assist.build_vision_vocabulary_sight_messages("data:image/png;base64,abc", groups)
+    prompt = messages[1]["content"][0]["text"]
+    assert '"alias": "Bikini Bottom Back"' in prompt
+    assert "always use the original group label" in prompt
+    changed = [{"group": "BB Back", "alias": "Bikini Bottom Construction", "terms": ["thong"]}]
+    assert vision_schema_assist.vision_vocabulary_group_signature(groups) != vision_schema_assist.vision_vocabulary_group_signature(changed)
+    result = vision_schema_assist.normalize_vision_vocabulary_sight_payload(
+        {"caption": "Bikini bottom", "matches": [{"group": "BB Back", "terms": ["thong"]}]}, groups
+    )
+    assert result["matches"] == [{"group": "BB Back", "terms": ["thong"]}]
+    assert vision_schema_contract._normalize_existing_groups(groups)[0]["alias"] == "Bikini Bottom Back"

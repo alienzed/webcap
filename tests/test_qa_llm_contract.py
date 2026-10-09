@@ -128,3 +128,9 @@ def test_qa_deep_scan_allows_clean_set_with_zero_findings():
         "summary": "No useful semantic issues found.",
         "findings": [],
     }
+
+def test_qa_prompt_explains_group_alias_but_preserves_label():
+    items = _items()
+    items[0]["groupedTags"][0]["alias"] = "Bikini Top Shape"
+    contract = build_request(items)
+    assert "BT Shape (Bikini Top Shape): triangle" in contract["prompt"]

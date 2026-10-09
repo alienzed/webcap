@@ -229,3 +229,18 @@ def test_caption_assist_route_passes_corrections_to_prompt(monkeypatch):
     assert response.status_code == 202
     payload = json.loads(captured["contract"]["messages"][1]["content"].split("\n\n", 1)[1])
     assert payload["corrections"][0]["term"] == "red"
+
+def test_semantic_group_alias_reaches_caption_and_template_assist_without_changing_key():
+    caption = caption_ops.build_caption_assist_messages(
+        assignments=[{"group": "BB Back", "alias": "Bikini Bottom Back", "key": "bb_back", "term": "thong"}],
+    )
+    payload = json.loads(caption[1]["content"].split("\n\n", 1)[1])
+    assert payload["groupedAnnotations"][0] == {
+        "group": "BB Back", "alias": "Bikini Bottom Back", "key": "bb_back", "tag": "thong"
+    }
+    groups = [{"label": "BB Back", "alias": "Bikini Bottom Back", "key": "bb_back",
+               "terms": [{"value": "thong"}]}]
+    template = caption_ops.build_caption_template_assist_messages(groups=groups)
+    data = json.loads(template[1]["content"].split("\n\n", 1)[1])
+    assert data["groupsInOrder"][0]["alias"] == "Bikini Bottom Back"
+    assert data["availableKeys"] == ["bb_back"]

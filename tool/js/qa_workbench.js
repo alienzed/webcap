@@ -231,6 +231,7 @@
         groupedTags: getChecklistAssignmentEntriesForMediaKey(key).map(function (entry) {
           return {
             group: String(entry && entry.requirement || ''),
+            alias: getRequirementGroupAlias(entry && entry.requirement),
             term: String(entry && entry.term || '')
           };
         }),

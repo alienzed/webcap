@@ -139,3 +139,12 @@ If legacy text fields existed, new saves overwrite with structured state as sour
 4. Placeholder rendering removes unresolved keys and honors conditional punctuation/phrase wrappers.
 5. Review compute consumes structured rules and returns expected failures.
 6. Existing review/caption workflows remain functional without legacy textareas.
+
+## Group aliases (2026-10-09)
+
+Existing `primer.keyAliases` defaults, including `Viewpoint → View` and `Key Phrase → Subject`, now serve as optional semantic aliases in the **existing Edit Terms** group modal. Edits are stored as per-Set overrides under `primer.keyAliases` in `.webcap_state.json`; blank overrides can clear defaults.
+
+- The **group label** remains the annotation identity and the canonical group in Vision results.
+- The **alias** is a human-readable equivalent passed to Vision and Director, never an annotation rename.
+- Primer placeholders are **always derived from the label**, e.g. `Viewpoint → {viewpoint}`, `Key Phrase → {key_phrase}`, `BB Back → {bb_back}`. The old alias-derived placeholders `{view}` and `{subject}` are intentionally unsupported as group defaults; hand-written mappings may still use their keys. No automatic template migration.
+- Context Sight's cache signature includes aliases so changes invalidate old group-specific results. Caption Assist and QA keep their existing UI and execution behavior.

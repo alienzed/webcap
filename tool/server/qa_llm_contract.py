@@ -85,7 +85,7 @@ def _normalize_items(items):
             group = _clean(entry.get("group"))
             term = _clean(entry.get("term"))
             if group and term:
-                grouped.append({"group": group, "term": term})
+                grouped.append({"group": group, "alias": _clean(entry.get("alias")), "term": term})
 
         tags = []
         for value in item.get("tags") or []:
@@ -206,7 +206,7 @@ def _response_schema():
 
 def _render_item(row):
     grouped = " | ".join(
-        entry["group"] + ": " + entry["term"]
+        entry["group"] + (" (" + entry["alias"] + ")" if entry["alias"] else "") + ": " + entry["term"]
         for entry in row["groupedTags"]
     )
     parts = [

@@ -85,7 +85,7 @@ function openPrimerTemplateHelpInPreview() {
     '<p style="margin:0 0 10px 0;">Caption Template builds a starter caption from your tags and provides structure for Caption Assist. Saved Set templates take precedence over the app default.</p>' +
     '<h4 style="margin:12px 0 6px 0;font-size:14px;">How It Works</h4>' +
     '<ul style="margin:0 0 8px 18px;padding:0;">' +
-    '<li style="margin:0 0 6px 0;">Write placeholders like <code>{position}</code>, <code>{lighting}</code>, and <code>{view}</code>.</li>' +
+    '<li style="margin:0 0 6px 0;">Write placeholders like <code>{position}</code>, <code>{lighting}</code>, and <code>{viewpoint}</code>.</li>' +
     '<li style="margin:0 0 6px 0;">Use the live group placeholder buttons under the template to insert the current requirement keys without typing them manually.</li>' +
     '<li style="margin:0 0 6px 0;">If a placeholder has no matching value, it disappears cleanly.</li>' +
     '<li style="margin:0 0 6px 0;">The built-in starter includes custom groups among the subject details. Use Template Assist to refine their placement from the group names and vocabulary, then review and accept the result.</li>' +
@@ -693,6 +693,7 @@ function buildPrimerTemplateAssistRequest() {
     });
     groups.push({
       label: label,
+      alias: getRequirementGroupAlias(label),
       key: key,
       separator: getChecklistPrimerSeparatorForRequirement(label),
       precedence: JSON.parse(JSON.stringify(checklistPrimerPrecedenceByGroup[label] || {})),
@@ -932,6 +933,7 @@ function buildCaptionAssistRequest(mediaItem) {
   var assignments = getChecklistAssignmentEntriesForMediaKey(mediaKey).map(function (entry) {
     return {
       group: String(entry.requirement || '').trim(),
+      alias: getRequirementGroupAlias(entry.requirement),
       key: normalizeRequirementPrimerKey(entry.requirement),
       term: String(entry.term || '').trim()
     };

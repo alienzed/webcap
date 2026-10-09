@@ -5,6 +5,34 @@
  * 
  * @returns {object} - The sanitized folder state object
  */
+// Local overrides of existing primer.keyAliases defaults. These are semantic
+// group names; annotation identity and template placeholders use the label.
+var requirementGroupAliasOverrides = {};
+
+function getRequirementGroupAlias(label) {
+  var key = String(label || '').trim().toLowerCase();
+  if (!key) return '';
+  if (Object.prototype.hasOwnProperty.call(requirementGroupAliasOverrides, key)) {
+    return requirementGroupAliasOverrides[key];
+  }
+  return String(DEFAULT_REQUIREMENT_PRIMER_KEY_ALIASES[key] || '');
+}
+
+function setRequirementGroupAlias(label, alias) {
+  var key = String(label || '').trim().toLowerCase();
+  if (!key) throw new Error('Group alias requires a group label.');
+  var value = String(alias || '').trim().replace(/\s+/g, ' ');
+  if (getRequirementGroupAlias(label) === value) return false;
+  if (value === String(DEFAULT_REQUIREMENT_PRIMER_KEY_ALIASES[key] || '')) {
+    delete requirementGroupAliasOverrides[key];
+  } else {
+    // Explicit empty values permit clearing shipped defaults.
+    requirementGroupAliasOverrides[key] = value;
+  }
+  saveChecklistToFolderState();
+  return true;
+}
+
 function sanitizeFolderState(data) {
   var src = data || {};
   var stats = src.stats || {};
@@ -41,6 +69,14 @@ function sanitizeFolderState(data) {
   var primerMappingsValue = Array.isArray(primer.mappings)
     ? JSON.parse(JSON.stringify(primer.mappings))
     : (typeof primer.mappings === 'string' ? String(primer.mappings) : []);
+  var keyAliases = {};
+  if (primer.keyAliases && typeof primer.keyAliases === 'object' && !Array.isArray(primer.keyAliases)) {
+    Object.keys(primer.keyAliases).forEach(function (label) {
+      var key = String(label || '').trim().toLowerCase();
+      if (!key || typeof primer.keyAliases[label] !== 'string') return;
+      keyAliases[key] = primer.keyAliases[label].trim().replace(/\s+/g, ' ').slice(0, 120);
+    });
+  }
   var reviewedKeys = Array.isArray(src.reviewedKeys) ? src.reviewedKeys : [];
   reviewedKeys = reviewedKeys.map(function (key) { return String(key || ''); }).filter(Boolean);
   var captionHiddenRequirements = Array.isArray(src.caption_hidden_requirements)
@@ -198,7 +234,8 @@ function sanitizeFolderState(data) {
     },
     primer: {
       template: String(primer.template || ''),
-      mappings: primerMappingsValue
+      mappings: primerMappingsValue,
+      keyAliases: keyAliases
     },
     reviewedKeys: reviewedKeys,
     flags: (typeof src.flags === 'object' && src.flags) ? src.flags : {},
@@ -435,6 +472,7 @@ function snapshotFolderStateFromDom() {
   // so they are persisted. This function must snapshot ALL fields that should be saved.
   var stats = getOptionsFromDom();
   var primer = statsGetPrimerOptionsFromDom();
+  primer.keyAliases = Object.assign({}, requirementGroupAliasOverrides);
   // Folder state is authoritative. The visible list can be filtered, empty, or
   // temporarily replaced by SuperSet results; none of those states authorizes
   // removing unrelated associations from disk.
@@ -528,6 +566,7 @@ function applyFolderStateToDom(folderState) {
   // IMPORTANT: If you add new fields to the folder state, you MUST handle them here
   // so they are restored to both the global state and the UI. This function must apply ALL fields.
   var clean = sanitizeFolderState(folderState);
+  requirementGroupAliasOverrides = Object.assign({}, clean.primer.keyAliases);
   var hasSavedPrimerTemplate = !!(
     folderState &&
     folderState.primer &&
@@ -688,26 +727,8 @@ function renderMultilineTemplate(template, values) {
 }
 
 function normalizeRequirementPrimerKey(requirementLabel) {
-  var label = String(requirementLabel || '').trim();
-  if (!label) return '';
-  var lower = label.toLowerCase();
-  var aliases = DEFAULT_REQUIREMENT_PRIMER_KEY_ALIASES;
-  if (
-    typeof MAPPINGS_SYSTEM_DEFAULTS === 'object' &&
-    MAPPINGS_SYSTEM_DEFAULTS &&
-    MAPPINGS_SYSTEM_DEFAULTS.primer &&
-    typeof MAPPINGS_SYSTEM_DEFAULTS.primer.keyAliases === 'object'
-  ) {
-    aliases = MAPPINGS_SYSTEM_DEFAULTS.primer.keyAliases;
-  }
-  if (
-    typeof aliases === 'object' &&
-    aliases &&
-    aliases[lower]
-  ) {
-    return String(aliases[lower] || '').trim().toLowerCase();
-  }
-  return lower.replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  return String(requirementLabel || '').trim().toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
 function parseRequirementKeywordList(raw) {

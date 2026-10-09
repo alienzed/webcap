@@ -685,8 +685,8 @@ function stopFocusedCaption(message, options) {
   if (!focusedCaptionState.open) return true;
   if (captionAssistCandidate) persistCaptionAssistCandidate(captionAssistCandidate, false);
   var opts = options || {};
-  if (hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits) {
-    setStatus('This review caption has unsaved edits. Use Save → Next, or Skip before exiting.');
+  if (!isFocusedQaReviewMode() && hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits) {
+    setStatus('This review caption has unsaved edits. Save or Skip before exiting.');
     return false;
   }
   var stoppingLabel = focusedCaptionModeLabel();

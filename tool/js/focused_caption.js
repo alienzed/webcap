@@ -397,6 +397,8 @@ function cancelFocusedCaptionPrefetch() {
       reportConsoleWarning('Focus Caption', 'Could not cancel lookahead Sight: ' + String(err && err.message || err));
       return false;
     }));
+    // Do not start another per-item Sight while the cancelled one is still settling.
+    if (prefetch.promise) cancellations.push(prefetch.promise.then(function () { return true; }));
   }
   if (prefetch.phraseTask && !prefetch.phraseTask.result) {
     cancellations.push(cancelFocusedCaptionVisionPhraseTask(prefetch.phraseTask));

@@ -1579,6 +1579,14 @@ function runCaptionAssistFromUi() {
 }
 
 function refreshCaptionAssistFromUi() {
+  // Manual Director refresh outranks the next unsubmitted background QA item.
+  if (isFocusedQaReviewMode()) {
+    return qaFocusReviewInteractiveRefresh(refreshCaptionAssistCurrentCandidate);
+  }
+  return refreshCaptionAssistCurrentCandidate();
+}
+
+function refreshCaptionAssistCurrentCandidate() {
   var item = getPrimerResetCurrentMediaItem();
   var candidate = captionAssistCandidate;
   if (!item || !candidate || candidate.mediaKey !== item.key) {

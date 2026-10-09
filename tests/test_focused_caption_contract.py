@@ -498,7 +498,7 @@ def test_focus_caption_orders_warnings_then_editable_caption_then_vision_sight()
     sight = html.index('id="editor-caption-vision-phrases"')
     assert findings < candidate < sight
     assert "requestVisionCaptionExtras(mediaItem, task.captionText" in focus
-    assert "Vision extras" in primer
+    assert "Suggested tags from Sight" in primer
     assert "fullDescription" not in primer
     assert "insertFocusedCaptionVisionPhrase(phrase)" in primer
     assert "blendFocusedCaptionVisionPhrase(phrase)" in primer
@@ -877,8 +877,7 @@ def test_focus_caption_vision_extras_use_current_edited_candidate_and_no_prose_d
     assert "createFocusedCaptionVisionPhraseTask(mediaItem, captionAssistCandidate.text)" in focus
     assert "prefetch.candidate ? prefetch.candidate.text : ''" in focus
     assert "extractFocusedCaptionVisionPhrases" not in focus
-    assert "Vision extras" in primer
-    assert "Refresh extras" in primer
+    assert "function getCaptionAssistTagSuggestions(mediaItem)" in primer
     assert "caption-vision-description" not in primer.split("function syncFocusedCaptionVisionPhrasesUi()", 1)[1].split("function syncCaptionAssistCandidateUi()", 1)[0]
     assert "'/caption/vision-extras'" in vision
     assert "window.requestVisionCaptionExtras = requestVisionCaptionExtras;" in vision
@@ -988,22 +987,22 @@ def test_caption_assist_sight_partial_failure_is_logged_and_not_marked_full_succ
     assert "fatalFailures.length" in scan
 
 
-def test_caption_assist_surfaces_existing_sight_novel_terms_without_extra_inference():
+def test_caption_assist_surfaces_existing_sight_as_tag_suggestions_without_extra_inference():
     primer = _read("tool/js/primer_settings.js")
     qa = _read("tool/js/qa_workbench.js")
-    start = primer.split("function getCaptionAssistSightSuggestions(mediaItem, captionText)", 1)[1].split(
-        "function syncFocusedCaptionVisionPhrasesUi()", 1
+    start = primer.split("function getCaptionAssistTagSuggestions(mediaItem)", 1)[1].split(
+        "function refreshCaptionAssistAfterTagMutation(", 1
     )[0]
     ui = primer.split("function syncFocusedCaptionVisionPhrasesUi()", 1)[1].split(
         "function syncCaptionAssistCandidateUi()", 1
     )[0]
+    assert "context.matches" in start
     assert "context.diagnostics && context.diagnostics.unmatched" in start
     assert "inventory.details" in start
     assert "inventory.things" in start
-    assert "captionContainsPhrase(caption, term)" in start
-    assert ".slice(0, 6)" in start
-    assert "getCaptionAssistSightSuggestions(state.currentItem, captionAssistCandidate.text)" in ui
-    assert "insertFocusedCaptionVisionPhrase(phrase)" in ui
+    assert ".slice(0, 6)" not in start
+    assert "getCaptionAssistTagSuggestions(item)" in ui
+    assert "acceptCaptionAssistTagSuggestion(mediaKey, suggestion)" in ui
     assert "requestVisionCaptionExtras(" not in ui
     assert "unmatched: (contextSight.diagnostics" in qa
 
@@ -1017,6 +1016,13 @@ def test_caption_assist_uses_sight_for_explicit_tag_actions():
     assert "getChecklistRequirementsForTag(term)" in source
     assert "mergeChecklistKeywordTermsForRequirement(group, [term], { skipRefresh: true })" in source
     assert "assignChecklistTagToMediaKey(mediaKey, group, term)" in source
+    add = source.split("function acceptCaptionAssistTagSuggestion(mediaKey, suggestion)", 1)[1].split(
+        "function removeCaptionAssistAssignedTag(", 1
+    )[0]
+    assert add.index("mergeChecklistKeywordTermsForRequirement(") < add.index(
+        "assignChecklistTagToMediaKey(") < add.index("saveChecklistToFolderState();")
+    assert "getTagsForMediaKey(mediaKey)" in source
+    assert "row.scrollTop = previousScrollTop;" in source
     assert "addTagToMediaKey(mediaKey, term)" in source
     assert "removeTagFromMediaKey(mediaKey, term)" in source
     assert "annotationsAtGeneration" in source

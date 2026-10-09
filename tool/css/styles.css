@@ -6833,5 +6833,5 @@ html[data-theme="dark"] iframe {
 }
 .caption-assist-assigned-tags { margin-top: 12px; font-size: 13px; }
 .caption-assist-assigned-tags summary { cursor: pointer; color: var(--muted); margin-bottom: 8px; }
-.editor-caption-vision-phrases { overflow: auto; min-height: 0; }
+.editor-caption-vision-phrases { overflow: auto; min-height: 0; max-height: min(320px, 35vh); }
 

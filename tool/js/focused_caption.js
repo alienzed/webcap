@@ -392,6 +392,15 @@ function cancelFocusedCaptionPrefetch() {
   if (prefetch.visionTask && !prefetch.visionTask.result) {
     cancellations.push(cancelCaptionVisionTask(prefetch.visionTask, 'Focus Caption Vision'));
   }
+  if (prefetch.sightPending) {
+    cancellations.push(cancelItemSightRefresh().catch(function (err) {
+      reportConsoleWarning('Focus Caption', 'Could not cancel lookahead Sight: ' + String(err && err.message || err));
+      return false;
+    }));
+  }
+  if (prefetch.phraseTask && !prefetch.phraseTask.result) {
+    cancellations.push(cancelFocusedCaptionVisionPhraseTask(prefetch.phraseTask));
+  }
   if (!cancellations.length) return Promise.resolve(true);
   return Promise.all(cancellations).then(function () { return true; });
 }
@@ -443,9 +452,59 @@ function syncFocusedCaptionVisionPreference() {
   return beginFocusedCaptionPrefetchVision(prefetch, mediaItem, prefetch.candidate);
 }
 
-function startFocusedCaptionPrefetch() {
-  // Sight must be prepared before the Director, so speculative candidates are invalid.
-  return cancelFocusedCaptionPrefetch();
+function startFocusedCaptionPrefetch(sourceMediaKey) {
+  if (!focusedCaptionState.open || isFocusedCaptionReviewMode() ||
+      focusedCaptionState.itemKey !== String(sourceMediaKey || '') ||
+      captionAssistPendingJobId) return Promise.resolve(false);
+  var target = getNextFocusedCaptionTarget(focusedCaptionState.itemIndex);
+  if (!target) return Promise.resolve(false);
+  if (focusedCaptionPrefetch && !focusedCaptionPrefetch.discarded &&
+      focusedCaptionPrefetch.itemKey === target.itemKey) return focusedCaptionPrefetch.promise;
+
+  return cancelFocusedCaptionPrefetch().then(function () {
+    if (!focusedCaptionState.open || isFocusedCaptionReviewMode() ||
+        focusedCaptionState.itemKey !== String(sourceMediaKey || '') ||
+        captionAssistPendingJobId) return false;
+    var prefetch = {
+      itemKey: target.itemKey, index: target.index, folder: String(state.folder || ''),
+      fingerprint: '', jobId: '', candidate: null, sightPending: true,
+      discarded: false, visionTask: null, phraseTask: null, promise: null
+    };
+    focusedCaptionPrefetch = prefetch;
+    function active() {
+      return !prefetch.discarded && focusedCaptionPrefetch === prefetch &&
+        focusedCaptionState.open && String(state.folder || '') === prefetch.folder;
+    }
+    prefetch.promise = loadCaptionVisionCapabilities().then(function () {
+      if (!active()) return null;
+      return refreshSetIntelligenceItem(target.item, {
+        open: 'missing', context: true, silent: true,
+        isCancelled: function () { return prefetch.discarded; }
+      });
+    }).then(function (prepared) {
+      prefetch.sightPending = false;
+      if (!active() || prepared !== true) return null;
+      var request = buildCaptionAssistRequest(target.item);
+      prefetch.fingerprint = captionAssistRequestFingerprint(target.item, request);
+      if (!request.model) throw new Error('Select a Director model before using Caption Assist.');
+      return requestCaptionAssistCandidate(target.item, request, {
+        onJob: function (job) {
+          prefetch.jobId = String(job.jobId || '');
+          if (prefetch.discarded) return cancelCaptionAssistJob(prefetch.jobId);
+          return null;
+        }
+      });
+    }).then(function (candidate) {
+      if (!active() || !candidate) return null;
+      prefetch.candidate = candidate;
+      return candidate;
+    }).catch(function (err) {
+      prefetch.sightPending = false;
+      if (!prefetch.discarded) reportConsoleError('Focus Caption', err);
+      return null;
+    });
+    return prefetch.promise;
+  });
 }
 
 function useFocusedCaptionPrefetchForCurrentItem() {
@@ -461,20 +520,13 @@ function useFocusedCaptionPrefetchForCurrentItem() {
     return cancelFocusedCaptionPrefetch().then(function () { return false; });
   }
 
-  var currentRequest = buildCaptionAssistRequest(mediaItem);
-  var currentFingerprint = captionAssistRequestFingerprint(mediaItem, currentRequest);
-  if (currentFingerprint !== prefetch.fingerprint) {
-    return cancelFocusedCaptionPrefetch().then(function () { return false; });
-  }
-
-  function presentCandidate(candidate) {
+   function presentCandidate(candidate) {
     if (!candidate || !focusedCaptionState.open || !state.currentItem || state.currentItem.key !== prefetch.itemKey) {
       return false;
     }
     var latestRequest = buildCaptionAssistRequest(state.currentItem);
     if (captionAssistRequestFingerprint(state.currentItem, latestRequest) !== prefetch.fingerprint) {
-      focusedCaptionPrefetch = null;
-      return false;
+      return cancelFocusedCaptionPrefetch().then(function () { return false; });
     }
     var adoptedPrefetch = prefetch;
     focusedCaptionPrefetch = null;
@@ -500,15 +552,7 @@ function useFocusedCaptionPrefetchForCurrentItem() {
         focusedCaptionState.discrepancySourceLabel || 'QA'
       );
     }
-    if (captionVisionEnabled) {
-      adoptCaptionVisionPrefetch(adoptedPrefetch, candidate).then(function () {
-        if (isFocusedCaptionOpen() && state.currentItem && state.currentItem.key === candidate.mediaKey) {
-          startFocusedCaptionPrefetch(candidate.mediaKey);
-        }
-      });
-    } else {
-      startFocusedCaptionPrefetch(candidate.mediaKey);
-    }
+    startFocusedCaptionPrefetch(candidate.mediaKey);
     return true;
   }
 
@@ -521,6 +565,10 @@ function useFocusedCaptionPrefetchForCurrentItem() {
     if (captionAssistPendingJobId === prefetch.jobId || captionAssistPendingJobId === 'prefetch') {
       captionAssistPendingJobId = '';
       updatePrimerCaptionResetUi();
+    }
+    if (!candidate) {
+      if (focusedCaptionPrefetch === prefetch) focusedCaptionPrefetch = null;
+      return false;
     }
     return presentCandidate(candidate);
   });
@@ -682,6 +730,8 @@ function prepareFocusedCaptionCurrentItem() {
   }
   return useFocusedCaptionPrefetchForCurrentItem().then(function (usedPrefetch) {
     if (usedPrefetch) return true;
+    if (!focusedCaptionState.open || !state.currentItem ||
+        state.currentItem.key !== focusedCaptionState.itemKey) return false;
     return runCaptionAssist();
   });
 }
@@ -765,11 +815,15 @@ function moveFocusedCaption(delta, options) {
     return Promise.resolve(false);
   }
   var step = delta < 0 ? -1 : 1;
+  var nextIndex = focusedCaptionState.itemIndex + step;
+  var keepPrefetch = focusedCaptionPrefetch && focusedCaptionPrefetch.index === nextIndex;
   return cancelFocusedCaptionCurrentRequest().then(function () {
+    return keepPrefetch ? true : cancelFocusedCaptionPrefetch();
+  }).then(function () {
     return cancelCurrentCaptionVision();
   }).then(function () {
     clearCaptionAssistCandidate();
-    return navigateFocusedCaptionToIndex(focusedCaptionState.itemIndex + step, step);
+    return navigateFocusedCaptionToIndex(nextIndex, step);
   });
 }
 

@@ -646,8 +646,10 @@ function syncCaptionVisionUi() {
   }
 
   recheck.disabled = !!captionVisionActiveTask || !modelAvailable;
+  recheck.textContent = 'Recheck Caption (Vision)';
+  refreshSight.textContent = 'Refresh Sight (Vision)';
   recheck.title = modelAvailable
-    ? 'Run a fresh visual check for this caption and item only.'
+    ? 'Vision (VL): check the current caption against this image.'
     : 'Select an available Vision model to recheck this item.';
   toggle.checked = !!captionVisionEnabled;
   toggle.disabled = !modelAvailable;
@@ -673,8 +675,7 @@ function syncCaptionVisionUi() {
     status.classList.remove('hidden');
   }
   if (!captionVisionResult && !captionQaResult) {
-    if (!status.textContent) status.textContent = 'Fresh Context Sight informed this caption. Use Recheck Vision for a separate caption-to-image check.';
-    status.classList.remove('hidden');
+    // Sight preparation is routine; no status banner unless there is an actionable issue.
     return;
   }
   var combinedFindings = (captionQaResult && captionQaResult.findings || []).concat(captionVisionResult && captionVisionResult.findings || []);

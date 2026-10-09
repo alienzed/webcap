@@ -111,8 +111,11 @@ def serve_media_file(folder: str, media_name: str):
 
 CAPTION_ASSIST_SYSTEM_PROMPT = (
     "You write concise, information-dense natural-language training captions for media dataset items. "
-    "The user's selected annotation tags are existing evidence that may be incomplete. Represent supported tags faithfully "
-    "while combining redundant wording naturally. Prefer compact visual phrases over prose padding: do not add phrases "
+    "Every tag in groupedAnnotations and otherTags is a deliberate user-selected caption fact. Attempt to convey "
+    "every distinct selected tag's meaning, including specific small details, rather than choosing a subset. "
+    "Combine redundant values naturally, but never silently omit a nonredundant selected value just to shorten "
+    "the caption, because the draft lacks it, or because Sight does not independently repeat it. "
+    "Prefer compact visual phrases over prose padding: do not add phrases "
     "such as 'the photo shows', 'can be seen', or 'the photo was taken' when they add no visual fact. "
     "The existing draft may guide wording and may contain useful details, but it must never override selected tags. "
     "Do not invent identity, demographic traits, colors, objects, actions, setting details, camera properties, mood, "
@@ -214,8 +217,8 @@ def build_caption_assist_messages(
     }
     if preferred_sequence:
         ordering = (
-            "preferredCaptionSequence is the user's caption house style. Follow it closely, making only small local "
-            "moves required for grammar or to keep a detail attached to its subject. Annotation groups not explicitly "
+            "preferredCaptionSequence is the user's preferred order for caption content. Follow its broad sequence, "
+            "making local moves only for natural grammar or to keep a detail attached to its subject. Groups not explicitly "
             "named in the sequence still belong in the caption; place those unlisted groups immediately before the "
             "final background, lighting, and view portion when that terminal portion is present. "
         )
@@ -232,8 +235,12 @@ def build_caption_assist_messages(
             "omitted or mishandled; explicitly fix those items while preserving all other valid caption content. "
         )
     user_prompt = (
-        "Write the caption using these WebCap inputs. Use annotation group names as semantic context for interpreting "
-        "selected values, and express those values as natural caption language. Treat fresh Context Sight and reusable Open Sight as visual evidence; do not invent details absent from evidence. "
+        "Write the caption using these WebCap inputs. Cover every nonredundant tag in groupedAnnotations and otherTags; "
+        "use annotation group names to interpret selected values and express them naturally. Fresh Context Sight and "
+        "reusable Open Sight are supplemental visual evidence, not replacements for the user's selected annotations. "
+        "Before returning, check that each distinct selected tag's information is represented; compress phrasing "
+        "rather than omitting it. Do not invent details unsupported by selected annotations, the required phrase, "
+        "the draft, or visual evidence. "
         + repair_instruction
         + ordering +
         "Do not use annotation group order or captionTemplate placeholder order as caption order.\n\n"

@@ -105,6 +105,33 @@ def test_caption_assist_prompt_uses_house_sequence_not_annotation_order():
     assert "high-angle three-quarter rear view" in messages[0]["content"]
 
 
+def test_caption_assist_prioritizes_every_selected_tag_without_dropping_details():
+    messages = caption_ops.build_caption_assist_messages(
+        assignments=[
+            {"group": "Clothing", "term": "triangle bikini"},
+            {"group": "Hair", "term": "braid"},
+            {"group": "Pose", "term": "standing"},
+        ],
+        tags=["bracelet"],
+        draft="a person standing",
+        preferred_sequence="subject\\npose\\nclothing\\nhair",
+        open_sight={"summary": "a person standing"},
+        context_sight={"summary": "a person standing"},
+    )
+    system = messages[0]["content"]
+    user = messages[1]["content"]
+    payload = json.loads(user.split("\\n\\n", 1)[1])
+    assert [entry["tag"] for entry in payload["groupedAnnotations"]] == [
+        "triangle bikini", "braid", "standing"
+    ]
+    assert payload["otherTags"] == ["bracelet"]
+    assert "every distinct selected tag's meaning" in system
+    assert "never silently omit a nonredundant selected value" in system
+    assert "Cover every nonredundant tag in groupedAnnotations and otherTags" in user
+    assert "supplemental visual evidence, not replacements" in user
+    assert "preferred order for caption content" in user
+
+
 def test_caption_assist_blank_sequence_uses_natural_order():
     messages = caption_ops.build_caption_assist_messages(
         assignments=[{"group": "Position", "term": "standing"}],

@@ -221,7 +221,9 @@ function useCaptionAssistCandidate() {
     syncCaptionAssistCandidateUi();
     ui.editorEl.value = nextCaption;
     setStatus(unchangedReview ? 'Caption accepted.' : 'Caption saved.');
-    return advanceFocusedCaption();
+    return isFocusedQaReviewMode()
+      ? resolveFocusedQaReviewItem('applied')
+      : advanceFocusedCaption();
   }).catch(function (err) {
     syncCaptionAssistCandidateUi();
     setStatus('Could not save AI caption candidate: ' + String(err && err.message ? err.message : err));
@@ -686,6 +688,7 @@ function syncCaptionAssistCandidateUi() {
   var progressEl = document.getElementById('editor-caption-focus-progress');
   var loadingEl = document.getElementById('editor-caption-focus-loading');
   var loadingTextEl = document.getElementById('editor-caption-focus-loading-text');
+  var qaReasonsEl = document.getElementById('editor-caption-qa-reasons');
   var omissionsEl = document.getElementById('editor-caption-candidate-omissions');
   var missingEl = document.getElementById('editor-caption-candidate-missing');
   var phrasesEl = document.getElementById('editor-caption-vision-phrases');
@@ -697,7 +700,7 @@ function syncCaptionAssistCandidateUi() {
   var useBtn = document.getElementById('editor-caption-candidate-use');
   var regenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
   var dismissBtn = document.getElementById('editor-caption-candidate-dismiss');
-  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !omissionsEl || !missingEl || !phrasesEl || !phrasesBtn || !textEl || !prevBtn || !nextBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
+  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !qaReasonsEl || !omissionsEl || !missingEl || !phrasesEl || !phrasesBtn || !textEl || !prevBtn || !nextBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
     throw new Error('Caption Assist candidate markup is incomplete.');
   }
 
@@ -718,10 +721,14 @@ function syncCaptionAssistCandidateUi() {
 
   panel.classList.toggle('hidden', !panelVisible);
   panel.classList.toggle('is-focus-caption', focusVisible);
-  titleEl.textContent = reviewMode ? 'Focus Review' : (focusOpen ? 'Focus Caption' : 'Caption Assist');
+  titleEl.textContent = isFocusedQaReviewMode() ? 'QA Focus Review' : (reviewMode ? 'Focus Review' : (focusOpen ? 'Focus Caption' : 'Caption Assist'));
 
   progressEl.classList.toggle('hidden', !focusOpen);
   progressEl.textContent = focusOpen ? getFocusedCaptionProgressText() : '';
+  if (isFocusedQaReviewMode() && visible) {
+    progressEl.textContent += String(candidate.text || '') === String((state.currentItem && state.currentItem.caption) || '')
+      ? ' · Caption unchanged' : ' · Caption change proposed';
+  }
 
   var loadingVisible = !visible && (focusOpen || pending);
   loadingEl.classList.toggle('hidden', !loadingVisible);
@@ -731,6 +738,9 @@ function syncCaptionAssistCandidateUi() {
       : (reviewMode ? 'Preparing review…' : 'Preparing caption…');
   }
 
+  var qaReasons = isFocusedQaReviewMode() ? qaFocusReviewReasons(mediaKey) : [];
+  qaReasonsEl.classList.toggle('hidden', !qaReasons.length);
+  qaReasonsEl.textContent = qaReasons.length ? 'QA finding: ' + qaReasons.join(' · ') : '';
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
   omissionsEl.innerHTML = '';
   if (omittedAssignments.length) {
@@ -1569,6 +1579,14 @@ function runCaptionAssistFromUi() {
 }
 
 function refreshCaptionAssistFromUi() {
+  // Manual Director refresh outranks the next unsubmitted background QA item.
+  if (isFocusedQaReviewMode()) {
+    return qaFocusReviewInteractiveRefresh(refreshCaptionAssistCurrentCandidate);
+  }
+  return refreshCaptionAssistCurrentCandidate();
+}
+
+function refreshCaptionAssistCurrentCandidate() {
   var item = getPrimerResetCurrentMediaItem();
   var candidate = captionAssistCandidate;
   if (!item || !candidate || candidate.mediaKey !== item.key) {

@@ -29,11 +29,15 @@ function isFocusedCaptionOpen() {
 }
 
 function isFocusedCaptionReviewMode() {
-  return !!(focusedCaptionState.open && focusedCaptionState.mode === 'review');
+  return !!(focusedCaptionState.open && (focusedCaptionState.mode === 'review' || focusedCaptionState.mode === 'qa'));
+}
+
+function isFocusedQaReviewMode() {
+  return !!(focusedCaptionState.open && focusedCaptionState.mode === 'qa');
 }
 
 function focusedCaptionModeLabel() {
-  return 'Caption Assist';
+  return isFocusedQaReviewMode() ? 'QA Focus Review' : 'Caption Assist';
 }
 
 function resetFocusedCaptionUseArm() {
@@ -601,7 +605,8 @@ function syncFocusedCaptionControls() {
   var startBtn = ui.previewFocusCaptionBtnEl;
   var reviewBtn = document.getElementById('preview-open-focus-review-btn');
   var skipBtn = ui.previewFocusCaptionSkipBtnEl;
-  if (!startBtn || !reviewBtn || !skipBtn) {
+  var dismissQaBtn = document.getElementById('preview-focus-caption-dismiss-qa-btn');
+  if (!startBtn || !reviewBtn || !skipBtn || !dismissQaBtn) {
     throw new Error('Focus Caption controls are missing.');
   }
 
@@ -643,6 +648,7 @@ function syncFocusedCaptionControls() {
     if (reviewLabelEl) reviewLabelEl.textContent = 'Review Captions';
 
     skipBtn.classList.add('hidden');
+    dismissQaBtn.classList.add('hidden');
     skipBtn.disabled = false;
     return;
   }
@@ -659,6 +665,7 @@ function syncFocusedCaptionControls() {
   }
 
   skipBtn.classList.remove('hidden');
+  dismissQaBtn.classList.toggle('hidden', !isFocusedQaReviewMode());
   skipBtn.disabled = false;
   skipBtn.title = reviewMode
     ? 'Skip this review item without saving edits'
@@ -683,6 +690,7 @@ function stopFocusedCaption(message, options) {
     return false;
   }
   var stoppingLabel = focusedCaptionModeLabel();
+  var wasQaFocusReview = isFocusedQaReviewMode();
   if (stoppingLabel === 'Focus Review' && String(message || '') === 'Focus Caption ended.') {
     message = 'Focus Review ended.';
   }
@@ -712,6 +720,7 @@ function stopFocusedCaption(message, options) {
   syncFocusedCaptionPanelGeometry();
   renderPreviewHeaderMeta();
   if (message) setStatus(message);
+  if (wasQaFocusReview) qaFocusReviewStopped();
   return true;
 }
 
@@ -763,10 +772,16 @@ function syncFocusedCaptionSelection(mediaKey) {
 function finishFocusedCaption() {
   var completedCount = focusedCaptionState.itemKeys.length;
   var label = focusedCaptionModeLabel();
+  var wasQa = isFocusedQaReviewMode();
   stopFocusedCaption();
   renderFileList();
-  showFocusedCaptionToast(label + ' complete · ' + completedCount + ' item' + (completedCount === 1 ? '' : 's'));
-  setStatus(label + ' complete.');
+  if (wasQa) {
+    showFocusedCaptionToast('QA Focus Review · reached end of prepared items');
+    setStatus('QA Focus Review reached the end of prepared items. Skip keeps items available for this round.');
+  } else {
+    showFocusedCaptionToast(label + ' complete · ' + completedCount + ' item' + (completedCount === 1 ? '' : 's'));
+    setStatus(label + ' complete.');
+  }
   return Promise.resolve(false);
 }
 
@@ -849,34 +864,39 @@ function skipFocusedCaptionItem() {
 function regenerateFocusedCaption() {
   if (!focusedCaptionState.open) return Promise.resolve(false);
   var mediaKey = String(focusedCaptionState.itemKey || '');
-  return cancelFocusedCaptionCurrentRequest().then(function () {
-    return cancelFocusedCaptionPrefetch();
-  }).then(function () {
-    if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== mediaKey) return false;
-    if (captionAssistCandidate && captionAssistCandidate.mediaKey === mediaKey) {
-      return refreshCaptionAssistFromUi();
-    }
-    return runCaptionAssistAfterSight();
-  });
+  var operation = function () {
+    return cancelFocusedCaptionCurrentRequest().then(function () {
+      return cancelFocusedCaptionPrefetch();
+    }).then(function () {
+      if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== mediaKey) return false;
+      if (captionAssistCandidate && captionAssistCandidate.mediaKey === mediaKey) {
+        return refreshCaptionAssistFromUi();
+      }
+      return runCaptionAssistAfterSight();
+    });
+  };
+  return isFocusedQaReviewMode() ? qaFocusReviewInteractiveRefresh(operation) : operation();
 }
 
 function startFocusedCaption(targetMediaKey, mode, options) {
   var opts = options || {};
   if (isCaptionAssistRunning()) {
     setStatus('Finish the current Caption Assist request before starting another focused caption workflow.');
-    return;
+    return false;
   }
   if (isFocusedAnnotationOpen()) {
     stopFocusedAnnotation();
   }
 
-  var nextMode = 'caption';
-  var itemKeys = getFocusedCaptionEntryKeys(targetMediaKey, nextMode);
+  var nextMode = opts.mode === 'qa' ? 'qa' : 'caption';
+  var itemKeys = Array.isArray(opts.itemKeys)
+    ? opts.itemKeys.slice()
+    : getFocusedCaptionEntryKeys(targetMediaKey, nextMode);
   if (!itemKeys.length) {
     setStatus(nextMode === 'review'
       ? 'No saved captions are available in the current visible scope.'
       : 'No media items are available in the current visible scope.');
-    return;
+    return false;
   }
 
   focusedCaptionState.open = true;
@@ -895,6 +915,51 @@ function startFocusedCaption(targetMediaKey, mode, options) {
   syncCaptionAssistCandidateUi();
   syncFocusedCaptionPanelGeometry();
   navigateFocusedCaptionToIndex(0, 1);
+  return true;
+}
+
+function startFocusedQaReview(itemKeys) {
+  var keys = (itemKeys || []).filter(Boolean);
+  if (!keys.length) return false;
+  if (isFocusedQaReviewMode()) {
+    appendFocusedQaReviewItems(keys);
+    return true;
+  }
+  if (focusedCaptionState.open && !stopFocusedCaption('Caption Assist ended to begin QA review.')) return false;
+  return startFocusedCaption(keys[0], 'qa', { mode: 'qa', itemKeys: keys });
+}
+
+function appendFocusedQaReviewItems(itemKeys) {
+  if (!isFocusedQaReviewMode()) return false;
+  (itemKeys || []).forEach(function (key) {
+    if (key && focusedCaptionState.itemKeys.indexOf(key) === -1) focusedCaptionState.itemKeys.push(key);
+  });
+  syncFocusedCaptionControls();
+  syncCaptionAssistCandidateUi();
+  return true;
+}
+
+function pruneFocusedQaReviewItems(validKeys) {
+  if (!isFocusedQaReviewMode()) return;
+  var currentKey = focusedCaptionState.itemKey;
+  var valid = {};
+  (validKeys || []).forEach(function (key) { valid[key] = true; });
+  focusedCaptionState.itemKeys = focusedCaptionState.itemKeys.filter(function (key) {
+    return key === currentKey || !!valid[key];
+  });
+  focusedCaptionState.itemIndex = focusedCaptionState.itemKeys.indexOf(currentKey);
+  syncFocusedCaptionControls();
+  syncCaptionAssistCandidateUi();
+}
+
+function resolveFocusedQaReviewItem(disposition) {
+  if (!isFocusedQaReviewMode()) return advanceFocusedCaption();
+  var key = focusedCaptionState.itemKey;
+  qaFocusReviewMarkHandled(key, disposition);
+  var index = focusedCaptionState.itemIndex;
+  focusedCaptionState.itemKeys.splice(index, 1);
+  focusedCaptionState.itemIndex = index - 1;
+  return moveFocusedCaption(1, { discardReviewEdits: true });
 }
 
 function startFocusedReview(targetMediaKey) {
@@ -920,7 +985,8 @@ function startFocusedCaptionForMediaItem(mediaItem) {
 
 function wireFocusedCaption() {
   var reviewBtn = document.getElementById('preview-open-focus-review-btn');
-  if (!ui.previewFocusCaptionBtnEl || !reviewBtn || !ui.previewFocusCaptionSkipBtnEl) {
+  var dismissQaBtn = document.getElementById('preview-focus-caption-dismiss-qa-btn');
+  if (!ui.previewFocusCaptionBtnEl || !reviewBtn || !ui.previewFocusCaptionSkipBtnEl || !dismissQaBtn) {
     throw new Error('Focus Caption controls are missing.');
   }
   if (!ui.previewFocusCaptionBtnEl.__focusedCaptionBound) {
@@ -938,6 +1004,12 @@ function wireFocusedCaption() {
     ui.previewFocusCaptionSkipBtnEl.__focusedCaptionBound = true;
     ui.previewFocusCaptionSkipBtnEl.addEventListener('click', function () {
       skipFocusedCaptionItem();
+    });
+  }
+  if (!dismissQaBtn.__focusedCaptionBound) {
+    dismissQaBtn.__focusedCaptionBound = true;
+    dismissQaBtn.addEventListener('click', function () {
+      if (isFocusedQaReviewMode()) resolveFocusedQaReviewItem('dismissed');
     });
   }
   if (!document.__focusedCaptionKeyboardBound) {
@@ -985,7 +1057,7 @@ function wireFocusedCaption() {
       if (!focusedCaptionState.open || !event || !event.target) return;
       var panel = document.getElementById('editor-caption-candidate');
       if (panel && panel.contains(event.target)) return;
-      if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-open-focus-review-btn, #preview-focus-caption-skip-btn')) return;
+      if (event.target.closest && event.target.closest('#preview-open-focus-caption-btn, #preview-open-focus-review-btn, #preview-focus-caption-skip-btn, #preview-focus-caption-dismiss-qa-btn')) return;
       if (!stopFocusedCaption(focusedCaptionModeLabel() + ' ended.')) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -1007,6 +1079,11 @@ wireFocusedCaption();
 
 window.isFocusedCaptionOpen = isFocusedCaptionOpen;
 window.isFocusedCaptionReviewMode = isFocusedCaptionReviewMode;
+window.isFocusedQaReviewMode = isFocusedQaReviewMode;
+window.startFocusedQaReview = startFocusedQaReview;
+window.appendFocusedQaReviewItems = appendFocusedQaReviewItems;
+window.pruneFocusedQaReviewItems = pruneFocusedQaReviewItems;
+window.resolveFocusedQaReviewItem = resolveFocusedQaReviewItem;
 window.startFocusedCaption = startFocusedCaption;
 window.startFocusedReview = startFocusedReview;
 window.startFocusedCaptionForMediaItem = startFocusedCaptionForMediaItem;

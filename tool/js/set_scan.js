@@ -500,7 +500,7 @@
       var sight = job && job.result && job.result.vocabularySight || null;
       var warnings = sight && sight.diagnostics && sight.diagnostics.parseWarnings || [];
       if (warnings.length) {
-        reportConsoleWarning('Context Sight ' + media, warnings.length + ' malformed model match entries skipped: ' + warnings.join(' | '));
+        reportConsoleWarning('Context Sight ' + media, warnings.length + ' model response adjustment(s): ' + warnings.join(' | '));
       }
       return {
         sight: sight,
@@ -1027,7 +1027,11 @@
         ? failures.filter(function (message) { return message.indexOf('Open Sight: ') !== 0; })
         : failures;
       if (fatalFailures.length) throw new Error(fatalFailures.join(' | '));
-      if (!opts.silent) window.setStatus('Sight refreshed for ' + file + '.');
+      if (!opts.silent) {
+        window.setStatus(failures.length
+          ? 'Context Sight ready; Open Sight failed for ' + file + ' (see Console).'
+          : 'Sight refreshed for ' + file + '.');
+      }
       return true;
     }).finally(function () {
       setScanState.currentVisionJobId = '';

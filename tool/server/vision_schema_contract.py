@@ -25,7 +25,7 @@ def _normalize_existing_groups(groups):
             if term and low not in term_seen:
                 term_seen.add(low)
                 terms.append(term)
-        out.append({"group": name, "terms": terms})
+        out.append({"group": name, "alias": _clean(raw.get("alias"), 120), "terms": terms})
     return out
 
 

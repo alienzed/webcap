@@ -291,7 +291,7 @@ def _normalize_vocabulary_groups(groups):
             if term and term_key not in term_seen:
                 term_seen.add(term_key)
                 terms.append(term)
-        out.append({"group": name, "terms": terms})
+        out.append({"group": name, "alias": _clean(raw.get("alias"), 120), "terms": terms})
     return out
 
 
@@ -313,6 +313,7 @@ def build_vision_vocabulary_sight_messages(media_reference, existing_groups, cap
     text = (
         "Make a fresh visual read of this image. "
         "Build the caption from clearly visible details in the image. "
+        "Group aliases clarify abbreviated labels; always use the original group label in matches. "
         "Prefer exact supplied terms when they clearly match what you see. "
         "Include distinctive, clearly visible details with no matching term as concise novel matches, "
         "without changing existing vocabulary. Use the caption template to guide ordering, emphasis, and relationships.\n\n"

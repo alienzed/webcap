@@ -104,6 +104,7 @@
     return (Array.isArray(checklistItems) ? checklistItems : []).map(function (group) {
       return {
         group: String(group || ''),
+        alias: getRequirementGroupAlias(group),
         terms: getChecklistKeywordTermsForRequirement(group)
       };
     }).filter(function (row) { return !!row.group; });

@@ -3,13 +3,13 @@
 var APP_CONFIG = {};
 
 var DEFAULT_PRIMER_TEMPLATE = [
-  'A person {subject }{second_subject }{action, }',
+  'A person {key_phrase }{second_subject }{action, }',
   '{position }{surface, }{body, }',
   '{clothing, }{hair, }{jewelry, }{traits, }{expression, }',
   '{second_subject_traits, }',
   '{background, }{setting, }',
   '{lighting| lighting.}',
-  '{view| view.}'
+  '{viewpoint| view.}'
 ].join('\n');
 
 var DEFAULT_CAPTION_ASSIST_SEQUENCE = [

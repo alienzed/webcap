@@ -164,6 +164,7 @@ def build_caption_assist_messages(
         seen_grouped.add(key)
         grouped.append({
             "group": group or "Annotation",
+            "alias": str(entry.get("alias") or "").strip(),
             "key": str(entry.get("key") or "").strip(),
             "tag": term,
         })
@@ -236,7 +237,7 @@ def build_caption_assist_messages(
         )
     user_prompt = (
         "Write the caption using these WebCap inputs. Cover every nonredundant tag in groupedAnnotations and otherTags; "
-        "use annotation group names to interpret selected values and express them naturally. Fresh Context Sight and "
+        "use group labels and optional semantic aliases to interpret selected values and express them naturally. Fresh Context Sight and "
         "reusable Open Sight are supplemental visual evidence, not replacements for the user's selected annotations. "
         "Before returning, check that each distinct selected tag's information is represented; compress phrasing "
         "rather than omitting it. Do not invent details unsupported by selected annotations, the required phrase, "
@@ -295,7 +296,7 @@ Design requirements:
 - Include every available key so no configured group or mapping loses its place in the template.
 - Preserve the user's actual group vocabulary, separators, affixes, and mappings; do not invent facts,
   groups, tags, affixes, or replacement rules.
-- Infer each group's meaning from its label AND vocabulary, including renderedDefault and affixes. Abbreviated or
+- Infer each group's meaning from its label, optional semantic alias, AND vocabulary, including renderedDefault and affixes. Abbreviated or
   unfamiliar labels are not enough by themselves: values may reveal garment shape, limb positioning, accessories,
   a second subject, a relationship, or environmental detail. Do not expand uncertain abbreviations into invented facts.
 - Treat groupsInOrder as the primary sequence. Infer what each group describes so you can write good conditional
@@ -352,6 +353,7 @@ def build_caption_template_assist_messages(groups=None, mappings=None, current_t
             })
         clean_groups.append({
             "label": label,
+            "alias": str(raw_group.get("alias") or "").strip(),
             "key": key,
             "separator": str(raw_group.get("separator") if raw_group.get("separator") is not None else ", "),
             "precedence": raw_group.get("precedence") if isinstance(raw_group.get("precedence"), dict) else {},

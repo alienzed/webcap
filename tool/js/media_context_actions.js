@@ -475,7 +475,7 @@ function buildMediaContextMenuActions(mediaItem, key) {
   });
   if (isCaptionVisionSupportedMedia(fileName)) {
     actions.push({
-      label: 'Vision Caption...',
+      label: 'Describe with VL',
       run: function () {
         var select = state.currentItem && state.currentItem.key === mediaItem.key
           ? Promise.resolve()

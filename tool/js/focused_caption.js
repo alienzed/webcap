@@ -864,15 +864,18 @@ function skipFocusedCaptionItem() {
 function regenerateFocusedCaption() {
   if (!focusedCaptionState.open) return Promise.resolve(false);
   var mediaKey = String(focusedCaptionState.itemKey || '');
-  return cancelFocusedCaptionCurrentRequest().then(function () {
-    return cancelFocusedCaptionPrefetch();
-  }).then(function () {
-    if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== mediaKey) return false;
-    if (captionAssistCandidate && captionAssistCandidate.mediaKey === mediaKey) {
-      return refreshCaptionAssistFromUi();
-    }
-    return runCaptionAssistAfterSight();
-  });
+  var operation = function () {
+    return cancelFocusedCaptionCurrentRequest().then(function () {
+      return cancelFocusedCaptionPrefetch();
+    }).then(function () {
+      if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== mediaKey) return false;
+      if (captionAssistCandidate && captionAssistCandidate.mediaKey === mediaKey) {
+        return refreshCaptionAssistFromUi();
+      }
+      return runCaptionAssistAfterSight();
+    });
+  };
+  return isFocusedQaReviewMode() ? qaFocusReviewInteractiveRefresh(operation) : operation();
 }
 
 function startFocusedCaption(targetMediaKey, mode, options) {

@@ -326,6 +326,7 @@
     }).catch(function (err) {
       window.reportConsoleError('QA · Save review', err);
       qaWorkbenchState.statusMessage = 'QA review could not be saved.';
+      throw err;
     });
     return qaReviewSaveChain;
   }
@@ -536,7 +537,7 @@
         qaWorkbenchState.aiCoverageTotal + ' items interpreted' +
         (skippedCount ? ' · ' + skippedCount + ' skipped (see Console)' : '') + '.';
       qaWorkbenchState.aiScopeSignature = qaBuildDeepScanSignature(qaGetTrainingItems());
-      qaSaveReview();
+      qaSaveReview().catch(function () {});
       qaMergeFindings();
       renderQaWorkbench();
       return;
@@ -621,6 +622,10 @@
         window.reportConsoleError('QA · Ignored invalid suggested edits',
           new Error(analysis.patchWarnings.join('; ')));
       }
+      if (Array.isArray(analysis.findingWarnings) && analysis.findingWarnings.length) {
+        window.reportConsoleError('QA · Ignored invalid findings',
+          new Error(analysis.findingWarnings.join('; ')));
+      }
       var batchFindings = qaNormalizeAiFindings(analysis, job.result.model).filter(function (finding) {
         return !(finding.files || []).some(function (file) { return changed[file]; });
       });
@@ -632,10 +637,9 @@
       qaWorkbenchState.aiModel = String(job.result.model || model);
       qaWorkbenchState.aiScopeSignature = qaBuildDeepScanSignature(currentItems);
       qaRefreshAiCoverage();
-      qaSaveReview();
       qaMergeFindings();
       renderQaWorkbench();
-      return qaRunNextDeepScanBatch();
+      return qaSaveReview().then(function () { return qaRunNextDeepScanBatch(); });
     }).then(function (continued) {
       if (continued === false && sessionToken !== qaWorkbenchState.deepScanSessionToken) return false;
       return continued;
@@ -649,7 +653,7 @@
         qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
       } else {
         var message = String(err && err.message || err);
-        var unusableResponse = /WebCap ingest failed after a successful model response|QA Deep Scan response|QA Deep Scan finding|QA Deep Scan invented a filename|QA Deep Scan batch completed without structured findings/.test(message);
+        var unusableResponse = /WebCap ingest failed after a successful model response: QA Deep Scan (response|finding|invented a filename)|QA Deep Scan batch completed without structured findings/.test(message);
         window.reportConsoleError('QA Deep Scan · ' + (unusableResponse ? 'Skipped ' + batchItems[0].fileName : 'Failed'), err);
         if (unusableResponse && qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStopRequested) {
           qaWorkbenchState.deepScanSkipped[batchItems[0].fileName] = true;

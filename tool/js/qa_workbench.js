@@ -568,11 +568,11 @@
     var sessionFocus = qaWorkbenchState.trainingFocus;
     var sessionVisionModel = qaWorkbenchState.deepScanVisionModel;
     qaWorkbenchState.deepScanSubmitting = true;
-    qaWorkbenchState.deepScanStatus = 'Deep QA · Vision ' + batchItems[0].fileName +
+    qaWorkbenchState.deepScanStatus = 'Deep QA · Sight check ' + batchItems[0].fileName +
       ' · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' reviewed';
     renderQaWorkbench();
 
-    refreshSetIntelligenceItem(batchItems[0], { open: false, context: true }).then(function () {
+    refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: 'missing', silent: true }).then(function () {
       if (sessionToken !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
       if (getCaptionVisionModelId() !== sessionVisionModel) throw new Error('Deep QA Vision model changed while running; restart the scan.');
       batchSignatures = qaCurrentItemSignatureMap(batchItems);

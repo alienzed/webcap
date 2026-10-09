@@ -160,7 +160,8 @@ function restoreCaptionAssistCandidate(mediaItem) {
   };
   syncCaptionAssistCandidateUi();
   var changed = saved.annotationsAtGeneration !== JSON.stringify([request.assignments, request.tags]) ||
-    saved.sourceCaption !== String(mediaItem.caption || '');
+    saved.sourceCaption !== String(mediaItem.caption || '') ||
+    (saved.model && saved.model !== String(request.model || ''));
   setStatus(changed ? 'Saved caption candidate restored; inputs changed. Refresh Caption if needed.' : 'Saved caption candidate restored.');
   return true;
 }
@@ -779,7 +780,11 @@ function syncCaptionAssistCandidateUi() {
   var tagsChanged = !!(visible && candidate.annotationsAtGeneration &&
     candidate.annotationsAtGeneration !== JSON.stringify([currentRequest.assignments, currentRequest.tags]));
   regenerateBtn.textContent = 'Refresh Caption';
-  regenerateBtn.classList.toggle('is-primary', tagsChanged || !!omittedAssignments.length);
+  var restoredInputsChanged = !!(visible && candidate.sourceCaption !== undefined &&
+    candidate.sourceCaption !== String(state.currentItem.caption || ''));
+  var restoredModelChanged = !!(visible && candidate.model && currentRequest.model &&
+    candidate.model !== currentRequest.model);
+  regenerateBtn.classList.toggle('is-primary', tagsChanged || restoredInputsChanged || restoredModelChanged || !!omittedAssignments.length);
   regenerateBtn.title = 'Director (LLM): rewrite using the edited caption, current tags, and cached Sight; no Vision scan.';
   regenerateBtn.setAttribute('aria-label', regenerateBtn.title);
 

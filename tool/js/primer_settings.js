@@ -452,10 +452,10 @@ function getCaptionAssistSightSuggestions(mediaItem, captionText) {
   var seen = {};
   var caption = String(captionText || '');
   return values.map(function (raw) {
-    return String(raw || '').replace(/\\s+/g, ' ').trim();
+    return String(raw || '').replace(/\s+/g, ' ').trim();
   }).filter(function (term) {
     var key = term.toLowerCase();
-    if (!term || term.length > 65 || term.split(/\\s+/).length > 5 ||
+    if (!term || term.length > 65 || term.split(/\s+/).length > 5 ||
         seen[key] || captionContainsPhrase(caption, term)) return false;
     seen[key] = true;
     return true;

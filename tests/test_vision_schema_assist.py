@@ -558,16 +558,37 @@ def test_schema_contract_merges_duplicate_groups_and_terms_without_dropping_evid
     assert result["groups"][0]["terms"][0]["support"] == 2
 
 
-def test_context_sight_rejects_malformed_nested_output_loudly():
-    try:
-        vision_schema_assist.normalize_vision_vocabulary_sight_payload(
-            {
-                "caption": "Triangle top.",
-                "matches": [{"group": "BT Shape", "terms": "triangle"}],
-            },
-            [{"group": "BT Shape", "terms": ["triangle"]}],
-        )
-    except ValueError as exc:
-        assert "terms must be an array" in str(exc)
-    else:
-        raise AssertionError("Malformed Context Sight must fail loudly.")
+def test_context_sight_keeps_valid_matches_and_reports_malformed_entries():
+    payload = vision_schema_assist.normalize_vision_vocabulary_sight_payload(
+        {
+            "caption": "A triangle top with front view.",
+            "matches": [
+                {"group": "Shape", "terms": ["triangle", ""]},
+                {"group": "View", "terms": "front"},
+                {"group": "View", "terms": ["front"]},
+                "invalid",
+                {"group": "", "terms": ["ignored"]},
+            ],
+        },
+        [
+            {"group": "Shape", "terms": ["triangle"]},
+            {"group": "View", "terms": ["front"]},
+        ],
+    )
+    assert payload["matches"] == [
+        {"group": "Shape", "terms": ["triangle"]},
+        {"group": "View", "terms": ["front"]},
+    ]
+    assert len(payload["diagnostics"]["parseWarnings"]) == 3
+
+
+def test_context_sight_keeps_caption_when_all_optional_matches_are_malformed():
+    payload = vision_schema_assist.normalize_vision_vocabulary_sight_payload(
+        {"caption": "A triangle top.", "matches": [{"group": "Shape", "terms": "triangle"}]},
+        [{"group": "Shape", "terms": ["triangle"]}],
+    )
+    assert payload["caption"] == "A triangle top."
+    assert payload["matches"] == []
+    assert payload["diagnostics"]["parseWarnings"]
+
+

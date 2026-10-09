@@ -1270,6 +1270,7 @@ function runCaptionAssistAfterSight() {
     if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
     if (!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey)) return false;
     if (!focusRequest) closeCaptionAssistPresentation();
+    reportConsoleError('Caption Assist', err);
     setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));
     return false;
   }).then(function (result) {

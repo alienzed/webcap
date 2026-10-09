@@ -945,15 +945,13 @@
   }
 
   function continueToVocabulary() {
-    var files = setScanState.files.slice();
     closeSetIntelligence();
-    openVisionSchemaAssist({ files: files });
+    openVisionSchemaAssist();
   }
 
   function continueToGuidedTagging() {
-    var files = setScanState.files.slice();
     closeSetIntelligence();
-    openGuidedTagPass({ source: 'set', files: files });
+    openGuidedTagPass({ source: 'set' });
   }
 
   function continueToQa() {

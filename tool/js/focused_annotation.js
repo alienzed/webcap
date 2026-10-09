@@ -314,7 +314,7 @@ function runFocusedAnnotationSingleItemShortcut(actionKey) {
 
 function decorateFocusedAnnotationPreviewActions(actions, mediaItem) {
   return (Array.isArray(actions) ? actions : []).filter(function (action) {
-    return !action || action.separator || String(action.label || '') !== 'Focused Annotate...';
+    return !action || action.separator || String(action.label || '') !== 'Focused Annotate';
   }).map(function (action) {
     if (!action || action.separator) return action;
     var mappedRender;

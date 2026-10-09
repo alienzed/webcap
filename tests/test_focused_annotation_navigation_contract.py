@@ -71,7 +71,7 @@ def test_focus_reuses_shared_actions_and_disables_single_item_iframe_gestures():
     main = _read("tool/js/main.js")
 
     assert "function decorateFocusedAnnotationPreviewActions(actions, mediaItem)" in focus
-    assert "String(action.label || '') !== 'Focused Annotate...'" in focus
+    assert "String(action.label || '') !== 'Focused Annotate'" in focus
     assert "mappedRender = function flagRowRenderer(value)" in focus
     assert "action.run({ selectReplacement: false })" in focus
     assert "action.label === 'Paste Tags' && operation" in focus

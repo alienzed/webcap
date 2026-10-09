@@ -167,8 +167,8 @@ function runBlurBackground(mediaItem) {
 
 function buildCurrentFolderContextActions() {
   var focusActionLabel = (state && state.focusSet && state.focusSet.keys && state.focusSet.keys.length)
-    ? 'Resume Focus Annotation...'
-    : 'Focused Annotate...';
+    ? 'Resume Focus Annotation'
+    : 'Focused Annotate';
   var browseOriginalsAction = state.folder && isSetFolderPath(state.folder)
     ? {
         label: 'Browse Originals',
@@ -387,7 +387,7 @@ function stopH3Calibration() {
     .then(function (payload) {
       if (!payload || !payload.ok) throw new Error((payload && payload.error) || 'Could not stop H3 calibration.');
       appendToConsolePanel('[h3-probe] Stop requested. Preserving partial results.\n');
-      setStatus('Stopping H3 calibration...');
+      setStatus('Stopping H3 calibration');
       h3ProbeActive = true;
       pollH3CalibrationLog();
     })
@@ -399,8 +399,8 @@ function stopH3Calibration() {
 function runH3Calibration(mediaItem) {
   if (!confirm('Run H3 calibration with the selected source?\n\nThis is a long, GPU-intensive calibration. Avoid other GPU-heavy applications while it runs. Training remains available, but concurrent GPU work makes the results less reliable.')) return;
   showConsolePanel();
-  appendToConsolePanel('[h3-probe] Preparing H3 calibration...\n');
-  setStatus('Starting H3 calibration...');
+  appendToConsolePanel('[h3-probe] Preparing H3 calibration\n');
+  setStatus('Starting H3 calibration');
   fetch('/fs/h3_probe/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -462,13 +462,13 @@ function buildMediaContextMenuActions(mediaItem, key) {
   }
 
   actions.push({
-    label: 'Focused Annotate...',
+    label: 'Focused Annotate',
     run: function () {
       startFocusedAnnotationForMediaItem(mediaItem);
     }
   });
   actions.push({
-    label: 'Focus Caption...',
+    label: 'Focus Caption',
     run: function () {
       startFocusedCaptionForMediaItem(mediaItem);
     }

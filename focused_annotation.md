@@ -26,7 +26,7 @@ Focused Annotation should feel like a deliberate work mode that says: "annotate 
 
 Initial launch surfaces:
 
-1. Media item context menu action: `Focused Annotate...`
+1. Media item context menu action: `Focused Annotate`
 2. Preview action button near the top-right preview actions area
 
 Both should enter the same flow.

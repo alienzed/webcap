@@ -34,8 +34,8 @@ def test_context_menu_places_focus_caption_after_focused_annotate():
     root = Path(__file__).parents[1]
     script = (root / "tool" / "js" / "media_context_actions.js").read_text(encoding="utf-8")
 
-    annotate_action = script.index("label: 'Focused Annotate...'")
-    caption_action = script.index("label: 'Focus Caption...'")
+    annotate_action = script.index("label: 'Focused Annotate'")
+    caption_action = script.index("label: 'Focus Caption'")
 
     assert caption_action > annotate_action
     assert "startFocusedCaptionForMediaItem(mediaItem);" in script[caption_action:]

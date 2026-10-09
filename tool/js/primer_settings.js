@@ -1195,7 +1195,8 @@ function runCaptionAssist() {
     if (!state.currentItem || state.currentItem.key !== sourceKey || startedFocused !== isFocusedCaptionOpen()) return false;
     return refreshSetIntelligenceItem(item, {
       open: 'missing',
-      context: true
+      context: true,
+      allowOpenFailure: true
     });
   }).then(function (prepared) {
     if (prepared === false) return false;
@@ -1269,6 +1270,7 @@ function runCaptionAssistAfterSight() {
     if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
     if (!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey)) return false;
     if (!focusRequest) closeCaptionAssistPresentation();
+    reportConsoleError('Caption Assist', err);
     setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));
     return false;
   }).then(function (result) {

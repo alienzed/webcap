@@ -497,8 +497,13 @@
       return waitForCaptionAssistJob(payload.job);
     }).then(function (job) {
       setScanState.currentVisionJobId = '';
+      var sight = job && job.result && job.result.vocabularySight || null;
+      var warnings = sight && sight.diagnostics && sight.diagnostics.parseWarnings || [];
+      if (warnings.length) {
+        reportConsoleWarning('Context Sight ' + media, warnings.length + ' model response adjustment(s): ' + warnings.join(' | '));
+      }
       return {
-        sight: job && job.result && job.result.vocabularySight || null,
+        sight: sight,
         text: String(job && job.result && job.result.text || ''),
         warning: String(job && job.result && job.result.structureWarning || '')
       };
@@ -1018,8 +1023,15 @@
         function (sight) { return saveContextSight(folder, model, file, visionContext, sight); });
     }).then(function () {
       if (opts.isCancelled && opts.isCancelled()) return false;
-      if (failures.length) throw new Error(failures.join(' | '));
-      if (!opts.silent) window.setStatus('Sight refreshed for ' + file + '.');
+      var fatalFailures = opts.allowOpenFailure
+        ? failures.filter(function (message) { return message.indexOf('Open Sight: ') !== 0; })
+        : failures;
+      if (fatalFailures.length) throw new Error(fatalFailures.join(' | '));
+      if (!opts.silent) {
+        window.setStatus(failures.length
+          ? 'Context Sight ready; Open Sight failed for ' + file + ' (see Console).'
+          : 'Sight refreshed for ' + file + '.');
+      }
       return true;
     }).finally(function () {
       setScanState.currentVisionJobId = '';

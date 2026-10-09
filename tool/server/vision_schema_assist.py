@@ -338,23 +338,39 @@ def normalize_vision_vocabulary_sight_payload(data, existing_groups):
     caption = _clean(data.get("caption"), 1600)
     if not caption:
         raise ValueError("Context Sight response is missing its caption.")
-    if not isinstance(data.get("matches"), list):
-        raise ValueError("Context Sight response is missing its matches array.")
-
     groups = _normalize_vocabulary_groups(existing_groups)
     allowed_groups = {row["group"].casefold(): row for row in groups}
     grouped = {row["group"]: [] for row in groups}
     unmatched = []
+    prior_diagnostics = data.get("diagnostics")
+    prior_warnings = (
+        prior_diagnostics.get("parseWarnings")
+        if isinstance(prior_diagnostics, dict) else None
+    )
+    parse_warnings = [
+        _clean(value, 240) for value in prior_warnings
+        if _clean(value, 240)
+    ] if isinstance(prior_warnings, list) else []
+    raw_matches = data.get("matches")
+    if not isinstance(raw_matches, list):
+        parse_warnings.append("Context Sight omitted a usable matches array; retaining the caption.")
+        raw_matches = []
 
-    for index, raw in enumerate(data["matches"], start=1):
+    for index, raw in enumerate(raw_matches, start=1):
         if not isinstance(raw, dict):
-            raise ValueError("Context Sight match {} is not an object.".format(index))
+            parse_warnings.append("Match {} is not an object.".format(index))
+            continue
         raw_group = _clean(raw.get("group"), 120)
         if not raw_group:
-            raise ValueError("Context Sight match {} has an empty group.".format(index))
+            parse_warnings.append("Match {} has an empty group.".format(index))
+            continue
         raw_terms = raw.get("terms")
+        if isinstance(raw_terms, str) and raw_terms.strip():
+            parse_warnings.append("Match '{}' returned one term as text; normalized it.".format(raw_group))
+            raw_terms = [raw_terms]
         if not isinstance(raw_terms, list):
-            raise ValueError("Context Sight match '{}' terms must be an array.".format(raw_group))
+            parse_warnings.append("Match '{}' terms must be an array.".format(raw_group))
+            continue
         target = allowed_groups.get(raw_group.casefold())
         if target is None:
             unmatched.append({
@@ -369,7 +385,8 @@ def normalize_vision_vocabulary_sight_payload(data, existing_groups):
         for raw_term in raw_terms:
             term = _clean(raw_term)
             if not term:
-                raise ValueError("Context Sight match '{}' contains an empty term.".format(raw_group))
+                parse_warnings.append("Match '{}' contains an empty term.".format(raw_group))
+                continue
             canonical = exact_terms.get(term.casefold())
             if canonical:
                 if canonical.casefold() not in seen:
@@ -394,6 +411,7 @@ def normalize_vision_vocabulary_sight_payload(data, existing_groups):
         "diagnostics": {
             "unmatched": unmatched,
             "unmatchedCount": sum(len(row.get("terms") or []) for row in unmatched),
+            "parseWarnings": parse_warnings[:24],
         },
     }
 

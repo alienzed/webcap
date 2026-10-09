@@ -737,6 +737,9 @@
     qaWorkbenchState.deepScanStatus = 'Stopping Deep QA…';
     renderQaWorkbench();
     if (!qaWorkbenchState.deepScanJobId) {
+      cancelItemSightRefresh().catch(function (err) {
+        window.reportConsoleError('QA Deep Scan · Cancel Vision', err);
+      });
       qaWorkbenchState.deepScanSessionActive = false;
       qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
       renderQaWorkbench();

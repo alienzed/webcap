@@ -30,7 +30,7 @@ Supporting analyzers do not become peer workflows merely because WebCap can comp
 
 **Set Tools → Set Intelligence** is the primary entry point below the media list.
 
-It is a full-Set operation. Filters and Focus Sets do not silently narrow it.
+By default, Set Intelligence uses the **current visible training selection**, respecting text filters, advanced filters, and Focus Sets. **Scan entire Set (ignore filters)** is an explicit override. The selected scope is snapshotted for the Vision scan, so changing filters does not expand an in-progress scan. Discover Vocabulary and Set-level Guided Tagging remain Set-wide and can reuse any cached Sight evidence, including from prior broader scans.
 
 The intelligence path is fundamentally model-driven:
 
@@ -49,7 +49,7 @@ Current versioned evidence is reused. No separate scan manifest or durable workf
 
 The Set Intelligence surface must expose the state that changes the user's next decision, at readable sizes:
 
-- **Open Sight** coverage: current saved results versus media still missing reusable open evidence;
+- **Open Sight** coverage within the selected scope: current saved results versus media still missing reusable open evidence;
 - **Context Sight** coverage: current results, saved-but-stale results, and genuinely missing results;
 - current scan/progress state and failures;
 - one prominent next decision: **Discover Vocabulary** once the intelligence pass is complete;
@@ -91,7 +91,7 @@ Unfinished Caption Assist caption candidates may be retained in existing Set fol
 - **Recheck Vision** separately reruns a targeted caption-to-image discrepancy check when explicitly requested. **Refresh Sight** explicitly replaces the item's Open Sight, Context Sight, or both. Neither action scans the Set.
 - Item Sight refresh uses the existing `scan_sight`, `scan_vocabulary_sight`, `save_sight`, and `save_vocabulary_sight` operations. A valid observation is saved immediately. Failed normalization or inference must not overwrite the previously saved observation.
 - QA-provided correction findings remain separate from fresh Vision findings while both are presented within the same caption correction UI. The user explicitly chooses edits.
-- Full-Set Vision scanning remains an explicit Set Intelligence operation; normal QA consumes cached evidence and uses bounded Director batches, not a mandatory full-media rescan.
+- Entire-Set Vision scanning is an explicit Set Intelligence override; normal QA uses the current training selection and performs its own progressive per-item review.
 
 ## Discover Vocabulary
 

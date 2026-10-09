@@ -1260,6 +1260,10 @@ function runCaptionAssistAfterSight() {
       captionAssistPendingJobId = '';
       updatePrimerCaptionResetUi();
       syncFocusedCaptionAfterAssist(sourceMediaKey);
+      if (result === true && isFocusedCaptionOpen() &&
+          state.currentItem && state.currentItem.key === sourceMediaKey) {
+        startFocusedCaptionPrefetch(sourceMediaKey);
+      }
     }
     return result;
   }, function (err) {

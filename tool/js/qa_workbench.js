@@ -653,7 +653,7 @@
         qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
       } else {
         var message = String(err && err.message || err);
-        var unusableResponse = /WebCap ingest failed after a successful model response: QA Deep Scan (response|finding|invented a filename)|QA Deep Scan batch completed without structured findings/.test(message);
+        var unusableResponse = /WebCap ingest failed after a successful model response: QA Deep Scan (response|finding|invented a filename)|QA Deep Scan batch completed without structured findings|Director returned invalid structured JSON|Director structured output must be a JSON object/.test(message);
         window.reportConsoleError('QA Deep Scan · ' + (unusableResponse ? 'Skipped ' + batchItems[0].fileName : 'Failed'), err);
         if (unusableResponse && qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStopRequested) {
           qaWorkbenchState.deepScanSkipped[batchItems[0].fileName] = true;

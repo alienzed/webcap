@@ -9,6 +9,10 @@ Audit basis: current `main` review, metadata, annotation, focus-set, prune, dupl
 - **Balance checks dataset composition:** coverage, variation, and correlations relative to training objectives. Accurate, explicit attribute tags should be preserved; QA must never alter correct annotations to compensate for uneven representation.
 - Balance is a **separate future reasoning task**, with its own Director prompt and set-level inputs; it may reuse existing counts and evidence. Keep unvalidated distribution observations quiet, outside the QA attention queue. Older balance-oriented QA proposals below are superseded by this boundary.
 
+## Caption Assist reuse clarification (2026-10-09)
+
+This small follow-up supersedes the earlier requirement that normal Caption Assist always refresh Context Sight on entry. Caption Assist reuses saved valid Sight and restores unfinished candidate text; manual Refresh Sight stays explicit. Deep QA retains its separate, explicitly requested fresh per-item Vision + Director assessment and may still benefit Caption Assist through the shared saved Sight. **No changes to Deep QA, QA findings, or QA prompt are part of this reuse pass.** Unattended Prepare Captions is a deferred North Star, not a current QA feature.
+
 ## Agreed Deep QA design contract (2026-10-08)
 
 **Status: approved product direction; implementation and end-to-end testing still pending.** This section supersedes older proposals below where they disagree (especially four-item Director batches, optional-only targeted Vision, and independent patch application). Preserve the working QA Workbench, Focus Set, Set Intelligence, and Caption Assist features; repair locally in phases under `AGENTS.md`.
@@ -25,7 +29,7 @@ Audit basis: current `main` review, metadata, annotation, focus-set, prune, dupl
 
 - Reuse existing model execution, FIFO GPU arbitration, VL request patterns, and item Focus Sets; do not add a new model service, workflow engine, or storage root.
 - Saved Sight remains reusable evidence (subject to media modification time and size). An explicitly requested Deep QA item intentionally makes a **fresh** visual read, even when older Sight exists. Keep that new observation available to the immediately following Director evaluation and subsequent human review without triggering the *same* VL inference again.
-- Caption Assist's normal independent entry point retains its existing fresh Context Sight behavior. **For a QA handoff**, provide a small explicit way to use the already-fresh QA observation instead of immediately rerunning Vision. If data or media has genuinely changed or the user requests refresh, allow a new read.
+- Caption Assist's normal entry and **QA handoff** both reuse existing valid Open and Context Sight; they do not rerun the Vision pass solely because the focus interface reopened. Missing/invalid Sight can be gathered on demand, and Refresh Sight remains an explicit user action. Deep QA's own fresh Vision policy is unchanged.
 - Persist only what is expensive to reproduce and necessary to resume: compact actionable findings, per-item completion/provenance as needed, and narrowly useful user decisions already supported. Do **not** save full repeated prompts, copied caption/Sight corpora, or large histories just to track a scan. Derive cheap counts and candidate priority when needed. Reuse existing QA review persistence where appropriate.
 
 ### Failure semantics and progress

@@ -38,6 +38,13 @@ Each Train action captures visible media, latest captions, exact saved TOMLs, an
 - Hidden dataset preparation state, stale-state tracking, revisions, or hashes.
 - Arbitrary user-defined launch commands.
 
+## Caption intelligence direction (2026-10-09)
+
+- Open Sight and Context Sight are reusable per-item evidence, regardless of which workflow produced them. Entering Caption Assist is not a reason to repeat a valid pixel scan.
+- Caption Assist remains a **focused, single-item** experience. It can be exited to edit the full annotation workspace and reopened without discarding an unfinished caption candidate or repeating completed inference.
+- Deep QA remains a separate, explicit correctness/consistency assessment and may intentionally ask fresh visual questions. Neither Deep QA nor Caption Assist owns a second copy of Sight.
+- Long-term direction: unattended, evidence-driven **Prepare Captions** for later human review. Its batch processing, automated annotations, and orchestration are deferred, not implementation requirements for the current improvements.
+
 ## Product principles
 
 - Opening a folder is primarily read-oriented.

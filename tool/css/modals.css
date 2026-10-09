@@ -2921,6 +2921,17 @@ html[data-theme="dark"] .app-settings-environment-check {
   line-height: 1.45;
 }
 
+.set-scan-scope-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 18px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.set-scan-scope-row label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.set-scan-scope-row input { margin: 0; }
 .set-scan-run-actions {
   display: flex;
   align-items: center;

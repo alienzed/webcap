@@ -1011,6 +1011,14 @@
     });
   }
 
+  function cancelItemSightRefresh() {
+    if (!itemSightRefreshActive) return Promise.resolve(false);
+    var jobId = setScanState.currentVisionJobId;
+    if (!jobId) return Promise.resolve(false);
+    return cancelCaptionAssistJob(jobId);
+  }
+
+  window.cancelItemSightRefresh = cancelItemSightRefresh;
   window.refreshSetIntelligenceItem = refreshSetIntelligenceItem;
   window.openSetIntelligence = openSetIntelligence;
   window.stopSetIntelligence = stopSetIntelligence;

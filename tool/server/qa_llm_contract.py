@@ -248,7 +248,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "- caption omissions and contradictions: compare saved captions with assigned tags and cached visual descriptions\\n"
         "- semantic vocabulary drift: synonyms, near-synonyms, inconsistent naming, spelling or hyphenation families that may fragment one concept\n"
         "- natural-language oddity: copy residue, contradictory wording, inconsistent subject naming, or unusually different descriptive granularity\n"
-        "- meaningful cross-group or caption/tag relationships whose exceptions deserve human inspection\n"
+        "- meaningful cross-group or caption/tag relationships only when there is evidence of an actual annotation omission, inconsistency, or contradiction\n"
         "- semantically duplicated or template-like captions that exact string matching can miss\n"
 
         "[BOUNDARIES]\n"
@@ -264,7 +264,9 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "- Prefer issues supported by agreement between independent sources such as annotations, MediaPipe, Face Focus, or Vision Sight.\n"
         "- Do not invent desired categories, missing visual attributes, or training goals not supported by the supplied focus and data.\n"
         "- Rare does not mean wrong. Common does not mean bad. Association does not mean correctness.\n"
-        "- The deterministic findings below carry full-scope counts and balance analysis. Do not reinterpret batch-local prevalence as Set-level under/overrepresentation.\n"
+        "- Treat unverified statistical associations as investigation hints, never as findings to repeat automatically. Independently assess the current item's caption, tags and visual evidence. If the exception is a legitimate variation, return no finding.\n"
+        "- QA is about annotation accuracy, not dataset balance: do not report overrepresentation, underrepresentation, or legitimate attribute combinations as annotation errors. Correct explicit attribute tagging is valuable.\n"
+        "- The supplied candidates may carry full-scope counts; do not reinterpret batch-local prevalence as Set-level under/overrepresentation.\n"
         "- Do not repeat a deterministic finding unless semantic interpretation materially changes why a human should care.\n"
         "- Every returned finding must name the supplied filenames that a human should inspect. Use only filenames from the training selection.\n"
         "- Prefer 0-6 strong findings. Never pad the response to fill a quota.\n\n"
@@ -273,7 +275,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "captioning = language quality, semantic repetition, terminology, or caption structure\n\n"
         "[TRAINING FOCUS]\n"
         + (_clean(training_focus) or "Not specified; use generic training-quality priorities.")
-        + "\n\n[DETERMINISTIC QA FINDINGS]\n"
+        + "\n\n[DETERMINISTIC QA FINDINGS AND UNVERIFIED CANDIDATES]\n"
         + deterministic_text
         + "\n\n[TRAINING SELECTION]\n"
         + corpus

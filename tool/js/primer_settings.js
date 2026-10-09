@@ -720,14 +720,9 @@ function syncCaptionAssistCandidateUi() {
   var currentRequest = visible ? buildCaptionAssistRequest(state.currentItem) : null;
   var tagsChanged = !!(visible && candidate.annotationsAtGeneration &&
     candidate.annotationsAtGeneration !== JSON.stringify([currentRequest.assignments, currentRequest.tags]));
-  regenerateBtn.textContent = tagsChanged ? 'Rewrite with current tags' : '\u21bb';
+  regenerateBtn.textContent = 'Refresh Caption';
   regenerateBtn.classList.toggle('is-primary', tagsChanged || !!omittedAssignments.length);
-  regenerateBtn.title = tagsChanged
-    ? 'Generate a new caption using the updated tags'
-    : (reviewMode ? 'Ask the Director for a rewritten caption'
-      : (focusOpen && captionVisionEnabled
-        ? 'Regenerate caption and recheck Vision'
-        : 'Generate another caption candidate'));
+  regenerateBtn.title = 'Director (LLM): rewrite using the edited caption, current tags, and cached Sight; no Vision scan.';
   regenerateBtn.setAttribute('aria-label', regenerateBtn.title);
 
   dismissBtn.textContent = '\u00d7';
@@ -1266,7 +1261,7 @@ function repairCaptionAssistCandidate(corrections) {
       captionAssistPendingJobId = '';
       updatePrimerCaptionResetUi();
       syncFocusedCaptionAfterAssist(sourceMediaKey);
-      if (result === true && isFocusedCaptionOpen() &&
+      if (result === true && typeof draftOverride !== 'string' && isFocusedCaptionOpen() &&
           state.currentItem && state.currentItem.key === sourceMediaKey) {
         startFocusedCaptionPrefetch(sourceMediaKey);
       }
@@ -1403,7 +1398,7 @@ function runCaptionAssist() {
   });
 }
 
-function runCaptionAssistAfterSight() {
+function runCaptionAssistAfterSight(draftOverride) {
   var mediaItem = getPrimerResetCurrentMediaItem();
   if (!mediaItem) {
     setStatus('Select a media item first.');
@@ -1415,6 +1410,7 @@ function runCaptionAssistAfterSight() {
   }
 
   var request = buildCaptionAssistRequest(mediaItem);
+  if (typeof draftOverride === 'string') request.draft = draftOverride;
   if (!request.model) {
     setStatus('Select a Director model before using Caption Assist.');
     return Promise.resolve(false);
@@ -1461,7 +1457,7 @@ function runCaptionAssistAfterSight() {
   }).catch(function (err) {
     if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
     if (!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey)) return false;
-    if (!focusRequest) closeCaptionAssistPresentation();
+    if (!focusRequest && typeof draftOverride !== 'string') closeCaptionAssistPresentation();
     reportConsoleError('Caption Assist', err);
     setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));
     return false;
@@ -1493,6 +1489,21 @@ function runCaptionAssistFromUi() {
   if (!isFocusedCaptionOpen()) return runCaptionAssist();
   return cancelFocusedCaptionPrefetch().then(function () {
     return runCaptionAssist();
+  });
+}
+
+function refreshCaptionAssistFromUi() {
+  var item = getPrimerResetCurrentMediaItem();
+  var candidate = captionAssistCandidate;
+  if (!item || !candidate || candidate.mediaKey !== item.key) {
+    throw new Error('Refresh Caption requires a current editable candidate.');
+  }
+  if (isCaptionAssistRunning()) return Promise.resolve(false);
+  var draft = String(candidate.text || '');
+  return cancelFocusedCaptionPrefetch().then(function () {
+    return cancelCurrentCaptionVision();
+  }).then(function () {
+    return runCaptionAssistAfterSight(draft);
   });
 }
 
@@ -1560,13 +1571,9 @@ function wirePrimerCaptionResetUi() {
   if (!candidateRegenerateBtn.__captionAssistBound) {
     candidateRegenerateBtn.__captionAssistBound = true;
     candidateRegenerateBtn.addEventListener('click', function () {
-      if (isFocusedCaptionOpen()) {
-        regenerateFocusedCaption();
-        return;
-      }
-      cancelCurrentCaptionVision().then(function () {
-        captionAssistCandidate = null;
-        return runCaptionAssistFromUi();
+      refreshCaptionAssistFromUi().catch(function (err) {
+        reportConsoleError('Refresh Caption', err);
+        setStatus('Refresh Caption failed: ' + String(err && err.message || err));
       });
     });
   }

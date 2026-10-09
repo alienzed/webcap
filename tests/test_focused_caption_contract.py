@@ -337,8 +337,8 @@ def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
     assert "useBtn.textContent = reviewMode" in primer
     assert "'Save → Next'" in primer
     assert "'Keep → Next'" in primer
-    assert "regenerateBtn.textContent = '\\u21bb';" in primer
-    assert "regenerateBtn.classList.toggle('is-primary', !!omittedAssignments.length);" in primer
+    assert "regenerateBtn.textContent = 'Refresh Caption';" in primer
+    assert "regenerateBtn.classList.toggle('is-primary', tagsChanged || !!omittedAssignments.length);" in primer
     assert ".editor-caption-candidate-omissions {" in css
     assert ".editor-caption-candidate-regenerate.is-primary {" in css
 
@@ -719,7 +719,7 @@ def test_focus_caption_enhancements_do_not_change_normal_caption_assist_contract
     assert "titleEl.textContent = reviewMode ? 'Focus Review' : (focusOpen ? 'Focus Caption' : 'Caption Assist');" in primer
     assert "dismissBtn.textContent = '\\u00d7';" in primer
     assert "if (!isFocusedCaptionOpen()) return runCaptionAssist();" in primer
-    assert "if (isFocusedCaptionOpen()) {\n        regenerateFocusedCaption();" in primer
+    assert "function refreshCaptionAssistFromUi()" in primer
     assert "if (isFocusedCaptionOpen()) {\n        event.preventDefault();" in primer
     assert "applyEditorTextAndTriggerInput(nextCaption);" in primer
 
@@ -756,9 +756,9 @@ def test_normal_caption_assist_regenerate_stays_open_and_can_cancel():
     regenerate_start = wire.index("candidateRegenerateBtn.addEventListener")
     regenerate_end = wire.index("if (!focusPrevBtn.__captionAssistBound)", regenerate_start)
     regenerate = wire[regenerate_start:regenerate_end]
-    assert "captionAssistCandidate = null;" in regenerate
+    assert "refreshCaptionAssistFromUi().catch(function (err)" in regenerate
     assert "syncCaptionAssistCandidateUi();" not in regenerate
-    assert "return runCaptionAssistFromUi();" in regenerate
+    assert "captionAssistCandidate = null;" not in regenerate
 
     assert "function cancelCaptionAssistGeneration()" in primer
     assert "if (!isFocusedCaptionOpen()) {\n        cancelCaptionAssistGeneration();" in wire
@@ -1028,3 +1028,14 @@ def test_caption_assist_uses_sight_for_explicit_tag_actions():
     assert "annotationsAtGeneration" in source
     assert "Rewrite with current tags" in source
 
+
+
+def test_refresh_caption_uses_current_candidate_and_cached_sight_without_rescan():
+    primer = _read('tool/js/primer_settings.js')
+    vision = _read('tool/js/caption_vision.js')
+    refresh = primer.split('function refreshCaptionAssistFromUi()', 1)[1].split('function wirePrimerCaptionResetUi()', 1)[0]
+    assert 'var draft = String(candidate.text || \'\');' in refresh
+    assert 'runCaptionAssistAfterSight(draft)' in refresh
+    assert 'refreshSetIntelligenceItem(' not in refresh
+    assert 'clearCaptionAssistCandidate()' not in refresh
+    assert 'Fresh Context Sight informed this caption' not in vision

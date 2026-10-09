@@ -454,7 +454,7 @@ function getCaptionAssistTagSuggestions(mediaItem) {
     if (seen[identity]) return;
     seen[identity] = true;
     if (group && hasChecklistAssignedTagForMediaKey(mediaKey, group, term)) return;
-    if (!group && getUnscopedTagsForMediaKey(mediaKey).some(function (tag) {
+    if (!group && getTagsForMediaKey(mediaKey).some(function (tag) {
       return normalizeChecklistTerm(tag).toLowerCase() === lower;
     })) return;
     var known = !!group && getChecklistKeywordTermsForRequirement(group).some(function (value) {
@@ -521,7 +521,12 @@ function acceptCaptionAssistTagSuggestion(mediaKey, suggestion) {
     if (!assignChecklistTagToMediaKey(mediaKey, group, term)) {
       throw new Error('Caption Assist could not assign ' + term + ' to ' + group);
     }
-    if (added.length) refreshCurrentPrimerDerivedUi();
+    if (added.length) {
+      // The assignment writer saves only per-item annotations. Persist the
+      // newly added group vocabulary in folder state as a separate queued write.
+      saveChecklistToFolderState();
+      refreshCurrentPrimerDerivedUi();
+    }
   } else if (!addTagToMediaKey(mediaKey, term)) {
     throw new Error('Caption Assist could not add unscoped tag: ' + term);
   }
@@ -546,6 +551,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
   if (!row || !trigger) throw new Error('Caption Assist Sight tag controls are missing.');
   var previousDetails = row.querySelector('details');
   var wasExpanded = !!(previousDetails && previousDetails.open);
+  var previousScrollTop = row.scrollTop;
   row.innerHTML = '';
   trigger.classList.add('hidden');
   trigger.disabled = true;
@@ -616,6 +622,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
     details.appendChild(list);
     row.appendChild(details);
   }
+  row.scrollTop = previousScrollTop;
 }
 function syncCaptionAssistCandidateUi() {
   var panel = document.getElementById('editor-caption-candidate');

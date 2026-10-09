@@ -1048,7 +1048,13 @@ function wireCaptionVisionUi() {
       var item = state.currentItem;
       refreshSight.disabled = true;
       var mode = document.getElementById('editor-caption-refresh-sight-mode').value;
-      refreshSetIntelligenceItem(item, { open: mode !== 'context', context: mode !== 'open' }).catch(function (err) {
+      var refreshOperation = function () {
+        return refreshSetIntelligenceItem(item, { open: mode !== 'context', context: mode !== 'open' });
+      };
+      var refresh = isFocusedQaReviewMode()
+        ? qaFocusReviewInteractiveRefresh(refreshOperation)
+        : refreshOperation();
+      refresh.catch(function (err) {
         reportConsoleError('Item Sight refresh', err);
         window.setStatus(String(err && err.message || err));
       }).finally(function () {
@@ -1062,7 +1068,10 @@ function wireCaptionVisionUi() {
     recheck.__captionVisionBound = true;
     recheck.addEventListener('click', function () {
       if (!captionAssistCandidate) return;
-      runCaptionVisionForCandidate(captionAssistCandidate).catch(function (err) {
+      var candidate = captionAssistCandidate;
+      var check = function () { return runCaptionVisionForCandidate(candidate); };
+      var request = isFocusedQaReviewMode() ? qaFocusReviewInteractiveRefresh(check) : check();
+      request.catch(function (err) {
         reportConsoleError('Caption Vision recheck', err);
       });
     });

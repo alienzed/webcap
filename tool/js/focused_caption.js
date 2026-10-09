@@ -332,6 +332,7 @@ function buildFocusedReviewCandidate(mediaItem) {
       request.tags
     ),
     requestFingerprint: captionAssistRequestFingerprint(mediaItem, request),
+    annotationsAtGeneration: JSON.stringify([request.assignments, request.tags]),
     reviewSeed: true
   };
 }

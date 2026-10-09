@@ -1261,7 +1261,7 @@ function repairCaptionAssistCandidate(corrections) {
       captionAssistPendingJobId = '';
       updatePrimerCaptionResetUi();
       syncFocusedCaptionAfterAssist(sourceMediaKey);
-      if (result === true && isFocusedCaptionOpen() &&
+      if (result === true && typeof draftOverride !== 'string' && isFocusedCaptionOpen() &&
           state.currentItem && state.currentItem.key === sourceMediaKey) {
         startFocusedCaptionPrefetch(sourceMediaKey);
       }
@@ -1457,7 +1457,7 @@ function runCaptionAssistAfterSight(draftOverride) {
   }).catch(function (err) {
     if (focusRequest && !isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
     if (!focusRequest && !isCaptionAssistPresentationOpenFor(sourceMediaKey)) return false;
-    if (!focusRequest) closeCaptionAssistPresentation();
+    if (!focusRequest && typeof draftOverride !== 'string') closeCaptionAssistPresentation();
     reportConsoleError('Caption Assist', err);
     setStatus('Caption Assist failed: ' + String(err && err.message ? err.message : err));
     return false;

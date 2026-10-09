@@ -80,6 +80,17 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "getSelectionPoseSuggestedTags" in qa
     assert "qaSightSupportsTerm" in qa
     assert "qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.aiFindings)" in qa
+    # Statistical associations can prioritize and inform Deep QA, not become direct recommendations.
+    assert "statisticalCandidates: []" in qa
+    assert "qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.statisticalCandidates).forEach" in qa
+    assert "qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.statisticalCandidates).filter" in qa
+    assert "files: exceptionFiles.slice()" in qa
+    computed = qa.split("function qaComputeFindings(items)", 1)[1].split("function qaGetRecommendations()", 1)[0]
+    assert "statisticalCandidates: statisticalCandidates" in computed
+    assert ".concat(qaBuildAssociationFindings(items))" not in computed
+    assert ".concat(qaBuildUnderrepresentedFindings(items, groups))" not in computed
+    assert ".concat(qaBuildOverrepresentedFindings(items, groups))" not in computed
+    assert "representationObservations" in computed
     assert "deepScanSessionToken" in qa
     assert "qaCurrentItemSignatureMap" in qa
     assert "qaPendingDeepScanItems" in qa

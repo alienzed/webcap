@@ -949,6 +949,7 @@ function syncWorkspaceSurfaceUi() {
   var reviewOutputSurface = document.getElementById('review-output-surface');
   var reviewDetailSurface = document.getElementById('review-detail-surface');
   var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
+  var qaFocusBtn = document.getElementById('qa-focus-review-btn');
   var trainingNavigator = document.getElementById('training-navigator');
   var reviewOutputBackBtn = document.getElementById('review-output-back-btn');
   var workbenchTop = ui.appEl.querySelector('.workbench-top');
@@ -987,6 +988,8 @@ function syncWorkspaceSurfaceUi() {
   }
   var hasReviewContext = isSetFolderContext(state.folder, state.items);
   if (reviewOutputBtn) reviewOutputBtn.classList.toggle('hidden', !hasReviewContext);
+  if (!qaFocusBtn) throw new Error('QA Focus Review Set Tools button is missing.');
+  qaFocusBtn.classList.toggle('hidden', !hasReviewContext);
   syncTrainingEntryChrome();
   if (reviewOutputBackBtn) {
     reviewOutputBackBtn.classList.toggle('hidden', surface !== 'reviewOutput');
@@ -1235,6 +1238,12 @@ function wireWorkspaceHeaderUi() {
   if (breadcrumb && !breadcrumb.__workspaceWired) {
     breadcrumb.__workspaceWired = true;
     breadcrumb.onclick = handleApplicationHeaderBreadcrumbClick;
+  }
+  var qaFocusBtn = document.getElementById('qa-focus-review-btn');
+  if (!qaFocusBtn) throw new Error('QA Focus Review Set Tools button is missing.');
+  if (!qaFocusBtn.__workspaceWired) {
+    qaFocusBtn.__workspaceWired = true;
+    qaFocusBtn.onclick = qaStartFocusReview;
   }
   var reviewOutputBtn = document.getElementById('sidebar-open-review-output-btn');
   if (reviewOutputBtn && !reviewOutputBtn.__workspaceWired) {

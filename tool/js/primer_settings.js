@@ -688,6 +688,7 @@ function syncCaptionAssistCandidateUi() {
   var progressEl = document.getElementById('editor-caption-focus-progress');
   var loadingEl = document.getElementById('editor-caption-focus-loading');
   var loadingTextEl = document.getElementById('editor-caption-focus-loading-text');
+  var qaReasonsEl = document.getElementById('editor-caption-qa-reasons');
   var omissionsEl = document.getElementById('editor-caption-candidate-omissions');
   var missingEl = document.getElementById('editor-caption-candidate-missing');
   var phrasesEl = document.getElementById('editor-caption-vision-phrases');
@@ -699,7 +700,7 @@ function syncCaptionAssistCandidateUi() {
   var useBtn = document.getElementById('editor-caption-candidate-use');
   var regenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
   var dismissBtn = document.getElementById('editor-caption-candidate-dismiss');
-  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !omissionsEl || !missingEl || !phrasesEl || !phrasesBtn || !textEl || !prevBtn || !nextBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
+  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !qaReasonsEl || !omissionsEl || !missingEl || !phrasesEl || !phrasesBtn || !textEl || !prevBtn || !nextBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
     throw new Error('Caption Assist candidate markup is incomplete.');
   }
 
@@ -737,6 +738,9 @@ function syncCaptionAssistCandidateUi() {
       : (reviewMode ? 'Preparing review…' : 'Preparing caption…');
   }
 
+  var qaReasons = isFocusedQaReviewMode() ? qaFocusReviewReasons(mediaKey) : [];
+  qaReasonsEl.classList.toggle('hidden', !qaReasons.length);
+  qaReasonsEl.textContent = qaReasons.length ? 'QA finding: ' + qaReasons.join(' · ') : '';
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
   omissionsEl.innerHTML = '';
   if (omittedAssignments.length) {

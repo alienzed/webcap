@@ -17,6 +17,12 @@
     captioning: 'Vocabulary or caption patterns likely to matter in training.'
   };
 
+  var qaFocusReviewState = {
+    active: false, folder: '', scopeKey: '', items: [], handled: {},
+    queued: {}, prepQueued: {}, prepChain: Promise.resolve(),
+    autoOpen: false, opening: false, token: 0
+  };
+
   var qaWorkbenchState = {
     view: 'overview',
     trainingFocus: '',
@@ -355,12 +361,12 @@
     qaWorkbenchState.aiCoverageTotal = 0;
     qaWorkbenchState.aiModel = '';
     qaWorkbenchState.dispositions = {};
-    qaRequestJson('/fs/qa/review?folder=' + encodeURIComponent(folder)).then(function (payload) {
+    return qaRequestJson('/fs/qa/review?folder=' + encodeURIComponent(folder)).then(function (payload) {
       if (token !== qaReviewLoadToken || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting || String(state.folder || '') !== folder
           || qaBuildScopeKey(qaGetTrainingItems()) !== scopeKey
           || qaWorkbenchState.trainingFocus !== focus) return;
       var saved = payload.review;
-      if (!saved || saved.scopeKey !== scopeKey || saved.trainingFocus !== focus) return;
+      if (!saved || saved.trainingFocus !== focus) return;
       var before = saved.itemSignatures && typeof saved.itemSignatures === 'object'
         ? saved.itemSignatures
         : {};
@@ -386,6 +392,7 @@
       qaWorkbenchState.dispositions = saved.dispositions && typeof saved.dispositions === 'object'
         ? saved.dispositions : {};
       qaMergeFindings();
+      qaSyncFocusReview();
       renderQaWorkbench();
     }).catch(function (err) {
       if (token !== qaReviewLoadToken) return;
@@ -396,8 +403,15 @@
   }
 
   function qaMergeFindings() {
+    var current = qaCurrentItemSignatureMap(qaGetTrainingItems());
+    var visibleAi = qaWorkbenchState.aiFindings.map(function (finding) {
+      var files = (finding.files || []).filter(function (file) {
+        return current[file] && qaWorkbenchState.aiItemSignatures[file] === current[file];
+      });
+      return files.length ? Object.assign({}, finding, { files: files }) : null;
+    }).filter(Boolean);
     qaWorkbenchState.findings = qaSortFindings(
-      qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.aiFindings)
+      qaWorkbenchState.deterministicFindings.concat(visibleAi)
     );
   }
 
@@ -555,6 +569,7 @@
       qaWorkbenchState.aiScopeSignature = qaBuildDeepScanSignature(qaGetTrainingItems());
       qaSaveReview().catch(function () {});
       qaMergeFindings();
+      qaSyncFocusReview();
       renderQaWorkbench();
       return;
     }
@@ -666,6 +681,7 @@
       qaWorkbenchState.aiScopeSignature = qaBuildDeepScanSignature(currentItems);
       qaRefreshAiCoverage();
       qaMergeFindings();
+      qaSyncFocusReview();
       renderQaWorkbench();
       return qaSaveReview(true).then(function () { return qaRunNextDeepScanBatch(); });
     }).then(function (continued) {
@@ -1856,6 +1872,11 @@
       qaWorkbenchState.parentFocusSet = undefined;
       qaWorkbenchState.returnFindingId = '';
     }
+    if (qaFocusReviewState.active && (folderChanged || scopeChanged) &&
+        !qaFocusReviewCurrent()) {
+      qaFocusReviewState.active = false;
+      qaFocusReviewState.autoOpen = false;
+    }
     if (folderChanged || scopeChanged || inputsChanged || !qaWorkbenchState.deepScanInputSignature) {
       qaWorkbenchState.browseIndex = 0;
       qaWorkbenchState.statusMessage = '';
@@ -1891,6 +1912,176 @@
     }
     qaWorkbenchState.browseIndex = Math.max(0, Math.min(qaWorkbenchState.browseIndex, Math.max(0, recommendations.length - 1)));
     return { items: items, health: result.health };
+  }
+
+
+  // Review membership is session-only. Deep QA owns durable evidence; Caption
+  // Assist owns candidate generation. No second QA result store is introduced.
+  function qaFocusReviewCurrent() {
+    return qaFocusReviewState.active &&
+      qaFocusReviewState.folder === String(state.folder || '') &&
+      qaFocusReviewState.scopeKey === qaBuildScopeKey(qaGetTrainingItems());
+  }
+
+  function qaFocusReviewReasons(mediaKey) {
+    if (!qaFocusReviewCurrent()) return [];
+    var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
+    if (!item) return [];
+    var current = qaCurrentItemSignatureMap([item]);
+    return qaWorkbenchState.aiFindings.filter(function (finding) {
+      return (finding.category === 'captioning' || finding.category === 'consistency') &&
+        !qaWorkbenchState.dispositions[finding.id] &&
+        (finding.files || []).indexOf(item.fileName) !== -1 &&
+        qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
+    }).map(function (finding) {
+      return String(finding.title || '') + (finding.why ? ' — ' + String(finding.why) : '');
+    }).filter(Boolean).slice(0, 3);
+  }
+
+  function qaSyncFocusReviewButton() {
+    var button = document.getElementById('qa-focus-review-btn');
+    if (!button) throw new Error('QA Focus Review Set Tools button is missing.');
+    if (!qaFocusReviewCurrent()) {
+      button.textContent = 'QA Focus Review';
+      return;
+    }
+    var ready = Object.keys(qaFocusReviewState.queued).filter(function (key) {
+      return !qaFocusReviewState.handled[key];
+    }).length;
+    var pending = qaWorkbenchState.aiCoverageTotal - qaWorkbenchState.aiCoverageValid;
+    button.textContent = 'QA Focus Review · ' + ready + ' ready' +
+      (qaWorkbenchState.deepScanSessionActive ? ' · ' + Math.max(0, pending) + ' checking' : '');
+  }
+
+  function qaFocusReviewMarkHandled(mediaKey, disposition) {
+    if (!qaFocusReviewCurrent()) throw new Error('QA Focus Review round is no longer current.');
+    qaFocusReviewState.handled[String(mediaKey || '')] = String(disposition || 'applied');
+    delete qaFocusReviewState.queued[String(mediaKey || '')];
+    qaSyncFocusReviewButton();
+  }
+
+  function qaFocusReviewStopped() {
+    // Closing an overlay must not cancel the user's already-running Deep QA.
+    qaFocusReviewState.autoOpen = false;
+    qaFocusReviewState.opening = false;
+    qaSyncFocusReviewButton();
+  }
+
+  function qaQueueFocusCandidatePreparation(item) {
+    var session = qaFocusReviewState;
+    var key = String(item && item.key || '');
+    if (!key || session.prepQueued[key]) return;
+    session.prepQueued[key] = true;
+    var token = session.token;
+    session.prepChain = session.prepChain.catch(function () {}).then(function () {
+      if (!qaFocusReviewCurrent() || session.token !== token || session.handled[key]) return;
+      if (isFocusedQaReviewMode() && focusedCaptionState.itemKey === key) return;
+      var request = buildCaptionAssistRequest(item);
+      var saved = captionAssistSavedCandidatesByMedia[key];
+      var annotations = JSON.stringify([request.assignments, request.tags]);
+      if (saved && saved.sourceCaption === String(item.caption || '') &&
+          saved.annotationsAtGeneration === annotations &&
+          (!saved.model || saved.model === String(request.model || ''))) return;
+      return refreshSetIntelligenceItem(item, {
+        open: 'missing', context: 'missing', silent: true, allowOpenFailure: true
+      }).then(function () {
+        if (!qaFocusReviewCurrent() || session.token !== token || session.handled[key]) return;
+        request = buildCaptionAssistRequest(item);
+        var fingerprint = captionAssistRequestFingerprint(item, request);
+        return requestCaptionAssistCandidate(item, request).then(function (candidate) {
+          if (!qaFocusReviewCurrent() || session.token !== token || session.handled[key]) return;
+          if (captionAssistRequestFingerprint(item, buildCaptionAssistRequest(item)) !== fingerprint) return;
+          candidate.sourceCaption = String(item.caption || '');
+          candidate.model = String(request.model || '');
+          persistCaptionAssistCandidate(candidate, true);
+        });
+      }).catch(function (err) {
+        reportConsoleError('QA Focus Review · Prepare ' + item.fileName, err);
+      });
+    });
+  }
+
+  function qaSyncFocusReview() {
+    if (!qaFocusReviewCurrent()) return;
+    var session = qaFocusReviewState;
+    var current = qaCurrentItemSignatureMap(session.items);
+    var wanted = {};
+    qaWorkbenchState.aiFindings.forEach(function (finding) {
+      if (finding.category !== 'captioning' && finding.category !== 'consistency') return;
+      if (qaWorkbenchState.dispositions[finding.id]) return;
+      (finding.files || []).forEach(function (file) {
+        if (current[file] && qaWorkbenchState.aiItemSignatures[file] === current[file]) wanted[file] = true;
+      });
+    });
+    var newKeys = [];
+    session.items.forEach(function (item) {
+      if (!wanted[item.fileName] || session.handled[item.key] || session.queued[item.key]) return;
+      session.queued[item.key] = true;
+      newKeys.push(item.key);
+    });
+    if (isFocusedQaReviewMode() && newKeys.length) {
+      appendFocusedQaReviewItems(newKeys);
+    }
+    session.items.forEach(function (item) {
+      if (session.queued[item.key] && !session.handled[item.key]) qaQueueFocusCandidatePreparation(item);
+    });
+    qaSyncFocusReviewButton();
+    if (!isFocusedQaReviewMode() && session.autoOpen && !session.opening) {
+      var keys = session.items.filter(function (item) {
+        return session.queued[item.key] && !session.handled[item.key];
+      }).map(function (item) { return item.key; });
+      if (keys.length) {
+        session.opening = true;
+        var token = session.token;
+        var target = session.items.find(function (item) { return item.key === keys[0]; });
+        selectPathMedia(target).then(function () {
+          if (!qaFocusReviewCurrent() || session.token !== token || !session.autoOpen) return;
+          if (startFocusedQaReview(keys)) session.autoOpen = false;
+        }).catch(function (err) {
+          reportConsoleError('QA Focus Review · Open', err);
+          setStatus('Could not open QA Focus Review: ' + String(err && err.message || err));
+        }).then(function () {
+          session.opening = false;
+        });
+      }
+    }
+  }
+
+  function qaStartFocusReview() {
+    var items = qaGetTrainingItems();
+    if (!items.length) {
+      setStatus('QA Focus Review needs at least one item in the current training selection.');
+      return;
+    }
+    var scopeKey = qaBuildScopeKey(items);
+    if (!qaFocusReviewState.active || qaFocusReviewState.folder !== String(state.folder || '') ||
+        qaFocusReviewState.scopeKey !== scopeKey) {
+      qaFocusReviewState = {
+        active: true, folder: String(state.folder || ''), scopeKey: scopeKey,
+        items: items.slice(), handled: {}, queued: {}, prepQueued: {},
+        prepChain: Promise.resolve(), autoOpen: true, opening: false,
+        token: qaFocusReviewState.token + 1
+      };
+    } else {
+      qaFocusReviewState.autoOpen = true;
+    }
+    qaRefreshComputedState(true);
+    qaRestoreReview(qaBuildDeepScanSignature(items)).then(function () {
+      if (!qaFocusReviewCurrent()) return;
+      qaSyncFocusReview();
+      if (!qaWorkbenchState.deepScanSessionActive && qaPendingDeepScanItems().length) {
+        qaRunDeepScan();
+      } else if (!qaWorkbenchState.deepScanSessionActive &&
+                 !Object.keys(qaFocusReviewState.queued).length) {
+        setStatus('QA Focus Review complete: no actionable QA findings in this selection.');
+      }
+      qaSyncFocusReviewButton();
+    }).catch(function (err) {
+      reportConsoleError('QA Focus Review · Restore', err);
+      setStatus('Could not prepare QA Focus Review: ' + String(err && err.message || err));
+    });
+    setStatus('QA Focus Review: loading saved findings and checking remaining items.');
+    qaSyncFocusReviewButton();
   }
 
   function renderQaWorkbench(force) {
@@ -2001,6 +2192,10 @@
   }
 
   function qaHandleAction(action, value) {
+    if (action === 'qa-focus-review') {
+      qaStartFocusReview();
+      return;
+    }
     if (action === 'deep-scan') {
       qaRunDeepScan();
       return;
@@ -2137,4 +2332,8 @@
   window.getQaTrainingFocus = getQaTrainingFocus;
   window.getQaTrainingItemsForAssistant = getQaTrainingItemsForAssistant;
   window.qaInputsUpdated = qaInputsUpdated;
+  window.qaStartFocusReview = qaStartFocusReview;
+  window.qaFocusReviewMarkHandled = qaFocusReviewMarkHandled;
+  window.qaFocusReviewStopped = qaFocusReviewStopped;
+  window.qaFocusReviewReasons = qaFocusReviewReasons;
 })();

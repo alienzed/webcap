@@ -484,7 +484,7 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
     prefetch.promise = loadCaptionVisionCapabilities().then(function () {
       if (!active()) return null;
       return refreshSetIntelligenceItem(target.item, {
-        open: 'missing', context: true, silent: true, allowOpenFailure: true,
+        open: 'missing', context: 'missing', silent: true, allowOpenFailure: true,
         isCancelled: function () { return prefetch.discarded; }
       });
     }).then(function (prepared) {
@@ -676,6 +676,7 @@ function syncFocusedCaptionAfterAssist(sourceMediaKey) {
 
 function stopFocusedCaption(message, options) {
   if (!focusedCaptionState.open) return true;
+  if (captionAssistCandidate) persistCaptionAssistCandidate(captionAssistCandidate, false);
   var opts = options || {};
   if (hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits) {
     setStatus('This review caption has unsaved edits. Use Save → Next, or Skip before exiting.');
@@ -733,6 +734,10 @@ function prepareFocusedCaptionCurrentItem() {
   if (isCaptionAssistRunning()) {
     setStatus('Caption Assist is already running for this ' + focusedCaptionModeLabel() + ' item.');
     return Promise.resolve(false);
+  }
+  if (captionAssistSavedCandidatesByMedia[state.currentItem.key]) {
+    restoreCaptionAssistCandidate(state.currentItem);
+    return Promise.resolve(true);
   }
   return useFocusedCaptionPrefetchForCurrentItem().then(function (usedPrefetch) {
     if (usedPrefetch) return true;
@@ -848,8 +853,10 @@ function regenerateFocusedCaption() {
     return cancelFocusedCaptionPrefetch();
   }).then(function () {
     if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== mediaKey) return false;
-    clearCaptionAssistCandidate();
-    return prepareFocusedCaptionCurrentItem();
+    if (captionAssistCandidate && captionAssistCandidate.mediaKey === mediaKey) {
+      return refreshCaptionAssistFromUi();
+    }
+    return runCaptionAssistAfterSight();
   });
 }
 

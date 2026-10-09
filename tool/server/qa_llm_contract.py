@@ -304,6 +304,7 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
         if str(value or "").strip()
     }
     normalized = []
+    patch_warnings = []
     for finding in findings:
         if not isinstance(finding, dict):
             raise ValueError("QA Deep Scan response contains an invalid finding.")
@@ -353,47 +354,50 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
         normalized_patches = []
         seen_patches = set()
         for patch in patches[:8]:
-            if not isinstance(patch, dict):
-                raise ValueError("QA Deep Scan response contains an invalid caption patch.")
-            file_name = str(patch.get("file") or "").strip()
-            action = str(patch.get("action") or "").strip().lower()
-            source_text = str(patch.get("sourceText") or "")
-            replacement_text = str(patch.get("replacementText") or "")
-            anchor_text = str(patch.get("anchorText") or "")
-            if file_name not in normalized_files or action not in {"add", "replace", "remove"}:
-                raise ValueError("QA Deep Scan caption patch is outside its finding.")
-            if file_name not in caption_lookup:
-                raise ValueError("QA Deep Scan caption patch is missing its submitted caption.")
-            caption = str(caption_lookup.get(file_name) or "")
-            if action == "add":
-                if source_text.strip() or not replacement_text.strip():
-                    raise ValueError("QA Deep Scan add patch is invalid.")
-                if anchor_text and caption.count(anchor_text) != 1:
-                    raise ValueError("QA Deep Scan add patch anchor is not an exact unique caption substring.")
-            elif action == "replace":
-                if not source_text.strip() or not replacement_text.strip() or source_text == replacement_text:
-                    raise ValueError("QA Deep Scan replace patch is invalid.")
-                if caption.count(source_text) != 1:
-                    raise ValueError("QA Deep Scan replace patch source is not an exact unique caption substring.")
-                anchor_text = ""
-            else:
-                if not source_text.strip() or replacement_text:
-                    raise ValueError("QA Deep Scan remove patch is invalid.")
-                if caption.count(source_text) != 1:
-                    raise ValueError("QA Deep Scan remove patch source is not an exact unique caption substring.")
-                anchor_text = ""
-            key = (file_name, action, source_text, replacement_text, anchor_text)
-            if key in seen_patches:
-                continue
-            seen_patches.add(key)
-            normalized_patches.append({
-                "file": file_name,
-                "action": action,
-                "sourceText": source_text,
-                "replacementText": replacement_text,
-                "anchorText": anchor_text,
-            })
-
+            try:
+                if not isinstance(patch, dict):
+                    raise ValueError("QA Deep Scan response contains an invalid caption patch.")
+                file_name = str(patch.get("file") or "").strip()
+                action = str(patch.get("action") or "").strip().lower()
+                source_text = str(patch.get("sourceText") or "")
+                replacement_text = str(patch.get("replacementText") or "")
+                anchor_text = str(patch.get("anchorText") or "")
+                if file_name not in normalized_files or action not in {"add", "replace", "remove"}:
+                    raise ValueError("QA Deep Scan caption patch is outside its finding.")
+                if file_name not in caption_lookup:
+                    raise ValueError("QA Deep Scan caption patch is missing its submitted caption.")
+                caption = str(caption_lookup.get(file_name) or "")
+                if action == "add":
+                    if source_text.strip() or not replacement_text.strip():
+                        raise ValueError("QA Deep Scan add patch is invalid.")
+                    if anchor_text and caption.count(anchor_text) != 1:
+                        raise ValueError("QA Deep Scan add patch anchor is not an exact unique caption substring.")
+                elif action == "replace":
+                    if not source_text.strip() or not replacement_text.strip() or source_text == replacement_text:
+                        raise ValueError("QA Deep Scan replace patch is invalid.")
+                    if caption.count(source_text) != 1:
+                        raise ValueError("QA Deep Scan replace patch source is not an exact unique caption substring.")
+                    anchor_text = ""
+                else:
+                    if not source_text.strip() or replacement_text:
+                        raise ValueError("QA Deep Scan remove patch is invalid.")
+                    if caption.count(source_text) != 1:
+                        raise ValueError("QA Deep Scan remove patch source is not an exact unique caption substring.")
+                    anchor_text = ""
+                key = (file_name, action, source_text, replacement_text, anchor_text)
+                if key in seen_patches:
+                    continue
+                seen_patches.add(key)
+                normalized_patches.append({
+                    "file": file_name,
+                    "action": action,
+                    "sourceText": source_text,
+                    "replacementText": replacement_text,
+                    "anchorText": anchor_text,
+                })
+    
+            except ValueError as exc:
+                patch_warnings.append(str(exc) + " (" + str(patch.get("file") if isinstance(patch, dict) else "unknown file") + ")")
         normalized.append({
             "category": category,
             "priority": priority,
@@ -406,4 +410,4 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
             "patches": normalized_patches,
         })
 
-    return {"summary": summary, "findings": normalized[:8]}
+    return {"summary": summary, "findings": normalized[:8], "patchWarnings": patch_warnings}

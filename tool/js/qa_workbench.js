@@ -20,7 +20,7 @@
   var qaFocusReviewState = {
     active: false, folder: '', scopeKey: '', items: [], handled: {},
     queued: {}, prepQueued: {}, prepChain: Promise.resolve(),
-    autoOpen: false, opening: false, token: 0
+    autoOpen: false, opening: false, token: 0, loadToken: 0
   };
 
   var qaWorkbenchState = {
@@ -2080,14 +2080,20 @@
         active: true, folder: String(state.folder || ''), scopeKey: scopeKey,
         items: items.slice(), handled: {}, queued: {}, prepQueued: {},
         prepChain: Promise.resolve(), autoOpen: true, opening: false,
-        token: qaFocusReviewState.token + 1
+        token: qaFocusReviewState.token + 1, loadToken: 0
       };
     } else {
       qaFocusReviewState.autoOpen = true;
     }
     qaRefreshComputedState(true);
-    qaRestoreReview(qaBuildDeepScanSignature(items)).then(function () {
-      if (!qaFocusReviewCurrent()) return;
+    var session = qaFocusReviewState;
+    var loadToken = ++session.loadToken;
+    // Never clear an active Deep QA session just to restore saved findings.
+    var restore = qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting
+      ? Promise.resolve()
+      : qaRestoreReview(qaBuildDeepScanSignature(items));
+    restore.then(function () {
+      if (!qaFocusReviewCurrent() || session !== qaFocusReviewState || session.loadToken !== loadToken) return;
       qaSyncFocusReview();
       if (!qaWorkbenchState.deepScanSessionActive && qaPendingDeepScanItems().length) {
         qaRunDeepScan();

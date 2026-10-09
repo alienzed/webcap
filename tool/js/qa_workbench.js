@@ -614,6 +614,8 @@
     renderQaWorkbench();
 
     refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: 'missing', silent: true }).then(function () {
+      return qaWaitForInteractiveRefresh();
+    }).then(function () {
       if (sessionToken !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
       if (getCaptionVisionModelId() !== sessionVisionModel) throw new Error('Deep QA Vision model changed while running; restart the scan.');
       batchSignatures = qaCurrentItemSignatureMap(batchItems);
@@ -2022,6 +2024,8 @@
           (!saved.model || saved.model === String(request.model || ''))) return;
       return refreshSetIntelligenceItem(item, {
         open: 'missing', context: 'missing', silent: true, allowOpenFailure: true
+      }).then(function () {
+        return qaWaitForInteractiveRefresh();
       }).then(function () {
         if (!qaFocusReviewCurrent() || session.token !== token || session.handled[key]) return;
         request = buildCaptionAssistRequest(item);

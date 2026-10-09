@@ -19,7 +19,7 @@ def test_director_runtime_dir_uses_app_cache(monkeypatch, tmp_path):
 def test_director_capacity_defaults_defer_to_runtime():
     assert storyboard_llm_runtime.DEFAULT_CONTEXT_SIZE is None
     assert storyboard_llm_runtime.DEFAULT_MAX_TOKENS is None
-    assert storyboard_llm_runtime.LOCAL_MODEL_RESIDENT_LIMIT == 2
+    assert storyboard_llm_runtime.LOCAL_MODEL_RESIDENT_LIMIT == 1
     assert storyboard_llm_runtime.LOCAL_MODEL_FIT_TARGET_MIB == 1024
 
 
@@ -489,7 +489,7 @@ def test_ensure_local_model_loaded_reuses_loaded_selection(monkeypatch):
     assert calls == []
 
 
-def test_ensure_local_model_loaded_keeps_second_model_resident(monkeypatch):
+def test_ensure_local_model_loaded_delegates_model_switch_to_router(monkeypatch):
     calls = []
     monkeypatch.setattr(
         storyboard_llm_runtime,

@@ -1608,6 +1608,15 @@
         badge.dataset.sessionGroupCount = '1';
         heading.appendChild(title);
         heading.appendChild(badge);
+        if (key === 'history') {
+          var clearHistory = document.createElement('button');
+          clearHistory.type = 'button';
+          clearHistory.className = 'review-captions-btn';
+          clearHistory.dataset.sessionClearHistory = '1';
+          clearHistory.textContent = 'Clear All';
+          clearHistory.title = 'Delete all Test session history';
+          heading.appendChild(clearHistory);
+        }
         var body = document.createElement('div');
         body.className = 'test-generations-session-group-list';
         body.dataset.sessionGroupList = '1';
@@ -3509,6 +3518,33 @@
     });
   }
 
+  function clearSessionHistory(button) {
+    var host = el('test-generations-sessions-list');
+    if (!host) return Promise.resolve();
+    var history = host.querySelector('[data-session-group="history"]');
+    if (!history) return Promise.resolve();
+
+    var sessions = Array.prototype.map.call(
+      history.querySelectorAll('[data-session-name]'),
+      function (row) { return String(row.dataset.sessionName || ''); }
+    ).filter(Boolean);
+    if (!sessions.length) return Promise.resolve();
+
+    if (!window.confirm('Delete all ' + sessions.length + ' Test session' + (sessions.length === 1 ? '' : 's') + '?')) {
+      return Promise.resolve();
+    }
+
+    if (button) button.disabled = true;
+    return sessions.reduce(function (chain, sessionName) {
+      return chain.then(function () { return deleteSession(sessionName); });
+    }, Promise.resolve()).then(function () {
+      return refreshSessions();
+    }).catch(function (err) {
+      if (button && button.isConnected) button.disabled = false;
+      throw err;
+    });
+  }
+
   function removeCandidate(fileName, sessionName) {
     return request('test_remove_candidate', {
       fileName: String(fileName || ''),
@@ -3703,6 +3739,11 @@
       });
     };
     el('test-generations-sessions-list').onclick = function (event) {
+      var clearHistory = event.target.closest('[data-session-clear-history]');
+      if (clearHistory) {
+        clearSessionHistory(clearHistory).catch(showError);
+        return;
+      }
       var queueCancel = event.target.closest('[data-queue-cancel]');
       if (queueCancel) {
         queueCancel.disabled = true;

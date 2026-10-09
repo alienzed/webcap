@@ -37,6 +37,7 @@
     deepScanStatus: '',
     deepScanInputSignature: '',
     deepScanSkipped: {},
+    deepScanVisionModel: '',
     observations: [],
     dispositions: {},
     browseIndex: 0,
@@ -451,7 +452,7 @@
   function qaCurrentItemSignatureMap(items) {
     var signatures = {};
     qaBuildDeepScanItems(items).forEach(function (item) {
-      var source = JSON.stringify(item);
+      var source = JSON.stringify([item, getCaptionVisionModelId() || '']);
       var hash = 2166136261;
       for (var i = 0; i < source.length; i += 1) {
         hash = Math.imul(hash ^ source.charCodeAt(i), 16777619);
@@ -555,6 +556,7 @@
     var sessionFolder = String(state.folder || '');
     var sessionScopeKey = qaBuildScopeKey(qaGetTrainingItems());
     var sessionFocus = qaWorkbenchState.trainingFocus;
+    var sessionVisionModel = qaWorkbenchState.deepScanVisionModel;
     qaWorkbenchState.deepScanSubmitting = true;
     qaWorkbenchState.deepScanStatus = 'Deep QA · Vision ' + batchItems[0].fileName +
       ' · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' reviewed';
@@ -562,6 +564,7 @@
 
     refreshSetIntelligenceItem(batchItems[0], { open: false, context: true }).then(function () {
       if (sessionToken !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
+      if (getCaptionVisionModelId() !== sessionVisionModel) throw new Error('Deep QA Vision model changed while running; restart the scan.');
       batchSignatures = qaCurrentItemSignatureMap(batchItems);
       qaWorkbenchState.deepScanStatus = 'Deep QA · Director ' + batchItems[0].fileName;
       renderQaWorkbench();
@@ -688,6 +691,7 @@
     var model = String(getDirectorModelPreference() || '').trim();
     if (!model) throw new Error('Select a Director model before running Deep QA Scan.');
     if (!getCaptionVisionModelId()) throw new Error('Select a Vision model before running Deep QA Scan.');
+    qaWorkbenchState.deepScanVisionModel = getCaptionVisionModelId();
 
     ++qaReviewLoadToken;
     if (qaWorkbenchState.aiModel && qaWorkbenchState.aiModel !== model) {

@@ -124,6 +124,7 @@ function cancelFocusedCaptionCurrentRequest() {
 
   if (
     focusedCaptionPrefetch &&
+    pendingJobId &&
     (pendingJobId === 'prefetch' || pendingJobId === String(focusedCaptionPrefetch.jobId || ''))
   ) {
     return cancelFocusedCaptionPrefetch();

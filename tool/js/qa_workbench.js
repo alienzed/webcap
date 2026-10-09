@@ -36,6 +36,7 @@
     deepScanSubmitting: false,
     deepScanStatus: '',
     deepScanInputSignature: '',
+    deepScanSkipped: {},
     observations: [],
     dispositions: {},
     browseIndex: 0,
@@ -463,7 +464,8 @@
     var items = qaGetTrainingItems();
     var current = qaCurrentItemSignatureMap(items);
     return items.filter(function (item) {
-      return qaWorkbenchState.aiItemSignatures[item.fileName] !== current[item.fileName];
+      return qaWorkbenchState.aiItemSignatures[item.fileName] !== current[item.fileName]
+        && !qaWorkbenchState.deepScanSkipped[item.fileName];
     });
   }
 
@@ -481,6 +483,7 @@
   function qaInvalidateDeepScanSession(message) {
     var jobId = String(qaWorkbenchState.deepScanJobId || '');
     qaWorkbenchState.deepScanSessionToken += 1;
+    qaWorkbenchState.deepScanSkipped = {};
     qaWorkbenchState.deepScanSessionActive = false;
     qaWorkbenchState.deepScanStopRequested = true;
     qaWorkbenchState.deepScanSubmitting = false;
@@ -528,9 +531,10 @@
       qaWorkbenchState.deepScanSessionActive = false;
       qaWorkbenchState.deepScanSubmitting = false;
       qaWorkbenchState.deepScanJobId = '';
-      qaWorkbenchState.deepScanStatus = qaWorkbenchState.aiFindings.length
-        ? 'Deep QA current · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' items interpreted.'
-        : 'Deep QA current · no additional semantic findings.';
+      var skippedCount = Object.keys(qaWorkbenchState.deepScanSkipped).length;
+      qaWorkbenchState.deepScanStatus = 'Deep QA finished · ' + qaWorkbenchState.aiCoverageValid + '/' +
+        qaWorkbenchState.aiCoverageTotal + ' items interpreted' +
+        (skippedCount ? ' · ' + skippedCount + ' skipped (see Console)' : '') + '.';
       qaWorkbenchState.aiScopeSignature = qaBuildDeepScanSignature(qaGetTrainingItems());
       qaSaveReview();
       qaMergeFindings();
@@ -644,9 +648,18 @@
         qaWorkbenchState.deepScanSessionActive = false;
         qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
       } else {
+        var message = String(err && err.message || err);
+        var unusableResponse = /WebCap ingest failed after a successful model response|QA Deep Scan response|QA Deep Scan finding|QA Deep Scan invented a filename|QA Deep Scan batch completed without structured findings/.test(message);
+        window.reportConsoleError('QA Deep Scan · ' + (unusableResponse ? 'Skipped ' + batchItems[0].fileName : 'Failed'), err);
+        if (unusableResponse && qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStopRequested) {
+          qaWorkbenchState.deepScanSkipped[batchItems[0].fileName] = true;
+          qaWorkbenchState.deepScanStatus = 'Deep QA · skipped ' + batchItems[0].fileName + ' (see Console). Continuing…';
+          qaRefreshAiCoverage();
+          renderQaWorkbench();
+          return qaRunNextDeepScanBatch();
+        }
         qaWorkbenchState.deepScanSessionActive = false;
-        qaWorkbenchState.deepScanStatus = 'Deep QA failed: ' + String(err && err.message || err);
-        window.reportConsoleError('QA Deep Scan', err);
+        qaWorkbenchState.deepScanStatus = 'Deep QA failed: ' + message;
       }
       qaRefreshAiCoverage();
       renderQaWorkbench();
@@ -669,6 +682,7 @@
     }
     qaWorkbenchState.aiModel = model;
     qaWorkbenchState.deepScanSessionToken += 1;
+    qaWorkbenchState.deepScanSkipped = {};
     qaWorkbenchState.deepScanInputSignature = qaBuildDeepScanSignature(items);
     qaWorkbenchState.deepScanSessionActive = true;
     qaWorkbenchState.deepScanStopRequested = false;

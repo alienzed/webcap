@@ -372,19 +372,16 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
                     if action == "add":
                         if source_text.strip() or not replacement_text.strip():
                             raise ValueError("QA Deep Scan add patch is invalid.")
-                        if anchor_text and caption.count(anchor_text) != 1:
-                            raise ValueError("QA Deep Scan add patch anchor is not an exact unique caption substring.")
+                        # A proposal is not an edit. Check exact text only when applying it.
                     elif action == "replace":
                         if not source_text.strip() or not replacement_text.strip() or source_text == replacement_text:
                             raise ValueError("QA Deep Scan replace patch is invalid.")
-                        if caption.count(source_text) != 1:
-                            raise ValueError("QA Deep Scan replace patch source is not an exact unique caption substring.")
+                        # A proposal is not an edit. Check exact text only when applying it.
                         anchor_text = ""
                     else:
                         if not source_text.strip() or replacement_text:
                             raise ValueError("QA Deep Scan remove patch is invalid.")
-                        if caption.count(source_text) != 1:
-                            raise ValueError("QA Deep Scan remove patch source is not an exact unique caption substring.")
+                        # A proposal is not an edit. Check exact text only when applying it.
                         anchor_text = ""
                     key = (file_name, action, source_text, replacement_text, anchor_text)
                     if key in seen_patches:

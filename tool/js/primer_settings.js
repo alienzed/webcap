@@ -256,6 +256,7 @@ function cancelCaptionAssistGeneration() {
 }
 
 function dismissCaptionAssistCandidate() {
+  if (captionAssistCandidate) persistCaptionAssistCandidate(captionAssistCandidate, false);
   if (isFocusedCaptionOpen()) {
     if (!stopFocusedCaption('Focus Caption ended.')) return Promise.resolve(false);
     renderFileList();

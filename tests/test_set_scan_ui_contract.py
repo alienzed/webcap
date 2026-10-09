@@ -111,8 +111,7 @@ def test_set_intelligence_uses_visible_training_scope_with_explicit_full_set_ove
     assert 'var files = getSetIntelligenceScopeFiles();' in scan
     assert "if (!files.length) {\n      setCoverage(0, 0, 0, 0, true);" in scan
     assert 'entireSetToggle.onchange = openSetIntelligence;' in scan
-    assert 'openVisionSchemaAssist({ files: files });' in scan
-    assert "openGuidedTagPass({ source: 'set', files: files });" in scan
-    assert 'var files = Array.isArray(opts.files) ? opts.files.slice() : getVisibleMediaSelectionForTraining();' in schema
-    assert 'if (Array.isArray(opts.files)) return opts.files.slice();' in schema
-    assert "openGuidedTagPass({ source: 'set', files: schemaState.scopeFiles.slice() });" in schema
+    assert 'openVisionSchemaAssist();' in scan
+    assert "openGuidedTagPass({ source: 'set' });" in scan
+    assert 'schemaState.scopeFiles = getCurrentSetMediaFileNames();' in schema
+    assert "if (opts.source === 'set') {\n      return getCurrentSetMediaFileNames();" in schema

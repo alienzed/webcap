@@ -574,7 +574,8 @@
         trainingFocus: sessionFocus,
         items: qaBuildDeepScanItems(batchItems),
         deterministicFindings: qaDeepScanFindingPayload(batchItems)
-      });
+      })
+    });
     }).then(function (payload) {
       if (!payload) return null;
       if (

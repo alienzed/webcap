@@ -112,6 +112,58 @@ var debouncedSaveFolderState = debounceCreate(600);
 var primerResetUndoState = null; // { mediaKey, text }
 var captionAssistPendingJobId = '';
 var captionAssistCandidate = null; // { mediaKey, text, missingGroups, omittedAssignments }
+var captionAssistSavedCandidatesByMedia = {};
+var captionAssistDraftSave = debounceCreate(350);
+
+function persistCaptionAssistCandidate(candidate, defer) {
+  if (!candidate || !candidate.mediaKey || !state.folderStateWritable) return;
+  var key = candidate.mediaKey;
+  var item = (state.items || []).find(function (row) { return row && row.key === key; });
+  if (!item) return;
+  var saved = {
+    text: String(candidate.text || ''),
+    annotationsAtGeneration: String(candidate.annotationsAtGeneration || ''),
+    sourceCaption: String(candidate.sourceCaption === undefined ? item.caption || '' : candidate.sourceCaption),
+    model: String(candidate.model || '')
+  };
+  if (JSON.stringify(captionAssistSavedCandidatesByMedia[key]) === JSON.stringify(saved)) return;
+  captionAssistSavedCandidatesByMedia[key] = saved;
+  if (defer) {
+    var folder = String(state.folder || '');
+    captionAssistDraftSave(function () {
+      if (String(state.folder || '') === folder) saveFolderStateForCurrentRoot();
+    });
+  } else {
+    saveFolderStateForCurrentRoot();
+  }
+}
+
+function forgetCaptionAssistCandidate(mediaKey) {
+  if (!Object.prototype.hasOwnProperty.call(captionAssistSavedCandidatesByMedia, mediaKey)) return;
+  delete captionAssistSavedCandidatesByMedia[mediaKey];
+  saveFolderStateForCurrentRoot();
+}
+
+function restoreCaptionAssistCandidate(mediaItem) {
+  var saved = mediaItem && captionAssistSavedCandidatesByMedia[mediaItem.key];
+  if (!saved) return false;
+  var request = buildCaptionAssistRequest(mediaItem);
+  captionAssistCandidate = {
+    mediaKey: mediaItem.key,
+    text: saved.text,
+    annotationsAtGeneration: saved.annotationsAtGeneration,
+    sourceCaption: saved.sourceCaption,
+    model: saved.model,
+    missingGroups: getCaptionAssistMissingGroups(mediaItem.key),
+    omittedAssignments: getCaptionAssistOmittedAssignments(mediaItem.key, saved.text, request.assignments, request.tags),
+    omittedCorrections: getCaptionAssistOmittedCorrections(mediaItem.key, saved.text, request.assignments, request.tags)
+  };
+  syncCaptionAssistCandidateUi();
+  var changed = saved.annotationsAtGeneration !== JSON.stringify([request.assignments, request.tags]) ||
+    saved.sourceCaption !== String(mediaItem.caption || '');
+  setStatus(changed ? 'Saved caption candidate restored; inputs changed. Refresh Caption if needed.' : 'Saved caption candidate restored.');
+  return true;
+}
 var captionAssistPresentationMediaKey = '';
 var primerTemplateAssistPendingJobId = '';
 
@@ -147,6 +199,7 @@ function useCaptionAssistCandidate() {
   if (!isFocusedCaptionOpen()) {
     closeCaptionAssistPresentation();
     captionAssistCandidate = null;
+    forgetCaptionAssistCandidate(mediaItem.key);
     applyEditorTextAndTriggerInput(nextCaption);
     syncCaptionAssistCandidateUi();
     ui.editorEl.focus();
@@ -163,6 +216,7 @@ function useCaptionAssistCandidate() {
     });
   }).then(function () {
     captionAssistCandidate = null;
+    forgetCaptionAssistCandidate(mediaItem.key);
     syncCaptionAssistCandidateUi();
     ui.editorEl.value = nextCaption;
     setStatus(unchangedReview ? 'Caption accepted.' : 'Caption saved.');
@@ -647,6 +701,9 @@ function syncCaptionAssistCandidateUi() {
 
   var mediaKey = state && state.currentItem && state.currentItem.key;
   var candidate = captionAssistCandidate;
+  if (candidate && mediaKey && candidate.mediaKey === mediaKey && !isCaptionAssistRunning()) {
+    persistCaptionAssistCandidate(candidate, true);
+  }
   var focusOpen = isFocusedCaptionOpen();
   var reviewMode = focusOpen && isFocusedCaptionReviewMode();
   var visible = !!(candidate && mediaKey && candidate.mediaKey === mediaKey && (reviewMode || candidate.text));
@@ -1231,7 +1288,10 @@ function repairCaptionAssistCandidate(corrections) {
       setStatus('Caption repair finished, but the selected media item changed; result was not applied.');
       return false;
     }
+    nextCandidate.sourceCaption = String(state.currentItem.caption || '');
+    nextCandidate.model = request.model;
     captionAssistCandidate = nextCandidate;
+    persistCaptionAssistCandidate(nextCandidate, false);
     syncCaptionAssistCandidateUi();
     setStatus(
       nextCandidate.omittedAssignments.length
@@ -1329,7 +1389,10 @@ function blendFocusedCaptionVisionPhrase(phrase) {
   }).then(function (nextCandidate) {
     if (!isFocusedCaptionRequestCurrent(sourceMediaKey, focusRequest.token)) return false;
     if (!state.currentItem || state.currentItem.key !== sourceMediaKey) return false;
+    nextCandidate.sourceCaption = String(state.currentItem.caption || '');
+    nextCandidate.model = request.model;
     captionAssistCandidate = nextCandidate;
+    persistCaptionAssistCandidate(nextCandidate, false);
     syncCaptionAssistCandidateUi();
     setStatus('Vision extra blended.');
     if (captionVisionEnabled) {
@@ -1372,6 +1435,10 @@ function runCaptionAssist() {
   if (!item) return Promise.resolve(false);
   var sourceKey = item.key;
   var startedFocused = isFocusedCaptionOpen();
+  if (captionAssistSavedCandidatesByMedia[sourceKey]) {
+    if (!startedFocused) captionAssistPresentationMediaKey = sourceKey;
+    return Promise.resolve(restoreCaptionAssistCandidate(item));
+  }
   if (!getDirectorModelPreference('webcap.director.model')) {
     setStatus('Select a Director model before using Caption Assist.');
     return Promise.resolve(false);
@@ -1382,7 +1449,7 @@ function runCaptionAssist() {
     if (!state.currentItem || state.currentItem.key !== sourceKey || startedFocused !== isFocusedCaptionOpen()) return false;
     return refreshSetIntelligenceItem(item, {
       open: 'missing',
-      context: true,
+      context: 'missing',
       allowOpenFailure: true
     });
   }).then(function (prepared) {
@@ -1443,7 +1510,10 @@ function runCaptionAssistAfterSight(draftOverride) {
       setStatus('Caption Assist finished, but the selected media item changed; result was not applied.');
       return false;
     }
+    candidate.sourceCaption = String(state.currentItem.caption || '');
+    candidate.model = request.model;
     captionAssistCandidate = candidate;
+    persistCaptionAssistCandidate(candidate, false);
     syncCaptionAssistCandidateUi();
     setStatus(
       candidate.omittedAssignments.length

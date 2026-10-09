@@ -11,7 +11,7 @@ Audit basis: current `main` review, metadata, annotation, focus-set, prune, dupl
 
 ## Caption Assist reuse clarification (2026-10-09)
 
-This small follow-up supersedes the earlier requirement that normal Caption Assist always refresh Context Sight on entry. Caption Assist reuses saved valid Sight and restores unfinished candidate text; manual Refresh Sight stays explicit. Deep QA retains its separate, explicitly requested fresh per-item Vision + Director assessment and may still benefit Caption Assist through the shared saved Sight. **No changes to Deep QA, QA findings, or QA prompt are part of this reuse pass.** Unattended Prepare Captions is a deferred North Star, not a current QA feature.
+This small follow-up supersedes the earlier requirement that normal Caption Assist always refresh Context Sight on entry. Caption Assist reuses saved valid Sight and restores unfinished candidate text; manual Refresh Sight stays explicit. Deep QA reuses saved valid Sight by default and performs Director evaluation; missing/invalid evidence alone requires automatic Vision inference and may still benefit Caption Assist through the shared saved Sight. **No changes to Deep QA, QA findings, or QA prompt are part of this reuse pass.** Unattended Prepare Captions is a deferred North Star, not a current QA feature.
 
 ## Agreed Deep QA design contract (2026-10-08)
 
@@ -22,14 +22,14 @@ This small follow-up supersedes the earlier requirement that normal Caption Assi
 - QA opens passively: present cheaply recomputed checks, saved evidence, and previously completed findings. Never start expensive inference just by opening QA.
 - Explicit **Deep QA** is an unattended-capable, progressive, **one-media-item-at-a-time** review. No multi-item LLM batch or accumulated conversation history.
 - Rank credible existing suspicions first; then process **all remaining items**, including those with no initial suspicion. Priority changes order, never eligibility.
-- For each item, perform a **fresh VL examination with the user-selected Vision model**, then a **Director LLM evaluation** using that new visual evidence, relevant reusable Open/Context Sight, the current caption, tags, and concise existing observations. This permits an inexpensive initial Sight scan and a stronger Vision model for Deep QA.
+- For each item, reuse valid Open/Context Sight, obtain missing/invalid Sight when necessary, then perform a **Director LLM evaluation** using that visual evidence, relevant reusable Open/Context Sight, the current caption, tags, and concise existing observations. This permits an inexpensive initial Sight scan and a stronger Vision model for Deep QA.
 - The Director should identify only credible, consequential problems (including contradictions and meaningful omissions), with explicit item-specific evidence; returning **no findings is success**. Do not promote rare background concepts, incidental imbalance, arbitrary caption length, or speculative associations to prominent errors.
 
 ### Costs, reuse, and durability
 
 - Reuse existing model execution, FIFO GPU arbitration, VL request patterns, and item Focus Sets; do not add a new model service, workflow engine, or storage root.
-- Saved Sight remains reusable evidence (subject to media modification time and size). An explicitly requested Deep QA item intentionally makes a **fresh** visual read, even when older Sight exists. Keep that new observation available to the immediately following Director evaluation and subsequent human review without triggering the *same* VL inference again.
-- Caption Assist's normal entry and **QA handoff** both reuse existing valid Open and Context Sight; they do not rerun the Vision pass solely because the focus interface reopened. Missing/invalid Sight can be gathered on demand, and Refresh Sight remains an explicit user action. Deep QA's own fresh Vision policy is unchanged.
+- Saved Sight remains reusable evidence (subject to media modification time and size). Deep QA does not automatically refresh valid Sight; missing/invalid Sight is gathered and saved when necessary. Explicit Refresh Sight or a Set Intelligence refresh lets the user deliberately request a newer visual read.
+- Caption Assist's normal entry and **QA handoff** both reuse existing valid Open and Context Sight; they do not rerun the Vision pass solely because the focus interface reopened. Missing/invalid Sight can be gathered on demand, and Refresh Sight remains an explicit user action. Deep QA now follows the same reuse-by-default policy.
 - Persist only what is expensive to reproduce and necessary to resume: compact actionable findings, per-item completion/provenance as needed, and narrowly useful user decisions already supported. Do **not** save full repeated prompts, copied caption/Sight corpora, or large histories just to track a scan. Derive cheap counts and candidate priority when needed. Reuse existing QA review persistence where appropriate.
 
 ### Failure semantics and progress
@@ -49,7 +49,7 @@ This small follow-up supersedes the earlier requirement that normal Caption Assi
 ### Implementation and acceptance sequence
 
 1. **Reliability:** audit response ingest, optional suggestion handling, loud errors, per-item progression, stop/resume, and persistence. Remove obsolete four-item-batch logic instead of patching it further.
-2. **Per-item inference:** reuse the existing Vision and Director operations in sequence under the current GPU queue, with fresh VL and no cross-item conversation history.
+2. **Per-item inference:** reuse the existing Vision and Director operations in sequence under the current GPU queue, with reusable Sight (only scanning missing/invalid evidence) and no cross-item conversation history.
 3. **QA-to-Assist bridge:** pass the precise finding, evidence, and reusable fresh VL observation to Caption Assist without disturbing its standalone behavior.
 4. **Presentation and validation:** keep cheap QA immediately available; expose focused actionable results and progress; verify against a handful of real items (zero findings, a genuine issue, bad optional patch, failed Vision/Director, stop/resume) before a 256-item unattended run.
 

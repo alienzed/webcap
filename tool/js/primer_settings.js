@@ -1195,7 +1195,8 @@ function runCaptionAssist() {
     if (!state.currentItem || state.currentItem.key !== sourceKey || startedFocused !== isFocusedCaptionOpen()) return false;
     return refreshSetIntelligenceItem(item, {
       open: 'missing',
-      context: true
+      context: true,
+      allowOpenFailure: true
     });
   }).then(function (prepared) {
     if (prepared === false) return false;

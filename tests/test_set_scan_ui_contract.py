@@ -98,3 +98,21 @@ def test_set_intelligence_coverage_is_designed_for_readability_not_microcopy():
     assert "font-size: 15px;" in css
     assert ".set-scan-subtitle" in css
     assert "font-size: 14px;" in css
+
+
+def test_set_intelligence_uses_visible_training_scope_with_explicit_full_set_override():
+    html = _read("tool/tool.html")
+    scan = _read("tool/js/set_scan.js")
+    schema = _read("tool/js/vision_schema_assist.js")
+
+    assert 'id="set-scan-entire-set" type="checkbox"' in html
+    assert 'id="set-scan-scope-summary"' in html
+    assert 'return entireSet.checked ? getCurrentSetMediaFileNames() : getVisibleMediaSelectionForTraining();' in scan
+    assert 'var files = getSetIntelligenceScopeFiles();' in scan
+    assert "if (!files.length) {\n      setCoverage(0, 0, 0, 0, true);" in scan
+    assert 'entireSetToggle.onchange = openSetIntelligence;' in scan
+    assert 'openVisionSchemaAssist({ files: files });' in scan
+    assert "openGuidedTagPass({ source: 'set', files: files });" in scan
+    assert 'var files = Array.isArray(opts.files) ? opts.files.slice() : getVisibleMediaSelectionForTraining();' in schema
+    assert 'if (Array.isArray(opts.files)) return opts.files.slice();' in schema
+    assert "openGuidedTagPass({ source: 'set', files: schemaState.scopeFiles.slice() });" in schema

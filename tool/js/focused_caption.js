@@ -676,6 +676,7 @@ function syncFocusedCaptionAfterAssist(sourceMediaKey) {
 
 function stopFocusedCaption(message, options) {
   if (!focusedCaptionState.open) return true;
+  if (captionAssistCandidate) persistCaptionAssistCandidate(captionAssistCandidate, false);
   var opts = options || {};
   if (hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits) {
     setStatus('This review caption has unsaved edits. Use Save → Next, or Skip before exiting.');
@@ -852,8 +853,10 @@ function regenerateFocusedCaption() {
     return cancelFocusedCaptionPrefetch();
   }).then(function () {
     if (!focusedCaptionState.open || String(focusedCaptionState.itemKey || '') !== mediaKey) return false;
-    clearCaptionAssistCandidate();
-    return prepareFocusedCaptionCurrentItem();
+    if (captionAssistCandidate && captionAssistCandidate.mediaKey === mediaKey) {
+      return refreshCaptionAssistFromUi();
+    }
+    return runCaptionAssistAfterSight();
   });
 }
 

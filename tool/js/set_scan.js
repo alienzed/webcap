@@ -180,22 +180,22 @@
       } else if (coverage.contextCurrent >= totalCoverage) {
         contextState = 'current';
         contextBadgeText = 'Current';
-        contextDetailText = 'All Context Sight matches the current vocabulary and caption template.';
+        contextDetailText = 'All media have saved reusable Context Sight.';
       } else if (setScanState.phase === 'scanning-context') {
         contextState = 'running';
         contextBadgeText = 'Scanning';
       } else if (contextStale) {
         contextState = 'stale';
-        contextBadgeText = 'Refresh needed';
+        contextBadgeText = 'Unavailable';
       } else if (coverage.contextCurrent) {
         contextState = 'partial';
         contextBadgeText = 'Partial';
       }
       if (!contextDetailText) {
         var contextParts = [
-          String(coverage.contextCurrent) + ' current'
+          String(coverage.contextCurrent) + ' reusable'
         ];
-        if (contextStale) contextParts.push(String(contextStale) + ' saved but stale');
+        if (contextStale) contextParts.push(String(contextStale) + ' saved but unavailable');
         if (contextMissing) contextParts.push(String(contextMissing) + ' missing');
         contextDetailText = contextParts.join(' · ') + '.';
       }
@@ -366,11 +366,11 @@
           var missingContext = Math.max(0, files.length - contextAvailable);
           var remaining = [];
           if (openCount < files.length) remaining.push(String(files.length - openCount) + ' Open Sight missing');
-          if (staleContext) remaining.push(String(staleContext) + ' Context Sight stale');
+          if (staleContext) remaining.push(String(staleContext) + ' Context Sight unavailable');
           if (missingContext) remaining.push(String(missingContext) + ' Context Sight missing');
           setSetIntelligenceStatus(
             'Saved intelligence found',
-            remaining.join(' · ') + '. Resume only what is missing or stale.'
+            remaining.join(' · ') + '. Resume only what is missing.'
           );
         }
         return true;
@@ -602,7 +602,7 @@
     setScanState.completed = index;
     setSetIntelligenceStatus(
       'Context Sight',
-      String(index + 1) + ' of ' + String(pending.length) + ' · refreshing only missing or stale Context Sight'
+      String(index + 1) + ' of ' + String(pending.length) + ' · scanning missing Context Sight'
     );
 
     var pendingItem = pending[index];

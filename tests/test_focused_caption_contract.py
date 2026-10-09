@@ -880,3 +880,41 @@ def test_inserting_one_vision_extra_keeps_the_remaining_extras_visible():
     assert "syncCaptionAssistCandidateUi();" in insert
     assert "getCaptionAssistOmittedAssignments(" in insert
     assert "clearCaptionVisionResult();" in insert
+
+def test_focus_caption_lookahead_prepares_next_item_sight_before_director():
+    focus = _read("tool/js/focused_caption.js")
+    primer = _read("tool/js/primer_settings.js")
+    scan = _read("tool/js/set_scan.js")
+
+    prefetch = focus.split("function startFocusedCaptionPrefetch(sourceMediaKey)", 1)[1].split(
+        "function useFocusedCaptionPrefetchForCurrentItem()", 1
+    )[0]
+    assert "getNextFocusedCaptionTarget(focusedCaptionState.itemIndex)" in prefetch
+    assert "refreshSetIntelligenceItem(target.item" in prefetch
+    assert "open: 'missing', context: true, silent: true" in prefetch
+    assert "isCancelled: function () { return prefetch.discarded; }" in prefetch
+    assert prefetch.index("refreshSetIntelligenceItem(target.item") < prefetch.index(
+        "requestCaptionAssistCandidate(target.item, request"
+    )
+    assert "captionAssistRequestFingerprint(target.item, request)" in prefetch
+    assert "if (prefetch.discarded) return cancelCaptionAssistJob(prefetch.jobId);" in prefetch
+    assert "if (!opts.silent) window.setStatus" in scan
+    assert "if (opts.isCancelled && opts.isCancelled()) return false;" in scan
+    assert "startFocusedCaptionPrefetch(sourceMediaKey);" in primer
+
+
+def test_focus_caption_lookahead_is_adopted_without_cancel_on_next():
+    focus = _read("tool/js/focused_caption.js")
+    move = focus.split("function moveFocusedCaption(delta, options)", 1)[1].split(
+        "function advanceFocusedCaption()", 1
+    )[0]
+    adopt = focus.split("function useFocusedCaptionPrefetchForCurrentItem()", 1)[1].split(
+        "function getFocusedCaptionEntryKeys", 1
+    )[0]
+    assert "focusedCaptionPrefetch.index === nextIndex" in move
+    assert "keepPrefetch ? true : cancelFocusedCaptionPrefetch()" in move
+    assert "captionAssistRequestFingerprint(state.currentItem, latestRequest) !== prefetch.fingerprint" in adopt
+    assert "if (!candidate)" in adopt
+    assert "startFocusedCaptionPrefetch(candidate.mediaKey);" in adopt
+
+

@@ -1058,6 +1058,10 @@ function repairCaptionAssistCandidate(corrections) {
       captionAssistPendingJobId = '';
       updatePrimerCaptionResetUi();
       syncFocusedCaptionAfterAssist(sourceMediaKey);
+      if (result === true && isFocusedCaptionOpen() &&
+          state.currentItem && state.currentItem.key === sourceMediaKey) {
+        startFocusedCaptionPrefetch(sourceMediaKey);
+      }
     }
     return result;
   }, function (err) {
@@ -1241,10 +1245,8 @@ function runCaptionAssistAfterSight() {
         ? 'Caption Assist candidate failed annotation validation.'
         : 'AI caption candidate ready.'
     );
-    // The current item's fresh Context Sight preceded this Director result.
-    // A second pixel read is only requested by the explicit Recheck Vision action.
-    // The item pipeline has already obtained fresh Context Sight. Do not
-    // enqueue an unrelated Vision Extras read or speculative next-item LLM.
+    // Context Sight preceded the current Director result. Recheck Vision stays explicit;
+    // the one-item lookahead prepares the next item's Sight before its Director.
 
     return true;
   }).catch(function (err) {

@@ -3,6 +3,12 @@
 Status: product / IA proposal  
 Audit basis: current `main` review, metadata, annotation, focus-set, prune, duplicate, Assistant, and per-item QA code as of 2026-10-06.
 
+## QA vs. Balance (scope boundary, 2026-10-09)
+
+- **QA checks annotation correctness:** caption/tag/visual agreement, omissions, contradictions, and terminology consistency. Cross-item statistics are candidate evidence, not actionable findings until semantic interpretation identifies a credible annotation problem. Legitimate variation is not an error.
+- **Balance checks dataset composition:** coverage, variation, and correlations relative to training objectives. Accurate, explicit attribute tags should be preserved; QA must never alter correct annotations to compensate for uneven representation.
+- Balance is a **separate future reasoning task**, with its own Director prompt and set-level inputs; it may reuse existing counts and evidence. Keep unvalidated distribution observations quiet, outside the QA attention queue. Older balance-oriented QA proposals below are superseded by this boundary.
+
 ## Agreed Deep QA design contract (2026-10-08)
 
 **Status: approved product direction; implementation and end-to-end testing still pending.** This section supersedes older proposals below where they disagree (especially four-item Director batches, optional-only targeted Vision, and independent patch application). Preserve the working QA Workbench, Focus Set, Set Intelligence, and Caption Assist features; repair locally in phases under `AGENTS.md`.

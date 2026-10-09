@@ -17,6 +17,26 @@
     captioning: 'Vocabulary or caption patterns likely to matter in training.'
   };
 
+  var qaInteractiveRefreshCount = 0;
+  var qaInteractiveRefreshWaiters = [];
+
+  function qaWaitForInteractiveRefresh() {
+    if (!qaInteractiveRefreshCount) return Promise.resolve();
+    return new Promise(function (resolve) { qaInteractiveRefreshWaiters.push(resolve); });
+  }
+
+  function qaFocusReviewInteractiveRefresh(operation) {
+    if (!qaFocusReviewCurrent()) return Promise.resolve().then(operation);
+    qaInteractiveRefreshCount += 1;
+    return Promise.resolve().then(operation).finally(function () {
+      qaInteractiveRefreshCount -= 1;
+      if (!qaInteractiveRefreshCount) {
+        var waiters = qaInteractiveRefreshWaiters.splice(0);
+        waiters.forEach(function (resolve) { resolve(); });
+      }
+    });
+  }
+
   var qaFocusReviewState = {
     active: false, folder: '', scopeKey: '', items: [], handled: {},
     queued: {}, prepQueued: {}, prepChain: Promise.resolve(),
@@ -533,6 +553,12 @@
   }
 
   function qaRunNextDeepScanBatch() {
+    if (qaInteractiveRefreshCount) {
+      var token = qaWorkbenchState.deepScanSessionToken;
+      return qaWaitForInteractiveRefresh().then(function () {
+        if (token === qaWorkbenchState.deepScanSessionToken) return qaRunNextDeepScanBatch();
+      });
+    }
     if (!qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) {
       qaWorkbenchState.deepScanSessionActive = false;
       qaWorkbenchState.deepScanSubmitting = false;
@@ -1984,6 +2010,8 @@
     session.prepQueued[key] = true;
     var token = session.token;
     session.prepChain = session.prepChain.catch(function () {}).then(function () {
+      return qaWaitForInteractiveRefresh();
+    }).then(function () {
       if (!qaFocusReviewCurrent() || session.token !== token || session.handled[key]) return;
       if (isFocusedQaReviewMode() && focusedCaptionState.itemKey === key) return;
       var request = buildCaptionAssistRequest(item);
@@ -2362,4 +2390,5 @@
   window.qaFocusReviewMarkHandled = qaFocusReviewMarkHandled;
   window.qaFocusReviewStopped = qaFocusReviewStopped;
   window.qaFocusReviewReasons = qaFocusReviewReasons;
+  window.qaFocusReviewInteractiveRefresh = qaFocusReviewInteractiveRefresh;
 })();

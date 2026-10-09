@@ -3,6 +3,20 @@
 Status: product / IA proposal  
 Audit basis: current `main` review, metadata, annotation, focus-set, prune, duplicate, Assistant, and per-item QA code as of 2026-10-06.
 
+## QA Focus Review (2026-10-09)
+
+**Product contract:** Set Tools → QA Focus Review opens a guided Caption Assist round over the *current filtered training selection*. It is orchestration, not another QA algorithm or an independent permanent Focus Set.
+
+- Cold, partial, or completed QA coverage are all valid starting conditions. Show valid saved actionable findings immediately; continue missing Deep QA evaluations progressively, one item at a time, using reusable Sight.
+- A session-only queue contains items with credible, actionable annotation/caption findings. Statistical imbalance is not a QA correction. Do not force all items through Caption Assist.
+- Reuse saved unfinished Caption Assist candidates; prepare missing candidates using existing Sight and Director calls. The user should not need a separate Prepare Captions action.
+- Apply saves caption edits and resolves the item for *this round*; Dismiss removes the item from this round without changing the caption; Skip simply advances. Resolved items never silently re-enter this round. Persistent QA evidence remains available.
+- Every review item shows why it was queued and whether its proposed caption is unchanged. Successful no-findings, uncertain, failed, and not-yet-reviewed work must not be conflated.
+- Existing processing can outlive the overlay; closing it is not the same as cancelling Deep QA. Clearly distinguish an empty *currently ready* queue from a fully examined set.
+- Freshness/refresh controls should identify whether they rerun Sight or Director. No automatic rescan merely for opening the review.
+
+**Implementation status:** staged on `feature/qa-focus-review-guided-round` for integration testing; do not consider the workflow accepted until browser tests confirm progressive queue arrival, filters, apply/skip/dismiss, stale candidate treatment, closing/re-entry, and recovery from inference errors.
+
 ## QA vs. Balance (scope boundary, 2026-10-09)
 
 - **QA checks annotation correctness:** caption/tag/visual agreement, omissions, contradictions, and terminology consistency. Cross-item statistics are candidate evidence, not actionable findings until semantic interpretation identifies a credible annotation problem. Legitimate variation is not an error.

@@ -77,6 +77,19 @@ function sanitizeFolderState(data) {
       keyAliases[key] = primer.keyAliases[label].trim().replace(/\s+/g, ' ').slice(0, 120);
     });
   }
+  var candidates = {};
+  if (src.caption_assist_candidates && typeof src.caption_assist_candidates === 'object' && !Array.isArray(src.caption_assist_candidates)) {
+    Object.keys(src.caption_assist_candidates).forEach(function (mediaKey) {
+      var value = src.caption_assist_candidates[mediaKey];
+      if (!mediaKey || !value || typeof value !== 'object' || typeof value.text !== 'string') return;
+      candidates[mediaKey] = {
+        text: value.text,
+        annotationsAtGeneration: String(value.annotationsAtGeneration || ''),
+        sourceCaption: String(value.sourceCaption || ''),
+        model: String(value.model || '')
+      };
+    });
+  }
   var reviewedKeys = Array.isArray(src.reviewedKeys) ? src.reviewedKeys : [];
   reviewedKeys = reviewedKeys.map(function (key) { return String(key || ''); }).filter(Boolean);
   var captionHiddenRequirements = Array.isArray(src.caption_hidden_requirements)
@@ -238,6 +251,7 @@ function sanitizeFolderState(data) {
       keyAliases: keyAliases
     },
     reviewedKeys: reviewedKeys,
+    caption_assist_candidates: candidates,
     flags: (typeof src.flags === 'object' && src.flags) ? src.flags : {},
     caption_requirements: Array.isArray(src.caption_requirements) ? src.caption_requirements.slice() : getDefaultRequirementItems().slice(),
     caption_hidden_requirements: captionHiddenRequirements,
@@ -520,6 +534,7 @@ function snapshotFolderStateFromDom() {
     stats: stats,
     primer: primer,
     reviewedKeys: reviewedKeys,
+    caption_assist_candidates: captionAssistSavedCandidatesByMedia,
     flags: flags,
     caption_requirements: (typeof window.checklistItems !== 'undefined') ? window.checklistItems.slice() : undefined,
     caption_hidden_requirements: (typeof getChecklistHiddenRequirements === 'function') ? getChecklistHiddenRequirements() : [],
@@ -567,6 +582,7 @@ function applyFolderStateToDom(folderState) {
   // so they are restored to both the global state and the UI. This function must apply ALL fields.
   var clean = sanitizeFolderState(folderState);
   requirementGroupAliasOverrides = Object.assign({}, clean.primer.keyAliases);
+  captionAssistSavedCandidatesByMedia = Object.assign({}, clean.caption_assist_candidates);
   var hasSavedPrimerTemplate = !!(
     folderState &&
     folderState.primer &&

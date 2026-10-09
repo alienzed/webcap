@@ -30,7 +30,7 @@ Supporting analyzers do not become peer workflows merely because WebCap can comp
 
 **Set Tools → Set Intelligence** is the primary entry point below the media list.
 
-By default, Set Intelligence uses the **current visible training selection**, respecting text filters, advanced filters, and Focus Sets. **Scan entire Set (ignore filters)** is an explicit override. The selected scope is snapshotted for the scan and carried into Discover Vocabulary and Guided Tagging; a later change to filters does not silently expand an in-progress scan or downstream handoff.
+By default, Set Intelligence uses the **current visible training selection**, respecting text filters, advanced filters, and Focus Sets. **Scan entire Set (ignore filters)** is an explicit override. The selected scope is snapshotted for the Vision scan, so changing filters does not expand an in-progress scan. Discover Vocabulary and Set-level Guided Tagging remain Set-wide and can reuse any cached Sight evidence, including from prior broader scans.
 
 The intelligence path is fundamentally model-driven:
 

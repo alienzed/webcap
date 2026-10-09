@@ -22,6 +22,7 @@ def test_caption_assist_reuses_existing_context_sight():
 def test_unfinished_candidates_round_trip_through_existing_set_state():
     folder = source("tool/js/folder_state.js")
     primer = source("tool/js/primer_settings.js")
+    focus = source("tool/js/focused_caption.js")
     assert folder.count("caption_assist_candidates") >= 3
     assert "captionAssistSavedCandidatesByMedia = Object.assign({}, clean.caption_assist_candidates);" in folder
     assert "persistCaptionAssistCandidate(candidate, false);" in primer

@@ -259,6 +259,10 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "Compare the original caption with the alternative caption (if supplied). The alternative is another model-produced HYPOTHESIS, not the correct answer. "
         "Determine which specific additions genuinely improve the LoRA training description, which original information the alternative loses, and whether changes improve accuracy and coverage without diluting tokens. "
         "Propose precise tag or caption patches only for supported, nonredundant gains. Do not reward verbose alternatives or change correct captions for style alone. "
+        "First identify the distinct, visually supported, training-relevant facts in the supplied evidence; then check which are already covered semantically by the original caption or approved tags. " 
+        "Consider the candidate only as a source of hypotheses: it can add useful facts, omit good original details, or inherit wrong assumptions. " 
+        "Prioritize the biggest remaining accuracy or coverage gap, not the number of differences between two captions. " 
+
         "Rate the EXISTING caption for every supplied file, including those with no findings. "
         "Evaluate accuracy, useful completeness and relevance to the LoRA training focus; prefer concise information density, not exhaustive verbosity. "
         "Missing means empty, bad seriously wrong or unusable, low major problems, neutral substantial improvements, "

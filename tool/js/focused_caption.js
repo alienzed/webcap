@@ -836,7 +836,7 @@ function hasFocusedReviewUnsavedChanges() {
 function moveFocusedCaption(delta, options) {
   if (!focusedCaptionState.open) return Promise.resolve(false);
   var opts = options || {};
-  if (hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits) {
+  if (!isFocusedQaReviewMode() && hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits) {
     setStatus('This review caption has unsaved edits. Use Save → Next, or Skip to discard them.');
     return Promise.resolve(false);
   }

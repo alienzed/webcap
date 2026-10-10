@@ -196,9 +196,15 @@ def _response_schema():
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["summary", "findings"],
+        "required": ["summary", "findings", "captionQuality"],
         "properties": {
             "summary": {"type": "string", "minLength": 1},
+            "captionQuality": {"type": "array", "items": {"type": "object", "additionalProperties": False,
+                "required": ["file", "rating", "confidence", "reason"],
+                "properties": {"file": {"type": "string"}, "rating": {"type": "string",
+                    "enum": ["missing", "bad", "low", "neutral", "good", "high", "excellent"]},
+                    "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+                    "reason": {"type": "string"}}}},
             "findings": {
                 "type": "array",
                 "maxItems": 8,
@@ -247,6 +253,15 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "[PRIMARY GOAL]\n"
         "Reduce how much material a human must inspect while preserving confidence that meaningful training problems are noticed. "
         "Silence is better than weak advice. Return zero findings when there is nothing genuinely useful to add.\n\n"
+        "[CAPTION QUALITY — EVERY ITEM]\n"
+        "Rate the EXISTING caption for every supplied file, including those with no findings. "
+        "Evaluate accuracy, useful completeness and relevance to the LoRA training focus; prefer concise information density, not exhaustive verbosity. "
+        "Missing means empty, bad seriously wrong or unusable, low major problems, neutral substantial improvements, "
+        "good worthwhile improvements, high only marginal improvements, excellent no meaningful improvement. "
+        "Never rate high/excellent if an important focus-relevant fact is missing or incorrect. "
+        "Treat approved tags as strong prior evidence, not infallible truth. "
+        "Give rating, evidence confidence, and a short reason for each item. "
+        "An unobservable fact reduces confidence rather than automatically lowering quality.\n\n"
         "[LOOK FOR]\n"
         "- FIRST look for important missing tags in well-established groups, especially distinctive visual attributes or construction details that the current caption and annotations do not already represent.\\n"
         "- NEXT look for substantial caption omissions, incorrect facts, wrong subject-attribute relationships, and clearly incorrect tags.\\n"
@@ -313,7 +328,8 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
 
     summary = _clean(data.get("summary"))
     findings = data.get("findings")
-    if not summary or not isinstance(findings, list):
+    quality_rows = data.get("captionQuality", [])
+    if not summary or not isinstance(findings, list) or not isinstance(quality_rows, list):
         raise ValueError("QA Deep Scan response is missing its summary or findings array.")
 
     allowed = {
@@ -321,6 +337,16 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
         for value in (allowed_files or [])
         if str(value or "").strip()
     }
+    normalized_quality = []
+    for row in quality_rows:
+        if not isinstance(row, dict):
+            continue
+        file_name = str(row.get("file") or "").strip()
+        rating = str(row.get("rating") or "").strip()
+        confidence = str(row.get("confidence") or "").strip()
+        if file_name in allowed and rating in {"missing", "bad", "low", "neutral", "good", "high", "excellent"} and confidence in _ALLOWED_CONFIDENCE:
+            normalized_quality.append({"file": file_name, "rating": rating, "confidence": confidence,
+                                       "reason": _clean(row.get("reason"))})
     normalized = []
     patch_warnings = []
     finding_warnings = []

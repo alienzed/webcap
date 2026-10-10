@@ -623,7 +623,31 @@ function syncFocusedCaptionVisionPhrasesUi() {
   var mediaKey = item.key;
   var heading = document.createElement('div');
   heading.className = 'caption-vision-sight-label';
-  heading.textContent = 'Suggested tags from Sight · optional';
+  heading.textContent = 'Tag decisions · changes save immediately';
+  if (isFocusedQaReviewMode()) {
+    qaFocusReviewTagActions(mediaKey).forEach(function (action) {
+      var assigned = action.group
+        ? getChecklistAssignmentEntriesForMediaKey(mediaKey).some(function (entry) {
+          return entry.requirement === action.group && entry.term === action.term;
+        })
+        : getUnscopedTagsForMediaKey(mediaKey).indexOf(action.term) !== -1;
+      if ((action.action === 'add' && assigned) || (action.action === 'remove' && !assigned)) return;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'caption-vision-phrase-insert';
+      button.textContent = (action.action === 'add' ? '+ Add ' : '− Remove ') + action.term + (action.group ? ' · ' + action.group : '');
+      button.title = 'QA suggested tag correction · saves immediately';
+      button.addEventListener('click', function () {
+        if (action.action === 'add') acceptCaptionAssistTagSuggestion(mediaKey, { group: action.group, term: action.term });
+        else removeCaptionAssistAssignedTag(mediaKey, action.group, action.term);
+      });
+      row.appendChild(button);
+    });
+  }
+  var sightHeading = document.createElement('div');
+  sightHeading.className = 'caption-vision-sight-label';
+  sightHeading.textContent = 'Other suggestions from Sight · optional';
+  row.appendChild(sightHeading);
   row.appendChild(heading);
   var suggestions = getCaptionAssistTagSuggestions(item);
   if (suggestions.length) {
@@ -741,7 +765,22 @@ function syncCaptionAssistCandidateUi() {
 
   var qaReasons = isFocusedQaReviewMode() ? qaFocusReviewReasons(mediaKey) : [];
   qaReasonsEl.classList.toggle('hidden', !qaReasons.length);
-  qaReasonsEl.textContent = qaReasons.length ? 'QA finding: ' + qaReasons.join(' · ') : '';
+  qaReasonsEl.innerHTML = '';
+  if (qaReasons.length) {
+    var question = document.createElement('strong');
+    question.textContent = 'Check: ' + qaReasons.join(' · ');
+    qaReasonsEl.appendChild(question);
+    var details = document.createElement('details');
+    var summary = document.createElement('summary');
+    summary.textContent = 'Why?';
+    details.appendChild(summary);
+    qaFocusReviewFindings(mediaKey).forEach(function (finding) {
+      var reason = document.createElement('p');
+      reason.textContent = String(finding.why || finding.summary || '');
+      details.appendChild(reason);
+    });
+    qaReasonsEl.appendChild(details);
+  }
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
   omissionsEl.innerHTML = '';
   if (omittedAssignments.length) {

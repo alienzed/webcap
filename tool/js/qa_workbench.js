@@ -61,6 +61,7 @@
     deepScanStopRequested: false,
     deepScanSessionToken: 0,
     deepScanJobId: '',
+    deepScanChallengerJobId: '',
     deepScanSubmitting: false,
     deepScanStatus: '',
     deepScanInputSignature: '',
@@ -539,7 +540,8 @@
   }
 
   function qaInvalidateDeepScanSession(message) {
-    var jobId = String(qaWorkbenchState.deepScanJobId || '');
+    var jobId = String(qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanChallengerJobId || '');
+    qaWorkbenchState.deepScanChallengerJobId = '';
     qaWorkbenchState.deepScanSessionToken += 1;
     qaWorkbenchState.deepScanSkipped = {};
     qaWorkbenchState.deepScanSessionActive = false;
@@ -547,6 +549,7 @@
     qaWorkbenchState.deepScanSubmitting = false;
     qaWorkbenchState.deepScanJobId = '';
     qaWorkbenchState.aiFindings = [];
+    qaWorkbenchState.captionQuality = {};
     qaWorkbenchState.aiSummary = '';
     qaWorkbenchState.aiItemSignatures = {};
     qaWorkbenchState.aiCoverageValid = 0;
@@ -640,7 +643,17 @@
       var candidatePromise = saved && saved.requestFingerprint === fingerprint &&
         saved.sourceCaption === String(item.caption || '') && saved.text
         ? Promise.resolve(saved)
-        : requestCaptionAssistCandidate(item, request).then(function (candidate) {
+        : requestCaptionAssistCandidate(item, request, {
+          onJob: function (job) {
+            qaWorkbenchState.deepScanChallengerJobId = String(job.jobId || '');
+            if (qaWorkbenchState.deepScanStopRequested || sessionToken !== qaWorkbenchState.deepScanSessionToken) {
+              return qaRequestJson('/fs/director/job', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ operation: 'cancel_job', jobId: job.jobId })
+              });
+            }
+          }
+        }).then(function (candidate) {
           candidate.sourceCaption = String(item.caption || '');
           candidate.model = String(request.model || '');
           if (qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStopRequested &&
@@ -650,6 +663,7 @@
           return candidate;
         });
       return candidatePromise.then(function (candidate) {
+        qaWorkbenchState.deepScanChallengerJobId = '';
         if (sessionToken !== qaWorkbenchState.deepScanSessionToken ||
             !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
         qaWorkbenchState.deepScanStatus = 'Deep QA · Value judge ' + item.fileName;
@@ -757,6 +771,7 @@
       return continued;
     }).catch(function (err) {
       if (sessionToken !== qaWorkbenchState.deepScanSessionToken) return false;
+      qaWorkbenchState.deepScanChallengerJobId = '';
       qaWorkbenchState.deepScanSubmitting = false;
       qaWorkbenchState.deepScanJobId = '';
       if (['cancelled', 'stopped', 'interrupted'].indexOf(String(err && err.jobStatus || '')) !== -1) {
@@ -804,6 +819,7 @@
     qaWorkbenchState.deepScanInputSignature = qaBuildDeepScanSignature(items);
     qaWorkbenchState.deepScanSessionActive = true;
     qaWorkbenchState.deepScanStopRequested = false;
+    qaWorkbenchState.deepScanChallengerJobId = '';
     qaWorkbenchState.deepScanStatus = 'Starting progressive Deep QA…';
     qaRefreshAiCoverage();
     renderQaWorkbench();
@@ -835,6 +851,13 @@
     qaWorkbenchState.deepScanStatus = 'Stopping Deep QA…';
     renderQaWorkbench();
     if (!qaWorkbenchState.deepScanJobId) {
+      var challengerId = qaWorkbenchState.deepScanChallengerJobId;
+      if (challengerId) {
+        qaRequestJson('/fs/director/job', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ operation: 'cancel_job', jobId: challengerId })
+        }).catch(function (err) { window.reportConsoleError('QA Deep Scan · Cancel challenger', err); });
+      }
       cancelItemSightRefresh().catch(function (err) {
         window.reportConsoleError('QA Deep Scan · Cancel Vision', err);
       });

@@ -51,6 +51,7 @@
     statisticalCandidates: [],
     aiFindings: [],
     captionQuality: {},
+    qaAlternatives: {},
     aiSummary: '',
     aiScopeSignature: '',
     aiItemSignatures: {},
@@ -355,6 +356,7 @@
       itemSignatures: Object.assign({}, qaWorkbenchState.aiItemSignatures),
       aiFindings: qaWorkbenchState.aiFindings,
       captionQuality: qaWorkbenchState.captionQuality,
+      qaAlternatives: qaWorkbenchState.qaAlternatives,
       aiSummary: qaWorkbenchState.aiSummary,
       aiModel: qaWorkbenchState.aiModel,
       dispositions: qaWorkbenchState.dispositions
@@ -385,6 +387,7 @@
     var focus = qaWorkbenchState.trainingFocus;
     qaWorkbenchState.aiFindings = [];
     qaWorkbenchState.captionQuality = {};
+    qaWorkbenchState.qaAlternatives = {};
     qaWorkbenchState.aiSummary = '';
     qaWorkbenchState.aiScopeSignature = '';
     qaWorkbenchState.aiItemSignatures = {};
@@ -421,6 +424,9 @@
         return !(finding.files || []).some(function (file) { return changed[file]; });
       });
       qaWorkbenchState.captionQuality = Object.fromEntries(Object.entries(saved.captionQuality || {}).filter(function (entry) { return !changed[entry[0]]; }));
+      qaWorkbenchState.qaAlternatives = Object.fromEntries(Object.entries(saved.qaAlternatives || {}).filter(function (entry) {
+        return !changed[entry[0]] && typeof entry[1] === 'string' && !!entry[1].trim();
+      }));
       qaWorkbenchState.aiSummary = String(saved.aiSummary || '');
       qaWorkbenchState.aiModel = String(saved.aiModel || '');
       qaWorkbenchState.aiScopeSignature = signature;
@@ -465,7 +471,10 @@
       }
     });
     if (Object.keys(invalid).length) {
-      Object.keys(invalid).forEach(function (file) { delete qaWorkbenchState.captionQuality[file]; });
+      Object.keys(invalid).forEach(function (file) {
+        delete qaWorkbenchState.captionQuality[file];
+        delete qaWorkbenchState.qaAlternatives[file];
+      });
       qaWorkbenchState.aiFindings = qaWorkbenchState.aiFindings.filter(function (finding) {
         return !(finding.files || []).some(function (file) { return invalid[file]; });
       });
@@ -556,6 +565,7 @@
     qaWorkbenchState.deepScanJobId = '';
     qaWorkbenchState.aiFindings = [];
     qaWorkbenchState.captionQuality = {};
+    qaWorkbenchState.qaAlternatives = {};
     qaWorkbenchState.aiSummary = '';
     qaWorkbenchState.aiItemSignatures = {};
     qaWorkbenchState.aiCoverageValid = 0;
@@ -629,6 +639,7 @@
     var sessionScopeKey = qaBuildScopeKey(qaGetTrainingItems());
     var sessionFocus = qaWorkbenchState.trainingFocus;
     var sessionVisionModel = qaWorkbenchState.deepScanVisionModel;
+    var candidateCaptionText = '';
     qaWorkbenchState.deepScanSubmitting = true;
     qaWorkbenchState.deepScanStatus = 'Deep QA · Sight check ' + batchItems[0].fileName +
       ' · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' reviewed';
@@ -682,7 +693,8 @@
         qaWorkbenchState.deepScanStatus = 'Deep QA · Value judge ' + item.fileName;
         renderQaWorkbench();
         var inputItems = qaBuildDeepScanItems(batchItems);
-        inputItems[0].candidateCaption = String(candidate && candidate.text || '');
+        candidateCaptionText = String(candidate && candidate.text || '');
+        inputItems[0].candidateCaption = candidateCaptionText;
         return qaRequestJson('/fs/qa/deep-scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -769,7 +781,10 @@
         if (!changed[assessment.file]) qaWorkbenchState.captionQuality[assessment.file] = assessment;
       });
       Object.keys(batchSignatures).forEach(function (file) {
-        if (!changed[file]) qaWorkbenchState.aiItemSignatures[file] = batchSignatures[file];
+        if (changed[file]) return;
+        qaWorkbenchState.aiItemSignatures[file] = batchSignatures[file];
+        if (candidateCaptionText.trim()) qaWorkbenchState.qaAlternatives[file] = candidateCaptionText;
+        else delete qaWorkbenchState.qaAlternatives[file];
       });
       qaWorkbenchState.aiSummary = String(analysis.summary || '');
       qaWorkbenchState.aiModel = String(job.result.model || model);
@@ -823,6 +838,7 @@
     if (qaWorkbenchState.aiModel && qaWorkbenchState.aiModel !== model) {
       qaWorkbenchState.aiFindings = [];
       qaWorkbenchState.captionQuality = {};
+      qaWorkbenchState.qaAlternatives = {};
       qaWorkbenchState.aiSummary = '';
       qaWorkbenchState.aiItemSignatures = {};
       qaWorkbenchState.aiCoverageValid = 0;
@@ -2080,6 +2096,15 @@
     }, []);
   }
 
+  function qaFocusReviewAlternative(mediaKey) {
+    if (!qaFocusReviewCurrent()) return '';
+    var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
+    if (!item) return '';
+    var current = qaCurrentItemSignatureMap([item]);
+    if (qaWorkbenchState.aiItemSignatures[item.fileName] !== current[item.fileName]) return '';
+    return String(qaWorkbenchState.qaAlternatives[item.fileName] || '');
+  }
+
   function qaFocusReviewQuality(mediaKey) {
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item || !qaFocusReviewCurrent()) return null;
@@ -2166,6 +2191,7 @@
     session.prepQueued[key] = true;
     var token = session.token;
     session.prepChain = session.prepChain.catch(function () {}).then(function () {
+      if (qaFocusReviewAlternative(key)) return;
       return qaWaitForInteractiveRefresh();
     }).then(function () {
       if (!qaFocusReviewCurrent() || session.token !== token || session.handled[key]) return;
@@ -2567,6 +2593,7 @@
   window.qaFocusReviewStopped = qaFocusReviewStopped;
   window.qaFocusReviewReasons = qaFocusReviewReasons;
   window.qaFocusReviewQuality = qaFocusReviewQuality;
+  window.qaFocusReviewAlternative = qaFocusReviewAlternative;
   window.qaFocusReviewFindings = qaFocusReviewFindings;
   window.qaFocusReviewTagActions = qaFocusReviewTagActions;
   window.qaFocusReviewPatches = qaFocusReviewPatches;

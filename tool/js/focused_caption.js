@@ -748,6 +748,25 @@ function prepareFocusedCaptionCurrentItem() {
     restoreCaptionAssistCandidate(state.currentItem);
     return Promise.resolve(true);
   }
+  if (isFocusedQaReviewMode()) {
+    var alternative = qaFocusReviewAlternative(state.currentItem.key);
+    if (alternative) {
+      var candidate = buildFocusedReviewCandidate(state.currentItem);
+      candidate.text = alternative;
+      candidate.omittedAssignments = getCaptionAssistOmittedAssignments(
+        candidate.mediaKey, alternative, buildCaptionAssistRequest(state.currentItem).assignments,
+        buildCaptionAssistRequest(state.currentItem).tags
+      );
+      candidate.omittedCorrections = getCaptionAssistOmittedCorrections(
+        candidate.mediaKey, alternative, buildCaptionAssistRequest(state.currentItem).assignments,
+        buildCaptionAssistRequest(state.currentItem).tags
+      );
+      captionAssistCandidate = candidate;
+      syncCaptionAssistCandidateUi();
+      setStatus('Reusing Deep QA caption alternative. Edit or Apply; saved caption unchanged.');
+      return Promise.resolve(true);
+    }
+  }
   return useFocusedCaptionPrefetchForCurrentItem().then(function (usedPrefetch) {
     if (usedPrefetch) return true;
     if (!focusedCaptionState.open || !state.currentItem ||

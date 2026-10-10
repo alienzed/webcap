@@ -39,7 +39,7 @@
 
   var qaFocusReviewState = {
     active: false, folder: '', scopeKey: '', items: [], handled: {},
-    queued: {}, prepQueued: {}, prepChain: Promise.resolve(),
+    queued: {}, reviewFindings: {}, prepQueued: {}, prepChain: Promise.resolve(),
     autoOpen: false, opening: false, token: 0, loadToken: 0
   };
 
@@ -1970,6 +1970,9 @@
     if (!qaFocusReviewCurrent()) return [];
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) return [];
+    if (qaFocusReviewState.queued[mediaKey] && qaFocusReviewState.reviewFindings[mediaKey]) {
+      return qaFocusReviewState.reviewFindings[mediaKey];
+    }
     var current = qaCurrentItemSignatureMap([item]);
     return qaWorkbenchState.aiFindings.filter(function (finding) {
       return (finding.category === 'captioning' || finding.category === 'consistency') &&
@@ -2015,6 +2018,7 @@
     if (!qaFocusReviewCurrent()) throw new Error('QA Focus Review round is no longer current.');
     qaFocusReviewState.handled[String(mediaKey || '')] = String(disposition || 'applied');
     delete qaFocusReviewState.queued[String(mediaKey || '')];
+    delete qaFocusReviewState.reviewFindings[String(mediaKey || '')];
     qaSyncFocusReviewButton();
   }
 
@@ -2082,8 +2086,10 @@
     });
     var newKeys = [];
     session.items.forEach(function (item) {
-      if (!wanted[item.fileName] && session.queued[item.key] && !session.handled[item.key]) {
+      if (!wanted[item.fileName] && session.queued[item.key] && !session.handled[item.key] &&
+          !(isFocusedQaReviewMode() && focusedCaptionState.itemKey === item.key)) {
         delete session.queued[item.key];
+        delete session.reviewFindings[item.key];
       }
     });
     if (isFocusedQaReviewMode()) {
@@ -2094,6 +2100,12 @@
     session.items.forEach(function (item) {
       if (!wanted[item.fileName] || session.handled[item.key] || session.queued[item.key]) return;
       session.queued[item.key] = true;
+      session.reviewFindings[item.key] = qaWorkbenchState.aiFindings.filter(function (finding) {
+        return (finding.category === 'captioning' || finding.category === 'consistency') &&
+          !qaWorkbenchState.dispositions[finding.id] &&
+          (finding.files || []).indexOf(item.fileName) !== -1 &&
+          qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
+      }).slice(0, 3);
       newKeys.push(item.key);
     });
     if (isFocusedQaReviewMode() && newKeys.length) {
@@ -2135,7 +2147,7 @@
         qaFocusReviewState.scopeKey !== scopeKey) {
       qaFocusReviewState = {
         active: true, folder: String(state.folder || ''), scopeKey: scopeKey,
-        items: items.slice(), handled: {}, queued: {}, prepQueued: {},
+        items: items.slice(), handled: {}, queued: {}, reviewFindings: {}, prepQueued: {},
         prepChain: Promise.resolve(), autoOpen: true, opening: false,
         token: qaFocusReviewState.token + 1, loadToken: 0
       };

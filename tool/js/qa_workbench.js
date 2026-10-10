@@ -458,6 +458,7 @@
       }
     });
     if (Object.keys(invalid).length) {
+      Object.keys(invalid).forEach(function (file) { delete qaWorkbenchState.captionQuality[file]; });
       qaWorkbenchState.aiFindings = qaWorkbenchState.aiFindings.filter(function (finding) {
         return !(finding.files || []).some(function (file) { return invalid[file]; });
       });
@@ -721,7 +722,8 @@
       });
 
       var analysis = job.result && job.result.analysis;
-      if (!analysis || !Array.isArray(analysis.findings)) {
+      if (!analysis || !Array.isArray(analysis.findings) || !Array.isArray(analysis.captionQuality) ||
+          !analysis.captionQuality.some(function (assessment) { return assessment.file === batchItems[0].fileName; })) {
         throw new Error('QA Deep Scan batch completed without structured findings.');
       }
       if (Array.isArray(analysis.patchWarnings) && analysis.patchWarnings.length) {
@@ -2025,7 +2027,10 @@
 
   function qaFocusReviewQuality(mediaKey) {
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
-    return item ? qaWorkbenchState.captionQuality[item.fileName] || null : null;
+    if (!item || !qaFocusReviewCurrent()) return null;
+    if (qaWorkbenchState.aiItemSignatures[item.fileName] !== qaCurrentItemSignatureMap([item])[item.fileName] &&
+        !(qaFocusReviewState.queued[mediaKey] && qaFocusReviewState.reviewFindings[mediaKey])) return null;
+    return qaWorkbenchState.captionQuality[item.fileName] || null;
   }
 
   function qaFocusReviewReasons(mediaKey) {
@@ -2040,6 +2045,11 @@
     }, []);
   }
 
+  function qaFocusQualityRank(key) {
+    var assessment = qaFocusReviewQuality(key);
+    return assessment ? { missing: 0, bad: 0, low: 1, neutral: 2, good: 3, high: 4, excellent: 5 }[assessment.rating] ?? 3 : 3;
+  }
+
   function qaFocusReviewKeyRank(key) {
     return (qaFocusReviewState.reviewFindings[key] || []).reduce(function (best, finding) {
       return Math.max(best, qaTrainingValueRank(finding.trainingValue));
@@ -2048,7 +2058,8 @@
 
   function qaOrderFocusReviewKeys(keys) {
     return keys.slice().sort(function (a, b) {
-      return qaFocusReviewKeyRank(b) - qaFocusReviewKeyRank(a);
+      return qaFocusQualityRank(a) - qaFocusQualityRank(b) ||
+        qaFocusReviewKeyRank(b) - qaFocusReviewKeyRank(a);
     });
   }
 

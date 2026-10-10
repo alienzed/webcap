@@ -1746,6 +1746,15 @@
     nav.appendChild(next);
     actions.appendChild(nav);
     article.appendChild(actions);
+    // Put the decision before the explanation; preserve full evidence on demand.
+    article.insertBefore(actions, summary);
+    var details = document.createElement('details');
+    details.className = 'qa-recommendation-details';
+    var detailsLabel = document.createElement('summary');
+    detailsLabel.textContent = 'Why / evidence';
+    details.appendChild(detailsLabel);
+    while (actions.nextSibling) details.appendChild(actions.nextSibling);
+    article.appendChild(details);
 
     var status = document.createElement('div');
     status.className = 'qa-recommendation-status';

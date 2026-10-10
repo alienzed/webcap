@@ -480,7 +480,9 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
 
         except ValueError as exc:
             finding_warnings.append('Finding ' + str(finding_index + 1) + ': ' + str(exc))
-    result = {"summary": summary, "findings": normalized[:8], "captionQuality": normalized_quality}
+    result = {"summary": summary, "findings": normalized[:8]}
+    if "captionQuality" in data:
+        result["captionQuality"] = normalized_quality
     if patch_warnings:
         result["patchWarnings"] = patch_warnings
     if finding_warnings:

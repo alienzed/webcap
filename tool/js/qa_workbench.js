@@ -2004,6 +2004,18 @@
     }, []);
   }
 
+  function qaFocusReviewKeyRank(key) {
+    return (qaFocusReviewState.reviewFindings[key] || []).reduce(function (best, finding) {
+      return Math.max(best, qaTrainingValueRank(finding.trainingValue));
+    }, 0);
+  }
+
+  function qaOrderFocusReviewKeys(keys) {
+    return keys.slice().sort(function (a, b) {
+      return qaFocusReviewKeyRank(b) - qaFocusReviewKeyRank(a);
+    });
+  }
+
   function qaSyncFocusReviewButton() {
     var button = document.getElementById('qa-focus-review-btn');
     if (!button) throw new Error('QA Focus Review Set Tools button is missing.');
@@ -2122,7 +2134,7 @@
       newKeys.push(item.key);
     });
     if (isFocusedQaReviewMode() && newKeys.length) {
-      appendFocusedQaReviewItems(newKeys);
+      appendFocusedQaReviewItems(qaOrderFocusReviewKeys(newKeys));
     }
     session.items.forEach(function (item) {
       if (session.queued[item.key] && !session.handled[item.key]) qaQueueFocusCandidatePreparation(item);
@@ -2132,6 +2144,7 @@
       var keys = session.items.filter(function (item) {
         return session.queued[item.key] && !session.handled[item.key];
       }).map(function (item) { return item.key; });
+      keys = qaOrderFocusReviewKeys(keys);
       if (keys.length) {
         session.opening = true;
         var token = session.token;

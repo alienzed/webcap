@@ -96,6 +96,7 @@ def _normalize_items(items):
         rows.append({
             "fileName": file_name,
             "caption": str(item.get("caption") or "").strip(),
+            "candidateCaption": str(item.get("candidateCaption") or "").strip(),
             "groupedTags": grouped,
             "tags": tags,
             "analysis": _normalize_analysis(item.get("analysis")),
@@ -222,6 +223,7 @@ def _render_item(row):
     parts = [
         "FILE: " + row["fileName"],
         "CAPTION: " + row["caption"],
+        "ALTERNATIVE CAPTION: " + row["candidateCaption"],
     ]
     if grouped:
         parts.append("GROUPED TAGS: " + grouped)
@@ -254,6 +256,9 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "Reduce how much material a human must inspect while preserving confidence that meaningful training problems are noticed. "
         "Silence is better than weak advice. Return zero findings when there is nothing genuinely useful to add.\n\n"
         "[CAPTION QUALITY — EVERY ITEM]\n"
+        "Compare the original caption with the alternative caption (if supplied). The alternative is another model-produced HYPOTHESIS, not the correct answer. "
+        "Determine which specific additions genuinely improve the LoRA training description, which original information the alternative loses, and whether changes improve accuracy and coverage without diluting tokens. "
+        "Propose precise tag or caption patches only for supported, nonredundant gains. Do not reward verbose alternatives or change correct captions for style alone. "
         "Rate the EXISTING caption for every supplied file, including those with no findings. "
         "Evaluate accuracy, useful completeness and relevance to the LoRA training focus; prefer concise information density, not exhaustive verbosity. "
         "Missing means empty, bad seriously wrong or unusable, low major problems, neutral substantial improvements, "

@@ -640,8 +640,9 @@ function syncFocusedCaptionVisionPhrasesUi() {
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'caption-vision-phrase-insert';
-      button.textContent = (action.action === 'add' ? '+ Add ' : '− Remove ') + action.term + (action.group ? ' · ' + action.group : '');
-      button.title = 'QA suggested tag correction · saves immediately';
+      button.textContent = action.term;
+      button.title = (action.action === 'add' ? 'Add' : 'Remove') + ' tag · ' + (action.group || 'Other') + ' · saves immediately';
+      button.setAttribute('aria-label', button.title);
       button.addEventListener('click', function () {
         if (action.action === 'add') acceptCaptionAssistTagSuggestion(mediaKey, { group: action.group, term: action.term });
         else removeCaptionAssistAssignedTag(mediaKey, action.group, action.term);
@@ -656,9 +657,9 @@ function syncFocusedCaptionVisionPhrasesUi() {
     var tagButton = document.createElement('button');
     tagButton.type = 'button';
     tagButton.className = 'caption-vision-phrase-insert';
-    tagButton.textContent = '+ Tag ' + suggestion.term + ' · ' + (suggestion.group || 'Other') +
-      (suggestion.isNew ? ' (new)' : '');
-    tagButton.title = 'Assign tag now (saves immediately)';
+    tagButton.textContent = suggestion.term;
+    tagButton.title = 'Add tag · ' + (suggestion.group || 'Other') + (suggestion.isNew ? ' · new vocabulary' : '') + ' · saves immediately';
+    tagButton.setAttribute('aria-label', tagButton.title);
     tagButton.addEventListener('click', function () {
       acceptCaptionAssistTagSuggestion(mediaKey, suggestion);
     });

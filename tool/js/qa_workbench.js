@@ -645,13 +645,14 @@
         ? Promise.resolve(saved)
         : requestCaptionAssistCandidate(item, request, {
           onJob: function (job) {
-            qaWorkbenchState.deepScanChallengerJobId = String(job.jobId || '');
-            if (qaWorkbenchState.deepScanStopRequested || sessionToken !== qaWorkbenchState.deepScanSessionToken) {
+            if (qaWorkbenchState.deepScanStopRequested || !qaWorkbenchState.deepScanSessionActive ||
+                sessionToken !== qaWorkbenchState.deepScanSessionToken) {
               return qaRequestJson('/fs/director/job', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ operation: 'cancel_job', jobId: job.jobId })
               });
             }
+            qaWorkbenchState.deepScanChallengerJobId = String(job.jobId || '');
           }
         }).then(function (candidate) {
           candidate.sourceCaption = String(item.caption || '');
@@ -663,7 +664,7 @@
           return candidate;
         });
       return candidatePromise.then(function (candidate) {
-        qaWorkbenchState.deepScanChallengerJobId = '';
+        if (sessionToken === qaWorkbenchState.deepScanSessionToken) qaWorkbenchState.deepScanChallengerJobId = '';
         if (sessionToken !== qaWorkbenchState.deepScanSessionToken ||
             !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
         qaWorkbenchState.deepScanStatus = 'Deep QA · Value judge ' + item.fileName;

@@ -2056,6 +2056,16 @@
     }).slice(0, 3);
   }
 
+  function qaFocusReviewPatches(mediaKey) {
+    var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
+    if (!item) return [];
+    return qaFocusReviewFindings(mediaKey).reduce(function (all, finding) {
+      return all.concat((finding.patches || []).filter(function (patch) {
+        return patch.file === item.fileName;
+      }));
+    }, []);
+  }
+
   function qaFocusReviewQuality(mediaKey) {
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item || !qaFocusReviewCurrent()) return null;
@@ -2538,5 +2548,6 @@
   window.qaFocusReviewQuality = qaFocusReviewQuality;
   window.qaFocusReviewFindings = qaFocusReviewFindings;
   window.qaFocusReviewTagActions = qaFocusReviewTagActions;
+  window.qaFocusReviewPatches = qaFocusReviewPatches;
   window.qaFocusReviewInteractiveRefresh = qaFocusReviewInteractiveRefresh;
 })();

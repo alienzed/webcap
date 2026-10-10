@@ -275,7 +275,7 @@
     setScanState.rawResponses.push(response);
     setScanState.rawResponseIndex = setScanState.rawResponses.length - 1;
     setScanState.currentRawResponse = response;
-    el('set-scan-details').open = true;
+    // Raw model output stays opt-in; live progress remains the primary signal.
     renderSetIntelligence();
   }
 

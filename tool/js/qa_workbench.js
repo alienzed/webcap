@@ -1,5 +1,4 @@
 (function () {
-  var QA_RECOMMENDATION_LIMIT = 10;
   
   var QA_CATEGORY_ORDER = ['underrepresented', 'overrepresented', 'prune', 'consistency', 'captioning'];
   var QA_CATEGORY_LABELS = {
@@ -46,6 +45,7 @@
   var qaWorkbenchState = {
     view: 'overview',
     trainingFocus: '',
+    focusExplicitlyEdited: false,
     findings: [],
     deterministicFindings: [],
     statisticalCandidates: [],
@@ -397,7 +397,13 @@
           || qaBuildScopeKey(qaGetTrainingItems()) !== scopeKey
           || qaWorkbenchState.trainingFocus !== focus) return;
       var saved = payload.review;
-      if (!saved || saved.trainingFocus !== focus) return;
+      if (!saved) return;
+      // Restore the Set's saved intent on first entry, but never override a focus
+      // deliberately chosen in this session (including an intentionally empty one).
+      if (!qaWorkbenchState.focusExplicitlyEdited && !focus && saved.trainingFocus) {
+        qaWorkbenchState.trainingFocus = String(saved.trainingFocus);
+      }
+      if (saved.trainingFocus !== qaWorkbenchState.trainingFocus) return;
       var before = saved.itemSignatures && typeof saved.itemSignatures === 'object'
         ? saved.itemSignatures
         : {};
@@ -1424,7 +1430,7 @@
   }
 
   function qaGetRecommendations() {
-    return qaWorkbenchState.findings.slice(0, QA_RECOMMENDATION_LIMIT);
+    return qaWorkbenchState.findings.slice();
   }
 
   function qaGetUndisposedRecommendationIndexes() {
@@ -1479,6 +1485,10 @@
     actions.className = 'qa-page-actions';
     if (view !== 'overview') actions.appendChild(qaCreateButton('QA Overview', '', 'view', 'overview'));
     if (view !== 'report') actions.appendChild(qaCreateButton('Full Report', '', 'view', 'report'));
+    if (view !== 'overview' && qaWorkbenchState.deepScanSessionActive) {
+      actions.appendChild(qaCreateButton('Stop Deep QA · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal,
+        '', 'deep-scan-stop'));
+    }
     header.appendChild(actions);
     container.appendChild(header);
   }
@@ -1764,7 +1774,9 @@
     article.className = 'qa-recommendation';
     var eyebrow = document.createElement('div');
     eyebrow.className = 'qa-recommendation-eyebrow';
-    eyebrow.textContent = QA_CATEGORY_LABELS[finding.category] + ' · ' + (finding.priority === 'high' ? 'High impact' : 'Recommendation') + ' · ' + finding.confidence + ' confidence' + (finding.sourceLabel ? ' · ' + finding.sourceLabel : '');
+    eyebrow.textContent = QA_CATEGORY_LABELS[finding.category] + ' · ' + (finding.priority === 'high' ? 'High impact' : 'Recommendation') +
+      (finding.source === 'ai' ? ' · ' + finding.trainingValue + ' training value' : '') +
+      ' · ' + finding.confidence + ' confidence' + (finding.sourceLabel ? ' · ' + finding.sourceLabel : '');
     article.appendChild(eyebrow);
     var title = document.createElement('h2');
     title.className = 'qa-recommendation-title';
@@ -1849,6 +1861,7 @@
     meta.className = 'qa-report-meta';
     [
       finding.priority === 'high' ? 'High impact' : 'Normal priority',
+      finding.source === 'ai' ? finding.trainingValue + ' training value' : '',
       finding.confidence + ' confidence',
       qaFileCountText((finding.files || []).length),
       finding.sourceLabel || ''
@@ -1983,6 +1996,7 @@
 
     if (folderChanged) {
       qaWorkbenchState.trainingFocus = '';
+      qaWorkbenchState.focusExplicitlyEdited = false;
       qaWorkbenchState.parentFocusSet = undefined;
       qaWorkbenchState.returnFindingId = '';
     }
@@ -2130,6 +2144,7 @@
     delete qaFocusReviewState.queued[String(mediaKey || '')];
     delete qaFocusReviewState.reviewFindings[String(mediaKey || '')];
     qaSyncFocusReviewButton();
+    qaSyncFocusReview(); // Refill only the immediate lookahead after a reviewed item.
   }
 
   function qaFocusReviewStopped() {
@@ -2144,10 +2159,10 @@
     var key = String(item && item.key || '');
     if (!key || session.prepQueued[key]) return;
     // The visible first item is prepared on demand by Caption Assist itself.
-    var firstReady = session.items.find(function (entry) {
+    var firstReadyKey = qaOrderFocusReviewKeys(session.items.filter(function (entry) {
       return session.queued[entry.key] && !session.handled[entry.key];
-    });
-    if ((session.autoOpen || session.opening) && firstReady && firstReady.key === key) return;
+    }).map(function (entry) { return entry.key; }))[0];
+    if ((session.autoOpen || session.opening) && firstReadyKey === key) return;
     session.prepQueued[key] = true;
     var token = session.token;
     session.prepChain = session.prepChain.catch(function () {}).then(function () {
@@ -2224,8 +2239,13 @@
     if (isFocusedQaReviewMode() && newKeys.length) {
       appendFocusedQaReviewItems(qaOrderFocusReviewKeys(newKeys));
     }
-    session.items.forEach(function (item) {
-      if (session.queued[item.key] && !session.handled[item.key]) qaQueueFocusCandidatePreparation(item);
+    // Only prepare the current priority item and one lookahead. Preparing the
+    // entire queue would consume GPU time on findings the user may never inspect.
+    qaOrderFocusReviewKeys(session.items.filter(function (item) {
+      return session.queued[item.key] && !session.handled[item.key];
+    }).map(function (item) { return item.key; })).slice(0, 2).forEach(function (key) {
+      var item = session.items.find(function (row) { return row.key === key; });
+      qaQueueFocusCandidatePreparation(item);
     });
     qaSyncFocusReviewButton();
     if (!isFocusedQaReviewMode() && session.autoOpen && !session.opening) {
@@ -2496,6 +2516,7 @@
         qaInvalidateDeepScanSession('Deep QA stopped because the training focus changed.');
       }
       qaWorkbenchState.trainingFocus = nextFocus;
+      qaWorkbenchState.focusExplicitlyEdited = true;
       renderQaWorkbench();
     }
   }

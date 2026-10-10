@@ -1024,6 +1024,20 @@ Do not make full-dataset vision mandatory.
 
 ---
 
+## QA / Review UX acceptance test
+
+Every QA/Review surface (Browse Recommendations, Deep QA, QA Focus Review, and Caption Assist handoffs) must pass:
+
+1. **Decision first:** Is the next user choice immediately obvious?
+2. **Minimal reading:** Can a user decide without reading paragraphs?
+3. **Actionable:** Can they accept, reject, or manually adjust a suggested add-tag, remove-tag, or caption correction directly, reusing existing controls?
+4. **Evidence on demand:** Are the supporting reasons accessible without dominating the default view?
+5. **Worth interrupting:** Is the finding credible and important enough to justify the user's attention?
+
+**Outcome test:** Does the feature reduce the time and effort required to confidently QA a mature dataset? If not, simplify or remove the friction. Broader set-level findings may require investigation in Browse Recommendations; do not force them into per-item Caption Assist or invent corrections.
+
+---
+
 ## Product guardrails
 
 - Silence is better than weak advice.

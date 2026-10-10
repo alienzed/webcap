@@ -317,6 +317,7 @@
         category: String(finding.category || 'consistency'),
         priority: String(finding.priority || 'normal'),
         confidence: confidence,
+        trainingValue: String(finding.trainingValue || 'medium'),
         title: String(finding.title || ''),
         summary: String(finding.summary || ''),
         why: String(finding.why || ''),
@@ -1314,10 +1315,16 @@
     return 1;
   }
 
+  function qaTrainingValueRank(value) {
+    return { critical: 4, high: 3, medium: 2, low: 1 }[value] || 0;
+  }
+
   function qaSortFindings(findings) {
     return findings.slice().sort(function (a, b) {
       var action = qaFindingActionRank(b) - qaFindingActionRank(a);
       if (action) return action;
+      var value = qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue);
+      if (value) return value;
       var priority = qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
       if (priority) return priority;
       var ai = QA_CATEGORY_ORDER.indexOf(a.category);
@@ -1979,6 +1986,9 @@
         !qaWorkbenchState.dispositions[finding.id] &&
         (finding.files || []).indexOf(item.fileName) !== -1 &&
         qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
+    }).sort(function (a, b) {
+      return qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue) ||
+        qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
     }).slice(0, 3);
   }
 
@@ -2105,6 +2115,9 @@
           !qaWorkbenchState.dispositions[finding.id] &&
           (finding.files || []).indexOf(item.fileName) !== -1 &&
           qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
+      }).sort(function (a, b) {
+        return qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue) ||
+          qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
       }).slice(0, 3);
       newKeys.push(item.key);
     });

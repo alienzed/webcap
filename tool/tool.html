@@ -2534,6 +2534,12 @@
                 </div>
                 <div class="set-scan-run-actions">
                     <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
+                    <select id="set-scan-force-mode" aria-label="Sight to force refresh" title="Choose which Sight evidence to replace after a successful fresh scan">
+                        <option value="both">Both Sights</option>
+                        <option value="open">Open Sight</option>
+                        <option value="context">Context Sight</option>
+                    </select>
+                    <button id="set-scan-force-btn" type="button" class="review-captions-btn" title="Rerun selected Sight passes for the current scope; failed reads preserve existing evidence">Force Refresh Sight</button>
                     <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>
                 </div>
                 <div id="set-intelligence-next" class="set-intelligence-next hidden">

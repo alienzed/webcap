@@ -93,6 +93,8 @@
     var output = el('set-scan-raw-output');
     var reportCount = el('set-scan-report-count');
     var rescanBtn = el('set-scan-rescan-btn');
+    var forceBtn = el('set-scan-force-btn');
+    var forceMode = el('set-scan-force-mode');
     var scopeToggle = el('set-scan-entire-set');
     var scopeSummary = el('set-scan-scope-summary');
     var openCard = el('set-scan-open-card');
@@ -105,7 +107,7 @@
     var contextDetail = el('set-scan-context-detail');
     if (
       !modal || !stopBtn || !progressFill || !next || !details || !responseSelect || !output ||
-      !reportCount || !rescanBtn || !scopeToggle || !scopeSummary || !openCard || !openBadge || !openCount || !openDetail ||
+      !reportCount || !rescanBtn || !forceBtn || !forceMode || !scopeToggle || !scopeSummary || !openCard || !openBadge || !openCount || !openDetail ||
       !contextCard || !contextBadge || !contextCount || !contextDetail
     ) {
       throw new Error('Set Intelligence UI is incomplete.');
@@ -145,6 +147,8 @@
     rescanBtn.classList.toggle('hidden', setScanState.running);
     rescanBtn.disabled = !scopeCount;
     rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
+    forceBtn.disabled = setScanState.running || !scopeCount;
+    forceMode.disabled = setScanState.running;
 
     var percent = 0;
     if (setScanState.phase === 'preparing') percent = 8;
@@ -588,7 +592,7 @@
     });
   }
 
-  function scanVision(folder, files, model) {
+  function scanVision(folder, files, model, force) {
     return requestJson(
       '/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model)
     ).then(function (payload) {
@@ -598,7 +602,7 @@
         return !!wanted[String(item.file || '')];
       });
       var pending = scopedItems.filter(function (item) {
-        return !item.structured;
+        return !!force || !item.structured;
       }).map(function (item) {
         return String(item.file || '');
       }).filter(Boolean);
@@ -673,7 +677,7 @@
     });
   }
 
-  function scanContextVision(folder, files, model, context) {
+  function scanContextVision(folder, files, model, context, force) {
     setScanState.phase = 'scanning-context';
     if (!context.groups.length) {
       setScanState.coverage.contextRequired = false;
@@ -692,7 +696,7 @@
         return !!wanted[String(item.file || '')];
       });
       var pending = scopedItems.filter(function (item) {
-        return !item.cached;
+        return !!force || !item.cached;
       }).map(function (item) {
         return {
           file: String(item.file || ''),
@@ -738,7 +742,11 @@
     window.setStatus('Set Intelligence is ready.');
   }
 
-  function runSetIntelligence() {
+  function runSetIntelligence(forceMode) {
+    var selectedMode = typeof forceMode === 'string' ? forceMode : '';
+    if (selectedMode && ['both', 'open', 'context'].indexOf(selectedMode) === -1) {
+      throw new Error('Invalid Sight refresh selection.');
+    }
     if (setScanState.running) return;
     if (itemSightRefreshActive) {
       window.setStatus('Finish the current item Sight refresh before starting a full Set scan.');
@@ -804,10 +812,10 @@
       }
       if (setScanState.stopRequested) return false;
       visionContext = setIntelligenceVisionContext();
-      return scanVision(folder, files, setScanState.visionModel);
+      return selectedMode === 'context' ? true : scanVision(folder, files, setScanState.visionModel, !!selectedMode);
     }).then(function (openSuccess) {
       if (openSuccess === false || setScanState.stopRequested) return false;
-      return scanContextVision(folder, files, setScanState.visionModel, visionContext);
+      return selectedMode === 'open' ? true : scanContextVision(folder, files, setScanState.visionModel, visionContext, !!selectedMode);
     }).then(function (visionSuccess) {
       if (visionSuccess === false || setScanState.stopRequested) return false;
       return refreshMediaResolutionCache({
@@ -965,20 +973,23 @@
     var closeBtn = el('set-scan-close-btn');
     var stopBtn = el('set-scan-stop-btn');
     var rescanBtn = el('set-scan-rescan-btn');
+    var forceBtn = el('set-scan-force-btn');
+    var forceMode = el('set-scan-force-mode');
     var entireSetToggle = el('set-scan-entire-set');
     var responseSelect = el('set-scan-response-select');
     var primaryBtn = el('set-intelligence-primary-btn');
     var guidedBtn = el('set-intelligence-guided-btn');
     var qaBtn = el('set-intelligence-qa-btn');
     var modal = el('set-scan-modal');
-    if (!openBtn || !closeBtn || !stopBtn || !rescanBtn || !entireSetToggle || !responseSelect || !primaryBtn || !guidedBtn || !qaBtn || !modal) {
+    if (!openBtn || !closeBtn || !stopBtn || !rescanBtn || !forceBtn || !forceMode || !entireSetToggle || !responseSelect || !primaryBtn || !guidedBtn || !qaBtn || !modal) {
       throw new Error('Set Intelligence controls are missing.');
     }
 
     openBtn.onclick = openSetIntelligence;
     closeBtn.onclick = closeSetIntelligence;
     stopBtn.onclick = stopSetIntelligence;
-    rescanBtn.onclick = runSetIntelligence;
+    rescanBtn.onclick = function () { runSetIntelligence(); };
+    forceBtn.onclick = function () { runSetIntelligence(forceMode.value); };
     entireSetToggle.onchange = openSetIntelligence;
     responseSelect.onchange = selectRawResponse;
     primaryBtn.onclick = continueToVocabulary;

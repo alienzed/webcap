@@ -322,6 +322,12 @@
         why: String(finding.why || ''),
         files: files,
         patches: patches,
+        tagActions: Array.isArray(finding.tagActions) ? finding.tagActions.filter(function (row) {
+          return row && files.indexOf(String(row.file || '')) !== -1 &&
+            (row.action === 'add' || row.action === 'remove') && String(row.term || '').trim();
+        }).map(function (row) {
+          return { file: String(row.file), action: row.action, group: String(row.group || ''), term: String(row.term) };
+        }) : [],
         facts: [{ value: String(files.length), label: 'affected items' }],
         meta: evidence,
         source: 'ai',
@@ -1951,7 +1957,7 @@
       qaFocusReviewState.scopeKey === qaBuildScopeKey(qaGetTrainingItems());
   }
 
-  function qaFocusReviewReasons(mediaKey) {
+  function qaFocusReviewFindings(mediaKey) {
     if (!qaFocusReviewCurrent()) return [];
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) return [];
@@ -1961,9 +1967,19 @@
         !qaWorkbenchState.dispositions[finding.id] &&
         (finding.files || []).indexOf(item.fileName) !== -1 &&
         qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
-    }).map(function (finding) {
-      return String(finding.title || '') + (finding.why || finding.summary ? ' — ' + String(finding.why || finding.summary) : '');
-    }).filter(Boolean).slice(0, 3);
+    }).slice(0, 3);
+  }
+
+  function qaFocusReviewReasons(mediaKey) {
+    return qaFocusReviewFindings(mediaKey).map(function (finding) { return String(finding.title || ''); });
+  }
+
+  function qaFocusReviewTagActions(mediaKey) {
+    var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
+    if (!item) return [];
+    return qaFocusReviewFindings(mediaKey).reduce(function (all, finding) {
+      return all.concat((finding.tagActions || []).filter(function (action) { return action.file === item.fileName; }));
+    }, []);
   }
 
   function qaSyncFocusReviewButton() {
@@ -2394,5 +2410,7 @@
   window.qaFocusReviewMarkHandled = qaFocusReviewMarkHandled;
   window.qaFocusReviewStopped = qaFocusReviewStopped;
   window.qaFocusReviewReasons = qaFocusReviewReasons;
+  window.qaFocusReviewFindings = qaFocusReviewFindings;
+  window.qaFocusReviewTagActions = qaFocusReviewTagActions;
   window.qaFocusReviewInteractiveRefresh = qaFocusReviewInteractiveRefresh;
 })();

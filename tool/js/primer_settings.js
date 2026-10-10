@@ -627,9 +627,9 @@ function syncFocusedCaptionVisionPhrasesUi() {
   var mediaKey = item.key;
   var heading = document.createElement('div');
   heading.className = 'caption-vision-sight-label';
-  heading.textContent = 'Tag decisions · changes save immediately';
+  heading.textContent = 'Suggestions';
+  row.appendChild(heading);
   if (isFocusedQaReviewMode()) {
-    row.appendChild(heading);
     qaFocusReviewTagActions(mediaKey).forEach(function (action) {
       var assigned = action.group
         ? getChecklistAssignmentEntriesForMediaKey(mediaKey).some(function (entry) {
@@ -649,10 +649,6 @@ function syncFocusedCaptionVisionPhrasesUi() {
       row.appendChild(button);
     });
   }
-  var sightHeading = document.createElement('div');
-  sightHeading.className = 'caption-vision-sight-label';
-  sightHeading.textContent = 'Other suggestions from Sight · optional';
-  row.appendChild(sightHeading);
   var suggestions = getCaptionAssistTagSuggestions(item);
   function makeSuggestion(suggestion) {
     var pair = document.createElement('span');

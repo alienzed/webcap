@@ -630,19 +630,43 @@
       if (sessionToken !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
       if (getCaptionVisionModelId() !== sessionVisionModel) throw new Error('Deep QA Vision model changed while running; restart the scan.');
       batchSignatures = qaCurrentItemSignatureMap(batchItems);
-      qaWorkbenchState.deepScanStatus = 'Deep QA · Director ' + batchItems[0].fileName;
+      qaWorkbenchState.deepScanStatus = 'Deep QA · Caption challenger ' + batchItems[0].fileName;
       renderQaWorkbench();
-      return qaRequestJson('/fs/qa/deep-scan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        folder: sessionFolder,
-        model: model,
-        trainingFocus: sessionFocus,
-        items: qaBuildDeepScanItems(batchItems),
-        deterministicFindings: qaDeepScanFindingPayload(batchItems)
-      })
-    });
+      var item = batchItems[0];
+      var request = buildCaptionAssistRequest(item);
+      var saved = captionAssistSavedCandidatesByMedia[item.key];
+      var fingerprint = captionAssistRequestFingerprint(item, request);
+      var candidatePromise = saved && saved.requestFingerprint === fingerprint &&
+        saved.sourceCaption === String(item.caption || '') && saved.text
+        ? Promise.resolve(saved)
+        : requestCaptionAssistCandidate(item, request).then(function (candidate) {
+          candidate.sourceCaption = String(item.caption || '');
+          candidate.model = String(request.model || '');
+          if (qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStopRequested &&
+              sessionToken === qaWorkbenchState.deepScanSessionToken) {
+            persistCaptionAssistCandidate(candidate, true);
+          }
+          return candidate;
+        });
+      return candidatePromise.then(function (candidate) {
+        if (sessionToken !== qaWorkbenchState.deepScanSessionToken ||
+            !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
+        qaWorkbenchState.deepScanStatus = 'Deep QA · Value judge ' + item.fileName;
+        renderQaWorkbench();
+        var inputItems = qaBuildDeepScanItems(batchItems);
+        inputItems[0].candidateCaption = String(candidate.text || '');
+        return qaRequestJson('/fs/qa/deep-scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            folder: sessionFolder,
+            model: model,
+            trainingFocus: sessionFocus,
+            items: inputItems,
+            deterministicFindings: qaDeepScanFindingPayload(batchItems)
+          })
+        });
+      });
     }).then(function (payload) {
       if (!payload) {
         qaWorkbenchState.deepScanSubmitting = false;

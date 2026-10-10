@@ -317,6 +317,7 @@
         category: String(finding.category || 'consistency'),
         priority: String(finding.priority || 'normal'),
         confidence: confidence,
+        trainingValue: String(finding.trainingValue || 'medium'),
         title: String(finding.title || ''),
         summary: String(finding.summary || ''),
         why: String(finding.why || ''),
@@ -1314,10 +1315,16 @@
     return 1;
   }
 
+  function qaTrainingValueRank(value) {
+    return { critical: 4, high: 3, medium: 2, low: 1 }[value] || 0;
+  }
+
   function qaSortFindings(findings) {
     return findings.slice().sort(function (a, b) {
       var action = qaFindingActionRank(b) - qaFindingActionRank(a);
       if (action) return action;
+      var value = qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue);
+      if (value) return value;
       var priority = qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
       if (priority) return priority;
       var ai = QA_CATEGORY_ORDER.indexOf(a.category);
@@ -1979,6 +1986,9 @@
         !qaWorkbenchState.dispositions[finding.id] &&
         (finding.files || []).indexOf(item.fileName) !== -1 &&
         qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
+    }).sort(function (a, b) {
+      return qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue) ||
+        qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
     }).slice(0, 3);
   }
 
@@ -1992,6 +2002,18 @@
     return qaFocusReviewFindings(mediaKey).reduce(function (all, finding) {
       return all.concat((finding.tagActions || []).filter(function (action) { return action.file === item.fileName; }));
     }, []);
+  }
+
+  function qaFocusReviewKeyRank(key) {
+    return (qaFocusReviewState.reviewFindings[key] || []).reduce(function (best, finding) {
+      return Math.max(best, qaTrainingValueRank(finding.trainingValue));
+    }, 0);
+  }
+
+  function qaOrderFocusReviewKeys(keys) {
+    return keys.slice().sort(function (a, b) {
+      return qaFocusReviewKeyRank(b) - qaFocusReviewKeyRank(a);
+    });
   }
 
   function qaSyncFocusReviewButton() {
@@ -2105,11 +2127,14 @@
           !qaWorkbenchState.dispositions[finding.id] &&
           (finding.files || []).indexOf(item.fileName) !== -1 &&
           qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
+      }).sort(function (a, b) {
+        return qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue) ||
+          qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
       }).slice(0, 3);
       newKeys.push(item.key);
     });
     if (isFocusedQaReviewMode() && newKeys.length) {
-      appendFocusedQaReviewItems(newKeys);
+      appendFocusedQaReviewItems(qaOrderFocusReviewKeys(newKeys));
     }
     session.items.forEach(function (item) {
       if (session.queued[item.key] && !session.handled[item.key]) qaQueueFocusCandidatePreparation(item);
@@ -2119,6 +2144,7 @@
       var keys = session.items.filter(function (item) {
         return session.queued[item.key] && !session.handled[item.key];
       }).map(function (item) { return item.key; });
+      keys = qaOrderFocusReviewKeys(keys);
       if (keys.length) {
         session.opening = true;
         var token = session.token;

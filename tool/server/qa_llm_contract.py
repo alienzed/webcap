@@ -139,6 +139,7 @@ def _response_schema():
             "category",
             "priority",
             "confidence",
+            "trainingValue",
             "title",
             "summary",
             "why",
@@ -160,6 +161,7 @@ def _response_schema():
                 "type": "string",
                 "enum": ["high", "medium", "low"],
             },
+            "trainingValue": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
             "title": {"type": "string", "minLength": 1},
             "summary": {"type": "string", "minLength": 1},
             "why": {"type": "string", "minLength": 1},
@@ -265,7 +267,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "- A Vision observation agreeing with an existing posture tag is supporting evidence, not grounds to question that tag because the camera is tightly cropped. If visual signals disagree without a clear resolution, return no finding rather than calling the tag ambiguous, redundant, or imprecise.\n"
         "- Open Sight is vocabulary-agnostic; Context Sight follows current vocabulary. Their agreement is stronger than either one alone.\\n"
         "- Context Sight matches are candidate observations, not proof that a tag must be added. Cross-check them.\\n"
-        "- Rank findings by expected marginal training value: major incorrect or missing distinctive attributes first, then other genuinely useful omissions, then modest refinements. Avoid low-value incidental scene details.\\n"
+        "- For EACH finding, set trainingValue (critical/high/medium/low) to the estimated marginal training relevance of the specific correction, independent of confidence. Rank distinctive focus-relevant attributes and major factual errors highest; incidental background or lighting refinements usually low unless the training focus makes them central.\\n"
         "- Pose and posture assertions, including standing, are not intrinsically useful. If the view does not establish them, never prioritize them; an approved kneeling or posing tag is not an invitation to speculate about standing.\\n"
         "- A concise caption can be excellent without matching an exhaustive Vision description. Extra words are not improvements unless they add accurate, distinctive, training-relevant information.\\n"
         "- When no substantial correction is supported, return no finding; do not produce a cosmetic rewrite as a QA issue.\\n"
@@ -330,6 +332,7 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
             category = str(finding.get("category") or "").strip()
             priority = str(finding.get("priority") or "").strip()
             confidence = str(finding.get("confidence") or "").strip()
+            training_value = str(finding.get("trainingValue") or "medium").strip()
             title = _clean(finding.get("title"))
             finding_summary = _clean(finding.get("summary"))
             why = _clean(finding.get("why"))
@@ -342,6 +345,7 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
                 category not in _ALLOWED_CATEGORIES
                 or priority not in _ALLOWED_PRIORITIES
                 or confidence not in _ALLOWED_CONFIDENCE
+                or training_value not in {"critical", "high", "medium", "low"}
                 or not title
                 or not finding_summary
                 or not why
@@ -433,6 +437,7 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
                 "category": category,
                 "priority": priority,
                 "confidence": confidence,
+                "trainingValue": training_value,
                 "title": title,
                 "summary": finding_summary,
                 "why": why,

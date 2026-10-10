@@ -797,8 +797,15 @@ function syncCaptionAssistCandidateUi() {
   }
 
   var qaReasons = isFocusedQaReviewMode() ? qaFocusReviewReasons(mediaKey) : [];
-  qaReasonsEl.classList.toggle('hidden', !qaReasons.length);
+  var qaQuality = isFocusedQaReviewMode() ? qaFocusReviewQuality(mediaKey) : null;
+  qaReasonsEl.classList.toggle('hidden', !qaReasons.length && !qaQuality);
   qaReasonsEl.innerHTML = '';
+  if (qaQuality) {
+    var qualityLabel = document.createElement('strong');
+    qualityLabel.textContent = 'Current caption quality: ' + qaQuality.rating.charAt(0).toUpperCase() + qaQuality.rating.slice(1);
+    qualityLabel.title = (qaQuality.reason || '') + ' · ' + qaQuality.confidence + ' confidence';
+    qaReasonsEl.appendChild(qualityLabel);
+  }
   if (qaReasons.length) {
     var question = document.createElement('strong');
     question.textContent = 'Check: ' + qaReasons.join(' · ');

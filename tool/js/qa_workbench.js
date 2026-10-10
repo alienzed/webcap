@@ -2159,10 +2159,10 @@
     var key = String(item && item.key || '');
     if (!key || session.prepQueued[key]) return;
     // The visible first item is prepared on demand by Caption Assist itself.
-    var firstReady = session.items.find(function (entry) {
+    var firstReadyKey = qaOrderFocusReviewKeys(session.items.filter(function (entry) {
       return session.queued[entry.key] && !session.handled[entry.key];
-    });
-    if ((session.autoOpen || session.opening) && firstReady && firstReady.key === key) return;
+    }).map(function (entry) { return entry.key; }))[0];
+    if ((session.autoOpen || session.opening) && firstReadyKey === key) return;
     session.prepQueued[key] = true;
     var token = session.token;
     session.prepChain = session.prepChain.catch(function () {}).then(function () {

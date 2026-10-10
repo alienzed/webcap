@@ -137,3 +137,25 @@ def test_qa_prompt_explains_group_alias_but_preserves_label():
     items[0]["groupedTags"][0]["alias"] = "Bikini Top Shape"
     contract = build_request(items)
     assert "BT Shape (Bikini Top Shape): triangle" in contract["prompt"]
+
+
+def test_qa_caption_quality_compares_real_alternative_and_scores_clean_items():
+    items = _items()[:1]
+    items[0]["candidateCaption"] = "Subject in a red triangle bikini top with metal ring connectors."
+    contract = build_request(items, training_focus="Bikini construction details")
+    assert "ALTERNATIVE CAPTION: Subject in a red triangle" in contract["prompt"]
+    assert "captionQuality" in contract["response_schema"]["required"]
+    result = normalize_result(
+        {
+            "summary": "Caption already covers all important facts.",
+            "findings": [],
+            "captionQuality": [{
+                "file": "one.jpg", "rating": "high", "confidence": "medium",
+                "reason": "Distinctive details largely covered."
+            }],
+        },
+        allowed_files=["one.jpg"],
+    )
+    assert result["findings"] == []
+    assert result["captionQuality"][0]["rating"] == "high"
+    assert result["captionQuality"][0]["confidence"] == "medium"

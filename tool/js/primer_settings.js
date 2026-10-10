@@ -736,6 +736,52 @@ function syncFocusedCaptionVisionPhrasesUi() {
   }
   row.scrollTop = previousScrollTop;
 }
+function applyQaCaptionPatch(patch) {
+  if (!captionAssistCandidate || !state.currentItem ||
+      captionAssistCandidate.mediaKey !== state.currentItem.key) return false;
+  var current = String(captionAssistCandidate.text || '');
+  var source = String(patch.sourceText || '');
+  var replacement = String(patch.replacementText || '');
+  var action = String(patch.action || '');
+  var next = current;
+  if (action === 'add') {
+    var anchor = String(patch.anchorText || '');
+    if (!replacement.trim()) return false;
+    if (!anchor) return insertFocusedCaptionVisionPhrase(replacement);
+    var first = current.indexOf(anchor);
+    if (first < 0 || current.indexOf(anchor, first + anchor.length) >= 0) {
+      setStatus('Cannot place suggested edit uniquely. Edit the caption manually.');
+      return false;
+    }
+    var position = first + anchor.length;
+    next = current.slice(0, position) + ' ' + replacement + current.slice(position);
+  } else if (action === 'replace' || action === 'remove') {
+    var index = source ? current.indexOf(source) : -1;
+    if (index < 0 || current.indexOf(source, index + source.length) >= 0) {
+      setStatus('Suggested text no longer matches uniquely. Edit the caption manually.');
+      return false;
+    }
+    next = current.slice(0, index) + (action === 'replace' ? replacement : '') +
+      current.slice(index + source.length);
+  } else {
+    throw new Error('Unknown QA caption patch action: ' + action);
+  }
+  captionAssistCandidate.text = next;
+  resetFocusedCaptionUseArm();
+  var request = buildCaptionAssistRequest(state.currentItem);
+  captionAssistCandidate.omittedAssignments = getCaptionAssistOmittedAssignments(
+    captionAssistCandidate.mediaKey, next, request.assignments, request.tags
+  );
+  captionAssistCandidate.omittedCorrections = getCaptionAssistOmittedCorrections(
+    captionAssistCandidate.mediaKey, next, request.assignments, request.tags
+  );
+  var editor = document.getElementById('editor-caption-candidate-text');
+  if (editor) editor.textContent = next;
+  syncCaptionAssistCandidateUi();
+  setStatus('Suggested change inserted for review. Save when ready.');
+  return true;
+}
+
 function syncCaptionAssistCandidateUi() {
   var panel = document.getElementById('editor-caption-candidate');
   var titleEl = document.getElementById('editor-caption-candidate-title');
@@ -820,6 +866,20 @@ function syncCaptionAssistCandidateUi() {
       details.appendChild(reason);
     });
     qaReasonsEl.appendChild(details);
+  }
+  if (isFocusedQaReviewMode() && visible) {
+    qaFocusReviewPatches(mediaKey).forEach(function (patch) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'caption-vision-phrase-insert';
+      button.textContent = (patch.action === 'remove' ? 'Remove ' :
+        patch.action === 'replace' ? 'Replace with ' : 'Add ') +
+        (patch.action === 'remove' ? patch.sourceText : patch.replacementText);
+      button.title = 'Apply suggested caption edit to the draft (not saved until Apply)';
+      button.addEventListener('pointerdown', function (event) { event.preventDefault(); });
+      button.addEventListener('click', function () { applyQaCaptionPatch(patch); });
+      qaReasonsEl.appendChild(button);
+    });
   }
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
   omissionsEl.innerHTML = '';

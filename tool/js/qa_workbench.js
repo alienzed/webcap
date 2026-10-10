@@ -50,6 +50,7 @@
     deterministicFindings: [],
     statisticalCandidates: [],
     aiFindings: [],
+    captionQuality: {},
     aiSummary: '',
     aiScopeSignature: '',
     aiItemSignatures: {},
@@ -352,6 +353,7 @@
       trainingFocus: qaWorkbenchState.trainingFocus,
       itemSignatures: Object.assign({}, qaWorkbenchState.aiItemSignatures),
       aiFindings: qaWorkbenchState.aiFindings,
+      captionQuality: qaWorkbenchState.captionQuality,
       aiSummary: qaWorkbenchState.aiSummary,
       aiModel: qaWorkbenchState.aiModel,
       dispositions: qaWorkbenchState.dispositions
@@ -381,6 +383,7 @@
     var scopeKey = qaBuildScopeKey(qaGetTrainingItems());
     var focus = qaWorkbenchState.trainingFocus;
     qaWorkbenchState.aiFindings = [];
+    qaWorkbenchState.captionQuality = {};
     qaWorkbenchState.aiSummary = '';
     qaWorkbenchState.aiScopeSignature = '';
     qaWorkbenchState.aiItemSignatures = {};
@@ -410,6 +413,7 @@
       qaWorkbenchState.aiFindings = (saved.aiFindings || []).filter(function (finding) {
         return !(finding.files || []).some(function (file) { return changed[file]; });
       });
+      qaWorkbenchState.captionQuality = Object.fromEntries(Object.entries(saved.captionQuality || {}).filter(function (entry) { return !changed[entry[0]]; }));
       qaWorkbenchState.aiSummary = String(saved.aiSummary || '');
       qaWorkbenchState.aiModel = String(saved.aiModel || '');
       qaWorkbenchState.aiScopeSignature = signature;
@@ -708,6 +712,9 @@
         return !(finding.files || []).some(function (file) { return changed[file]; });
       });
       qaMergeAiBatch(batchFindings);
+      (analysis.captionQuality || []).forEach(function (assessment) {
+        if (!changed[assessment.file]) qaWorkbenchState.captionQuality[assessment.file] = assessment;
+      });
       Object.keys(batchSignatures).forEach(function (file) {
         if (!changed[file]) qaWorkbenchState.aiItemSignatures[file] = batchSignatures[file];
       });
@@ -1992,6 +1999,11 @@
     }).slice(0, 3);
   }
 
+  function qaFocusReviewQuality(mediaKey) {
+    var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
+    return item ? qaWorkbenchState.captionQuality[item.fileName] || null : null;
+  }
+
   function qaFocusReviewReasons(mediaKey) {
     return qaFocusReviewFindings(mediaKey).map(function (finding) { return String(finding.title || ''); });
   }
@@ -2457,6 +2469,7 @@
   window.qaFocusReviewMarkHandled = qaFocusReviewMarkHandled;
   window.qaFocusReviewStopped = qaFocusReviewStopped;
   window.qaFocusReviewReasons = qaFocusReviewReasons;
+  window.qaFocusReviewQuality = qaFocusReviewQuality;
   window.qaFocusReviewFindings = qaFocusReviewFindings;
   window.qaFocusReviewTagActions = qaFocusReviewTagActions;
   window.qaFocusReviewInteractiveRefresh = qaFocusReviewInteractiveRefresh;

@@ -810,6 +810,7 @@
     ++qaReviewLoadToken;
     if (qaWorkbenchState.aiModel && qaWorkbenchState.aiModel !== model) {
       qaWorkbenchState.aiFindings = [];
+      qaWorkbenchState.captionQuality = {};
       qaWorkbenchState.aiSummary = '';
       qaWorkbenchState.aiItemSignatures = {};
       qaWorkbenchState.aiCoverageValid = 0;

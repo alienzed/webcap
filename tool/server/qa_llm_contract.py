@@ -145,6 +145,7 @@ def _response_schema():
             "files",
             "evidence",
             "patches",
+            "tagActions",
         ],
         "properties": {
             "category": {
@@ -171,6 +172,7 @@ def _response_schema():
                 "type": "array",
                 "items": {"type": "string", "minLength": 1},
             },
+            "tagActions": {"type": "array", "maxItems": 8, "items": {"type": "object", "additionalProperties": False, "required": ["file", "action", "group", "term"], "properties": {"file": {"type": "string"}, "action": {"type": "string", "enum": ["add", "remove"]}, "group": {"type": "string"}, "term": {"type": "string"}}}},
             "patches": {
                 "type": "array",
                 "maxItems": 8,
@@ -264,6 +266,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "- For replace/remove, sourceText must be copied exactly from that file's supplied current caption. For add, sourceText must be empty and replacementText must be compact caption-ready wording.\\n"
         "- For add, anchorText may be one exact substring from the current caption when placement is clear; otherwise leave anchorText empty for insertion at the user's caret.\\n"
         "- Patches are optional evidence-backed actions, not a quota. Return an empty patches array rather than guessing.\\n"
+        "- tagActions are optional per-file tag suggestions: add or remove a specific term in its existing named group (empty group for unscoped). Never suggest tag removal without affirmative visual contradiction; uncertainty alone is insufficient. Return [] when unsure.\\n"
         "- Prefer issues supported by agreement between independent sources such as annotations, MediaPipe, Face Focus, or Vision Sight.\n"
         "- Do not invent desired categories, missing visual attributes, or training goals not supported by the supplied focus and data.\n"
         "- Rare does not mean wrong. Common does not mean bad. Association does not mean correctness.\n"
@@ -325,6 +328,7 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
             files = finding.get("files")
             evidence = finding.get("evidence")
             patches = finding.get("patches")
+            tag_actions = finding.get("tagActions")
 
             if (
                 category not in _ALLOWED_CATEGORIES
@@ -336,6 +340,7 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
                 or not isinstance(files, list)
                 or not isinstance(evidence, list)
                 or not isinstance(patches, list)
+                or not isinstance(tag_actions, list)
             ):
                 raise ValueError("QA Deep Scan response contains an invalid finding.")
 
@@ -402,6 +407,20 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
         
                 except ValueError as exc:
                     patch_warnings.append(str(exc) + " (" + str(patch.get("file") if isinstance(patch, dict) else "unknown file") + ")")
+            normalized_tag_actions = []
+            seen_tag_actions = set()
+            for action_row in tag_actions[:8]:
+                if not isinstance(action_row, dict):
+                    continue
+                file_name = str(action_row.get("file") or "").strip()
+                action = str(action_row.get("action") or "").strip()
+                group = str(action_row.get("group") or "").strip()
+                term = str(action_row.get("term") or "").strip()
+                key = (file_name, action, group.lower(), term.lower())
+                if file_name not in normalized_files or action not in {"add", "remove"} or not term or key in seen_tag_actions:
+                    continue
+                seen_tag_actions.add(key)
+                normalized_tag_actions.append({"file": file_name, "action": action, "group": group, "term": term})
             normalized.append({
                 "category": category,
                 "priority": priority,
@@ -412,6 +431,7 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
                 "files": normalized_files,
                 "evidence": normalized_evidence[:6],
                 "patches": normalized_patches,
+                "tagActions": normalized_tag_actions,
             })
 
         except ValueError as exc:

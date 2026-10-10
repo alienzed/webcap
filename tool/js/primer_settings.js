@@ -495,40 +495,41 @@ function getCaptionAssistTagSuggestions(mediaItem) {
   var open = metadata.vision_sight || {};
   var suggestions = [];
   var seen = {};
-  var contextTerms = {};
+  var assigned = {};
+  getTagsForMediaKey(mediaKey).forEach(function (tag) {
+    assigned[normalizeChecklistTerm(tag).toLowerCase()] = true;
+  });
+  getChecklistAssignmentEntriesForMediaKey(mediaKey).forEach(function (entry) {
+    assigned[normalizeChecklistTerm(entry.term).toLowerCase()] = true;
+  });
   function existingGroup(rawGroup) {
     var name = String(rawGroup || '').trim().toLowerCase();
     return (checklistItems || []).find(function (group) {
       return String(group || '').toLowerCase() === name;
     }) || '';
   }
-  function offer(rawGroup, rawTerm, fromContext) {
+  function offer(rawGroup, rawTerm, rank, explicitGroup) {
     var group = existingGroup(rawGroup);
+    if (explicitGroup && !group) return;
     var term = normalizeChecklistTerm(rawTerm);
     if (!term) return;
     var lower = term.toLowerCase();
-    if (fromContext) contextTerms[lower] = true;
-    var identity = group.toLowerCase() + '\u0001' + lower;
-    if (seen[identity]) return;
-    seen[identity] = true;
-    if (group && hasChecklistAssignedTagForMediaKey(mediaKey, group, term)) return;
-    if (!group && getTagsForMediaKey(mediaKey).some(function (tag) {
-      return normalizeChecklistTerm(tag).toLowerCase() === lower;
-    })) return;
+    if (assigned[lower] || seen[lower]) return;
     var known = !!group && getChecklistKeywordTermsForRequirement(group).some(function (value) {
       return normalizeChecklistTerm(value).toLowerCase() === lower;
     });
-    suggestions.push({ group: group, term: term, isNew: !!group && !known });
+    seen[lower] = true;
+    suggestions.push({ group: group, term: term, isNew: !!group && !known, rank: rank + (known ? 0 : 1) });
   }
   (Array.isArray(context.matches) ? context.matches : []).forEach(function (entry) {
     (Array.isArray(entry && entry.terms) ? entry.terms : []).forEach(function (term) {
-      offer(entry.group, term, true);
+      offer(entry.group, term, 0, true);
     });
   });
   (Array.isArray(context.diagnostics && context.diagnostics.unmatched)
     ? context.diagnostics.unmatched : []).forEach(function (entry) {
     (Array.isArray(entry && entry.terms) ? entry.terms : []).forEach(function (term) {
-      offer(entry.group, term, true);
+      offer(entry.group, term, 2, true);
     });
   });
   var inventory = open.inventory || {};
@@ -542,12 +543,13 @@ function getCaptionAssistTagSuggestions(mediaItem) {
   });
   extras.forEach(function (raw) {
     var term = normalizeChecklistTerm(raw);
-    if (!term || contextTerms[term.toLowerCase()]) return;
+    if (!term || assigned[term.toLowerCase()] || seen[term.toLowerCase()]) return;
     var groups = getChecklistRequirementsForTag(term);
-    if (groups.length) groups.forEach(function (group) { offer(group, term, false); });
-    else offer('', term, false); // Unmatched Open Sight details remain unscoped.
+    // Open Sight does not identify a group: never guess across several groups.
+    if (groups.length === 1) offer(groups[0], term, 4, false);
+    else if (!groups.length) offer('', term, 6, false);
   });
-  return suggestions;
+  return suggestions.sort(function (a, b) { return a.rank - b.rank; });
 }
 
 function refreshCaptionAssistAfterTagMutation(mediaKey, message) {
@@ -610,6 +612,8 @@ function syncFocusedCaptionVisionPhrasesUi() {
   var previousDetails = row.querySelector('details');
   var wasExpanded = !!(previousDetails && previousDetails.open);
   var previousScrollTop = row.scrollTop;
+  var previousSightMore = row.querySelector('details[data-sight-more]');
+  var sightMoreOpen = !!(previousSightMore && previousSightMore.open);
   row.innerHTML = '';
   trigger.classList.add('hidden');
   trigger.disabled = true;
@@ -623,27 +627,80 @@ function syncFocusedCaptionVisionPhrasesUi() {
   var mediaKey = item.key;
   var heading = document.createElement('div');
   heading.className = 'caption-vision-sight-label';
-  heading.textContent = 'Suggested tags from Sight · optional';
-  row.appendChild(heading);
-  var suggestions = getCaptionAssistTagSuggestions(item);
-  if (suggestions.length) {
-    var choices = document.createElement('div');
-    choices.className = 'caption-vision-phrase-list';
-    suggestions.forEach(function (suggestion) {
+  heading.textContent = 'Tag decisions · changes save immediately';
+  if (isFocusedQaReviewMode()) {
+    row.appendChild(heading);
+    qaFocusReviewTagActions(mediaKey).forEach(function (action) {
+      var assigned = action.group
+        ? getChecklistAssignmentEntriesForMediaKey(mediaKey).some(function (entry) {
+          return entry.requirement === action.group && entry.term === action.term;
+        })
+        : getUnscopedTagsForMediaKey(mediaKey).indexOf(action.term) !== -1;
+      if ((action.action === 'add' && assigned) || (action.action === 'remove' && !assigned)) return;
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'caption-vision-phrase-insert';
-      button.textContent = '+ ' + suggestion.term + ' · ' + (suggestion.group || 'Other') +
-        (suggestion.isNew ? ' (new)' : '');
-      button.title = suggestion.group
-        ? 'Assign to ' + suggestion.group + (suggestion.isNew ? ' and add to group vocabulary' : '')
-        : 'Assign as unscoped tag';
+      button.textContent = (action.action === 'add' ? '+ Add ' : '− Remove ') + action.term + (action.group ? ' · ' + action.group : '');
+      button.title = 'QA suggested tag correction · saves immediately';
       button.addEventListener('click', function () {
-        acceptCaptionAssistTagSuggestion(mediaKey, suggestion);
+        if (action.action === 'add') acceptCaptionAssistTagSuggestion(mediaKey, { group: action.group, term: action.term });
+        else removeCaptionAssistAssignedTag(mediaKey, action.group, action.term);
       });
-      choices.appendChild(button);
+      row.appendChild(button);
+    });
+  }
+  var sightHeading = document.createElement('div');
+  sightHeading.className = 'caption-vision-sight-label';
+  sightHeading.textContent = 'Other suggestions from Sight · optional';
+  row.appendChild(sightHeading);
+  var suggestions = getCaptionAssistTagSuggestions(item);
+  function makeSuggestion(suggestion) {
+    var pair = document.createElement('span');
+    pair.className = 'caption-vision-phrase-list';
+    var tagButton = document.createElement('button');
+    tagButton.type = 'button';
+    tagButton.className = 'caption-vision-phrase-insert';
+    tagButton.textContent = '+ Tag ' + suggestion.term + ' · ' + (suggestion.group || 'Other') +
+      (suggestion.isNew ? ' (new)' : '');
+    tagButton.title = 'Assign tag now (saves immediately)';
+    tagButton.addEventListener('click', function () {
+      acceptCaptionAssistTagSuggestion(mediaKey, suggestion);
+    });
+    pair.appendChild(tagButton);
+    var insertButton = document.createElement('button');
+    insertButton.type = 'button';
+    insertButton.className = 'caption-vision-phrase-insert';
+    insertButton.textContent = 'Insert';
+    insertButton.title = 'Insert at caption cursor; does not assign a tag';
+    insertButton.addEventListener('pointerdown', function (event) { event.preventDefault(); });
+    insertButton.addEventListener('click', function () {
+      insertFocusedCaptionVisionPhrase(suggestion.term);
+    });
+    pair.appendChild(insertButton);
+    return pair;
+  }
+  if (suggestions.length) {
+    var choices = document.createElement('div');
+    choices.className = 'caption-vision-phrase-list';
+    suggestions.slice(0, 8).forEach(function (suggestion) {
+      choices.appendChild(makeSuggestion(suggestion));
     });
     row.appendChild(choices);
+    if (suggestions.length > 8) {
+      var more = document.createElement('details');
+      more.setAttribute('data-sight-more', 'true');
+      more.open = sightMoreOpen;
+      var showAll = document.createElement('summary');
+      showAll.textContent = 'Show ' + (suggestions.length - 8) + ' more suggestions';
+      more.appendChild(showAll);
+      var rest = document.createElement('div');
+      rest.className = 'caption-vision-phrase-list';
+      suggestions.slice(8).forEach(function (suggestion) {
+        rest.appendChild(makeSuggestion(suggestion));
+      });
+      more.appendChild(rest);
+      row.appendChild(more);
+    }
   } else {
     var empty = document.createElement('div');
     empty.className = 'small';
@@ -741,7 +798,22 @@ function syncCaptionAssistCandidateUi() {
 
   var qaReasons = isFocusedQaReviewMode() ? qaFocusReviewReasons(mediaKey) : [];
   qaReasonsEl.classList.toggle('hidden', !qaReasons.length);
-  qaReasonsEl.textContent = qaReasons.length ? 'QA finding: ' + qaReasons.join(' · ') : '';
+  qaReasonsEl.innerHTML = '';
+  if (qaReasons.length) {
+    var question = document.createElement('strong');
+    question.textContent = 'Check: ' + qaReasons.join(' · ');
+    qaReasonsEl.appendChild(question);
+    var details = document.createElement('details');
+    var summary = document.createElement('summary');
+    summary.textContent = 'Why?';
+    details.appendChild(summary);
+    qaFocusReviewFindings(mediaKey).forEach(function (finding) {
+      var reason = document.createElement('p');
+      reason.textContent = String(finding.why || finding.summary || '');
+      details.appendChild(reason);
+    });
+    qaReasonsEl.appendChild(details);
+  }
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
   omissionsEl.innerHTML = '';
   if (omittedAssignments.length) {

@@ -255,6 +255,8 @@ def build_request(items, training_focus="", deterministic_findings=None):
         "- This is analysis only. Do not return full rewritten captions and do not tell WebCap to mutate data; exact proposed patches are allowed.\n"
         "- You cannot see the media directly. Treat normalized visual analysis as supplied evidence, not as perfect ground truth, and never claim direct visual verification.\n"
         "- Do not infer standing, sitting, or a grounded posture from cropped framing (including cowboy shots) unless visible evidence actually establishes that posture. Missing feet or floor contact does not prove standing. If the framing cannot establish the posture, return no posture-related finding.\n"
+        "- Equally, cropping or incomplete visual confirmation does not contradict an existing position tag. Only recommend removing or changing a saved posture tag when affirmative, credible visual evidence contradicts it; uncertainty, unknown pose fields, or insufficient visible floor contact are not evidence of an error.\n"
+        "- A Vision observation agreeing with an existing posture tag is supporting evidence, not grounds to question that tag because the camera is tightly cropped. If visual signals disagree without a clear resolution, return no finding rather than calling the tag ambiguous, redundant, or imprecise.\n"
         "- Open Sight is vocabulary-agnostic; Context Sight follows current vocabulary. Their agreement is stronger than either one alone.\\n"
         "- Context Sight matches are candidate observations, not proof that a tag must be added. Cross-check them.\\n"
         "- Prefer specific corrections that can be made in the existing item editor.\\n"

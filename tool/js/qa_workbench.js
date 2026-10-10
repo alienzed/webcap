@@ -639,9 +639,15 @@
       var item = batchItems[0];
       var request = buildCaptionAssistRequest(item);
       var saved = captionAssistSavedCandidatesByMedia[item.key];
-      var fingerprint = captionAssistRequestFingerprint(item, request);
-      var candidatePromise = saved && saved.requestFingerprint === fingerprint &&
-        saved.sourceCaption === String(item.caption || '') && saved.text
+      var annotations = JSON.stringify([request.assignments, request.tags]);
+      // This is analysis, not an editor operation: never overwrite an unfinished draft.
+      // Older saved candidates have no fingerprint; their caption, model and tags are enough
+      // to make them a useful comparison hypothesis, not authoritative evidence.
+      var reusable = saved && saved.text &&
+        saved.sourceCaption === String(item.caption || '') &&
+        saved.annotationsAtGeneration === annotations &&
+        (!saved.model || saved.model === String(request.model || ''));
+      var candidatePromise = reusable
         ? Promise.resolve(saved)
         : requestCaptionAssistCandidate(item, request, {
           onJob: function (job) {
@@ -654,14 +660,14 @@
             }
             qaWorkbenchState.deepScanChallengerJobId = String(job.jobId || '');
           }
-        }).then(function (candidate) {
-          candidate.sourceCaption = String(item.caption || '');
-          candidate.model = String(request.model || '');
-          if (qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStopRequested &&
+        }).catch(function (err) {
+          // The Director can still assess the original caption and saved Sight.
+          // Report the failed supplemental call rather than marking the item failed or silent.
+          if (!qaWorkbenchState.deepScanStopRequested &&
               sessionToken === qaWorkbenchState.deepScanSessionToken) {
-            persistCaptionAssistCandidate(candidate, true);
+            reportConsoleError('Deep QA · Caption challenger ' + item.fileName, err);
           }
-          return candidate;
+          return null;
         });
       return candidatePromise.then(function (candidate) {
         if (sessionToken === qaWorkbenchState.deepScanSessionToken) qaWorkbenchState.deepScanChallengerJobId = '';
@@ -670,7 +676,7 @@
         qaWorkbenchState.deepScanStatus = 'Deep QA · Value judge ' + item.fileName;
         renderQaWorkbench();
         var inputItems = qaBuildDeepScanItems(batchItems);
-        inputItems[0].candidateCaption = String(candidate.text || '');
+        inputItems[0].candidateCaption = String(candidate && candidate.text || '');
         return qaRequestJson('/fs/qa/deep-scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

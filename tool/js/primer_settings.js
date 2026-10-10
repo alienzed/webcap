@@ -625,6 +625,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
   heading.className = 'caption-vision-sight-label';
   heading.textContent = 'Tag decisions · changes save immediately';
   if (isFocusedQaReviewMode()) {
+    row.appendChild(heading);
     qaFocusReviewTagActions(mediaKey).forEach(function (action) {
       var assigned = action.group
         ? getChecklistAssignmentEntriesForMediaKey(mediaKey).some(function (entry) {
@@ -648,7 +649,6 @@ function syncFocusedCaptionVisionPhrasesUi() {
   sightHeading.className = 'caption-vision-sight-label';
   sightHeading.textContent = 'Other suggestions from Sight · optional';
   row.appendChild(sightHeading);
-  row.appendChild(heading);
   var suggestions = getCaptionAssistTagSuggestions(item);
   if (suggestions.length) {
     var choices = document.createElement('div');

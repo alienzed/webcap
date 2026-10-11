@@ -24,7 +24,8 @@ def test_concept_contract_contains_focused_evidence_not_caption_quality_task():
     assert contract["operation"] == "qa_deep_scan"
     assert "metal ring connectors" in contract["prompt"]
     assert "Metal rings on the shoulder straps" in contract["prompt"]
-    assert "Set captionQuality to []" in contract["prompt"]\n    assert "[KNOWN VOCABULARY]" in contract["prompt"]
+    assert "Set captionQuality to []" in contract["prompt"]
+    assert "[KNOWN VOCABULARY]" in contract["prompt"]
     assert contract["source_files"] == ["a.jpg"]
 
 
@@ -98,3 +99,9 @@ def test_concept_frontend_uses_canonical_and_complete_cached_sight():
     assert "finding.inputSignatures[file] === conceptCurrent[file]" in script
     assert "function qaConceptInputSignatures(items)" in script
     assert "signatures: qaConceptInputSignatures(items)" in script
+
+
+def test_focus_review_refreshes_existing_queue_with_new_findings():
+    script = (Path(__file__).resolve().parents[1] / "tool/js/qa_workbench.js").read_text(encoding="utf-8")
+    assert "session.reviewFindings[item.key] = candidatesByKey[item.key];" in script
+    assert script.index("session.reviewFindings[item.key] = candidatesByKey[item.key];") < script.index("if (session.queued[item.key]) return;")

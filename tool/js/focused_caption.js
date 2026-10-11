@@ -693,6 +693,7 @@ function stopFocusedCaption(message, options) {
   }
   var stoppingLabel = focusedCaptionModeLabel();
   var wasQaFocusReview = isFocusedQaReviewMode();
+  if (wasQaFocusReview) qaCancelTargetedRecheck();
   if (stoppingLabel === 'Focus Review' && String(message || '') === 'Focus Caption ended.') {
     message = 'Focus Review ended.';
   }
@@ -857,6 +858,7 @@ function hasFocusedReviewUnsavedChanges() {
 
 function moveFocusedCaption(delta, options) {
   if (!focusedCaptionState.open) return Promise.resolve(false);
+  if (isFocusedQaReviewMode()) qaCancelTargetedRecheck();
   var opts = options || {};
   if (!isFocusedQaReviewMode() && hasFocusedReviewUnsavedChanges() && !opts.discardReviewEdits) {
     setStatus('This review caption has unsaved edits. Use Save → Next, or Skip to discard them.');

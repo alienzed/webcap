@@ -257,6 +257,7 @@ function clearCaptionVisionResult() {
   captionVisionResult = null;
   captionQaResult = null;
   captionVisionError = '';
+  restoreCaptionVisionCandidatePreview();
   syncCaptionVisionUi();
 }
 
@@ -433,39 +434,18 @@ function getCaptionVisionCaretIndex() {
   return range.toString().length;
 }
 
-function setCaptionVisionCaretIndex(index) {
-  var candidateEl = getCaptionVisionCandidateTextElement();
-  var target = Math.max(0, Number(index) || 0);
-  var walker = document.createTreeWalker(candidateEl, NodeFilter.SHOW_TEXT);
-  var node;
-  while ((node = walker.nextNode())) {
-    if (target <= node.nodeValue.length) {
-      var range = document.createRange();
-      range.setStart(node, target);
-      range.collapse(true);
-      var selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      return;
-    }
-    target -= node.nodeValue.length;
-  }
-}
-
 function setCaptionVisionCandidatePreview(text, active) {
-  var candidateEl = getCaptionVisionCandidateTextElement();
-  candidateEl.textContent = String(text || '');
-  candidateEl.classList.toggle('is-patch-preview', !!active);
+  // Suggested edits are reference material, never a temporary replacement
+  // for the editable candidate (which also has its own input handler).
+  var preview = document.getElementById('editor-caption-patch-preview');
+  var previewText = document.getElementById('editor-caption-patch-preview-text');
+  if (!preview || !previewText) throw new Error('Caption edit preview markup is missing.');
+  previewText.textContent = active ? String(text || '') : '';
+  preview.classList.toggle('hidden', !active);
 }
 
 function restoreCaptionVisionCandidatePreview() {
-  if (!captionAssistCandidate) return;
-  var candidateEl = getCaptionVisionCandidateTextElement();
-  var restoreCaret = captionVisionPreviewCaretIndex;
-  setCaptionVisionCandidatePreview(captionAssistCandidate.text, false);
-  if (restoreCaret !== null && document.activeElement === candidateEl) {
-    setCaptionVisionCaretIndex(restoreCaret);
-  }
+  setCaptionVisionCandidatePreview('', false);
   captionVisionPreviewCaretIndex = null;
 }
 

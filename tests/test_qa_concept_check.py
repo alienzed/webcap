@@ -24,7 +24,8 @@ def test_concept_contract_contains_focused_evidence_not_caption_quality_task():
     assert contract["operation"] == "qa_deep_scan"
     assert "metal ring connectors" in contract["prompt"]
     assert "Metal rings on the shoulder straps" in contract["prompt"]
-    assert "Set captionQuality to []" in contract["prompt"]\n    assert "[KNOWN VOCABULARY]" in contract["prompt"]
+    assert "Set captionQuality to []" in contract["prompt"]
+    assert "[KNOWN VOCABULARY]" in contract["prompt"]
     assert contract["source_files"] == ["a.jpg"]
 
 

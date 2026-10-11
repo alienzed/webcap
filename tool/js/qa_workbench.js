@@ -54,6 +54,7 @@
     conceptQuery: '',
     conceptStatus: '',
     conceptSession: null,
+    conceptCoverage: null, // Session-only coverage of the last explicit concept check.
     captionQuality: {},
     qaAlternatives: {},
     aiSummary: '',
@@ -814,6 +815,54 @@
     });
   }
 
+  function qaConceptCoverageCounts() {
+    var report = qaWorkbenchState.conceptCoverage;
+    if (!report || report.scope !== qaBuildScopeKey(qaGetTrainingItems())) return null;
+    var counts = { actionable: 0, clean: 0, inconclusive: 0, failed: 0, unchecked: 0 };
+    qaGetTrainingItems().forEach(function (item) {
+      var record = report.items[item.fileName];
+      var status = record && record.signature === qaConceptInputSignatures([item])[item.fileName]
+        ? record.status : 'unchecked';
+      var actionable = qaWorkbenchState.conceptFindings.some(function (finding) {
+        return (finding.files || []).indexOf(item.fileName) !== -1 &&
+          finding.inputSignatures[item.fileName] === qaConceptInputSignatures([item])[item.fileName] &&
+          qaFocusReviewHasAction(item.key, item.fileName, item.caption || '', finding);
+      });
+      if (actionable && status !== 'failed') status = 'actionable';
+      if (!Object.prototype.hasOwnProperty.call(counts, status)) status = 'unchecked';
+      counts[status] += 1;
+    });
+    return { concept: report.concept, counts: counts };
+  }
+
+  function qaDeepCoverageCounts(items) {
+    var signatures = qaCurrentItemSignatureMap(items);
+    var counts = { actionable: 0, clean: 0, failed: 0, unchecked: 0 };
+    items.forEach(function (item) {
+      var file = item.fileName;
+      if (qaWorkbenchState.aiItemSignatures[file] === signatures[file]) {
+        var hasFinding = qaWorkbenchState.aiFindings.some(function (finding) {
+          return (finding.files || []).indexOf(file) !== -1 &&
+            !qaWorkbenchState.dispositions[finding.id] &&
+            qaFocusReviewHasAction(item.key, file, item.caption || '', finding);
+        });
+        counts[hasFinding ? 'actionable' : 'clean'] += 1;
+      } else if (qaWorkbenchState.deepScanSkipped[file]) {
+        counts.failed += 1;
+      } else {
+        counts.unchecked += 1;
+      }
+    });
+    return counts;
+  }
+
+  function qaCoverageLine(counts, isConcept) {
+    var text = counts.actionable + ' actionable · ' + counts.clean + ' checked/no action · ' +
+      (isConcept ? counts.inconclusive + ' inconclusive · ' : '') +
+      counts.failed + ' failed · ' + counts.unchecked + ' unchecked';
+    return text;
+  }
+
   function qaConceptVocabulary(concept) {
     // Only send terms related to the question, not the Set's entire vocabulary.
     var tokens = String(concept || '').toLowerCase().match(/[a-z0-9]+/g) || [];
@@ -893,6 +942,13 @@
       return;
     }
     var vocabulary = qaConceptVocabulary(concept);
+    var coverage = { concept: concept, scope: qaBuildScopeKey(items), items: {} };
+    items.forEach(function (item) {
+      coverage.items[item.fileName] = {
+        signature: qaConceptInputSignatures([item])[item.fileName], status: 'unchecked'
+      };
+    });
+    qaWorkbenchState.conceptCoverage = coverage;
     var session = {
       folder: String(state.folder || ''), scope: qaBuildScopeKey(items),
       concept: concept, model: model, items: available,
@@ -976,12 +1032,28 @@
           finding.sourceLabel = 'Concept QA · ' + concept;
           qaWorkbenchState.conceptFindings.push(finding);
         });
+        batch.forEach(function (row) {
+          var item = qaGetTrainingItems().find(function (entry) { return entry.fileName === row.fileName; });
+          if (!item) return;
+          var signature = qaConceptInputSignatures([item])[item.fileName];
+          var hasAction = qaWorkbenchState.conceptFindings.some(function (finding) {
+            return (finding.files || []).indexOf(row.fileName) !== -1 &&
+              finding.inputSignatures[row.fileName] === signature;
+          });
+          coverage.items[row.fileName] = { signature: signature, status: hasAction ? 'actionable' : 'clean' };
+        });
         session.index += batch.length;
         qaMergeFindings();
         qaSyncFocusReview();
         return next();
       }).catch(function (err) {
         if (!current()) return;
+        batch.forEach(function (row) {
+          var item = qaGetTrainingItems().find(function (entry) { return entry.fileName === row.fileName; });
+          if (item) coverage.items[row.fileName] = {
+            signature: qaConceptInputSignatures([item])[item.fileName], status: 'failed'
+          };
+        });
         qaWorkbenchState.conceptSession = null;
         qaWorkbenchState.conceptStatus = 'Concept check failed at ' + session.index + '/' + session.items.length + ' · see Console.';
         reportConsoleError('QA Concept Check', err);
@@ -1782,6 +1854,10 @@
     );
     deepWrap.appendChild(note);
     heroActions.appendChild(deepWrap);
+    var deepCoverage = document.createElement('div');
+    deepCoverage.className = 'qa-deep-scan-note';
+    deepCoverage.textContent = 'Deep QA: ' + qaCoverageLine(qaDeepCoverageCounts(items), false);
+    deepWrap.appendChild(deepCoverage);
     hero.appendChild(heroActions);
     container.appendChild(hero);
 
@@ -1806,6 +1882,14 @@
     conceptNote.className = 'qa-deep-scan-note';
     conceptNote.textContent = qaWorkbenchState.conceptStatus || 'Uses cached Sight and existing annotations. No automatic VL scans.';
     conceptWrap.appendChild(conceptNote);
+    var conceptCoverage = qaConceptCoverageCounts();
+    if (conceptCoverage) {
+      var conceptCounts = document.createElement('div');
+      conceptCounts.className = 'qa-deep-scan-note';
+      conceptCounts.textContent = 'Last check (' + conceptCoverage.concept + '): ' +
+        qaCoverageLine(conceptCoverage.counts, true);
+      conceptWrap.appendChild(conceptCounts);
+    }
     container.appendChild(conceptWrap);
 
     var summary = document.createElement('div');
@@ -2226,6 +2310,7 @@
       qaStopConceptCheck(true);
       qaWorkbenchState.conceptFindings = [];
       qaWorkbenchState.conceptStatus = '';
+      qaWorkbenchState.conceptCoverage = null;
       if (folderChanged) qaWorkbenchState.conceptQuery = '';
     }
     if (folderChanged) {

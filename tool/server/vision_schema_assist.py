@@ -47,7 +47,7 @@ VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA = {
                 },
                 "things": {
                     "type": "array",
-                    "maxItems": 24,
+                    "maxItems": 32,
                     "items": {
                         "type": "object",
                         "additionalProperties": False,
@@ -97,7 +97,7 @@ VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA = {
                 },
                 "details": {
                     "type": "array",
-                    "maxItems": 16,
+                    "maxItems": 32,
                     "items": {"type": "string", "minLength": 1},
                 },
             },
@@ -106,15 +106,14 @@ VISION_SCHEMA_SIGHT_RESPONSE_SCHEMA = {
 }
 
 VISION_SCHEMA_SIGHT_SYSTEM_PROMPT = (
-    "You inspect one image to create reusable visual evidence for annotation-vocabulary discovery. "
-    "This is not the final training caption. Return two complementary views of the same image: "
-    "a concise natural-language description for context and a structured inventory of short, reusable visual facts. "
-    "Report only facts clearly supported by the image. If an axis is not observable, leave its array empty rather than guessing. "
-    "Keep inventory values compact and visual, not sentence-like prose. Prioritize distinctions useful for prompting and annotation: "
-    "camera viewpoint, subject position or pose, visible things and their non-color qualities such as shape, material, pattern, "
-    "construction or accessories, explicit thing-to-color relationships, setting, background, lighting, support or surface, "
-    "and distinctive repeatable details. Avoid filler such as 'the image shows', 'depicts', or other connective narration. "
-    "Do not assume or imitate any existing annotation vocabulary; none is supplied. Return JSON only."
+    "You inspect one image for visual discovery, not for a training caption. "
+    "Observe broadly: subjects, objects, poses, spatial relationships, appearance, materials, construction, "
+    "colors attached to specific things, setting, lighting, and small distinctive details. "
+    "Return a brief description for context and a structured inventory of specific, reusable visual facts. "
+    "Seek useful coverage without repeating the same observation as verbose prose. "
+    "Report only visibly supported facts; leave uncertain or unobservable fields empty. "
+    "Optional annotation group names are attention hints, not evidence, constraints, or a checklist. "
+    "Look beyond the supplied groups and capture valuable discoveries that don't fit them. Return JSON only."
 )
 
 VISION_VOCABULARY_SIGHT_RESPONSE_SCHEMA = {
@@ -191,7 +190,7 @@ def _strip_json_fence(raw_text):
 def normalize_vision_schema_sight_payload(data):
     if not isinstance(data, dict):
         raise ValueError("Vision sight response must be an object.")
-    description = _clean(data.get("description"), 1200)
+    description = _clean(data.get("description"), 1800)
     inventory = data.get("inventory")
     if not description or not isinstance(inventory, dict):
         raise ValueError("Vision sight response is missing description or inventory.")
@@ -205,7 +204,7 @@ def normalize_vision_schema_sight_payload(data):
         "background": _clean_list(inventory.get("background"), 12),
         "lighting": _clean_list(inventory.get("lighting"), 8),
         "surface": _clean_list(inventory.get("surface"), 8),
-        "details": _clean_list(inventory.get("details"), 16),
+        "details": _clean_list(inventory.get("details"), 32),
     }
 
     thing_seen = set()
@@ -221,7 +220,7 @@ def normalize_vision_schema_sight_payload(data):
             continue
         thing_seen.add(key)
         normalized["things"].append({"name": name, "qualities": qualities})
-        if len(normalized["things"]) >= 24:
+        if len(normalized["things"]) >= 32:
             break
 
     color_seen = set()
@@ -250,25 +249,32 @@ def normalize_vision_schema_sight_result(raw_text):
     return normalize_vision_schema_sight_payload(payload)
 
 
-def build_vision_schema_sight_messages(media_reference):
+def build_vision_schema_sight_messages(media_reference, groups=None):
+    hints = []
+    for raw in groups if isinstance(groups, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        label = _clean(raw.get("group"), 80)
+        alias = _clean(raw.get("alias"), 120)
+        if label and label not in [hint["group"] for hint in hints]:
+            hints.append({"group": label, "alias": alias})
+        if len(hints) >= 32:
+            break
     text = (
-        "Inspect this image for reusable visual vocabulary. "
-        "The description should preserve useful context and relationships. "
-        "The inventory should be atomic and compact. In things, list visually significant subjects, garments, objects, "
-        "body or hair features, and environment elements; put non-color qualities on the thing they modify. "
-        "In colors, bind every clear color to the thing it colors. "
-        "Use details for repeatable construction, trim, connectors, cutouts, closures, unusual geometry, or other visual "
-        "characteristics not cleanly represented by the other axes. Empty arrays are correct when something is not visible."
+        "Inspect broadly for reusable visual discoveries, including small but meaningful details. "
+        "Use structured inventory entries for specific objects, qualities, relationships and construction. "
+        "Connect colors to the objects they modify; this is not a training caption. "
+        "If group hints are provided, examine those dimensions without assuming any term is present "
+        "or excluding discoveries outside those dimensions."
     )
+    if hints:
+        text += "\n\nOptional areas of interest (not a closed vocabulary): " + json.dumps(hints, ensure_ascii=False)
     return [
         {"role": "system", "content": VISION_SCHEMA_SIGHT_SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": text},
-                {"type": "image_url", "image_url": {"url": str(media_reference or "")}},
-            ],
-        },
+        {"role": "user", "content": [
+            {"type": "text", "text": text},
+            {"type": "image_url", "image_url": {"url": str(media_reference or "")}},
+        ]},
     ]
 
 
@@ -928,54 +934,23 @@ def mine_vocabulary_sight_records(records, limit=360, singleton_limit_per_group=
 
 
 def mine_vision_vocabulary(folder, model, existing_groups, files=None, caption_template=""):
+    # One active evidence source. Old Context Sight records remain on disk until explicitly removed.
     open_records = vision_sight_records(folder, model, files=files)
-    vocabulary_records = vision_vocabulary_sight_records(
-        folder,
-        model,
-        existing_groups,
-        files=files,
-        caption_template=caption_template,
-        current_context=True,
-    )
-    open_analysis = mine_sight_records(open_records, limit=180)
-    vocabulary_analysis = mine_vocabulary_sight_records(vocabulary_records)
-
+    analysis = mine_sight_records(open_records, limit=240)
     evidence = []
-    for index, row in enumerate(open_analysis.get("evidence") or [], start=1):
+    for index, row in enumerate(analysis.get("evidence") or [], start=1):
         copied = dict(row)
         copied["id"] = "o{:03d}".format(index)
-        copied["source"] = "open"
+        copied["source"] = "sight"
         copied["suggestedGroup"] = ""
         evidence.append(copied)
-    evidence.extend(vocabulary_analysis.get("evidence") or [])
-    for index, row in enumerate(vocabulary_analysis.get("captions") or [], start=1):
-        file_name = str(row.get("file") or "").strip()
-        caption = _clean(row.get("caption"), 420)
-        if not file_name or not caption:
-            continue
-        evidence.append({
-            "id": "c{:03d}".format(index),
-            "source": "context_caption",
-            "category": "caption",
-            "suggestedGroup": "",
-            "label": caption,
-            "count": 1,
-            "media": [file_name],
-            "examples": [file_name],
-            "contexts": [],
-        })
-
     return {
         "version": VISION_VOCABULARY_MINING_VERSION,
         "visionModel": str(model or ""),
         "itemCount": len(open_records),
         "openItemCount": len(open_records),
-        "schemaAwareItemCount": len(vocabulary_records),
+        "schemaAwareItemCount": 0,
         "evidenceCount": len(evidence),
         "evidence": evidence,
-        "coverage": {
-            "open": len(open_records),
-            "schemaAware": len(vocabulary_records),
-        },
+        "coverage": {"open": len(open_records), "schemaAware": 0},
     }
-

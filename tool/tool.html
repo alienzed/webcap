@@ -1793,8 +1793,8 @@
                     <details id="editor-caption-details" style="margin: 0.3rem 0;">
                         <summary title="Inspect the evidence used for this caption" style="cursor:pointer;font-size:0.85em;">ⓘ Details</summary>
                         <pre id="editor-caption-evidence" style="max-height:16rem;overflow:auto;white-space:pre-wrap;font-size:0.8em;"></pre>
-                        <div id="editor-caption-details-actions"><select id="editor-caption-refresh-sight-mode" class="hidden" aria-label="Sight to refresh" title="Choose the saved Sight evidence to refresh for this item"><option value="both">Both Sights</option><option value="open">Open Sight</option><option value="context">Context Sight</option></select>
-                            <button id="editor-caption-refresh-sight" class="caption-vision-phrases-trigger hidden" type="button" title="Refresh Open Sight and Context Sight for this item only">Refresh Sight (Vision)</button>
+                        <div id="editor-caption-details-actions"><select id="editor-caption-refresh-sight-mode" class="hidden" aria-label="Sight to refresh" title="Choose the saved Sight evidence to refresh for this item"><option value="open">Sight</option></select>
+                            <button id="editor-caption-refresh-sight" class="caption-vision-phrases-trigger hidden" type="button" title="Refresh this item's Sight observation">Refresh Sight (Vision)</button>
                             <button id="editor-caption-vision-recheck" class="caption-vision-phrases-trigger hidden" type="button" title="Run a fresh visual caption check for this item only">Recheck Caption (Vision)</button></div>
                     </details>
                     <div id="editor-caption-focus-loading" class="editor-caption-focus-loading hidden" role="status">
@@ -2509,15 +2509,15 @@
                     <section id="set-scan-open-card" class="set-scan-evidence-card">
                         <div class="set-scan-evidence-card-header">
                             <div>
-                                <strong>Open Sight</strong>
-                                <span>Broad image read, independent of vocabulary</span>
+                                <strong>Sight</strong>
+                                <span>Broad discovery, optionally guided by existing groups</span>
                             </div>
                             <span id="set-scan-open-badge" class="set-scan-evidence-badge">Checking</span>
                         </div>
                         <div id="set-scan-open-count" class="set-scan-evidence-count">—</div>
                         <div id="set-scan-open-detail" class="set-scan-evidence-detail">Checking saved coverage…</div>
                     </section>
-                    <section id="set-scan-context-card" class="set-scan-evidence-card">
+                    <section id="set-scan-context-card" class="set-scan-evidence-card hidden">
                         <div class="set-scan-evidence-card-header">
                             <div>
                                 <strong>Context Sight</strong>
@@ -2536,10 +2536,7 @@
                 <div class="set-scan-run-actions">
                     <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
                     <select id="set-scan-force-mode" aria-label="Sight to force refresh" title="Choose which Sight evidence to replace after a successful fresh scan">
-                        <option value="open">Open Sight</option>
-                        <option value="context-missing">Context Sight (missing only)</option>
-                        <option value="context">Context Sight (force refresh)</option>
-                        <option value="both">Both Sights (force refresh)</option>
+                        <option value="open">Sight</option>
                     </select>
                     <button id="set-scan-force-btn" type="button" class="review-captions-btn" title="Rerun selected Sight passes for the current scope; failed reads preserve existing evidence">Force Refresh Sight</button>
                     <button id="set-scan-stop-btn" type="button" class="review-captions-btn hidden">Stop</button>

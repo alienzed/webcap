@@ -1876,16 +1876,29 @@
 
     var heroActions = document.createElement('div');
     heroActions.className = 'qa-hero-actions';
-    if (undisposed.length) heroActions.appendChild(qaCreateButton('Review ' + undisposed.length + ' findings', 'qa-primary', 'browse-next'));
+    if (undisposed.length) heroActions.appendChild(qaCreateButton('Review ' + undisposed.length + ' findings', '', 'browse-next'));
+    var reviewReady = undisposed.some(function (finding) {
+      return (finding.files || []).some(function (file) {
+        var item = items.find(function (entry) { return entry.fileName === file; });
+        return item && qaFocusReviewHasAction(item.key, file, item.caption || '', finding);
+      });
+    });
+    heroActions.appendChild(qaCreateButton(
+      qaWorkbenchState.deepScanSessionActive ? 'QA running · Review & Fix' : 'Start QA & Review',
+      'qa-primary', 'qa-start'
+    ));
+    if (reviewReady && !qaWorkbenchState.deepScanSessionActive) {
+      heroActions.appendChild(qaCreateButton('Review & Fix saved findings', '', 'qa-focus-review'));
+    }
     var deepWrap = document.createElement('div');
     deepWrap.className = 'qa-deep-scan-wrap';
     var deep = qaCreateButton(
-      qaWorkbenchState.deepScanSubmitting ? 'Starting…' : (qaWorkbenchState.deepScanSessionActive ? 'Stop Deep QA' : '✦ Deep QA Scan'),
+      qaWorkbenchState.deepScanSubmitting ? 'Starting…' : (qaWorkbenchState.deepScanSessionActive ? 'Stop QA scan' : 'Run scan only'),
       '',
       qaWorkbenchState.deepScanSessionActive ? 'deep-scan-stop' : 'deep-scan'
     );
     deep.disabled = qaWorkbenchState.deepScanSubmitting;
-    deep.title = 'Optional structured LLM scan of the current training selection';
+    deep.title = 'Run or stop the existing progressive Deep QA scan without opening the correction flow';
     deepWrap.appendChild(deep);
     var note = document.createElement('span');
     note.className = 'qa-deep-scan-note';
@@ -3038,6 +3051,13 @@
   }
 
   function qaHandleAction(action, value) {
+    if (action === 'qa-start') {
+      // Explicit user intent starts the existing progressive scan; review follows
+      // saved and arriving findings without introducing a second QA engine.
+      if (!qaWorkbenchState.deepScanSessionActive) qaRunDeepScan();
+      qaStartFocusReview();
+      return;
+    }
     if (action === 'concept-run') { qaRunConceptCheck(); return; }
     if (action === 'concept-stop') { qaStopConceptCheck(); return; }
     if (action === 'qa-focus-review') {

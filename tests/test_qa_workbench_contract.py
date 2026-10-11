@@ -61,7 +61,10 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     runner = _read("tool/server/llm_runner.py")
     contract = _read("tool/server/qa_llm_contract.py")
 
-    assert "✦ Deep QA Scan" in qa
+    assert "Start QA & Review" in qa
+    assert "qaRunDeepScan();" in qa
+    assert "qaStartFocusReview();" in qa
+    assert "Run scan only" in qa
     assert "'deep-scan'" in qa
     assert "'/fs/qa/deep-scan'" in qa
     assert "qaBuildDeepScanItems" in qa

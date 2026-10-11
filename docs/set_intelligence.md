@@ -93,6 +93,8 @@ The interaction remains in Grid: one tag proposition, likely media preselected, 
 
 ## Quality Assurance
 
+**Primary navigation:** Set Tools → **Prepare Set** collects Sight and guides vocabulary/tagging. **Quality Assurance** is the single Set-level QA entry point. Opening QA only shows saved checks; it never starts inference. **Start QA & Review** explicitly starts or resumes Deep QA and opens the existing QA Focus Review queue, where confirmed actionable results arrive progressively. **Run scan only** preserves the standalone Deep QA action, and **Review & Fix saved findings** opens the existing correction flow without starting a scan. Targeted concept checks and full reports remain available as secondary QA tools; per-item Vision rechecks remain explicit.
+
 Purpose: reduce the amount of material the user must personally inspect.
 
 The new intelligence value comes from semantic interpretation and cross-signal synthesis. Deterministic systems remain useful evidence producers, but should not be promoted into strong semantic recommendations by themselves.

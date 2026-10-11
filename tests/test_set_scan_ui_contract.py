@@ -54,7 +54,7 @@ def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secon
     assert "WebCap analysis</strong>" not in html
     assert "Face Focus, MediaPipe pose" not in html
     assert 'id="set-scan-open-card"' in html
-    assert 'id="set-scan-context-card"' in html
+    assert 'id="set-scan-context-card"' not in html
     assert "Broad discovery, optionally guided by existing groups" in html
     assert 'id="set-scan-details"' in html
     assert "<strong>Vision report</strong>" in html

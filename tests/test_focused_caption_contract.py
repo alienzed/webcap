@@ -192,7 +192,7 @@ def test_caption_assist_surfaces_only_unreviewed_empty_groups_with_candidate():
     assert "isChecklistRequirementCheckedForMediaKey(mediaKey, label)" in primer
     assert "typeof isChecklistRequirementCheckedForMediaKey" not in primer
     assert "return !reviewed;" in primer
-    assert "var missingGroups = visible ? getCaptionAssistMissingGroups(mediaKey) : [];" in primer
+    assert "var missingGroups = visible && !isFocusedQaReviewMode() ? getCaptionAssistMissingGroups(mediaKey) : [];" in primer
     assert "renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);" in primer
     assert "label.textContent = 'Still unreviewed:';" in primer
     assert "button.textContent = 'N/A';" in primer
@@ -661,8 +661,10 @@ def test_caption_omissions_and_vision_share_explicit_fix_path():
     assert "function repairCaptionAssistCandidate(corrections)" in primer
     assert "request.draft = String(candidate.text || '').trim();" in primer
     assert "request.corrections = cleanCorrections;" in primer
-    assert "fixOmissionsBtn.textContent = 'Fix';" in primer
-    assert "repairCaptionAssistCandidate(candidate.omittedCorrections || [])" in primer
+    assert "insert.textContent = 'Insert at cursor';" in primer
+    assert "remove.textContent = 'Remove tag';" in primer
+    assert "removeCaptionAssistAssignedTag(mediaKey, entry.group, entry.term);" in primer
+    assert "repairCaptionAssistCandidate(candidate.omittedCorrections || [])" not in primer
     assert ".caption-assist-fix-btn {" in css
 
     assert "function isCaptionVisionKnownTagSelected" in vision

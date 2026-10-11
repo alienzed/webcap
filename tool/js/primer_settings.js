@@ -221,9 +221,16 @@ function useCaptionAssistCandidate() {
     syncCaptionAssistCandidateUi();
     ui.editorEl.value = nextCaption;
     setStatus(unchangedReview ? 'Caption accepted.' : 'Caption saved.');
-    return isFocusedQaReviewMode()
-      ? resolveFocusedQaReviewItem('applied')
-      : advanceFocusedCaption();
+    if (isFocusedQaReviewMode()) {
+      if (qaFocusReviewRefreshAfterApply(mediaItem.key)) {
+        return presentFocusedReviewCandidate(mediaItem).then(function () {
+          setStatus('Caption saved. Additional QA corrections remain on this item.');
+          return true;
+        });
+      }
+      return resolveFocusedQaReviewItem('applied');
+    }
+    return advanceFocusedCaption();
   }).catch(function (err) {
     syncCaptionAssistCandidateUi();
     setStatus('Could not save AI caption candidate: ' + String(err && err.message ? err.message : err));
@@ -912,10 +919,25 @@ function syncCaptionAssistCandidateUi() {
     qaFocusReviewActionableFindings(mediaKey, candidate.text).length > 0;
   qaRecheckEl.classList.toggle('hidden', !canRecheck);
   qaRecheckBtn.disabled = !!(canRecheck && qaFocusReviewRecheckBusy());
-  qaRecheckBtn.textContent = qaRecheckBtn.disabled ? 'Rechecking concern…' : 'Recheck concern with Vision';
+  qaRecheckBtn.textContent = qaRecheckBtn.disabled ? 'Rechecking concern…' : 'Recheck selected concern with Vision';
+  var concernOptions = canRecheck ? qaReviewConcernOptions(mediaKey, candidate.text) : [];
+  var qaConcernSelect = document.getElementById('editor-caption-qa-concern');
+  if (!qaConcernSelect) throw new Error('QA concern selector is missing.');
+  var selectedConcern = qaConcernSelect.value;
+  qaConcernSelect.replaceChildren();
+  concernOptions.forEach(function (option) {
+    var node = document.createElement('option');
+    node.value = option.id;
+    node.textContent = option.title;
+    qaConcernSelect.appendChild(node);
+  });
+  if (concernOptions.some(function (option) { return option.id === selectedConcern; })) {
+    qaConcernSelect.value = selectedConcern;
+  }
+  qaConcernSelect.classList.toggle('hidden', !canRecheck || concernOptions.length < 2);
   if (!qaRecheckBtn.__qaRecheckBound) {
     qaRecheckBtn.__qaRecheckBound = true;
-    qaRecheckBtn.addEventListener('click', function () { qaRecheckCurrentFinding(); });
+    qaRecheckBtn.addEventListener('click', function () { qaRecheckCurrentFinding(qaConcernSelect.value); });
   }
 
   qaReasonsEl.innerHTML = '';

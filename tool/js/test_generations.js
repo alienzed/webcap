@@ -3437,7 +3437,6 @@
     }).then(function () {
       pollStatus();
     }).catch(function (err) {
-      reportConsoleError('Test Generations start', err);
       syncActiveRunControls(currentStatus);
       showError(err);
     });

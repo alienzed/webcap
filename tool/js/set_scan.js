@@ -133,11 +133,11 @@
       } else if (openMissing) {
         actionLabel = 'Resume ' + String(openMissing) + ' Open Sight';
       } else {
-        actionLabel = 'Open Sight current · optional Context Sight available';
+        actionLabel = 'Open Sight current';
       }
     }
     rescanBtn.classList.toggle('hidden', setScanState.running);
-    rescanBtn.disabled = !scopeCount;
+    rescanBtn.disabled = !scopeCount || !!(coverage.known && !openMissing);
     rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
     forceBtn.disabled = setScanState.running || !scopeCount;
     forceMode.disabled = setScanState.running;
@@ -146,7 +146,7 @@
     if (setScanState.phase === 'preparing') percent = 8;
     if (setScanState.phase === 'scanning-open') {
       percent = setScanState.total
-        ? 10 + Math.round((setScanState.completed / setScanState.total) * 38)
+        ? 10 + Math.round((setScanState.completed / setScanState.total) * 85)
         : 10;
     }
     if (setScanState.phase === 'scanning-context') {

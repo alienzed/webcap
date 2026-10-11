@@ -628,7 +628,7 @@ function syncCaptionVisionUi() {
   refreshSight.classList.toggle('hidden', !candidateVisible || !mediaSupported);
   var refreshMode = document.getElementById('editor-caption-refresh-sight-mode');
   if (!refreshMode) throw new Error('Sight refresh mode control is missing.');
-  refreshMode.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  refreshMode.classList.add('hidden');
   var details = document.getElementById('editor-caption-details');
   var evidence = document.getElementById('editor-caption-evidence');
   if (!details || !evidence) throw new Error('Caption Assist evidence disclosure is missing.');
@@ -1049,9 +1049,8 @@ function wireCaptionVisionUi() {
       if (!state.currentItem) return;
       var item = state.currentItem;
       refreshSight.disabled = true;
-      var mode = document.getElementById('editor-caption-refresh-sight-mode').value;
       var refreshOperation = function () {
-        return refreshSetIntelligenceItem(item, { open: true, context: false });
+        return refreshSetIntelligenceItem(item, { open: true });
       };
       var refresh = isFocusedQaReviewMode()
         ? qaFocusReviewInteractiveRefresh(refreshOperation)

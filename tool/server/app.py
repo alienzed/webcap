@@ -999,13 +999,7 @@ def vision_schema_assist_route():
             if not records:
                 raise ValueError("Tag Assist needs structured Vision sight for the selected media.")
             existing_groups = data.get("existingGroups")
-            context_records = vision_vocabulary_sight_records(
-                folder,
-                vision_model,
-                existing_groups,
-                files=requested_files,
-                current_context=False,
-            )
+            context_records = []  # Legacy Context Sight stays stored, not sent to the Director.
             contract = build_vision_tag_request(
                 records,
                 existing_groups,

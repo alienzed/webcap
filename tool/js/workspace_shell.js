@@ -823,7 +823,7 @@ function syncApplicationShellContext() {
     else if (storyboardOpen) workspaceTitle.textContent = 'Storyboard';
     else if (testOpen) workspaceTitle.textContent = 'Test Generations';
     else if (surface === 'training') workspaceTitle.textContent = 'Training';
-    else if (surface === 'reviewOutput') workspaceTitle.textContent = 'Review Set';
+    else if (surface === 'reviewOutput') workspaceTitle.textContent = 'Quality Assurance';
     else if (surface === 'grid') workspaceTitle.textContent = 'Grid';
     else if (surface === 'focus') workspaceTitle.textContent = 'Focus';
     else workspaceTitle.textContent = 'Prep';
@@ -989,7 +989,10 @@ function syncWorkspaceSurfaceUi() {
   var hasReviewContext = isSetFolderContext(state.folder, state.items);
   if (reviewOutputBtn) reviewOutputBtn.classList.toggle('hidden', !hasReviewContext);
   if (!qaFocusBtn) throw new Error('QA Focus Review Set Tools button is missing.');
-  qaFocusBtn.classList.toggle('hidden', !hasReviewContext);
+  // The single Quality Assurance entry owns scan-to-review handoff.
+  // Retain the legacy button and its handler for existing callers, but do not
+  // present a competing Set Tools entry point.
+  qaFocusBtn.classList.add('hidden');
   syncTrainingEntryChrome();
   if (reviewOutputBackBtn) {
     reviewOutputBackBtn.classList.toggle('hidden', surface !== 'reviewOutput');

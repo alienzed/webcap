@@ -2191,7 +2191,6 @@
     actions.appendChild(nav);
     article.appendChild(actions);
     // Keep visual evidence visible while browsing. Detailed explanation stays collapsed.
-    article.insertBefore(actions, summary);
     article.insertBefore(summary, actions);
     if (finding.files && finding.files.length) {
       article.insertBefore(evidenceHeading, actions);
@@ -2203,7 +2202,6 @@
     detailsLabel.textContent = 'Why / evidence';
     details.appendChild(detailsLabel);
     while (actions.nextSibling) details.appendChild(actions.nextSibling);
-    details.appendChild(why);
     article.appendChild(details);
 
     var status = document.createElement('div');
@@ -2288,15 +2286,16 @@
       container.appendChild(section);
     });
 
-    if (qaGetReportObservations().length) {
+    var reportObservations = qaGetReportObservations();
+    if (reportObservations.length) {
       var details = document.createElement('details');
       details.className = 'qa-other-observations';
       var summary = document.createElement('summary');
-      summary.textContent = 'Other observations · ' + qaGetReportObservations().length + ' signals';
+      summary.textContent = 'Other observations · ' + reportObservations.length + ' signals';
       details.appendChild(summary);
       var list = document.createElement('div');
       list.className = 'qa-other-observations-list';
-      qaGetReportObservations().forEach(function (observation) {
+      reportObservations.forEach(function (observation) {
         var row = document.createElement('div');
         row.textContent = observation.title + ' — ' + observation.summary;
         list.appendChild(row);

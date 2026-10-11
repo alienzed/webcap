@@ -455,6 +455,51 @@ def test_current_set_storage_is_visible_but_never_purgeable(monkeypatch, tmp_pat
     assert (set_path / "originals" / "image.png").is_file()
 
 
+def test_clear_generated_sight_preserves_authored_metadata_and_restricts_scope(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    path = tmp_path / "sets" / "demo" / "media_metadata.json"
+    original = {
+        "image.png": {
+            "mtime": 123,
+            "size": 456,
+            "face_focus": {"bucket": "medium"},
+            "vision_sight": {"description": "a detailed image"},
+            "vision_vocabulary_sight": {"caption": "old guided observation"},
+        },
+        "other.png": {"size": 9},
+    }
+    _write_json(path, original)
+    legacy = storage_manager.clear_set_generated_sight("sets/demo", "legacy")
+    assert legacy["removedRecords"] == 1
+    after_legacy = json.loads(path.read_text(encoding="utf-8"))
+    assert after_legacy["image.png"]["vision_sight"] == original["image.png"]["vision_sight"]
+    assert "vision_vocabulary_sight" not in after_legacy["image.png"]
+    assert after_legacy["image.png"]["face_focus"] == original["image.png"]["face_focus"]
+    cleared = storage_manager.clear_set_generated_sight("sets/demo", "all")
+    assert cleared["removedRecords"] == 1
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "image.png": {"mtime": 123, "size": 456, "face_focus": {"bucket": "medium"}},
+        "other.png": {"size": 9},
+    }
+    with pytest.raises(ValueError):
+        storage_manager.clear_set_generated_sight("sets/demo", "everything")
+
+
+def test_clear_generated_sight_route_requires_explicit_scope(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
+    _write_json(tmp_path / "set" / "media_metadata.json", {
+        "a.jpg": {"vision_sight": {"description": "visible detail"}},
+    })
+    client = app_module.app.test_client()
+    rejected = client.post("/fs/storage/set-sight/clear", json={"folder": "set"})
+    assert rejected.status_code == 400
+    response = client.post("/fs/storage/set-sight/clear", json={
+        "folder": "set", "scope": "all",
+    })
+    assert response.status_code == 200
+    assert response.get_json()["removedRecords"] == 1
+
+
 def test_storage_has_no_path_based_or_set_source_purge(monkeypatch, tmp_path):
     monkeypatch.setattr(storage_manager.app_config, "FS_ROOT", tmp_path)
     source = tmp_path / "sets" / "demo" / "image.png"
@@ -521,6 +566,8 @@ def test_storage_ui_is_isolated_global_activity():
     assert "storageState.activeArea" in storage_js
     assert "storage-overview-back" in storage_js
     assert "Delete Take" in storage_js
+    assert "storage-clear-sight-btn" in storage_js
+    assert "/fs/storage/set-sight/clear" in storage_js
     assert "typeof window.reportConsoleError" not in storage_js
     assert "typeof window.closeGenerateActivity" not in storage_js
     assert "This removes only this generated Take. The Story and other Takes remain." in storage_js

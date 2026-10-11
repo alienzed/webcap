@@ -104,7 +104,7 @@ def test_vocabulary_synthesis_accepts_open_sight_without_context(tmp_path, monke
     assert seen["contract"]["sight_evidence"]
 
 
-def test_vision_tag_suggestions_queue_both_visual_reads(tmp_path, monkeypatch):
+def test_vision_tag_suggestions_use_unified_sight(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()
     (set_root / "a.jpg").write_bytes(b"a")
@@ -334,7 +334,7 @@ def test_vocabulary_synthesis_accepts_partial_visual_coverage(tmp_path, monkeypa
     assert seen["label"] == "Vocabulary Synthesis"
 
 
-def test_vocabulary_challenge_queues_schema_contract_from_both_visual_passes(tmp_path, monkeypatch):
+def test_vocabulary_challenge_queues_schema_contract_from_unified_sight(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()
     (set_root / "a.jpg").write_bytes(b"a")
@@ -387,7 +387,7 @@ def test_vocabulary_challenge_queues_schema_contract_from_both_visual_passes(tmp
     assert all(row.get("source") != "context_caption" for row in seen["contract"]["sight_evidence"])
 
 
-def test_intelligence_report_rehydrates_cached_open_and_context_sight(tmp_path, monkeypatch):
+def test_intelligence_report_rehydrates_cached_unified_sight(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()
     (set_root / "a.jpg").write_bytes(b"a")

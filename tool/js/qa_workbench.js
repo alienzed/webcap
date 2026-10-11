@@ -2494,13 +2494,20 @@
     reportConsoleInfo('QA Recheck', 'Stopped. Existing annotations and findings retained.');
   }
 
-  function qaRecheckCurrentFinding() {
+  function qaReviewConcernOptions(mediaKey, captionText) {
+    return qaFocusReviewActionableFindings(mediaKey, captionText).map(function (finding) {
+      return { id: finding.id, title: finding.title };
+    });
+  }
+
+  function qaRecheckCurrentFinding(findingId) {
     if (!isFocusedQaReviewMode() || !qaFocusReviewCurrent() || !state.currentItem) return Promise.resolve(false);
     if (qaTargetedRecheck) return Promise.resolve(false);
     var item = state.currentItem;
     var findings = qaFocusReviewActionableFindings(item.key, captionAssistCandidate && captionAssistCandidate.text);
     if (!findings.length) { setStatus('No actionable QA concern to recheck.'); return Promise.resolve(false); }
-    var finding = findings[0];
+    var finding = findings.find(function (row) { return row.id === findingId; });
+    if (!finding) { setStatus('Select an actionable concern to recheck.'); return Promise.resolve(false); }
     var model = String(getDirectorModelPreference() || '').trim();
     if (!model) { setStatus('Select a Director model first.'); return Promise.resolve(false); }
     if (qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.conceptSession) {
@@ -2672,6 +2679,24 @@
       : (!complete && (pending || failed) ? ' · review incomplete' : '');
     button.textContent = 'QA Focus Review · ' +
       (ready ? ready + ' ready' : (complete ? 'No findings remaining' : '0 ready')) + suffix;
+  }
+
+  function qaFocusReviewRefreshAfterApply(mediaKey) {
+    if (!qaFocusReviewCurrent()) return false;
+    var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
+    if (!item) throw new Error('QA review item is missing after Apply.');
+    qaReconcileAiFindingsToCurrentInputs();
+    qaMergeFindings();
+    var remaining = qaFocusReviewFindings(mediaKey).filter(function (finding) {
+      return qaFocusReviewHasAction(mediaKey, item.fileName, item.caption || '', finding);
+    });
+    qaFocusReviewState.reviewFindings[mediaKey] = remaining;
+    if (!remaining.length) {
+      qaFocusReviewMarkHandled(mediaKey, 'applied');
+      return false;
+    }
+    qaSyncFocusReviewButton();
+    return true;
   }
 
   function qaFocusReviewMarkHandled(mediaKey, disposition) {
@@ -3098,7 +3123,9 @@
   window.qaInputsUpdated = qaInputsUpdated;
   window.qaStartFocusReview = qaStartFocusReview;
   window.qaFocusReviewMarkHandled = qaFocusReviewMarkHandled;
+  window.qaFocusReviewRefreshAfterApply = qaFocusReviewRefreshAfterApply;
   window.qaFocusReviewStopped = qaFocusReviewStopped;
+  window.qaReviewConcernOptions = qaReviewConcernOptions;
   window.qaRecheckCurrentFinding = qaRecheckCurrentFinding;
   window.qaCancelTargetedRecheck = qaCancelTargetedRecheck;
   window.qaFocusReviewRecheckBusy = function () { return !!qaTargetedRecheck; };

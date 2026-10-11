@@ -19,9 +19,7 @@ def test_set_intelligence_is_the_single_set_tools_entry_point():
     assert 'id="set-scan-modal"' in html
     assert 'id="set-scan-response-select"' in html
     assert 'id="set-scan-open-card"' in html
-    assert 'id="set-scan-context-card"' in html
     assert 'id="set-scan-open-count"' in html
-    assert 'id="set-scan-context-count"' in html
     assert 'id="set-scan-rescan-btn"' in html
     assert 'id="set-intelligence-primary-btn"' in html
     assert 'id="set-intelligence-guided-btn"' in html
@@ -43,10 +41,6 @@ def test_set_intelligence_requires_llm_observation_and_interpretation():
     assert "Select a Director model before running Set Intelligence." not in scan
     assert "operation: 'scan_sight'" in scan
     assert "operation: 'save_sight'" in scan
-    assert "operation: 'scan_vocabulary_sight'" in scan
-    assert "operation: 'save_vocabulary_sight'" in scan
-    assert "captionTemplate: context.captionTemplate" in scan
-    assert "existingGroups: context.groups" in scan
     assert "Skipped — no Vision model selected." not in scan
     assert "includeFaceFocus: true" in scan
     assert "includeSelectionPose: true" in scan
@@ -62,23 +56,21 @@ def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secon
     assert 'id="set-scan-open-card"' in html
     assert 'id="set-scan-context-card"' in html
     assert "Broad discovery, optionally guided by existing groups" in html
-    assert "Second image read guided by groups, terms, and caption structure" in html
     assert 'id="set-scan-details"' in html
     assert "<strong>Vision report</strong>" in html
     assert 'id="set-scan-report-count"' in html
     assert "currentRawResponse" in scan
     assert "rawResponses" in scan
     assert "rawResponseIndex" in scan
-    assert "showRawResponse(fileName, 'Open Sight', result.text);" in scan
-    assert "showRawResponse(fileName, 'Context Sight', result.text);" in scan
+    assert "showRawResponse(fileName, 'Sight', result.text);" in scan
     assert "responseSelect.onchange = selectRawResponse;" in scan
     assert "rescanBtn.onclick = function () { runSetIntelligence(); };" in scan
-    assert "'Resume ' + String(openMissing) + ' Open Sight'" in scan
+    assert "'Resume ' + String(openMissing) + ' Sight'" in scan
     assert "rescanBtn.disabled = !scopeCount || !!(coverage.known && !openMissing);" in scan
     assert "operation: 'intelligence_report'" in scan
     assert "function restoreCachedIntelligence(" in scan
     assert "if (setScanState.hasRun) return;" not in scan
-    assert "Checking saved Open Sight and Context Sight for " in scan
+    assert "Checking saved Sight for " in scan
     assert "function recordSetIntelligenceFailure(" in scan
     assert "Set understood with gaps" in scan
     assert "Previous report preserved." in scan
@@ -107,7 +99,7 @@ def test_set_intelligence_uses_visible_training_scope_with_explicit_full_set_ove
     assert 'id="set-scan-scope-summary"' in html
     assert 'return entireSet.checked ? getCurrentSetMediaFileNames() : getVisibleMediaSelectionForTraining();' in scan
     assert 'var files = getSetIntelligenceScopeFiles();' in scan
-    assert "if (!files.length) {\n      setCoverage(0, 0, 0, 0, true);" in scan
+    assert "if (!files.length) {\n      setCoverage(0, 0);" in scan
     assert 'entireSetToggle.onchange = openSetIntelligence;' in scan
     assert 'openVisionSchemaAssist();' in scan
     assert "openGuidedTagPass({ source: 'set' });" in scan

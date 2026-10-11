@@ -24,7 +24,7 @@ def test_concept_contract_contains_focused_evidence_not_caption_quality_task():
     assert contract["operation"] == "qa_deep_scan"
     assert "metal ring connectors" in contract["prompt"]
     assert "Metal rings on the shoulder straps" in contract["prompt"]
-    assert "Set captionQuality to []" in contract["prompt"]
+    assert "Set captionQuality to []" in contract["prompt"]\n    assert "[KNOWN VOCABULARY]" in contract["prompt"]
     assert contract["source_files"] == ["a.jpg"]
 
 
@@ -78,3 +78,21 @@ def test_finding_normalization_rejects_invented_file_and_keeps_exact_action():
     }, allowed_files=["a.jpg"], captions_by_file={"a.jpg": _item()["caption"]})
     assert result["captionQuality"] == []
     assert result["findings"][0]["tagActions"][0]["term"] == "ring connector"
+
+
+def test_known_vocabulary_is_bounded_and_supplied_to_director():
+    contract = build_concept_request([_item()], "Check ring connectors", [
+        {"group": "Hardware", "alias": "Fasteners", "terms": ["ring connector", "metal ring"]},
+    ])
+    assert '"group": "Hardware"' in contract["prompt"]
+    assert 'ring connector' in contract["prompt"]
+    assert '"alias": "Fasteners"' in contract["prompt"]
+
+
+def test_concept_frontend_uses_canonical_and_complete_cached_sight():
+    script = (Path(__file__).resolve().parents[1] / "tool/js/qa_workbench.js").read_text(encoding="utf-8")
+    assert "function qaBuildConceptItems(items)" in script
+    assert "inventory: sight.inventory" in script
+    assert "function qaConceptVocabulary(concept)" in script
+    assert "qaStopConceptCheck(true);" in script
+    assert "finding.inputSignatures[file] === current[file]" in script

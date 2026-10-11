@@ -425,6 +425,5 @@ def test_intelligence_report_rehydrates_cached_unified_sight(tmp_path, monkeypat
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["open"]["structured"] == 1
-    assert payload["context"]["available"] == 1
-    assert payload["context"]["records"][0]["caption"] == "Front view."
-    assert payload["context"]["records"][0]["diagnostics"]["unmatchedCount"] == 1
+    assert "context" not in payload
+    assert payload["open"]["items"][0]["sight"]["description"] == "Front view."

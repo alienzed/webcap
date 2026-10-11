@@ -2173,7 +2173,7 @@
     var actions = document.createElement('div');
     actions.className = 'qa-recommendation-actions';
     if (finding.files && finding.files.length) {
-      var primaryLabel = (finding.patches || []).length ? 'Open Caption Assist'
+      var primaryLabel = (finding.category === 'captioning' || (finding.patches || []).length) ? 'Open Caption Assist'
         : finding.utilityTab === 'duplicates' ? 'Inspect exact duplicates'
         : 'Inspect ' + finding.files.length;
       actions.appendChild(qaCreateButton(primaryLabel, 'qa-primary', 'inspect-finding', finding.id));
@@ -2991,8 +2991,12 @@
   function qaInspectFinding(findingId) {
     var finding = qaWorkbenchState.findings.find(function (row) { return row.id === findingId; });
     if (!finding || !finding.files || !finding.files.length) return;
-    if ((finding.patches || []).length) {
+    if (finding.category === 'captioning' || (finding.patches || []).length) {
       qaReviewCaptionFiles(finding.files, 'QA · ' + finding.title, finding.id);
+      return;
+    }
+    if (finding.files.length === 1) {
+      qaSelectFiles(finding.files, 'QA · ' + finding.title, finding.id);
       return;
     }
     // Group inspection belongs in the existing Grid: rate, select, or prune.

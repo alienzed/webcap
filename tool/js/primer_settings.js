@@ -617,8 +617,11 @@ function syncFocusedCaptionVisionPhrasesUi() {
   heading.className = 'caption-vision-sight-label';
   heading.textContent = 'Suggestions';
   row.appendChild(heading);
-  if (isFocusedQaReviewMode()) {
-    qaFocusReviewTagActions(mediaKey, captionAssistCandidate.text).forEach(function (action) {
+  var qaActions = isFocusedQaReviewMode() ? qaFocusReviewTagActions(mediaKey, captionAssistCandidate.text) : [];
+  if (qaActions.length) {
+    var qaChoices = document.createElement('div');
+    qaChoices.className = 'caption-assist-suggestion-grid';
+    qaActions.forEach(function (action) {
       var assigned = action.group
         ? getChecklistAssignmentEntriesForMediaKey(mediaKey).some(function (entry) {
           return entry.requirement === action.group && entry.term === action.term;
@@ -627,24 +630,24 @@ function syncFocusedCaptionVisionPhrasesUi() {
       if ((action.action === 'add' && assigned) || (action.action === 'remove' && !assigned)) return;
       var button = document.createElement('button');
       button.type = 'button';
-      button.className = 'caption-vision-phrase-insert';
-      button.textContent = (action.action === 'add' ? 'Add ' : 'Remove ') + action.term;
+      button.className = 'caption-assist-suggestion-tag';
+      button.textContent = (action.action === 'add' ? '+ ' : '− ') + action.term;
       button.title = (action.action === 'add' ? 'Add' : 'Remove') + ' tag · ' + (action.group || 'Other') + ' · saves immediately';
-      button.setAttribute('aria-label', button.title);
       button.addEventListener('click', function () {
         if (action.action === 'add') acceptCaptionAssistTagSuggestion(mediaKey, { group: action.group, term: action.term });
         else removeCaptionAssistAssignedTag(mediaKey, action.group, action.term);
       });
-      row.appendChild(button);
+      qaChoices.appendChild(button);
     });
+    row.appendChild(qaChoices);
   }
   var suggestions = getCaptionAssistTagSuggestions(item);
   function makeSuggestion(suggestion) {
     var pair = document.createElement('span');
-    pair.className = 'caption-vision-phrase-list';
+    pair.className = 'caption-assist-suggestion-chip';
     var tagButton = document.createElement('button');
     tagButton.type = 'button';
-    tagButton.className = 'caption-vision-phrase-insert';
+    tagButton.className = 'caption-assist-suggestion-tag';
     tagButton.textContent = suggestion.term;
     tagButton.title = 'Add tag · ' + (suggestion.group || 'Other') + (suggestion.isNew ? ' · new vocabulary' : '') + ' · saves immediately';
     tagButton.setAttribute('aria-label', tagButton.title);
@@ -654,7 +657,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
     pair.appendChild(tagButton);
     var insertButton = document.createElement('button');
     insertButton.type = 'button';
-    insertButton.className = 'caption-vision-phrase-insert';
+    insertButton.className = 'caption-assist-suggestion-insert';
     insertButton.textContent = 'Insert';
     insertButton.title = 'Insert at caption cursor; does not assign a tag';
     insertButton.addEventListener('pointerdown', function (event) { event.preventDefault(); });
@@ -666,7 +669,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
   }
   if (suggestions.length) {
     var choices = document.createElement('div');
-    choices.className = 'caption-vision-phrase-list';
+    choices.className = 'caption-assist-suggestion-grid';
     suggestions.slice(0, 8).forEach(function (suggestion) {
       choices.appendChild(makeSuggestion(suggestion));
     });
@@ -679,7 +682,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
       showAll.textContent = 'Show ' + (suggestions.length - 8) + ' more suggestions';
       more.appendChild(showAll);
       var rest = document.createElement('div');
-      rest.className = 'caption-vision-phrase-list';
+      rest.className = 'caption-assist-suggestion-grid';
       suggestions.slice(8).forEach(function (suggestion) {
         rest.appendChild(makeSuggestion(suggestion));
       });

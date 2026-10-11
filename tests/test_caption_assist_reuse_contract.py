@@ -14,9 +14,9 @@ def test_caption_assist_reuses_existing_context_sight():
     focus = source("tool/js/focused_caption.js")
     assert "opts.context === 'missing'" in scan
     assert "context = !row.cached;" in scan
-    assert "context: 'missing'" in primer
-    assert "context: 'missing'" in focus
-    assert "refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: 'missing', silent: true })" in source("tool/js/qa_workbench.js")
+    assert "context: false" in primer
+    assert "context: false" in focus
+    assert "refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: false, silent: true })" in source("tool/js/qa_workbench.js")
 
 
 def test_unfinished_candidates_round_trip_through_existing_set_state():

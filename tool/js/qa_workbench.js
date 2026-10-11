@@ -1756,7 +1756,7 @@
   }
 
   function qaDispositionLabel(value) {
-    if (value === 'keep') return 'Kept intentionally';
+    if (value === 'keep') return 'Dismissed';
     if (value === 'skip') return 'Skipped for now';
     return '';
   }
@@ -1853,27 +1853,27 @@
     var recommendations = qaGetRecommendations();
     var undisposed = recommendations.filter(function (finding) { return !qaWorkbenchState.dispositions[finding.id]; });
     var handled = recommendations.length - undisposed.length;
-    var high = recommendations.filter(function (finding) { return finding.priority === 'high'; }).length;
+    var high = undisposed.filter(function (finding) { return finding.priority === 'high'; }).length;
 
     var hero = document.createElement('section');
     hero.className = 'qa-hero';
     var copy = document.createElement('div');
     copy.className = 'qa-hero-copy';
     var h2 = document.createElement('h2');
-    h2.textContent = recommendations.length
-      ? recommendations.length + ' recommendation' + (recommendations.length === 1 ? '' : 's') + ' ' + (recommendations.length === 1 ? 'is' : 'are') + ' worth your attention.'
-      : 'Nothing prominent needs your attention right now.';
+    h2.textContent = undisposed.length
+      ? undisposed.length + ' actionable finding' + (undisposed.length === 1 ? '' : 's') + ' to review'
+      : 'No outstanding QA findings';
     var intro = document.createElement('p');
-    intro.textContent = recommendations.length
-      ? 'These are ranked for likely training impact. Browse them one at a time rather than treating QA like a backlog.'
-      : 'The full report and existing utilities are still available if you want to dig deeper.';
+    intro.textContent = undisposed.length
+      ? 'Inspect the affected media and decide what, if anything, needs changing.'
+      : 'Available checks and lower-confidence observations remain in Reports.';
     copy.appendChild(h2);
     copy.appendChild(intro);
     hero.appendChild(copy);
 
     var heroActions = document.createElement('div');
     heroActions.className = 'qa-hero-actions';
-    if (recommendations.length) heroActions.appendChild(qaCreateButton('Browse Recommendations', 'qa-primary', 'browse-next'));
+    if (undisposed.length) heroActions.appendChild(qaCreateButton('Review ' + undisposed.length + ' findings', 'qa-primary', 'browse-next'));
     var deepWrap = document.createElement('div');
     deepWrap.className = 'qa-deep-scan-wrap';
     var deep = qaCreateButton(
@@ -1903,11 +1903,16 @@
     container.appendChild(hero);
 
     var conceptWrap = document.createElement('section');
-    conceptWrap.className = 'qa-section';
+    conceptWrap.className = 'qa-section qa-concept-check';
+    var conceptDetails = document.createElement('details');
+    conceptDetails.className = 'qa-optional-check';
+    var conceptSummary = document.createElement('summary');
+    conceptSummary.textContent = 'Check a specific concept (optional)';
+    conceptDetails.appendChild(conceptSummary);
     var conceptHeading = document.createElement('h2');
     conceptHeading.className = 'qa-section-title';
     conceptHeading.textContent = 'Check a specific concept';
-    conceptWrap.appendChild(conceptHeading);
+    conceptHeading.classList.add('hidden');
     var conceptInput = document.createElement('input');
     conceptInput.type = 'text';
     conceptInput.id = 'qa-concept-input';
@@ -1931,18 +1936,19 @@
         qaCoverageLine(conceptCoverage.counts, true);
       conceptWrap.appendChild(conceptCounts);
     }
-    container.appendChild(conceptWrap);
+    conceptDetails.appendChild(conceptWrap);
+    container.appendChild(conceptDetails);
 
     var summary = document.createElement('div');
     summary.className = 'qa-summary-line';
     var primary = document.createElement('strong');
-    primary.textContent = high + ' high-impact';
+    primary.textContent = high + ' higher-priority';
     summary.appendChild(primary);
     var normal = document.createElement('span');
-    normal.textContent = Math.max(0, recommendations.length - high) + ' normal-priority';
+    normal.textContent = Math.max(0, undisposed.length - high) + ' other findings';
     summary.appendChild(normal);
     var handledEl = document.createElement('span');
-    handledEl.textContent = handled + ' handled';
+    handledEl.textContent = handled + ' set aside';
     summary.appendChild(handledEl);
     container.appendChild(summary);
 
@@ -1950,7 +1956,7 @@
     categorySection.className = 'qa-section';
     var categoryTitle = document.createElement('h2');
     categoryTitle.className = 'qa-section-title';
-    categoryTitle.textContent = 'What deserves attention';
+    categoryTitle.textContent = 'Findings by type';
     categorySection.appendChild(categoryTitle);
     var grid = document.createElement('div');
     grid.className = 'qa-category-grid';
@@ -1977,7 +1983,7 @@
     if (!grid.children.length) {
       var empty = document.createElement('div');
       empty.className = 'qa-empty';
-      empty.textContent = 'No actionable deterministic findings in the current training selection.';
+      empty.textContent = 'No supported corrections identified. Uncertain patterns remain in Reports.';
       grid.appendChild(empty);
     }
     categorySection.appendChild(grid);
@@ -2123,9 +2129,8 @@
     article.className = 'qa-recommendation';
     var eyebrow = document.createElement('div');
     eyebrow.className = 'qa-recommendation-eyebrow';
-    eyebrow.textContent = QA_CATEGORY_LABELS[finding.category] + ' · ' + (finding.priority === 'high' ? 'High impact' : 'Recommendation') +
-      (finding.source === 'ai' ? ' · ' + finding.trainingValue + ' training value' : '') +
-      ' · ' + finding.confidence + ' confidence' + (finding.sourceLabel ? ' · ' + finding.sourceLabel : '');
+    eyebrow.textContent = (QA_CATEGORY_LABELS[finding.category] || 'QA') +
+      (finding.sourceLabel ? ' · ' + finding.sourceLabel : '');
     article.appendChild(eyebrow);
     var title = document.createElement('h2');
     title.className = 'qa-recommendation-title';
@@ -2147,26 +2152,33 @@
       var h3 = document.createElement('h3');
       h3.textContent = 'Evidence';
       var note = document.createElement('span');
-      note.textContent = finding.files.length > 1 ? 'Scroll through ' + finding.files.length + ' affected items.' : '1 affected item.';
+      note.textContent = finding.files.length > 1 ? finding.files.length + ' affected items' : '1 affected item';
       evidenceHeading.appendChild(h3);
       evidenceHeading.appendChild(note);
       article.appendChild(evidenceHeading);
       var strip = document.createElement('div');
       strip.className = 'qa-evidence-strip';
-      finding.files.forEach(function (fileName) { strip.appendChild(qaCreateEvidenceMedia(fileName)); });
+      finding.files.slice(0, 6).forEach(function (fileName) { strip.appendChild(qaCreateEvidenceMedia(fileName)); });
+      if (finding.files.length > 6) {
+        var overflow = document.createElement('span');
+        overflow.className = 'qa-muted';
+        overflow.textContent = '+' + (finding.files.length - 6) + ' more in Inspect';
+        strip.appendChild(overflow);
+      }
       article.appendChild(strip);
     }
 
     var actions = document.createElement('div');
     actions.className = 'qa-recommendation-actions';
     if (finding.files && finding.files.length) {
-      actions.appendChild(qaCreateButton('Inspect ' + finding.files.length, 'qa-primary', 'inspect-finding', finding.id));
+      var primaryLabel = finding.category === 'captioning' ? 'Review correction'
+        : finding.utilityTab === 'duplicates' ? 'Review duplicate groups'
+        : 'Inspect ' + finding.files.length;
+      actions.appendChild(qaCreateButton(primaryLabel, 'qa-primary',
+        finding.utilityTab === 'duplicates' ? 'utility' : 'inspect-finding',
+        finding.utilityTab === 'duplicates' ? 'duplicates' : finding.id));
     }
-    if (finding.utilityTab) {
-      actions.appendChild(qaCreateButton('Open ' + (finding.utilityTab === 'duplicates' ? 'Duplicates' : 'Prune Report'), '', 'utility', finding.utilityTab));
-    }
-    actions.appendChild(qaCreateButton('Keep intentionally', '', 'dispose', 'keep'));
-    actions.appendChild(qaCreateButton('Skip for now', '', 'dispose', 'skip'));
+    actions.appendChild(qaCreateButton('Dismiss', '', 'dispose', 'keep'));
 
     var nav = document.createElement('div');
     nav.className = 'qa-recommendation-nav';
@@ -2180,6 +2192,7 @@
     article.appendChild(actions);
     // Keep visual evidence visible while browsing. Detailed explanation stays collapsed.
     article.insertBefore(actions, summary);
+    article.insertBefore(summary, actions);
     if (finding.files && finding.files.length) {
       article.insertBefore(evidenceHeading, actions);
       article.insertBefore(strip, actions);
@@ -2190,6 +2203,7 @@
     detailsLabel.textContent = 'Why / evidence';
     details.appendChild(detailsLabel);
     while (actions.nextSibling) details.appendChild(actions.nextSibling);
+    details.appendChild(why);
     article.appendChild(details);
 
     var status = document.createElement('div');
@@ -2213,9 +2227,7 @@
     var meta = document.createElement('div');
     meta.className = 'qa-report-meta';
     [
-      finding.priority === 'high' ? 'High impact' : 'Normal priority',
-      finding.source === 'ai' ? finding.trainingValue + ' training value' : '',
-      finding.confidence + ' confidence',
+      finding.priority === 'high' ? 'Priority' : '',
       qaFileCountText((finding.files || []).length),
       finding.sourceLabel || ''
     ].filter(Boolean).concat(finding.meta || []).slice(0, 6).forEach(function (value) {
@@ -2276,15 +2288,15 @@
       container.appendChild(section);
     });
 
-    if (qaWorkbenchState.observations.length) {
+    if (qaGetReportObservations().length) {
       var details = document.createElement('details');
       details.className = 'qa-other-observations';
       var summary = document.createElement('summary');
-      summary.textContent = 'Other observations · ' + qaWorkbenchState.observations.length + ' lower-impact signal' + (qaWorkbenchState.observations.length === 1 ? '' : 's');
+      summary.textContent = 'Other observations · ' + qaGetReportObservations().length + ' signals';
       details.appendChild(summary);
       var list = document.createElement('div');
       list.className = 'qa-other-observations-list';
-      qaWorkbenchState.observations.forEach(function (observation) {
+      qaGetReportObservations().forEach(function (observation) {
         var row = document.createElement('div');
         row.textContent = observation.title + ' — ' + observation.summary;
         list.appendChild(row);

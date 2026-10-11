@@ -499,10 +499,12 @@ function startManagedTraining() {
       renderTrainingRunnerPreflight(null);
       renderTrainingLaunchStatus();
       setStatus(payload.queued ? 'Training job queued.' : 'Managed training started.');
+      reportConsoleInfo('Training', (payload.queued ? 'Queued' : 'Started') + ' managed training job ' + payload.job.id + '.');
       if (typeof window.refreshActivityMonitor === 'function') window.refreshActivityMonitor();
       refreshTrainingRunnerStatus();
     })
     .catch(function (err) {
+      reportConsoleError('Training start', err);
       setStatus('Managed training did not start: ' + String(err && err.message ? err.message : err));
     }).finally(function () {
       renderTrainingLaunchStatus();
@@ -523,10 +525,12 @@ function stopManagedTraining(cancel, pause, finish) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ jobId: job.id, cancel: !!cancel, pause: !!pause, finish: !!finish })
   }).then(function () {
+    reportConsoleInfo('Training', (cancel ? 'Cancel' : pause ? 'Pause' : finish ? 'Finish' : 'Stop') + ' accepted for job ' + job.id + '.');
     setStatus(cancel ? 'Queued training job cancelled.' : (pause ? 'Pause requested; waiting for the current step and checkpoint save.' : finish ? 'Finish requested; waiting for the current step and checkpoint save.' : 'Stop requested; waiting for the runner result.'));
     refreshTrainingRunnerStatus();
     refreshTrainingHistory(true);
   }).catch(function (err) {
+    reportConsoleError('Training control', err);
     setStatus('Could not change training job: ' + String(err && err.message ? err.message : err));
   });
 }

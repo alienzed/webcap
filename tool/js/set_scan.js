@@ -372,7 +372,7 @@
       String(index + 1) + ' of ' + String(pending.length) + ' · exploring visual details');
 
     var fileName = pending[index];
-    return requestSight(folder, model, fileName, null, groups).then(function (result) {
+    return requestSight(folder, model, fileName, function () { return setScanState.stopRequested; }, groups).then(function (result) {
       if (setScanState.stopRequested) return false;
       showRawResponse(fileName, 'Sight', result.text);
       if (!result.sight) throw new Error(result.warning || ('Vision returned unstructured evidence for ' + fileName + '.'));
@@ -596,7 +596,7 @@
       setScanState.coverage = {
         known: false,
         total: 0,
-        openCurrent: 0,
+        openCurrent: 0
       };
       setScanState.rawResponses = [];
       setScanState.rawResponseIndex = -1;
@@ -733,7 +733,8 @@
           shouldScan = !row.structured;
         });
     }).then(function () {
-      if (!shouldScan || (opts.isCancelled && opts.isCancelled())) return false;
+      if (opts.isCancelled && opts.isCancelled()) return false;
+      if (!shouldScan) return true;
       return requestSight(folder, model, file, opts.isCancelled, groups).then(function (result) {
         if (opts.isCancelled && opts.isCancelled()) return false;
         if (!result.sight) throw new Error(result.warning || 'Sight returned no structured observation.');
@@ -747,8 +748,8 @@
       if (opts.isCancelled && opts.isCancelled()) return false;
       reportConsoleError('Sight refresh ' + file, err);
       if (!opts.allowOpenFailure) throw err;
-      if (!opts.silent) window.setStatus('Sight unavailable for ' + file + '; see Console.');
-      return false;
+      if (!opts.silent) window.setStatus('Sight unavailable for ' + file + '; continuing without it (see Console).');
+      return true;
     }).finally(function () {
       setScanState.currentVisionJobId = '';
       itemSightRefreshActive = false;

@@ -130,3 +130,20 @@ def test_targeted_recheck_uses_existing_focus_review_and_single_sight_path():
     assert "entry.file !== item.fileName" in qa
     assert "qaRecheckCurrentFinding();" in primer
     assert 'id="editor-caption-qa-recheck-btn"' in html
+
+
+def test_qa_coverage_and_review_completion_contract():
+    root = Path(__file__).resolve().parents[1]
+    qa = (root / "tool/js/qa_workbench.js").read_text(encoding="utf-8")
+    primer = (root / "tool/js/primer_settings.js").read_text(encoding="utf-8")
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    assert "function qaDeepCoverageCounts(items)" in qa
+    assert "function qaConceptCoverageCounts()" in qa
+    assert "counts.failed" in qa and "counts.unchecked" in qa
+    assert "function qaFocusReviewRefreshAfterApply(mediaKey)" in qa
+    assert "qaFocusReviewHasAction(mediaKey, item.fileName, item.caption || '', finding)" in qa
+    assert "function qaReviewConcernOptions(mediaKey, captionText)" in qa
+    assert "qaRecheckCurrentFinding(findingId)" in qa
+    assert "qaRecheckCurrentFinding(qaConcernSelect.value)" in primer
+    assert "qaFocusReviewRefreshAfterApply(mediaItem.key)" in primer
+    assert 'id="editor-caption-qa-concern"' in html

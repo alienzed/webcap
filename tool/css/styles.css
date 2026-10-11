@@ -6939,3 +6939,7 @@ html[data-theme="dark"] iframe {
   .editor-caption-candidate-draft .editor-caption-candidate-text { font-size: 18px; }
   .editor-caption-details-body { left: auto; right: 0; }
 }
+
+/* Let the header evidence popover extend beyond the dialog without clipping. */
+.editor-caption-candidate-dialog:has(.editor-caption-details[open]) { overflow: visible; }
+.editor-caption-details-body { color: var(--text); }

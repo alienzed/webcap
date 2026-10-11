@@ -399,6 +399,30 @@
     top.appendChild(target);
     card.appendChild(top);
 
+    // Show representative images before asking the user to accept new vocabulary.
+    var representativeFiles = [];
+    (group.terms || []).forEach(function (term) {
+      (term.examples || []).forEach(function (fileName) {
+        if (fileName && representativeFiles.indexOf(fileName) === -1 && representativeFiles.length < 4) {
+          representativeFiles.push(fileName);
+        }
+      });
+    });
+    if (representativeFiles.length) {
+      var examples = document.createElement('div');
+      examples.className = 'vision-schema-evidence-thumbs';
+      representativeFiles.forEach(function (fileName) {
+        var thumb = document.createElement('img');
+        thumb.loading = 'lazy';
+        thumb.alt = String(fileName);
+        thumb.title = String(fileName);
+        thumb.src = '/caption/media?folder=' + encodeURIComponent(schemaState.folder) +
+          '&media=' + encodeURIComponent(String(fileName));
+        examples.appendChild(thumb);
+      });
+      card.appendChild(examples);
+    }
+
     (group.terms || []).forEach(function (term, termIndex) {
       var row = document.createElement('div');
       row.className = 'vision-schema-term-row' + (term.alreadyExists ? ' vision-schema-existing' : '');
@@ -514,8 +538,8 @@
     modal.classList.toggle('vision-schema-guided', !!schemaState.guidedLaunch);
     title.textContent = schemaState.guidedLaunch ? 'Guided Tag Pass' : 'Discover Vocabulary';
     subtitle.textContent = schemaState.guidedLaunch
-      ? 'Use current Set intelligence to build an existing-vocabulary pass in Grid.'
-      : 'Find recurring concepts and decide what belongs in this Set\'s vocabulary.';
+      ? 'Apply existing vocabulary in Grid · ' + schemaState.scopeFiles.length + ' selected Set items.'
+      : 'Discover vocabulary across the Set · ' + schemaState.scopeFiles.length + ' media items.';
     body.classList.toggle('hidden', schemaState.guidedLaunch);
 
     var schemaBusy = schemaState.schemaStarting || !!schemaState.schemaJobId;

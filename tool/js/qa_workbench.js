@@ -430,19 +430,44 @@
 
   function qaMergeFindings() {
     var current = qaCurrentItemSignatureMap(qaGetTrainingItems());
+    var byFile = {};
+    qaGetTrainingItems().forEach(function (item) { byFile[item.fileName] = item; });
     var visibleAi = qaWorkbenchState.aiFindings.map(function (finding) {
       var files = (finding.files || []).filter(function (file) {
-        return current[file] && qaWorkbenchState.aiItemSignatures[file] === current[file];
+        var item = byFile[file];
+        return item && current[file] && qaWorkbenchState.aiItemSignatures[file] === current[file]
+          && qaFocusReviewHasAction(item.key, file, item.caption || '', finding);
+      });
+      return files.length ? Object.assign({}, finding, { files: files }) : null;
+    }).filter(Boolean);
+    var visibleConcept = qaWorkbenchState.conceptFindings.map(function (finding) {
+      var conceptCurrent = qaConceptInputSignatures(qaGetTrainingItems());
+      var files = (finding.files || []).filter(function (file) {
+        var item = byFile[file];
+        return item && conceptCurrent[file] && finding.inputSignatures[file] === conceptCurrent[file]
+          && qaFocusReviewHasAction(item.key, file, item.caption || '', finding);
       });
       return files.length ? Object.assign({}, finding, { files: files }) : null;
     }).filter(Boolean);
     qaWorkbenchState.findings = qaSortFindings(
-      qaWorkbenchState.deterministicFindings.concat(visibleAi, qaWorkbenchState.conceptFindings.map(function (finding) {
-        var conceptCurrent = qaConceptInputSignatures(qaGetTrainingItems());
-        var files = (finding.files || []).filter(function (file) { return conceptCurrent[file] && finding.inputSignatures[file] === conceptCurrent[file]; });
-        return files.length ? Object.assign({}, finding, { files: files }) : null;
-      }).filter(Boolean))
+      qaWorkbenchState.deterministicFindings.concat(visibleAi, visibleConcept)
     );
+  }
+
+  function qaGetReportObservations() {
+    var promoted = {};
+    qaWorkbenchState.findings.forEach(function (finding) { promoted[finding.id] = true; });
+    var current = qaCurrentItemSignatureMap(qaGetTrainingItems());
+    var others = qaWorkbenchState.aiFindings.concat(qaWorkbenchState.conceptFindings).filter(function (finding) {
+      return !promoted[finding.id] && (finding.files || []).some(function (file) {
+        return !!current[file] && (finding.source === 'concept'
+          ? finding.inputSignatures && finding.inputSignatures[file] === qaConceptInputSignatures(qaGetTrainingItems().filter(function (item) { return item.fileName === file; }))[file]
+          : qaWorkbenchState.aiItemSignatures[file] === current[file]);
+      });
+    }).map(function (finding) {
+      return { id: finding.id, title: finding.title, summary: finding.summary, files: finding.files || [] };
+    });
+    return qaWorkbenchState.observations.concat(others);
   }
 
   function qaReconcileAiFindingsToCurrentInputs() {
@@ -1434,95 +1459,108 @@
     }];
   }
 
-  function qaBuildPruneFindings(items) {
+  function qaScopedPruneCandidates(items) {
     var scopeFiles = items.map(function (item) { return String(item.fileName || ''); }).filter(Boolean);
     if (state.pruneCandidatesStatus !== 'ready'
         || state.pruneCandidatesFolder !== String(state.folder || '')
-        || state.pruneCandidatesScopeKey !== pruneCandidateScopeKey(scopeFiles)) {
-      return [];
-    }
-    var allow = {};
-    items.forEach(function (item) { allow[item.fileName] = true; });
-    var candidates = (state.pruneCandidates || []).filter(function (candidate) {
-      return !!allow[String(candidate && candidate.file || '')];
+        || state.pruneCandidatesScopeKey !== pruneCandidateScopeKey(scopeFiles)) return [];
+    var allowed = {};
+    scopeFiles.forEach(function (file) { allowed[file] = true; });
+    return (state.pruneCandidates || []).filter(function (candidate) {
+      return !!allowed[String(candidate && candidate.file || '')];
     });
-    if (!candidates.length) return [];
-    var blocking = candidates.filter(function (candidate) { return candidate.priority === 'blocking'; });
-    var outliers = candidates.filter(function (candidate) { return candidate.priority !== 'blocking'; });
-    var findings = [];
-    if (blocking.length) {
-      findings.push({
-        id: 'prune:blocking',
-        category: 'prune',
-        priority: 'high',
-        confidence: 'high',
-        title: qaFileCountText(blocking.length) + ' have confirmed technical prune problems',
-        summary: 'Prune Candidates already flagged these items as blocking.',
-        why: 'These are technical media problems, not aesthetic judgments.',
-        files: blocking.map(function (candidate) { return candidate.file; }),
-        facts: [{ value: String(blocking.length), label: 'blocking items' }],
-        meta: blocking.slice(0, 4).map(function (candidate) {
-          var reason = candidate.reasons && candidate.reasons[0];
-          return String(reason && reason.message || candidate.kind || candidate.file);
-        }),
-        utilityTab: 'prune'
-      });
-    }
-    if (outliers.length) {
-      findings.push({
-        id: 'prune:outliers',
-        category: 'prune',
-        priority: 'normal',
-        confidence: 'high',
-        title: qaFileCountText(outliers.length) + ' are technical outliers worth a prune check',
-        summary: 'Existing Prune Candidates analysis found media that differs materially from the rest of the current training selection.',
-        why: 'Review these as possible low-value or incompatible training inputs.',
-        files: outliers.map(function (candidate) { return candidate.file; }),
-        facts: [{ value: String(outliers.length), label: 'outliers' }],
-        meta: [],
-        utilityTab: 'prune'
-      });
-    }
-    return findings;
   }
 
-  function qaBuildDuplicateFindings(items) {
+  function qaHasUnsupportedAspect(candidate) {
+    return (candidate.reasons || []).some(function (reason) {
+      return reason.code === 'unsupported_aspect_ratio';
+    });
+  }
+
+  function qaBuildPruneFindings(items) {
+    // An unsupported bucket is an observable problem for the current training
+    // workflow. Missing metadata and relative resolution outliers are not proof
+    // that a source image should be removed.
+    var affected = qaScopedPruneCandidates(items).filter(qaHasUnsupportedAspect);
+    if (!affected.length) return [];
+    return [{
+      id: 'prune:unsupported-aspect',
+      category: 'prune',
+      priority: 'high',
+      confidence: 'high',
+      title: qaFileCountText(affected.length) + ' use unsupported aspect ratios',
+      summary: 'These files do not match a supported training aspect bucket. Inspect them to crop or exclude.',
+      why: 'This is a supported-bucket mismatch, not a judgment about visual quality.',
+      files: affected.map(function (row) { return row.file; }),
+      facts: [{ value: String(affected.length), label: 'affected media' }],
+      utilityTab: 'prune'
+    }];
+  }
+
+  function qaBuildPruneObservations(items) {
+    var other = qaScopedPruneCandidates(items).filter(function (candidate) {
+      return !qaHasUnsupportedAspect(candidate);
+    });
+    if (!other.length) return [];
+    return [{
+      id: 'observation:technical-outliers',
+      title: qaFileCountText(other.length) + ' have technical metadata or resolution anomalies',
+      summary: 'These may be harmless; the existing Prune Candidates report contains their specific reasons.',
+      files: other.map(function (row) { return row.file; })
+    }];
+  }
+
+  function qaScopedDuplicateGroups(items) {
     var scopeFiles = items.map(function (item) { return String(item.fileName || ''); }).filter(Boolean);
     if (state.duplicateCandidatesStatus !== 'ready'
         || state.duplicateCandidatesFolder !== String(state.folder || '')
-        || state.duplicateCandidatesScopeKey !== duplicateCandidateScopeKey(scopeFiles)) {
-      return [];
-    }
-    var allow = {};
-    items.forEach(function (item) { allow[item.fileName] = true; });
-    var groups = (state.duplicateCandidateGroups || []).map(function (group) {
-      var filteredItems = (group.items || []).filter(function (item) { return !!allow[String(item && item.file || '')]; });
-      return Object.assign({}, group, { items: filteredItems });
-    }).filter(function (group) {
-      return group.items.length >= 2;
+        || state.duplicateCandidatesScopeKey !== duplicateCandidateScopeKey(scopeFiles)) return [];
+    var allowed = {};
+    scopeFiles.forEach(function (file) { allowed[file] = true; });
+    return (state.duplicateCandidateGroups || []).map(function (group) {
+      var matching = (group.items || []).filter(function (item) {
+        return !!allowed[String(item && item.file || '')];
+      });
+      return Object.assign({}, group, { items: matching });
+    }).filter(function (group) { return group.items.length >= 2; });
+  }
+
+  function qaBuildDuplicateFindings(items) {
+    // Only byte-identical groups are confirmed duplicates. A perceptual hash
+    // match can hide meaningful differences in color, construction, or pose.
+    return qaScopedDuplicateGroups(items).filter(function (group) {
+      return group.match_type === 'exact';
+    }).map(function (group) {
+      var files = group.items.map(function (item) { return item.file; });
+      return {
+        id: qaStableId(['prune', 'exact-duplicates'].concat(files)),
+        category: 'prune',
+        priority: 'high',
+        confidence: 'high',
+        title: qaFileCountText(files.length) + ' are exact duplicates',
+        summary: 'These files are byte-identical. Inspect the group and keep any intentional repeat.',
+        why: 'Identical content hashes establish duplication; whether to retain extra training weight is your decision.',
+        files: files,
+        facts: [{ value: String(files.length - 1), label: 'additional copies' }],
+        utilityTab: 'duplicates'
+      };
     });
-    if (!groups.length) return [];
+  }
+
+  function qaBuildDuplicateObservations(items) {
+    var similar = qaScopedDuplicateGroups(items).filter(function (group) {
+      return group.match_type !== 'exact';
+    });
+    if (!similar.length) return [];
     var files = {};
-    var exact = 0;
-    groups.forEach(function (group) {
-      if (group.match_type === 'exact') exact += 1;
+    similar.forEach(function (group) {
       group.items.forEach(function (item) { files[item.file] = true; });
     });
     return [{
-      id: 'prune:duplicates',
-      category: 'prune',
-      priority: exact ? 'high' : 'normal',
-      confidence: 'high',
-      title: groups.length + ' duplicate group' + (groups.length === 1 ? '' : 's') + ' may add redundant training weight',
-      summary: qaFileCountText(Object.keys(files).length) + ' are grouped by the existing exact/visual duplicate detector.',
-      why: 'Near-identical examples can unintentionally give one visual pattern more weight than intended.',
-      files: qaSortedFileNames(files),
-      facts: [
-        { value: String(groups.length), label: 'duplicate groups' },
-        { value: String(Object.keys(files).length), label: 'affected items' }
-      ],
-      meta: exact ? [exact + ' exact group' + (exact === 1 ? '' : 's')] : [],
-      utilityTab: 'duplicates'
+      id: 'observation:similar-media',
+      title: similar.length + ' visually similar media group' + (similar.length === 1 ? '' : 's'),
+      summary: 'Similarity alone does not establish redundancy. Different colors and garment details may be useful variation.',
+      files: qaSortedFileNames(files)
     }];
   }
 
@@ -1684,12 +1722,15 @@
     var findings = []
       .concat(qaBuildPruneFindings(items))
       .concat(qaBuildDuplicateFindings(items))
-      .concat(qaBuildVisualAgreementFindings(items))
-      .concat(qaBuildCaptionFindings(items));
+      .concat(qaBuildVisualAgreementFindings(items));
     return {
       findings: qaSortFindings(findings),
       statisticalCandidates: statisticalCandidates,
-      observations: qaBuildObservations(items).concat(representationObservations).concat(statisticalCandidates.map(function (candidate) {
+      observations: qaBuildObservations(items).concat(representationObservations)
+        .concat(qaBuildCaptionFindings(items))
+        .concat(qaBuildPruneObservations(items))
+        .concat(qaBuildDuplicateObservations(items))
+        .concat(statisticalCandidates.map(function (candidate) {
         return {
           id: candidate.id,
           title: 'Unverified pattern: ' + candidate.title,
@@ -1715,7 +1756,7 @@
   }
 
   function qaDispositionLabel(value) {
-    if (value === 'keep') return 'Kept intentionally';
+    if (value === 'keep') return 'Dismissed';
     if (value === 'skip') return 'Skipped for now';
     return '';
   }
@@ -1812,27 +1853,27 @@
     var recommendations = qaGetRecommendations();
     var undisposed = recommendations.filter(function (finding) { return !qaWorkbenchState.dispositions[finding.id]; });
     var handled = recommendations.length - undisposed.length;
-    var high = recommendations.filter(function (finding) { return finding.priority === 'high'; }).length;
+    var high = undisposed.filter(function (finding) { return finding.priority === 'high'; }).length;
 
     var hero = document.createElement('section');
     hero.className = 'qa-hero';
     var copy = document.createElement('div');
     copy.className = 'qa-hero-copy';
     var h2 = document.createElement('h2');
-    h2.textContent = recommendations.length
-      ? recommendations.length + ' recommendation' + (recommendations.length === 1 ? '' : 's') + ' ' + (recommendations.length === 1 ? 'is' : 'are') + ' worth your attention.'
-      : 'Nothing prominent needs your attention right now.';
+    h2.textContent = undisposed.length
+      ? undisposed.length + ' actionable finding' + (undisposed.length === 1 ? '' : 's') + ' to review'
+      : 'No outstanding QA findings';
     var intro = document.createElement('p');
-    intro.textContent = recommendations.length
-      ? 'These are ranked for likely training impact. Browse them one at a time rather than treating QA like a backlog.'
-      : 'The full report and existing utilities are still available if you want to dig deeper.';
+    intro.textContent = undisposed.length
+      ? 'Inspect the affected media and decide what, if anything, needs changing.'
+      : 'Available checks and lower-confidence observations remain in Reports.';
     copy.appendChild(h2);
     copy.appendChild(intro);
     hero.appendChild(copy);
 
     var heroActions = document.createElement('div');
     heroActions.className = 'qa-hero-actions';
-    if (recommendations.length) heroActions.appendChild(qaCreateButton('Browse Recommendations', 'qa-primary', 'browse-next'));
+    if (undisposed.length) heroActions.appendChild(qaCreateButton('Review ' + undisposed.length + ' findings', 'qa-primary', 'browse-next'));
     var deepWrap = document.createElement('div');
     deepWrap.className = 'qa-deep-scan-wrap';
     var deep = qaCreateButton(
@@ -1862,11 +1903,16 @@
     container.appendChild(hero);
 
     var conceptWrap = document.createElement('section');
-    conceptWrap.className = 'qa-section';
+    conceptWrap.className = 'qa-section qa-concept-check';
+    var conceptDetails = document.createElement('details');
+    conceptDetails.className = 'qa-optional-check';
+    var conceptSummary = document.createElement('summary');
+    conceptSummary.textContent = 'Check a specific concept (optional)';
+    conceptDetails.appendChild(conceptSummary);
     var conceptHeading = document.createElement('h2');
     conceptHeading.className = 'qa-section-title';
     conceptHeading.textContent = 'Check a specific concept';
-    conceptWrap.appendChild(conceptHeading);
+    conceptHeading.classList.add('hidden');
     var conceptInput = document.createElement('input');
     conceptInput.type = 'text';
     conceptInput.id = 'qa-concept-input';
@@ -1890,18 +1936,19 @@
         qaCoverageLine(conceptCoverage.counts, true);
       conceptWrap.appendChild(conceptCounts);
     }
-    container.appendChild(conceptWrap);
+    conceptDetails.appendChild(conceptWrap);
+    container.appendChild(conceptDetails);
 
     var summary = document.createElement('div');
     summary.className = 'qa-summary-line';
     var primary = document.createElement('strong');
-    primary.textContent = high + ' high-impact';
+    primary.textContent = high + ' higher-priority';
     summary.appendChild(primary);
     var normal = document.createElement('span');
-    normal.textContent = Math.max(0, recommendations.length - high) + ' normal-priority';
+    normal.textContent = Math.max(0, undisposed.length - high) + ' other findings';
     summary.appendChild(normal);
     var handledEl = document.createElement('span');
-    handledEl.textContent = handled + ' handled';
+    handledEl.textContent = handled + ' set aside';
     summary.appendChild(handledEl);
     container.appendChild(summary);
 
@@ -1909,7 +1956,7 @@
     categorySection.className = 'qa-section';
     var categoryTitle = document.createElement('h2');
     categoryTitle.className = 'qa-section-title';
-    categoryTitle.textContent = 'What deserves attention';
+    categoryTitle.textContent = 'Findings by type';
     categorySection.appendChild(categoryTitle);
     var grid = document.createElement('div');
     grid.className = 'qa-category-grid';
@@ -1936,7 +1983,7 @@
     if (!grid.children.length) {
       var empty = document.createElement('div');
       empty.className = 'qa-empty';
-      empty.textContent = 'No actionable deterministic findings in the current training selection.';
+      empty.textContent = 'No supported corrections identified. Uncertain patterns remain in Reports.';
       grid.appendChild(empty);
     }
     categorySection.appendChild(grid);
@@ -2082,9 +2129,8 @@
     article.className = 'qa-recommendation';
     var eyebrow = document.createElement('div');
     eyebrow.className = 'qa-recommendation-eyebrow';
-    eyebrow.textContent = QA_CATEGORY_LABELS[finding.category] + ' · ' + (finding.priority === 'high' ? 'High impact' : 'Recommendation') +
-      (finding.source === 'ai' ? ' · ' + finding.trainingValue + ' training value' : '') +
-      ' · ' + finding.confidence + ' confidence' + (finding.sourceLabel ? ' · ' + finding.sourceLabel : '');
+    eyebrow.textContent = (QA_CATEGORY_LABELS[finding.category] || 'QA') +
+      (finding.sourceLabel ? ' · ' + finding.sourceLabel : '');
     article.appendChild(eyebrow);
     var title = document.createElement('h2');
     title.className = 'qa-recommendation-title';
@@ -2106,26 +2152,33 @@
       var h3 = document.createElement('h3');
       h3.textContent = 'Evidence';
       var note = document.createElement('span');
-      note.textContent = finding.files.length > 1 ? 'Scroll through ' + finding.files.length + ' affected items.' : '1 affected item.';
+      note.textContent = finding.files.length > 1 ? finding.files.length + ' affected items' : '1 affected item';
       evidenceHeading.appendChild(h3);
       evidenceHeading.appendChild(note);
       article.appendChild(evidenceHeading);
       var strip = document.createElement('div');
       strip.className = 'qa-evidence-strip';
-      finding.files.forEach(function (fileName) { strip.appendChild(qaCreateEvidenceMedia(fileName)); });
+      finding.files.slice(0, 6).forEach(function (fileName) { strip.appendChild(qaCreateEvidenceMedia(fileName)); });
+      if (finding.files.length > 6) {
+        var overflow = document.createElement('span');
+        overflow.className = 'qa-muted';
+        overflow.textContent = '+' + (finding.files.length - 6) + ' more in Inspect';
+        strip.appendChild(overflow);
+      }
       article.appendChild(strip);
     }
 
     var actions = document.createElement('div');
     actions.className = 'qa-recommendation-actions';
     if (finding.files && finding.files.length) {
-      actions.appendChild(qaCreateButton('Inspect ' + finding.files.length, 'qa-primary', 'inspect-finding', finding.id));
+      var primaryLabel = finding.category === 'captioning' ? 'Review correction'
+        : finding.utilityTab === 'duplicates' ? 'Review duplicate groups'
+        : 'Inspect ' + finding.files.length;
+      actions.appendChild(qaCreateButton(primaryLabel, 'qa-primary',
+        finding.utilityTab === 'duplicates' ? 'utility' : 'inspect-finding',
+        finding.utilityTab === 'duplicates' ? 'duplicates' : finding.id));
     }
-    if (finding.utilityTab) {
-      actions.appendChild(qaCreateButton('Open ' + (finding.utilityTab === 'duplicates' ? 'Duplicates' : 'Prune Report'), '', 'utility', finding.utilityTab));
-    }
-    actions.appendChild(qaCreateButton('Keep intentionally', '', 'dispose', 'keep'));
-    actions.appendChild(qaCreateButton('Skip for now', '', 'dispose', 'skip'));
+    actions.appendChild(qaCreateButton('Dismiss', '', 'dispose', 'keep'));
 
     var nav = document.createElement('div');
     nav.className = 'qa-recommendation-nav';
@@ -2138,7 +2191,7 @@
     actions.appendChild(nav);
     article.appendChild(actions);
     // Keep visual evidence visible while browsing. Detailed explanation stays collapsed.
-    article.insertBefore(actions, summary);
+    article.insertBefore(summary, actions);
     if (finding.files && finding.files.length) {
       article.insertBefore(evidenceHeading, actions);
       article.insertBefore(strip, actions);
@@ -2172,9 +2225,7 @@
     var meta = document.createElement('div');
     meta.className = 'qa-report-meta';
     [
-      finding.priority === 'high' ? 'High impact' : 'Normal priority',
-      finding.source === 'ai' ? finding.trainingValue + ' training value' : '',
-      finding.confidence + ' confidence',
+      finding.priority === 'high' ? 'Priority' : '',
       qaFileCountText((finding.files || []).length),
       finding.sourceLabel || ''
     ].filter(Boolean).concat(finding.meta || []).slice(0, 6).forEach(function (value) {
@@ -2235,15 +2286,16 @@
       container.appendChild(section);
     });
 
-    if (qaWorkbenchState.observations.length) {
+    var reportObservations = qaGetReportObservations();
+    if (reportObservations.length) {
       var details = document.createElement('details');
       details.className = 'qa-other-observations';
       var summary = document.createElement('summary');
-      summary.textContent = 'Other observations · ' + qaWorkbenchState.observations.length + ' lower-impact signal' + (qaWorkbenchState.observations.length === 1 ? '' : 's');
+      summary.textContent = 'Other observations · ' + reportObservations.length + ' signals';
       details.appendChild(summary);
       var list = document.createElement('div');
       list.className = 'qa-other-observations-list';
-      qaWorkbenchState.observations.forEach(function (observation) {
+      reportObservations.forEach(function (observation) {
         var row = document.createElement('div');
         row.textContent = observation.title + ' — ' + observation.summary;
         list.appendChild(row);

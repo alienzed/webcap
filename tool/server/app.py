@@ -822,7 +822,7 @@ def vision_schema_assist_route():
                 folder,
                 data.get("media", ""),
             )
-            messages = build_vision_schema_sight_messages(relative_media)
+            messages = build_vision_schema_sight_messages(relative_media, data.get("existingGroups"))
             job = enqueue_llm(
                 "caption",
                 vision_model,
@@ -831,7 +831,7 @@ def vision_schema_assist_route():
                     "messages": messages,
                 },
                 context={
-                    "runtimeOverrides": {"maxTokens": 900},
+                    "runtimeOverrides": {"maxTokens": 1800},
                 },
                 label="Vision Sight",
             )

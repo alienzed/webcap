@@ -366,7 +366,7 @@
   function notifyRecent(items) {
     items.forEach(function (item) {
       var status = String(item.status || '');
-      if (['completed', 'finished_early', 'failed', 'interrupted'].indexOf(status) === -1) return;
+      if (['completed', 'finished_early', 'failed', 'interrupted', 'stopped', 'cancelled'].indexOf(status) === -1) return;
       var key = recentKey(item);
       if (state.notified[key]) return;
       state.notified[key] = true;

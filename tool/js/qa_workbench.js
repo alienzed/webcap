@@ -2394,6 +2394,21 @@
 
   var qaTargetedRecheck = null;
 
+  function qaCancelTargetedRecheck() {
+    if (!qaTargetedRecheck) return;
+    var operation = qaTargetedRecheck;
+    operation.cancelled = true;
+    qaTargetedRecheck = null;
+    cancelItemSightRefresh().catch(function (err) { reportConsoleError('QA Recheck · Cancel Vision', err); });
+    if (operation.jobId) {
+      qaRequestJson('/fs/director/job', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation: 'cancel_job', jobId: operation.jobId })
+      }).catch(function (err) { reportConsoleError('QA Recheck · Cancel Director', err); });
+    }
+    reportConsoleInfo('QA Recheck', 'Stopped. Existing annotations and findings retained.');
+  }
+
   function qaRecheckCurrentFinding() {
     if (!isFocusedQaReviewMode() || !qaFocusReviewCurrent() || !state.currentItem) return Promise.resolve(false);
     if (qaTargetedRecheck) return Promise.resolve(false);
@@ -3000,6 +3015,7 @@
   window.qaFocusReviewMarkHandled = qaFocusReviewMarkHandled;
   window.qaFocusReviewStopped = qaFocusReviewStopped;
   window.qaRecheckCurrentFinding = qaRecheckCurrentFinding;
+  window.qaCancelTargetedRecheck = qaCancelTargetedRecheck;
   window.qaFocusReviewRecheckBusy = function () { return !!qaTargetedRecheck; };
   window.qaFocusReviewReasons = qaFocusReviewReasons;
   window.qaFocusReviewActionableFindings = qaFocusReviewActionableFindings;

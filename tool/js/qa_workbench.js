@@ -2685,16 +2685,11 @@
     if (!qaFocusReviewCurrent()) return false;
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) throw new Error('QA review item is missing after Apply.');
-    qaReconcileAiFindingsToCurrentInputs();
-    qaMergeFindings();
     var remaining = qaFocusReviewFindings(mediaKey).filter(function (finding) {
       return qaFocusReviewHasAction(mediaKey, item.fileName, item.caption || '', finding);
     });
     qaFocusReviewState.reviewFindings[mediaKey] = remaining;
-    if (!remaining.length) {
-      qaFocusReviewMarkHandled(mediaKey, 'applied');
-      return false;
-    }
+    if (!remaining.length) return false;
     qaSyncFocusReviewButton();
     return true;
   }

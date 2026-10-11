@@ -568,6 +568,9 @@ def normalize_assignment_result(data, existing_groups=None, allowed_files=None, 
         out.append({"file": file_name, "candidates": candidates})
 
     by_file = {row["file"]: row for row in out}
+    missing = [file_name for file_name in (allowed_files or []) if file_name not in by_file]
+    if missing:
+        raise ValueError("Tag Assist omitted results for: " + ", ".join(missing))
     ordered = []
     for file_name in (allowed_files or []):
         file_name = str(file_name or "").strip()

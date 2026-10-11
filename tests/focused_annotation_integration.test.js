@@ -127,4 +127,30 @@ assert.deepStrictEqual(Array.from(undoSandbox.checklistItems), ['A']);
 assert.strictEqual(undoSandbox.focusedAnnotationState.open, false);
 assert.strictEqual(undoSandbox.focusedAnnotationState.groupKey, '');
 
+// Quick Picks suggest missing tags, even if an assigned tag also matches the caption or pose.
+const assignedTags = new Set(['ring connectors']);
+focusSandbox.state = {
+  items: [{ key: 'item-1', fileName: 'item.jpg', metadata: {} }]
+};
+focusSandbox.getChecklistKeywordTermsForRequirement = () => [
+  'ring connectors', 'simple string straps', 'triangle'
+];
+focusSandbox.normalizeChecklistTerm = (value) => String(value || '').trim();
+focusSandbox.getChecklistAssignedTagsForMediaKey = () => Array.from(assignedTags);
+focusSandbox.hasChecklistAssignedTagForMediaKey = (_key, _group, term) => assignedTags.has(term);
+focusSandbox.checklistGroupTermAppearsInCurrentCaption = (_group, term) =>
+  term === 'ring connectors' || term === 'triangle';
+focusSandbox.getSelectionPoseSuggestedTags = () => ['ring connectors', 'simple string straps'];
+
+function quickPickTerms() {
+  return Array.from(focusSandbox.buildFocusedAnnotationQuickPickEntries('item-1', 'Top'),
+    (entry) => entry.term);
+}
+
+assert.deepStrictEqual(quickPickTerms(), ['triangle', 'simple string straps']);
+assignedTags.add('simple string straps');
+assert.deepStrictEqual(quickPickTerms(), ['triangle']);
+assignedTags.delete('ring connectors');
+assert.deepStrictEqual(quickPickTerms(), ['ring connectors', 'triangle']);
+
 console.log('focused_annotation_integration: all assertions passed');

@@ -630,7 +630,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
   heading.textContent = 'Suggestions';
   row.appendChild(heading);
   if (isFocusedQaReviewMode()) {
-    qaFocusReviewTagActions(mediaKey).forEach(function (action) {
+    qaFocusReviewTagActions(mediaKey, captionAssistCandidate.text).forEach(function (action) {
       var assigned = action.group
         ? getChecklistAssignmentEntriesForMediaKey(mediaKey).some(function (entry) {
           return entry.requirement === action.group && entry.term === action.term;
@@ -640,7 +640,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'caption-vision-phrase-insert';
-      button.textContent = action.term;
+      button.textContent = (action.action === 'add' ? 'Add ' : 'Remove ') + action.term;
       button.title = (action.action === 'add' ? 'Add' : 'Remove') + ' tag · ' + (action.group || 'Other') + ' · saves immediately';
       button.setAttribute('aria-label', button.title);
       button.addEventListener('click', function () {
@@ -818,7 +818,7 @@ function syncCaptionAssistCandidateUi() {
   var panelVisible = focusVisible || assistVisible;
   var pending = panelVisible && isCaptionAssistRunning();
   var omittedAssignments = visible && Array.isArray(candidate.omittedAssignments) ? candidate.omittedAssignments : [];
-  var missingGroups = visible ? getCaptionAssistMissingGroups(mediaKey) : [];
+  var missingGroups = visible && !isFocusedQaReviewMode() ? getCaptionAssistMissingGroups(mediaKey) : [];
 
   panel.classList.toggle('hidden', !panelVisible);
   panel.classList.toggle('is-focus-caption', focusVisible);
@@ -842,7 +842,7 @@ function syncCaptionAssistCandidateUi() {
       : (reviewMode ? 'Preparing review…' : 'Preparing caption…');
   }
 
-  var qaReasons = isFocusedQaReviewMode() ? qaFocusReviewReasons(mediaKey) : [];
+  var qaReasons = isFocusedQaReviewMode() && visible ? qaFocusReviewReasons(mediaKey, candidate.text) : [];
   var qaQuality = isFocusedQaReviewMode() ? qaFocusReviewQuality(mediaKey) : null;
   qaReasonsEl.classList.toggle('hidden', !qaReasons.length && !qaQuality);
   qaReasonsEl.innerHTML = '';
@@ -860,7 +860,7 @@ function syncCaptionAssistCandidateUi() {
     var summary = document.createElement('summary');
     summary.textContent = 'Why?';
     details.appendChild(summary);
-    qaFocusReviewFindings(mediaKey).forEach(function (finding) {
+    qaFocusReviewActionableFindings(mediaKey, candidate.text).forEach(function (finding) {
       var reason = document.createElement('p');
       reason.textContent = String(finding.why || finding.summary || '');
       details.appendChild(reason);
@@ -868,7 +868,7 @@ function syncCaptionAssistCandidateUi() {
     qaReasonsEl.appendChild(details);
   }
   if (isFocusedQaReviewMode() && visible) {
-    qaFocusReviewPatches(mediaKey).forEach(function (patch) {
+    qaFocusReviewPatches(mediaKey, candidate.text).forEach(function (patch) {
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'caption-vision-phrase-insert';
@@ -884,18 +884,39 @@ function syncCaptionAssistCandidateUi() {
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
   omissionsEl.innerHTML = '';
   if (omittedAssignments.length) {
-    var omissionText = document.createElement('span');
-    omissionText.textContent = (reviewMode ? 'Caption' : 'Candidate') + ' omitted selected annotations: ' + omittedAssignments.join(' · ');
-    omissionsEl.appendChild(omissionText);
-    var fixOmissionsBtn = document.createElement('button');
-    fixOmissionsBtn.type = 'button';
-    fixOmissionsBtn.className = 'caption-assist-fix-btn';
-    fixOmissionsBtn.textContent = 'Fix';
-    fixOmissionsBtn.title = 'Revise this candidate to include the selected annotations';
-    fixOmissionsBtn.addEventListener('click', function () {
-      repairCaptionAssistCandidate(candidate.omittedCorrections || []);
+    var omissionLabel = document.createElement('span');
+    omissionLabel.textContent = (reviewMode ? 'Caption' : 'Candidate') + ' omitted selected annotations:';
+    omissionsEl.appendChild(omissionLabel);
+    (candidate.omittedCorrections || []).forEach(function (entry) {
+      var row = document.createElement('span');
+      row.className = 'caption-vision-phrase-list';
+      var title = document.createElement('span');
+      title.textContent = (entry.group ? entry.group + ' — ' : '') + entry.term;
+      row.appendChild(title);
+      var insert = document.createElement('button');
+      insert.type = 'button';
+      insert.className = 'caption-assist-fix-btn';
+      insert.textContent = 'Insert at cursor';
+      insert.title = 'Insert this selected annotation into the draft; save with Apply';
+      insert.addEventListener('pointerdown', function (event) { event.preventDefault(); });
+      insert.addEventListener('click', function () {
+        var phrase = entry.group
+          ? renderChecklistGroupTermWithAffixes(entry.group, entry.term, mediaKey)
+          : renderChecklistTermWithAffixes(entry.term, mediaKey);
+        insertFocusedCaptionVisionPhrase(phrase || entry.term);
+      });
+      row.appendChild(insert);
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'caption-vision-phrase-insert';
+      remove.textContent = 'Remove tag';
+      remove.title = 'Unassign this annotation from the item; saves immediately';
+      remove.addEventListener('click', function () {
+        removeCaptionAssistAssignedTag(mediaKey, entry.group, entry.term);
+      });
+      row.appendChild(remove);
+      omissionsEl.appendChild(row);
     });
-    omissionsEl.appendChild(fixOmissionsBtn);
   }
 
   renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);

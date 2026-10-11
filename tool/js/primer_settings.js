@@ -491,7 +491,6 @@ function insertFocusedCaptionVisionPhrase(phrase) {
 function getCaptionAssistTagSuggestions(mediaItem) {
   var mediaKey = mediaItem.key;
   var metadata = mediaItem.metadata || {};
-  var context = metadata.vision_vocabulary_sight || {};
   var open = metadata.vision_sight || {};
   var suggestions = [];
   var seen = {};
@@ -521,17 +520,6 @@ function getCaptionAssistTagSuggestions(mediaItem) {
     seen[lower] = true;
     suggestions.push({ group: group, term: term, isNew: !!group && !known, rank: rank + (known ? 0 : 1) });
   }
-  (Array.isArray(context.matches) ? context.matches : []).forEach(function (entry) {
-    (Array.isArray(entry && entry.terms) ? entry.terms : []).forEach(function (term) {
-      offer(entry.group, term, 0, true);
-    });
-  });
-  (Array.isArray(context.diagnostics && context.diagnostics.unmatched)
-    ? context.diagnostics.unmatched : []).forEach(function (entry) {
-    (Array.isArray(entry && entry.terms) ? entry.terms : []).forEach(function (term) {
-      offer(entry.group, term, 2, true);
-    });
-  });
   var inventory = open.inventory || {};
   var extras = (Array.isArray(inventory.details) ? inventory.details : []).slice();
   (Array.isArray(inventory.things) ? inventory.things : []).forEach(function (thing) {
@@ -1316,8 +1304,7 @@ function buildCaptionAssistRequest(mediaItem) {
     template: primer.template,
     renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
     draft: getCaptionAssistDraftForMediaItem(mediaItem),
-    openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null,
-    contextSight: null
+    openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null
   };
 }
 
@@ -1700,7 +1687,7 @@ function runCaptionAssistAfterSight(draftOverride) {
         ? 'Caption Assist candidate failed annotation validation.'
         : 'AI caption candidate ready.'
     );
-    // Context Sight preceded the current Director result. Recheck Vision stays explicit;
+    // Recheck Vision stays explicit;
     // the one-item lookahead prepares the next item's Sight before its Director.
 
     return true;

@@ -437,7 +437,8 @@
     }).filter(Boolean);
     qaWorkbenchState.findings = qaSortFindings(
       qaWorkbenchState.deterministicFindings.concat(visibleAi, qaWorkbenchState.conceptFindings.map(function (finding) {
-        var files = (finding.files || []).filter(function (file) { return current[file] && finding.inputSignatures[file] === current[file]; });
+        var conceptCurrent = qaConceptInputSignatures(qaGetTrainingItems());
+        var files = (finding.files || []).filter(function (file) { return conceptCurrent[file] && finding.inputSignatures[file] === conceptCurrent[file]; });
         return files.length ? Object.assign({}, finding, { files: files }) : null;
       }).filter(Boolean))
     );
@@ -832,6 +833,20 @@
     }).filter(function (row) { return row.terms.length; });
   }
 
+  function qaConceptInputSignatures(items) {
+    // Concept checks inspect full Sight, so fingerprint that same full evidence.
+    var signatures = {};
+    qaBuildConceptItems(items).forEach(function (item) {
+      var source = JSON.stringify([item, getCaptionVisionModelId() || '']);
+      var hash = 2166136261;
+      for (var i = 0; i < source.length; i += 1) {
+        hash = Math.imul(hash ^ source.charCodeAt(i), 16777619);
+      }
+      signatures[item.fileName] = (hash >>> 0).toString(16);
+    });
+    return signatures;
+  }
+
   function qaBuildConceptItems(items) {
     // Deep QA deliberately shortens Sight. A targeted check needs the whole
     // cached inventory to avoid losing the very detail being investigated.
@@ -882,10 +897,12 @@
       folder: String(state.folder || ''), scope: qaBuildScopeKey(items),
       concept: concept, model: model, items: available,
       vocabulary: vocabulary, missingCount: missingCount,
-      signatures: qaCurrentItemSignatureMap(items), index: 0,
+      signatures: qaConceptInputSignatures(items), index: 0,
       jobId: '', stopped: false
     };
     qaWorkbenchState.conceptFindings = [];
+    qaMergeFindings();
+    qaSyncFocusReview();
     qaWorkbenchState.conceptSession = session;
     reportConsoleInfo('QA Concept Check', 'Started "' + concept + '" for ' + available.length + '/' + items.length + ' items with cached Sight' + (missingCount ? '; ' + missingCount + ' need Sight.' : '.') );
     function current() {
@@ -937,7 +954,7 @@
         var liveItems = qaGetTrainingItems().filter(function (item) {
           return batch.some(function (row) { return row.fileName === item.fileName; });
         });
-        var currentSignatures = qaCurrentItemSignatureMap(liveItems);
+        var currentSignatures = qaConceptInputSignatures(liveItems);
         qaNormalizeAiFindings(analysis, session.model).forEach(function (finding) {
           var files = (finding.files || []).filter(function (file) { return session.signatures[file] === currentSignatures[file]; });
           finding.tagActions = (finding.tagActions || []).filter(function (action) {
@@ -2311,7 +2328,7 @@
       return (finding.category === 'captioning' || finding.category === 'consistency') &&
         !qaWorkbenchState.dispositions[finding.id] &&
         (finding.files || []).indexOf(item.fileName) !== -1 &&
-        (finding.source === 'concept' ? finding.inputSignatures[item.fileName] === current[item.fileName] : qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName]);
+        (finding.source === 'concept' ? finding.inputSignatures[item.fileName] === qaConceptInputSignatures([item])[item.fileName] : qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName]);
     });
     // Only the existing two-signal visual agreement check can introduce a
     // deterministic item-level tag action. Other QA observations stay in QA.

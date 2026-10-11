@@ -1860,13 +1860,16 @@
     var copy = document.createElement('div');
     copy.className = 'qa-hero-copy';
     var h2 = document.createElement('h2');
+    var deepCoverageCounts = qaDeepCoverageCounts(items);
+    var evaluationIncomplete = deepCoverageCounts.unchecked > 0 || deepCoverageCounts.failed > 0 || qaWorkbenchState.externalAnalysisRunning;
     h2.textContent = undisposed.length
       ? undisposed.length + ' actionable finding' + (undisposed.length === 1 ? '' : 's') + ' to review'
-      : 'No outstanding QA findings';
+      : (evaluationIncomplete ? 'No actionable findings in available checks' : 'No outstanding QA findings');
     var intro = document.createElement('p');
     intro.textContent = undisposed.length
       ? 'Inspect the affected media and decide what, if anything, needs changing.'
-      : 'Available checks and lower-confidence observations remain in Reports.';
+      : (evaluationIncomplete ? 'Deep QA has not checked every item. Details and observations are in Reports.'
+        : 'No outstanding findings from the current checks. Observations remain in Reports.');
     copy.appendChild(h2);
     copy.appendChild(intro);
     hero.appendChild(copy);
@@ -1960,7 +1963,7 @@
     categorySection.appendChild(categoryTitle);
     var grid = document.createElement('div');
     grid.className = 'qa-category-grid';
-    var counts = qaCategoryCounts(recommendations);
+    var counts = qaCategoryCounts(undisposed);
     QA_CATEGORY_ORDER.forEach(function (category) {
       if (!counts[category]) return;
       var card = qaCreateButton('', 'qa-category-card', 'open-category', category);
@@ -2143,8 +2146,7 @@
     var why = document.createElement('p');
     why.className = 'qa-recommendation-why';
     why.textContent = finding.why;
-    article.appendChild(why);
-    qaRenderFacts(article, finding);
+    // Keep the short diagnosis visible; explanation and metrics are optional.
 
     if (finding.files && finding.files.length) {
       var evidenceHeading = document.createElement('div');
@@ -2171,12 +2173,10 @@
     var actions = document.createElement('div');
     actions.className = 'qa-recommendation-actions';
     if (finding.files && finding.files.length) {
-      var primaryLabel = finding.category === 'captioning' ? 'Review correction'
-        : finding.utilityTab === 'duplicates' ? 'Review duplicate groups'
+      var primaryLabel = (finding.category === 'captioning' || (finding.patches || []).length) ? 'Open Caption Assist'
+        : finding.utilityTab === 'duplicates' ? 'Inspect exact duplicates'
         : 'Inspect ' + finding.files.length;
-      actions.appendChild(qaCreateButton(primaryLabel, 'qa-primary',
-        finding.utilityTab === 'duplicates' ? 'utility' : 'inspect-finding',
-        finding.utilityTab === 'duplicates' ? 'duplicates' : finding.id));
+      actions.appendChild(qaCreateButton(primaryLabel, 'qa-primary', 'inspect-finding', finding.id));
     }
     actions.appendChild(qaCreateButton('Dismiss', '', 'dispose', 'keep'));
 
@@ -2201,7 +2201,8 @@
     var detailsLabel = document.createElement('summary');
     detailsLabel.textContent = 'Why / evidence';
     details.appendChild(detailsLabel);
-    while (actions.nextSibling) details.appendChild(actions.nextSibling);
+    details.appendChild(why);
+    qaRenderFacts(details, finding);
     article.appendChild(details);
 
     var status = document.createElement('div');
@@ -2990,11 +2991,21 @@
   function qaInspectFinding(findingId) {
     var finding = qaWorkbenchState.findings.find(function (row) { return row.id === findingId; });
     if (!finding || !finding.files || !finding.files.length) return;
-    if (finding.category === 'captioning') {
+    if (finding.category === 'captioning' || (finding.patches || []).length) {
       qaReviewCaptionFiles(finding.files, 'QA · ' + finding.title, finding.id);
       return;
     }
-    qaSelectFiles(finding.files, 'QA · ' + finding.title, finding.id);
+    if (finding.files.length === 1) {
+      qaSelectFiles(finding.files, 'QA · ' + finding.title, finding.id);
+      return;
+    }
+    // Group inspection belongs in the existing Grid: rate, select, or prune.
+    // Keep the original selection so Return to QA restores its prior context.
+    qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
+    qaWorkbenchState.returnFindingId = finding.id;
+    qaWorkbenchState.statusMessage = '';
+    activateFocusSet(finding.files, 'QA · ' + finding.title, 'qa');
+    openMediaGridSurface();
   }
 
   function qaInspectHealth(kind) {

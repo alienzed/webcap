@@ -69,6 +69,10 @@
     detail.textContent = detailText;
   }
 
+  function coverageIsUsable() {
+    return setScanState.coverage.known && setScanState.coverage.openCurrent > 0;
+  }
+
   function renderSetIntelligence() {
     var modal = el('set-scan-modal');
     var stopBtn = el('set-scan-stop-btn');
@@ -100,7 +104,8 @@
     scopeSummary.textContent = (scopeToggle.checked ? 'Entire Set' : 'Current training selection') +
       ' · ' + String(scopeCount) + ' / ' + String(getCurrentSetMediaFileNames().length) + ' media';
     stopBtn.classList.toggle('hidden', !setScanState.running);
-    next.classList.toggle('hidden', setScanState.phase !== 'complete');
+    // Saved partial Sight is useful downstream; do not turn coverage gaps into a wizard gate.
+    next.classList.toggle('hidden', setScanState.running || !coverageIsUsable());
 
     var coverage = setScanState.coverage;
     var totalCoverage = coverage.known ? coverage.total : 0;

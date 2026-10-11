@@ -808,19 +808,24 @@ function captionAssistCompareWords(original, proposed) {
 function renderCaptionAssistComparison(container, item, candidate) {
   var original = String(item && item.caption || '');
   var revised = String(candidate && candidate.text || '');
-  var visible = !!(item && candidate && candidate.mediaKey === item.key && original !== revised);
+  var visible = !!(item && candidate && candidate.mediaKey === item.key);
   container.classList.toggle('hidden', !visible);
   if (!visible) {
     container.replaceChildren();
     container.dataset.mediaKey = '';
+    container.dataset.hasChanges = '';
     return;
   }
+  var changed = original !== revised;
   var sameItem = container.dataset.mediaKey === item.key;
-  var expanded = sameItem ? container.open : isFocusedQaReviewMode();
+  // Open new differences automatically, but respect a manually collapsed diff.
+  var expanded = changed && (!sameItem || container.dataset.hasChanges !== 'true' || container.open);
   var diff = captionAssistCompareWords(original, revised);
   container.replaceChildren();
   var summary = document.createElement('summary');
-  summary.textContent = 'Changes vs saved caption';
+  var missingCount = Array.isArray(candidate.omittedCorrections) ? candidate.omittedCorrections.length : 0;
+  summary.textContent = (changed ? 'Changes vs saved caption' : 'No caption changes proposed') +
+    (missingCount ? ' · ' + missingCount + ' selected tag' + (missingCount === 1 ? '' : 's') + ' missing' : '');
   container.appendChild(summary);
   function addRow(title, words, matched, kind) {
     var row = document.createElement('div');
@@ -841,9 +846,17 @@ function renderCaptionAssistComparison(container, item, candidate) {
     row.appendChild(content);
     container.appendChild(row);
   }
-  addRow('Saved', diff.oldWords, diff.oldMatch, 'removed');
-  addRow('Proposed', diff.newWords, diff.newMatch, 'added');
+  if (changed) {
+    addRow('Saved', diff.oldWords, diff.oldMatch, 'removed');
+    addRow('Proposed', diff.newWords, diff.newMatch, 'added');
+  } else {
+    var unchanged = document.createElement('div');
+    unchanged.className = 'caption-assist-comparison-row';
+    unchanged.textContent = 'Saved caption and draft match.';
+    container.appendChild(unchanged);
+  }
   container.dataset.mediaKey = item.key;
+  container.dataset.hasChanges = String(changed);
   container.open = expanded;
 }
 

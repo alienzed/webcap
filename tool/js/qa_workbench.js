@@ -2681,15 +2681,16 @@
       (ready ? ready + ' ready' : (complete ? 'No findings remaining' : '0 ready')) + suffix;
   }
 
-  function qaFocusReviewRefreshAfterApply(mediaKey) {
+  function qaFocusReviewRefreshAfterApply(mediaKey, previousFindings) {
     if (!qaFocusReviewCurrent()) return false;
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) throw new Error('QA review item is missing after Apply.');
-    var remaining = qaFocusReviewFindings(mediaKey).filter(function (finding) {
+    var remaining = (previousFindings || []).filter(function (finding) {
       return qaFocusReviewHasAction(mediaKey, item.fileName, item.caption || '', finding);
     });
     qaFocusReviewState.reviewFindings[mediaKey] = remaining;
     if (!remaining.length) return false;
+    qaFocusReviewState.queued[mediaKey] = true;
     qaSyncFocusReviewButton();
     return true;
   }
@@ -2761,6 +2762,12 @@
     var wanted = {};
     session.items.forEach(function (item) {
       var candidates = qaFocusReviewCandidateFindings(item);
+      var pending = session.reviewFindings[item.key] || [];
+      // Preserve reviewed-but-unresolved actions across a saved annotation change.
+      pending.forEach(function (finding) {
+        if (qaFocusReviewHasAction(item.key, item.fileName, item.caption || '', finding) &&
+            !candidates.some(function (row) { return row.id === finding.id; })) candidates.push(finding);
+      });
       candidatesByKey[item.key] = candidates;
       if (candidates.length) wanted[item.fileName] = true;
     });

@@ -705,7 +705,8 @@
   function finishScan(message) {
     setScanState.running = false;
     setScanState.currentVisionJobId = '';
-    setScanState.phase = 'complete';
+    setScanState.phase = setScanState.coverage.openCurrent >= setScanState.coverage.total
+      ? 'complete' : 'idle';
     qaInputsUpdated();
     var failureCount = setScanState.failures.length;
     if (failureCount) {

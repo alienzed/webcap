@@ -197,6 +197,8 @@ function useCaptionAssistCandidate() {
   }
 
   var nextCaption = String(captionAssistCandidate.text || '');
+  var priorQaFindings = isFocusedQaReviewMode()
+    ? qaFocusReviewFindings(mediaItem.key).slice() : [];
   if (!isFocusedCaptionOpen()) {
     closeCaptionAssistPresentation();
     captionAssistCandidate = null;
@@ -222,7 +224,7 @@ function useCaptionAssistCandidate() {
     ui.editorEl.value = nextCaption;
     setStatus(unchangedReview ? 'Caption accepted.' : 'Caption saved.');
     if (isFocusedQaReviewMode()) {
-      if (qaFocusReviewRefreshAfterApply(mediaItem.key)) {
+      if (qaFocusReviewRefreshAfterApply(mediaItem.key, priorQaFindings)) {
         return presentFocusedReviewCandidate(mediaItem).then(function () {
           setStatus('Caption saved. Additional QA corrections remain on this item.');
           return true;

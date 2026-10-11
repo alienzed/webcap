@@ -141,6 +141,12 @@
       else if (item.area === 'comfy') label = 'Delete Scratch';
       html += '<button type="button" class="review-captions-btn storage-delete-btn"' + payload + '>' + label + '</button>';
     }
+    if (item.area === 'set' && item.id === 'media_metadata.json') {
+      html += '<button type="button" class="review-captions-btn storage-clear-sight-btn"' + payload +
+        ' data-sight-scope="legacy">Clear Legacy Sight</button>';
+      html += '<button type="button" class="review-captions-btn storage-clear-sight-btn"' + payload +
+        ' data-sight-scope="all">Clear All Sight</button>';
+    }
     return html;
   }
 
@@ -488,6 +494,34 @@
     });
   }
 
+  function clearSetSight(item, scope, button) {
+    var all = scope === 'all';
+    var message = all
+      ? 'Clear ALL saved Sight observations for this Set? This will require new Vision scans to regenerate them.'
+      : 'Clear legacy Context Sight observations for this Set? Current discovery Sight will be kept.';
+    if (!window.confirm(message + '\n\nManual tags, captions, vocabulary, and QA review decisions are not removed.\nThis cannot be undone.')) return;
+    button.disabled = true;
+    postJson('/fs/storage/set-sight/clear', {
+      folder: item.folder || '',
+      scope: scope
+    }).then(function (result) {
+      if (String(state.folder || '') === String(item.folder || '')) {
+        (state.items || []).forEach(function (mediaItem) {
+          if (!mediaItem || !mediaItem.metadata) return;
+          delete mediaItem.metadata.vision_vocabulary_sight;
+          if (all) delete mediaItem.metadata.vision_sight;
+        });
+        qaInputsUpdated();
+      }
+      return refresh().then(function () {
+        var status = el('storage-status');
+        if (status) status.textContent = String(result.removedRecords || 0) + ' generated Sight records cleared from Set metadata.';
+      });
+    }).catch(reportError).finally(function () {
+      button.disabled = false;
+    });
+  }
+
   function findItem(area, id, folder) {
     return allItems().find(function (item) {
       return item.area === area && item.id === id && String(item.folder || '') === String(folder || '');
@@ -519,6 +553,10 @@
     var item = findItem(area, id, folder);
     if (!item) return;
 
+    if (button.classList.contains('storage-clear-sight-btn')) {
+      clearSetSight(item, button.getAttribute('data-sight-scope') || '', button);
+      return;
+    }
     if (button.classList.contains('storage-open-btn')) {
       postJson('/fs/storage/open', { area: area, id: id, folder: folder }).catch(reportError);
       return;

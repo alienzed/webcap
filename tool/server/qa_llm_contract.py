@@ -383,23 +383,18 @@ def build_concept_request(items, concept, known_vocabulary=None, recheck_concern
     if concern:
         prompt = (
             "[ROLE]\nYou reassess ONE previously reported QA concern against fresh Vision Sight. "
-            "You do not see pixels; the saved Sight is a fallible observation.\n\n"
+            "You do not see pixels; Sight is fallible.\n\n"
             "[ORIGINAL CONCERN]\n" + json.dumps(concern, ensure_ascii=False) + "\n\n"
-            "[TASK]\nAnswer ONLY whether that same concern remains actionable after comparing "
-            "fresh Sight, current caption and current tags. Do not search for unrelated issues. "
-            "An absent or ambiguous observation is NOT affirmative evidence against an approved tag. "
-            "If the new Sight contradicts the concern with clear specific evidence, choose resolved. "
-            "If it supports a concrete annotation edit, choose still_actionable and include a precise "
-            "finding with exact tagActions or caption patches. If uncertain, choose inconclusive, "
-            "return no new findings and preserve the user's ability to review the original concern. "
-            "Do not equate no findings with resolved. Changes are suggestions, never mutations. "
-            "Use only exact supplied filenames and canonical vocabulary terms; do not invent groups.\n\n"
+            "[TASK]\nReassess ONLY this concern against fresh Sight, the caption and tags. "
+            "Do not find unrelated problems. Absent observations never disprove approved tags. "
+            "Choose resolved only with credible contradictory evidence, still_actionable only "
+            "with a concrete suggested patch or canonical tag action, otherwise inconclusive. "
+            "Zero findings does not mean resolved. Never modify annotations.\n\n"
             "[KNOWN VOCABULARY]\n" + json.dumps(vocabulary, ensure_ascii=False, separators=(",", ":")) + "\n\n"
             "[CURRENT EVIDENCE]\n" + json.dumps(evidence, ensure_ascii=False, separators=(",", ":")) + "\n\n"
-            "[OUTPUT]\nReturn the required recheckStatus (still_actionable, resolved, inconclusive) "
-            "and a brief, evidence-specific recheckReason. Set captionQuality to []. "
-            "A still_actionable result MUST include an actionable finding with a supported patch or "
-            "canonical tag action. A resolved or inconclusive result MUST return findings: []."
+            "[OUTPUT]\nReturn recheckStatus (still_actionable, resolved, inconclusive), an "
+            "evidence-specific recheckReason, summary, findings and captionQuality: []. "
+            "Only still_actionable may return findings. Those findings must include a concrete action."
         )
     else:
         prompt = (

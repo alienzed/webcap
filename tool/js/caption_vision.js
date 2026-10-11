@@ -873,6 +873,7 @@ function runVisionImageCaption() {
     visionImageCaptionState.requestToken = token;
     syncVisionImageCaptionModal();
     setStatus('Vision Caption starting...');
+    reportConsoleInfo('Describe with VL', 'Started for ' + mediaItem.fileName + '.');
 
     return requestVisionImageCaptionDescription(mediaItem, {
       model: model,
@@ -893,6 +894,7 @@ function runVisionImageCaption() {
       visionImageCaptionState.model = String(result.model || model);
       syncVisionImageCaptionModal();
       setStatus('Vision Caption ready.');
+      reportConsoleInfo('Describe with VL', 'Description ready for ' + mediaItem.fileName + '.');
       return true;
     });
   }).catch(function (err) {

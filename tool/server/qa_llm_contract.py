@@ -330,6 +330,60 @@ def build_request(items, training_focus="", deterministic_findings=None):
     }
 
 
+
+def build_concept_request(items, concept):
+    """Narrow, cache-only concept investigation; output reuses the Deep QA finding contract."""
+    concept = _clean(concept)[:240]
+    if not concept:
+        raise ValueError("Describe the visual concept to check.")
+    rows = _normalize_items(items)
+    evidence = []
+    for row in rows:
+        sight = row["analysis"].get("visionSight")
+        evidence.append({
+            "file": row["fileName"],
+            "caption": row["caption"],
+            "groupedTags": row["groupedTags"],
+            "tags": row["tags"],
+            "sight": {
+                "description": sight.get("description"),
+                "inventory": sight.get("inventory"),
+            } if isinstance(sight, dict) else None,
+        })
+    prompt = (
+        "[ROLE]\n"
+        "You conduct a user-directed QA check over supplied Set items. You do not see pixels. "
+        "Sight is fallible visual observation, not established ground truth.\n\n"
+        "[QUESTION]\n" + concept + "\n\n"
+        "[TASK]\n"
+        "For EACH supplied file, consider the exact requested concept using its cached Sight, "
+        "current caption and assigned tags. Report only concrete, actionable annotation omissions "
+        "or contradictions that matter to this question. Compare meanings, not keyword occurrences. "
+        "Existing tags may express the concept in different wording. Do not interpret an absent Sight "
+        "observation as proof of absence, and do not remove a user tag without affirmative contrary evidence. "
+        "If Sight is missing or inconclusive, do not invent a visual verdict. "
+        "Zero findings is valid; do not manufacture a quota.\n\n"
+        "[ACTIONS]\n"
+        "Each finding must identify actual supplied filenames. Use category consistency or captioning. "
+        "Prefer an exact per-file tagAction (add/remove) when the group and term appear in current annotations; "
+        "never invent groups or terms. Otherwise, provide a concise exact caption patch if the evidence "
+        "supports an edit. Keep findings per file, with a short specific why and concrete supporting evidence. "
+        "Do not return broad advice without a clickable action. "
+        "Do not change annotations yourself. All proposals require human review. "
+        "Respect the exact sourceText/anchorText patch contract; never fabricate an original substring.\n\n"
+        "[INPUT]\n" + json.dumps(evidence, ensure_ascii=False, separators=(",", ":")) + "\n\n"
+        "[OUTPUT]\nReturn JSON matching the schema. Set captionQuality to []. "
+        "Summary should describe this batch, not infer Set-wide prevalence."
+    )
+    return {
+        "operation": "qa_deep_scan",
+        "output": "json",
+        "prompt": prompt,
+        "response_schema": _response_schema(),
+        "source_files": [row["fileName"] for row in rows],
+    }
+
+
 def normalize_result(data, allowed_files=None, captions_by_file=None):
     if not isinstance(data, dict):
         raise ValueError("QA Deep Scan response must be an object.")

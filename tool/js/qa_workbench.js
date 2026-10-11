@@ -2094,7 +2094,10 @@
 
   function qaFocusReviewPatchesForFinding(fileName, captionText, finding) {
     return (finding.patches || []).filter(function (patch) {
-      return patch && patch.file === fileName && !!captionVisionValidatePatch(captionText, patch);
+      if (!patch || patch.file !== fileName || !captionVisionValidatePatch(captionText, patch)) return false;
+      // Do not offer an add patch if its exact phrase is already present.
+      if (patch.action === 'add' && captionContainsPhrase(captionText, patch.replacementText)) return false;
+      return true;
     });
   }
 

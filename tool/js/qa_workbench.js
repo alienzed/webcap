@@ -645,7 +645,7 @@
       ' · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' reviewed';
     renderQaWorkbench();
 
-    refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: 'missing', silent: true }).then(function () {
+    refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: false, silent: true }).then(function () {
       return qaWaitForInteractiveRefresh();
     }).then(function () {
       if (sessionToken !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
@@ -2203,7 +2203,7 @@
           saved.annotationsAtGeneration === annotations &&
           (!saved.model || saved.model === String(request.model || ''))) return;
       return refreshSetIntelligenceItem(item, {
-        open: 'missing', context: 'missing', silent: true, allowOpenFailure: true
+        open: 'missing', context: false, silent: true, allowOpenFailure: true
       }).then(function () {
         return qaWaitForInteractiveRefresh();
       }).then(function () {

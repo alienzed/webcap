@@ -1041,3 +1041,18 @@ def test_refresh_caption_uses_current_candidate_and_cached_sight_without_rescan(
     assert 'refreshSetIntelligenceItem(' not in refresh
     assert 'clearCaptionAssistCandidate()' not in refresh
     assert 'Fresh Context Sight informed this caption' not in vision
+
+
+def test_caption_assist_comparison_and_natural_hand_on_hip_allowance():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    primer = (root / "tool/js/primer_settings.js").read_text(encoding="utf-8")
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    css = (root / "tool/css/styles.css").read_text(encoding="utf-8")
+    assert "function captionAssistAnnotationAppearsInCaption(" in primer
+    assert "captionAssistAnnotationAppearsInCaption(captionText, term)" in primer
+    assert "function captionAssistCompareWords(" in primer
+    assert "renderCaptionAssistComparison(comparisonEl, state.currentItem" in primer
+    assert 'id="editor-caption-comparison"' in html
+    assert ".caption-assist-comparison-added" in css
+    assert ".caption-assist-suggestion-chip" in css

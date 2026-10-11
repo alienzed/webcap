@@ -6848,3 +6848,26 @@ html[data-theme="dark"] iframe {
 .caption-assist-assigned-tags summary { cursor: pointer; color: var(--muted); margin-bottom: 8px; }
 .editor-caption-vision-phrases { overflow: auto; min-height: 0; max-height: min(320px, 35vh); }
 
+
+/* Caption Assist: compact suggestions and a read-only saved/proposed comparison. */
+.caption-assist-comparison {
+  margin: 0;
+  padding: 9px 18px 12px;
+  border-top: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--panel) 94%, var(--accent) 6%);
+}
+.caption-assist-comparison summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--muted); }
+.caption-assist-comparison-row { margin-top: 9px; display: grid; gap: 4px; }
+.caption-assist-comparison-row strong { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+.caption-assist-comparison-text { max-height: 110px; overflow: auto; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.caption-assist-comparison-added { background: rgba(34, 197, 94, .18); border-radius: 3px; }
+.caption-assist-comparison-removed { background: rgba(239, 68, 68, .18); text-decoration: line-through; border-radius: 3px; }
+.caption-assist-suggestion-grid { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.caption-assist-suggestion-chip { display: inline-flex; align-items: stretch; border: 1px solid var(--border-soft); border-radius: 7px; overflow: hidden; background: var(--panel); }
+.caption-assist-suggestion-tag, .caption-assist-suggestion-insert {
+  border: 0; background: transparent; color: var(--text); font-size: 12px;
+  padding: 5px 9px; cursor: pointer;
+}
+.caption-assist-suggestion-tag { font-weight: 650; }
+.caption-assist-suggestion-insert { color: var(--muted); border-left: 1px solid var(--border-soft); font-size: 11px; }
+.caption-assist-suggestion-tag:hover, .caption-assist-suggestion-insert:hover { background: var(--panel-soft); }

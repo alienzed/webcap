@@ -430,19 +430,44 @@
 
   function qaMergeFindings() {
     var current = qaCurrentItemSignatureMap(qaGetTrainingItems());
+    var byFile = {};
+    qaGetTrainingItems().forEach(function (item) { byFile[item.fileName] = item; });
     var visibleAi = qaWorkbenchState.aiFindings.map(function (finding) {
       var files = (finding.files || []).filter(function (file) {
-        return current[file] && qaWorkbenchState.aiItemSignatures[file] === current[file];
+        var item = byFile[file];
+        return item && current[file] && qaWorkbenchState.aiItemSignatures[file] === current[file]
+          && qaFocusReviewHasAction(item.key, file, item.caption || '', finding);
+      });
+      return files.length ? Object.assign({}, finding, { files: files }) : null;
+    }).filter(Boolean);
+    var visibleConcept = qaWorkbenchState.conceptFindings.map(function (finding) {
+      var conceptCurrent = qaConceptInputSignatures(qaGetTrainingItems());
+      var files = (finding.files || []).filter(function (file) {
+        var item = byFile[file];
+        return item && conceptCurrent[file] && finding.inputSignatures[file] === conceptCurrent[file]
+          && qaFocusReviewHasAction(item.key, file, item.caption || '', finding);
       });
       return files.length ? Object.assign({}, finding, { files: files }) : null;
     }).filter(Boolean);
     qaWorkbenchState.findings = qaSortFindings(
-      qaWorkbenchState.deterministicFindings.concat(visibleAi, qaWorkbenchState.conceptFindings.map(function (finding) {
-        var conceptCurrent = qaConceptInputSignatures(qaGetTrainingItems());
-        var files = (finding.files || []).filter(function (file) { return conceptCurrent[file] && finding.inputSignatures[file] === conceptCurrent[file]; });
-        return files.length ? Object.assign({}, finding, { files: files }) : null;
-      }).filter(Boolean))
+      qaWorkbenchState.deterministicFindings.concat(visibleAi, visibleConcept)
     );
+  }
+
+  function qaGetReportObservations() {
+    var promoted = {};
+    qaWorkbenchState.findings.forEach(function (finding) { promoted[finding.id] = true; });
+    var current = qaCurrentItemSignatureMap(qaGetTrainingItems());
+    var others = qaWorkbenchState.aiFindings.concat(qaWorkbenchState.conceptFindings).filter(function (finding) {
+      return !promoted[finding.id] && (finding.files || []).some(function (file) {
+        return !!current[file] && (finding.source === 'concept'
+          ? finding.inputSignatures && finding.inputSignatures[file] === qaConceptInputSignatures(qaGetTrainingItems().filter(function (item) { return item.fileName === file; }))[file]
+          : qaWorkbenchState.aiItemSignatures[file] === current[file]);
+      });
+    }).map(function (finding) {
+      return { id: finding.id, title: finding.title, summary: finding.summary, files: finding.files || [] };
+    });
+    return qaWorkbenchState.observations.concat(others);
   }
 
   function qaReconcileAiFindingsToCurrentInputs() {
@@ -1434,95 +1459,108 @@
     }];
   }
 
-  function qaBuildPruneFindings(items) {
+  function qaScopedPruneCandidates(items) {
     var scopeFiles = items.map(function (item) { return String(item.fileName || ''); }).filter(Boolean);
     if (state.pruneCandidatesStatus !== 'ready'
         || state.pruneCandidatesFolder !== String(state.folder || '')
-        || state.pruneCandidatesScopeKey !== pruneCandidateScopeKey(scopeFiles)) {
-      return [];
-    }
-    var allow = {};
-    items.forEach(function (item) { allow[item.fileName] = true; });
-    var candidates = (state.pruneCandidates || []).filter(function (candidate) {
-      return !!allow[String(candidate && candidate.file || '')];
+        || state.pruneCandidatesScopeKey !== pruneCandidateScopeKey(scopeFiles)) return [];
+    var allowed = {};
+    scopeFiles.forEach(function (file) { allowed[file] = true; });
+    return (state.pruneCandidates || []).filter(function (candidate) {
+      return !!allowed[String(candidate && candidate.file || '')];
     });
-    if (!candidates.length) return [];
-    var blocking = candidates.filter(function (candidate) { return candidate.priority === 'blocking'; });
-    var outliers = candidates.filter(function (candidate) { return candidate.priority !== 'blocking'; });
-    var findings = [];
-    if (blocking.length) {
-      findings.push({
-        id: 'prune:blocking',
-        category: 'prune',
-        priority: 'high',
-        confidence: 'high',
-        title: qaFileCountText(blocking.length) + ' have confirmed technical prune problems',
-        summary: 'Prune Candidates already flagged these items as blocking.',
-        why: 'These are technical media problems, not aesthetic judgments.',
-        files: blocking.map(function (candidate) { return candidate.file; }),
-        facts: [{ value: String(blocking.length), label: 'blocking items' }],
-        meta: blocking.slice(0, 4).map(function (candidate) {
-          var reason = candidate.reasons && candidate.reasons[0];
-          return String(reason && reason.message || candidate.kind || candidate.file);
-        }),
-        utilityTab: 'prune'
-      });
-    }
-    if (outliers.length) {
-      findings.push({
-        id: 'prune:outliers',
-        category: 'prune',
-        priority: 'normal',
-        confidence: 'high',
-        title: qaFileCountText(outliers.length) + ' are technical outliers worth a prune check',
-        summary: 'Existing Prune Candidates analysis found media that differs materially from the rest of the current training selection.',
-        why: 'Review these as possible low-value or incompatible training inputs.',
-        files: outliers.map(function (candidate) { return candidate.file; }),
-        facts: [{ value: String(outliers.length), label: 'outliers' }],
-        meta: [],
-        utilityTab: 'prune'
-      });
-    }
-    return findings;
   }
 
-  function qaBuildDuplicateFindings(items) {
+  function qaHasUnsupportedAspect(candidate) {
+    return (candidate.reasons || []).some(function (reason) {
+      return reason.code === 'unsupported_aspect_ratio';
+    });
+  }
+
+  function qaBuildPruneFindings(items) {
+    // An unsupported bucket is an observable problem for the current training
+    // workflow. Missing metadata and relative resolution outliers are not proof
+    // that a source image should be removed.
+    var affected = qaScopedPruneCandidates(items).filter(qaHasUnsupportedAspect);
+    if (!affected.length) return [];
+    return [{
+      id: 'prune:unsupported-aspect',
+      category: 'prune',
+      priority: 'high',
+      confidence: 'high',
+      title: qaFileCountText(affected.length) + ' use unsupported aspect ratios',
+      summary: 'These files do not match a supported training aspect bucket. Inspect them to crop or exclude.',
+      why: 'This is a supported-bucket mismatch, not a judgment about visual quality.',
+      files: affected.map(function (row) { return row.file; }),
+      facts: [{ value: String(affected.length), label: 'affected media' }],
+      utilityTab: 'prune'
+    }];
+  }
+
+  function qaBuildPruneObservations(items) {
+    var other = qaScopedPruneCandidates(items).filter(function (candidate) {
+      return !qaHasUnsupportedAspect(candidate);
+    });
+    if (!other.length) return [];
+    return [{
+      id: 'observation:technical-outliers',
+      title: qaFileCountText(other.length) + ' have technical metadata or resolution anomalies',
+      summary: 'These may be harmless; the existing Prune Candidates report contains their specific reasons.',
+      files: other.map(function (row) { return row.file; })
+    }];
+  }
+
+  function qaScopedDuplicateGroups(items) {
     var scopeFiles = items.map(function (item) { return String(item.fileName || ''); }).filter(Boolean);
     if (state.duplicateCandidatesStatus !== 'ready'
         || state.duplicateCandidatesFolder !== String(state.folder || '')
-        || state.duplicateCandidatesScopeKey !== duplicateCandidateScopeKey(scopeFiles)) {
-      return [];
-    }
-    var allow = {};
-    items.forEach(function (item) { allow[item.fileName] = true; });
-    var groups = (state.duplicateCandidateGroups || []).map(function (group) {
-      var filteredItems = (group.items || []).filter(function (item) { return !!allow[String(item && item.file || '')]; });
-      return Object.assign({}, group, { items: filteredItems });
-    }).filter(function (group) {
-      return group.items.length >= 2;
+        || state.duplicateCandidatesScopeKey !== duplicateCandidateScopeKey(scopeFiles)) return [];
+    var allowed = {};
+    scopeFiles.forEach(function (file) { allowed[file] = true; });
+    return (state.duplicateCandidateGroups || []).map(function (group) {
+      var matching = (group.items || []).filter(function (item) {
+        return !!allowed[String(item && item.file || '')];
+      });
+      return Object.assign({}, group, { items: matching });
+    }).filter(function (group) { return group.items.length >= 2; });
+  }
+
+  function qaBuildDuplicateFindings(items) {
+    // Only byte-identical groups are confirmed duplicates. A perceptual hash
+    // match can hide meaningful differences in color, construction, or pose.
+    return qaScopedDuplicateGroups(items).filter(function (group) {
+      return group.match_type === 'exact';
+    }).map(function (group) {
+      var files = group.items.map(function (item) { return item.file; });
+      return {
+        id: qaStableId(['prune', 'exact-duplicates'].concat(files)),
+        category: 'prune',
+        priority: 'high',
+        confidence: 'high',
+        title: qaFileCountText(files.length) + ' are exact duplicates',
+        summary: 'These files are byte-identical. Inspect the group and keep any intentional repeat.',
+        why: 'Identical content hashes establish duplication; whether to retain extra training weight is your decision.',
+        files: files,
+        facts: [{ value: String(files.length - 1), label: 'additional copies' }],
+        utilityTab: 'duplicates'
+      };
     });
-    if (!groups.length) return [];
+  }
+
+  function qaBuildDuplicateObservations(items) {
+    var similar = qaScopedDuplicateGroups(items).filter(function (group) {
+      return group.match_type !== 'exact';
+    });
+    if (!similar.length) return [];
     var files = {};
-    var exact = 0;
-    groups.forEach(function (group) {
-      if (group.match_type === 'exact') exact += 1;
+    similar.forEach(function (group) {
       group.items.forEach(function (item) { files[item.file] = true; });
     });
     return [{
-      id: 'prune:duplicates',
-      category: 'prune',
-      priority: exact ? 'high' : 'normal',
-      confidence: 'high',
-      title: groups.length + ' duplicate group' + (groups.length === 1 ? '' : 's') + ' may add redundant training weight',
-      summary: qaFileCountText(Object.keys(files).length) + ' are grouped by the existing exact/visual duplicate detector.',
-      why: 'Near-identical examples can unintentionally give one visual pattern more weight than intended.',
-      files: qaSortedFileNames(files),
-      facts: [
-        { value: String(groups.length), label: 'duplicate groups' },
-        { value: String(Object.keys(files).length), label: 'affected items' }
-      ],
-      meta: exact ? [exact + ' exact group' + (exact === 1 ? '' : 's')] : [],
-      utilityTab: 'duplicates'
+      id: 'observation:similar-media',
+      title: similar.length + ' visually similar media group' + (similar.length === 1 ? '' : 's'),
+      summary: 'Similarity alone does not establish redundancy. Different colors and garment details may be useful variation.',
+      files: qaSortedFileNames(files)
     }];
   }
 
@@ -1684,12 +1722,15 @@
     var findings = []
       .concat(qaBuildPruneFindings(items))
       .concat(qaBuildDuplicateFindings(items))
-      .concat(qaBuildVisualAgreementFindings(items))
-      .concat(qaBuildCaptionFindings(items));
+      .concat(qaBuildVisualAgreementFindings(items));
     return {
       findings: qaSortFindings(findings),
       statisticalCandidates: statisticalCandidates,
-      observations: qaBuildObservations(items).concat(representationObservations).concat(statisticalCandidates.map(function (candidate) {
+      observations: qaBuildObservations(items).concat(representationObservations)
+        .concat(qaBuildCaptionFindings(items))
+        .concat(qaBuildPruneObservations(items))
+        .concat(qaBuildDuplicateObservations(items))
+        .concat(statisticalCandidates.map(function (candidate) {
         return {
           id: candidate.id,
           title: 'Unverified pattern: ' + candidate.title,

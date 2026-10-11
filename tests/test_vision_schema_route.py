@@ -242,7 +242,7 @@ def test_structured_sight_scan_uses_caption_vision_lane_and_response_contract(tm
     assert seen["model"] == "vl"
     assert seen["label"] == "Vision Sight"
     assert seen["contract"]["operation"] == "vision_schema_sight"
-    assert seen["context"]["runtimeOverrides"]["maxTokens"] == 900
+    assert seen["context"]["runtimeOverrides"]["maxTokens"] == 1800
 
 
 
@@ -329,8 +329,8 @@ def test_vocabulary_synthesis_accepts_partial_visual_coverage(tmp_path, monkeypa
     assert response.status_code == 202
     payload = response.get_json()
     assert payload["analysis"]["openItemCount"] == 2
-    assert payload["analysis"]["schemaAwareItemCount"] == 1
-    assert any(row.get("source") == "context_caption" for row in payload["analysis"]["evidence"])
+    assert payload["analysis"]["schemaAwareItemCount"] == 0
+    assert any(row.get("source") == "sight" for row in payload["analysis"]["evidence"])
     assert seen["label"] == "Vocabulary Synthesis"
 
 
@@ -383,8 +383,8 @@ def test_vocabulary_challenge_queues_schema_contract_from_both_visual_passes(tmp
     assert seen["client"] == "schema"
     assert seen["contract"]["operation"] == "vision_schema_challenge"
     assert seen["label"] == "Vocabulary Challenge"
-    assert any(row.get("source") == "context" for row in seen["contract"]["sight_evidence"])
-    assert any(row.get("source") == "context_caption" for row in seen["contract"]["sight_evidence"])
+    assert any(row.get("source") == "sight" for row in seen["contract"]["sight_evidence"])
+    assert all(row.get("source") != "context_caption" for row in seen["contract"]["sight_evidence"])
 
 
 def test_intelligence_report_rehydrates_cached_open_and_context_sight(tmp_path, monkeypatch):

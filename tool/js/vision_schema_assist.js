@@ -1285,7 +1285,7 @@
         setStatus('Guided Tagging needs at least one usable Set Intelligence result for this Vision model.', true);
         return null;
       }
-      setStatus('Using ' + String(structured) + ' saved Open Sight observations. Existing Context Sight will be reused when available.');
+      setStatus('Using ' + String(structured) + ' saved Sight observations.');
       runTagSuggestions();
     }).catch(function (err) {
       setStatus('Could not start Guided Tag Pass: ' + String(err && err.message ? err.message : err), true);

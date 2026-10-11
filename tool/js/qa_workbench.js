@@ -2191,10 +2191,10 @@
     session.prepQueued[key] = true;
     var token = session.token;
     session.prepChain = session.prepChain.catch(function () {}).then(function () {
-      if (qaFocusReviewAlternative(key)) return;
+      if (qaFocusReviewAlternative(key)) return false;
       return qaWaitForInteractiveRefresh();
-    }).then(function () {
-      if (!qaFocusReviewCurrent() || session.token !== token || session.handled[key]) return;
+    }).then(function (ready) {
+      if (ready === false || !qaFocusReviewCurrent() || session.token !== token || session.handled[key]) return;
       if (isFocusedQaReviewMode() && focusedCaptionState.itemKey === key) return;
       var request = buildCaptionAssistRequest(item);
       var saved = captionAssistSavedCandidatesByMedia[key];

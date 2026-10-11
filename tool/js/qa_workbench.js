@@ -1340,6 +1340,9 @@
         summary: qaFileCountText(row.files.length) + ' have matching MediaPipe and Vision evidence but are not tagged "' + row.term + '".',
         why: 'Two independent visual signals agree on a term that already exists in the Set vocabulary, making these strong annotation-review candidates.',
         files: row.files.slice(),
+        tagActions: row.files.map(function (file) {
+          return { file: file, action: 'add', group: row.groups[0], term: row.term };
+        }),
         facts: [
           { value: '2', label: 'agreeing visual sources' },
           { value: String(row.groups[0] || ''), label: 'annotation group' }
@@ -2067,6 +2070,63 @@
       qaFocusReviewState.scopeKey === qaBuildScopeKey(qaGetTrainingItems());
   }
 
+  function qaFocusReviewTagActionsForFinding(mediaKey, fileName, finding) {
+    var assignments = getChecklistAssignmentEntriesForMediaKey(mediaKey);
+    var unscoped = getUnscopedTagsForMediaKey(mediaKey);
+    return (finding.tagActions || []).filter(function (action) {
+      return action && action.file === fileName && (action.action === 'add' || action.action === 'remove');
+    }).map(function (action) {
+      var groupName = String(action.group || '').trim();
+      var term = String(action.term || '').trim();
+      var group = groupName ? (checklistItems || []).find(function (name) {
+        return String(name).toLowerCase() === groupName.toLowerCase();
+      }) : '';
+      if (!term || (groupName && !group)) return null;
+      var assigned = group
+        ? assignments.some(function (entry) {
+          return entry.requirement === group && entry.term.toLowerCase() === term.toLowerCase();
+        })
+        : unscoped.some(function (tag) { return tag.toLowerCase() === term.toLowerCase(); });
+      if ((action.action === 'add' && assigned) || (action.action === 'remove' && !assigned)) return null;
+      return { file: fileName, action: action.action, group: group, term: term };
+    }).filter(Boolean);
+  }
+
+  function qaFocusReviewPatchesForFinding(fileName, captionText, finding) {
+    return (finding.patches || []).filter(function (patch) {
+      return patch && patch.file === fileName && !!captionVisionValidatePatch(captionText, patch);
+    });
+  }
+
+  function qaFocusReviewHasAction(mediaKey, fileName, captionText, finding) {
+    return qaFocusReviewPatchesForFinding(fileName, captionText, finding).length > 0 ||
+      qaFocusReviewTagActionsForFinding(mediaKey, fileName, finding).length > 0;
+  }
+
+  function qaFocusReviewCandidateFindings(item) {
+    if (!item) return [];
+    var current = qaCurrentItemSignatureMap([item]);
+    var found = qaWorkbenchState.aiFindings.filter(function (finding) {
+      return (finding.category === 'captioning' || finding.category === 'consistency') &&
+        !qaWorkbenchState.dispositions[finding.id] &&
+        (finding.files || []).indexOf(item.fileName) !== -1 &&
+        qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
+    });
+    // Only the existing two-signal visual agreement check can introduce a
+    // deterministic item-level tag action. Other QA observations stay in QA.
+    qaWorkbenchState.deterministicFindings.forEach(function (finding) {
+      if (finding.sourceLabel === 'WebCap + Vision' &&
+          !qaWorkbenchState.dispositions[finding.id] &&
+          (finding.files || []).indexOf(item.fileName) !== -1) found.push(finding);
+    });
+    return found.filter(function (finding) {
+      return qaFocusReviewHasAction(item.key, item.fileName, item.caption || '', finding);
+    }).sort(function (a, b) {
+      return qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue) ||
+        qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
+    }).slice(0, 3);
+  }
+
   function qaFocusReviewFindings(mediaKey) {
     if (!qaFocusReviewCurrent()) return [];
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
@@ -2074,25 +2134,26 @@
     if (qaFocusReviewState.queued[mediaKey] && qaFocusReviewState.reviewFindings[mediaKey]) {
       return qaFocusReviewState.reviewFindings[mediaKey];
     }
-    var current = qaCurrentItemSignatureMap([item]);
-    return qaWorkbenchState.aiFindings.filter(function (finding) {
-      return (finding.category === 'captioning' || finding.category === 'consistency') &&
-        !qaWorkbenchState.dispositions[finding.id] &&
-        (finding.files || []).indexOf(item.fileName) !== -1 &&
-        qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
-    }).sort(function (a, b) {
-      return qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue) ||
-        qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
-    }).slice(0, 3);
+    return qaFocusReviewCandidateFindings(item);
   }
 
-  function qaFocusReviewPatches(mediaKey) {
+  // Recheck each suggested operation against live tags and the editable caption.
+  // A stale AI title never counts as an unresolved QA warning on its own.
+  function qaFocusReviewActionableFindings(mediaKey, captionText) {
+    var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
+    if (!item || !qaFocusReviewCurrent()) return [];
+    var caption = captionText === undefined ? String(item.caption || '') : String(captionText || '');
+    return qaFocusReviewFindings(mediaKey).filter(function (finding) {
+      return qaFocusReviewHasAction(mediaKey, item.fileName, caption, finding);
+    });
+  }
+
+  function qaFocusReviewPatches(mediaKey, captionText) {
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) return [];
-    return qaFocusReviewFindings(mediaKey).reduce(function (all, finding) {
-      return all.concat((finding.patches || []).filter(function (patch) {
-        return patch.file === item.fileName;
-      }));
+    var caption = captionText === undefined ? String(item.caption || '') : String(captionText || '');
+    return qaFocusReviewActionableFindings(mediaKey, caption).reduce(function (all, finding) {
+      return all.concat(qaFocusReviewPatchesForFinding(item.fileName, caption, finding));
     }, []);
   }
 
@@ -2113,15 +2174,17 @@
     return qaWorkbenchState.captionQuality[item.fileName] || null;
   }
 
-  function qaFocusReviewReasons(mediaKey) {
-    return qaFocusReviewFindings(mediaKey).map(function (finding) { return String(finding.title || ''); });
+  function qaFocusReviewReasons(mediaKey, captionText) {
+    return qaFocusReviewActionableFindings(mediaKey, captionText).map(function (finding) {
+      return String(finding.title || '');
+    });
   }
 
-  function qaFocusReviewTagActions(mediaKey) {
+  function qaFocusReviewTagActions(mediaKey, captionText) {
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) return [];
-    return qaFocusReviewFindings(mediaKey).reduce(function (all, finding) {
-      return all.concat((finding.tagActions || []).filter(function (action) { return action.file === item.fileName; }));
+    return qaFocusReviewActionableFindings(mediaKey, captionText).reduce(function (all, finding) {
+      return all.concat(qaFocusReviewTagActionsForFinding(mediaKey, item.fileName, finding));
     }, []);
   }
 
@@ -2226,14 +2289,12 @@
   function qaSyncFocusReview() {
     if (!qaFocusReviewCurrent()) return;
     var session = qaFocusReviewState;
-    var current = qaCurrentItemSignatureMap(session.items);
+    var candidatesByKey = {};
     var wanted = {};
-    qaWorkbenchState.aiFindings.forEach(function (finding) {
-      if (finding.category !== 'captioning' && finding.category !== 'consistency') return;
-      if (qaWorkbenchState.dispositions[finding.id]) return;
-      (finding.files || []).forEach(function (file) {
-        if (current[file] && qaWorkbenchState.aiItemSignatures[file] === current[file]) wanted[file] = true;
-      });
+    session.items.forEach(function (item) {
+      var candidates = qaFocusReviewCandidateFindings(item);
+      candidatesByKey[item.key] = candidates;
+      if (candidates.length) wanted[item.fileName] = true;
     });
     var newKeys = [];
     session.items.forEach(function (item) {
@@ -2251,28 +2312,14 @@
     session.items.forEach(function (item) {
       if (!wanted[item.fileName] || session.handled[item.key] || session.queued[item.key]) return;
       session.queued[item.key] = true;
-      session.reviewFindings[item.key] = qaWorkbenchState.aiFindings.filter(function (finding) {
-        return (finding.category === 'captioning' || finding.category === 'consistency') &&
-          !qaWorkbenchState.dispositions[finding.id] &&
-          (finding.files || []).indexOf(item.fileName) !== -1 &&
-          qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
-      }).sort(function (a, b) {
-        return qaTrainingValueRank(b.trainingValue) - qaTrainingValueRank(a.trainingValue) ||
-          qaPriorityRank(b.priority) - qaPriorityRank(a.priority);
-      }).slice(0, 3);
+      session.reviewFindings[item.key] = candidatesByKey[item.key];
       newKeys.push(item.key);
     });
     if (isFocusedQaReviewMode() && newKeys.length) {
       appendFocusedQaReviewItems(qaOrderFocusReviewKeys(newKeys));
     }
-    // Only prepare the current priority item and one lookahead. Preparing the
-    // entire queue would consume GPU time on findings the user may never inspect.
-    qaOrderFocusReviewKeys(session.items.filter(function (item) {
-      return session.queued[item.key] && !session.handled[item.key];
-    }).map(function (item) { return item.key; })).slice(0, 2).forEach(function (key) {
-      var item = session.items.find(function (row) { return row.key === key; });
-      qaQueueFocusCandidatePreparation(item);
-    });
+    // QA Focus Review never initiates Sight or Director inference. Deep QA and
+    // Refresh Caption remain explicit actions.
     qaSyncFocusReviewButton();
     if (!isFocusedQaReviewMode() && session.autoOpen && !session.opening) {
       var keys = session.items.filter(function (item) {
@@ -2324,11 +2371,9 @@
     restore.then(function () {
       if (!qaFocusReviewCurrent() || session !== qaFocusReviewState || session.loadToken !== loadToken) return;
       qaSyncFocusReview();
-      if (!qaWorkbenchState.deepScanSessionActive && qaPendingDeepScanItems().length) {
-        qaRunDeepScan();
-      } else if (!qaWorkbenchState.deepScanSessionActive &&
-                 !Object.keys(qaFocusReviewState.queued).length) {
-        setStatus('QA Focus Review complete: no actionable QA findings in this selection.');
+      if (!qaWorkbenchState.deepScanSessionActive &&
+          !Object.keys(qaFocusReviewState.queued).length) {
+        setStatus('No actionable saved QA findings. Run Deep QA separately to check more items.');
       }
       qaSyncFocusReviewButton();
     }).catch(function (err) {
@@ -2592,6 +2637,7 @@
   window.qaFocusReviewMarkHandled = qaFocusReviewMarkHandled;
   window.qaFocusReviewStopped = qaFocusReviewStopped;
   window.qaFocusReviewReasons = qaFocusReviewReasons;
+  window.qaFocusReviewActionableFindings = qaFocusReviewActionableFindings;
   window.qaFocusReviewQuality = qaFocusReviewQuality;
   window.qaFocusReviewAlternative = qaFocusReviewAlternative;
   window.qaFocusReviewFindings = qaFocusReviewFindings;

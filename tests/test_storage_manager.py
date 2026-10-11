@@ -566,6 +566,8 @@ def test_storage_ui_is_isolated_global_activity():
     assert "storageState.activeArea" in storage_js
     assert "storage-overview-back" in storage_js
     assert "Delete Take" in storage_js
+    assert "storage-clear-sight-btn" in storage_js
+    assert "/fs/storage/set-sight/clear" in storage_js
     assert "typeof window.reportConsoleError" not in storage_js
     assert "typeof window.closeGenerateActivity" not in storage_js
     assert "This removes only this generated Take. The Story and other Takes remain." in storage_js

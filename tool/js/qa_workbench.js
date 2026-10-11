@@ -2175,9 +2175,22 @@
   }
 
   function qaFocusReviewReasons(mediaKey, captionText) {
-    return qaFocusReviewActionableFindings(mediaKey, captionText).map(function (finding) {
-      return String(finding.title || '');
-    });
+    var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
+    if (!item) return [];
+    var caption = captionText === undefined ? String(item.caption || '') : String(captionText || '');
+    return qaFocusReviewActionableFindings(mediaKey, caption).reduce(function (labels, finding) {
+      qaFocusReviewTagActionsForFinding(mediaKey, item.fileName, finding).forEach(function (action) {
+        labels.push((action.action === 'add' ? 'Add tag: ' : 'Remove tag: ') +
+          (action.group ? action.group + ' / ' : '') + action.term);
+      });
+      qaFocusReviewPatchesForFinding(item.fileName, caption, finding).forEach(function (patch) {
+        labels.push(patch.action === 'replace'
+          ? 'Replace "' + patch.sourceText + '" with "' + patch.replacementText + '"'
+          : (patch.action === 'remove' ? 'Remove caption text: "' + patch.sourceText + '"'
+            : 'Insert caption text: "' + patch.replacementText + '"'));
+      });
+      return labels;
+    }, []);
   }
 
   function qaFocusReviewTagActions(mediaKey, captionText) {

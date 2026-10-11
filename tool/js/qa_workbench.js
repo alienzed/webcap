@@ -2173,7 +2173,7 @@
     var actions = document.createElement('div');
     actions.className = 'qa-recommendation-actions';
     if (finding.files && finding.files.length) {
-      var primaryLabel = (finding.patches || []).length ? 'Review correction'
+      var primaryLabel = (finding.patches || []).length ? 'Open Caption Assist'
         : finding.utilityTab === 'duplicates' ? 'Inspect exact duplicates'
         : 'Inspect ' + finding.files.length;
       actions.appendChild(qaCreateButton(primaryLabel, 'qa-primary', 'inspect-finding', finding.id));

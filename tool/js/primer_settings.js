@@ -855,6 +855,8 @@ function syncCaptionAssistCandidateUi() {
   var loadingEl = document.getElementById('editor-caption-focus-loading');
   var loadingTextEl = document.getElementById('editor-caption-focus-loading-text');
   var qaReasonsEl = document.getElementById('editor-caption-qa-reasons');
+  var qaRecheckEl = document.getElementById('editor-caption-qa-recheck');
+  var qaRecheckBtn = document.getElementById('editor-caption-qa-recheck-btn');
   var omissionsEl = document.getElementById('editor-caption-candidate-omissions');
   var comparisonEl = document.getElementById('editor-caption-comparison');
   var missingEl = document.getElementById('editor-caption-candidate-missing');
@@ -868,7 +870,7 @@ function syncCaptionAssistCandidateUi() {
   var useBtn = document.getElementById('editor-caption-candidate-use');
   var regenerateBtn = document.getElementById('editor-caption-candidate-regenerate');
   var dismissBtn = document.getElementById('editor-caption-candidate-dismiss');
-  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !qaReasonsEl || !omissionsEl || !comparisonEl || !missingEl || !phrasesEl || !phrasesBtn || !textEl || !prevBtn || !nextBtn || !qaDismissBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
+  if (!panel || !titleEl || !progressEl || !loadingEl || !loadingTextEl || !qaReasonsEl || !qaRecheckEl || !qaRecheckBtn || !omissionsEl || !comparisonEl || !missingEl || !phrasesEl || !phrasesBtn || !textEl || !prevBtn || !nextBtn || !qaDismissBtn || !cancelBtn || !useBtn || !regenerateBtn || !dismissBtn) {
     throw new Error('Caption Assist candidate markup is incomplete.');
   }
 
@@ -912,6 +914,16 @@ function syncCaptionAssistCandidateUi() {
   var qaReasons = isFocusedQaReviewMode() && visible ? qaFocusReviewReasons(mediaKey, candidate.text) : [];
   var qaQuality = isFocusedQaReviewMode() ? qaFocusReviewQuality(mediaKey) : null;
   qaReasonsEl.classList.toggle('hidden', !qaReasons.length && !qaQuality);
+  var canRecheck = isFocusedQaReviewMode() && visible &&
+    qaFocusReviewActionableFindings(mediaKey, candidate.text).length > 0;
+  qaRecheckEl.classList.toggle('hidden', !canRecheck);
+  qaRecheckBtn.disabled = !!(canRecheck && qaFocusReviewRecheckBusy());
+  qaRecheckBtn.textContent = qaRecheckBtn.disabled ? 'Rechecking concern…' : 'Recheck concern with Vision';
+  if (!qaRecheckBtn.__qaRecheckBound) {
+    qaRecheckBtn.__qaRecheckBound = true;
+    qaRecheckBtn.addEventListener('click', function () { qaRecheckCurrentFinding(); });
+  }
+
   qaReasonsEl.innerHTML = '';
   if (qaQuality) {
     var qualityLabel = document.createElement('strong');

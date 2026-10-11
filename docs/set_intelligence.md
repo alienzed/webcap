@@ -79,7 +79,7 @@ Current blocks may include:
 - `vision_vocabulary_sight` (Context Sight);
 - other analyzer-owned blocks.
 
-Each analyzer owns its own versioning/invalidation rules. Set Intelligence does not create a second cache.
+Each analyzer owns its own versioning/invalidation rules. Set Intelligence does not create a second cache. Storage Manager's protected Set Data area offers explicit field-level cleanup of legacy Context Sight or all Sight. It preserves the metadata file, authored annotations, captions, and QA review state; deleted Sight requires a new user-initiated scan.
 
 Unfinished Caption Assist caption candidates may be retained in existing Set folder state for inexpensive re-entry; applying a candidate removes that saved proposal. Guided Tag steps and modal progress remain ephemeral. Completed Deep QA findings and QA review dispositions are saved as Set-owned review state in `.webcap_qa_review.json`; reusable per-image Sight remains in `media_metadata.json`. The review stores compact input fingerprints, not a duplicate of the underlying captions or image metadata.
 

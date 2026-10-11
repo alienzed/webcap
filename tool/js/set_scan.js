@@ -601,7 +601,7 @@
       setScanState.phase = 'scanning-open';
 
       if (!pending.length) {
-        reportConsoleInfo('Set Intelligence', 'Open Sight: reusing existing evidence for ' + files.length + ' items.');
+        reportConsoleInfo('Set Intelligence', 'Open Sight: no new reads; ' + scopedItems.length + '/' + files.length + ' cached records found.');
         setScanState.total = 1;
         setScanState.completed = 1;
         setSetIntelligenceStatus('Open Sight', 'Vocabulary-agnostic visual understanding is already reusable.');
@@ -705,7 +705,7 @@
         setScanState.total = 1;
         setScanState.completed = 1;
         setSetIntelligenceStatus('Context Sight', 'Template- and vocabulary-guided visual understanding is already reusable.');
-        reportConsoleInfo('Set Intelligence', 'Context Sight: reusing existing evidence for ' + files.length + ' items.');
+        reportConsoleInfo('Set Intelligence', 'Context Sight: no new reads; ' + scopedItems.length + '/' + files.length + ' cached records found.');
         return true;
       }
       reportConsoleInfo('Set Intelligence', 'Context Sight: inspecting ' + pending.length + ' items; reusing ' + (scopedItems.length - pending.length) + '.');

@@ -12,6 +12,7 @@
     openedAt: 0,
     recentCompletions: [],
     notified: Object.create(null),
+    seenActive: Object.create(null),
     reportedErrors: Object.create(null)
   };
 
@@ -363,6 +364,20 @@
     timer = setTimeout(dismiss, failed ? 8000 : 5000);
   }
 
+  function notifyActive(items) {
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      var id = String(item && item.id || '');
+      if (!id) return;
+      var key = recentIdentity(item);
+      if (state.seenActive[key]) return;
+      state.seenActive[key] = true;
+      var message = activityTitle(item) + ' active (' + String(item.status || 'running').replace(/_/g, ' ') + ')';
+      var detail = activityDetail(item);
+      if (detail) message += ' · ' + detail;
+      window.reportConsoleInfo('Activity', message);
+    });
+  }
+
   function notifyRecent(items) {
     items.forEach(function (item) {
       var status = String(item.status || '');
@@ -629,6 +644,7 @@
       Object.keys(state.reportedErrors).forEach(function (key) {
         if (!activeErrorKeys[key]) delete state.reportedErrors[key];
       });
+      notifyActive(payload.active);
       notifyRecent(sessionRecent());
       render();
       return payload;

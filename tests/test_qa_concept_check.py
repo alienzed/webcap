@@ -105,3 +105,28 @@ def test_focus_review_refreshes_existing_queue_with_new_findings():
     script = (Path(__file__).resolve().parents[1] / "tool/js/qa_workbench.js").read_text(encoding="utf-8")
     assert "session.reviewFindings[item.key] = candidatesByKey[item.key];" in script
     assert script.index("session.reviewFindings[item.key] = candidatesByKey[item.key];") < script.index("if (session.queued[item.key]) return;")
+
+
+def test_targeted_recheck_contract_has_explicit_three_way_status():
+    from tool.server.qa_llm_contract import build_concept_request
+    contract = build_concept_request(
+        [_item()], "Ring connector tag", [{"group": "Hardware", "terms": ["ring connector"]}],
+        {"title": "Missing ring tag", "summary": "Sight suggested a ring.", "why": "Visual detail"},
+    )
+    assert contract["recheck"] is True
+    assert "recheckStatus" in contract["response_schema"]["required"]
+    assert "inconclusive" in contract["response_schema"]["properties"]["recheckStatus"]["enum"]
+    assert "Missing ring tag" in contract["prompt"]
+
+
+def test_targeted_recheck_uses_existing_focus_review_and_single_sight_path():
+    root = Path(__file__).resolve().parents[1]
+    qa = (root / "tool/js/qa_workbench.js").read_text(encoding="utf-8")
+    primer = (root / "tool/js/primer_settings.js").read_text(encoding="utf-8")
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    assert "refreshSetIntelligenceItem(item, { open: true" in qa
+    assert "recheckConcern:" in qa
+    assert "qaFocusReviewInteractiveRefresh(function ()" in qa
+    assert "entry.file !== item.fileName" in qa
+    assert "qaRecheckCurrentFinding();" in primer
+    assert 'id="editor-caption-qa-recheck-btn"' in html

@@ -1787,16 +1787,20 @@
                         <div class="editor-caption-candidate-heading">
                             <strong id="editor-caption-candidate-title">Caption Assist</strong>
                             <span id="editor-caption-focus-progress" class="editor-caption-focus-progress hidden"></span>
+                            <details id="editor-caption-details" class="editor-caption-details">
+                                <summary title="Inspect the evidence used for this caption">ⓘ Details</summary>
+                                <div class="editor-caption-details-body">
+                                    <pre id="editor-caption-evidence"></pre>
+                                    <div id="editor-caption-details-actions">
+                                        <select id="editor-caption-refresh-sight-mode" class="hidden" aria-label="Sight to refresh"><option value="open">Sight</option></select>
+                                        <button id="editor-caption-refresh-sight" class="caption-vision-phrases-trigger hidden" type="button" title="Refresh this item's Sight observation">Refresh Sight (Vision)</button>
+                                        <button id="editor-caption-vision-recheck" class="caption-vision-phrases-trigger hidden" type="button" title="Run a fresh visual caption check for this item only">Recheck Caption (Vision)</button>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
                         <button id="editor-caption-candidate-dismiss" class="editor-caption-candidate-close" type="button" title="Dismiss candidate and stay on this item" aria-label="Dismiss candidate and stay on this item">&times;</button>
                     </div>
-                    <details id="editor-caption-details" style="margin: 0.3rem 0;">
-                        <summary title="Inspect the evidence used for this caption" style="cursor:pointer;font-size:0.85em;">ⓘ Details</summary>
-                        <pre id="editor-caption-evidence" style="max-height:16rem;overflow:auto;white-space:pre-wrap;font-size:0.8em;"></pre>
-                        <div id="editor-caption-details-actions"><select id="editor-caption-refresh-sight-mode" class="hidden" aria-label="Sight to refresh"><option value="open">Sight</option></select>
-                            <button id="editor-caption-refresh-sight" class="caption-vision-phrases-trigger hidden" type="button" title="Refresh this item's Sight observation">Refresh Sight (Vision)</button>
-                            <button id="editor-caption-vision-recheck" class="caption-vision-phrases-trigger hidden" type="button" title="Run a fresh visual caption check for this item only">Recheck Caption (Vision)</button></div>
-                    </details>
                     <div id="editor-caption-focus-loading" class="editor-caption-focus-loading hidden" role="status">
                         <span class="editor-caption-focus-spinner" aria-hidden="true"></span>
                         <strong id="editor-caption-focus-loading-text">Generating caption…</strong>
@@ -1812,7 +1816,10 @@
                         <div id="editor-caption-patch-preview-text" class="editor-caption-patch-preview-text"></div>
                     </div>
                     <details id="editor-caption-comparison" class="caption-assist-comparison hidden"></details>
-                    <div id="editor-caption-candidate-text" class="editor-caption-candidate-text"></div>
+                    <div class="editor-caption-candidate-draft">
+                        <button id="editor-caption-candidate-regenerate" class="editor-caption-candidate-regenerate" type="button" title="Director (LLM): rewrite with current tags and saved Sight" aria-label="Refresh Caption">↻ Refresh Caption</button>
+                        <div id="editor-caption-candidate-text" class="editor-caption-candidate-text"></div>
+                    </div>
                     <div id="editor-caption-vision-phrases" class="editor-caption-vision-phrases hidden"></div>
                     <div class="editor-caption-candidate-actions">
                         <div class="editor-caption-candidate-actions-left">
@@ -1827,7 +1834,6 @@
                             <button id="editor-caption-focus-next" class="hidden" type="button">Next →</button>
                             <button id="editor-caption-qa-dismiss" class="hidden" type="button" title="Dismiss this finding for this round without saving">Dismiss</button>
                             <button id="editor-caption-candidate-use" type="button">Apply Caption</button>
-                            <button id="editor-caption-candidate-regenerate" class="editor-caption-candidate-regenerate" type="button" title="Director (LLM): rewrite with current tags and saved Sight" aria-label="Refresh Caption">Refresh Caption</button>
                             <button id="editor-caption-focus-cancel" class="hidden" type="button">Cancel generation</button>
                         </div>
                     </div>

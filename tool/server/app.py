@@ -1527,15 +1527,15 @@ def qa_concept_check_route():
     data = request.get_json(silent=True) or {}
     try:
         items = data.get("items")
-        if not isinstance(items, list) or not 1 <= len(items) <= 8:
-            raise ValueError("Concept QA requires 1 to 8 selected items per batch.")
+        if not isinstance(items, list) or not 1 <= len(items) <= 4:
+            raise ValueError("Concept QA requires 1 to 4 selected items per batch.")
         folder = str(data.get("folder") or "").strip()
         available = set(list_media_files(folder))
         names = [str(row.get("fileName") or "").strip() for row in items if isinstance(row, dict)]
         if len(names) != len(items) or len(set(names)) != len(names) or any(name not in available for name in names):
             raise ValueError("Concept QA includes duplicate or unknown Set media.")
         from .qa_llm_contract import build_concept_request
-        contract = build_concept_request(items, data.get("concept"))
+        contract = build_concept_request(items, data.get("concept"), data.get("knownVocabulary"))
         job = enqueue_llm(
             "qa",
             str(data.get("model") or "").strip(),

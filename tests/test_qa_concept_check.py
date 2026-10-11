@@ -84,9 +84,9 @@ def test_known_vocabulary_is_bounded_and_supplied_to_director():
     contract = build_concept_request([_item()], "Check ring connectors", [
         {"group": "Hardware", "alias": "Fasteners", "terms": ["ring connector", "metal ring"]},
     ])
-    assert '"group": "Hardware"' in contract["prompt"]
+    assert '"group":"Hardware"' in contract["prompt"]
     assert 'ring connector' in contract["prompt"]
-    assert '"alias": "Fasteners"' in contract["prompt"]
+    assert '"alias":"Fasteners"' in contract["prompt"]
 
 
 def test_concept_frontend_uses_canonical_and_complete_cached_sight():

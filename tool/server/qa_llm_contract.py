@@ -331,12 +331,22 @@ def build_request(items, training_focus="", deterministic_findings=None):
 
 
 
-def build_concept_request(items, concept):
+def build_concept_request(items, concept, known_vocabulary=None):
     """Narrow, cache-only concept investigation; output reuses the Deep QA finding contract."""
     concept = _clean(concept)[:240]
     if not concept:
         raise ValueError("Describe the visual concept to check.")
     rows = _normalize_items(items)
+    vocabulary = []
+    for group in known_vocabulary if isinstance(known_vocabulary, list) else []:
+        if not isinstance(group, dict):
+            continue
+        name = _clean(group.get("group"))[:80]
+        terms = [_clean(term)[:120] for term in (group.get("terms") or [])[:24] if _clean(term)]
+        if name and terms:
+            vocabulary.append({"group": name, "alias": _clean(group.get("alias"))[:120], "terms": terms})
+        if len(vocabulary) >= 24:
+            break
     evidence = []
     for row in rows:
         sight = row["analysis"].get("visionSight")
@@ -366,7 +376,7 @@ def build_concept_request(items, concept):
         "[ACTIONS]\n"
         "Each finding must identify actual supplied filenames. Use category consistency or captioning. "
         "Prefer an exact per-file tagAction (add/remove) when the group and term appear in current annotations; "
-        "never invent groups or terms. Otherwise, provide a concise exact caption patch if the evidence "
+        "never invent groups or terms. Match add-tag terms only to KNOWN VOCABULARY supplied below. Otherwise, provide a concise exact caption patch if the evidence "
         "supports an edit. Keep findings per file, with a short specific why and concrete supporting evidence. "
         "Do not return broad advice without a clickable action. "
         "Do not change annotations yourself. All proposals require human review. "

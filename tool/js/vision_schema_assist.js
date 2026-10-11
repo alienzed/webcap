@@ -144,31 +144,6 @@
     });
   }
 
-  function ensureVocabularySight() {
-    var folder = schemaState.folder;
-    var model = schemaState.visionModel;
-    var groups = existingGroupsPayload();
-    var captionTemplate = currentCaptionTemplate();
-    if (!groups.length) {
-      throw new Error('Discover Vocabulary needs at least one annotation group in Set Intelligence context.');
-    }
-    return requestVocabularyStatus(folder, model, groups, captionTemplate).then(function (payload) {
-      var wanted = {};
-      schemaState.scopeFiles.forEach(function (fileName) { wanted[fileName] = true; });
-      var cached = (payload.items || []).filter(function (item) {
-        return !!wanted[String(item.file || '')] && !!item.cached;
-      }).length;
-      if (!cached) {
-        throw new Error('Discover Vocabulary needs current Context Sight. Run Set Intelligence first.');
-      }
-      setStatus(
-        'Two-pass visual evidence is ready for ' + String(cached) + ' of ' +
-        String(schemaState.scopeFiles.length) + ' media.'
-      );
-      return true;
-    });
-  }
-
   function setStatus(message, error) {
     schemaState.error = error ? String(message || '') : '';
     var node = el('vision-schema-status');
@@ -588,9 +563,9 @@
       }
       setStatus(
         'Open visual evidence is ready for ' + String(structured) + ' of ' +
-        String(schemaState.scopeFiles.length) + ' items. Checking Context Sight from Set Intelligence…'
+        String(schemaState.scopeFiles.length) + ' items. Reusing saved observations…'
       );
-      return ensureVocabularySight();
+      return true;
     });
   }
 
@@ -1310,29 +1285,7 @@
         setStatus('Guided Tagging needs at least one usable Set Intelligence result for this Vision model.', true);
         return null;
       }
-      return requestVocabularyStatus(
-        folder,
-        model,
-        existingGroupsPayload(),
-        currentCaptionTemplate()
-      ).then(function (contextPayload) {
-        return { structured: structured, contextPayload: contextPayload };
-      });
-    }).then(function (ready) {
-      if (!ready || !schemaState.open || !schemaState.guidedLaunch) return;
-      var wanted = {};
-      schemaState.scopeFiles.forEach(function (fileName) { wanted[fileName] = true; });
-      var contextAvailable = (ready.contextPayload.items || []).filter(function (item) {
-        return !!wanted[String(item.file || '')] && !!item.available;
-      }).length;
-      if (!contextAvailable) {
-        setStatus('Guided Tagging needs Context Sight from Set Intelligence. Run Set Intelligence first.', true);
-        return;
-      }
-      setStatus(
-        'Using two-pass Set intelligence for ' + String(Math.min(ready.structured, contextAvailable)) + ' of ' +
-        String(schemaState.scopeFiles.length) + ' media. Building Guided Tag Pass…'
-      );
+      setStatus('Using ' + String(structured) + ' saved Open Sight observations. Existing Context Sight will be reused when available.');
       runTagSuggestions();
     }).catch(function (err) {
       setStatus('Could not start Guided Tag Pass: ' + String(err && err.message ? err.message : err), true);

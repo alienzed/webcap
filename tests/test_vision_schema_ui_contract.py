@@ -145,16 +145,16 @@ def test_vocabulary_completion_promotes_guided_tagging_next_step():
     assert ".vision-schema-continue-btn" in css
 
 
-def test_discover_vocabulary_reuses_two_pass_sight_then_synthesizes_and_challenges():
+def test_discover_vocabulary_reuses_open_sight_then_synthesizes_and_challenges():
     script = _read("tool/js/vision_schema_assist.js")
     css = _read("tool/css/modals.css")
 
-    assert "function ensureVocabularySight()" in script
+    assert "function ensureVocabularySight()" not in script
     assert "function runVocabularySynthesis()" in script
     assert "function runVocabularyChallenge(draftSchema)" in script
-    assert "Run Set Intelligence first." in script
+    assert "Discover Vocabulary needs at least one usable Set Intelligence result" in script
     assert "operation: 'scan_vocabulary_sight'" not in script
-    assert script.index("return ensureVocabularySight();") < script.index("return runVocabularySynthesis();")
+    assert "return true;" in script.split("function prepareDiscoveryEvidence()", 1)[1].split("function completeDiscovery(", 1)[0]
     assert script.index("return runVocabularySynthesis();") < script.index("return runVocabularyChallenge(draft);")
     assert "vision-schema-evidence-thumbs" in script
     assert ".vision-schema-evidence-thumbs img" in css

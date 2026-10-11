@@ -74,6 +74,36 @@ def test_vision_schema_synthesis_queues_frozen_schema_contract(tmp_path, monkeyp
     assert seen["contract"]["sight_evidence"]
 
 
+def test_vocabulary_synthesis_accepts_open_sight_without_context(tmp_path, monkeypatch):
+    set_root = tmp_path / "set"
+    set_root.mkdir()
+    for name in ("a.jpg", "b.jpg"):
+        (set_root / name).write_bytes(b"image")
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", Path(tmp_path))
+    from tool.server import vision_schema_assist
+    for name in ("a.jpg", "b.jpg"):
+        vision_schema_assist.save_vision_sight(
+            "set", name, "vl",
+            _sight("Garment with ring hardware.", details=["metal ring connector"]),
+        )
+    seen = {}
+    def fake_enqueue(client, model_id, contract, context=None, label=""):
+        seen.update(contract=contract, label=label)
+        return {"jobId": "schema-1", "status": "queued"}
+    monkeypatch.setattr(app_module, "enqueue_llm", fake_enqueue)
+    response = app_module.app.test_client().post("/fs/vision_schema", json={
+        "operation": "synthesize_vocabulary",
+        "folder": "set",
+        "visionModel": "vl",
+        "directorModel": "director",
+        "existingGroups": [{"group": "Detail", "terms": ["metal ring connector"]}],
+    })
+    assert response.status_code == 202
+    assert response.get_json()["analysis"]["schemaAwareItemCount"] == 0
+    assert seen["contract"]["operation"] == "vision_schema_suggest"
+    assert seen["contract"]["sight_evidence"]
+
+
 def test_vision_tag_suggestions_queue_both_visual_reads(tmp_path, monkeypatch):
     set_root = tmp_path / "set"
     set_root.mkdir()

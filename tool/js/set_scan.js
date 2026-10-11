@@ -124,28 +124,20 @@
     var coverage = setScanState.coverage;
     var totalCoverage = coverage.known ? coverage.total : 0;
     var openMissing = coverage.known ? Math.max(0, totalCoverage - coverage.openCurrent) : 0;
-    var contextMissing = coverage.known && coverage.contextRequired
-      ? Math.max(0, totalCoverage - coverage.contextAvailable)
-      : 0;
-    var contextStale = coverage.known && coverage.contextRequired
-      ? Math.max(0, coverage.contextAvailable - coverage.contextCurrent)
-      : 0;
+    var contextMissing = coverage.known ? Math.max(0, totalCoverage - coverage.contextAvailable) : 0;
+    var contextStale = coverage.known ? Math.max(0, coverage.contextAvailable - coverage.contextCurrent) : 0;
     var actionLabel = '';
     if (!setScanState.running) {
       if (!setScanState.hasRun || !coverage.known) {
         actionLabel = 'Run Set Intelligence';
       } else if (openMissing) {
         actionLabel = 'Resume ' + String(openMissing) + ' Open Sight';
-      } else if (contextMissing) {
-        actionLabel = 'Resume ' + String(contextMissing) + ' Context Sight';
-      } else if (contextStale) {
-        actionLabel = 'Refresh ' + String(contextStale) + ' Context Sight';
       } else {
-        actionLabel = 'Refresh Set Intelligence';
+        actionLabel = 'Open Sight current';
       }
     }
     rescanBtn.classList.toggle('hidden', setScanState.running);
-    rescanBtn.disabled = !scopeCount;
+    rescanBtn.disabled = !scopeCount || !!(coverage.known && !openMissing);
     rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
     forceBtn.disabled = setScanState.running || !scopeCount;
     forceMode.disabled = setScanState.running;
@@ -154,7 +146,7 @@
     if (setScanState.phase === 'preparing') percent = 8;
     if (setScanState.phase === 'scanning-open') {
       percent = setScanState.total
-        ? 10 + Math.round((setScanState.completed / setScanState.total) * 38)
+        ? 10 + Math.round((setScanState.completed / setScanState.total) * 85)
         : 10;
     }
     if (setScanState.phase === 'scanning-context') {
@@ -192,9 +184,8 @@
       var contextCountText = String(coverage.contextCurrent) + ' / ' + String(totalCoverage);
       if (!coverage.contextRequired) {
         contextState = 'current';
-        contextBadgeText = 'Not required';
-        contextCountText = '—';
-        contextDetailText = 'No annotation groups are configured, so Context Sight is skipped.';
+        contextBadgeText = 'Optional';
+        contextDetailText = 'A separate vocabulary-guided pixel read is optional; use the explicit controls if needed.';
       } else if (coverage.contextCurrent >= totalCoverage) {
         contextState = 'current';
         contextBadgeText = 'Current';
@@ -210,12 +201,10 @@
         contextBadgeText = 'Partial';
       }
       if (!contextDetailText) {
-        var contextParts = [
-          String(coverage.contextCurrent) + ' reusable'
-        ];
-        if (contextStale) contextParts.push(String(contextStale) + ' saved but unavailable');
-        if (contextMissing) contextParts.push(String(contextMissing) + ' missing');
-        contextDetailText = contextParts.join(' · ') + '.';
+        var contextParts = [String(coverage.contextCurrent) + ' reusable'];
+        if (contextStale) contextParts.push(String(contextStale) + ' other saved observations');
+        if (contextMissing) contextParts.push(String(contextMissing) + ' not scanned');
+        contextDetailText = contextParts.join(' · ') + '. Context Sight is optional.';
       }
       setEvidenceCard(
         contextCard,
@@ -374,24 +363,14 @@
         setScanState.running = false;
         setCachedReportResponses(payload);
         applyCoveragePayload(payload, files.length, context.groups.length > 0);
-        var complete = openCount >= files.length && (
-          !context.groups.length ||
-          Number(payload && payload.context && payload.context.cached || 0) >= files.length
-        );
+        var complete = openCount >= files.length;
         setScanState.phase = complete ? 'complete' : 'idle';
         if (complete) {
-          setSetIntelligenceStatus('Set understood', 'Cached two-pass Set Intelligence is current. Review the report or continue.');
+          setSetIntelligenceStatus('Set understood', 'Cached Open Sight is available. Context Sight is optional.');
         } else {
-          var currentContext = Number(payload && payload.context && payload.context.cached || 0);
-          var staleContext = Math.max(0, contextAvailable - currentContext);
-          var missingContext = Math.max(0, files.length - contextAvailable);
-          var remaining = [];
-          if (openCount < files.length) remaining.push(String(files.length - openCount) + ' Open Sight missing');
-          if (staleContext) remaining.push(String(staleContext) + ' Context Sight unavailable');
-          if (missingContext) remaining.push(String(missingContext) + ' Context Sight missing');
           setSetIntelligenceStatus(
             'Saved intelligence found',
-            remaining.join(' · ') + '. Resume only what is missing.'
+            String(Math.max(0, files.length - openCount)) + ' media still need Open Sight. Context Sight is optional.'
           );
         }
         return true;
@@ -726,7 +705,8 @@
   function finishScan(message) {
     setScanState.running = false;
     setScanState.currentVisionJobId = '';
-    setScanState.phase = 'complete';
+    setScanState.phase = setScanState.coverage.openCurrent >= setScanState.coverage.total
+      ? 'complete' : 'idle';
     qaInputsUpdated();
     var failureCount = setScanState.failures.length;
     if (failureCount) {
@@ -744,7 +724,7 @@
 
   function runSetIntelligence(forceMode) {
     var selectedMode = typeof forceMode === 'string' ? forceMode : '';
-    if (selectedMode && ['both', 'open', 'context'].indexOf(selectedMode) === -1) {
+    if (selectedMode && ['both', 'open', 'context', 'context-missing'].indexOf(selectedMode) === -1) {
       throw new Error('Invalid Sight refresh selection.');
     }
     if (setScanState.running) return;
@@ -812,10 +792,12 @@
       }
       if (setScanState.stopRequested) return false;
       visionContext = setIntelligenceVisionContext();
-      return selectedMode === 'context' ? true : scanVision(folder, files, setScanState.visionModel, !!selectedMode);
+      return selectedMode === 'context' || selectedMode === 'context-missing'
+        ? true : scanVision(folder, files, setScanState.visionModel, !!selectedMode);
     }).then(function (openSuccess) {
       if (openSuccess === false || setScanState.stopRequested) return false;
-      return selectedMode === 'open' ? true : scanContextVision(folder, files, setScanState.visionModel, visionContext, !!selectedMode);
+      return ['both', 'context', 'context-missing'].indexOf(selectedMode) === -1
+        ? true : scanContextVision(folder, files, setScanState.visionModel, visionContext, selectedMode !== 'context-missing');
     }).then(function (visionSuccess) {
       if (visionSuccess === false || setScanState.stopRequested) return false;
       return refreshMediaResolutionCache({

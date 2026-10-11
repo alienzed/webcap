@@ -72,15 +72,13 @@ def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secon
     assert "showRawResponse(fileName, 'Open Sight', result.text);" in scan
     assert "showRawResponse(fileName, 'Context Sight', result.text);" in scan
     assert "responseSelect.onchange = selectRawResponse;" in scan
-    assert "rescanBtn.onclick = runSetIntelligence;" in scan
+    assert "rescanBtn.onclick = function () { runSetIntelligence(); };" in scan
     assert "'Resume ' + String(openMissing) + ' Open Sight'" in scan
-    assert "'Resume ' + String(contextMissing) + ' Context Sight'" in scan
-    assert "'Refresh ' + String(contextStale) + ' Context Sight'" in scan
-    assert "rescanBtn.classList.toggle('hidden', !actionLabel);" in scan
+    assert "rescanBtn.disabled = !scopeCount || !!(coverage.known && !openMissing);" in scan
     assert "operation: 'intelligence_report'" in scan
     assert "function restoreCachedIntelligence(" in scan
     assert "if (setScanState.hasRun) return;" not in scan
-    assert "Checking saved Open Sight and Context Sight against the current Set" in scan
+    assert "Checking saved Open Sight and Context Sight for " in scan
     assert "function recordSetIntelligenceFailure(" in scan
     assert "Set understood with gaps" in scan
     assert "Previous report preserved." in scan

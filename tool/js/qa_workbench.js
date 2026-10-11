@@ -218,17 +218,8 @@
       out.visionSight = {
         model: String(sight.model || ''),
         description: String(sight.description || ''),
-        inventory: {
-          viewpoint: (inventory.viewpoint || []).slice(0, 4),
-          position: (inventory.position || []).slice(0, 6),
-          things: (inventory.things || []).slice(0, 8),
-          colors: (inventory.colors || []).slice(0, 8),
-          setting: (inventory.setting || []).slice(0, 4),
-          background: (inventory.background || []).slice(0, 4),
-          lighting: (inventory.lighting || []).slice(0, 4),
-          surface: (inventory.surface || []).slice(0, 4),
-          details: (inventory.details || []).slice(0, 8)
-        }
+        // Sight is already bounded when saved; do not discard evidence again for QA.
+        inventory: inventory
       };
     }
     return out;

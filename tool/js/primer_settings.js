@@ -776,7 +776,7 @@ function captionAssistCompareWords(original, proposed) {
   // an edit script: reordered phrases must not look deleted and re-added.
   // Count occurrences to keep genuine added/removed duplicates visible.
   function key(word) {
-    return word.toLowerCase().replace(/^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$/gu, '');
+    return word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
   }
   var oldMatch = new Array(oldWords.length).fill(false);
   var newMatch = new Array(newWords.length).fill(false);

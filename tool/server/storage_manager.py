@@ -713,6 +713,55 @@ def _set_items(cache, folder):
             ))
     return rows
 
+
+def clear_set_generated_sight(folder, scope):
+    """Explicit cleanup of derived visual observations; never deletes Set-authored data."""
+    scope = str(scope or "").strip()
+    fields = {
+        "legacy": ("vision_vocabulary_sight",),
+        "all": ("vision_sight", "vision_vocabulary_sight"),
+    }.get(scope)
+    if fields is None:
+        raise ValueError("Choose legacy Context Sight or all generated Sight.")
+    folder = str(folder or "").strip()
+    if not folder:
+        raise ValueError("Select a Set before clearing generated Sight.")
+    set_path = app_config.safe_join_fs_root(folder)
+    if not set_path.is_dir():
+        raise FileNotFoundError("Selected Set folder does not exist.")
+    metadata_path = set_path / "media_metadata.json"
+    if metadata_path.is_symlink():
+        raise ValueError("Set metadata must not be a symlink.")
+
+    from . import media as media_store
+    with media_store._media_metadata_lock:
+        if not metadata_path.is_file():
+            return {"ok": True, "folder": folder, "scope": scope, "removedRecords": 0, "bytesEstimate": 0}
+        with metadata_path.open("r", encoding="utf-8") as handle:
+            metadata = json.load(handle)
+        if not isinstance(metadata, dict):
+            raise ValueError("Set media metadata must be a JSON object.")
+        changed = 0
+        estimated_bytes = 0
+        for info in metadata.values():
+            if not isinstance(info, dict):
+                continue
+            for field in fields:
+                if field in info:
+                    estimated_bytes += len(json.dumps({field: info[field]}, ensure_ascii=False).encode("utf-8"))
+                    del info[field]
+                    changed += 1
+        if changed:
+            media_store.write_media_metadata_file(metadata_path, metadata)
+    return {
+        "ok": True,
+        "folder": folder,
+        "scope": scope,
+        "removedRecords": changed,
+        "bytesEstimate": estimated_bytes,
+    }
+
+
 def _read_h3_probe_state(probe_path):
     probe = Path(probe_path)
     seed_path = probe / "seed.json"

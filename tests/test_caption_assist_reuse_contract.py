@@ -8,12 +8,12 @@ def source(path):
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_caption_assist_reuses_existing_context_sight():
+def test_caption_assist_only_requests_unified_sight():
     scan = source("tool/js/set_scan.js")
     primer = source("tool/js/primer_settings.js")
     focus = source("tool/js/focused_caption.js")
-    assert "opts.context === 'missing'" in scan
-    assert "context = !row.cached;" in scan
+    assert "scan_vocabulary_sight" not in scan
+    assert "save_vocabulary_sight" not in scan
     assert "context: false" in primer
     assert "context: false" in focus
     assert "refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: false, silent: true })" in source("tool/js/qa_workbench.js")

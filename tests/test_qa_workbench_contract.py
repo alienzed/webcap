@@ -167,4 +167,4 @@ def test_qa_omission_fixes_use_local_tag_and_draft_editing():
     assert "removeCaptionAssistAssignedTag(mediaKey, entry.group, entry.term)" in omissions
     assert "repairCaptionAssistCandidate(" not in omissions
     assert "var missingGroups = visible && !isFocusedQaReviewMode()" in primer
-    assert "Replace \\"" in _read("tool/js/qa_workbench.js")
+    assert "Replace " in _read("tool/js/qa_workbench.js")

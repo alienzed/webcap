@@ -132,7 +132,7 @@ def _normalize_deterministic_findings(findings, allowed_files):
     return rows
 
 
-def _response_schema():
+def _response_schema(recheck=False):
     finding = {
         "type": "object",
         "additionalProperties": False,
@@ -194,7 +194,7 @@ def _response_schema():
             },
         },
     }
-    return {
+    schema = {
         "type": "object",
         "additionalProperties": False,
         "required": ["summary", "findings", "captionQuality"],
@@ -213,6 +213,13 @@ def _response_schema():
             },
         },
     }
+    if recheck:
+        schema["required"].extend(["recheckStatus", "recheckReason"])
+        schema["properties"]["recheckStatus"] = {
+            "type": "string", "enum": ["still_actionable", "resolved", "inconclusive"]
+        }
+        schema["properties"]["recheckReason"] = {"type": "string", "minLength": 1}
+    return schema
 
 
 def _render_item(row):
@@ -331,7 +338,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
 
 
 
-def build_concept_request(items, concept, known_vocabulary=None):
+def build_concept_request(items, concept, known_vocabulary=None, recheck_concern=None):
     """Narrow, cache-only concept investigation; output reuses the Deep QA finding contract."""
     concept = _clean(concept)[:240]
     if not concept:
@@ -347,6 +354,19 @@ def build_concept_request(items, concept, known_vocabulary=None):
             vocabulary.append({"group": name, "alias": _clean(group.get("alias"))[:120], "terms": terms})
         if len(vocabulary) >= 24:
             break
+    concern = None
+    if recheck_concern is not None:
+        if len(rows) != 1 or not isinstance(recheck_concern, dict):
+            raise ValueError("A targeted QA recheck requires one image and one concern.")
+        concern = {
+            "title": _clean(recheck_concern.get("title"))[:160],
+            "why": _clean(recheck_concern.get("why"))[:600],
+            "summary": _clean(recheck_concern.get("summary"))[:600],
+            "evidence": [_clean(value)[:200] for value in
+                         (recheck_concern.get("evidence") or [])[:6] if _clean(value)],
+        }
+        if not concern["title"]:
+            raise ValueError("Targeted QA recheck requires the original concern.")
     evidence = []
     for row in rows:
         sight = row["analysis"].get("visionSight")
@@ -360,42 +380,65 @@ def build_concept_request(items, concept, known_vocabulary=None):
                 "inventory": sight.get("inventory"),
             } if isinstance(sight, dict) else None,
         })
-    prompt = (
-        "[ROLE]\n"
-        "You conduct a user-directed QA check over supplied Set items. You do not see pixels. "
-        "Sight is fallible visual observation, not established ground truth.\n\n"
-        "[QUESTION]\n" + concept + "\n\n"
-        "[TASK]\n"
-        "For EACH supplied file, consider the exact requested concept using its cached Sight, "
-        "current caption and assigned tags. Report only concrete, actionable annotation omissions "
-        "or contradictions that matter to this question. Compare meanings, not keyword occurrences. "
-        "Existing tags may express the concept in different wording. Do not interpret an absent Sight "
-        "observation as proof of absence, and do not remove a user tag without affirmative contrary evidence. "
-        "If Sight is missing or inconclusive, do not invent a visual verdict. "
-        "Zero findings is valid; do not manufacture a quota.\n\n"
-        "[ACTIONS]\n"
-        "Each finding must identify actual supplied filenames. Use category consistency or captioning. "
-        "Prefer an exact per-file tagAction (add/remove) when a canonical group and term are supplied; "
-        "never invent groups or terms. Match add-tag terms only to KNOWN VOCABULARY supplied below. Otherwise, provide a concise exact caption patch if the evidence "
-        "supports an edit. Keep findings per file, with a short specific why and concrete supporting evidence. "
-        "Do not return broad advice without a clickable action. "
-        "Do not change annotations yourself. All proposals require human review. "
-        "Respect the exact sourceText/anchorText patch contract; never fabricate an original substring.\n\n"
-        "[KNOWN VOCABULARY]\n" + json.dumps(vocabulary, ensure_ascii=False, separators=(",", ":")) + "\n\n"
-        "[INPUT]\n" + json.dumps(evidence, ensure_ascii=False, separators=(",", ":")) + "\n\n"
-        "[OUTPUT]\nReturn JSON matching the schema. Set captionQuality to []. "
-        "Summary should describe this batch, not infer Set-wide prevalence."
-    )
+    if concern:
+        prompt = (
+            "[ROLE]\nYou reassess ONE previously reported QA concern against fresh Vision Sight. "
+            "You do not see pixels; the saved Sight is a fallible observation.\n\n"
+            "[ORIGINAL CONCERN]\n" + json.dumps(concern, ensure_ascii=False) + "\n\n"
+            "[TASK]\nAnswer ONLY whether that same concern remains actionable after comparing "
+            "fresh Sight, current caption and current tags. Do not search for unrelated issues. "
+            "An absent or ambiguous observation is NOT affirmative evidence against an approved tag. "
+            "If the new Sight contradicts the concern with clear specific evidence, choose resolved. "
+            "If it supports a concrete annotation edit, choose still_actionable and include a precise "
+            "finding with exact tagActions or caption patches. If uncertain, choose inconclusive, "
+            "return no new findings and preserve the user's ability to review the original concern. "
+            "Do not equate no findings with resolved. Changes are suggestions, never mutations. "
+            "Use only exact supplied filenames and canonical vocabulary terms; do not invent groups.\n\n"
+            "[KNOWN VOCABULARY]\n" + json.dumps(vocabulary, ensure_ascii=False, separators=(",", ":")) + "\n\n"
+            "[CURRENT EVIDENCE]\n" + json.dumps(evidence, ensure_ascii=False, separators=(",", ":")) + "\n\n"
+            "[OUTPUT]\nReturn the required recheckStatus (still_actionable, resolved, inconclusive) "
+            "and a brief, evidence-specific recheckReason. Set captionQuality to []. "
+            "A still_actionable result MUST include an actionable finding with a supported patch or "
+            "canonical tag action. A resolved or inconclusive result MUST return findings: []."
+        )
+    else:
+        prompt = (
+            "[ROLE]\n"
+            "You conduct a user-directed QA check over supplied Set items. You do not see pixels. "
+            "Sight is fallible visual observation, not established ground truth.\n\n"
+            "[QUESTION]\n" + concept + "\n\n"
+            "[TASK]\n"
+            "For EACH supplied file, consider the exact requested concept using its cached Sight, "
+            "current caption and assigned tags. Report only concrete, actionable annotation omissions "
+            "or contradictions that matter to this question. Compare meanings, not keyword occurrences. "
+            "Existing tags may express the concept in different wording. Do not interpret an absent Sight "
+            "observation as proof of absence, and do not remove a user tag without affirmative contrary evidence. "
+            "If Sight is missing or inconclusive, do not invent a visual verdict. "
+            "Zero findings is valid; do not manufacture a quota.\n\n"
+            "[ACTIONS]\n"
+            "Each finding must identify actual supplied filenames. Use category consistency or captioning. "
+            "Prefer an exact per-file tagAction (add/remove) when a canonical group and term are supplied; "
+            "never invent groups or terms. Match add-tag terms only to KNOWN VOCABULARY supplied below. Otherwise, provide a concise exact caption patch if the evidence "
+            "supports an edit. Keep findings per file, with a short specific why and concrete supporting evidence. "
+            "Do not return broad advice without a clickable action. "
+            "Do not change annotations yourself. All proposals require human review. "
+            "Respect the exact sourceText/anchorText patch contract; never fabricate an original substring.\n\n"
+            "[KNOWN VOCABULARY]\n" + json.dumps(vocabulary, ensure_ascii=False, separators=(",", ":")) + "\n\n"
+            "[INPUT]\n" + json.dumps(evidence, ensure_ascii=False, separators=(",", ":")) + "\n\n"
+            "[OUTPUT]\nReturn JSON matching the schema. Set captionQuality to []. "
+            "Summary should describe this batch, not infer Set-wide prevalence."
+        )
     return {
         "operation": "qa_deep_scan",
         "output": "json",
         "prompt": prompt,
-        "response_schema": _response_schema(),
+        "response_schema": _response_schema(recheck=bool(concern)),
+        "recheck": bool(concern),
         "source_files": [row["fileName"] for row in rows],
     }
 
 
-def normalize_result(data, allowed_files=None, captions_by_file=None):
+def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=False):
     if not isinstance(data, dict):
         raise ValueError("QA Deep Scan response must be an object.")
 
@@ -549,6 +592,13 @@ def normalize_result(data, allowed_files=None, captions_by_file=None):
         except ValueError as exc:
             finding_warnings.append('Finding ' + str(finding_index + 1) + ': ' + str(exc))
     result = {"summary": summary, "findings": normalized[:8]}
+    if recheck:
+        status = str(data.get("recheckStatus") or "").strip()
+        reason = _clean(data.get("recheckReason"))
+        if status not in {"still_actionable", "resolved", "inconclusive"} or not reason:
+            raise ValueError("QA recheck response is missing its status or reason.")
+        result["recheckStatus"] = status
+        result["recheckReason"] = reason
     if "captionQuality" in data:
         result["captionQuality"] = normalized_quality
     if patch_warnings:

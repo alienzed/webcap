@@ -488,7 +488,7 @@ function startFocusedCaptionPrefetch(sourceMediaKey) {
     prefetch.promise = loadCaptionVisionCapabilities().then(function () {
       if (!active()) return null;
       return refreshSetIntelligenceItem(target.item, {
-        open: 'missing', context: 'missing', silent: true, allowOpenFailure: true,
+        open: 'missing', context: false, silent: true, allowOpenFailure: true,
         isCancelled: function () { return prefetch.discarded; }
       });
     }).then(function (prepared) {

@@ -1051,7 +1051,7 @@ function wireCaptionVisionUi() {
       refreshSight.disabled = true;
       var mode = document.getElementById('editor-caption-refresh-sight-mode').value;
       var refreshOperation = function () {
-        return refreshSetIntelligenceItem(item, { open: mode !== 'context', context: mode !== 'open' });
+        return refreshSetIntelligenceItem(item, { open: true, context: false });
       };
       var refresh = isFocusedQaReviewMode()
         ? qaFocusReviewInteractiveRefresh(refreshOperation)

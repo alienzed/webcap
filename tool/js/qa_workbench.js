@@ -2392,6 +2392,112 @@
     return qaWorkbenchState.captionQuality[item.fileName] || null;
   }
 
+  var qaTargetedRecheck = null;
+
+  function qaRecheckCurrentFinding() {
+    if (!isFocusedQaReviewMode() || !qaFocusReviewCurrent() || !state.currentItem) return Promise.resolve(false);
+    if (qaTargetedRecheck) return Promise.resolve(false);
+    var item = state.currentItem;
+    var findings = qaFocusReviewActionableFindings(item.key, captionAssistCandidate && captionAssistCandidate.text);
+    if (!findings.length) { setStatus('No actionable QA concern to recheck.'); return Promise.resolve(false); }
+    var finding = findings[0];
+    var model = String(getDirectorModelPreference() || '').trim();
+    if (!model) { setStatus('Select a Director model first.'); return Promise.resolve(false); }
+    if (qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.conceptSession) {
+      setStatus('Finish the running QA scan before rechecking this concern.');
+      return Promise.resolve(false);
+    }
+    var folder = String(state.folder || '');
+    var mediaKey = item.key;
+    var caption = String(item.caption || '');
+    var original = Object.assign({}, finding);
+    var operation = { folder: folder, mediaKey: mediaKey, cancelled: false, jobId: '' };
+    qaTargetedRecheck = operation;
+    setStatus('Rechecking QA concern with fresh Vision…');
+    reportConsoleInfo('QA Recheck', 'Reinspecting ' + item.fileName + ' · ' + original.title);
+    function valid() {
+      return qaTargetedRecheck === operation && !operation.cancelled &&
+        String(state.folder || '') === folder && state.currentItem && state.currentItem.key === mediaKey &&
+        isFocusedQaReviewMode() && qaFocusReviewCurrent();
+    }
+    return qaFocusReviewInteractiveRefresh(function () {
+      return refreshSetIntelligenceItem(item, { open: true, isCancelled: function () { return !valid(); } })
+        .then(function (saved) {
+          if (!valid() || !saved) return false;
+          setStatus('Fresh Sight saved. Director reassessing the concern…');
+          var requestItem = qaBuildConceptItems([item])[0];
+          return qaRequestJson('/fs/qa/concept-check', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              folder: folder, model: model, concept: String(original.title || ''),
+              knownVocabulary: qaConceptVocabulary(original.title || ''),
+              recheckConcern: {
+                title: original.title, summary: original.summary,
+                why: original.why, evidence: original.evidence || []
+              },
+              items: [requestItem]
+            })
+          }).then(function (payload) {
+            operation.jobId = String(payload.job && payload.job.jobId || '');
+            if (!valid()) {
+              if (operation.jobId) return qaRequestJson('/fs/director/job', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ operation: 'cancel_job', jobId: operation.jobId })
+              }).then(function () { return false; });
+              return false;
+            }
+            return qaWaitForConceptJob(payload.job);
+          }).then(function (job) {
+            if (!valid() || !job) return false;
+            var analysis = job.result && job.result.analysis;
+            if (!analysis || !analysis.recheckStatus) throw new Error('Director returned no recheck verdict.');
+            if (analysis.patchWarnings && analysis.patchWarnings.length) reportConsoleWarning('QA Recheck', analysis.patchWarnings.join('; '));
+            if (analysis.findingWarnings && analysis.findingWarnings.length) reportConsoleWarning('QA Recheck', analysis.findingWarnings.join('; '));
+            var updated = qaNormalizeAiFindings(analysis, model);
+            var current = qaConceptInputSignatures([item])[item.fileName];
+            var replacements = [];
+            if (analysis.recheckStatus === 'still_actionable') {
+              updated.forEach(function (entry) {
+                if ((entry.files || []).indexOf(item.fileName) === -1 ||
+                    (!(entry.tagActions || []).length && !(entry.patches || []).length)) return;
+                entry.id = qaStableId(['recheck', original.id, entry.id]);
+                entry.source = 'concept';
+                entry.sourceLabel = 'Vision recheck';
+                entry.inputSignatures = { [item.fileName]: current };
+                replacements.push(entry);
+              });
+              if (!replacements.length) throw new Error('Recheck marked actionable without a usable correction.');
+            } else if (analysis.recheckStatus === 'inconclusive') {
+              var retained = Object.assign({}, original, {
+                source: 'concept', sourceLabel: 'Vision recheck · inconclusive',
+                inputSignatures: { [item.fileName]: current }
+              });
+              retained.id = qaStableId(['recheck-inconclusive', original.id]);
+              replacements.push(retained);
+            }
+            qaWorkbenchState.aiFindings = qaWorkbenchState.aiFindings.filter(function (entry) { return entry.id !== original.id; });
+            qaWorkbenchState.conceptFindings = qaWorkbenchState.conceptFindings.filter(function (entry) { return entry.id !== original.id; });
+            replacements.forEach(function (entry) { qaWorkbenchState.conceptFindings.push(entry); });
+            qaMergeFindings();
+            qaSyncFocusReview();
+            var label = { resolved: 'Resolved', still_actionable: 'Still actionable', inconclusive: 'Inconclusive' }[analysis.recheckStatus];
+            setStatus('QA Vision recheck: ' + label + ' · ' + analysis.recheckReason);
+            reportConsoleInfo('QA Recheck', label + ' · ' + analysis.recheckReason);
+            return true;
+          });
+        });
+    }).catch(function (err) {
+      if (valid()) {
+        reportConsoleError('QA Vision recheck', err);
+        setStatus('QA Vision recheck failed: ' + String(err && err.message || err));
+      }
+      return false;
+    }).finally(function () {
+      if (qaTargetedRecheck === operation) qaTargetedRecheck = null;
+      if (isFocusedQaReviewMode()) syncCaptionAssistCandidateUi();
+    });
+  }
+
   function qaFocusReviewReasons(mediaKey, captionText) {
     var item = (state.items || []).find(function (row) { return row && row.key === mediaKey; });
     if (!item) return [];
@@ -2882,6 +2988,8 @@
   window.qaStartFocusReview = qaStartFocusReview;
   window.qaFocusReviewMarkHandled = qaFocusReviewMarkHandled;
   window.qaFocusReviewStopped = qaFocusReviewStopped;
+  window.qaRecheckCurrentFinding = qaRecheckCurrentFinding;
+  window.qaFocusReviewRecheckBusy = function () { return !!qaTargetedRecheck; };
   window.qaFocusReviewReasons = qaFocusReviewReasons;
   window.qaFocusReviewActionableFindings = qaFocusReviewActionableFindings;
   window.qaFocusReviewQuality = qaFocusReviewQuality;

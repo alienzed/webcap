@@ -32,6 +32,9 @@ def test_qa_group_inspection_enters_existing_grid_and_preserves_return():
     assert "qaWorkbenchState.returnFindingId = finding.id;" in inspect
     assert "activateFocusSet(finding.files" in inspect
     assert "openMediaGridSurface();" in inspect
+    assert "finding.category === 'captioning'" in inspect
+    assert "finding.files.length === 1" in inspect
+    assert "qaSelectFiles(finding.files" in inspect
     assert "qaReviewCaptionFiles(" in inspect
     assert "function returnToQaWorkbenchFromFocusSet()" in qa
 

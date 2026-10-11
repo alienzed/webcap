@@ -50,6 +50,10 @@
     deterministicFindings: [],
     statisticalCandidates: [],
     aiFindings: [],
+    conceptFindings: [],
+    conceptQuery: '',
+    conceptStatus: '',
+    conceptSession: null,
     captionQuality: {},
     qaAlternatives: {},
     aiSummary: '',
@@ -432,7 +436,9 @@
       return files.length ? Object.assign({}, finding, { files: files }) : null;
     }).filter(Boolean);
     qaWorkbenchState.findings = qaSortFindings(
-      qaWorkbenchState.deterministicFindings.concat(visibleAi)
+      qaWorkbenchState.deterministicFindings.concat(visibleAi, qaWorkbenchState.conceptFindings.filter(function (finding) {
+        return (finding.files || []).some(function (file) { return !!current[file]; });
+      }))
     );
   }
 
@@ -804,6 +810,121 @@
       qaRefreshAiCoverage();
       renderQaWorkbench();
     });
+  }
+
+  function qaStopConceptCheck() {
+    var session = qaWorkbenchState.conceptSession;
+    if (!session) return;
+    session.stopped = true;
+    qaWorkbenchState.conceptSession = null;
+    qaWorkbenchState.conceptStatus = 'Concept check stopped · completed findings retained.';
+    if (session.jobId) {
+      qaRequestJson('/fs/director/job', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation: 'cancel_job', jobId: session.jobId })
+      }).catch(function (err) { reportConsoleError('QA Concept Check · Stop', err); });
+    }
+    renderQaWorkbench();
+  }
+
+  function qaRunConceptCheck() {
+    if (qaWorkbenchState.conceptSession || qaWorkbenchState.deepScanSessionActive) return;
+    var concept = qaNormalizeLabel(qaWorkbenchState.conceptQuery).slice(0, 240);
+    if (!concept) { setStatus('Describe the concept to investigate.'); return; }
+    var model = String(getDirectorModelPreference() || '').trim();
+    if (!model) { setStatus('Select a Director model for the concept check.'); return; }
+    var items = qaGetTrainingItems();
+    if (!items.length) { setStatus('No media in current training selection.'); return; }
+    var session = {
+      folder: String(state.folder || ''), scope: qaBuildScopeKey(items),
+      concept: concept, model: model, items: items.slice(),
+      signatures: qaCurrentItemSignatureMap(items), index: 0,
+      jobId: '', stopped: false
+    };
+    qaWorkbenchState.conceptFindings = [];
+    qaWorkbenchState.conceptSession = session;
+    reportConsoleInfo('QA Concept Check', 'Started "' + concept + '" for ' + items.length + ' items using cached evidence.');
+    function current() {
+      return qaWorkbenchState.conceptSession === session && !session.stopped &&
+        String(state.folder || '') === session.folder &&
+        qaBuildScopeKey(qaGetTrainingItems()) === session.scope;
+    }
+    function next() {
+      if (!current()) {
+        if (qaWorkbenchState.conceptSession === session) qaStopConceptCheck();
+        return Promise.resolve();
+      }
+      if (session.index >= session.items.length) {
+        qaWorkbenchState.conceptSession = null;
+        qaWorkbenchState.conceptStatus = 'Concept check finished · ' + session.items.length + ' items examined.';
+        reportConsoleInfo('QA Concept Check', qaWorkbenchState.conceptStatus);
+        qaMergeFindings();
+        qaSyncFocusReview();
+        renderQaWorkbench();
+        return Promise.resolve();
+      }
+      var batch = session.items.slice(session.index, session.index + 8);
+      qaWorkbenchState.conceptStatus = 'Concept check · ' + session.index + '/' + session.items.length + ' examined';
+      renderQaWorkbench();
+      return qaRequestJson('/fs/qa/concept-check', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folder: session.folder, model: model, concept: concept,
+          items: qaBuildDeepScanItems(batch)
+        })
+      }).then(function (payload) {
+        if (!current()) {
+          if (payload.job && payload.job.jobId) return qaRequestJson('/fs/director/job', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ operation: 'cancel_job', jobId: payload.job.jobId })
+          });
+          return null;
+        }
+        session.jobId = String(payload.job && payload.job.jobId || '');
+        if (!session.jobId) throw new Error('Concept QA did not queue a Director job.');
+        return qaWaitForConceptJob(payload.job);
+      }).then(function (job) {
+        if (!current() || !job) return;
+        session.jobId = '';
+        var analysis = job.result && job.result.analysis;
+        if (!analysis || !Array.isArray(analysis.findings)) throw new Error('Concept QA returned no structured findings.');
+        if (analysis.patchWarnings && analysis.patchWarnings.length) reportConsoleWarning('QA Concept Check', analysis.patchWarnings.join('; '));
+        if (analysis.findingWarnings && analysis.findingWarnings.length) reportConsoleWarning('QA Concept Check', analysis.findingWarnings.join('; '));
+        var currentSignatures = qaCurrentItemSignatureMap(batch);
+        qaNormalizeAiFindings(analysis, session.model).forEach(function (finding) {
+          var files = (finding.files || []).filter(function (file) { return session.signatures[file] === currentSignatures[file]; });
+          if (!files.length || !(finding.tagActions || []).length && !(finding.patches || []).length) return;
+          finding.id = qaStableId(['concept', concept, finding.id].concat(files));
+          finding.files = files;
+          finding.source = 'concept';
+          finding.sourceLabel = 'Concept QA · ' + concept;
+          qaWorkbenchState.conceptFindings.push(finding);
+        });
+        session.index += batch.length;
+        qaMergeFindings();
+        qaSyncFocusReview();
+        return next();
+      }).catch(function (err) {
+        if (!current()) return;
+        qaWorkbenchState.conceptSession = null;
+        qaWorkbenchState.conceptStatus = 'Concept check failed at ' + session.index + '/' + session.items.length + ' · see Console.';
+        reportConsoleError('QA Concept Check', err);
+        renderQaWorkbench();
+      });
+    }
+    next();
+  }
+
+  function qaWaitForConceptJob(job) {
+    function poll(row) {
+      var status = String(row && row.status || '');
+      if (status === 'completed') return Promise.resolve(row);
+      if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) throw new Error(row.error || 'Concept QA job ' + status);
+      return new Promise(function (resolve) { setTimeout(resolve, status === 'queued' ? 2000 : 1000); })
+        .then(function () { return qaRequestJson('/fs/director/job?job=' + encodeURIComponent(row.jobId) + '&consume=1'); })
+        .then(function (payload) { return poll(payload.job); });
+    }
+    return poll(job);
   }
 
   function qaRunDeepScan() {
@@ -1587,6 +1708,29 @@
     hero.appendChild(heroActions);
     container.appendChild(hero);
 
+    var conceptWrap = document.createElement('section');
+    conceptWrap.className = 'qa-section';
+    var conceptHeading = document.createElement('h2');
+    conceptHeading.className = 'qa-section-title';
+    conceptHeading.textContent = 'Check a specific concept';
+    conceptWrap.appendChild(conceptHeading);
+    var conceptInput = document.createElement('input');
+    conceptInput.type = 'text';
+    conceptInput.id = 'qa-concept-input';
+    conceptInput.maxLength = 240;
+    conceptInput.placeholder = 'e.g. missing metal ring connectors';
+    conceptInput.value = qaWorkbenchState.conceptQuery;
+    conceptInput.disabled = !!qaWorkbenchState.conceptSession;
+    conceptWrap.appendChild(conceptInput);
+    var conceptButton = qaCreateButton(qaWorkbenchState.conceptSession ? 'Stop concept check' : 'Check selection',
+      '', qaWorkbenchState.conceptSession ? 'concept-stop' : 'concept-run');
+    conceptWrap.appendChild(conceptButton);
+    var conceptNote = document.createElement('div');
+    conceptNote.className = 'qa-deep-scan-note';
+    conceptNote.textContent = qaWorkbenchState.conceptStatus || 'Uses cached Sight and existing annotations. No automatic VL scans.';
+    conceptWrap.appendChild(conceptNote);
+    container.appendChild(conceptWrap);
+
     var summary = document.createElement('div');
     summary.className = 'qa-summary-line';
     var primary = document.createElement('strong');
@@ -2097,11 +2241,11 @@
   function qaFocusReviewCandidateFindings(item) {
     if (!item) return [];
     var current = qaCurrentItemSignatureMap([item]);
-    var found = qaWorkbenchState.aiFindings.filter(function (finding) {
+    var found = qaWorkbenchState.aiFindings.concat(qaWorkbenchState.conceptFindings).filter(function (finding) {
       return (finding.category === 'captioning' || finding.category === 'consistency') &&
         !qaWorkbenchState.dispositions[finding.id] &&
         (finding.files || []).indexOf(item.fileName) !== -1 &&
-        qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName];
+        (finding.source === 'concept' || qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName]);
     });
     // Only the existing two-signal visual agreement check can introduce a
     // deterministic item-level tag action. Other QA observations stay in QA.
@@ -2496,6 +2640,8 @@
   }
 
   function qaHandleAction(action, value) {
+    if (action === 'concept-run') { qaRunConceptCheck(); return; }
+    if (action === 'concept-stop') { qaStopConceptCheck(); return; }
     if (action === 'qa-focus-review') {
       qaStartFocusReview();
       return;
@@ -2608,8 +2754,14 @@
       if (!button || !root.contains(button)) return;
       qaHandleAction(button.getAttribute('data-qa-action'), button.getAttribute('data-qa-value') || '');
     });
+    root.addEventListener('input', function (event) {
+      if (event.target && event.target.id === 'qa-concept-input') {
+        qaWorkbenchState.conceptQuery = event.target.value;
+      }
+    });
     root.addEventListener('keydown', function (event) {
       if (event.key !== 'Enter') return;
+      if (event.target && event.target.id === 'qa-concept-input') { event.preventDefault(); qaRunConceptCheck(); return; }
       if (event.target && event.target.id === 'qa-training-focus-input') {
         event.preventDefault();
         qaHandleAction('save-focus', '');

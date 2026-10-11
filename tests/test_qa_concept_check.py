@@ -95,4 +95,6 @@ def test_concept_frontend_uses_canonical_and_complete_cached_sight():
     assert "inventory: sight.inventory" in script
     assert "function qaConceptVocabulary(concept)" in script
     assert "qaStopConceptCheck(true);" in script
-    assert "finding.inputSignatures[file] === current[file]" in script
+    assert "finding.inputSignatures[file] === conceptCurrent[file]" in script
+    assert "function qaConceptInputSignatures(items)" in script
+    assert "signatures: qaConceptInputSignatures(items)" in script

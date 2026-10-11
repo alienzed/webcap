@@ -467,9 +467,9 @@ def build_assignment_request(
     prompt = (
         "[ROLE]\n"
         "You map reusable visual evidence onto WebCap's mature annotation vocabulary. "
-        "Each item contains vocabulary-agnostic Open Sight and may also contain Context Sight from a fresh second pixel inspection "
-        "guided by the Set's caption template and annotation vocabulary. Consider both reads together. "
-        "Agreement across the reads is strong support; when they use different wording for the same visible fact, reconcile by meaning. "
+        "Each item contains structured visual discovery Sight "
+        "that may use optional group hints. Treat it as fallible observation, not verified truth. "
+        ""
         "The supplied group names define semantic dimensions and their terms are canonical values.\n\n"
         "[GOAL]\n"
         "For each media item, return tags that a human can confidently add from the supplied visual evidence. "
@@ -481,7 +481,7 @@ def build_assignment_request(
         )
         + "\n\n"
         "[BOUNDARIES]\n"
-        "- Sight evidence is authoritative; vocabulary availability alone is not evidence.\n"
+        "- Sight is fallible visual evidence, not ground truth; vocabulary availability alone is not evidence.\n"
         "- Do not repeat tags already present in currentAssignments.\n"
         "- Prefer high confidence. Use medium only when useful and visually well supported. Omit weak or speculative candidates.\n"
         "- Respect the group meaning. A term must belong semantically to the exact group you name.\n"

@@ -2541,9 +2541,12 @@
       }).map(function (item) { return item.key; }));
     }
     session.items.forEach(function (item) {
-      if (!wanted[item.fileName] || session.handled[item.key] || session.queued[item.key]) return;
-      session.queued[item.key] = true;
+      if (!wanted[item.fileName] || session.handled[item.key]) return;
+      // Reconcile queued evidence when a new QA/Concept result arrives.
+      // Do not preserve an obsolete snapshot merely because the item is queued.
       session.reviewFindings[item.key] = candidatesByKey[item.key];
+      if (session.queued[item.key]) return;
+      session.queued[item.key] = true;
       newKeys.push(item.key);
     });
     if (isFocusedQaReviewMode() && newKeys.length) {

@@ -1029,6 +1029,9 @@ function setWorkspaceSurface(surface, options) {
   if (nextSurface !== 'default' && isFocusedCaptionOpen()) {
     if (!stopFocusedCaption('Focus Caption ended.')) return false;
   }
+  if (nextSurface !== 'grid' && mediaGridIsOpen()) {
+    mediaGridCloseActivePresentation();
+  }
   if (!opts.skipRemember && nextSurface !== currentSurface && nextSurface !== 'default') {
     workspaceState.previousSurface = currentSurface;
   }

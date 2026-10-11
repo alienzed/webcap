@@ -813,7 +813,38 @@
     });
   }
 
-  function qaStopConceptCheck() {
+  function qaConceptVocabulary(concept) {
+    // Only send terms related to the question, not the Set's entire vocabulary.
+    var tokens = String(concept || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+    var stop = {check: 1, for: 1, the: 1, with: 1, any: 1, all: 1, are: 1, missing: 1, incorrect: 1, wrong: 1, images: 1, items: 1, tags: 1, captions: 1, have: 1, does: 1, that: 1, from: 1};
+    var wanted = tokens.filter(function (term) { return term.length > 2 && !stop[term]; }).map(function (term) {
+      return term.length > 4 ? term.replace(/s$/, '') : term;
+    });
+    return (checklistItems || []).map(function (group) {
+      var terms = getChecklistKeywordTermsForRequirement(group).filter(function (term) {
+        var words = String(term || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+        return words.some(function (word) {
+          var stem = word.length > 4 ? word.replace(/s$/, '') : word;
+          return wanted.indexOf(stem) !== -1;
+        });
+      });
+      return { group: group, alias: getRequirementGroupAlias(group), terms: terms };
+    }).filter(function (row) { return row.terms.length; });
+  }
+
+  function qaBuildConceptItems(items) {
+    // Deep QA deliberately shortens Sight. A targeted check needs the whole
+    // cached inventory to avoid losing the very detail being investigated.
+    return qaBuildDeepScanItems(items).map(function (row, index) {
+      var sight = items[index].metadata && items[index].metadata.vision_sight;
+      row.analysis = sight && sight.description && sight.inventory
+        ? { visionSight: { model: sight.model || '', description: sight.description, inventory: sight.inventory } }
+        : {};
+      return row;
+    });
+  }
+
+  function qaStopConceptCheck(silent) {
     var session = qaWorkbenchState.conceptSession;
     if (!session) return;
     session.stopped = true;
@@ -825,11 +856,12 @@
         body: JSON.stringify({ operation: 'cancel_job', jobId: session.jobId })
       }).catch(function (err) { reportConsoleError('QA Concept Check · Stop', err); });
     }
-    renderQaWorkbench();
+    if (!silent) renderQaWorkbench();
   }
 
   function qaRunConceptCheck() {
-    if (qaWorkbenchState.conceptSession || qaWorkbenchState.deepScanSessionActive) return;
+    if (qaWorkbenchState.conceptSession) return;
+    if (qaWorkbenchState.deepScanSessionActive) { setStatus('Stop Deep QA before running a concept check.'); return; }
     var concept = qaNormalizeLabel(qaWorkbenchState.conceptQuery).slice(0, 240);
     if (!concept) { setStatus('Describe the concept to investigate.'); return; }
     var model = String(getDirectorModelPreference() || '').trim();
@@ -837,15 +869,25 @@
     if (qaWorkbenchState.deepScanSubmitting || qaWorkbenchState.deepScanJobId) { setStatus('Finish or stop Deep QA first.'); return; }
     var items = qaGetTrainingItems();
     if (!items.length) { setStatus('No media in current training selection.'); return; }
+    var conceptItems = qaBuildConceptItems(items);
+    var available = conceptItems.filter(function (row) { return !!row.analysis.visionSight; });
+    var missingCount = conceptItems.length - available.length;
+    if (!available.length) {
+      qaWorkbenchState.conceptStatus = 'No cached Sight for this selection. Run Set Intelligence explicitly first.';
+      renderQaWorkbench();
+      return;
+    }
+    var vocabulary = qaConceptVocabulary(concept);
     var session = {
       folder: String(state.folder || ''), scope: qaBuildScopeKey(items),
-      concept: concept, model: model, items: items.slice(),
+      concept: concept, model: model, items: available,
+      vocabulary: vocabulary, missingCount: missingCount,
       signatures: qaCurrentItemSignatureMap(items), index: 0,
       jobId: '', stopped: false
     };
     qaWorkbenchState.conceptFindings = [];
     qaWorkbenchState.conceptSession = session;
-    reportConsoleInfo('QA Concept Check', 'Started "' + concept + '" for ' + items.length + ' items using cached evidence.');
+    reportConsoleInfo('QA Concept Check', 'Started "' + concept + '" for ' + available.length + '/' + items.length + ' items with cached Sight' + (missingCount ? '; ' + missingCount + ' need Sight.' : '.') );
     function current() {
       return qaWorkbenchState.conceptSession === session && !session.stopped &&
         String(state.folder || '') === session.folder &&
@@ -858,21 +900,21 @@
       }
       if (session.index >= session.items.length) {
         qaWorkbenchState.conceptSession = null;
-        qaWorkbenchState.conceptStatus = 'Concept check finished · ' + session.items.length + ' items examined.';
+        qaWorkbenchState.conceptStatus = 'Concept check finished · ' + session.items.length + ' items examined' + (missingCount ? ' · ' + missingCount + ' without Sight (not checked).' : '.');
         reportConsoleInfo('QA Concept Check', qaWorkbenchState.conceptStatus);
         qaMergeFindings();
         qaSyncFocusReview();
         renderQaWorkbench();
         return Promise.resolve();
       }
-      var batch = session.items.slice(session.index, session.index + 8);
+      var batch = session.items.slice(session.index, session.index + 4);
       qaWorkbenchState.conceptStatus = 'Concept check · ' + session.index + '/' + session.items.length + ' examined';
       renderQaWorkbench();
       return qaRequestJson('/fs/qa/concept-check', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folder: session.folder, model: model, concept: concept,
-          items: qaBuildDeepScanItems(batch)
+          knownVocabulary: session.vocabulary, items: batch
         })
       }).then(function (payload) {
         if (!current()) {
@@ -892,10 +934,24 @@
         if (!analysis || !Array.isArray(analysis.findings)) throw new Error('Concept QA returned no structured findings.');
         if (analysis.patchWarnings && analysis.patchWarnings.length) reportConsoleWarning('QA Concept Check', analysis.patchWarnings.join('; '));
         if (analysis.findingWarnings && analysis.findingWarnings.length) reportConsoleWarning('QA Concept Check', analysis.findingWarnings.join('; '));
-        var currentSignatures = qaCurrentItemSignatureMap(batch);
+        var liveItems = qaGetTrainingItems().filter(function (item) {
+          return batch.some(function (row) { return row.fileName === item.fileName; });
+        });
+        var currentSignatures = qaCurrentItemSignatureMap(liveItems);
         qaNormalizeAiFindings(analysis, session.model).forEach(function (finding) {
           var files = (finding.files || []).filter(function (file) { return session.signatures[file] === currentSignatures[file]; });
-          if (!files.length || !(finding.tagActions || []).length && !(finding.patches || []).length) return;
+          finding.tagActions = (finding.tagActions || []).filter(function (action) {
+            if (files.indexOf(action.file) === -1) return false;
+            // New assigned terms must be in the existing vocabulary; do not
+            // let a guessed term silently create a new Set vocabulary entry.
+            if (action.action !== 'add') return true;
+            return session.vocabulary.some(function (row) {
+              return row.group.toLowerCase() === action.group.toLowerCase() &&
+                row.terms.some(function (term) { return term.toLowerCase() === action.term.toLowerCase(); });
+            });
+          });
+          finding.patches = (finding.patches || []).filter(function (patch) { return files.indexOf(patch.file) !== -1; });
+          if (!files.length || (!(finding.tagActions || []).length && !(finding.patches || []).length)) return;
           finding.id = qaStableId(['concept', concept, finding.id].concat(files));
           finding.files = files;
           finding.inputSignatures = Object.assign({}, session.signatures);
@@ -931,6 +987,7 @@
   }
 
   function qaRunDeepScan() {
+    if (qaWorkbenchState.conceptSession) { setStatus('Stop the concept check before starting Deep QA.'); return; }
     if (qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting) return;
     var items = qaGetTrainingItems();
     if (!items.length) throw new Error('QA Deep Scan requires at least one training item.');
@@ -2148,6 +2205,12 @@
     var inputsChanged = !!qaWorkbenchState.deepScanInputSignature
       && qaWorkbenchState.deepScanInputSignature !== inputSignature;
 
+    if (folderChanged || scopeChanged) {
+      qaStopConceptCheck(true);
+      qaWorkbenchState.conceptFindings = [];
+      qaWorkbenchState.conceptStatus = '';
+      if (folderChanged) qaWorkbenchState.conceptQuery = '';
+    }
     if (folderChanged) {
       qaWorkbenchState.trainingFocus = '';
       qaWorkbenchState.focusExplicitlyEdited = false;

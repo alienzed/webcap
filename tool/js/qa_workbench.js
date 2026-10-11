@@ -436,9 +436,10 @@
       return files.length ? Object.assign({}, finding, { files: files }) : null;
     }).filter(Boolean);
     qaWorkbenchState.findings = qaSortFindings(
-      qaWorkbenchState.deterministicFindings.concat(visibleAi, qaWorkbenchState.conceptFindings.filter(function (finding) {
-        return (finding.files || []).some(function (file) { return !!current[file]; });
-      }))
+      qaWorkbenchState.deterministicFindings.concat(visibleAi, qaWorkbenchState.conceptFindings.map(function (finding) {
+        var files = (finding.files || []).filter(function (file) { return current[file] && finding.inputSignatures[file] === current[file]; });
+        return files.length ? Object.assign({}, finding, { files: files }) : null;
+      }).filter(Boolean))
     );
   }
 
@@ -833,6 +834,7 @@
     if (!concept) { setStatus('Describe the concept to investigate.'); return; }
     var model = String(getDirectorModelPreference() || '').trim();
     if (!model) { setStatus('Select a Director model for the concept check.'); return; }
+    if (qaWorkbenchState.deepScanSubmitting || qaWorkbenchState.deepScanJobId) { setStatus('Finish or stop Deep QA first.'); return; }
     var items = qaGetTrainingItems();
     if (!items.length) { setStatus('No media in current training selection.'); return; }
     var session = {
@@ -896,6 +898,7 @@
           if (!files.length || !(finding.tagActions || []).length && !(finding.patches || []).length) return;
           finding.id = qaStableId(['concept', concept, finding.id].concat(files));
           finding.files = files;
+          finding.inputSignatures = Object.assign({}, session.signatures);
           finding.source = 'concept';
           finding.sourceLabel = 'Concept QA · ' + concept;
           qaWorkbenchState.conceptFindings.push(finding);
@@ -2245,7 +2248,7 @@
       return (finding.category === 'captioning' || finding.category === 'consistency') &&
         !qaWorkbenchState.dispositions[finding.id] &&
         (finding.files || []).indexOf(item.fileName) !== -1 &&
-        (finding.source === 'concept' || qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName]);
+        (finding.source === 'concept' ? finding.inputSignatures[item.fileName] === current[item.fileName] : qaWorkbenchState.aiItemSignatures[item.fileName] === current[item.fileName]);
     });
     // Only the existing two-signal visual agreement check can introduce a
     // deterministic item-level tag action. Other QA observations stay in QA.

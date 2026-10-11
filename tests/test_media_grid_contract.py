@@ -223,3 +223,17 @@ def test_single_item_preview_has_session_only_inspect_toggle_and_containment():
     assert "overflow:hidden;box-sizing:border-box" in script
     assert ".preview-inspect-toggle" in css
     assert '.preview-inspect-toggle[aria-pressed="true"]' in css
+
+
+def test_switching_workspace_closes_grid_before_changing_surface():
+    shell = _read("tool/js/workspace_shell.js")
+    grid = _read("tool/js/media_grid_state.js")
+    actions = _read("tool/js/media_grid_actions.js")
+
+    transition = shell.split("function setWorkspaceSurface(surface, options) {", 1)[1].split("function exitWorkspaceSurface", 1)[0]
+    assert "if (nextSurface !== 'grid' && mediaGridIsOpen()) {\n    mediaGridCloseActivePresentation();\n  }" in transition
+    assert transition.index("mediaGridCloseActivePresentation();") < transition.index("workspaceState.surface = nextSurface;")
+    assert "function mediaGridCloseActivePresentation()" in grid
+    assert "closeMediaGridSurface();" in grid
+    assert "mediaGridResetSessionState();" in actions
+    assert "window.exitGuidedTagPass({ keepGridOpen: false, silent: true });" in actions

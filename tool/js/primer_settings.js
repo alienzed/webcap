@@ -725,6 +725,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
   row.scrollTop = previousScrollTop;
 }
 function applyQaCaptionPatch(patch) {
+  restoreCaptionVisionCandidatePreview();
   if (!captionAssistCandidate || !state.currentItem ||
       captionAssistCandidate.mediaKey !== state.currentItem.key) return false;
   var current = String(captionAssistCandidate.text || '');
@@ -863,9 +864,24 @@ function syncCaptionAssistCandidateUi() {
       button.textContent = (patch.action === 'remove' ? 'Remove ' :
         patch.action === 'replace' ? 'Replace with ' : 'Add ') +
         (patch.action === 'remove' ? patch.sourceText : patch.replacementText);
-      button.title = 'Apply suggested caption edit to the draft (not saved until Apply)';
+      button.title = 'Preview on hover or focus; click to apply to the draft (not saved until Apply)';
       button.addEventListener('pointerdown', function (event) { event.preventDefault(); });
-      button.addEventListener('click', function () { applyQaCaptionPatch(patch); });
+      function previewQaPatch() {
+        var currentPatch = captionVisionValidatePatch(captionAssistCandidate.text, patch);
+        if (!currentPatch) return;
+        captionVisionPreviewCaretIndex = getCaptionVisionCaretIndex();
+        setCaptionVisionCandidatePreview(
+          captionVisionApplyPatchToText(captionAssistCandidate.text, currentPatch, captionVisionPreviewCaretIndex), true
+        );
+      }
+      button.addEventListener('mouseenter', previewQaPatch);
+      button.addEventListener('focus', previewQaPatch);
+      button.addEventListener('mouseleave', restoreCaptionVisionCandidatePreview);
+      button.addEventListener('blur', restoreCaptionVisionCandidatePreview);
+      button.addEventListener('click', function () {
+        restoreCaptionVisionCandidatePreview();
+        applyQaCaptionPatch(patch);
+      });
       qaReasonsEl.appendChild(button);
     });
   }
@@ -913,6 +929,7 @@ function syncCaptionAssistCandidateUi() {
   textEl.setAttribute('role', visible ? 'textbox' : 'document');
   textEl.setAttribute('aria-multiline', visible ? 'true' : 'false');
   var candidateText = visible ? String(candidate.text || '') : '';
+  if (!visible) restoreCaptionVisionCandidatePreview();
   if (document.activeElement !== textEl || String(textEl.textContent || '') !== candidateText) {
     textEl.textContent = candidateText;
   }

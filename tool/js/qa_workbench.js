@@ -2596,6 +2596,11 @@
             qaWorkbenchState.aiFindings = qaWorkbenchState.aiFindings.map(retainOtherFiles).filter(Boolean);
             qaWorkbenchState.conceptFindings = qaWorkbenchState.conceptFindings.map(retainOtherFiles).filter(Boolean);
             replacements.forEach(function (entry) { qaWorkbenchState.conceptFindings.push(entry); });
+            if (qaFocusReviewCurrent() && qaFocusReviewState.reviewFindings[mediaKey]) {
+              qaFocusReviewState.reviewFindings[mediaKey] = qaFocusReviewState.reviewFindings[mediaKey].filter(function (entry) {
+                return entry.id !== original.id;
+              });
+            }
             qaMergeFindings();
             qaSyncFocusReview();
             var label = { resolved: 'Resolved', still_actionable: 'Still actionable', inconclusive: 'Inconclusive' }[analysis.recheckStatus];

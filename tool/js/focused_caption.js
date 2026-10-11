@@ -363,8 +363,10 @@ function presentFocusedReviewCandidate(mediaItem) {
     );
   }
   // QA suggestions and the fresh item-level visual check are complementary.
-  if (captionVisionEnabled) maybeRunCaptionVisionForCandidate(candidate);
-  startFocusedCaptionPrefetch(candidate.mediaKey);
+  if (!isFocusedQaReviewMode()) {
+    if (captionVisionEnabled) maybeRunCaptionVisionForCandidate(candidate);
+    startFocusedCaptionPrefetch(candidate.mediaKey);
+  }
   return Promise.resolve(true);
 }
 
@@ -562,7 +564,7 @@ function useFocusedCaptionPrefetchForCurrentItem() {
         focusedCaptionState.discrepancySourceLabel || 'QA'
       );
     }
-    startFocusedCaptionPrefetch(candidate.mediaKey);
+    if (!isFocusedQaReviewMode()) startFocusedCaptionPrefetch(candidate.mediaKey);
     return true;
   }
 
@@ -767,6 +769,7 @@ function prepareFocusedCaptionCurrentItem() {
       return Promise.resolve(true);
     }
   }
+  if (isFocusedQaReviewMode()) return presentFocusedReviewCandidate(state.currentItem);
   return useFocusedCaptionPrefetchForCurrentItem().then(function (usedPrefetch) {
     if (usedPrefetch) return true;
     if (!focusedCaptionState.open || !state.currentItem ||

@@ -169,8 +169,8 @@ def test_vision_tag_suggestions_queue_both_visual_reads(tmp_path, monkeypatch):
     assert seen["contract"]["operation"] == "vision_tag_suggest"
     assert seen["contract"]["source_files"] == ["b.jpg"]
     assert '"openSight"' in seen["contract"]["prompt"]
-    assert '"contextSight"' in seen["contract"]["prompt"]
-    assert "Black bandeau top from the side." in seen["contract"]["prompt"]
+    assert '"contextSight"' not in seen["contract"]["prompt"]
+    assert "Black bandeau top from the side." not in seen["contract"]["prompt"]
 
 
 def test_vision_tag_suggestions_accept_partial_structured_sight(tmp_path, monkeypatch):

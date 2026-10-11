@@ -139,3 +139,32 @@ def test_qa_only_consumes_prune_and_duplicate_results_for_exact_current_scope():
     assert "state.duplicateCandidatesScopeKey !== duplicateCandidateScopeKey(scopeFiles)" in qa
     assert "state.pruneCandidatesFolder !== String(state.folder || '')" in qa
     assert "state.duplicateCandidatesFolder !== String(state.folder || '')" in qa
+
+
+def test_focus_review_only_promotes_current_exact_actions_without_implicit_scan():
+    qa = _read("tool/js/qa_workbench.js")
+    primer = _read("tool/js/primer_settings.js")
+    focused = _read("tool/js/focused_caption.js")
+
+    assert "qaFocusReviewHasAction(mediaKey, item.fileName, caption, finding)" in qa
+    assert "captionVisionValidatePatch(captionText, patch)" in qa
+    assert "qaFocusReviewTagActionsForFinding" in qa
+    assert "tagActions: row.files.map(" in qa
+    assert "qaFocusReviewActionableFindings(mediaKey, candidate.text)" in primer
+    assert "qaFocusReviewPatches(mediaKey, candidate.text)" in primer
+    assert "qaFocusReviewTagActions(mediaKey, captionAssistCandidate.text)" in primer
+    assert "if (isFocusedQaReviewMode()) return presentFocusedReviewCandidate(state.currentItem);" in focused
+    start = qa.split("function qaStartFocusReview()", 1)[1].split("function renderQaWorkbench(", 1)[0]
+    assert "qaRunDeepScan();" not in start
+    sync = qa.split("function qaSyncFocusReview()", 1)[1].split("function qaStartFocusReview()", 1)[0]
+    assert "qaQueueFocusCandidatePreparation(item);" not in sync
+
+
+def test_qa_omission_fixes_use_local_tag_and_draft_editing():
+    primer = _read("tool/js/primer_settings.js")
+    omissions = primer.split("if (omittedAssignments.length) {", 1)[1].split("renderCaptionAssistMissingGroups", 1)[0]
+    assert "insertFocusedCaptionVisionPhrase(phrase || entry.term)" in omissions
+    assert "removeCaptionAssistAssignedTag(mediaKey, entry.group, entry.term)" in omissions
+    assert "repairCaptionAssistCandidate(" not in omissions
+    assert "var missingGroups = visible && !isFocusedQaReviewMode()" in primer
+    assert "Replace \\"" in _read("tool/js/qa_workbench.js")

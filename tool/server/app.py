@@ -1535,7 +1535,7 @@ def qa_concept_check_route():
         if len(names) != len(items) or len(set(names)) != len(names) or any(name not in available for name in names):
             raise ValueError("Concept QA includes duplicate or unknown Set media.")
         from .qa_llm_contract import build_concept_request
-        contract = build_concept_request(items, data.get("concept"), data.get("knownVocabulary"))
+        contract = build_concept_request(items, data.get("concept"), data.get("knownVocabulary"), data.get("recheckConcern"))
         job = enqueue_llm(
             "qa",
             str(data.get("model") or "").strip(),

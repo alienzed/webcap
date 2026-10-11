@@ -381,7 +381,8 @@ def build_concept_request(items, concept, known_vocabulary=None):
         "Do not return broad advice without a clickable action. "
         "Do not change annotations yourself. All proposals require human review. "
         "Respect the exact sourceText/anchorText patch contract; never fabricate an original substring.\n\n"
-        "[KNOWN VOCABULARY]\\n" + json.dumps(vocabulary, ensure_ascii=False, separators=(",", ":")) + "\\n\\n"\n        "[INPUT]\n" + json.dumps(evidence, ensure_ascii=False, separators=(",", ":")) + "\n\n"
+        "[KNOWN VOCABULARY]\n" + json.dumps(vocabulary, ensure_ascii=False, separators=(",", ":")) + "\n\n"
+        "[INPUT]\n" + json.dumps(evidence, ensure_ascii=False, separators=(",", ":")) + "\n\n"
         "[OUTPUT]\nReturn JSON matching the schema. Set captionQuality to []. "
         "Summary should describe this batch, not infer Set-wide prevalence."
     )

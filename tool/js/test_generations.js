@@ -3424,6 +3424,7 @@
       var status = startedStatus || currentStatus;
       syncActiveRunControls(status);
       refreshActivityButton();
+      reportConsoleInfo('Test Generations', 'Run submitted' + (startedStatus && startedStatus.session ? ': ' + startedStatus.session : '.') );
       if (startedStatus && startedStatus.session) {
         showSessionError = true;
         selectSessionStatus(startedStatus);
@@ -3444,6 +3445,7 @@
   function stopRun(stopBtn) {
     if (stopBtn) stopBtn.disabled = true;
     request('test_stop', { session: String(stopBtn && stopBtn.dataset.sessionStop || '') }).then(function (status) {
+      reportConsoleInfo('Test Generations', 'Stop accepted for ' + String(status && status.session || 'run') + '.');
       syncActiveRunControls(status);
       refreshActivityButton();
       if (currentSession === String(status && status.session || '')) renderStatus(status);

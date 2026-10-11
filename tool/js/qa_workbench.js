@@ -624,6 +624,7 @@
         qaWorkbenchState.aiCoverageTotal + ' items interpreted' +
         (skippedCount ? ' · ' + skippedCount + ' skipped (see Console)' : '') + '.';
       qaWorkbenchState.aiScopeSignature = qaBuildDeepScanSignature(qaGetTrainingItems());
+      reportConsoleInfo('Deep QA', 'Finished: ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' items reviewed; ' + skippedCount + ' skipped.');
       qaSaveReview().catch(function () {});
       qaMergeFindings();
       qaSyncFocusReview();
@@ -790,6 +791,9 @@
       qaWorkbenchState.aiModel = String(job.result.model || model);
       qaWorkbenchState.aiScopeSignature = qaBuildDeepScanSignature(currentItems);
       qaRefreshAiCoverage();
+      if (qaWorkbenchState.aiCoverageValid > 0 && qaWorkbenchState.aiCoverageValid % Math.max(1, Math.ceil(qaWorkbenchState.aiCoverageTotal / 10)) === 0) {
+        reportConsoleInfo('Deep QA', 'Progress: ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' reviewed.');
+      }
       qaMergeFindings();
       qaSyncFocusReview();
       renderQaWorkbench();
@@ -852,6 +856,7 @@
     qaWorkbenchState.deepScanChallengerJobId = '';
     qaWorkbenchState.deepScanStatus = 'Starting progressive Deep QA…';
     qaRefreshAiCoverage();
+    reportConsoleInfo('Deep QA', 'Started: ' + items.length + ' eligible items; ' + qaWorkbenchState.aiCoverageValid + ' already current.');
     renderQaWorkbench();
     qaRunNextDeepScanBatch();
   }
@@ -878,6 +883,7 @@
   function qaCancelDeepScan() {
     if (!qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanJobId) return;
     qaWorkbenchState.deepScanStopRequested = true;
+    reportConsoleInfo('Deep QA', 'Stop requested.');
     qaWorkbenchState.deepScanStatus = 'Stopping Deep QA…';
     renderQaWorkbench();
     if (!qaWorkbenchState.deepScanJobId) {

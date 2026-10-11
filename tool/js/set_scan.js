@@ -567,6 +567,9 @@
         setScanState.coverage.openCurrent + 1
       );
       setScanState.completed = index + 1;
+      if ((index + 1) % Math.max(1, Math.ceil(pending.length / 10)) === 0 && index + 1 < pending.length) {
+        reportConsoleInfo('Set Intelligence', 'Open Sight: ' + (index + 1) + '/' + pending.length + ' attempted.');
+      }
       return scanNext(pending, index + 1, folder, model);
     });
   }
@@ -598,11 +601,13 @@
       setScanState.phase = 'scanning-open';
 
       if (!pending.length) {
+        reportConsoleInfo('Set Intelligence', 'Open Sight: reusing existing evidence for ' + files.length + ' items.');
         setScanState.total = 1;
         setScanState.completed = 1;
         setSetIntelligenceStatus('Open Sight', 'Vocabulary-agnostic visual understanding is already reusable.');
         return true;
       }
+      reportConsoleInfo('Set Intelligence', 'Open Sight: inspecting ' + pending.length + ' items; reusing ' + (scopedItems.length - pending.length) + '.');
       return scanNext(pending, 0, folder, model);
     });
   }
@@ -652,6 +657,9 @@
         );
       }
       setScanState.completed = index + 1;
+      if ((index + 1) % Math.max(1, Math.ceil(pending.length / 10)) === 0 && index + 1 < pending.length) {
+        reportConsoleInfo('Set Intelligence', 'Context Sight: ' + (index + 1) + '/' + pending.length + ' attempted.');
+      }
       return scanContextNext(pending, index + 1, folder, model, context);
     });
   }
@@ -665,6 +673,7 @@
       setScanState.total = 1;
       setScanState.completed = 1;
       setSetIntelligenceStatus('Context Sight', 'No annotation groups are configured, so the second visual read is skipped.');
+      reportConsoleInfo('Set Intelligence', 'Context Sight skipped: no annotation groups.');
       return Promise.resolve(true);
     }
     setScanState.coverage.contextRequired = true;
@@ -696,8 +705,10 @@
         setScanState.total = 1;
         setScanState.completed = 1;
         setSetIntelligenceStatus('Context Sight', 'Template- and vocabulary-guided visual understanding is already reusable.');
+        reportConsoleInfo('Set Intelligence', 'Context Sight: reusing existing evidence for ' + files.length + ' items.');
         return true;
       }
+      reportConsoleInfo('Set Intelligence', 'Context Sight: inspecting ' + pending.length + ' items; reusing ' + (scopedItems.length - pending.length) + '.');
       return scanContextNext(pending, 0, folder, model, context);
     });
   }
@@ -709,6 +720,7 @@
       ? 'complete' : 'idle';
     qaInputsUpdated();
     var failureCount = setScanState.failures.length;
+    reportConsoleInfo('Set Intelligence', 'Scan finished: ' + setScanState.coverage.openCurrent + '/' + setScanState.coverage.total + ' Open Sight current; ' + failureCount + ' item failures.');
     if (failureCount) {
       setSetIntelligenceStatus(
         'Set understood with gaps',
@@ -770,6 +782,7 @@
     setScanState.total = 0;
     setScanState.phase = 'preparing';
     setSetIntelligenceStatus('Understanding Set', 'Preparing ' + String(files.length) + ' media item' + (files.length === 1 ? '' : 's') + '…');
+    reportConsoleInfo('Set Intelligence', 'Scan started: ' + files.length + ' visible items; mode ' + (selectedMode || 'missing Open Sight') + '.');
 
     var visionContext = null;
 
@@ -826,6 +839,7 @@
         qaInputsUpdated();
         setSetIntelligenceStatus('Scan stopped', 'Completed understanding remains cached.');
         window.setStatus('Set Intelligence stopped. Completed understanding remains cached.');
+        reportConsoleInfo('Set Intelligence', 'Scan stopped; saved evidence retained.');
         return;
       }
       finishScan('Ready to shape the vocabulary, or skip ahead if this Set is already mature.');
@@ -857,6 +871,7 @@
   function stopSetIntelligence() {
     if (!setScanState.running) return;
     setScanState.stopRequested = true;
+    reportConsoleInfo('Set Intelligence', 'Stop requested.');
     var jobId = setScanState.currentVisionJobId;
     setScanState.currentVisionJobId = '';
     setSetIntelligenceStatus('Stopping', 'Completed understanding will remain cached.');

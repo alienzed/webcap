@@ -936,6 +936,7 @@
     }).then(function (payload) {
       trackGenerateJob(payload.job && payload.job.jobId);
       syncGenerationPreviewCard(payload.job, true);
+      reportConsoleInfo('Generate', 'Submitted job ' + String(payload.job && payload.job.jobId || 'unknown') + '.');
       var submittedStatus = String(payload.job && payload.job.status || '');
       setStatus(
         submittedStatus === 'backlog'
@@ -1031,6 +1032,7 @@
         submission,
         'Sweep queued · ' + queued + ' generation' + (queued === 1 ? '' : 's') + '.'
       );
+      reportConsoleInfo('Generate', 'Sweep submitted: ' + queued + ' jobs.');
     }).catch(function (err) {
       if (submission.id === generateState.sweepSubmissionSerial) {
         reportError(err, 'Sweep stopped · ' + queued + ' / ' + submission.items.length + ' queued');

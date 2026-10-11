@@ -1719,6 +1719,7 @@
     name.title = fileName;
     card.appendChild(preview);
     card.appendChild(name);
+    card.appendChild(qaCreateButton('Open preview', '', 'inspect-file', fileName));
     return card;
   }
 
@@ -1831,8 +1832,12 @@
     nav.appendChild(next);
     actions.appendChild(nav);
     article.appendChild(actions);
-    // Put the decision before the explanation; preserve full evidence on demand.
+    // Keep visual evidence visible while browsing. Detailed explanation stays collapsed.
     article.insertBefore(actions, summary);
+    if (finding.files && finding.files.length) {
+      article.insertBefore(evidenceHeading, actions);
+      article.insertBefore(strip, actions);
+    }
     var details = document.createElement('details');
     details.className = 'qa-recommendation-details';
     var detailsLabel = document.createElement('summary');
@@ -2539,6 +2544,10 @@
     }
     if (action === 'inspect-finding') {
       qaInspectFinding(value);
+      return;
+    }
+    if (action === 'inspect-file') {
+      qaSelectFiles([value], 'QA · Evidence', '');
       return;
     }
     if (action === 'inspect-health') {

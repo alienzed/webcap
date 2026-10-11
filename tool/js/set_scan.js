@@ -568,7 +568,7 @@
       );
       setScanState.completed = index + 1;
       if ((index + 1) % Math.max(1, Math.ceil(pending.length / 10)) === 0 && index + 1 < pending.length) {
-        reportConsoleInfo('Set Intelligence', 'Open Sight: ' + (index + 1) + '/' + pending.length + ' inspected.');
+        reportConsoleInfo('Set Intelligence', 'Open Sight: ' + (index + 1) + '/' + pending.length + ' attempted.');
       }
       return scanNext(pending, index + 1, folder, model);
     });
@@ -658,7 +658,7 @@
       }
       setScanState.completed = index + 1;
       if ((index + 1) % Math.max(1, Math.ceil(pending.length / 10)) === 0 && index + 1 < pending.length) {
-        reportConsoleInfo('Set Intelligence', 'Context Sight: ' + (index + 1) + '/' + pending.length + ' inspected.');
+        reportConsoleInfo('Set Intelligence', 'Context Sight: ' + (index + 1) + '/' + pending.length + ' attempted.');
       }
       return scanContextNext(pending, index + 1, folder, model, context);
     });

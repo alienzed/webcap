@@ -53,7 +53,7 @@ Current shipped shape:
   - current caption matches
   - selection-pose tag suggestions constrained to the current group
   - similar-item tag suggestions constrained to the current group
-  - already-selected terms in the current group
+  - only unselected terms are shown; selected tags remain visible in the main group list
 
 ## Keyboard Behavior
 

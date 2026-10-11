@@ -494,7 +494,8 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
 
   function addEntry(term, reason, priority, kind) {
     var normalized = normalizeChecklistTerm(term).toLowerCase();
-    if (!normalized || !termLookup[normalized]) return;
+    if (!normalized || !termLookup[normalized] ||
+        hasChecklistAssignedTagForMediaKey(mediaKey, requirementLabel, term)) return;
     var existing = entriesByKey[normalized];
     if (!existing) {
       existing = {
@@ -513,9 +514,6 @@ function buildFocusedAnnotationQuickPickEntries(mediaKey, requirementLabel) {
   }
 
   terms.forEach(function (term) {
-    if (hasChecklistAssignedTagForMediaKey(mediaKey, requirementLabel, term)) {
-      addEntry(term, 'Selected', 100, 'active');
-    }
     if (checklistGroupTermAppearsInCurrentCaption(requirementLabel, term, mediaKey)) {
       addEntry(term, 'Caption match', 80, 'matched');
     }
@@ -620,7 +618,6 @@ function renderFocusedAnnotationQuickPicks(requirementLabel, entries) {
     list.className = 'focused-annotation-quick-pick-list';
     entriesList.forEach(function (entry) {
       var classes = [];
-      if (entry.kinds.active) classes.push('active');
       if (entry.kinds.matched) classes.push('matched');
       if (entry.kinds.suggested) classes.push('suggested');
       appendFocusedAnnotationQuickPickRow(list, requirementLabel, entry.term, entry.reasons.join(' | '), classes);

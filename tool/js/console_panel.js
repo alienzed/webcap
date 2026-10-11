@@ -7,11 +7,13 @@ function getConsolePanelLogEl() {
 function wireConsolePanelUi() {
   var panel = ui && ui.consolePanelEl;
   var closeBtn = document.getElementById('console-close-btn');
+  var clearBtn = document.getElementById('console-clear-btn');
   if (!panel || !closeBtn || closeBtn.__consoleWired) return;
   closeBtn.__consoleWired = true;
   closeBtn.onclick = function () {
     hideConsolePanel();
   };
+  clearBtn.onclick = clearConsolePanel;
 }
 
 function setConsolePanelVisible(visible) {
@@ -36,7 +38,10 @@ function appendToConsolePanel(msg) {
   var followTail = isConsolePanelVisible() &&
     (logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight <= 24);
   var div = document.createElement('div');
-  div.textContent = String(msg);
+  var now = new Date();
+  var timestamp = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map(function (part) { return String(part).padStart(2, '0'); }).join(':');
+  div.textContent = '[' + timestamp + '] ' + String(msg);
   logEl.appendChild(div);
   // Limit to last 500 lines for performance
   var maxLines = 500;
@@ -44,6 +49,13 @@ function appendToConsolePanel(msg) {
     logEl.removeChild(logEl.firstChild);
   }
   if (followTail) scrollConsolePanelToBottom();
+}
+
+function clearConsolePanel() {
+  var logEl = getConsolePanelLogEl();
+  if (!logEl) return;
+  logEl.replaceChildren();
+  markConsoleAttention(false);
 }
 
 function markConsoleAttention(active) {

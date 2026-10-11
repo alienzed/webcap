@@ -425,7 +425,7 @@
     });
   }
 
-  function requestSight(folder, model, media, isCancelled) {
+  function requestSight(folder, model, media, isCancelled, groups) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -433,7 +433,8 @@
         operation: 'scan_sight',
         folder: folder,
         visionModel: model,
-        media: media
+        media: media,
+        existingGroups: groups || []
       })
     }).then(function (payload) {
       if (!payload.job || !payload.job.jobId) {
@@ -543,7 +544,7 @@
     );
 
     var fileName = pending[index];
-    return requestSight(folder, model, fileName).catch(function (err) {
+    return requestSight(folder, model, fileName, null, setIntelligenceVisionContext().groups).catch(function (err) {
       setScanState.currentVisionJobId = '';
       if (setScanState.stopRequested) return false;
       recordSetIntelligenceFailure('Open Sight', fileName, err);
@@ -1059,7 +1060,7 @@
       }
     }).then(function () {
       if (open) return stage('Open Sight',
-        function () { return requestSight(folder, model, file, opts.isCancelled); },
+        function () { return requestSight(folder, model, file, opts.isCancelled, visionContext.groups); },
         function (sight) { return saveSight(folder, model, file, sight); });
     }).then(function () {
       if (opts.context === 'missing') {

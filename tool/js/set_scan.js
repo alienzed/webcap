@@ -21,10 +21,7 @@
     coverage: {
       known: false,
       total: 0,
-      openCurrent: 0,
-      contextCurrent: 0,
-      contextAvailable: 0,
-      contextRequired: true
+      openCurrent: 0
     }
   };
 
@@ -49,28 +46,17 @@
     });
   }
 
-  function setCoverage(total, openCurrent, contextCurrent, contextAvailable, contextRequired) {
+  function setCoverage(total, current) {
     setScanState.coverage = {
       known: true,
       total: Math.max(0, Number(total) || 0),
-      openCurrent: Math.max(0, Number(openCurrent) || 0),
-      contextCurrent: Math.max(0, Number(contextCurrent) || 0),
-      contextAvailable: Math.max(0, Number(contextAvailable) || 0),
-      contextRequired: contextRequired === undefined
-        ? setScanState.coverage.contextRequired !== false
-        : !!contextRequired
+      openCurrent: Math.max(0, Number(current) || 0)
     };
   }
 
-  function applyCoveragePayload(payload, scopedTotal, contextRequired) {
-    var openItems = payload && payload.open && Array.isArray(payload.open.items) ? payload.open.items : [];
-    var contextItems = payload && payload.context && Array.isArray(payload.context.items) ? payload.context.items : [];
-    var total = Number(scopedTotal);
-    if (!Number.isFinite(total)) total = Math.max(openItems.length, contextItems.length);
-    var openCurrent = openItems.filter(function (item) { return !!(item && item.structured); }).length;
-    var contextCurrent = contextItems.filter(function (item) { return !!(item && item.cached); }).length;
-    var contextAvailable = contextItems.filter(function (item) { return !!(item && item.available); }).length;
-    setCoverage(total, openCurrent, contextCurrent, contextAvailable, contextRequired);
+  function applyCoveragePayload(payload, scopedTotal) {
+    var items = payload && payload.open && Array.isArray(payload.open.items) ? payload.open.items : [];
+    setCoverage(scopedTotal, items.filter(function (item) { return !!(item && item.structured); }).length);
   }
 
   function setEvidenceCard(card, badge, count, detail, stateName, badgeText, countText, detailText) {
@@ -101,14 +87,9 @@
     var openBadge = el('set-scan-open-badge');
     var openCount = el('set-scan-open-count');
     var openDetail = el('set-scan-open-detail');
-    var contextCard = el('set-scan-context-card');
-    var contextBadge = el('set-scan-context-badge');
-    var contextCount = el('set-scan-context-count');
-    var contextDetail = el('set-scan-context-detail');
     if (
       !modal || !stopBtn || !progressFill || !next || !details || !responseSelect || !output ||
-      !reportCount || !rescanBtn || !forceBtn || !forceMode || !scopeToggle || !scopeSummary || !openCard || !openBadge || !openCount || !openDetail ||
-      !contextCard || !contextBadge || !contextCount || !contextDetail
+      !reportCount || !rescanBtn || !forceBtn || !forceMode || !scopeToggle || !scopeSummary || !openCard || !openBadge || !openCount || !openDetail
     ) {
       throw new Error('Set Intelligence UI is incomplete.');
     }
@@ -124,16 +105,14 @@
     var coverage = setScanState.coverage;
     var totalCoverage = coverage.known ? coverage.total : 0;
     var openMissing = coverage.known ? Math.max(0, totalCoverage - coverage.openCurrent) : 0;
-    var contextMissing = coverage.known ? Math.max(0, totalCoverage - coverage.contextAvailable) : 0;
-    var contextStale = coverage.known ? Math.max(0, coverage.contextAvailable - coverage.contextCurrent) : 0;
     var actionLabel = '';
     if (!setScanState.running) {
       if (!setScanState.hasRun || !coverage.known) {
         actionLabel = 'Run Set Intelligence';
       } else if (openMissing) {
-        actionLabel = 'Resume ' + String(openMissing) + ' Open Sight';
+        actionLabel = 'Resume ' + String(openMissing) + ' Sight';
       } else {
-        actionLabel = 'Open Sight current';
+        actionLabel = 'Sight current';
       }
     }
     rescanBtn.classList.toggle('hidden', setScanState.running);
@@ -149,17 +128,11 @@
         ? 10 + Math.round((setScanState.completed / setScanState.total) * 85)
         : 10;
     }
-    if (setScanState.phase === 'scanning-context') {
-      percent = setScanState.total
-        ? 50 + Math.round((setScanState.completed / setScanState.total) * 45)
-        : 50;
-    }
     if (setScanState.phase === 'complete') percent = 100;
     progressFill.style.width = String(percent) + '%';
 
     if (!coverage.known) {
-      setEvidenceCard(openCard, openBadge, openCount, openDetail, 'checking', 'Checking', '—', 'Looking for saved Open Sight…');
-      setEvidenceCard(contextCard, contextBadge, contextCount, contextDetail, 'checking', 'Checking', '—', 'Looking for saved Context Sight…');
+      setEvidenceCard(openCard, openBadge, openCount, openDetail, 'checking', 'Checking', '—', 'Looking for saved Sight…');
     } else {
       var openState = coverage.openCurrent >= totalCoverage
         ? 'current'
@@ -174,47 +147,8 @@
         openState === 'current' ? 'Current' : (openState === 'running' ? 'Scanning' : (coverage.openCurrent ? 'Partial' : 'Missing')),
         String(coverage.openCurrent) + ' / ' + String(totalCoverage),
         coverage.openCurrent >= totalCoverage
-          ? 'All media have saved reusable Open Sight.'
-          : String(openMissing) + ' media still need Open Sight. Saved results will be reused.'
-      );
-
-      var contextState = 'missing';
-      var contextBadgeText = 'Missing';
-      var contextDetailText = '';
-      var contextCountText = String(coverage.contextCurrent) + ' / ' + String(totalCoverage);
-      if (!coverage.contextRequired) {
-        contextState = 'current';
-        contextBadgeText = 'Optional';
-        contextDetailText = 'A separate vocabulary-guided pixel read is optional; use the explicit controls if needed.';
-      } else if (coverage.contextCurrent >= totalCoverage) {
-        contextState = 'current';
-        contextBadgeText = 'Current';
-        contextDetailText = 'All media have saved reusable Context Sight.';
-      } else if (setScanState.phase === 'scanning-context') {
-        contextState = 'running';
-        contextBadgeText = 'Scanning';
-      } else if (contextStale) {
-        contextState = 'stale';
-        contextBadgeText = 'Unavailable';
-      } else if (coverage.contextCurrent) {
-        contextState = 'partial';
-        contextBadgeText = 'Partial';
-      }
-      if (!contextDetailText) {
-        var contextParts = [String(coverage.contextCurrent) + ' reusable'];
-        if (contextStale) contextParts.push(String(contextStale) + ' other saved observations');
-        if (contextMissing) contextParts.push(String(contextMissing) + ' not scanned');
-        contextDetailText = contextParts.join(' · ') + '. Context Sight is optional.';
-      }
-      setEvidenceCard(
-        contextCard,
-        contextBadge,
-        contextCount,
-        contextDetail,
-        contextState,
-        contextBadgeText,
-        contextCountText,
-        contextDetailText
+          ? 'All media have saved reusable Sight.'
+          : String(openMissing) + ' media still need Sight. Saved results will be reused.'
       );
     }
 
@@ -293,26 +227,12 @@
 
   function setCachedReportResponses(payload) {
     var responses = [];
-    var openItems = payload && payload.open && Array.isArray(payload.open.items) ? payload.open.items : [];
-    openItems.forEach(function (item) {
+    var items = payload && payload.open && Array.isArray(payload.open.items) ? payload.open.items : [];
+    items.forEach(function (item) {
       if (!item || !item.structured || !item.sight) return;
       responses.push({
-        file: String(item.file || '') + ' · Open Sight',
+        file: String(item.file || '') + ' · Sight',
         text: JSON.stringify(item.sight, null, 2)
-      });
-    });
-    var contextRecords = payload && payload.context && Array.isArray(payload.context.records)
-      ? payload.context.records
-      : [];
-    contextRecords.forEach(function (record) {
-      if (!record || !record.file) return;
-      responses.push({
-        file: String(record.file || '') + ' · Context Sight',
-        text: JSON.stringify({
-          caption: String(record.caption || ''),
-          matches: Array.isArray(record.matches) ? record.matches : [],
-          diagnostics: record.diagnostics && typeof record.diagnostics === 'object' ? record.diagnostics : {}
-        }, null, 2)
       });
     });
     setScanState.rawResponses = responses;
@@ -320,7 +240,7 @@
     setScanState.currentRawResponse = responses.length ? responses[responses.length - 1] : null;
   }
 
-  function requestCachedIntelligenceReport(folder, files, model, context) {
+  function requestCachedIntelligenceReport(folder, files, model) {
     return requestJson('/fs/vision_schema', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -328,9 +248,7 @@
         operation: 'intelligence_report',
         folder: folder,
         visionModel: model,
-        files: files,
-        existingGroups: context.groups,
-        captionTemplate: context.captionTemplate
+        files: files
       })
     });
   }
@@ -340,40 +258,24 @@
       if (requestToken !== setScanState.scopeRequestToken || setScanState.running || !setScanState.open) return null;
       var model = String(getCaptionVisionModelId() || '').trim();
       if (!model) return false;
-      var context = setIntelligenceVisionContext();
-      return requestCachedIntelligenceReport(folder, files, model, context).then(function (payload) {
+      return requestCachedIntelligenceReport(folder, files, model).then(function (payload) {
         if (requestToken !== setScanState.scopeRequestToken || setScanState.running || !setScanState.open) return null;
-        var openCount = Number(payload && payload.open && payload.open.structured || 0);
-        var contextAvailable = Number(payload && payload.context && payload.context.available || 0);
-        if (!openCount && !contextAvailable) {
-          setScanState.folder = folder;
-          setScanState.files = files.slice();
-          setScanState.visionModel = model;
-          setScanState.hasRun = false;
-          setScanState.running = false;
-          setCachedReportResponses(payload);
-          applyCoveragePayload(payload, files.length, context.groups.length > 0);
-          setScanState.phase = 'idle';
-          return false;
-        }
+        var count = Number(payload && payload.open && payload.open.structured || 0);
         setScanState.folder = folder;
         setScanState.files = files.slice();
         setScanState.visionModel = model;
-        setScanState.hasRun = true;
+        setScanState.hasRun = !!count;
         setScanState.running = false;
         setCachedReportResponses(payload);
-        applyCoveragePayload(payload, files.length, context.groups.length > 0);
-        var complete = openCount >= files.length;
-        setScanState.phase = complete ? 'complete' : 'idle';
-        if (complete) {
-          setSetIntelligenceStatus('Set understood', 'Cached Open Sight is available. Context Sight is optional.');
-        } else {
-          setSetIntelligenceStatus(
-            'Saved intelligence found',
-            String(Math.max(0, files.length - openCount)) + ' media still need Open Sight. Context Sight is optional.'
-          );
+        applyCoveragePayload(payload, files.length);
+        setScanState.phase = count >= files.length ? 'complete' : 'idle';
+        if (count >= files.length) {
+          setSetIntelligenceStatus('Set understood', 'Cached Sight is available.');
+        } else if (count) {
+          setSetIntelligenceStatus('Saved intelligence found',
+            String(Math.max(0, files.length - count)) + ' media still need Sight.');
         }
-        return true;
+        return !!count;
       });
     });
   }
@@ -458,79 +360,7 @@
     });
   }
 
-  function requestContextStatus(folder, model, context) {
-    return requestJson('/fs/vision_schema', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operation: 'vocabulary_status',
-        folder: folder,
-        visionModel: model,
-        existingGroups: context.groups,
-        captionTemplate: context.captionTemplate
-      })
-    });
-  }
-
-  function requestContextSight(folder, model, media, context, isCancelled) {
-    return requestJson('/fs/vision_schema', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operation: 'scan_vocabulary_sight',
-        folder: folder,
-        visionModel: model,
-        media: media,
-        existingGroups: context.groups,
-        captionTemplate: context.captionTemplate
-      })
-    }).then(function (payload) {
-      if (!payload.job || !payload.job.jobId) {
-        throw new Error('Set Intelligence Context Sight did not return a queued job.');
-      }
-      setScanState.currentVisionJobId = String(payload.job.jobId || '');
-      trackTransientLlmJob(payload.job);
-      if (isCancelled && isCancelled()) {
-        return cancelCaptionAssistJob(setScanState.currentVisionJobId).then(function () {
-          throw new Error('Sight refresh cancelled.');
-        });
-      }
-      return waitForCaptionAssistJob(payload.job);
-    }).then(function (job) {
-      setScanState.currentVisionJobId = '';
-      var sight = job && job.result && job.result.vocabularySight || null;
-      var warnings = sight && sight.diagnostics && sight.diagnostics.parseWarnings || [];
-      if (warnings.length) {
-        reportConsoleWarning('Context Sight ' + media, warnings.length + ' model response adjustment(s): ' + warnings.join(' | '));
-      }
-      return {
-        sight: sight,
-        text: String(job && job.result && job.result.text || ''),
-        warning: String(job && job.result && job.result.structureWarning || '')
-      };
-    });
-  }
-
-  function saveContextSight(folder, model, media, context, sight) {
-    return requestJson('/fs/vision_schema', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operation: 'save_vocabulary_sight',
-        folder: folder,
-        visionModel: model,
-        media: media,
-        existingGroups: context.groups,
-        captionTemplate: context.captionTemplate,
-        sight: sight
-      })
-    }).then(function (payload) {
-      publishSetIntelligenceMetadata(folder, media, 'vision_vocabulary_sight', payload.sight);
-      return payload;
-    });
-  }
-
-  function scanNext(pending, index, folder, model) {
+  function scanNext(pending, index, folder, model, groups) {
     if (setScanState.stopRequested) return Promise.resolve(false);
     if (String(state.folder || '') !== folder) {
       throw new Error('Set changed while Set Intelligence was scanning.');
@@ -538,44 +368,34 @@
     if (index >= pending.length) return Promise.resolve(true);
 
     setScanState.completed = index;
-    setSetIntelligenceStatus(
-      'Open Sight',
-      String(index + 1) + ' of ' + String(pending.length) + ' · exploring visual details'
-    );
+    setSetIntelligenceStatus('Sight',
+      String(index + 1) + ' of ' + String(pending.length) + ' · exploring visual details');
 
     var fileName = pending[index];
-    return requestSight(folder, model, fileName, null, setIntelligenceVisionContext().groups).catch(function (err) {
+    return requestSight(folder, model, fileName, function () { return setScanState.stopRequested; }, groups).then(function (result) {
+      if (setScanState.stopRequested) return false;
+      showRawResponse(fileName, 'Sight', result.text);
+      if (!result.sight) throw new Error(result.warning || ('Vision returned unstructured evidence for ' + fileName + '.'));
+      return saveSight(folder, model, fileName, result.sight).then(function () { return true; });
+    }).catch(function (err) {
       setScanState.currentVisionJobId = '';
       if (setScanState.stopRequested) return false;
-      recordSetIntelligenceFailure('Open Sight', fileName, err);
+      recordSetIntelligenceFailure('Sight', fileName, err);
       reportConsoleError('Set Intelligence item ' + fileName, err);
       return null;
-    }).then(function (result) {
-      if (result === false || setScanState.stopRequested) return false;
-      if (!result) return true;
-      showRawResponse(fileName, 'Open Sight', result.text);
-      if (!result.sight) {
-        var sightError = new Error(result.warning || ('Vision returned unstructured evidence for ' + fileName + '.'));
-        recordSetIntelligenceFailure('Open Sight', fileName, sightError);
-        reportConsoleError('Set Intelligence', sightError);
-        return true;
-      }
-      return saveSight(folder, model, fileName, result.sight);
     }).then(function (saved) {
       if (saved === false || setScanState.stopRequested) return false;
-      setScanState.coverage.openCurrent = Math.min(
-        setScanState.coverage.total,
-        setScanState.coverage.openCurrent + 1
-      );
+      if (saved) setScanState.coverage.openCurrent = Math.min(
+        setScanState.coverage.total, setScanState.coverage.openCurrent + 1);
       setScanState.completed = index + 1;
       if ((index + 1) % Math.max(1, Math.ceil(pending.length / 10)) === 0 && index + 1 < pending.length) {
-        reportConsoleInfo('Set Intelligence', 'Open Sight: ' + (index + 1) + '/' + pending.length + ' attempted.');
+        reportConsoleInfo('Set Intelligence', 'Sight: ' + (index + 1) + '/' + pending.length + ' attempted.');
       }
-      return scanNext(pending, index + 1, folder, model);
+      return scanNext(pending, index + 1, folder, model, groups);
     });
   }
 
-  function scanVision(folder, files, model, force) {
+  function scanVision(folder, files, model, force, groups) {
     return requestJson(
       '/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model)
     ).then(function (payload) {
@@ -586,131 +406,21 @@
       });
       var pending = scopedItems.filter(function (item) {
         return !!force || !item.structured;
-      }).map(function (item) {
-        return String(item.file || '');
-      }).filter(Boolean);
+      }).map(function (item) { return String(item.file || ''); }).filter(Boolean);
 
-      setCoverage(
-        files.length,
-        scopedItems.filter(function (item) { return !!item.structured; }).length,
-        setScanState.coverage.known ? setScanState.coverage.contextCurrent : 0,
-        setScanState.coverage.known ? setScanState.coverage.contextAvailable : 0,
-        setScanState.coverage.contextRequired
-      );
+      setCoverage(files.length, scopedItems.filter(function (item) { return !!item.structured; }).length);
       setScanState.total = pending.length;
       setScanState.completed = 0;
       setScanState.phase = 'scanning-open';
-
       if (!pending.length) {
-        reportConsoleInfo('Set Intelligence', 'Open Sight: no new reads; ' + scopedItems.length + '/' + files.length + ' cached records found.');
+        reportConsoleInfo('Set Intelligence', 'Sight: reusing existing evidence for ' + files.length + ' items.');
         setScanState.total = 1;
         setScanState.completed = 1;
-        setSetIntelligenceStatus('Open Sight', 'Vocabulary-agnostic visual understanding is already reusable.');
+        setSetIntelligenceStatus('Sight', 'Saved visual understanding is already reusable.');
         return true;
       }
-      reportConsoleInfo('Set Intelligence', 'Open Sight: inspecting ' + pending.length + ' items; reusing ' + (scopedItems.length - pending.length) + '.');
-      return scanNext(pending, 0, folder, model);
-    });
-  }
-
-  function scanContextNext(pending, index, folder, model, context) {
-    if (setScanState.stopRequested) return Promise.resolve(false);
-    if (String(state.folder || '') !== folder) {
-      throw new Error('Set changed while Context Sight was scanning.');
-    }
-    if (index >= pending.length) return Promise.resolve(true);
-
-    setScanState.completed = index;
-    setSetIntelligenceStatus(
-      'Context Sight',
-      String(index + 1) + ' of ' + String(pending.length) + ' · scanning missing Context Sight'
-    );
-
-    var pendingItem = pending[index];
-    var fileName = pendingItem.file;
-    return requestContextSight(folder, model, fileName, context).catch(function (err) {
-      setScanState.currentVisionJobId = '';
-      if (setScanState.stopRequested) return false;
-      recordSetIntelligenceFailure('Context Sight', fileName, err);
-      reportConsoleError('Set Intelligence Context Sight ' + fileName, err);
-      return null;
-    }).then(function (result) {
-      if (result === false || setScanState.stopRequested) return false;
-      if (!result) return true;
-      showRawResponse(fileName, 'Context Sight', result.text);
-      if (!result.sight) {
-        var contextError = new Error(result.warning || ('Vision returned unstructured Context Sight for ' + fileName + '.'));
-        recordSetIntelligenceFailure('Context Sight', fileName, contextError);
-        reportConsoleError('Set Intelligence', contextError);
-        return true;
-      }
-      return saveContextSight(folder, model, fileName, context, result.sight);
-    }).then(function (saved) {
-      if (saved === false || setScanState.stopRequested) return false;
-      setScanState.coverage.contextCurrent = Math.min(
-        setScanState.coverage.total,
-        setScanState.coverage.contextCurrent + 1
-      );
-      if (!pendingItem.available) {
-        setScanState.coverage.contextAvailable = Math.min(
-          setScanState.coverage.total,
-          setScanState.coverage.contextAvailable + 1
-        );
-      }
-      setScanState.completed = index + 1;
-      if ((index + 1) % Math.max(1, Math.ceil(pending.length / 10)) === 0 && index + 1 < pending.length) {
-        reportConsoleInfo('Set Intelligence', 'Context Sight: ' + (index + 1) + '/' + pending.length + ' attempted.');
-      }
-      return scanContextNext(pending, index + 1, folder, model, context);
-    });
-  }
-
-  function scanContextVision(folder, files, model, context, force) {
-    setScanState.phase = 'scanning-context';
-    if (!context.groups.length) {
-      setScanState.coverage.contextRequired = false;
-      setScanState.coverage.contextCurrent = 0;
-      setScanState.coverage.contextAvailable = 0;
-      setScanState.total = 1;
-      setScanState.completed = 1;
-      setSetIntelligenceStatus('Context Sight', 'No annotation groups are configured, so the second visual read is skipped.');
-      reportConsoleInfo('Set Intelligence', 'Context Sight skipped: no annotation groups.');
-      return Promise.resolve(true);
-    }
-    setScanState.coverage.contextRequired = true;
-    return requestContextStatus(folder, model, context).then(function (payload) {
-      var wanted = {};
-      files.forEach(function (fileName) { wanted[fileName] = true; });
-      var scopedItems = (payload.items || []).filter(function (item) {
-        return !!wanted[String(item.file || '')];
-      });
-      var pending = scopedItems.filter(function (item) {
-        return !!force || !item.cached;
-      }).map(function (item) {
-        return {
-          file: String(item.file || ''),
-          available: !!item.available
-        };
-      }).filter(function (item) { return !!item.file; });
-
-      setCoverage(
-        files.length,
-        setScanState.coverage.known ? setScanState.coverage.openCurrent : files.length,
-        scopedItems.filter(function (item) { return !!item.cached; }).length,
-        scopedItems.filter(function (item) { return !!item.available; }).length,
-        true
-      );
-      setScanState.total = pending.length;
-      setScanState.completed = 0;
-      if (!pending.length) {
-        setScanState.total = 1;
-        setScanState.completed = 1;
-        setSetIntelligenceStatus('Context Sight', 'Template- and vocabulary-guided visual understanding is already reusable.');
-        reportConsoleInfo('Set Intelligence', 'Context Sight: no new reads; ' + scopedItems.length + '/' + files.length + ' cached records found.');
-        return true;
-      }
-      reportConsoleInfo('Set Intelligence', 'Context Sight: inspecting ' + pending.length + ' items; reusing ' + (scopedItems.length - pending.length) + '.');
-      return scanContextNext(pending, 0, folder, model, context);
+      reportConsoleInfo('Set Intelligence', 'Sight: inspecting ' + pending.length + ' items; reusing ' + (scopedItems.length - pending.length) + '.');
+      return scanNext(pending, 0, folder, model, groups);
     });
   }
 
@@ -721,7 +431,7 @@
       ? 'complete' : 'idle';
     qaInputsUpdated();
     var failureCount = setScanState.failures.length;
-    reportConsoleInfo('Set Intelligence', 'Scan finished: ' + setScanState.coverage.openCurrent + '/' + setScanState.coverage.total + ' Open Sight current; ' + failureCount + ' item failures.');
+    reportConsoleInfo('Set Intelligence', 'Scan finished: ' + setScanState.coverage.openCurrent + '/' + setScanState.coverage.total + ' Sight current; ' + failureCount + ' item failures.');
     if (failureCount) {
       setSetIntelligenceStatus(
         'Set understood with gaps',
@@ -737,7 +447,7 @@
 
   function runSetIntelligence(forceMode) {
     var selectedMode = typeof forceMode === 'string' ? forceMode : '';
-    if (selectedMode && ['both', 'open', 'context', 'context-missing'].indexOf(selectedMode) === -1) {
+    if (selectedMode && selectedMode !== 'open') {
       throw new Error('Invalid Sight refresh selection.');
     }
     if (setScanState.running) return;
@@ -783,7 +493,7 @@
     setScanState.total = 0;
     setScanState.phase = 'preparing';
     setSetIntelligenceStatus('Understanding Set', 'Preparing ' + String(files.length) + ' media item' + (files.length === 1 ? '' : 's') + '…');
-    reportConsoleInfo('Set Intelligence', 'Scan started: ' + files.length + ' visible items; mode ' + (selectedMode || 'missing Open Sight') + '.');
+    reportConsoleInfo('Set Intelligence', 'Scan started: ' + files.length + ' visible items; mode ' + (selectedMode || 'missing Sight') + '.');
 
     var visionContext = null;
 
@@ -806,11 +516,7 @@
       }
       if (setScanState.stopRequested) return false;
       visionContext = setIntelligenceVisionContext();
-      return selectedMode === 'context' || selectedMode === 'context-missing'
-        ? true : scanVision(folder, files, setScanState.visionModel, !!selectedMode);
-    }).then(function (openSuccess) {
-      if (openSuccess === false || setScanState.stopRequested) return false;
-      return true;
+      return scanVision(folder, files, setScanState.visionModel, !!selectedMode, visionContext.groups);
     }).then(function (visionSuccess) {
       if (visionSuccess === false || setScanState.stopRequested) return false;
       return refreshMediaResolutionCache({
@@ -821,14 +527,9 @@
         if (!result || result.ok === false) {
           throw new Error((result && result.error) || 'Set Intelligence refresh failed.');
         }
-        return requestCachedIntelligenceReport(
-          folder,
-          files,
-          setScanState.visionModel,
-          visionContext
-        ).then(function (payload) {
+        return requestCachedIntelligenceReport(folder, files, setScanState.visionModel).then(function (payload) {
           setCachedReportResponses(payload);
-          applyCoveragePayload(payload, files.length, visionContext.groups.length > 0);
+          applyCoveragePayload(payload, files.length);
           return true;
         });
       });
@@ -895,10 +596,7 @@
       setScanState.coverage = {
         known: false,
         total: 0,
-        openCurrent: 0,
-        contextCurrent: 0,
-        contextAvailable: 0,
-        contextRequired: true
+        openCurrent: 0
       };
       setScanState.rawResponses = [];
       setScanState.rawResponseIndex = -1;
@@ -919,11 +617,11 @@
     setScanState.currentRawResponse = null;
     renderSetIntelligence();
     if (!files.length) {
-      setCoverage(0, 0, 0, 0, true);
+      setCoverage(0, 0);
       setSetIntelligenceStatus('Empty selection', 'No media match the current filters. Adjust filters or scan the entire Set.');
       return;
     }
-    setSetIntelligenceStatus('Checking selection', 'Checking saved Open Sight and Context Sight for ' + String(files.length) + ' selected media…');
+    setSetIntelligenceStatus('Checking selection', 'Checking saved Sight for ' + String(files.length) + ' selected media…');
     restoreCachedIntelligence(folder, files, requestToken).then(function (restored) {
       if (!setScanState.open || requestToken !== setScanState.scopeRequestToken || restored === null || restored) return;
       setScanState.hasRun = false;
@@ -1014,9 +712,6 @@
   var itemSightRefreshActive = false;
   function refreshSetIntelligenceItem(mediaItem, options) {
     var opts = options || {};
-    var open = opts.open !== false;
-    var context = false; // Legacy Context Sight is no longer generated by item refresh.
-    if (!open && !context) return Promise.resolve(false);
     if (opts.isCancelled && opts.isCancelled()) return Promise.resolve(false);
     if (!mediaItem || !mediaItem.fileName) return Promise.reject(new Error('Select a media item to refresh Sight.'));
     if (setScanState.running || itemSightRefreshActive) {
@@ -1026,65 +721,34 @@
     var file = String(mediaItem.fileName);
     var model = String(getCaptionVisionModelId() || '').trim();
     if (!folder || !model) return Promise.reject(new Error('Select a Set and Vision model first.'));
-    var visionContext = setIntelligenceVisionContext();
+    var groups = setIntelligenceVisionContext().groups;
+    var shouldScan = opts.open !== false;
     itemSightRefreshActive = true;
-    var failures = [];
-    function stage(label, request, save) {
-      if (opts.isCancelled && opts.isCancelled()) return Promise.resolve(false);
-      return request().then(function (result) {
-        if (opts.isCancelled && opts.isCancelled()) return false;
-        if (!result.sight) throw new Error(result.warning || (label + ' returned no structured observation.'));
-        return save(result.sight).then(function () {
-          if (result.warning) {
-            reportConsoleWarning('Sight refresh ' + file, label + ': ' + result.warning);
-          }
-          return true;
-        });
-      }).catch(function (err) {
-        if (opts.isCancelled && opts.isCancelled()) return false;
-        failures.push(label + ': ' + String(err && err.message || err));
-        reportConsoleError('Sight refresh ' + file, err);
-        return false;
-      });
-    }
     return Promise.resolve().then(function () {
-      if (opts.open === 'missing') {
-        return requestJson('/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model))
-          .then(function (report) {
-            if (opts.isCancelled && opts.isCancelled()) return;
-            var row = (report.items || []).find(function (entry) { return entry.file === file; });
-            if (!row) throw new Error('Open Sight status did not include ' + file + '.');
-            open = !row.structured;
-          });
-      }
-    }).then(function () {
-      if (open) return stage('Open Sight',
-        function () { return requestSight(folder, model, file, opts.isCancelled, visionContext.groups); },
-        function (sight) { return saveSight(folder, model, file, sight); });
-    }).then(function () {
-      if (opts.context === 'missing') {
-        return requestContextStatus(folder, model, visionContext).then(function (report) {
-          if (opts.isCancelled && opts.isCancelled()) return;
+      if (opts.open !== 'missing') return null;
+      return requestJson('/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model))
+        .then(function (report) {
           var row = (report.items || []).find(function (entry) { return entry.file === file; });
-          if (!row) throw new Error('Context Sight status did not include ' + file + '.');
-          context = !row.cached;
+          if (!row) throw new Error('Sight status did not include ' + file + '.');
+          shouldScan = !row.structured;
         });
-      }
-    }).then(function () {
-      if (context) return stage('Context Sight',
-        function () { return requestContextSight(folder, model, file, visionContext, opts.isCancelled); },
-        function (sight) { return saveContextSight(folder, model, file, visionContext, sight); });
     }).then(function () {
       if (opts.isCancelled && opts.isCancelled()) return false;
-      var fatalFailures = opts.allowOpenFailure
-        ? failures.filter(function (message) { return message.indexOf('Open Sight: ') !== 0; })
-        : failures;
-      if (fatalFailures.length) throw new Error(fatalFailures.join(' | '));
-      if (!opts.silent) {
-        window.setStatus(failures.length
-          ? 'Context Sight ready; Open Sight failed for ' + file + ' (see Console).'
-          : 'Sight refreshed for ' + file + '.');
-      }
+      if (!shouldScan) return true;
+      return requestSight(folder, model, file, opts.isCancelled, groups).then(function (result) {
+        if (opts.isCancelled && opts.isCancelled()) return false;
+        if (!result.sight) throw new Error(result.warning || 'Sight returned no structured observation.');
+        return saveSight(folder, model, file, result.sight).then(function () {
+          if (result.warning) reportConsoleWarning('Sight refresh ' + file, result.warning);
+          if (!opts.silent) window.setStatus('Sight refreshed for ' + file + '.');
+          return true;
+        });
+      });
+    }).catch(function (err) {
+      if (opts.isCancelled && opts.isCancelled()) return false;
+      reportConsoleError('Sight refresh ' + file, err);
+      if (!opts.allowOpenFailure) throw err;
+      if (!opts.silent) window.setStatus('Sight unavailable for ' + file + '; continuing without it (see Console).');
       return true;
     }).finally(function () {
       setScanState.currentVisionJobId = '';

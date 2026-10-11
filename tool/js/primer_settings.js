@@ -491,7 +491,6 @@ function insertFocusedCaptionVisionPhrase(phrase) {
 function getCaptionAssistTagSuggestions(mediaItem) {
   var mediaKey = mediaItem.key;
   var metadata = mediaItem.metadata || {};
-  var context = metadata.vision_vocabulary_sight || {};
   var open = metadata.vision_sight || {};
   var suggestions = [];
   var seen = {};
@@ -521,17 +520,6 @@ function getCaptionAssistTagSuggestions(mediaItem) {
     seen[lower] = true;
     suggestions.push({ group: group, term: term, isNew: !!group && !known, rank: rank + (known ? 0 : 1) });
   }
-  (Array.isArray(context.matches) ? context.matches : []).forEach(function (entry) {
-    (Array.isArray(entry && entry.terms) ? entry.terms : []).forEach(function (term) {
-      offer(entry.group, term, 0, true);
-    });
-  });
-  (Array.isArray(context.diagnostics && context.diagnostics.unmatched)
-    ? context.diagnostics.unmatched : []).forEach(function (entry) {
-    (Array.isArray(entry && entry.terms) ? entry.terms : []).forEach(function (term) {
-      offer(entry.group, term, 2, true);
-    });
-  });
   var inventory = open.inventory || {};
   var extras = (Array.isArray(inventory.details) ? inventory.details : []).slice();
   (Array.isArray(inventory.things) ? inventory.things : []).forEach(function (thing) {
@@ -737,17 +725,36 @@ function syncFocusedCaptionVisionPhrasesUi() {
   row.scrollTop = previousScrollTop;
 }
 function applyQaCaptionPatch(patch) {
-  var caretIndex = captionVisionPreviewCaretIndex !== null ? captionVisionPreviewCaretIndex : getCaptionVisionCaretIndex();
   restoreCaptionVisionCandidatePreview();
   if (!captionAssistCandidate || !state.currentItem ||
       captionAssistCandidate.mediaKey !== state.currentItem.key) return false;
   var current = String(captionAssistCandidate.text || '');
-  var validated = captionVisionValidatePatch(current, patch);
-  if (!validated) {
-    setStatus('Suggested text no longer matches uniquely. Edit the caption manually.');
-    return false;
+  var source = String(patch.sourceText || '');
+  var replacement = String(patch.replacementText || '');
+  var action = String(patch.action || '');
+  var next = current;
+  if (action === 'add') {
+    var anchor = String(patch.anchorText || '');
+    if (!replacement.trim()) return false;
+    if (!anchor) return insertFocusedCaptionVisionPhrase(replacement);
+    var first = current.indexOf(anchor);
+    if (first < 0 || current.indexOf(anchor, first + anchor.length) >= 0) {
+      setStatus('Cannot place suggested edit uniquely. Edit the caption manually.');
+      return false;
+    }
+    var position = first + anchor.length;
+    next = current.slice(0, position) + ' ' + replacement + current.slice(position);
+  } else if (action === 'replace' || action === 'remove') {
+    var index = source ? current.indexOf(source) : -1;
+    if (index < 0 || current.indexOf(source, index + source.length) >= 0) {
+      setStatus('Suggested text no longer matches uniquely. Edit the caption manually.');
+      return false;
+    }
+    next = current.slice(0, index) + (action === 'replace' ? replacement : '') +
+      current.slice(index + source.length);
+  } else {
+    throw new Error('Unknown QA caption patch action: ' + action);
   }
-  var next = captionVisionApplyPatchToText(current, validated, caretIndex);
   captionAssistCandidate.text = next;
   resetFocusedCaptionUseArm();
   var request = buildCaptionAssistRequest(state.currentItem);
@@ -871,7 +878,10 @@ function syncCaptionAssistCandidateUi() {
       button.addEventListener('focus', previewQaPatch);
       button.addEventListener('mouseleave', restoreCaptionVisionCandidatePreview);
       button.addEventListener('blur', restoreCaptionVisionCandidatePreview);
-      button.addEventListener('click', function () { applyQaCaptionPatch(patch); });
+      button.addEventListener('click', function () {
+        restoreCaptionVisionCandidatePreview();
+        applyQaCaptionPatch(patch);
+      });
       qaReasonsEl.appendChild(button);
     });
   }
@@ -1311,8 +1321,7 @@ function buildCaptionAssistRequest(mediaItem) {
     template: primer.template,
     renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
     draft: getCaptionAssistDraftForMediaItem(mediaItem),
-    openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null,
-    contextSight: null
+    openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null
   };
 }
 
@@ -1695,7 +1704,7 @@ function runCaptionAssistAfterSight(draftOverride) {
         ? 'Caption Assist candidate failed annotation validation.'
         : 'AI caption candidate ready.'
     );
-    // Context Sight preceded the current Director result. Recheck Vision stays explicit;
+    // Recheck Vision stays explicit;
     // the one-item lookahead prepares the next item's Sight before its Director.
 
     return true;

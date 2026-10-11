@@ -767,9 +767,8 @@
       qaWorkbenchState.aiSummary = String(analysis.summary || '');
       qaWorkbenchState.aiModel = String(job.result.model || model);
       qaWorkbenchState.aiScopeSignature = qaBuildDeepScanSignature(currentItems);
-      var previousCoverage = qaWorkbenchState.aiCoverageValid;
       qaRefreshAiCoverage();
-      if (qaWorkbenchState.aiCoverageValid > previousCoverage && qaWorkbenchState.aiCoverageValid % Math.max(1, Math.ceil(qaWorkbenchState.aiCoverageTotal / 10)) === 0) {
+      if (qaWorkbenchState.aiCoverageValid > 0 && qaWorkbenchState.aiCoverageValid % Math.max(1, Math.ceil(qaWorkbenchState.aiCoverageTotal / 10)) === 0) {
         reportConsoleInfo('Deep QA', 'Progress: ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' reviewed.');
       }
       qaMergeFindings();

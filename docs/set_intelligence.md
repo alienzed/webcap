@@ -34,12 +34,12 @@ By default, Set Intelligence uses the **current visible training selection**, re
 
 The intelligence path is fundamentally model-driven:
 
-- the selected **Vision** model performs an **Open Sight** read with no vocabulary guidance;
-- an optional **Context Sight** read can be requested explicitly using current group names, exact terms, and caption template as guidance; normal Set Intelligence does not perform this second read;
-- the selected **Director** model is used by the semantic interpretation workflows that follow;
+- the selected **Vision** model performs one broad **Sight** discovery pass per image, optionally guided by group names and aliases without assuming assigned terms or narrowing discovery;
+- each valid observation is saved in `vision_sight`, reused until the media changes, and replaced only by an explicit refresh;
+- the selected **Director** model interprets compact, workflow-specific evidence for Vocabulary Discovery, Guided Tagging, Caption Assist, and QA;
 - WebCap's deterministic metadata, Face Focus, MediaPipe pose, Scene Complexity, Prune, Duplicate, and other signals remain supporting evidence and constraints.
 
-Context Sight stays image-first: it produces a compact visual caption plus exact supplied terms that clearly match the image. The groups, terms, and template guide attention and wording; they are not a requirement to force a value into every dimension.
+Legacy `vision_vocabulary_sight` records remain readable by the compatibility code but are not generated or automatically forwarded. Sight is fallible visual observation, not a final training caption or an authority over user annotations.
 
 Set Intelligence itself requires the selected **Vision** model because that explicit run performs the pixel reads. Director availability is checked only when a downstream semantic interpretation workflow actually needs it. The workflow must not present a successful deterministic-only scan as equivalent to semantic Set understanding.
 
@@ -47,23 +47,9 @@ Current versioned evidence is reused. No separate scan manifest or durable workf
 
 ### Visibility
 
-The Set Intelligence surface must expose the state that changes the user's next decision, at readable sizes:
+The Set Intelligence surface shows one Sight coverage count for the selected scope, progress, failures, and an optional cached Vision report. Opening it never starts a scan. **Run/Resume** reads only missing Sight; **Force Refresh Sight** explicitly replaces successful observations. Failed responses preserve older evidence, and partial coverage can still inform downstream work.
 
-- **Open Sight** coverage within the selected scope: current saved results versus media still missing reusable open evidence;
-- **Context Sight** coverage: current results, saved-but-stale results, and genuinely missing results;
-- current scan/progress state and failures;
-- one prominent next decision: **Discover Vocabulary** once the intelligence pass is complete;
-- quieter skip-ahead actions for **Guided Tagging** and **Quality Assurance**.
-
-Open Sight coverage determines normal completion. Context Sight coverage remains visible for optional, explicitly requested follow-up reads. Lower-level analyzer internals remain supporting implementation detail.
-
-The collapsed **Vision report** stays directly visible as a readable reference surface and shows how many saved responses are available. It can expose raw responses from the current browser run and reconstruct normalized Open Sight and Context Sight from cached Set metadata after reopening or restarting the app. Opening the report never starts a scan.
-
-Per-media Vision quality is allowed to degrade without failing the Set-level workflow. A model response that cannot be normalized into reusable structured Sight is kept visible diagnostically, skipped as evidence, and does not abort the remaining scan. Vocabulary discovery may proceed from partial usable coverage; complete Set coverage is not a success requirement.
-
-Opening Set Intelligence is passive: it inspects saved coverage and never starts Vision or claims the GPU. The header action is explicit: **Run Set Intelligence** when no reusable evidence exists, **Resume** for missing work, and **Refresh** when the user wants to refresh stale or current intelligence.
-
-Stop is explicit. Closing the Set Intelligence surface does not stop an active scan; completed work continues to be saved unless the user presses **Stop**. Each successful Open Sight or Context Sight write is published immediately into the matching live media metadata as well as `media_metadata.json`, so downstream QA can use completed items before the full Set scan finishes.
+Closing the modal does not stop an active scan. The explicit Stop action cancels the current job, and completed per-item writes remain usable. No second cache or scan manifest is created.
 
 ## Data ownership
 
@@ -76,36 +62,22 @@ Current blocks may include:
 - `face_focus`;
 - `selection_pose`;
 - `vision_sight`;
-- `vision_vocabulary_sight` (Context Sight);
+- `vision_vocabulary_sight` (legacy, temporarily readable only);
 - other analyzer-owned blocks.
 
-Each analyzer owns its own versioning/invalidation rules. Set Intelligence does not create a second cache. Storage Manager's protected Set Data area offers explicit field-level cleanup of legacy Context Sight or all Sight. It preserves the metadata file, authored annotations, captions, and QA review state; deleted Sight requires a new user-initiated scan.
+Each analyzer owns its own versioning/invalidation rules. Set Intelligence does not create a second cache.
 
 Unfinished Caption Assist caption candidates may be retained in existing Set folder state for inexpensive re-entry; applying a candidate removes that saved proposal. Guided Tag steps and modal progress remain ephemeral. Completed Deep QA findings and QA review dispositions are saved as Set-owned review state in `.webcap_qa_review.json`; reusable per-image Sight remains in `media_metadata.json`. The review stores compact input fingerprints, not a duplicate of the underlying captions or image metadata.
 
 ## Item-level checks and refresh
 
-- Caption Assist has one purpose: produce an editable final caption from this item's evidence, whether or not a caption already exists. The preview header opens progressive navigation; the editor entry stays on the current item.
-- Caption Assist first restores an existing unfinished candidate when available; this requires no inference. Otherwise it reuses saved valid Open Sight and any available Context Sight, gathers missing Open Sight only, and asks the Director to synthesize a candidate from that evidence, the existing caption, and current tags. Closing and reopening the focus flow is not a reason to repeat the work. Other items' captions and historical QA findings are not synthesis inputs.
-- New annotations can change how a candidate should be worded without invalidating the underlying image observation. A vocabulary/template change can make Context Sight guidance older, but that alone does not automatically launch a pixel rescan; explicit Refresh Sight remains available. Current cache validity is based on the existing per-media evidence rules; do not claim a new comprehensive stale-state system in this phase.
-- **Recheck Vision** separately reruns a targeted caption-to-image discrepancy check when explicitly requested. **Refresh Sight** explicitly replaces the item's Open Sight, Context Sight, or both. Neither action scans the Set.
-- Item Sight refresh uses the existing `scan_sight`, `scan_vocabulary_sight`, `save_sight`, and `save_vocabulary_sight` operations. A valid observation is saved immediately. Failed normalization or inference must not overwrite the previously saved observation.
-- QA-provided correction findings remain separate from fresh Vision findings while both are presented within the same caption correction UI. The user explicitly chooses edits.
-- Entire-Set Vision scanning is an explicit Set Intelligence override; normal QA uses the current training selection and performs its own progressive per-item review.
+Caption Assist reuses saved Sight if valid, fetches missing Sight when explicitly invoked, and lets the Director propose editable caption text using the current annotation inputs. Unfinished candidates remain in existing Set state. **Refresh Sight** explicitly reruns one image observation; **Recheck Caption (Vision)** is a distinct image-to-caption inspection. Neither triggers a Set scan or writes user annotations automatically. New models can be selected for an explicit fresh observation; changing the selected model alone does not invalidate saved visual evidence.
 
 ## Discover Vocabulary
 
 Purpose: decide **what the Set vocabulary should contain**.
 
-Vocabulary discovery deliberately reuses the visual work already completed by Set Intelligence:
-
-1. Reuse **Open Sight**: structured, vocabulary-agnostic visual evidence.
-2. Include existing **Context Sight** when available; a second pixel read is never required for discovery.
-3. Combine both evidence sources and let the Director synthesize canonical terms, extend existing groups, and propose genuinely missing groups.
-4. Run a separate Director **challenge pass** against that draft to recover missed distinctions, merge synonyms, and remove weak or ungrounded proposals.
-5. Only then begin human curation, one group at a time. Existing groups are reviewed before proposed new groups.
-
-Context Sight stays separately cached in `media_metadata.json`. It is not regenerated merely because vocabulary changes. The latest valid observations remain useful and the user can explicitly refresh them.
+Vocabulary discovery deliberately reuses normalized Sight inventory. The Director proposes terms, extensions to existing groups and novel dimensions, followed by a separate challenge pass. This is not an additional pixel scan. Evidence is bounded to keep Director inputs focused; the underlying item observations remain cached.
 
 Discovery does not assign tags to media and does not perform its own Vision scan.
 
@@ -115,7 +87,7 @@ Support counts are visible. Representative thumbnails plus rationale/evidence ar
 
 Purpose: apply **existing vocabulary** efficiently.
 
-After vocabulary review, the Director prepares per-item candidate assignments from cached Open Sight, any available Context Sight, the **final vocabulary**, and current assignments. Large Sets are prepared in bounded batches so the per-response item limit cannot silently truncate the Guided pass. This preparation does not inspect pixels again and does not invent vocabulary in the Guided flow.
+After vocabulary review, the Director prepares per-item candidate assignments from cached Sight, the **final vocabulary**, and current assignments. Large Sets are prepared in bounded batches so the per-response item limit cannot silently truncate the Guided pass. This preparation does not inspect pixels again and does not invent vocabulary in the Guided flow.
 
 The interaction remains in Grid: one tag proposition, likely media preselected, explicit human correction/application, then the next proposition. Guided Tagging consumes the prepared candidates; it does not reinterpret the image itself. Completing Vocabulary review presents **Continue to Guided Tagging** as the primary next action and launches this Grid flow directly.
 

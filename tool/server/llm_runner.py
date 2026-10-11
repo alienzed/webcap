@@ -240,6 +240,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 llm_result.get("data"),
                 allowed_files=(frozen_contract or {}).get("source_files") or [],
                 captions_by_file=context.get("captionsByFile") or {},
+                recheck=bool((frozen_contract or {}).get("recheck")),
             ),
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),

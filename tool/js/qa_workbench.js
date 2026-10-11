@@ -2475,8 +2475,19 @@
               retained.id = qaStableId(['recheck-inconclusive', original.id]);
               replacements.push(retained);
             }
-            qaWorkbenchState.aiFindings = qaWorkbenchState.aiFindings.filter(function (entry) { return entry.id !== original.id; });
-            qaWorkbenchState.conceptFindings = qaWorkbenchState.conceptFindings.filter(function (entry) { return entry.id !== original.id; });
+            // Remove only this file's portion of a shared finding.
+            function retainOtherFiles(entry) {
+              if (entry.id !== original.id) return entry;
+              var remaining = (entry.files || []).filter(function (file) { return file !== item.fileName; });
+              if (!remaining.length) return null;
+              return Object.assign({}, entry, {
+                files: remaining,
+                patches: (entry.patches || []).filter(function (patch) { return patch.file !== item.fileName; }),
+                tagActions: (entry.tagActions || []).filter(function (action) { return action.file !== item.fileName; })
+              });
+            }
+            qaWorkbenchState.aiFindings = qaWorkbenchState.aiFindings.map(retainOtherFiles).filter(Boolean);
+            qaWorkbenchState.conceptFindings = qaWorkbenchState.conceptFindings.map(retainOtherFiles).filter(Boolean);
             replacements.forEach(function (entry) { qaWorkbenchState.conceptFindings.push(entry); });
             qaMergeFindings();
             qaSyncFocusReview();

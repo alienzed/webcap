@@ -618,81 +618,75 @@ function syncFocusedCaptionVisionPhrasesUi() {
   heading.textContent = 'Suggestions';
   row.appendChild(heading);
   var qaActions = isFocusedQaReviewMode() ? qaFocusReviewTagActions(mediaKey, captionAssistCandidate.text) : [];
-  if (qaActions.length) {
-    var qaChoices = document.createElement('div');
-    qaChoices.className = 'caption-assist-suggestion-grid';
-    qaActions.forEach(function (action) {
-      var assigned = action.group
-        ? getChecklistAssignmentEntriesForMediaKey(mediaKey).some(function (entry) {
-          return entry.requirement === action.group && entry.term === action.term;
-        })
-        : getUnscopedTagsForMediaKey(mediaKey).indexOf(action.term) !== -1;
-      if ((action.action === 'add' && assigned) || (action.action === 'remove' && !assigned)) return;
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'caption-assist-suggestion-tag';
-      button.textContent = (action.action === 'add' ? '+ ' : '− ') + action.term;
-      button.title = (action.action === 'add' ? 'Add' : 'Remove') + ' tag · ' + (action.group || 'Other') + ' · saves immediately';
-      button.addEventListener('click', function () {
-        if (action.action === 'add') acceptCaptionAssistTagSuggestion(mediaKey, { group: action.group, term: action.term });
-        else removeCaptionAssistAssignedTag(mediaKey, action.group, action.term);
-      });
-      qaChoices.appendChild(button);
-    });
-    row.appendChild(qaChoices);
-  }
   var suggestions = getCaptionAssistTagSuggestions(item);
-  function makeSuggestion(suggestion) {
+  var seen = Object.create(null);
+  var combined = [];
+  function addSuggestion(suggestion, action) {
+    var term = String(suggestion.term || '');
+    var group = String(suggestion.group || '');
+    var kind = action || 'add';
+    var id = [kind.toLowerCase(), group.toLowerCase(), term.toLowerCase()].join('\\u0000');
+    if (!term || seen[id]) return;
+    seen[id] = true;
+    combined.push({ suggestion: suggestion, action: kind });
+  }
+  qaActions.forEach(function (action) {
+    addSuggestion({ term: action.term, group: action.group }, action.action);
+  });
+  suggestions.forEach(function (suggestion) { addSuggestion(suggestion, 'add'); });
+  function makeSuggestion(entry) {
+    var suggestion = entry.suggestion;
+    var removing = entry.action === 'remove';
     var pair = document.createElement('span');
     pair.className = 'caption-assist-suggestion-chip';
     var tagButton = document.createElement('button');
     tagButton.type = 'button';
     tagButton.className = 'caption-assist-suggestion-tag';
-    tagButton.textContent = suggestion.term;
-    tagButton.title = 'Add tag · ' + (suggestion.group || 'Other') + (suggestion.isNew ? ' · new vocabulary' : '') + ' · saves immediately';
+    tagButton.textContent = (removing ? '− ' : '+ ') + suggestion.term;
+    tagButton.title = (removing ? 'Remove' : 'Add') + ' tag · ' + (suggestion.group || 'Other') +
+      (suggestion.isNew ? ' · new vocabulary' : '') + ' · saves immediately';
     tagButton.setAttribute('aria-label', tagButton.title);
     tagButton.addEventListener('click', function () {
-      acceptCaptionAssistTagSuggestion(mediaKey, suggestion);
+      if (removing) removeCaptionAssistAssignedTag(mediaKey, suggestion.group, suggestion.term);
+      else acceptCaptionAssistTagSuggestion(mediaKey, suggestion);
     });
     pair.appendChild(tagButton);
-    var insertButton = document.createElement('button');
-    insertButton.type = 'button';
-    insertButton.className = 'caption-assist-suggestion-insert';
-    insertButton.textContent = 'Insert';
-    insertButton.title = 'Insert at caption cursor; does not assign a tag';
-    insertButton.addEventListener('pointerdown', function (event) { event.preventDefault(); });
-    insertButton.addEventListener('click', function () {
-      insertFocusedCaptionVisionPhrase(suggestion.term);
-    });
-    pair.appendChild(insertButton);
+    if (!removing) {
+      var insertButton = document.createElement('button');
+      insertButton.type = 'button';
+      insertButton.className = 'caption-assist-suggestion-insert';
+      insertButton.textContent = 'Insert';
+      insertButton.title = 'Insert at caption cursor; does not assign a tag';
+      insertButton.addEventListener('pointerdown', function (event) { event.preventDefault(); });
+      insertButton.addEventListener('click', function () {
+        insertFocusedCaptionVisionPhrase(suggestion.term);
+      });
+      pair.appendChild(insertButton);
+    }
     return pair;
   }
-  if (suggestions.length) {
+  if (combined.length) {
     var choices = document.createElement('div');
     choices.className = 'caption-assist-suggestion-grid';
-    suggestions.slice(0, 8).forEach(function (suggestion) {
-      choices.appendChild(makeSuggestion(suggestion));
-    });
+    combined.slice(0, 8).forEach(function (entry) { choices.appendChild(makeSuggestion(entry)); });
     row.appendChild(choices);
-    if (suggestions.length > 8) {
+    if (combined.length > 8) {
       var more = document.createElement('details');
       more.setAttribute('data-sight-more', 'true');
       more.open = sightMoreOpen;
       var showAll = document.createElement('summary');
-      showAll.textContent = 'Show ' + (suggestions.length - 8) + ' more suggestions';
+      showAll.textContent = 'Show ' + (combined.length - 8) + ' more suggestions';
       more.appendChild(showAll);
       var rest = document.createElement('div');
       rest.className = 'caption-assist-suggestion-grid';
-      suggestions.slice(8).forEach(function (suggestion) {
-        rest.appendChild(makeSuggestion(suggestion));
-      });
+      combined.slice(8).forEach(function (entry) { rest.appendChild(makeSuggestion(entry)); });
       more.appendChild(rest);
       row.appendChild(more);
     }
   } else {
     var empty = document.createElement('div');
     empty.className = 'small';
-    empty.textContent = 'No additional tags suggested by saved Sight.';
+    empty.textContent = 'No tag suggestions.';
     row.appendChild(empty);
   }
 
@@ -778,31 +772,27 @@ function applyQaCaptionPatch(patch) {
 function captionAssistCompareWords(original, proposed) {
   var oldWords = String(original || '').match(/\S+/g) || [];
   var newWords = String(proposed || '').match(/\S+/g) || [];
+  // Match words irrespective of movement. This is an inclusion comparison, not
+  // an edit script: reordered phrases must not look deleted and re-added.
+  // Count occurrences to keep genuine added/removed duplicates visible.
+  function key(word) {
+    return word.toLowerCase().replace(/^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$/gu, '');
+  }
   var oldMatch = new Array(oldWords.length).fill(false);
   var newMatch = new Array(newWords.length).fill(false);
-  var table = Array.from({ length: oldWords.length + 1 }, function () {
-    return new Array(newWords.length + 1).fill(0);
+  var oldBuckets = Object.create(null);
+  oldWords.forEach(function (word, index) {
+    var k = key(word);
+    if (!oldBuckets[k]) oldBuckets[k] = [];
+    oldBuckets[k].push(index);
   });
-  for (var i = oldWords.length - 1; i >= 0; i -= 1) {
-    for (var j = newWords.length - 1; j >= 0; j -= 1) {
-      table[i][j] = oldWords[i].toLowerCase() === newWords[j].toLowerCase()
-        ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+  newWords.forEach(function (word, index) {
+    var matches = oldBuckets[key(word)];
+    if (matches && matches.length) {
+      oldMatch[matches.shift()] = true;
+      newMatch[index] = true;
     }
-  }
-  var a = 0;
-  var b = 0;
-  while (a < oldWords.length && b < newWords.length) {
-    if (oldWords[a].toLowerCase() === newWords[b].toLowerCase()) {
-      oldMatch[a] = true;
-      newMatch[b] = true;
-      a += 1;
-      b += 1;
-    } else if (table[a + 1][b] >= table[a][b + 1]) {
-      a += 1;
-    } else {
-      b += 1;
-    }
-  }
+  });
   return { oldWords: oldWords, newWords: newWords, oldMatch: oldMatch, newMatch: newMatch };
 }
 
@@ -912,8 +902,12 @@ function syncCaptionAssistCandidateUi() {
   }
 
   var qaReasons = isFocusedQaReviewMode() && visible ? qaFocusReviewReasons(mediaKey, candidate.text) : [];
+  // Tag-only findings are already actionable in the single suggestions row.
+  var qaCaptionReasons = qaReasons.filter(function (reason) {
+    return !/^(Add tag: |Remove tag: )/.test(reason);
+  });
   var qaQuality = isFocusedQaReviewMode() ? qaFocusReviewQuality(mediaKey) : null;
-  qaReasonsEl.classList.toggle('hidden', !qaReasons.length && !qaQuality);
+  qaReasonsEl.classList.toggle('hidden', !qaCaptionReasons.length && !qaQuality);
   var canRecheck = isFocusedQaReviewMode() && visible &&
     qaFocusReviewActionableFindings(mediaKey, candidate.text).length > 0;
   qaRecheckEl.classList.toggle('hidden', !canRecheck);
@@ -931,15 +925,17 @@ function syncCaptionAssistCandidateUi() {
     qualityLabel.title = (qaQuality.reason || '') + ' · ' + qaQuality.confidence + ' confidence';
     qaReasonsEl.appendChild(qualityLabel);
   }
-  if (qaReasons.length) {
+  if (qaCaptionReasons.length) {
     var question = document.createElement('strong');
-    question.textContent = 'Check: ' + qaReasons.join(' · ');
+    question.textContent = 'Check: ' + qaCaptionReasons.join(' · ');
     qaReasonsEl.appendChild(question);
     var details = document.createElement('details');
     var summary = document.createElement('summary');
     summary.textContent = 'Why?';
     details.appendChild(summary);
-    qaFocusReviewActionableFindings(mediaKey, candidate.text).forEach(function (finding) {
+    qaFocusReviewActionableFindings(mediaKey, candidate.text).filter(function (finding) {
+      return qaFocusReviewPatchesForFinding(state.currentItem.fileName, candidate.text, finding).length > 0;
+    }).forEach(function (finding) {
       var reason = document.createElement('p');
       reason.textContent = String(finding.why || finding.summary || '');
       details.appendChild(reason);
@@ -1030,7 +1026,11 @@ function syncCaptionAssistCandidateUi() {
   nextBtn.classList.toggle('hidden', !focusOpen);
   prevBtn.disabled = focusOpen && !canNavigateFocusedCaption(-1);
   nextBtn.disabled = focusOpen && !canNavigateFocusedCaption(1);
-  nextBtn.textContent = isFocusedQaReviewMode() ? 'Skip →' : 'Next →';
+  nextBtn.textContent = isFocusedQaReviewMode() ? '→' : 'Next →';
+  nextBtn.setAttribute('aria-label', isFocusedQaReviewMode() ? 'Skip to next QA item without saving' : 'Next item');
+  nextBtn.title = nextBtn.getAttribute('aria-label');
+  prevBtn.textContent = isFocusedQaReviewMode() ? '←' : '← Previous';
+  prevBtn.setAttribute('aria-label', 'Previous item');
   qaDismissBtn.classList.toggle('hidden', !isFocusedQaReviewMode());
   cancelBtn.classList.toggle('hidden', !pending);
 
@@ -1049,7 +1049,7 @@ function syncCaptionAssistCandidateUi() {
   var currentRequest = visible ? buildCaptionAssistRequest(state.currentItem) : null;
   var tagsChanged = !!(visible && candidate.annotationsAtGeneration &&
     candidate.annotationsAtGeneration !== JSON.stringify([currentRequest.assignments, currentRequest.tags]));
-  regenerateBtn.textContent = 'Refresh Caption';
+  regenerateBtn.textContent = '↻ Refresh Caption';
   var restoredInputsChanged = !!(visible && candidate.sourceCaption !== undefined &&
     candidate.sourceCaption !== String(state.currentItem.caption || ''));
   var restoredModelChanged = !!(visible && candidate.model && currentRequest.model &&

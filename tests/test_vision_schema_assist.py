@@ -1,3 +1,5 @@
+import pytest
+
 from tool.server import vision_schema_assist, vision_schema_contract
 
 
@@ -189,7 +191,8 @@ def test_tag_assignment_contract_prefers_existing_terms_and_allows_new_terms_in_
                         {"group": "BT Shape", "term": "TRIANGLE", "confidence": "high", "why": "Triangle cups."},
                         {"group": "BT Detail", "term": "ring connector", "confidence": "high", "why": "Gold ring hardware."},
                     ],
-                }
+                },
+                {"file": "b.jpg", "candidates": []},
             ]
         },
         existing_groups=contract["existing_groups"],
@@ -207,6 +210,14 @@ def test_tag_assignment_contract_prefers_existing_terms_and_allows_new_terms_in_
     assert result["items"][1]["candidates"] == []
 
 
+
+
+def test_tag_assist_requires_explicit_result_for_each_requested_media():
+    with pytest.raises(ValueError, match="omitted results for: b.jpg"):
+        vision_schema_contract.normalize_assignment_result(
+            {"items": [{"file": "a.jpg", "candidates": []}]},
+            allowed_files=["a.jpg", "b.jpg"],
+        )
 
 
 def test_guided_assignment_contract_rejects_new_terms():

@@ -1317,7 +1317,7 @@ function buildCaptionAssistRequest(mediaItem) {
     renderedPrimer: buildPrimerFromConfig(mediaItem.fileName, mediaKey, primer),
     draft: getCaptionAssistDraftForMediaItem(mediaItem),
     openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null,
-    contextSight: mediaItem.metadata && mediaItem.metadata.vision_vocabulary_sight || null
+    contextSight: null
   };
 }
 

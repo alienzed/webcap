@@ -409,15 +409,15 @@
 
 .app.shell-revamp .qa-recommendation-title {
   margin-top: 10px;
-  font-size: clamp(28px, 3vw, 36px);
+  font-size: clamp(24px, 2.4vw, 30px);
 }
 
 .app.shell-revamp .qa-recommendation-summary {
   max-width: 920px;
   margin: 12px 0 0;
   color: var(--text);
-  font-size: 20px;
-  line-height: 1.45;
+  font-size: 17px;
+  line-height: 1.4;
 }
 
 .app.shell-revamp .qa-recommendation-why {
@@ -431,12 +431,12 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  margin: 24px 0;
+  margin: 12px 0;
 }
 
 .app.shell-revamp .qa-fact {
   min-width: 130px;
-  padding: 13px 15px;
+  padding: 9px 11px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--panel-soft);
@@ -483,7 +483,7 @@
 }
 
 .app.shell-revamp .qa-evidence-media {
-  flex: 0 0 220px;
+  flex: 0 0 148px;
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -495,7 +495,7 @@
 .app.shell-revamp .qa-evidence-preview {
   position: relative;
   width: 100%;
-  height: 245px;
+  height: 168px;
   overflow: hidden;
   background: var(--hover);
 }
@@ -505,7 +505,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .app.shell-revamp .qa-evidence-file {
@@ -691,4 +691,36 @@
     width: 100%;
     margin-left: 0;
   }
+}
+
+/* Secondary checks and diagnostic facts stay available without dominating QA. */
+.app.shell-revamp .qa-optional-check {
+  margin-top: 18px;
+  color: var(--muted);
+}
+.app.shell-revamp .qa-optional-check > summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 650;
+}
+.app.shell-revamp .qa-optional-check .qa-concept-check {
+  margin-top: 12px;
+}
+.app.shell-revamp .qa-evidence-strip {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  scroll-snap-type: none;
+}
+.app.shell-revamp .qa-evidence-media {
+  scroll-snap-align: none;
+}
+.app.shell-revamp .qa-evidence-media button {
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: 13px;
+}
+.app.shell-revamp .qa-recommendation-actions {
+  margin-top: 12px;
+  padding-top: 12px;
 }

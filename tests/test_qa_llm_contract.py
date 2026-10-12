@@ -159,3 +159,22 @@ def test_qa_caption_quality_compares_real_alternative_and_scores_clean_items():
     assert result["findings"] == []
     assert result["captionQuality"][0]["rating"] == "high"
     assert result["captionQuality"][0]["confidence"] == "medium"
+
+
+def test_qa_preserves_long_sight_description_and_context():
+    from tool.server.qa_llm_contract import _normalize_analysis
+    description = "important visual detail " * 130
+    caption = "grouped garment construction " * 80
+    normalized = _normalize_analysis({
+        "visionSight": {"model": "vl", "description": description,
+                        "inventory": {"details": ["distinctive connectors"]}},
+        "contextSight": {"caption": caption,
+                         "matches": [{"group": "Details", "terms": ["distinctive connectors"]}]},
+    })
+    assert normalized["visionSight"]["description"] == description.strip()
+    assert normalized["contextSight"]["caption"] == caption.strip()
+    assert description.strip() in build_request([{
+        "fileName": "long.jpg", "caption": "A garment.",
+        "analysis": {"visionSight": {"description": description,
+                                     "inventory": {"details": ["distinctive connectors"]}}}
+    }])["prompt"]

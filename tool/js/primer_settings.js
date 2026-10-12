@@ -1378,6 +1378,16 @@ function getCaptionAssistMissingGroups(mediaKey) {
 function captionAssistAnnotationAppearsInCaption(captionText, term) {
   if (captionContainsTagWithAllowances(captionText, term)) return true;
   var normalized = String(term || '').trim().toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ');
+  // A narrow visual synonym, not a general semantic matcher.
+  // Negated descriptions must not silently satisfy a selected annotation.
+  if (normalized === 'nail polish on fingers') {
+    var nailsCaption = canonicalizeMatchText(captionText);
+    var negated = /\b(?:not|never|no) (?:painted|polished) (?:finger ?nails|nails)\b/.test(nailsCaption) ||
+      /\b(?:finger ?nails|nails) (?:are|were) not (?:painted|polished)\b/.test(nailsCaption);
+    if (!negated && /\b(?:(?:painted|polished) (?:finger ?nails|nails)|(?:finger ?nails|nails) (?:are|were) (?:painted|polished))\b/.test(nailsCaption)) {
+      return true;
+    }
+  }
   if (normalized !== 'hand on hip' && normalized !== 'hand on hips' &&
       normalized !== 'hands on hips') return false;
   return /\b(?:one |a |her |his |their |left |right )?hands?\s+(?:is |are )?(?:on|resting on)\s+(?:(?:her|his|their|the|a)\s+)?hips?\b/i.test(String(captionText || ''));

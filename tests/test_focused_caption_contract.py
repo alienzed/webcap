@@ -332,13 +332,13 @@ def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
     assert "function getCaptionAssistOmittedAssignments(mediaKey, captionText, assignments, tags)" in primer
     assert "checklistGroupTermAppearsInCaptionText(group, term, mediaKey, captionText)" in primer
     assert "request.assignments" in primer
-    assert "(reviewMode ? 'Caption' : 'Candidate') + ' omitted selected annotations: '" in primer
-    assert "Caption Assist candidate failed annotation validation." in primer
-    assert "useBtn.textContent = reviewMode" in primer
-    assert "'Save → Next'" in primer
-    assert "'Keep → Next'" in primer
-    assert "regenerateBtn.textContent = 'Refresh Caption';" in primer
-    assert "regenerateBtn.classList.toggle('is-primary', tagsChanged || !!omittedAssignments.length);" in primer
+    assert "'Selected annotations to reconcile (' + omittedAssignments.length" in primer
+    assert "Caption draft has selected annotations to reconcile." in primer
+    assert "useBtn.textContent = isFocusedQaReviewMode()" in primer
+    assert "'Save & Next'" in primer
+    assert "'Keep & Next'" in primer
+    assert "regenerateBtn.textContent = pending ? 'Refreshing…' : '↻ Refresh Caption';" in primer
+    assert "regenerateBtn.classList.toggle('is-primary', tagsChanged || restoredInputsChanged || restoredModelChanged || !!omittedAssignments.length);" in primer
     assert ".editor-caption-candidate-omissions {" in css
     assert ".editor-caption-candidate-regenerate.is-primary {" in css
 
@@ -661,7 +661,7 @@ def test_caption_omissions_and_vision_share_explicit_fix_path():
     assert "function repairCaptionAssistCandidate(corrections)" in primer
     assert "request.draft = String(candidate.text || '').trim();" in primer
     assert "request.corrections = cleanCorrections;" in primer
-    assert "insert.textContent = 'Insert at cursor';" in primer
+    assert "insert.textContent = 'Insert';" in primer
     assert "remove.textContent = 'Remove tag';" in primer
     assert "removeCaptionAssistAssignedTag(mediaKey, entry.group, entry.term);" in primer
     assert "repairCaptionAssistCandidate(candidate.omittedCorrections || [])" not in primer
@@ -718,7 +718,7 @@ def test_focus_caption_enhancements_do_not_change_normal_caption_assist_contract
 
     assert "var focusOpen = isFocusedCaptionOpen();" in primer
     assert "var focusVisible = !!(focusOpen && mediaKey);" in primer
-    assert "titleEl.textContent = reviewMode ? 'Focus Review' : (focusOpen ? 'Focus Caption' : 'Caption Assist');" in primer
+    assert "titleEl.textContent = isFocusedQaReviewMode() ? 'QA Focus Review'" in primer
     assert "dismissBtn.textContent = '\\u00d7';" in primer
     assert "if (!isFocusedCaptionOpen()) return runCaptionAssist();" in primer
     assert "function refreshCaptionAssistFromUi()" in primer
@@ -824,9 +824,9 @@ def test_focus_caption_visual_pass_is_theme_aware_and_compact():
     assert ".editor-caption-focus-shortcuts {" not in css
     assert 'html[data-theme="dark"] .editor-caption-candidate-missing' in css
 
-    assert "useBtn.textContent = reviewMode" in primer
-    assert "'Save → Next'" in primer
-    assert "'Keep → Next'" in primer
+    assert "useBtn.textContent = isFocusedQaReviewMode()" in primer
+    assert "'Save & Next'" in primer
+    assert "'Keep & Next'" in primer
     assert "Regenerate caption and recheck Vision" in primer
 
 
@@ -998,8 +998,8 @@ def test_caption_assist_surfaces_existing_sight_as_tag_suggestions_without_extra
     ui = primer.split("function syncFocusedCaptionVisionPhrasesUi()", 1)[1].split(
         "function syncCaptionAssistCandidateUi()", 1
     )[0]
-    assert "context.matches" in start
-    assert "context.diagnostics && context.diagnostics.unmatched" in start
+    assert "var inventory = open.inventory || {};" in start
+    assert "getChecklistRequirementsForTag(term)" in start
     assert "inventory.details" in start
     assert "inventory.things" in start
     assert ".slice(0, 6)" not in start
@@ -1013,8 +1013,8 @@ def test_caption_assist_uses_sight_for_explicit_tag_actions():
     root = Path(__file__).resolve().parents[1]
     source = (root / "tool/js/primer_settings.js").read_text(encoding="utf-8")
     assert "function getCaptionAssistTagSuggestions(mediaItem)" in source
-    assert "context.matches" in source
-    assert "context.diagnostics && context.diagnostics.unmatched" in source
+    assert "var inventory = open.inventory || {};" in source
+    assert "getChecklistRequirementsForTag(term)" in source
     assert "getChecklistRequirementsForTag(term)" in source
     assert "mergeChecklistKeywordTermsForRequirement(group, [term], { skipRefresh: true })" in source
     assert "assignChecklistTagToMediaKey(mediaKey, group, term)" in source
@@ -1028,7 +1028,7 @@ def test_caption_assist_uses_sight_for_explicit_tag_actions():
     assert "addTagToMediaKey(mediaKey, term)" in source
     assert "removeTagFromMediaKey(mediaKey, term)" in source
     assert "annotationsAtGeneration" in source
-    assert "Rewrite with current tags" in source
+    assert "rewrite using the edited caption, current tags, and cached Sight" in source
 
 
 

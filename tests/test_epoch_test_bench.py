@@ -161,6 +161,38 @@ def test_resolved_wildcard_values_supports_nested_groups_from_real_test_prompts(
     ]
 
 
+def test_resolved_wildcards_skip_inline_comment_without_losing_other_selections():
+    source = (
+        "A {Canadian|Australian} girl wears a {black|white} bikini "
+        "{with {red|blue} trim|} and has {brown|blonde} hair"
+        "{ in {braids|a bob cut}|} {with glistening skin|} "
+        "# and seems to have {medium-sized|small} breasts. "
+        "She is {looking away|rotating}, initial {front|side} view."
+    )
+    resolved = (
+        "A Australian girl wears a black bikini and has blonde hair in a bob cut "
+        "She is looking away, initial front view."
+    )
+
+    assert bench._resolved_wildcard_values(source, resolved) == [
+        "Australian", "black", "blonde", "a bob cut", "looking away", "front",
+    ]
+    summary = bench._resolved_wildcard_summary(source, resolved, "sets/bikini")
+    assert any("black bikini" in phrase for phrase in summary)
+    assert all("breast" not in phrase for phrase in summary)
+
+
+def test_resolved_wildcards_skip_full_line_comments():
+    source = (
+        "wearing a {black|white} bikini\n"
+        "# omitted {small|medium} detail. Other commentary.\n"
+        "standing in {sun|shade}"
+    )
+    assert bench._resolved_wildcard_values(
+        source, "wearing a white bikini standing in shade",
+    ) == ["white", "shade"]
+
+
 def test_resolved_wildcard_summary_prioritizes_set_specific_groups_with_context():
     source = (
         "A beautiful {Swedish|Australian} woman is standing wearing a "

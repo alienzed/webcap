@@ -1,20 +1,46 @@
 function renderMediaGridCanvas() {
   var canvas = mediaGridGetActiveCanvasEl();
   if (!canvas) return;
-  canvas.innerHTML = '';
+  var grid = canvas.querySelector('.media-grid-items');
   if (!mediaGridState.items.length) {
-    var empty = document.createElement('div');
-    empty.className = 'media-grid-empty media-grid-empty-main';
-    empty.textContent = 'No items remain in this Grid view.';
-    canvas.appendChild(empty);
+    if (grid) grid.remove();
+    var empty = canvas.querySelector('.media-grid-empty-main');
+    if (!empty) {
+      empty = document.createElement('div');
+      empty.className = 'media-grid-empty media-grid-empty-main';
+      empty.textContent = 'No items remain in this Grid view.';
+      canvas.appendChild(empty);
+    }
     return;
   }
-  var grid = document.createElement('div');
-  grid.className = 'media-grid-items';
-  mediaGridState.items.forEach(function (item) {
-    grid.appendChild(mediaGridBuildTile(item));
+  var empty = canvas.querySelector('.media-grid-empty-main');
+  if (empty) empty.remove();
+  if (!grid) {
+    grid = document.createElement('div');
+    grid.className = 'media-grid-items';
+    canvas.appendChild(grid);
+  }
+  var existing = new Map();
+  Array.prototype.forEach.call(grid.children, function (tile) {
+    existing.set(tile.getAttribute('data-key'), tile);
   });
-  canvas.appendChild(grid);
+  var wanted = mediaGridState.items.map(function (item) {
+    var tile = existing.get(item.key);
+    if (!tile || tile.dataset.gridFileName !== item.fileName) {
+      tile = mediaGridBuildTile(item);
+    } else {
+      mediaGridSyncTile(item, tile);
+    }
+    return tile;
+  });
+  var keep = new Set(wanted);
+  Array.prototype.slice.call(grid.children).forEach(function (tile) {
+    if (!keep.has(tile)) tile.remove();
+  });
+  wanted.forEach(function (tile, index) {
+    if (grid.children[index] !== tile) grid.insertBefore(tile, grid.children[index] || null);
+  });
+  mediaGridSyncSelectionDisplay();
 }
 
 function mediaGridOpenItemInMainWorkspace(mediaKey) {
@@ -34,6 +60,8 @@ function mediaGridBuildTile(mediaItem) {
   tile.className = 'media-grid-tile' + (selected ? ' selected' : '');
   tile.setAttribute('data-key', mediaItem.key);
   tile.title = mediaItem.fileName;
+  tile.dataset.gridFileName = mediaItem.fileName;
+  tile.dataset.gridBadgeState = mediaGridTileBadgeState(mediaItem);
   tile.onclick = function (e) {
     mediaGridHandleTileClick(mediaItem.key, e);
   };
@@ -43,7 +71,7 @@ function mediaGridBuildTile(mediaItem) {
     mediaGridOpenItemInMainWorkspace(mediaItem.key);
   };
   tile.oncontextmenu = function (e) {
-    mediaGridHandleTileContextMenu(mediaItem, e);
+    mediaGridHandleTileContextMenu(mediaGridFindItemByKey(mediaItem.key), e);
   };
 
   var thumb = document.createElement('div');
@@ -80,6 +108,29 @@ function mediaGridBuildTile(mediaItem) {
 
   tile.appendChild(thumb);
   return tile;
+}
+
+function mediaGridTileBadgeState(mediaItem) {
+  var aspect = String((mediaItem.metadata && mediaItem.metadata.aspect) || '').trim();
+  return String(getRatingForMediaKey(mediaItem.key)) + '|' +
+    (aspect && !hasSupportedAspectBucket(aspect) ? 'invalid-ar' : '');
+}
+
+function mediaGridSyncTile(mediaItem, tile) {
+  var thumb = tile.querySelector('.media-grid-thumb-wrap');
+  var media = thumb.querySelector('video, img');
+  var url = mediaGridMediaUrl(mediaItem);
+  if (media.getAttribute('src') !== url) media.setAttribute('src', url);
+  if (media.tagName === 'IMG') media.alt = mediaItem.label || mediaItem.fileName;
+  tile.title = mediaItem.fileName;
+
+  var badgeState = mediaGridTileBadgeState(mediaItem);
+  if (tile.dataset.gridBadgeState !== badgeState) {
+    var badges = thumb.querySelector('.media-grid-badges');
+    if (badges) badges.remove();
+    mediaGridAppendTileBadges(thumb, mediaItem);
+    tile.dataset.gridBadgeState = badgeState;
+  }
 }
 
 function mediaGridAppendTileBadges(thumb, mediaItem) {

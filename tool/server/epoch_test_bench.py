@@ -2472,6 +2472,11 @@ def queued_jobs(folder_path, model_id=None):
         _session_directories(folder_path),
         key=lambda path: path.name.lower(),
     ):
+        # Terminal history cannot be queued. Avoid loading its inference job
+        # records merely to build the queued-session list.
+        stored = _read_status(session_directory) or {}
+        if str(stored.get("status") or "") in {"complete", "stopped", "failed", "interrupted"}:
+            continue
         visible = _sync_inference_session(session_directory)
         if not visible or visible.get("status") != "queued":
             continue

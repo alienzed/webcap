@@ -6,6 +6,8 @@
   var pendingElapsedTimer = null;
   var lastActivityRefreshAt = 0;
   var lastSessionsRefreshAt = 0;
+  var sessionsMutationVersion = 0;
+  var lastSessionDetailsMarkup = null;
   var prepared = null;
   var launchFolder = '';
   var currentSession = '';
@@ -1324,6 +1326,35 @@
     master.indeterminate = selectedCount > 0 && selectedCount < available.length;
   }
 
+  function syncStagedSummary(payload) {
+    var count = Number(payload && payload.count || 0);
+    var summary = el('test-generations-summary');
+    var countEl = el('test-generations-files-count');
+    if (summary) {
+      var runCount = payload && Array.isArray(payload.candidateRuns) ? payload.candidateRuns.length : 0;
+      summary.textContent = (String(payload && payload.modelLabel || '').trim() ? String(payload.modelLabel).trim() + ' · ' : '') +
+        count + ' candidate' + (count === 1 ? '' : 's') +
+        (runCount ? ' · ' + runCount + ' run' + (runCount === 1 ? '' : 's') : '');
+    }
+    if (countEl) countEl.textContent = String(count);
+  }
+
+  function syncStagedCandidateScores(scores) {
+    var host = el('test-generations-files');
+    if (!host) return;
+    Array.prototype.forEach.call(host.querySelectorAll('[data-staged-file]'), function (row) {
+      var fileName = String(row.dataset.stagedFile || '');
+      var score = scores && scores[fileName];
+      var scoreText = score && Number(score.count || 0)
+        ? ('★ ' + Number(score.average || 0).toFixed(1) + ' (' + Number(score.count || 0) + ')')
+        : '';
+      var detail = row.querySelector('[data-candidate-detail]');
+      if (!detail) throw new Error('Test candidate detail is missing.');
+      detail.textContent = [stagedFileParts(fileName).detail, scoreText].filter(Boolean).join(' · ');
+      detail.classList.toggle('hidden', !detail.textContent);
+    });
+  }
+
   function renderStagedFiles(payload) {
     var count = Number(payload && payload.count || 0);
     var files = payload && Array.isArray(payload.files) ? payload.files : [];
@@ -1362,16 +1393,8 @@
     Object.keys(candidateStrengths).forEach(function (fileName) {
       if (files.indexOf(fileName) === -1) delete candidateStrengths[fileName];
     });
-    var summary = el('test-generations-summary');
-    var countEl = el('test-generations-files-count');
     var host = el('test-generations-files');
-    if (summary) {
-      var runCount = payload && Array.isArray(payload.candidateRuns) ? payload.candidateRuns.length : 0;
-      summary.textContent = (String(payload && payload.modelLabel || '').trim() ? String(payload.modelLabel).trim() + ' · ' : '') +
-        count + ' candidate' + (count === 1 ? '' : 's') +
-        (runCount ? ' · ' + runCount + ' run' + (runCount === 1 ? '' : 's') : '');
-    }
-    if (countEl) countEl.textContent = String(count);
+    syncStagedSummary(payload);
     if (!host) return;
     host.innerHTML = '';
 
@@ -1432,6 +1455,7 @@
       var metadata = candidateMetadata[String(fileName || '')] || null;
       var row = document.createElement('div');
       row.className = 'test-generations-staged-row' + (metadata && metadata.selected ? ' is-selected' : '');
+      row.dataset.stagedFile = String(fileName || '');
       row.title = parts.fileName;
       var include = document.createElement('input');
       include.type = 'checkbox';
@@ -1455,13 +1479,15 @@
         name.appendChild(selectedMark);
       }
       var detail = document.createElement('span');
+      detail.dataset.candidateDetail = '1';
       var score = scores[String(fileName || '')];
       var scoreText = score && Number(score.count || 0)
         ? ('★ ' + Number(score.average || 0).toFixed(1) + ' (' + Number(score.count || 0) + ')')
         : '';
       detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
       copy.appendChild(name);
-      if (detail.textContent) copy.appendChild(detail);
+      detail.classList.toggle('hidden', !detail.textContent);
+      copy.appendChild(detail);
 
       var strength = document.createElement('input');
       strength.type = 'number';
@@ -1619,10 +1645,17 @@
       group.querySelector('[data-session-group-title]').textContent = label;
       group.querySelector('[data-session-group-count]').textContent = String(count);
 
+      // Move only when group order actually changes. Re-inserting an unchanged
+      // history group detaches its interactive rows and shifts the sidebar.
       var order = { running: 0, queued: 1, history: 2 };
-      var groups = host.querySelectorAll('[data-session-group]');
-      var expected = groups[order[key]] || null;
-      if (expected !== group) host.insertBefore(group, expected);
+      var next = Array.prototype.find.call(host.querySelectorAll('[data-session-group]'), function (candidate) {
+        return candidate !== group && order[candidate.dataset.sessionGroup] > order[key];
+      });
+      if (next) {
+        if (group.nextElementSibling !== next) host.insertBefore(group, next);
+      } else if (group.nextElementSibling) {
+        host.appendChild(group);
+      }
 
       return group.querySelector('[data-session-group-list]');
     }
@@ -1854,12 +1887,16 @@
   function refreshSessions() {
     lastSessionsRefreshAt = Date.now();
     var modelId = currentTestModelId();
+    var mutationVersion = sessionsMutationVersion;
     return Promise.all([
       request('test_sessions', { modelId: modelId }),
       request('test_queue', { modelId: modelId })
     ]).then(function (payloads) {
       var sessionPayload = payloads[0] || {};
       var queuePayload = payloads[1] || {};
+      if (mutationVersion !== sessionsMutationVersion) {
+        return { sessions: sessionPayload.sessions || [], jobs: queuedTestJobs };
+      }
       queuedTestJobs = Array.isArray(queuePayload.jobs) ? queuePayload.jobs : [];
       renderSessions(sessionPayload.sessions, queuedTestJobs);
       return { sessions: sessionPayload.sessions || [], jobs: queuedTestJobs };
@@ -1899,13 +1936,14 @@
       return Promise.resolve();
     }
     return request('test_clear_sessions', {}).then(function () {
+      sessionsMutationVersion += 1;
       forgetTrackedTestSessions(launchFolder);
       currentSession = '';
       currentSessionFolder = '';
       currentSessionModel = '';
       showSessionError = false;
       renderStatus({ status: 'idle' });
-      return refreshSessions();
+      renderSessions([], []);
     });
   }
 
@@ -2104,7 +2142,7 @@
     }).then(function (payload) {
       if (prepared && payload && payload.candidateScores) {
         prepared.candidateScores = payload.candidateScores;
-        renderStagedFiles(prepared);
+        syncStagedCandidateScores(prepared.candidateScores);
       }
       if (payload && payload.sessions) renderSessions(payload.sessions, queuedTestJobs);
     }).catch(function (err) {
@@ -2398,8 +2436,10 @@
     var sessionName = String(status && status.session || '');
 
     if (results.length < 2) {
-      host.dataset.compareKey = '';
-      host.innerHTML = '<div class="test-generations-empty">At least two completed results are needed to compare.</div>';
+      if (host.dataset.compareKey !== 'empty') {
+        host.dataset.compareKey = 'empty';
+        host.innerHTML = '<div class="test-generations-empty">At least two completed results are needed to compare.</div>';
+      }
       return;
     }
 
@@ -3047,7 +3087,10 @@
     if (!details) return;
     if (!hasSession) {
       details.classList.add('hidden');
-      details.innerHTML = '';
+      if (lastSessionDetailsMarkup !== '') {
+        details.innerHTML = '';
+        lastSessionDetailsMarkup = '';
+      }
       if (infoBtn) {
         infoBtn.textContent = 'Details';
         infoBtn.setAttribute('aria-expanded', 'false');
@@ -3068,7 +3111,7 @@
     }
     var resolvedPrompt = String(status.resolvedPrompt || status.prompt || '');
     var sourcePrompt = String(status.sourcePrompt || '');
-    details.innerHTML = [
+    var markup = [
       '<div class="test-generations-session-info-grid">',
       renderPromptExpectations(resolvedPrompt),
       '<div class="test-generations-session-prompts">',
@@ -3077,6 +3120,10 @@
       '</div>',
       '</div>'
     ].join('');
+    if (markup !== lastSessionDetailsMarkup) {
+      details.innerHTML = markup;
+      lastSessionDetailsMarkup = markup;
+    }
   }
 
   function selectSessionStatus(status) {
@@ -3464,49 +3511,20 @@
     }).catch(showError);
   }
 
-  function removeDeletedSessionRow(sessionName) {
-    var host = el('test-generations-sessions-list');
-    if (!host) return;
-    var key = 'session:' + String(sessionName || '');
-    var row = null;
-    Array.prototype.some.call(host.querySelectorAll('[data-session-row-key]'), function (candidate) {
-      if (String(candidate.dataset.sessionRowKey || '') !== key) return false;
-      row = candidate;
-      return true;
-    });
-    if (!row) return;
-    var group = row.closest('[data-session-group]');
-    row.remove();
-
-    if (group) {
-      var body = group.querySelector('[data-session-group-list]');
-      if (body && !body.children.length) group.remove();
-    }
-
-    var countEl = el('test-generations-sessions-count');
-    if (countEl) {
-      countEl.textContent = String(Math.max(0, Number(countEl.textContent || 0) - 1));
-    }
-
-    if (!host.querySelector('[data-session-row-key]') && !host.querySelector('.test-generations-library-empty')) {
-      var empty = document.createElement('div');
-      empty.className = 'test-generations-library-empty';
-      empty.textContent = 'No test sessions yet.';
-      host.appendChild(empty);
-    }
-  }
-
   function deleteSession(sessionName) {
     return request('test_delete_session', { session: String(sessionName || '') }).then(function (payload) {
-      forgetTrackedTestSessions(launchFolder, String(payload && payload.deleted || ''));
-      removeDeletedSessionRow(payload && payload.deleted);
-      if (currentSession === String(payload.deleted || '')) {
+      sessionsMutationVersion += 1;
+      var deleted = String(payload && payload.deleted || '');
+      forgetTrackedTestSessions(launchFolder, deleted);
+      // The server returns the authoritative filtered session list; reconcile
+      // its keyed rows without replacing unrelated sessions or results.
+      renderSessions(payload.sessions, queuedTestJobs);
+      if (currentSession === deleted) {
         currentSession = '';
         currentSessionFolder = '';
         currentSessionModel = '';
         showSessionError = false;
-        if (payload.latest && payload.latest.session) selectSessionStatus(payload.latest);
-        else renderStatus({ status: 'idle' });
+        renderStatus({ status: 'idle' });
       }
     });
   }
@@ -3518,9 +3536,40 @@
       modelId: currentTestModelId()
     }).then(function (payload) {
       if (prepared && String(payload.modelId || '') === String(prepared.modelId || '')) {
+        var removed = String(payload.removed || '');
+        var previous = Array.isArray(prepared.files) ? prepared.files : [];
+        var remaining = Array.isArray(payload.files) ? payload.files.slice() : [];
+        var localRemoval = previous.indexOf(removed) !== -1 &&
+          previous.length === remaining.length + 1 &&
+          previous.filter(function (file) { return file !== removed; }).every(function (file, index) {
+            return file === remaining[index];
+          });
         prepared.count = Number(payload.count || 0);
-        prepared.files = Array.isArray(payload.files) ? payload.files.slice() : [];
-        renderStagedFiles(prepared);
+        prepared.files = remaining;
+        if (selectedCandidates instanceof Set) selectedCandidates.delete(removed);
+        if (candidateStrengths) delete candidateStrengths[removed];
+        if (prepared.candidateScores) delete prepared.candidateScores[removed];
+        if (prepared.candidateMetadata) delete prepared.candidateMetadata[removed];
+        if (localRemoval) {
+          var host = el('test-generations-files');
+          var row = host && Array.prototype.find.call(host.querySelectorAll('[data-staged-file]'), function (candidate) {
+            return String(candidate.dataset.stagedFile || '') === removed;
+          });
+          if (!row) throw new Error('Removed Test candidate row is missing.');
+          row.remove();
+          if (!remaining.length && host) {
+            var empty = document.createElement('div');
+            empty.className = 'test-generations-library-empty';
+            empty.textContent = 'No staged candidates for this Set.';
+            host.appendChild(empty);
+          }
+          syncStagedSummary(prepared);
+          syncCandidateMasterSelect(remaining);
+        } else {
+          // Only rebuild if server data changed beyond the requested row.
+          renderStagedFiles(prepared);
+        }
+        syncActiveRunControls(currentStatus);
       }
       if (payload.sessionStatus && currentSession === String(payload.sessionStatus.session || '')) {
         renderStatus(payload.sessionStatus);
@@ -3698,8 +3747,10 @@
       }
       var button = event.target.closest('[data-file-name]');
       if (!button) return;
+      var fileName = String(button.dataset.fileName || '');
+      if (!window.confirm('Remove staged Test candidate ' + fileName + '? This deletes its staged copy.')) return;
       button.disabled = true;
-      removeCandidate(button.dataset.fileName, '').catch(function (err) {
+      removeCandidate(fileName, '').catch(function (err) {
         button.disabled = false;
         showError(err);
       });
@@ -3730,8 +3781,10 @@
       }
       var remove = event.target.closest('[data-session-delete]');
       if (remove) {
+        var sessionName = String(remove.dataset.sessionDelete || '');
+        if (!window.confirm('Permanently delete Test session ' + sessionLabel(sessionName) + ' and its generated results?')) return;
         remove.disabled = true;
-        deleteSession(remove.dataset.sessionDelete).catch(function (err) {
+        deleteSession(sessionName).catch(function (err) {
           remove.disabled = false;
           showError(err);
         });

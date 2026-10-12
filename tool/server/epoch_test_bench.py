@@ -1158,23 +1158,39 @@ def _match_wildcard_nodes(nodes, resolved, node_index=0, position=0):
     return None
 
 
+def _match_wildcard_source(source, resolved, matcher):
+    candidates = [source]
+    if "#" in source:
+        # Keep the original match first; retry without explicit comments only
+        # when the resolver omitted them. Inline notes may end at a sentence.
+        uncommented = re.sub(r"(?m)^[ 	]*#[^\r\n]*(?:\r?\n|$)", " ", source)
+        uncommented = re.sub(
+            r"(?<!\S)#[^\r\n]*?(?:\.(?=\s+[A-Z])|(?=\r?\n)|$)",
+            "",
+            uncommented,
+        )
+        if uncommented != source:
+            candidates.append(uncommented)
+
+    for candidate in candidates:
+        try:
+            nodes = _parse_wildcard_nodes(candidate)
+        except ValueError:
+            continue
+        matched = matcher(nodes, resolved)
+        if matched is not None and matched[0] == len(resolved):
+            return candidate, nodes, matched[1]
+    return None
+
+
 def _resolved_wildcard_values(source_prompt, resolved_prompt):
     source = str(source_prompt or "")
     resolved = _normalize_wildcard_text(resolved_prompt)
     if "|" not in source or "{" not in source:
         return []
 
-    try:
-        nodes = _parse_wildcard_nodes(source)
-    except ValueError:
-        return []
-
-    matched = _match_wildcard_nodes(nodes, resolved)
-    if matched is None:
-        return []
-
-    position, values = matched
-    return values if position == len(resolved) else []
+    matched = _match_wildcard_source(source, resolved, _match_wildcard_nodes)
+    return matched[2] if matched is not None else []
 
 
 _WILDCARD_SUMMARY_LOW_TERMS = {
@@ -1381,17 +1397,10 @@ def _wildcard_summary_items(source_prompt, resolved_prompt):
     if "|" not in source or "{" not in source:
         return []
 
-    try:
-        nodes = _parse_wildcard_nodes(source)
-    except ValueError:
-        return []
-
-    matched = _match_top_level_wildcard_selections(nodes, resolved)
+    matched = _match_wildcard_source(source, resolved, _match_top_level_wildcard_selections)
     if matched is None:
         return []
-    position, selections = matched
-    if position != len(resolved):
-        return []
+    source, nodes, selections = matched
 
     spans = _top_level_wildcard_spans(source)
     group_nodes = [

@@ -4,6 +4,8 @@ var aiValidationReceiptsByMedia = {};
 var aiValidationDraftsByMedia = {};
 var aiValidationRequestToken = 0;
 var aiValidationRequestPending = false;
+var aiValidationApplyPending = false;
+var aiValidationSavePending = false;
 
 function aiValidationFingerprint(value) {
   var text = String(value || '');
@@ -53,6 +55,8 @@ function aiValidationRestoreReceipts(receipts) {
   aiValidationDraftsByMedia = {};
   aiValidationRequestToken += 1;
   aiValidationRequestPending = false;
+  aiValidationApplyPending = false;
+  aiValidationSavePending = false;
   Object.keys(receipts && typeof receipts === 'object' ? receipts : {}).forEach(function (key) {
     var row = receipts[key];
     if (row && row.version === 1 && typeof row.content === 'string' && typeof row.sight === 'string') {
@@ -120,13 +124,15 @@ function aiValidationRefreshUi() {
   var discard = document.getElementById('ai-validation-discard');
   var validate = document.getElementById('ai-validation-complete');
   status.textContent = isAiValidatedForItem(item) ? 'AI Validated' : 'Needs AI validation';
-  suggest.disabled = aiValidationRequestPending;
+  suggest.disabled = aiValidationRequestPending || aiValidationApplyPending || aiValidationSavePending;
   suggest.textContent = aiValidationRequestPending ? 'Suggesting…' : 'Suggest Tags';
   var hasProposals = !!(draft && draft.candidates.length);
   apply.classList.toggle('hidden', !hasProposals);
   discard.classList.toggle('hidden', !draft);
-  apply.disabled = !hasProposals || !draft.candidates.some(function (candidate) { return candidate.selected; });
-  validate.disabled = aiValidationRequestPending;
+  apply.disabled = aiValidationApplyPending || aiValidationSavePending || !hasProposals ||
+    !draft.candidates.some(function (candidate) { return candidate.selected; });
+  discard.disabled = aiValidationApplyPending || aiValidationSavePending;
+  validate.disabled = aiValidationRequestPending || aiValidationApplyPending || aiValidationSavePending;
   refreshGroupWorkbenchForCurrentItem();
 }
 
@@ -164,7 +170,7 @@ function aiValidationRenderGroupSuggestions(groupEl, requirementLabel, mediaKey)
 
 function aiValidationDiscardProposals() {
   var item = state && state.currentItem;
-  if (!item) return;
+  if (!item || aiValidationApplyPending || aiValidationSavePending) return;
   delete aiValidationDraftsByMedia[item.key];
   aiValidationRefreshUi();
 }
@@ -172,29 +178,49 @@ function aiValidationDiscardProposals() {
 function aiValidationApplyProposals() {
   var item = state && state.currentItem;
   var draft = aiValidationCurrentDraft();
-  if (!item || !draft) return;
+  if (!item || !draft || aiValidationApplyPending || aiValidationSavePending) return Promise.resolve(false);
   var selected = draft.candidates.filter(function (candidate) { return candidate.selected; });
-  if (!selected.length) return;
-  selected.forEach(function (candidate) {
-    if (!hasChecklistAssignedTagForMediaKey(item.key, candidate.group, candidate.term)) {
-      assignChecklistTagToMediaKey(item.key, candidate.group, candidate.term,
-        { skipSave: true, skipRefresh: true });
-    }
-  });
-  delete aiValidationDraftsByMedia[item.key];
-  saveMediaAnnotationState(item.key).then(function (ok) {
-    if (!ok) throw new Error('Could not save proposed tag assignments.');
-    refreshTagDrivenPanelsForMediaKey(item.key);
+  if (!selected.length) return Promise.resolve(false);
+  var folder = String(state.folder || '');
+  var key = item.key;
+  aiValidationApplyPending = true;
+  aiValidationRefreshUi();
+  try {
+    selected.forEach(function (candidate) {
+      if (!hasChecklistAssignedTagForMediaKey(key, candidate.group, candidate.term)) {
+        if (!assignChecklistTagToMediaKey(key, candidate.group, candidate.term,
+            { skipSave: true, skipRefresh: true })) {
+          throw new Error('Could not assign proposed tag: ' + candidate.term);
+        }
+      }
+    });
+  } catch (err) {
+    aiValidationApplyPending = false;
+    reportConsoleError('AI Validation · Apply tags', err);
+    setStatus('AI Validation could not apply the selected tags: ' + String(err.message || err));
     aiValidationRefreshUi();
+    return Promise.resolve(false);
+  }
+  return saveMediaAnnotationState(key).then(function (ok) {
+    if (!ok) throw new Error('Could not save proposed tag assignments.');
+    if (folder !== String(state.folder || '')) return false;
+    delete aiValidationDraftsByMedia[key];
+    refreshTagDrivenPanelsForMediaKey(key);
+    return true;
   }).catch(function (err) {
     reportConsoleError('AI Validation · Apply tags', err);
-    setStatus('AI Validation could not save the selected tags: ' + err.message);
+    setStatus('AI Validation could not save the selected tags: ' + String(err.message || err));
+    return false;
+  }).then(function (ok) {
+    aiValidationApplyPending = false;
+    aiValidationRefreshUi();
+    return ok;
   });
 }
 
 function aiValidationSuggestCurrentItem() {
   var item = state && state.currentItem;
-  if (!item || aiValidationRequestPending) return;
+  if (!item || aiValidationRequestPending || aiValidationApplyPending || aiValidationSavePending) return;
   var folder = String(state.folder || '');
   var director = String(getDirectorModelPreference() || '');
   var model = String(getCaptionVisionModelId() || '');
@@ -254,7 +280,7 @@ function aiValidationSuggestCurrentItem() {
 
 function aiValidationCompleteCurrentItem() {
   var item = state && state.currentItem;
-  if (!item || aiValidationRequestPending) return;
+  if (!item || aiValidationRequestPending || aiValidationApplyPending || aiValidationSavePending) return Promise.resolve(false);
   var draft = aiValidationCurrentDraft();
   if (draft && draft.candidates.some(function (candidate) {
     return candidate.selected && !hasChecklistAssignedTagForMediaKey(item.key, candidate.group, candidate.term);
@@ -277,18 +303,20 @@ function aiValidationCompleteCurrentItem() {
     setStatus('AI Validation requires saved Sight. Run the VL scan first.');
     return;
   }
-  var button = document.getElementById('ai-validation-complete');
-  button.disabled = true;
+  aiValidationSavePending = true;
+  aiValidationRefreshUi();
   cancelEditorAutosaveForCaption(folder, item.fileName);
-  saveCaptionDirect(folder, item.fileName, caption, key, { skipRenderFileList: true }).then(function () {
+  var previousReceipt = aiValidationReceiptsByMedia[key];
+  var recordedReceipt = null;
+  return saveCaptionDirect(folder, item.fileName, caption, key, { skipRenderFileList: true }).then(function () {
     if (folder !== String(state.folder || '') || !state.currentItem || state.currentItem.key !== key) {
       throw new Error('The selected Set or item changed during validation.');
     }
-    aiValidationReceiptsByMedia[key] = {
+    recordedReceipt = {
       version: 1, content: aiValidationCurrentInput(item), sight: aiValidationSightInput(item)
     };
-    delete aiValidationDraftsByMedia[key];
-    return saveFolderStateForCurrentRoot().then(function (ok) {
+    aiValidationReceiptsByMedia[key] = recordedReceipt;
+    return Promise.resolve(saveFolderStateForCurrentRoot()).then(function (ok) {
       if (!ok) throw new Error('Could not persist the AI validation receipt.');
     });
   }).then(function () {
@@ -300,9 +328,19 @@ function aiValidationCompleteCurrentItem() {
     renderFileList();
     setStatus('AI Validated. No further matching items remain.');
   }).catch(function (err) {
+    // A failed receipt write must not leave a false in-memory Validated status.
+    if (recordedReceipt && aiValidationReceiptsByMedia[key] === recordedReceipt) {
+      if (previousReceipt) aiValidationReceiptsByMedia[key] = previousReceipt;
+      else delete aiValidationReceiptsByMedia[key];
+    }
     reportConsoleError('AI Validation · Complete', err);
     setStatus('AI Validation failed: ' + String(err.message || err));
-  }).then(aiValidationRefreshUi);
+    return false;
+  }).then(function (result) {
+    aiValidationSavePending = false;
+    aiValidationRefreshUi();
+    return result;
+  });
 }
 
 function aiValidationVocabularyMutated(mutations, schema, analysis) {
@@ -320,7 +358,10 @@ function aiValidationVocabularyMutated(mutations, schema, analysis) {
           (suggested.evidenceIds || []).forEach(function (id) {
             var row = byId[String(id)];
             (row && row.media || []).forEach(function (file) {
-              delete aiValidationReceiptsByMedia[String(file)];
+              var matching = (state.items || []).find(function (item) {
+                return item && item.fileName === String(file);
+              });
+              delete aiValidationReceiptsByMedia[matching ? matching.key : String(file)];
             });
           });
         });

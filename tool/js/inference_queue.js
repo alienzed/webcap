@@ -186,7 +186,7 @@
     return row;
   }
 
-  function syncRow(row, job, queuedCount) {
+  function syncRow(row, job, queuedCount, preserveActions) {
     row.className = 'inference-queue-row status-' + String(job.status || '');
     var position = row.querySelector('[data-queue-position]');
     var title = row.querySelector('[data-queue-title]');
@@ -225,7 +225,7 @@
       link.title = 'Open ' + jobClientLabel(job);
     }
 
-    if (actions) {
+    if (actions && !preserveActions) {
       actions.innerHTML = '';
       if (status === 'backlog') {
         var addToQueue = document.createElement('button');
@@ -328,6 +328,25 @@
     clearButton.classList.toggle('hidden', !hasPending);
     clearButton.disabled = !hasPending;
 
+    // Polling updates labels and elapsed time without replacing live controls.
+    // An actual queue transition, insertion, removal, or reorder still uses
+    // the authoritative full render below.
+    var rowSignature = jobs.map(function (job) {
+      return [String(job.jobId || ''), String(job.status || ''), String(job.queuePosition || '')].join(':');
+    }).join('|');
+    var queuedSignature = String(queued);
+    var signature = rowSignature + '|queued:' + queuedSignature;
+    if (host.dataset.queueRenderSignature === signature &&
+        host.querySelectorAll('.inference-queue-row').length === jobs.length) {
+      jobs.forEach(function (job) {
+        var row = Array.prototype.find.call(host.querySelectorAll('.inference-queue-row'), function (candidate) {
+          return candidate.dataset.inferenceJobId === String(job.jobId || '');
+        });
+        if (row) syncRow(row, job, queued, true);
+      });
+      return;
+    }
+    host.dataset.queueRenderSignature = signature;
     host.innerHTML = '';
     if (!jobs.length) {
       var empty = document.createElement('div');

@@ -290,13 +290,14 @@ function aiValidationCompleteCurrentItem() {
       if (!ok) throw new Error('Could not persist the AI validation receipt.');
     });
   }).then(function () {
-    renderFileList();
+    // Navigate before rerendering: rendering a filtered list can independently
+    // replace the current item once its validation receipt removes its row.
     if (next && getFilteredMediaItems(false).some(function (row) { return row.key === next.key; })) {
-      return selectPathMedia(next);
+      return selectPathMedia(next).then(function () { renderFileList(); });
     }
+    renderFileList();
     setStatus('AI Validated. No further matching items remain.');
   }).catch(function (err) {
-    delete aiValidationReceiptsByMedia[key];
     reportConsoleError('AI Validation · Complete', err);
     setStatus('AI Validation failed: ' + String(err.message || err));
   }).then(aiValidationRefreshUi);

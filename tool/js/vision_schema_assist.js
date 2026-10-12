@@ -1249,6 +1249,7 @@
       setStatus('Select at least one proposed term to add.', true);
       return;
     }
+    aiValidationVocabularyMutated(mutations, schemaState.schema, schemaState.analysis);
     var merged = mergeChecklistSchemaVocabulary(mutations);
     var addedGroups = Number(merged.addedGroups || 0);
     var addedTerms = Number(merged.addedTerms || 0);

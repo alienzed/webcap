@@ -489,7 +489,7 @@ def test_test_preview_polling_survives_inter_job_queued_state():
     assert "'starting', 'queued', 'running', 'stopping'" in helper
     assert "total > processed" not in helper
 
-    open_session = script.split("function openSession(sessionName)", 1)[1].split("function removeDeletedSessionRow", 1)[0]
+    open_session = script.split("function openSession(sessionName)", 1)[1].split("function deleteSession(sessionName)", 1)[0]
     assert "if (testStatusHasPendingWork(status)) pollStatus();" in open_session
 
 
@@ -1339,3 +1339,45 @@ def test_results_header_renders_persisted_wildcard_values():
     assert "Array.isArray(status.wildcardValues)" in meta_block
     assert "Array.isArray(status.wildcardSummary)" in meta_block
     assert "wildcardTagline.textContent = wildcardHeader.join(' · ');" in meta_block
+
+
+def test_test_sessions_do_not_reinsert_unchanged_groups_or_apply_stale_poll_responses():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    renderer = script.split("function renderSessions(sessions, queuedJobs)", 1)[1].split("function refreshSessions()", 1)[0]
+    assert "if (group.nextElementSibling !== next) host.insertBefore(group, next);" in renderer
+    assert "else if (group.nextElementSibling)" in renderer
+    assert "var expected = groups[order[key]]" not in renderer
+    refresh = script.split("function refreshSessions()", 1)[1].split("function refreshSessionsIfDue", 1)[0]
+    assert "mutationVersion !== sessionsMutationVersion" in refresh
+
+
+def test_test_session_deletion_reconciles_authoritative_rows_without_implicit_selection():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    deletion = script.split("function deleteSession(sessionName)", 1)[1].split("function removeCandidate", 1)[0]
+    assert "renderSessions(payload.sessions, queuedTestJobs);" in deletion
+    assert "selectSessionStatus(payload.latest)" not in deletion
+    assert "renderStatus({ status: 'idle' });" in deletion
+    assert "refreshSessions()" not in deletion
+    assert "Permanently delete Test session" in script
+    assert "sessionsMutationVersion += 1;" in deletion
+
+
+def test_test_candidate_mutations_and_ratings_preserve_unaffected_dom():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    mutation = script.split("function removeCandidate(fileName, sessionName)", 1)[1].split("function removeCurrentSessionCandidate", 1)[0]
+    assert "row.remove();" in mutation
+    assert "syncStagedSummary(prepared);" in mutation
+    assert "if (localRemoval)" in mutation
+    rating = script.split("function rateTestResult(button)", 1)[1].split("function buildResultRemoveButton", 1)[0]
+    assert "syncStagedCandidateScores(prepared.candidateScores);" in rating
+    assert "renderStagedFiles(prepared);" not in rating
+    assert "row.dataset.stagedFile" in script
+    assert "Remove staged Test candidate " in script
+
+
+def test_test_session_details_and_empty_compare_are_not_rebuilt_on_refresh():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    details = script.split("function renderSessionMeta(status)", 1)[1].split("function selectSessionStatus", 1)[0]
+    assert "if (markup !== lastSessionDetailsMarkup)" in details
+    compare = script.split("function renderCompare(status)", 1)[1].split("function renderResults", 1)[0]
+    assert "if (host.dataset.compareKey !== 'empty')" in compare

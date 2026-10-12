@@ -3055,6 +3055,18 @@ html[data-theme="dark"] .app-settings-environment-check {
   font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+.saved-intelligence-dialog {
+  width: min(720px, calc(100vw - 36px));
+}
+
+.saved-intelligence-dialog .set-scan-raw-output {
+  margin: 0 18px 18px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
 .set-scan-footer-actions {
   display: flex;
   align-items: center;

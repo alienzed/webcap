@@ -609,8 +609,8 @@ function syncFocusedCaptionVisionPhrasesUi() {
   var previousDetails = row.querySelector('details');
   var wasExpanded = !!(previousDetails && previousDetails.open);
   var previousScrollTop = row.scrollTop;
-  var previousSightMore = row.querySelector('details[data-sight-more]');
-  var sightMoreOpen = !!(previousSightMore && previousSightMore.open);
+  var previousSightSuggestions = row.querySelector('details[data-sight-suggestions]');
+  var sightSuggestionsOpen = !!(previousSightSuggestions && previousSightSuggestions.open);
   row.innerHTML = '';
   trigger.classList.add('hidden');
   trigger.disabled = true;
@@ -622,10 +622,6 @@ function syncFocusedCaptionVisionPhrasesUi() {
   row.classList.remove('hidden');
   var item = state.currentItem;
   var mediaKey = item.key;
-  var heading = document.createElement('div');
-  heading.className = 'caption-vision-sight-label';
-  heading.textContent = 'Suggestions';
-  row.appendChild(heading);
   var qaActions = isFocusedQaReviewMode() ? qaFocusReviewTagActions(mediaKey, captionAssistCandidate.text) : [];
   var suggestions = getCaptionAssistTagSuggestions(item);
   var seen = Object.create(null);
@@ -642,6 +638,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
   qaActions.forEach(function (action) {
     addSuggestion({ term: action.term, group: action.group }, action.action);
   });
+  var qaCount = combined.length;
   suggestions.forEach(function (suggestion) { addSuggestion(suggestion, 'add'); });
   function makeSuggestion(entry) {
     var suggestion = entry.suggestion;
@@ -665,7 +662,7 @@ function syncFocusedCaptionVisionPhrasesUi() {
       insertButton.type = 'button';
       insertButton.className = 'caption-assist-suggestion-insert';
       insertButton.textContent = 'Insert';
-      insertButton.title = 'Insert at caption cursor; does not assign a tag';
+      insertButton.title = 'Insert into the draft; saved with Apply, does not assign a tag';
       insertButton.addEventListener('pointerdown', function (event) { event.preventDefault(); });
       insertButton.addEventListener('click', function () {
         insertFocusedCaptionVisionPhrase(suggestion.term);
@@ -674,25 +671,32 @@ function syncFocusedCaptionVisionPhrasesUi() {
     }
     return pair;
   }
-  if (combined.length) {
-    var choices = document.createElement('div');
-    choices.className = 'caption-assist-suggestion-grid';
-    combined.slice(0, 8).forEach(function (entry) { choices.appendChild(makeSuggestion(entry)); });
-    row.appendChild(choices);
-    if (combined.length > 8) {
-      var more = document.createElement('details');
-      more.setAttribute('data-sight-more', 'true');
-      more.open = sightMoreOpen;
-      var showAll = document.createElement('summary');
-      showAll.textContent = 'Show ' + (combined.length - 8) + ' more suggestions';
-      more.appendChild(showAll);
-      var rest = document.createElement('div');
-      rest.className = 'caption-assist-suggestion-grid';
-      combined.slice(8).forEach(function (entry) { rest.appendChild(makeSuggestion(entry)); });
-      more.appendChild(rest);
-      row.appendChild(more);
-    }
-  } else {
+  if (qaCount) {
+    var qaHeading = document.createElement('div');
+    qaHeading.className = 'caption-vision-sight-label';
+    qaHeading.textContent = 'QA tag actions (' + qaCount + ')';
+    row.appendChild(qaHeading);
+    var qaChoices = document.createElement('div');
+    qaChoices.className = 'caption-assist-suggestion-grid caption-assist-qa-suggestions';
+    combined.slice(0, qaCount).forEach(function (entry) { qaChoices.appendChild(makeSuggestion(entry)); });
+    row.appendChild(qaChoices);
+  }
+  if (combined.length > qaCount) {
+    var sightDetails = document.createElement('details');
+    sightDetails.className = 'caption-assist-sight-suggestions';
+    sightDetails.setAttribute('data-sight-suggestions', 'true');
+    sightDetails.open = sightSuggestionsOpen;
+    var sightSummary = document.createElement('summary');
+    sightSummary.textContent = 'Saved Sight suggestions (' + (combined.length - qaCount) + ')';
+    sightSummary.title = 'Optional observations from saved Open Sight; verify before adding';
+    sightDetails.appendChild(sightSummary);
+    var sightChoices = document.createElement('div');
+    sightChoices.className = 'caption-assist-suggestion-grid';
+    combined.slice(qaCount).forEach(function (entry) { sightChoices.appendChild(makeSuggestion(entry)); });
+    sightDetails.appendChild(sightChoices);
+    row.appendChild(sightDetails);
+  }
+  if (!combined.length) {
     var empty = document.createElement('div');
     empty.className = 'small';
     empty.textContent = 'No tag suggestions.';

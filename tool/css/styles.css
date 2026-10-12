@@ -7001,3 +7001,21 @@ html[data-theme="dark"] iframe {
   color: var(--text);
   border: 1px solid var(--border);
 }
+
+/* Optional cached Sight is available without competing with caption review. */
+.caption-assist-sight-suggestions > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.caption-assist-sight-suggestions > .caption-assist-suggestion-grid {
+  margin-top: 9px;
+  max-height: min(160px, 24vh);
+  overflow: auto;
+}
+.caption-assist-qa-suggestions { max-height: min(150px, 22vh); overflow: auto; }
+.editor-caption-vision-phrases:has(.caption-assist-sight-suggestions) {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}

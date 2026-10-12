@@ -340,10 +340,11 @@ function mediaGridApplyRating(rating) {
   }
   items.forEach(function (item, index) {
     mediaGridSetStatus('Rating ' + (index + 1) + '/' + items.length + '...');
-    setRatingForMediaKey(item.key, rating);
+    // Save each rating and undo entry, but refresh shared UI only once,
+    // after the last item's rating state has been updated.
+    setRatingForMediaKey(item.key, rating, { deferUiRefresh: index < items.length - 1 });
   });
   mediaGridSetStatus((rating > 0 ? 'Rated' : 'Cleared rating for') + ' ' + items.length + ' item' + (items.length === 1 ? '' : 's') + '.');
-  mediaGridRefreshAfterMutation();
 }
 
 function mediaGridRefreshAfterMutation() {

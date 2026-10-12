@@ -720,8 +720,9 @@ function appendMetadataProgressRow(listEl, label, progress, options) {
   listEl.appendChild(row);
 }
 
-function setRatingForMediaKey(mediaKey, rating) {
+function setRatingForMediaKey(mediaKey, rating, options) {
   if (!mediaKey) return;
+  var opts = options || {};
   if (!state.ratings || typeof state.ratings !== 'object') {
     state.ratings = {};
   }
@@ -744,9 +745,10 @@ function setRatingForMediaKey(mediaKey, rating) {
     console.error('[webcap] MEDIA RATING SAVE FAILED:', err);
     setStatus('MEDIA RATING SAVE FAILED: ' + (err && err.message ? err.message : err));
   });
-  renderPreviewHeaderMeta();
-  renderItemMetadataPanel();
-  renderFileList();
+  if (!opts.deferUiRefresh) {
+    renderItemMetadataPanel();
+    renderFileList();
+  }
   if (isFocusedAnnotationOpen()) {
     syncFocusedAnnotationQueue({ anchorMediaKey: mediaKey });
   }

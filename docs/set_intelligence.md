@@ -93,6 +93,18 @@ The interaction remains in Grid: one tag proposition, likely media preselected, 
 
 ## Quality Assurance
 
+### Approved target: one caption-quality strategy (2026-10-11)
+
+**Status: agreed design, not yet fully implemented.** Caption Assist and Deep QA must share **one definition of a successful result** and one per-item reasoning/correction contract. Caption Assist applies it to one item; Deep QA orchestrates it progressively across the current training selection. Do not create separate, competing caption-quality philosophies or editors.
+
+1. **Goal — the best supported training caption and matching annotations.** Favor accuracy, distinctive useful detail, relevant specificity, concise natural wording, and the user's annotation/primer intent. Do not optimize for the number of edits. Preserving an already-good caption is a successful outcome.
+2. **Vision observes.** Use the selected model's saved Sight when valid; allow explicit refresh/rescan without inventing a heuristic that claims to know which images need it. A fresh read is additional fallible visual evidence, not inherently better than the first. Preserve the useful evidence available; do not arbitrarily truncate the saved inventory or pretend WebCap can filter verbose observations by semantic importance.
+3. **Director proposes and evaluates.** In the baseline **one per-item Director call**, supply the available visual observations, current caption, assigned tags, applicable group vocabulary, and primer/template guidance. Compare supported facts against the caption and annotations. Return a better editable caption **only when justified**, exact proposed tag/term additions/removals where supported, and a concise assessment of the original versus the proposal. No findings or no changed caption is valid.
+4. **WebCap validates and presents.** Deterministically validate terms, currentness, duplicate assignments, and applicable exact edits; do not invent semantic confidence or pretend a model's observation is verified truth. Surface meaningful differences in the **existing** Caption Assist / QA Focus Review editor. Human review and application are explicit; source captions and annotations are never silently replaced.
+5. **Deep QA is the Set-wide orchestrator, not a different intelligence strategy.** Reuse evidence and completed work, process one item at a time, report progress and errors, and queue worthwhile proposals as they arrive. A second Director call is acceptable **only if** it performs a distinct, demonstrated valuable challenge of the first proposal, not merely to repeat the same goal with competing instructions.
+
+The existing Deep QA implementation still makes a Caption Assist candidate call followed by a separate Director QA evaluation; consolidating their reasoning/output contracts is **future implementation work**, not a change implied by this documentation. Preserve existing features and the user-initiated inference boundary during migration.
+
 **Primary navigation:** Set Tools → **Prepare Set** collects Sight and guides vocabulary/tagging. **Quality Assurance** is the single Set-level QA entry point. Opening QA only shows saved checks; it never starts inference. **Start QA & Review** explicitly starts or resumes Deep QA and opens the existing QA Focus Review queue, where confirmed actionable results arrive progressively. **Run scan only** preserves the standalone Deep QA action, and **Review & Fix saved findings** opens the existing correction flow without starting a scan. Targeted concept checks and full reports remain available as secondary QA tools; per-item Vision rechecks remain explicit.
 
 Purpose: reduce the amount of material the user must personally inspect.

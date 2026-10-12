@@ -103,6 +103,10 @@ function syncWorkbenchRailUi() {
   var available = isWorkbenchRailAvailable();
   var collapsed = available && isWorkbenchRailCollapsed();
   ui.appEl.classList.toggle('workbench-rail-collapsed', collapsed);
+  // Rail layout changes do not fire window resize; reposition the open editor dock.
+  if (typeof syncCaptionAssistEditorDock === 'function') {
+    window.requestAnimationFrame(syncCaptionAssistEditorDock);
+  }
   if (!toggleBtn) return;
   toggleBtn.classList.toggle('hidden', !available);
   toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');

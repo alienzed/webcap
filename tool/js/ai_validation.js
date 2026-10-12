@@ -185,6 +185,41 @@ function aiValidationApplyProposals() {
   if (!selected.length) return Promise.resolve(false);
   var folder = String(state.folder || '');
   var key = item.key;
+  // A rejected annotation save must not leave provisional tag edits behind.
+  // Preserve the pre-Apply values, including unscoped tags consumed by grouping.
+  function snapshotMediaEntry(map) {
+    return Object.prototype.hasOwnProperty.call(map, key) ? JSON.parse(JSON.stringify(map[key])) : null;
+  }
+  var before = {
+    assignments: snapshotMediaEntry(checklistAssignmentsByMedia),
+    unscoped: snapshotMediaEntry(captionItemTagsByMedia),
+    checked: snapshotMediaEntry(checklistCheckedByMedia),
+    descriptors: snapshotMediaEntry(checklistTermDescriptorsByMedia),
+    descriptorSnapshot: checklistTermDescriptorSnapshotMediaKeys.has(key),
+    reviewed: !!(state.reviewedSet && state.reviewedSet.has(key)),
+    undoStack: state.undoStack
+  };
+  var appliedUndoStack = null;
+  function rollback() {
+    if (folder !== String(state.folder || '')) return;
+    function restore(map, value) {
+      if (value === null) delete map[key];
+      else map[key] = value;
+    }
+    restore(checklistAssignmentsByMedia, before.assignments);
+    restore(captionItemTagsByMedia, before.unscoped);
+    restore(checklistCheckedByMedia, before.checked);
+    restore(checklistTermDescriptorsByMedia, before.descriptors);
+    if (before.descriptorSnapshot) checklistTermDescriptorSnapshotMediaKeys.add(key);
+    else checklistTermDescriptorSnapshotMediaKeys.delete(key);
+    if (state.reviewedSet) {
+      if (before.reviewed) state.reviewedSet.add(key);
+      else state.reviewedSet.delete(key);
+    }
+    if (state.undoStack === appliedUndoStack) state.undoStack = before.undoStack;
+    invalidateChecklistRequirementProgress(key);
+    refreshTagDrivenPanelsForMediaKey(key);
+  }
   aiValidationApplyPending = true;
   aiValidationRefreshUi();
   try {
@@ -197,12 +232,15 @@ function aiValidationApplyProposals() {
       }
     });
   } catch (err) {
+    appliedUndoStack = state.undoStack;
+    rollback();
     aiValidationApplyPending = false;
     reportConsoleError('AI Validation · Apply tags', err);
     setStatus('AI Validation could not apply the selected tags: ' + String(err.message || err));
     aiValidationRefreshUi();
     return Promise.resolve(false);
   }
+  appliedUndoStack = state.undoStack;
   return saveMediaAnnotationState(key).then(function (ok) {
     if (!ok) throw new Error('Could not save proposed tag assignments.');
     if (folder !== String(state.folder || '')) return false;
@@ -210,6 +248,7 @@ function aiValidationApplyProposals() {
     refreshTagDrivenPanelsForMediaKey(key);
     return true;
   }).catch(function (err) {
+    rollback();
     reportConsoleError('AI Validation · Apply tags', err);
     setStatus('AI Validation could not save the selected tags: ' + String(err.message || err));
     return false;
@@ -284,9 +323,7 @@ function aiValidationCompleteCurrentItem() {
   var item = state && state.currentItem;
   if (!item || aiValidationRequestPending || aiValidationApplyPending || aiValidationSavePending) return Promise.resolve(false);
   var draft = aiValidationCurrentDraft();
-  if (draft && draft.candidates.some(function (candidate) {
-    return candidate.selected && !hasChecklistAssignedTagForMediaKey(item.key, candidate.group, candidate.term);
-  })) {
+  if (draft && draft.candidates.some(function (candidate) { return candidate.selected; })) {
     setStatus('Apply or discard the selected tag proposals before validating.');
     return;
   }
@@ -310,7 +347,14 @@ function aiValidationCompleteCurrentItem() {
   cancelEditorAutosaveForCaption(folder, item.fileName);
   var previousReceipt = aiValidationReceiptsByMedia[key];
   var recordedReceipt = null;
-  return saveCaptionDirect(folder, item.fileName, caption, key, { skipRenderFileList: true }).then(function () {
+  // Confirm the final annotations are durable before saving the caption and receipt.
+  return saveMediaAnnotationState(key).then(function (ok) {
+    if (!ok) throw new Error('Could not persist the selected annotations.');
+    if (folder !== String(state.folder || '') || !state.currentItem || state.currentItem.key !== key) {
+      throw new Error('The selected Set or item changed during validation.');
+    }
+    return saveCaptionDirect(folder, item.fileName, caption, key, { skipRenderFileList: true });
+  }).then(function () {
     if (folder !== String(state.folder || '') || !state.currentItem || state.currentItem.key !== key) {
       throw new Error('The selected Set or item changed during validation.');
     }

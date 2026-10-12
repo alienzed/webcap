@@ -44,7 +44,7 @@ function isAiValidatedForItem(item) {
   var receipt = aiValidationReceiptsByMedia[item.key];
   if (!receipt || receipt.version !== 1 || receipt.content !== aiValidationCurrentInput(item)) return false;
   var sightInput = aiValidationSightInput(item);
-  // Media metadata may still be loading. Do not revoke approval on a transient absence.
+  // Metadata loads asynchronously; temporarily missing Sight is not evidence of a change.
   return !sightInput || receipt.sight === sightInput;
 }
 
@@ -269,6 +269,10 @@ function aiValidationCompleteCurrentItem() {
   var caption = String(ui.editorEl.value || '');
   if (!caption.trim()) {
     setStatus('Save a caption before marking this item AI Validated.');
+    return;
+  }
+  if (!aiValidationSightInput(item)) {
+    setStatus('AI Validation requires saved Sight. Run the VL scan first.');
     return;
   }
   var button = document.getElementById('ai-validation-complete');

@@ -361,7 +361,7 @@ def test_prepare_exposes_supported_test_aspect_ratios(tmp_path, monkeypatch):
     staged.mkdir()
     (staged / "epoch01.safetensors").write_bytes(b"weights")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None: {"status": "idle"})
+    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None, **_kwargs: {"status": "idle"})
 
     payload = bench.prepare(tmp_path)
 
@@ -376,7 +376,7 @@ def test_prepare_survives_optional_setting_choice_failure(tmp_path, monkeypatch)
     model = bench.get_test_model("krea2_raw")
 
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None: {"status": "idle"})
+    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None, **_kwargs: {"status": "idle"})
     monkeypatch.setattr(
         model,
         "setting_options",
@@ -1647,8 +1647,8 @@ def test_prepare_returns_candidates_from_current_test_folder(tmp_path, monkeypat
     staged = tmp_path / "staged"
     staged.mkdir()
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
-    monkeypatch.setattr(bench, "list_sessions", lambda _folder, model_id=None: [])
-    monkeypatch.setattr(bench, "status", lambda _folder, model_id=None: {"status": "idle"})
+    monkeypatch.setattr(bench, "list_sessions", lambda _folder, model_id=None, **_kwargs: [])
+    monkeypatch.setattr(bench, "status", lambda _folder, model_id=None, **_kwargs: {"status": "idle"})
 
     set_folder = tmp_path / "sets" / "demo"
     set_folder.mkdir(parents=True)
@@ -2210,3 +2210,65 @@ def test_per_candidate_strength_is_frozen_into_test_request(tmp_path, monkeypatc
             candidate_strengths={candidates[0].name: 2.05},
             include_base=False,
         )
+
+
+def test_prepare_reads_staged_provenance_once_and_resolves_each_run_once(tmp_path, monkeypatch):
+    model = bench.get_test_model()
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
+    files = []
+    for epoch in (10, 20, 30):
+        path = staged / ("run__epoch" + str(epoch) + ".safetensors")
+        path.write_bytes(b"weights")
+        files.append(path)
+    provenance_reads = []
+    run_reads = []
+    selection_reads = []
+
+    def read_provenance(path):
+        provenance_reads.append(path.name)
+        return {
+            "version": 1, "stage": model.STAGING_KEY,
+            "sourceFolder": "sets/demo", "sourceJobId": "job-1",
+            "sourceFileName": path.name, "sourceEpoch": int(path.stem.split("epoch")[1]),
+            "sourceRunPath": "/run-1", "sourceActionId": "action-1",
+        }
+
+    def resolve_run(provenance):
+        run_reads.append(provenance["sourceEpoch"])
+        return tmp_path / "run-1", {"id": "job-1"}
+
+    def selected_epoch(provenance):
+        selection_reads.append(provenance["sourceEpoch"])
+        return {"epoch": 20}
+
+    monkeypatch.setattr(bench, "_staged_lora_provenance", read_provenance)
+    monkeypatch.setattr(bench, "candidate_run_snapshot_from_provenance", resolve_run)
+    monkeypatch.setattr(bench, "candidate_selected_epoch_from_provenance", selected_epoch)
+    runs, metadata = bench._staged_candidate_catalog(files, model)
+    assert len(provenance_reads) == 3
+    assert len(run_reads) == 1
+    assert len(selection_reads) == 1
+    assert len(runs) == 1
+    assert [name for name, value in metadata.items() if value["selected"]] == [
+        "run__epoch20.safetensors"
+    ]
+
+
+def test_terminal_test_session_does_not_reconcile_execution_jobs(tmp_path, monkeypatch):
+    session = tmp_path / "finished"
+    session.mkdir()
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete", "inferenceJobs": ["old-job"],
+        "completed": 1, "failed": 0, "total": 1,
+        "results": [{"kind": "base", "mediaFile": "base.mp4"}],
+    })
+    def unexpected_reconciliation(_session):
+        raise AssertionError("terminal history should not reconcile inference jobs")
+
+    monkeypatch.setattr(bench, "_sync_inference_session", unexpected_reconciliation)
+    visible = bench._visible_session_status(tmp_path, session)
+    assert visible["status"] == "complete"
+    assert visible["session"] == "finished"
+    assert visible["results"][0]["mediaFile"] == "base.mp4"

@@ -607,6 +607,19 @@ def _session_status(session_directory):
     return visible
 
 
+def _session_status_from_payload(session_directory, payload):
+    if not payload:
+        return None
+    visible = dict(payload)
+    visible["session"] = Path(session_directory).name
+    if not visible.get("modelId"):
+        visible["modelId"] = str(visible.get("model") or get_test_model().PROFILE_ID)
+    if not visible.get("resultFolder"):
+        visible["resultFolder"] = _session_result_folder(session_directory)
+    _project_wildcard_fields(visible)
+    return visible
+
+
 def _session_rating_map(session_directory):
     state = read_folder_state(Path(session_directory) / ".webcap_state.json")
     raw = state.get("ratings_by_media") if isinstance(state, dict) else {}
@@ -649,12 +662,14 @@ def _with_session_ratings(session_directory, payload):
     return visible
 
 
-def _candidate_rating_scores(folder_path, model_id=None):
+def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None):
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
     totals = {}
-    for session in _session_directories(folder_path):
-        payload = _read_status(session) or {}
+    snapshots = session_snapshot if session_snapshot is not None else (
+        (session, _read_status(session) or {}) for session in _session_directories(folder_path)
+    )
+    for session, payload in snapshots:
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
         if selected_model_id and session_model_id != selected_model_id:
             continue
@@ -746,8 +761,8 @@ def _staged_lora_provenance(lora_file):
     return payload if isinstance(payload, dict) else {}
 
 
-def _has_webcap_staged_provenance(lora_file, model):
-    payload = _staged_lora_provenance(lora_file)
+def _has_webcap_staged_provenance(lora_file, model, provenance=None):
+    payload = provenance if provenance is not None else _staged_lora_provenance(lora_file)
     if payload.get("version") != 1:
         return False
     if str(payload.get("stage") or "").strip().lower() != str(model.STAGING_KEY or "").strip().lower():
@@ -808,30 +823,58 @@ def _selected_lora_files_for_set(folder_path, model, selected_files=None):
         raise ValueError("Select at least one staged LoRA to test.")
     return sorted(selected, key=lambda path: path.name.lower())
 
-def _staged_candidate_runs(lora_files, model):
+def _staged_candidate_catalog(lora_files, model):
+    """Build both Test candidate views using one sidecar read per LoRA.
+
+    Training run lookup and selected-epoch lookup are reused per run, not
+    repeated for every staged epoch. This cache exists only for this request.
+    """
     runs = {}
+    metadata = {}
+    resolved_by_identity = {}
+    selected_by_run = {}
     for lora_file in lora_files:
-        if not _has_webcap_staged_provenance(lora_file, model):
-            continue
         provenance = _staged_lora_provenance(lora_file)
-        source_job_id = str(provenance.get("sourceJobId") or "").strip()
+        if not _has_webcap_staged_provenance(lora_file, model, provenance):
+            continue
+
         folder = str(provenance.get("sourceFolder") or "").strip()
+        source_job_id = str(provenance.get("sourceJobId") or "").strip()
+        epoch = int(provenance.get("sourceEpoch"))
+        stage = str(provenance.get("stage") or "").strip().lower()
         run_name = str(provenance.get("sourceRunName") or "").strip()
         run_sequence = str(provenance.get("sourceRunSequence") or "").strip()
         run_summary = provenance.get("runSummary") if isinstance(provenance.get("runSummary"), dict) else {}
-        job_id = source_job_id
-        run_key = source_job_id
-        try:
-            run_dir, resolved_run = candidate_run_snapshot_from_provenance(provenance)
+        # Include every field used by current and legacy run lookup so that
+        # different training runs are never collapsed into one cached result.
+        identity = (
+            folder, stage, str(provenance.get("sourceRunPath") or "").strip(),
+            str(provenance.get("sourceActionId") or "").strip(),
+            source_job_id, run_name, run_sequence,
+        )
+        if identity not in resolved_by_identity:
+            try:
+                run_dir, resolved_run = candidate_run_snapshot_from_provenance(provenance)
+                resolved_by_identity[identity] = (str(run_dir), resolved_run)
+            except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
+                resolved_by_identity[identity] = None
+
+        resolved = resolved_by_identity[identity]
+        if resolved is None:
+            job_id = source_job_id
+            metadata_run_key = (folder, source_job_id)
+            runs_key = source_job_id
+        else:
+            run_dir, resolved_run = resolved
             job_id = str(resolved_run.get("id") or source_job_id)
+            metadata_run_key = run_dir
+            runs_key = run_dir
             run_name = str(resolved_run.get("runName") or run_name)
             run_sequence = str(resolved_run.get("sequence") or run_sequence)
             run_summary = resolved_run.get("runSummary") if isinstance(resolved_run.get("runSummary"), dict) else run_summary
-            run_key = str(run_dir)
-        except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
-            pass
+
         if job_id:
-            runs[run_key] = {
+            runs[runs_key] = {
                 "jobId": job_id,
                 "sourceJobId": source_job_id,
                 "folder": folder,
@@ -839,43 +882,24 @@ def _staged_candidate_runs(lora_files, model):
                 "runSequence": run_sequence,
                 "runSummary": run_summary,
             }
-    return list(runs.values())
 
-
-def _staged_candidate_metadata(lora_files, model):
-    selected_by_run = {}
-    result = {}
-    for lora_file in lora_files:
-        if not _has_webcap_staged_provenance(lora_file, model):
-            continue
-        provenance = _staged_lora_provenance(lora_file)
-        folder = str(provenance.get("sourceFolder") or "").strip()
-        job_id = str(provenance.get("sourceJobId") or "").strip()
-        epoch = int(provenance.get("sourceEpoch"))
-        try:
-            run_dir, resolved_run = candidate_run_snapshot_from_provenance(provenance)
-            resolved_job_id = str(resolved_run.get("id") or job_id)
-            run_key = str(run_dir)
-        except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
-            resolved_job_id = job_id
-            run_key = (folder, job_id)
-        if run_key not in selected_by_run:
+        if metadata_run_key not in selected_by_run:
             try:
-                selected_by_run[run_key] = candidate_selected_epoch_from_provenance(provenance)
+                selected_by_run[metadata_run_key] = candidate_selected_epoch_from_provenance(provenance)
             except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
-                selected_by_run[run_key] = None
-        selected = selected_by_run[run_key]
-        result[lora_file.name] = {
-            "jobId": resolved_job_id,
-            "sourceJobId": job_id,
+                selected_by_run[metadata_run_key] = None
+        selected = selected_by_run[metadata_run_key]
+        metadata[lora_file.name] = {
+            "jobId": job_id,
+            "sourceJobId": source_job_id,
             "folder": folder,
             "epoch": epoch,
-            "stage": str(provenance.get("stage") or "").strip().lower(),
+            "stage": stage,
             "sourceFileName": str(provenance.get("sourceFileName") or "").strip(),
             "selected": bool(selected and int(selected.get("epoch") or 0) == epoch),
             "selectedEpoch": selected,
         }
-    return result
+    return list(runs.values()), metadata
 
 
 def _new_session_seed():
@@ -941,6 +965,17 @@ def prepare(folder_path, model_id=None):
         prepare_warnings.append(
             "Could not load optional Test setting choices from ComfyUI: " + str(exc)
         )
+    candidate_runs, candidate_metadata = _staged_candidate_catalog(loras, model)
+    # One filesystem discovery/read pass serves rating scores, history and
+    # latest-status selection. Live sessions still use authoritative sync.
+    session_snapshot = [
+        (session, _read_status(session) or {})
+        for session in _session_directories(folder_path)
+    ]
+    visible_sessions = [
+        (session, _visible_session_status(folder_path, session, stored=stored))
+        for session, stored in session_snapshot
+    ]
     return {
         "operation": "test_prepare",
         "modelId": model.PROFILE_ID,
@@ -958,11 +993,11 @@ def prepare(folder_path, model_id=None):
         "count": len(loras),
         "files": [path.name for path in loras],
         "removableFiles": [path.name for path in loras],
-        "candidateRuns": _staged_candidate_runs(loras, model),
-        "candidateMetadata": _staged_candidate_metadata(loras, model),
-        "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID),
-        "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID),
-        "latest": status(folder_path, model_id=model.PROFILE_ID),
+        "candidateRuns": candidate_runs,
+        "candidateMetadata": candidate_metadata,
+        "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot),
+        "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID, visible_snapshot=visible_sessions),
+        "latest": status(folder_path, model_id=model.PROFILE_ID, visible_snapshot=visible_sessions),
     }
 
 def handle_request(folder_path, mode, selection_criteria=None):
@@ -2494,11 +2529,13 @@ def clear_queued(folder_path, model_id=None):
         removed += 1
     return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path, model_id=model_id)["jobs"]}
 
-def _visible_session_status(folder_path, session_directory):
-    status_payload = _read_status(session_directory) or {}
-    if isinstance(status_payload.get("inferenceJobs"), list):
+def _visible_session_status(folder_path, session_directory, stored=None):
+    status_payload = stored if stored is not None else (_read_status(session_directory) or {})
+    if isinstance(status_payload.get("inferenceJobs"), list) and str(status_payload.get("status") or "") not in {"complete", "stopped", "failed", "interrupted"}:
         return _sync_inference_session(session_directory)
-    payload = _session_status(session_directory)
+    if isinstance(status_payload.get("inferenceJobs"), list):
+        return _session_status_from_payload(session_directory, status_payload)
+    payload = _session_status_from_payload(session_directory, status_payload)
     if payload and str(payload.get("status") or "") in {"starting", "running", "stopping"}:
         _mark_session_interrupted(session_directory)
         payload = _session_status(session_directory)
@@ -2506,16 +2543,18 @@ def _visible_session_status(folder_path, session_directory):
 
 
 
-def list_sessions(folder_path, model_id=None):
+def list_sessions(folder_path, model_id=None, session_snapshot=None, visible_snapshot=None):
     sessions = []
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
-    for session in sorted(
-        _session_directories(folder_path),
-        key=lambda path: path.name.lower(),
-        reverse=True,
-    ):
-        payload = _visible_session_status(folder_path, session)
+    snapshots = session_snapshot if session_snapshot is not None else [
+        (session, _read_status(session) or {}) for session in _session_directories(folder_path)
+    ]
+    visible = visible_snapshot if visible_snapshot is not None else [
+        (session, _visible_session_status(folder_path, session, stored=stored))
+        for session, stored in snapshots
+    ]
+    for session, payload in sorted(visible, key=lambda item: item[0].name.lower(), reverse=True):
         if not payload or payload.get("status") == "queued":
             continue
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
@@ -2539,16 +2578,17 @@ def list_sessions(folder_path, model_id=None):
     return sessions
 
 
-def _latest_status(folder_path, model_id=None):
+def _latest_status(folder_path, model_id=None, session_snapshot=None, visible_snapshot=None):
     selected_model = str(model_id or "").strip()
-    sessions = sorted(
-        _session_directories(folder_path),
-        key=lambda path: path.name.lower(),
-        reverse=True,
-    )
+    snapshots = session_snapshot if session_snapshot is not None else [
+        (session, _read_status(session) or {}) for session in _session_directories(folder_path)
+    ]
+    visible = visible_snapshot if visible_snapshot is not None else [
+        (session, _visible_session_status(folder_path, session, stored=stored))
+        for session, stored in snapshots
+    ]
     payloads = []
-    for session in sessions:
-        payload = _visible_session_status(folder_path, session)
+    for session, payload in sorted(visible, key=lambda item: item[0].name.lower(), reverse=True):
         if not payload:
             continue
         if selected_model and str(payload.get("modelId") or payload.get("model") or "") != selected_model:
@@ -2560,12 +2600,12 @@ def _latest_status(folder_path, model_id=None):
     return payloads[0] if payloads else {"status": "idle"}
 
 
-def _visible_status(folder_path, model_id=None):
-    return _latest_status(folder_path, model_id=model_id)
+def _visible_status(folder_path, model_id=None, session_snapshot=None, visible_snapshot=None):
+    return _latest_status(folder_path, model_id=model_id, session_snapshot=session_snapshot, visible_snapshot=visible_snapshot)
 
 
-def status(folder_path, model_id=None):
-    payload = _visible_status(folder_path, model_id=model_id)
+def status(folder_path, model_id=None, session_snapshot=None, visible_snapshot=None):
+    payload = _visible_status(folder_path, model_id=model_id, session_snapshot=session_snapshot, visible_snapshot=visible_snapshot)
     session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
     if not session_name:
         return payload

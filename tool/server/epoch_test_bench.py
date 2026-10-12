@@ -972,6 +972,10 @@ def prepare(folder_path, model_id=None):
         (session, _read_status(session) or {})
         for session in _session_directories(folder_path)
     ]
+    visible_sessions = [
+        (session, _visible_session_status(folder_path, session, stored=stored))
+        for session, stored in session_snapshot
+    ]
     return {
         "operation": "test_prepare",
         "modelId": model.PROFILE_ID,
@@ -992,8 +996,8 @@ def prepare(folder_path, model_id=None):
         "candidateRuns": candidate_runs,
         "candidateMetadata": candidate_metadata,
         "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot),
-        "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID, session_snapshot=session_snapshot),
-        "latest": status(folder_path, model_id=model.PROFILE_ID, session_snapshot=session_snapshot),
+        "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID, visible_snapshot=visible_sessions),
+        "latest": status(folder_path, model_id=model.PROFILE_ID, visible_snapshot=visible_sessions),
     }
 
 def handle_request(folder_path, mode, selection_criteria=None):
@@ -2539,15 +2543,18 @@ def _visible_session_status(folder_path, session_directory, stored=None):
 
 
 
-def list_sessions(folder_path, model_id=None, session_snapshot=None):
+def list_sessions(folder_path, model_id=None, session_snapshot=None, visible_snapshot=None):
     sessions = []
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
     snapshots = session_snapshot if session_snapshot is not None else [
         (session, _read_status(session) or {}) for session in _session_directories(folder_path)
     ]
-    for session, stored in sorted(snapshots, key=lambda item: item[0].name.lower(), reverse=True):
-        payload = _visible_session_status(folder_path, session, stored=stored)
+    visible = visible_snapshot if visible_snapshot is not None else [
+        (session, _visible_session_status(folder_path, session, stored=stored))
+        for session, stored in snapshots
+    ]
+    for session, payload in sorted(visible, key=lambda item: item[0].name.lower(), reverse=True):
         if not payload or payload.get("status") == "queued":
             continue
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
@@ -2571,14 +2578,17 @@ def list_sessions(folder_path, model_id=None, session_snapshot=None):
     return sessions
 
 
-def _latest_status(folder_path, model_id=None, session_snapshot=None):
+def _latest_status(folder_path, model_id=None, session_snapshot=None, visible_snapshot=None):
     selected_model = str(model_id or "").strip()
     snapshots = session_snapshot if session_snapshot is not None else [
         (session, _read_status(session) or {}) for session in _session_directories(folder_path)
     ]
+    visible = visible_snapshot if visible_snapshot is not None else [
+        (session, _visible_session_status(folder_path, session, stored=stored))
+        for session, stored in snapshots
+    ]
     payloads = []
-    for session, stored in sorted(snapshots, key=lambda item: item[0].name.lower(), reverse=True):
-        payload = _visible_session_status(folder_path, session, stored=stored)
+    for session, payload in sorted(visible, key=lambda item: item[0].name.lower(), reverse=True):
         if not payload:
             continue
         if selected_model and str(payload.get("modelId") or payload.get("model") or "") != selected_model:
@@ -2590,12 +2600,12 @@ def _latest_status(folder_path, model_id=None, session_snapshot=None):
     return payloads[0] if payloads else {"status": "idle"}
 
 
-def _visible_status(folder_path, model_id=None, session_snapshot=None):
-    return _latest_status(folder_path, model_id=model_id, session_snapshot=session_snapshot)
+def _visible_status(folder_path, model_id=None, session_snapshot=None, visible_snapshot=None):
+    return _latest_status(folder_path, model_id=model_id, session_snapshot=session_snapshot, visible_snapshot=visible_snapshot)
 
 
-def status(folder_path, model_id=None, session_snapshot=None):
-    payload = _visible_status(folder_path, model_id=model_id, session_snapshot=session_snapshot)
+def status(folder_path, model_id=None, session_snapshot=None, visible_snapshot=None):
+    payload = _visible_status(folder_path, model_id=model_id, session_snapshot=session_snapshot, visible_snapshot=visible_snapshot)
     session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
     if not session_name:
         return payload

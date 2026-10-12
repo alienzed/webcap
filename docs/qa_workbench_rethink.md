@@ -3,9 +3,13 @@
 Status: product / IA proposal  
 Audit basis: current `main` review, metadata, annotation, focus-set, prune, duplicate, Assistant, and per-item QA code as of 2026-10-06.
 
-## Superseding strategy: unified caption quality (2026-10-11)
+## Current approved direction: primer-driven guided validation (2026-10-11)
 
-**Approved target; not fully implemented.** Caption Assist and Deep QA share one per-item objective: produce the best *supported* training caption and accurate accompanying tags, or preserve an already-good original. Vision observes (saved Sight or explicit refresh); the Director considers visual evidence, caption, selected tags, applicable vocabulary, and primer to propose and assess meaningful improvements; WebCap validates deterministic edits; the user reviews and explicitly applies them in the existing correction UI. Deep QA is the progressive Set-wide orchestrator, not a separate philosophy. Prefer a single per-item Director proposal-and-assessment call as the baseline. Keep a second call only if a distinct challenge demonstrates added value. Do not create automatic rescan-selection heuristics, new review lanes, or inference on opening QA. This decision supersedes older conflicting prompt/second-pass proposals in this file. Detailed contract: `docs/set_intelligence.md`, **Approved target: one caption-quality strategy**.
+**Approved target; not yet implemented. Supersedes the earlier caption-first and Deep-QA-as-main-orchestrator proposals below.** The **primary path** is: explicit VL scan → Vocabulary Discovery and concept-specific primer extensions → one continuous per-item guided validation (Director suggests group tags, human approves/edits/rejects, **primer deterministically renders the caption**, human adjusts and marks reviewed, then Next). Reuse the existing Sight, Guided Tagging, Focus Annotation, Caption Assist editing, primer, filter, and review mechanisms rather than building a parallel UI or job system. User-approved group tags are authoritative; preserve existing manual caption overrides. Do not generate a second freeform LLM caption by default.
+
+**Deep QA is optional and downstream**: a conservative, high-threshold final search for consequential evidence-backed mistakes, not the normal mechanism for preparing captions, annotations, or human review. No findings is success. Keep cheap deterministic filters (missing captions, tag mismatch, reviewed/unreviewed, technical issues) available while retiring or demoting overlapping workflow clutter. In particular, Incomplete only reports unfinished requirement groups.
+
+**Current code still follows portions of earlier contracts.** The current Deep QA uses a Caption Assist candidate and another Director assessment; current Caption Assist treats the primer as loose guidance. Do not mistake those for the newly agreed goal, and do not change them solely by updating docs. Authoritative contract: `docs/set_intelligence.md` → **Approved primary workflow: from media folder to reviewed training Set**. Preserve `AGENTS.md` architecture and human-authorized mutations during implementation.
 
 ## QA Focus Review (2026-10-09)
 

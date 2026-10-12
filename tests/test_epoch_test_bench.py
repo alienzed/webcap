@@ -2272,3 +2272,18 @@ def test_terminal_test_session_does_not_reconcile_execution_jobs(tmp_path, monke
     assert visible["status"] == "complete"
     assert visible["session"] == "finished"
     assert visible["results"][0]["mediaFile"] == "base.mp4"
+
+
+def test_queued_jobs_skips_terminal_history_without_reconciling(tmp_path, monkeypatch):
+    terminal = tmp_path / bench.TEST_RESULTS_DIR / "completed-old-session"
+    terminal.mkdir(parents=True)
+    bench._atomic_write_json(terminal / "test.json", {
+        "status": "complete", "modelId": bench.get_test_model().PROFILE_ID,
+        "inferenceJobs": ["old-pruned-job"], "results": [],
+    })
+    monkeypatch.setattr(bench, "reconcile_startup", lambda: None)
+    monkeypatch.setattr(bench, "_sync_inference_session",
+                        lambda _session: (_ for _ in ()).throw(AssertionError(
+                            "terminal history must not be reconciled during queue listing"
+                        )))
+    assert bench.queued_jobs(tmp_path)["jobs"] == []

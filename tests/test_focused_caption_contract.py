@@ -337,7 +337,8 @@ def test_caption_assist_flags_selected_annotations_omitted_by_candidate():
     assert "useBtn.textContent = isFocusedQaReviewMode()" in primer
     assert "'Save & Next'" in primer
     assert "'Keep & Next'" in primer
-    assert "regenerateBtn.textContent = pending ? 'Refreshing…' : '↻ Refresh Caption';" in primer
+    assert "regenerateBtn.textContent = '↻';" in primer
+    assert "regenerateBtn.setAttribute('aria-label', pending ? 'Refreshing caption' : 'Refresh Caption');" in primer
     assert "regenerateBtn.classList.toggle('is-primary', tagsChanged || restoredInputsChanged || restoredModelChanged || !!omittedAssignments.length);" in primer
     assert ".editor-caption-candidate-omissions {" in css
     assert ".editor-caption-candidate-regenerate.is-primary {" in css

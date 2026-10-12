@@ -6905,17 +6905,22 @@ html[data-theme="dark"] iframe {
 .editor-caption-details-body pre { max-height: 260px; overflow: auto; white-space: pre-wrap; font-size: 13px; }
 .editor-caption-candidate-draft { position: relative; min-height: 0; }
 .editor-caption-candidate-draft .editor-caption-candidate-text {
-  padding: 52px 24px 24px;
+  padding: 16px 58px 16px 18px;
   font-size: 21px;
 }
 .editor-caption-candidate-draft .editor-caption-candidate-regenerate {
   position: absolute;
   z-index: 1;
-  right: 18px;
-  top: 10px;
+  right: 9px;
+  top: 8px;
+  width: 30px;
+  height: 30px;
   min-height: 30px;
-  padding: 5px 10px;
-  font-size: 13px;
+  padding: 0;
+  line-height: 1;
+  font-size: 21px;
+  cursor: pointer;
+  border-radius: 6px;
   color: var(--muted);
   background: var(--panel-soft);
   border: 1px solid var(--border-soft);
@@ -6946,10 +6951,11 @@ html[data-theme="dark"] iframe {
 
 /* Focus Caption: keep reconciliation compact and the editable draft central. */
 #editor-caption-candidate-omissions {
-  display: grid;
-  justify-content: stretch;
-  gap: 7px;
-  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 7px 12px;
   border-bottom: 1px solid var(--border-soft);
   background: var(--panel-soft);
   color: var(--text);
@@ -6957,29 +6963,39 @@ html[data-theme="dark"] iframe {
   font-weight: 500;
 }
 #editor-caption-candidate-omissions .caption-assist-reconcile-label {
+  flex: 0 0 auto;
   font-size: 12px;
   font-weight: 700;
   color: var(--muted);
 }
 .caption-assist-reconcile-list {
-  display: grid;
-  gap: 5px;
-  max-height: min(170px, 25vh);
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  max-height: min(140px, 24vh);
   overflow: auto;
 }
 .caption-assist-reconcile-row {
-  display: flex;
-  gap: 8px;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
+  flex: 0 1 auto;
   flex-wrap: wrap;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 3px 2px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--panel);
 }
 .caption-assist-reconcile-term { min-width: 0; overflow-wrap: anywhere; }
-.caption-assist-reconcile-actions { display: inline-flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.caption-assist-reconcile-actions { display: inline-flex; flex: 0 0 auto; gap: 3px; align-items: center; }
 #editor-caption-candidate-omissions .caption-assist-fix-btn,
 #editor-caption-candidate-omissions .caption-vision-phrase-insert {
-  min-height: 27px;
-  padding: 3px 8px;
+  min-height: 25px;
+  padding: 2px 6px;
   font-size: 12px;
 }
 .editor-caption-candidate.is-focus-caption .editor-caption-candidate-draft {
@@ -6989,7 +7005,7 @@ html[data-theme="dark"] iframe {
   background: var(--panel-soft);
 }
 .editor-caption-candidate.is-focus-caption .editor-caption-candidate-draft .editor-caption-candidate-text {
-  padding: 47px 16px 16px;
+  padding: 16px 58px 16px 16px;
   font-size: 18px;
   line-height: 1.55;
 }
@@ -7047,7 +7063,7 @@ html[data-theme="dark"] iframe {
 }
 .editor-caption-candidate.is-editor-docked .editor-caption-candidate-draft .editor-caption-candidate-text {
   font-size: 15px;
-  padding: 38px 14px 12px;
+  padding: 12px 50px 12px 14px;
   max-height: min(23vh, 200px);
 }
 .editor-caption-candidate.is-editor-docked .editor-caption-candidate-actions {

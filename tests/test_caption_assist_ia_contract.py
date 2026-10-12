@@ -20,7 +20,9 @@ def test_caption_controls_have_single_owners():
 def test_qa_tag_actions_use_the_same_suggestions_surface():
     js = _source("tool/js/primer_settings.js")
     assert "qaFocusReviewTagActions(mediaKey, captionAssistCandidate.text)" in js
-    assert "combined.slice(0, 8)" in js
+    assert "combined.slice(0, qaCount)" in js
+    assert "combined.slice(qaCount)" in js
+    assert "Saved Sight suggestions (" in js
     assert "addSuggestion(suggestion, 'add')" in js
     assert "qaCaptionReasons" in js
     assert "return !/^(Add tag: |Remove tag: )/.test(reason)" in js

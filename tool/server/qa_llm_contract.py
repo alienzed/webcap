@@ -38,23 +38,23 @@ def _normalize_analysis(value):
         }
     sight = value.get("visionSight")
     if isinstance(sight, dict):
-        description = _clean(sight.get("description"))[:1200]
+        description = _clean(sight.get("description"))
         inventory = sight.get("inventory") if isinstance(sight.get("inventory"), dict) else {}
         if description:
             out["visionSight"] = {
-                "model": _clean(sight.get("model"))[:160],
+                "model": _clean(sight.get("model")),
                 "description": description,
                 "inventory": inventory,
             }
     context = value.get("contextSight")
     if isinstance(context, dict):
-        caption = _clean(context.get("caption"))[:1200]
+        caption = _clean(context.get("caption"))
         matches = []
-        for match in (context.get("matches") or [])[:16]:
+        for match in context.get("matches") or []:
             if not isinstance(match, dict):
                 continue
             group = _clean(match.get("group"))
-            terms = [_clean(term) for term in (match.get("terms") or [])[:16] if _clean(term)]
+            terms = [_clean(term) for term in (match.get("terms") or []) if _clean(term)]
             if group and terms:
                 matches.append({"group": group, "terms": terms})
         if caption or matches:
@@ -247,7 +247,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
     deterministic = _normalize_deterministic_findings(deterministic_findings, allowed_files)
 
     deterministic_text = (
-        json.dumps(deterministic, ensure_ascii=False, indent=2)
+        json.dumps(deterministic, ensure_ascii=False, separators=(",", ":"))
         if deterministic
         else "(none)"
     )

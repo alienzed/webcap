@@ -123,7 +123,7 @@ def build_request(analysis, existing_groups):
         "Evidence counts and filenames are supplied by WebCap; semantic grouping and naming are your task. "
         "Existing terms are organizational context, not visual evidence: do not infer that an existing term appears unless the Sight evidence supports it.\n\n"
         "[INPUT]\n"
-        + json.dumps(payload, ensure_ascii=False)
+        + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         + "\n\n[OUTPUT]\nReturn only JSON matching the supplied schema."
     )
     return {
@@ -179,7 +179,7 @@ def build_challenge_request(analysis, existing_groups, draft_schema):
         "Use an empty targetGroup only for a genuinely new group. Existing terms are context, not proof that a concept is visible. "
         "Do not invent evidence, filenames, or counts.\n\n"
         "[INPUT]\n"
-        + json.dumps(payload, ensure_ascii=False)
+        + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         + "\n\n[OUTPUT]\nReturn only JSON matching the supplied schema."
     )
     return {
@@ -419,7 +419,7 @@ def build_assignment_request(
         if not isinstance(raw, dict):
             continue
         file_name = str(raw.get("file") or "").strip()
-        caption = _clean(raw.get("caption"), 1600)
+        caption = _clean(raw.get("caption"))
         if file_name and caption:
             context_by_file[file_name] = {
                 "caption": caption,
@@ -432,7 +432,7 @@ def build_assignment_request(
         if not isinstance(raw, dict):
             continue
         file_name = str(raw.get("file") or "").strip()
-        description = _clean(raw.get("description"), 1200)
+        description = _clean(raw.get("description"))
         inventory = raw.get("inventory") if isinstance(raw.get("inventory"), dict) else {}
         if not file_name or not description:
             continue
@@ -488,7 +488,7 @@ def build_assignment_request(
         + vocabulary_boundary
         + "- Empty candidates is a successful result when nothing should be added.\n\n"
         "[INPUT]\n"
-        + json.dumps(payload, ensure_ascii=False)
+        + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         + "\n\n[OUTPUT]\nReturn only JSON matching the supplied schema."
     )
     return {

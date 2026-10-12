@@ -626,3 +626,31 @@ def test_context_sight_preserves_group_label_and_uses_alias_for_semantics():
     )
     assert result["matches"] == [{"group": "BB Back", "terms": ["thong"]}]
     assert vision_schema_contract._normalize_existing_groups(groups)[0]["alias"] == "Bikini Bottom Back"
+
+
+def test_unified_sight_does_not_truncate_long_visual_evidence():
+    long_detail = "construction-" + ("specific-" * 280)
+    long_description = "Detailed observation " + ("evidence " * 270) + long_detail
+    normalized = vision_schema_assist.normalize_vision_schema_sight_payload(
+        _sight(long_description, details=[long_detail],
+               things=[{"name": "top", "qualities": [long_detail]}])
+    )
+    assert normalized["description"] == long_description.strip()
+    assert normalized["inventory"]["details"] == [long_detail]
+    assert normalized["inventory"]["things"][0]["qualities"] == [long_detail]
+
+    mined = vision_schema_assist.mine_sight_records([
+        {"file": "a.jpg", **normalized},
+        {"file": "b.jpg", **normalized},
+    ])
+    evidence = next(row for row in mined["evidence"] if row["label"] == long_detail)
+    assert evidence["contexts"][0] == long_description.strip()
+
+
+def test_director_assignment_receives_complete_saved_sight():
+    long_description = "specific visual evidence " * 110
+    records = [{"file": "a.jpg", **_sight(long_description, details=["rare visual feature"])}]
+    request = vision_schema_contract.build_assignment_request(
+        records, [{"group": "Details", "terms": ["rare visual feature"]}]
+    )
+    assert long_description.strip() in request["prompt"]

@@ -256,7 +256,9 @@ function aiValidationCompleteCurrentItem() {
   var item = state && state.currentItem;
   if (!item || aiValidationRequestPending) return;
   var draft = aiValidationCurrentDraft();
-  if (draft && draft.candidates.some(function (candidate) { return candidate.selected; })) {
+  if (draft && draft.candidates.some(function (candidate) {
+    return candidate.selected && !hasChecklistAssignedTagForMediaKey(item.key, candidate.group, candidate.term);
+  })) {
     setStatus('Apply or discard the selected tag proposals before validating.');
     return;
   }

@@ -161,11 +161,11 @@ def _clean(value, limit=160):
     return text[:limit] if limit else text
 
 
-def _clean_list(values, limit=16):
+def _clean_list(values, limit=16, text_limit=160):
     out = []
     seen = set()
     for raw in values if isinstance(values, list) else []:
-        value = _clean(raw)
+        value = _clean(raw, text_limit)
         key = value.casefold()
         if value and key not in seen:
             seen.add(key)
@@ -190,31 +190,31 @@ def _strip_json_fence(raw_text):
 def normalize_vision_schema_sight_payload(data):
     if not isinstance(data, dict):
         raise ValueError("Vision sight response must be an object.")
-    description = _clean(data.get("description"), 1800)
+    description = _clean(data.get("description"), 0)
     inventory = data.get("inventory")
     if not description or not isinstance(inventory, dict):
         raise ValueError("Vision sight response is missing description or inventory.")
 
     normalized = {
-        "viewpoint": _clean_list(inventory.get("viewpoint"), 4),
-        "position": _clean_list(inventory.get("position"), 6),
+        "viewpoint": _clean_list(inventory.get("viewpoint"), 4, 0),
+        "position": _clean_list(inventory.get("position"), 6, 0),
         "things": [],
         "colors": [],
-        "setting": _clean_list(inventory.get("setting"), 8),
-        "background": _clean_list(inventory.get("background"), 12),
-        "lighting": _clean_list(inventory.get("lighting"), 8),
-        "surface": _clean_list(inventory.get("surface"), 8),
-        "details": _clean_list(inventory.get("details"), 32),
+        "setting": _clean_list(inventory.get("setting"), 8, 0),
+        "background": _clean_list(inventory.get("background"), 12, 0),
+        "lighting": _clean_list(inventory.get("lighting"), 8, 0),
+        "surface": _clean_list(inventory.get("surface"), 8, 0),
+        "details": _clean_list(inventory.get("details"), 32, 0),
     }
 
     thing_seen = set()
     for raw in inventory.get("things") if isinstance(inventory.get("things"), list) else []:
         if not isinstance(raw, dict):
             continue
-        name = _clean(raw.get("name"))
+        name = _clean(raw.get("name"), 0)
         if not name:
             continue
-        qualities = _clean_list(raw.get("qualities"), 8)
+        qualities = _clean_list(raw.get("qualities"), 8, 0)
         key = (name.casefold(), tuple(value.casefold() for value in qualities))
         if key in thing_seen:
             continue
@@ -227,8 +227,8 @@ def normalize_vision_schema_sight_payload(data):
     for raw in inventory.get("colors") if isinstance(inventory.get("colors"), list) else []:
         if not isinstance(raw, dict):
             continue
-        thing = _clean(raw.get("thing"))
-        color = _clean(raw.get("color"))
+        thing = _clean(raw.get("thing"), 0)
+        color = _clean(raw.get("color"), 0)
         key = (thing.casefold(), color.casefold())
         if not thing or not color or key in color_seen:
             continue
@@ -346,7 +346,7 @@ def build_vision_vocabulary_sight_messages(media_reference, existing_groups, cap
 def normalize_vision_vocabulary_sight_payload(data, existing_groups):
     if not isinstance(data, dict):
         raise ValueError("Context Sight response must be an object.")
-    caption = _clean(data.get("caption"), 1600)
+    caption = _clean(data.get("caption"), 0)
     if not caption:
         raise ValueError("Context Sight response is missing its caption.")
     groups = _normalize_vocabulary_groups(existing_groups)
@@ -658,7 +658,7 @@ def _add_evidence(buckets, media, category, label, context):
         }
         buckets[key] = row
     row["media"].add(media)
-    context = _clean(context, 260)
+    context = _clean(context, 0)
     if context and context not in row["contexts"] and len(row["contexts"]) < 2:
         row["contexts"].append(context)
 
@@ -669,7 +669,7 @@ def mine_sight_records(records, limit=240):
         if not isinstance(row, dict):
             continue
         media = str(row.get("file") or "").strip()
-        description = _clean(row.get("description"), 1200)
+        description = _clean(row.get("description"), 0)
         inventory = row.get("inventory")
         if media and description and isinstance(inventory, dict):
             prepared.append({
@@ -842,7 +842,7 @@ def mine_vocabulary_sight_records(records, limit=360, singleton_limit_per_group=
             }
             buckets[key] = row
         row["media"].add(media)
-        context = _clean(context, 420)
+        context = _clean(context, 0)
         if context and context not in row["contexts"] and len(row["contexts"]) < 2:
             row["contexts"].append(context)
 
@@ -851,7 +851,7 @@ def mine_vocabulary_sight_records(records, limit=360, singleton_limit_per_group=
         if not isinstance(record, dict):
             continue
         media = str(record.get("file") or "").strip()
-        caption = _clean(record.get("caption"), 1600)
+        caption = _clean(record.get("caption"), 0)
         if not media or not caption:
             continue
         prepared_count += 1
@@ -888,7 +888,7 @@ def mine_vocabulary_sight_records(records, limit=360, singleton_limit_per_group=
                     if group.casefold() not in dimension_order:
                         dimension_order.append(group.casefold())
                 row["media"].add(media)
-                context = _clean(caption, 420)
+                context = _clean(caption, 0)
                 if context and context not in row["contexts"] and len(row["contexts"]) < 2:
                     row["contexts"].append(context)
 

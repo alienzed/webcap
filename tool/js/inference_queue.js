@@ -225,7 +225,9 @@
       link.title = 'Open ' + jobClientLabel(job);
     }
 
-    if (actions) {
+    var preserveActions = row.dataset.inferenceQueueStatus === status;
+    row.dataset.inferenceQueueStatus = status;
+    if (actions && !preserveActions) {
       actions.innerHTML = '';
       if (status === 'backlog') {
         var addToQueue = document.createElement('button');
@@ -284,6 +286,26 @@
         actions.appendChild(stop);
       }
     }
+    // Membership changes can change the boundary buttons without changing
+    // this row's status. Keep its actual buttons (and pointer focus) intact.
+    if (actions && preserveActions && status === 'queued') {
+      var earlier = actions.querySelector('[data-inference-queue-action="reorder_up"]');
+      var later = actions.querySelector('[data-inference-queue-action="reorder_down"]');
+      if (earlier) earlier.disabled = Number(job.queuePosition || 0) <= 1;
+      if (later) later.disabled = Number(job.queuePosition || 0) >= Number(queuedCount || 0);
+    }
+  }
+
+  function reconcileQueueChildren(host, wanted) {
+    // Remove only rows/sections that no longer exist. Inserting the remaining
+    // nodes by key preserves unaffected controls through queue transitions.
+    var keep = new Set(wanted);
+    Array.prototype.slice.call(host.children).forEach(function (child) {
+      if (!keep.has(child)) child.remove();
+    });
+    wanted.forEach(function (node, index) {
+      if (host.children[index] !== node) host.insertBefore(node, host.children[index] || null);
+    });
   }
 
   function render() {
@@ -328,12 +350,21 @@
     clearButton.classList.toggle('hidden', !hasPending);
     clearButton.disabled = !hasPending;
 
-    host.innerHTML = '';
+    var previousRows = new Map();
+    Array.prototype.forEach.call(host.querySelectorAll('.inference-queue-row'), function (row) {
+      previousRows.set(row.dataset.inferenceJobId, row);
+    });
+    var wanted = [];
+    function addJob(job) {
+      var row = previousRows.get(String(job.jobId || '')) || createRow(job);
+      syncRow(row, job, queued);
+      wanted.push(row);
+    }
     if (!jobs.length) {
-      var empty = document.createElement('div');
+      var empty = host.querySelector('.inference-queue-empty') || document.createElement('div');
       empty.className = 'inference-queue-empty';
       empty.textContent = 'No queued or backlogged inference.';
-      host.appendChild(empty);
+      reconcileQueueChildren(host, [empty]);
       return;
     }
 
@@ -343,73 +374,66 @@
       return status !== 'queued' && status !== 'backlog';
     });
 
-    activeJobs.forEach(function (job) {
-      var row = createRow(job);
-      syncRow(row, job, queued);
-      host.appendChild(row);
-    });
+    activeJobs.forEach(addJob);
 
     if (queued) {
-      var queuedHeading = document.createElement('div');
-      queuedHeading.className = 'inference-backlog-heading inference-queued-heading';
+      var queuedHeading = host.querySelector('.inference-queued-heading');
+      if (!queuedHeading) {
+        queuedHeading = document.createElement('div');
+        queuedHeading.className = 'inference-backlog-heading inference-queued-heading';
 
-      var queuedCopy = document.createElement('div');
-      var queuedTitle = document.createElement('strong');
-      queuedTitle.textContent = 'Queue';
-      var queuedCount = document.createElement('span');
-      queuedCount.textContent = String(queued);
-      queuedCopy.appendChild(queuedTitle);
-      queuedCopy.appendChild(queuedCount);
-      queuedHeading.appendChild(queuedCopy);
+        var queuedCopy = document.createElement('div');
+        var queuedTitle = document.createElement('strong');
+        queuedTitle.textContent = 'Queue';
+        var queuedCount = document.createElement('span');
+        queuedCopy.appendChild(queuedTitle);
+        queuedCopy.appendChild(queuedCount);
+        queuedHeading.appendChild(queuedCopy);
 
-      var queuedActions = document.createElement('div');
-      queuedActions.className = 'inference-queue-section-actions';
-      var moveAll = document.createElement('button');
-      moveAll.type = 'button';
-      moveAll.className = 'review-captions-btn';
-      moveAll.dataset.inferenceQueueAction = 'move_all_to_backlog';
-      moveAll.textContent = 'Move all to Backlog';
-      queuedActions.appendChild(moveAll);
-      queuedHeading.appendChild(queuedActions);
-      host.appendChild(queuedHeading);
+        var queuedActions = document.createElement('div');
+        queuedActions.className = 'inference-queue-section-actions';
+        var moveAll = document.createElement('button');
+        moveAll.type = 'button';
+        moveAll.className = 'review-captions-btn';
+        moveAll.dataset.inferenceQueueAction = 'move_all_to_backlog';
+        moveAll.textContent = 'Move all to Backlog';
+        queuedActions.appendChild(moveAll);
+        queuedHeading.appendChild(queuedActions);
+      }
+      queuedHeading.querySelector('span').textContent = String(queued);
+      wanted.push(queuedHeading);
     }
 
-    queuedJobs.forEach(function (job) {
-      var row = createRow(job);
-      syncRow(row, job, queued);
-      host.appendChild(row);
-    });
+    queuedJobs.forEach(addJob);
 
     if (backlogJobs.length) {
-      var heading = document.createElement('div');
-      heading.className = 'inference-backlog-heading';
-      var headingCopy = document.createElement('div');
-      var headingTitle = document.createElement('strong');
-      headingTitle.textContent = 'Backlog';
-      var headingCount = document.createElement('span');
-      headingCount.textContent = String(backlogJobs.length);
-      headingCopy.appendChild(headingTitle);
-      headingCopy.appendChild(headingCount);
-      heading.appendChild(headingCopy);
+      var heading = host.querySelector('.inference-backlog-heading:not(.inference-queued-heading)');
+      if (!heading) {
+        heading = document.createElement('div');
+        heading.className = 'inference-backlog-heading';
+        var headingCopy = document.createElement('div');
+        var headingTitle = document.createElement('strong');
+        headingTitle.textContent = 'Backlog';
+        var headingCount = document.createElement('span');
+        headingCopy.appendChild(headingTitle);
+        headingCopy.appendChild(headingCount);
+        heading.appendChild(headingCopy);
 
-      var backlogActions = document.createElement('div');
-      backlogActions.className = 'inference-queue-section-actions';
-      var addAll = document.createElement('button');
-      addAll.type = 'button';
-      addAll.className = 'review-captions-btn';
-      addAll.dataset.inferenceQueueAction = 'add_all_to_queue';
-      addAll.textContent = 'Add all to Queue';
-      backlogActions.appendChild(addAll);
-      heading.appendChild(backlogActions);
-
-      host.appendChild(heading);
-
-      backlogJobs.forEach(function (job) {
-        var row = createRow(job);
-        syncRow(row, job, queued);
-        host.appendChild(row);
-      });
+        var backlogActions = document.createElement('div');
+        backlogActions.className = 'inference-queue-section-actions';
+        var addAll = document.createElement('button');
+        addAll.type = 'button';
+        addAll.className = 'review-captions-btn';
+        addAll.dataset.inferenceQueueAction = 'add_all_to_queue';
+        addAll.textContent = 'Add all to Queue';
+        backlogActions.appendChild(addAll);
+        heading.appendChild(backlogActions);
+      }
+      heading.querySelector('span').textContent = String(backlogJobs.length);
+      wanted.push(heading);
+      backlogJobs.forEach(addJob);
     }
+    reconcileQueueChildren(host, wanted);
   }
 
   function refresh() {

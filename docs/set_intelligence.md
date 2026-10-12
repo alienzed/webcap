@@ -2,29 +2,28 @@
 
 Status: focused LLM/VL-driven annotation workflow.
 
-## North-star sequence
+## Approved primary workflow: from media folder to reviewed training Set (2026-10-11)
 
-Set Intelligence is one entry point for the annotation intelligence workflow:
+**Status: agreed target; integration not yet implemented.** This supersedes the previous caption-first, Caption Assist/Deep QA-centered strategy. There are **two preparation steps and one continuous per-item validation flow**, not separate tagging, caption generation, QA review, and human sign-off ceremonies:
 
-1. **Understand the Set**
-2. **Discover Vocabulary**
-3. **Guided Tagging**
-4. **Quality Assurance**
+1. **VL scan first.** Explicitly scan the selected media with the chosen Vision model. Persist rich Sight evidence for reuse. Observations are fallible; users can explicitly refresh them. Opening a view must not launch inference.
+2. **Vocabulary discovery second.** The Director uses saved Sight to suggest concept-specific groups and terms; the user approves/refines the vocabulary. The **existing primer template and preferred structure are largely established**: extend it only for additional concept groups that genuinely apply, rather than asking the Director to continually reinvent caption phrasing.
+3. **One guided validation pass over the media.** For each item, the Director maps Sight to the established groups and terms, suggesting applicable tags, corrections, and missing vocabulary where justified. The user **accepts, edits, or rejects tags** in the existing annotation interface. **The primer then deterministically composes the caption from approved annotations**, using the established wording and ordering. The user can adjust the caption and **finish/review/advance** in the same interaction. No second caption-writing LLM call is required as the default path.
 
-The steps are ordered because each one improves the next. They are not four peer tools in Set Tools.
+**Authority and ownership:** Sight supplies visual evidence; the Director recommends semantic assignments; the **human-approved annotations are authoritative**; the primer owns default caption structure. Do not automatically apply tags, overwrite authored captions, or mark individual groups reviewed without the user's explicit review action. The Director may propose previously absent useful details or vocabulary; it does not bypass human approval or turn a freely rewritten caption into the canonical source of truth. Preserve existing explicit manual caption editing and item-level assist options.
 
-The user may skip forward when the earlier decision is already settled. WebCap does not persist a separate wizard-state machine; current Set data remains the source of truth.
+**Afterwards, optional Deep QA** serves as a **high-bar, high-precision exception search** for consequential, evidenced omissions or contradictions, ideally with a concrete fix. No finding is a successful outcome. Keep inexpensive deterministic clues (Missing Captions, Tag Mismatch, Reviewed/Unreviewed, technical checks) accessible; demote low-value or confusing workflow clutter rather than layering additional overlapping QA machinery. Incomplete currently measures unchecked requirement groups and must not be represented as an independent overall quality verdict.
+
+Reuse Set Intelligence, Vocabulary Discovery, Guided Tagging, Focus Annotation, the Primer, Caption Assist's existing editing/actions, and existing review/navigation/filter infrastructure. Do not introduce a new editor, queue, evidence cache, automatically selected rescan scheme, or separate wizard-state system. If preparation was already done, users can enter the guided validation flow directly. **The intended user experience is: scan → establish vocabulary → validate tags and caption together, item by item → optionally run final Deep QA.**
 
 ## Master of One
 
-Each surface has one job:
+- **Set Intelligence / Sight** captures reusable visual observations.
+- **Discover Vocabulary** defines the concept's annotation language.
+- **Guided Validation** integrates group-tag selection, deterministic primer caption composition, and human review in a single per-item interaction.
+- **Deep QA** optionally detects rare, substantial residual errors after validation; it is not the main route to create or improve captions.
 
-- **Set Intelligence** builds reusable semantic understanding.
-- **Discover Vocabulary** decides what concepts belong in the annotation schema.
-- **Guided Tagging** applies mature existing vocabulary efficiently.
-- **Quality Assurance** decides what still deserves human attention.
-
-Supporting analyzers do not become peer workflows merely because WebCap can compute them.
+Supporting analyzers remain cheap evidence or filtering utilities, not competing workflows.
 
 ## Set Intelligence
 
@@ -93,17 +92,11 @@ The interaction remains in Grid: one tag proposition, likely media preselected, 
 
 ## Quality Assurance
 
-### Approved target: one caption-quality strategy (2026-10-11)
+### Deep QA's reduced role (agreed target, 2026-10-11)
 
-**Status: agreed design, not yet fully implemented.** Caption Assist and Deep QA must share **one definition of a successful result** and one per-item reasoning/correction contract. Caption Assist applies it to one item; Deep QA orchestrates it progressively across the current training selection. Do not create separate, competing caption-quality philosophies or editors.
+Deep QA is **optional final validation**, after the Sight → vocabulary → guided tagging/primer/human review path. It must be conservative: raise only substantial, evidence-backed training-caption or annotation problems with a clear actionable suggestion; do not turn stylistic differences, uncertain visual guesses, or incidental dataset statistics into work. A successful run can produce zero findings. Reuse saved Sight and existing review/correction tools; do not automatically infer on opening QA. An independent extra Director challenge pass requires demonstrated value and is not part of the default guided validation path.
 
-1. **Goal — the best supported training caption and matching annotations.** Favor accuracy, distinctive useful detail, relevant specificity, concise natural wording, and the user's annotation/primer intent. Do not optimize for the number of edits. Preserving an already-good caption is a successful outcome.
-2. **Vision observes.** Use the selected model's saved Sight when valid; allow explicit refresh/rescan without inventing a heuristic that claims to know which images need it. A fresh read is additional fallible visual evidence, not inherently better than the first. Preserve the useful evidence available; do not arbitrarily truncate the saved inventory or pretend WebCap can filter verbose observations by semantic importance.
-3. **Director proposes and evaluates.** In the baseline **one per-item Director call**, supply the available visual observations, current caption, assigned tags, applicable group vocabulary, and primer/template guidance. Compare supported facts against the caption and annotations. Return a better editable caption **only when justified**, exact proposed tag/term additions/removals where supported, and a concise assessment of the original versus the proposal. No findings or no changed caption is valid.
-4. **WebCap validates and presents.** Deterministically validate terms, currentness, duplicate assignments, and applicable exact edits; do not invent semantic confidence or pretend a model's observation is verified truth. Surface meaningful differences in the **existing** Caption Assist / QA Focus Review editor. Human review and application are explicit; source captions and annotations are never silently replaced.
-5. **Deep QA is the Set-wide orchestrator, not a different intelligence strategy.** Reuse evidence and completed work, process one item at a time, report progress and errors, and queue worthwhile proposals as they arrive. A second Director call is acceptable **only if** it performs a distinct, demonstrated valuable challenge of the first proposal, not merely to repeat the same goal with competing instructions.
-
-The existing Deep QA implementation still makes a Caption Assist candidate call followed by a separate Director QA evaluation; consolidating their reasoning/output contracts is **future implementation work**, not a change implied by this documentation. Preserve existing features and the user-initiated inference boundary during migration.
+**Current implementation differs:** Deep QA still generates a Caption Assist candidate and runs a separate QA Director evaluation. The current Caption Assist prompt still treats the primer as loose guidance. Those existing behaviors are not endorsed as the final primary workflow; migrating them requires separate, tested code changes. This document locks product direction only.
 
 **Primary navigation:** Set Tools → **Prepare Set** collects Sight and guides vocabulary/tagging. **Quality Assurance** is the single Set-level QA entry point. Opening QA only shows saved checks; it never starts inference. **Start QA & Review** explicitly starts or resumes Deep QA and opens the existing QA Focus Review queue, where confirmed actionable results arrive progressively. **Run scan only** preserves the standalone Deep QA action, and **Review & Fix saved findings** opens the existing correction flow without starting a scan. Targeted concept checks and full reports remain available as secondary QA tools; per-item Vision rechecks remain explicit.
 

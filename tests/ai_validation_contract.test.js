@@ -69,3 +69,66 @@ test('tag suggestions stay in session draft and never assign automatically', () 
   c.aiValidationDiscardProposals();
   assert.equal(c.aiValidationCurrentDraft(), null);
 });
+
+test('failed proposal save rolls back tags and keeps selected proposals for retry', async () => {
+  const c = harness();
+  const item = { key: 'a.jpg', fileName: 'a.jpg', caption: 'caption',
+    metadata: { vision_sight: { description: 'front', inventory: {} } } };
+  c.state.items = [item]; c.state.currentItem = item;
+  c.checklistAssignmentsByMedia = {};
+  c.captionItemTagsByMedia = {};
+  c.checklistCheckedByMedia = {};
+  c.checklistTermDescriptorsByMedia = {};
+  c.checklistTermDescriptorSnapshotMediaKeys = new Set();
+  c.state.reviewedSet = new Set();
+  c.state.undoStack = [];
+  c.getChecklistKeywordTermsForRequirement = () => ['triangle'];
+  c.getChecklistAssignmentEntriesForMediaKey = () =>
+    (c.checklistAssignmentsByMedia[item.key]?.Shape || []).map(term => ({ requirement: 'Shape', term }));
+  c.getUnscopedTagsForMediaKey = () => c.captionItemTagsByMedia[item.key] || [];
+  c.hasChecklistAssignedTagForMediaKey = (_, group, term) =>
+    !!c.checklistAssignmentsByMedia[item.key]?.[group]?.includes(term);
+  c.assignChecklistTagToMediaKey = (key, group, term) => {
+    c.checklistAssignmentsByMedia[key] = { [group]: [term] };
+    return true;
+  };
+  c.invalidateChecklistRequirementProgress = () => {};
+  c.refreshTagDrivenPanelsForMediaKey = () => {};
+  c.reportConsoleError = () => {};
+  c.setStatus = () => {};
+  c.saveMediaAnnotationState = async () => false;
+  c.aiValidationPublishCandidates({ items: [{ file: 'a.jpg', candidates: [{
+    group: 'Shape', term: 'triangle', existing: true, confidence: 'high'
+  }] }] }, 'set');
+  assert.equal(await c.aiValidationApplyProposals(), false);
+  assert.equal(c.checklistAssignmentsByMedia[item.key], undefined);
+  assert.equal(c.aiValidationCurrentDraft().candidates[0].selected, true);
+  let receiptWrites = 0;
+  c.saveCaptionDirect = async () => { throw Error('must not save caption'); };
+  c.saveFolderStateForCurrentRoot = async () => { receiptWrites++; return true; };
+  assert.equal(await c.aiValidationCompleteCurrentItem(), undefined);
+  assert.equal(receiptWrites, 0);
+  c.saveMediaAnnotationState = async () => true;
+  assert.equal(await c.aiValidationApplyProposals(), true);
+  assert.equal(c.aiValidationCurrentDraft(), null);
+});
+
+test('Validate & Next cannot issue receipt when annotation save fails', async () => {
+  const c = harness();
+  const item = { key: 'a.jpg', fileName: 'a.jpg', caption: 'saved',
+    metadata: { vision_sight: { description: 'front', inventory: {} } } };
+  c.state.items = [item]; c.state.currentItem = item;
+  c.ui.editorEl.value = 'accepted';
+  c.getFilteredMediaItems = () => [item];
+  c.cancelEditorAutosaveForCaption = () => {};
+  c.saveMediaAnnotationState = async () => false;
+  let captionWrites = 0, receiptWrites = 0;
+  c.saveCaptionDirect = async () => { captionWrites++; };
+  c.saveFolderStateForCurrentRoot = async () => { receiptWrites++; return true; };
+  c.reportConsoleError = () => {};
+  c.setStatus = () => {};
+  assert.equal(await c.aiValidationCompleteCurrentItem(), false);
+  assert.equal(captionWrites, 0);
+  assert.equal(receiptWrites, 0);
+  assert.equal(c.isAiValidatedForItem(item), false);
+});

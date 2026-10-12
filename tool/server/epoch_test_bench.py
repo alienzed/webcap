@@ -1525,18 +1525,9 @@ def _resolved_wildcard_summary(source_prompt, resolved_prompt, owner_folder=""):
         aggregates,
         key=lambda item: (-int(item.get("score") or 0), int(item.get("index") or 0)),
     )
-    chosen = [item for item in ranked if int(item.get("score") or 0) >= 50][:5]
-    if len(chosen) < 3:
-        for item in ranked:
-            if item in chosen:
-                continue
-            chosen.append(item)
-            if len(chosen) >= 3:
-                break
-
     return [
         str(item.get("phrase") or "").strip()
-        for item in chosen
+        for item in ranked
         if str(item.get("phrase") or "").strip()
     ]
 

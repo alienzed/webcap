@@ -23,6 +23,7 @@
         <link rel="stylesheet" href="/static/css/generate.css">
         <link rel="stylesheet" href="/static/css/storage_manager.css">
         <link rel="stylesheet" href="/static/css/workbench.css">
+        <link rel="stylesheet" href="/static/css/ai_validation.css">
         <link rel="stylesheet" href="/static/css/qa_workbench.css">
         <link rel="stylesheet" href="/static/css/modals.css">
         <link rel="stylesheet" href="/static/css/media_grid.css">
@@ -300,6 +301,10 @@
                                 <span>Unreviewed</span>
                             </label>
                             <label class="advanced-filter-check-row">
+                                <input id="advanced-filter-needs-ai-validation" type="checkbox">
+                                <span>Needs AI Validation</span>
+                            </label>
+                            <label class="advanced-filter-check-row">
                                 <input id="advanced-filter-invalid-ar" type="checkbox">
                                 <span>Invalid AR</span>
                             </label>
@@ -492,6 +497,13 @@
                     <div class="workbench-main-stack">
                         <div class="workbench-card groups-card">
                             <section id="group-workbench" class="group-workbench" aria-label="Annotation groups">
+                                <div id="ai-validation-toolbar" class="ai-validation-toolbar hidden">
+                                    <span id="ai-validation-status" class="ai-validation-status">Needs AI validation</span>
+                                    <button id="ai-validation-suggest" type="button" class="btn">Suggest Tags</button>
+                                    <button id="ai-validation-apply" type="button" class="btn hidden">Apply Tags</button>
+                                    <button id="ai-validation-discard" type="button" class="btn hidden">Discard Proposals</button>
+                                    <button id="ai-validation-complete" type="button" class="btn ai-validation-primary">Validate &amp; Next</button>
+                                </div>
                                 <div id="group-workbench-list" class="group-workbench-list"></div>
                             </section>
                         </div>
@@ -2773,6 +2785,7 @@
         <script src="/static/js/caption_vision.js"></script>
         <script src="/static/js/set_scan.js"></script>
         <script src="/static/js/vision_schema_assist.js"></script>
+        <script src="/static/js/ai_validation.js"></script>
         <script src="/static/js/focused_caption.js"></script>
         <script src="/static/js/balance_distribution_wheel.js"></script>
         <script src="/static/js/h3_calibration_results.js"></script>

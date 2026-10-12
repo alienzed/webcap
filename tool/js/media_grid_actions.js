@@ -254,7 +254,8 @@ async function mediaGridPruneSelected() {
   }
   mediaGridSetStatus(summary);
   setStatus(summary);
-  mediaGridRefreshAfterMutation();
+  // A successful prune already reconciles the Grid through renderFileList.
+  // If nothing was removed, neither collection needs rebuilding.
 }
 
 function mediaGridCanDefaceItem(item) {

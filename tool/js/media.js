@@ -900,7 +900,7 @@ function refreshFolderQueueStatusBadges() {
 
 
 function mediaListReuseRow(previousRows, type, key, className, markup) {
-  var row = previousRows.get(type + '\\0' + key) || document.createElement('div');
+  var row = previousRows.get(type + ':' + key) || document.createElement('div');
   row.className = className;
   row.setAttribute('data-type', type);
   row.setAttribute('data-key', key);
@@ -927,7 +927,7 @@ async function renderFileList() {
   var renderSeq = ++state.listRenderSeq;
   var previousRows = new Map();
   Array.prototype.forEach.call(ui.mediaListEl.querySelectorAll('.media-item[data-type][data-key]'), function (row) {
-    previousRows.set(row.getAttribute('data-type') + '\\0' + row.getAttribute('data-key'), row);
+    previousRows.set(row.getAttribute('data-type') + ':' + row.getAttribute('data-key'), row);
   });
   var desiredRows = [];
   var mediaItems = getFilteredMediaItems(false);

@@ -60,3 +60,12 @@ def test_caption_assist_compact_controls_preserve_editor_and_actions():
     assert ".caption-assist-reconcile-row {\n  display: inline-flex;" in css
     assert "padding: 12px 50px 12px 14px;" in css
     assert "padding: 16px 58px 16px 16px;" in css
+
+def test_docked_caption_realigns_after_workbench_rail_change():
+    shell = _source("tool/js/workspace_shell.js")
+    caption = _source("tool/js/primer_settings.js")
+    assert "ui.appEl.classList.toggle('workbench-rail-collapsed', collapsed);" in shell
+    assert "window.requestAnimationFrame(syncCaptionAssistEditorDock);" in shell
+    assert "function syncCaptionAssistEditorDock()" in caption
+    assert "panel.style.setProperty('--caption-editor-left'" in caption
+    assert "panel.style.setProperty('--caption-editor-right'" in caption

@@ -3,6 +3,10 @@
 Status: product / IA proposal  
 Audit basis: current `main` review, metadata, annotation, focus-set, prune, duplicate, Assistant, and per-item QA code as of 2026-10-06.
 
+## Superseding strategy: unified caption quality (2026-10-11)
+
+**Approved target; not fully implemented.** Caption Assist and Deep QA share one per-item objective: produce the best *supported* training caption and accurate accompanying tags, or preserve an already-good original. Vision observes (saved Sight or explicit refresh); the Director considers visual evidence, caption, selected tags, applicable vocabulary, and primer to propose and assess meaningful improvements; WebCap validates deterministic edits; the user reviews and explicitly applies them in the existing correction UI. Deep QA is the progressive Set-wide orchestrator, not a separate philosophy. Prefer a single per-item Director proposal-and-assessment call as the baseline. Keep a second call only if a distinct challenge demonstrates added value. Do not create automatic rescan-selection heuristics, new review lanes, or inference on opening QA. This decision supersedes older conflicting prompt/second-pass proposals in this file. Detailed contract: `docs/set_intelligence.md`, **Approved target: one caption-quality strategy**.
+
 ## QA Focus Review (2026-10-09)
 
 **Product contract:** Set Tools → QA Focus Review opens a guided Caption Assist round over the *current filtered training selection*. It is orchestration, not another QA algorithm or an independent permanent Focus Set.

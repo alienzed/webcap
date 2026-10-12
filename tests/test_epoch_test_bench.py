@@ -215,16 +215,38 @@ def test_resolved_wildcard_summary_prioritizes_set_specific_groups_with_context(
         "non_diegetic_music: An k-pop music beat."
     )
 
-    assert bench._resolved_wildcard_summary(
-        source,
-        resolved,
-        "sets/micro_bikini",
-    ) == [
+    summary = bench._resolved_wildcard_summary(source, resolved, "sets/micro_bikini")
+    assert summary[:4] == [
         "purple striped micro bikini",
         "pink trim",
         "bandeau top",
         "ruched v-front bottom",
     ]
+    assert "Swedish" in summary
+    assert any("beach" in phrase for phrase in summary)
+    assert len(summary) > 5
+
+
+def test_resolved_wildcard_summary_keeps_all_dimensions_beyond_five():
+    source = (
+        "A {Canadian|Ukrainian} girl wearing a {black|snow-leopard print} micro bikini "
+        "{with {red|purple} trim|}, featuring a "
+        "{triangle simple string straps|teardrop} top and a "
+        "{tie-sides|ruched} {v-front|} {micro|thong} "
+        "{simple string strap|chain-link connectors} bottom "
+        "{on a beach|in a bedroom}."
+    )
+    resolved = (
+        "A Ukrainian girl wearing a snow-leopard print micro bikini "
+        "with purple trim, featuring a triangle simple string straps top and a "
+        "tie-sides v-front thong chain-link connectors bottom on a beach."
+    )
+    summary = bench._resolved_wildcard_summary(source, resolved, "sets/bikini")
+    assert len(summary) > 5
+    assert "triangle simple string straps top" in summary
+    assert any("bottom" in phrase for phrase in summary)
+    assert any("Ukrainian" in phrase for phrase in summary)
+    assert any("beach" in phrase for phrase in summary)
 
 
 def test_resolved_wildcard_summary_promotes_generic_category_when_it_is_the_set_concept():

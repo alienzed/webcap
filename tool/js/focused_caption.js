@@ -350,7 +350,7 @@ function presentFocusedReviewCandidate(mediaItem) {
   syncCaptionAssistCandidateUi();
   setStatus(
     candidate.omittedAssignments.length
-      ? 'Focus Review found selected annotations missing from this caption.'
+      ? 'Check selected annotations against this caption.'
       : 'Caption ready to review.'
   );
 
@@ -548,10 +548,10 @@ function useFocusedCaptionPrefetchForCurrentItem() {
     setStatus(
       isFocusedCaptionReviewMode()
         ? (candidate.omittedAssignments.length
-          ? 'Focus Review found selected annotations missing from this caption.'
+          ? 'Check selected annotations against this caption.'
           : 'Caption ready to review.')
         : (candidate.omittedAssignments.length
-          ? 'Caption Assist candidate failed annotation validation.'
+          ? 'Caption draft has selected annotations to reconcile.'
           : 'AI caption candidate ready.')
     );
     var suppliedFindings = isFocusedCaptionReviewMode()

@@ -6943,3 +6943,61 @@ html[data-theme="dark"] iframe {
 /* Let the header evidence popover extend beyond the dialog without clipping. */
 .editor-caption-candidate-dialog:has(.editor-caption-details[open]) { overflow: visible; }
 .editor-caption-details-body { color: var(--text); }
+
+/* Focus Caption: keep reconciliation compact and the editable draft central. */
+#editor-caption-candidate-omissions {
+  display: grid;
+  justify-content: stretch;
+  gap: 7px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+#editor-caption-candidate-omissions .caption-assist-reconcile-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.caption-assist-reconcile-list {
+  display: grid;
+  gap: 5px;
+  max-height: min(170px, 25vh);
+  overflow: auto;
+}
+.caption-assist-reconcile-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.caption-assist-reconcile-term { min-width: 0; overflow-wrap: anywhere; }
+.caption-assist-reconcile-actions { display: inline-flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+#editor-caption-candidate-omissions .caption-assist-fix-btn,
+#editor-caption-candidate-omissions .caption-vision-phrase-insert {
+  min-height: 27px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.editor-caption-candidate.is-focus-caption .editor-caption-candidate-draft {
+  margin: 10px 14px 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: var(--panel-soft);
+}
+.editor-caption-candidate.is-focus-caption .editor-caption-candidate-draft .editor-caption-candidate-text {
+  padding: 47px 16px 16px;
+  font-size: 18px;
+  line-height: 1.55;
+}
+.editor-caption-candidate.is-focus-caption .editor-caption-candidate-draft:focus-within {
+  border-color: var(--accent);
+}
+.editor-caption-candidate.is-focus-caption #editor-caption-focus-next {
+  background: var(--panel-soft);
+  color: var(--text);
+  border: 1px solid var(--border);
+}

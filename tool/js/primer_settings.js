@@ -809,23 +809,21 @@ function renderCaptionAssistComparison(container, item, candidate) {
   var original = String(item && item.caption || '');
   var revised = String(candidate && candidate.text || '');
   var visible = !!(item && candidate && candidate.mediaKey === item.key);
-  container.classList.toggle('hidden', !visible);
-  if (!visible) {
+  var changed = visible && original !== revised;
+  var sameItem = container.dataset.mediaKey === (item && item.key);
+  var expanded = changed && sameItem && container.open;
+  container.classList.toggle('hidden', !changed);
+  if (!changed) {
     container.replaceChildren();
-    container.dataset.mediaKey = '';
-    container.dataset.hasChanges = '';
+    container.dataset.mediaKey = visible ? item.key : '';
+    container.dataset.hasChanges = 'false';
+    container.open = false;
     return;
   }
-  var changed = original !== revised;
-  var sameItem = container.dataset.mediaKey === item.key;
-  // Open new differences automatically, but respect a manually collapsed diff.
-  var expanded = changed && (!sameItem || container.dataset.hasChanges !== 'true' || container.open);
   var diff = captionAssistCompareWords(original, revised);
   container.replaceChildren();
   var summary = document.createElement('summary');
-  var missingCount = Array.isArray(candidate.omittedCorrections) ? candidate.omittedCorrections.length : 0;
-  summary.textContent = (changed ? 'Changes vs saved caption' : 'No caption changes proposed') +
-    (missingCount ? ' · ' + missingCount + ' selected tag' + (missingCount === 1 ? '' : 's') + ' missing' : '');
+  summary.textContent = 'Changes vs saved caption';
   container.appendChild(summary);
   function addRow(title, words, matched, kind) {
     var row = document.createElement('div');
@@ -846,17 +844,10 @@ function renderCaptionAssistComparison(container, item, candidate) {
     row.appendChild(content);
     container.appendChild(row);
   }
-  if (changed) {
-    addRow('Saved', diff.oldWords, diff.oldMatch, 'removed');
-    addRow('Proposed', diff.newWords, diff.newMatch, 'added');
-  } else {
-    var unchanged = document.createElement('div');
-    unchanged.className = 'caption-assist-comparison-row';
-    unchanged.textContent = 'Saved caption and draft match.';
-    container.appendChild(unchanged);
-  }
+  addRow('Saved', diff.oldWords, diff.oldMatch, 'removed');
+  addRow('Proposed', diff.newWords, diff.newMatch, 'added');
   container.dataset.mediaKey = item.key;
-  container.dataset.hasChanges = String(changed);
+  container.dataset.hasChanges = 'true';
   container.open = expanded;
 }
 
@@ -1009,22 +1000,28 @@ function syncCaptionAssistCandidateUi() {
     });
   }
   omissionsEl.classList.toggle('hidden', !omittedAssignments.length);
-  omissionsEl.innerHTML = '';
+  omissionsEl.replaceChildren();
   if (omittedAssignments.length) {
-    var omissionLabel = document.createElement('span');
-    omissionLabel.textContent = (reviewMode ? 'Caption' : 'Candidate') + ' omitted selected annotations:';
+    var omissionLabel = document.createElement('strong');
+    omissionLabel.className = 'caption-assist-reconcile-label';
+    omissionLabel.textContent = 'Selected annotations to reconcile (' + omittedAssignments.length + ')';
     omissionsEl.appendChild(omissionLabel);
+    var omissionList = document.createElement('div');
+    omissionList.className = 'caption-assist-reconcile-list';
     (candidate.omittedCorrections || []).forEach(function (entry) {
-      var row = document.createElement('span');
-      row.className = 'caption-vision-phrase-list';
+      var row = document.createElement('div');
+      row.className = 'caption-assist-reconcile-row';
       var title = document.createElement('span');
+      title.className = 'caption-assist-reconcile-term';
       title.textContent = (entry.group ? entry.group + ' — ' : '') + entry.term;
       row.appendChild(title);
+      var actions = document.createElement('span');
+      actions.className = 'caption-assist-reconcile-actions';
       var insert = document.createElement('button');
       insert.type = 'button';
       insert.className = 'caption-assist-fix-btn';
-      insert.textContent = 'Insert at cursor';
-      insert.title = 'Insert this selected annotation into the draft; save with Apply';
+      insert.textContent = 'Insert';
+      insert.title = 'Insert into the draft at the cursor; only saved with Apply';
       insert.addEventListener('pointerdown', function (event) { event.preventDefault(); });
       insert.addEventListener('click', function () {
         var phrase = entry.group
@@ -1032,18 +1029,20 @@ function syncCaptionAssistCandidateUi() {
           : renderChecklistTermWithAffixes(entry.term, mediaKey);
         insertFocusedCaptionVisionPhrase(phrase || entry.term);
       });
-      row.appendChild(insert);
+      actions.appendChild(insert);
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'caption-vision-phrase-insert';
       remove.textContent = 'Remove tag';
-      remove.title = 'Unassign this annotation from the item; saves immediately';
+      remove.title = 'Unassign this tag from the item immediately';
       remove.addEventListener('click', function () {
         removeCaptionAssistAssignedTag(mediaKey, entry.group, entry.term);
       });
-      row.appendChild(remove);
-      omissionsEl.appendChild(row);
+      actions.appendChild(remove);
+      row.appendChild(actions);
+      omissionList.appendChild(row);
     });
+    omissionsEl.appendChild(omissionList);
   }
 
   renderCaptionAssistMissingGroups(missingEl, mediaKey, missingGroups);
@@ -1063,13 +1062,14 @@ function syncCaptionAssistCandidateUi() {
   nextBtn.classList.toggle('hidden', !focusOpen);
   prevBtn.disabled = focusOpen && !canNavigateFocusedCaption(-1);
   nextBtn.disabled = focusOpen && !canNavigateFocusedCaption(1);
-  nextBtn.textContent = isFocusedQaReviewMode() ? '→' : 'Next →';
-  nextBtn.setAttribute('aria-label', isFocusedQaReviewMode() ? 'Skip to next QA item without saving' : 'Next item');
+  nextBtn.textContent = isFocusedQaReviewMode() ? 'Skip →' : 'Next →';
+  nextBtn.setAttribute('aria-label', isFocusedQaReviewMode() ? 'Skip to next QA item without saving' : 'Next item without applying; draft remains available');
   nextBtn.title = nextBtn.getAttribute('aria-label');
   prevBtn.textContent = isFocusedQaReviewMode() ? '←' : '← Previous';
   prevBtn.setAttribute('aria-label', 'Previous item');
   qaDismissBtn.classList.toggle('hidden', !isFocusedQaReviewMode());
   cancelBtn.classList.toggle('hidden', !pending);
+  cancelBtn.textContent = 'Stop generation';
 
   useBtn.classList.toggle('hidden', !visible);
   regenerateBtn.classList.toggle('hidden', !visible);
@@ -1078,15 +1078,17 @@ function syncCaptionAssistCandidateUi() {
   var useArmed = focusOpen && !reviewMode && visible && isFocusedCaptionUseArmedForCandidate(candidate);
   useBtn.classList.toggle('is-armed', !!useArmed);
   var reviewChanged = reviewMode && visible && String(candidate.text || '') !== String((state.currentItem && state.currentItem.caption) || '');
+  var focusHasCaptionChange = visible && String(candidate.text || '') !== String((state.currentItem && state.currentItem.caption) || '');
   useBtn.textContent = isFocusedQaReviewMode()
     ? 'Apply'
-    : (reviewMode ? (reviewChanged ? 'Save → Next' : 'Keep → Next')
-      : (useArmed ? 'Press Enter again' : 'Apply Caption'));
+    : (reviewMode ? (reviewChanged ? 'Save & Next' : 'Keep & Next')
+      : (useArmed ? 'Press Enter again' : (focusOpen ? (focusHasCaptionChange ? 'Save & Next' : 'Accept & Next') : 'Apply Caption')));
+  useBtn.title = pending ? 'Stop generation or wait before applying' : (focusOpen ? 'Accept this caption and advance to the next item' : 'Apply this caption to the editor');
 
   var currentRequest = visible ? buildCaptionAssistRequest(state.currentItem) : null;
   var tagsChanged = !!(visible && candidate.annotationsAtGeneration &&
     candidate.annotationsAtGeneration !== JSON.stringify([currentRequest.assignments, currentRequest.tags]));
-  regenerateBtn.textContent = '↻ Refresh Caption';
+  regenerateBtn.textContent = pending ? 'Refreshing…' : '↻ Refresh Caption';
   var restoredInputsChanged = !!(visible && candidate.sourceCaption !== undefined &&
     candidate.sourceCaption !== String(state.currentItem.caption || ''));
   var restoredModelChanged = !!(visible && candidate.model && currentRequest.model &&
@@ -1840,7 +1842,7 @@ function runCaptionAssistAfterSight(draftOverride) {
     syncCaptionAssistCandidateUi();
     setStatus(
       candidate.omittedAssignments.length
-        ? 'Caption Assist candidate failed annotation validation.'
+        ? 'Caption draft has selected annotations to reconcile.'
         : 'AI caption candidate ready.'
     );
     // Recheck Vision stays explicit;

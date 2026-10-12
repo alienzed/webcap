@@ -218,7 +218,7 @@
       out.visionSight = {
         model: String(sight.model || ''),
         description: String(sight.description || ''),
-        // Sight is already bounded when saved; do not discard evidence again for QA.
+        // Preserve the complete normalized Sight evidence for the QA Director.
         inventory: inventory
       };
     }

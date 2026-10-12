@@ -1100,14 +1100,17 @@ function syncCaptionAssistCandidateUi() {
   var currentRequest = visible ? buildCaptionAssistRequest(state.currentItem) : null;
   var tagsChanged = !!(visible && candidate.annotationsAtGeneration &&
     candidate.annotationsAtGeneration !== JSON.stringify([currentRequest.assignments, currentRequest.tags]));
-  regenerateBtn.textContent = pending ? 'Refreshing…' : '↻ Refresh Caption';
+  regenerateBtn.textContent = '↻';
   var restoredInputsChanged = !!(visible && candidate.sourceCaption !== undefined &&
     candidate.sourceCaption !== String(state.currentItem.caption || ''));
   var restoredModelChanged = !!(visible && candidate.model && currentRequest.model &&
     candidate.model !== currentRequest.model);
   regenerateBtn.classList.toggle('is-primary', tagsChanged || restoredInputsChanged || restoredModelChanged || !!omittedAssignments.length);
-  regenerateBtn.title = 'Director (LLM): rewrite using the edited caption, current tags, and cached Sight; no Vision scan.';
-  regenerateBtn.setAttribute('aria-label', regenerateBtn.title);
+  regenerateBtn.title = pending
+    ? 'Refreshing caption…'
+    : 'Refresh Caption · Director (LLM) rewrite using the edited caption, current tags, and cached Sight; no Vision scan.';
+  regenerateBtn.setAttribute('aria-label', pending ? 'Refreshing caption' : 'Refresh Caption');
+  regenerateBtn.setAttribute('aria-busy', pending ? 'true' : 'false');
 
   dismissBtn.textContent = '\u00d7';
   dismissBtn.title = focusOpen

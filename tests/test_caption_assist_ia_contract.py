@@ -45,3 +45,18 @@ def test_focus_review_navigation_keeps_existing_semantics():
     assert "moveFocusedCaption(1)" in js
     assert "resolveFocusedQaReviewItem('dismissed')" in js
     assert "useCaptionAssistCandidate()" in js
+
+def test_caption_assist_compact_controls_preserve_editor_and_actions():
+    html = _source("tool/tool.html")
+    js = _source("tool/js/primer_settings.js")
+    css = _source("tool/css/styles.css")
+    assert 'id="editor-caption-candidate-regenerate"' in html
+    assert 'aria-label="Refresh Caption">↻</button>' in html
+    assert "regenerateBtn.textContent = '↻';" in js
+    assert "regenerateBtn.setAttribute('aria-busy', pending ? 'true' : 'false');" in js
+    assert "insertFocusedCaptionVisionPhrase(phrase || entry.term)" in js
+    assert "removeCaptionAssistAssignedTag(mediaKey, entry.group, entry.term)" in js
+    assert ".caption-assist-reconcile-list {\n  display: flex;" in css
+    assert ".caption-assist-reconcile-row {\n  display: inline-flex;" in css
+    assert "padding: 12px 50px 12px 14px;" in css
+    assert "padding: 16px 58px 16px 16px;" in css

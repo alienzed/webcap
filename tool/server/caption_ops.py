@@ -252,7 +252,7 @@ def build_caption_assist_messages(
         + repair_instruction
         + ordering +
         "Do not use annotation group order or captionTemplate placeholder order as caption order.\n\n"
-        + json.dumps(payload, ensure_ascii=False, indent=2)
+        + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     )
     return [
         {"role": "system", "content": CAPTION_ASSIST_SYSTEM_PROMPT},
@@ -408,7 +408,7 @@ def build_caption_template_assist_messages(groups=None, mappings=None, current_t
                 "order unless a small local move is necessary for grammatical attachment. Do not reorganize the "
                 "groups into your own preferred semantic order. Use the vocabulary examples to choose grammatical "
                 "placement and conditional glue.\n\n"
-                + json.dumps(payload, ensure_ascii=False, indent=2)
+                + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
             ),
         },
     ]

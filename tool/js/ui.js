@@ -546,6 +546,8 @@ if (ui.advancedFilterReviewedEl) {
 }
 if (ui.advancedFilterUnreviewedEl) {
   ui.advancedFilterUnreviewedEl.addEventListener('change', handleMediaFilterChanged);
+}
+if (ui.advancedFilterNeedsAiValidationEl) {
   ui.advancedFilterNeedsAiValidationEl.addEventListener('change', handleMediaFilterChanged);
 }
 if (ui.advancedFilterUntaggedEl) {

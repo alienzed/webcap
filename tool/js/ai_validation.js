@@ -127,8 +127,7 @@ function aiValidationRefreshUi() {
   discard.classList.toggle('hidden', !draft);
   apply.disabled = !hasProposals || !draft.candidates.some(function (candidate) { return candidate.selected; });
   validate.disabled = aiValidationRequestPending;
-  renderGroupWorkbench({ mode: 'item', targetEl: document.getElementById('group-workbench-list'),
-    currentMediaKey: item.key });
+  refreshGroupWorkbenchForCurrentItem();
 }
 
 function aiValidationRenderGroupSuggestions(groupEl, requirementLabel, mediaKey) {

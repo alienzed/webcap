@@ -92,6 +92,7 @@ ui = {
   advancedFilterMissingCaptionsEl: document.getElementById('advanced-filter-missing-captions'),
   advancedFilterReviewedEl: document.getElementById('advanced-filter-reviewed'),
   advancedFilterUnreviewedEl: document.getElementById('advanced-filter-unreviewed'),
+  advancedFilterNeedsAiValidationEl: document.getElementById('advanced-filter-needs-ai-validation'),
   advancedFilterStarsEl: document.getElementById('advanced-filter-stars'),
   advancedFilterFlagEl: document.getElementById('advanced-filter-flag'),
   advancedFilterInvalidArEl: document.getElementById('advanced-filter-invalid-ar'),

@@ -90,6 +90,14 @@ function sanitizeFolderState(data) {
       };
     });
   }
+  var aiValidationReceipts = {};
+  var sourceAiValidationReceipts = src.ai_validation_receipts && typeof src.ai_validation_receipts === 'object' && !Array.isArray(src.ai_validation_receipts)
+    ? src.ai_validation_receipts : {};
+  Object.keys(sourceAiValidationReceipts).forEach(function (key) {
+    var receipt = sourceAiValidationReceipts[key];
+    if (!receipt || receipt.version !== 1 || typeof receipt.content !== 'string' || typeof receipt.sight !== 'string') return;
+    aiValidationReceipts[key] = { version: 1, content: receipt.content, sight: receipt.sight };
+  });
   var reviewedKeys = Array.isArray(src.reviewedKeys) ? src.reviewedKeys : [];
   reviewedKeys = reviewedKeys.map(function (key) { return String(key || ''); }).filter(Boolean);
   var captionHiddenRequirements = Array.isArray(src.caption_hidden_requirements)
@@ -251,6 +259,7 @@ function sanitizeFolderState(data) {
       keyAliases: keyAliases
     },
     reviewedKeys: reviewedKeys,
+    ai_validation_receipts: aiValidationReceipts,
     caption_assist_candidates: candidates,
     flags: (typeof src.flags === 'object' && src.flags) ? src.flags : {},
     caption_requirements: Array.isArray(src.caption_requirements) ? src.caption_requirements.slice() : getDefaultRequirementItems().slice(),
@@ -282,6 +291,7 @@ function sanitizeFolderState(data) {
       missing_captions_only: !!mediaFilters.missing_captions_only,
       reviewed_only: !!mediaFilters.reviewed_only,
       unreviewed_only: !!mediaFilters.unreviewed_only,
+      needs_ai_validation_only: !!mediaFilters.needs_ai_validation_only,
       tag_mismatch_only: !!mediaFilters.tag_mismatch_only,
       incomplete_only: !!mediaFilters.incomplete_only,
       invalid_ar_only: !!mediaFilters.invalid_ar_only,
@@ -523,6 +533,7 @@ function snapshotFolderStateFromDom() {
     missing_captions_only: !!(ui.advancedFilterMissingCaptionsEl && ui.advancedFilterMissingCaptionsEl.checked),
     reviewed_only: !!(ui.advancedFilterReviewedEl && ui.advancedFilterReviewedEl.checked),
     unreviewed_only: !!(ui.advancedFilterUnreviewedEl && ui.advancedFilterUnreviewedEl.checked),
+    needs_ai_validation_only: !!(ui.advancedFilterNeedsAiValidationEl && ui.advancedFilterNeedsAiValidationEl.checked),
     tag_mismatch_only: !!(ui.advancedFilterUntaggedEl && ui.advancedFilterUntaggedEl.checked),
     incomplete_only: !!(ui.advancedFilterIncompleteEl && ui.advancedFilterIncompleteEl.checked),
     invalid_ar_only: !!(ui.advancedFilterInvalidArEl && ui.advancedFilterInvalidArEl.checked),
@@ -534,6 +545,7 @@ function snapshotFolderStateFromDom() {
     stats: stats,
     primer: primer,
     reviewedKeys: reviewedKeys,
+    ai_validation_receipts: aiValidationReceiptsByMedia,
     caption_assist_candidates: captionAssistSavedCandidatesByMedia,
     flags: flags,
     caption_requirements: (typeof window.checklistItems !== 'undefined') ? window.checklistItems.slice() : undefined,
@@ -583,6 +595,7 @@ function applyFolderStateToDom(folderState) {
   var clean = sanitizeFolderState(folderState);
   requirementGroupAliasOverrides = Object.assign({}, clean.primer.keyAliases);
   captionAssistSavedCandidatesByMedia = Object.assign({}, clean.caption_assist_candidates);
+  aiValidationRestoreReceipts(clean.ai_validation_receipts);
   var hasSavedPrimerTemplate = !!(
     folderState &&
     folderState.primer &&
@@ -646,6 +659,9 @@ function applyFolderStateToDom(folderState) {
   }
   if (ui.advancedFilterUnreviewedEl) {
     ui.advancedFilterUnreviewedEl.checked = !!(clean.media_filters && clean.media_filters.unreviewed_only);
+  }
+  if (ui.advancedFilterNeedsAiValidationEl) {
+    ui.advancedFilterNeedsAiValidationEl.checked = !!(clean.media_filters && clean.media_filters.needs_ai_validation_only);
   }
   if (ui.advancedFilterUntaggedEl) {
     ui.advancedFilterUntaggedEl.checked = !!(clean.media_filters && clean.media_filters.tag_mismatch_only);

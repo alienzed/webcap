@@ -213,6 +213,7 @@ function openAdvancedFilterHelpInPreview() {
     '<li style="margin:0 0 6px 0;"><strong>Captionless</strong>: items without captions.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Reviewed</strong>: items marked reviewed.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Unreviewed</strong>: items not marked reviewed yet.</li>' +
+     '<li style="margin:0 0 6px 0;"><strong>Needs AI Validation</strong>: item has no current validation receipt.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Incomplete</strong>: requirement groups not fully satisfied.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Invalid AR</strong>: items with unsupported aspect buckets.</li>' +
     '<li style="margin:0 0 6px 0;"><strong>Tag Mismatch</strong>: items with no tags, or with item tags not found in the caption.</li>' +
@@ -253,6 +254,7 @@ function clearCaptionFilterInputs() {
   if (ui.advancedFilterMissingCaptionsEl) ui.advancedFilterMissingCaptionsEl.checked = false;
   if (ui.advancedFilterReviewedEl) ui.advancedFilterReviewedEl.checked = false;
   if (ui.advancedFilterUnreviewedEl) ui.advancedFilterUnreviewedEl.checked = false;
+  if (ui.advancedFilterNeedsAiValidationEl) ui.advancedFilterNeedsAiValidationEl.checked = false;
   if (ui.advancedFilterUntaggedEl) ui.advancedFilterUntaggedEl.checked = false;
   if (ui.advancedFilterIncompleteEl) ui.advancedFilterIncompleteEl.checked = false;
   if (ui.advancedFilterStarsEl) {
@@ -544,6 +546,9 @@ if (ui.advancedFilterReviewedEl) {
 }
 if (ui.advancedFilterUnreviewedEl) {
   ui.advancedFilterUnreviewedEl.addEventListener('change', handleMediaFilterChanged);
+}
+if (ui.advancedFilterNeedsAiValidationEl) {
+  ui.advancedFilterNeedsAiValidationEl.addEventListener('change', handleMediaFilterChanged);
 }
 if (ui.advancedFilterUntaggedEl) {
   ui.advancedFilterUntaggedEl.addEventListener('change', handleMediaFilterChanged);

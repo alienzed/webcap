@@ -16,6 +16,14 @@ Status: focused LLM/VL-driven annotation workflow.
 
 Reuse Set Intelligence, Vocabulary Discovery, Guided Tagging, Focus Annotation, the Primer, Caption Assist's existing editing/actions, and existing review/navigation/filter infrastructure. Do not introduce a new editor, queue, evidence cache, automatically selected rescan scheme, or separate wizard-state system. If preparation was already done, users can enter the guided validation flow directly. **The intended user experience is: scan → establish vocabulary → validate tags and caption together, item by item → optionally run final Deep QA.**
 
+## Guided Validation implementation slice (2026-10-11)
+
+**Feature branch implementation; browser acceptance remains pending.** Single Item now has an explicit per-item **Suggest Tags** action using the existing `suggest_tags` Director operation and cached Sight, with canonical vocabulary candidates rendered as temporary draft chips in each Group Workbench group. Selecting suggestions only edits the session draft; **Apply Tags** explicitly assigns selected terms and **Discard Proposals** rejects the batch. The established Guided Tagging Grid pass, Focus Caption, and Caption Assist editor remain independently usable.
+
+**Validate & Next** explicitly saves the current caption, writes a separate human-approved `ai_validation_receipts` entry to existing Set folder state, and advances through the current filtered Media List. The **Needs AI Validation** filter includes missing/stale receipts; staleness compares final caption, assigned tags, and saved Sight, not whole-Set group configuration. New vocabulary approved through Discover Vocabulary invalidates receipts only for media linked by the Director's cited Sight evidence IDs. Other edits do not automatically start inference. No parallel cache, full-Set scan, or new model runtime is introduced.
+
+Remaining polish is limited to browser QA of autosave/selection/filtered navigation, integrated Caption Assist presentation, and refinements arising from actual use; no replacement of Focus Caption or Grid Guided Tagging is implied.
+
 ## Master of One
 
 - **Set Intelligence / Sight** captures reusable visual observations.

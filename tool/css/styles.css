@@ -7019,3 +7019,44 @@ html[data-theme="dark"] iframe {
   padding-top: 9px;
   padding-bottom: 9px;
 }
+
+/* Caption Assist uses the existing candidate dialog as a nonmodal editor dock.
+   Focus Caption and QA Focus Review keep their existing dedicated overlay. */
+.editor-caption-candidate.is-editor-docked {
+  inset: 0;
+  padding: 0;
+  background: transparent;
+  pointer-events: none;
+  display: block;
+}
+.editor-caption-candidate.is-editor-docked .editor-caption-candidate-dialog {
+  position: fixed;
+  left: var(--caption-editor-left);
+  right: var(--caption-editor-right);
+  bottom: var(--caption-editor-bottom);
+  width: auto;
+  max-height: max(120px, min(68vh, 590px, calc(100vh - var(--caption-editor-bottom) - 12px)));
+  overflow: auto;
+  pointer-events: auto;
+  border-radius: 9px 9px 5px 5px;
+  animation: caption-assist-rise .18s ease-out;
+}
+.editor-caption-candidate.is-editor-docked .editor-caption-candidate-header {
+  min-height: 38px;
+  padding: 7px 12px;
+}
+.editor-caption-candidate.is-editor-docked .editor-caption-candidate-draft .editor-caption-candidate-text {
+  font-size: 15px;
+  padding: 38px 14px 12px;
+  max-height: min(23vh, 200px);
+}
+.editor-caption-candidate.is-editor-docked .editor-caption-candidate-actions {
+  padding: 7px 10px;
+}
+@keyframes caption-assist-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editor-caption-candidate.is-editor-docked .editor-caption-candidate-dialog { animation: none; }
+}

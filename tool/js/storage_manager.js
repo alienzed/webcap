@@ -322,7 +322,9 @@
     var wasActive = scanIsActive();
     return requestJson('/fs/storage/scan/status').then(function (payload) {
       storageState.scan = payload.scan || { status: 'idle' };
-      render();
+      syncScanButton();
+      var status = el('storage-status');
+      if (status) status.textContent = scanStatusText();
       if (scanIsActive()) {
         scheduleScanPoll();
       } else {
@@ -340,14 +342,18 @@
       return postJson('/fs/storage/scan/cancel', {}).then(function (payload) {
         storageState.scan = payload.scan || storageState.scan;
         reportConsoleInfo('Storage', 'Scan cancellation requested.');
-        render();
+        syncScanButton();
+        var status = el('storage-status');
+        if (status) status.textContent = scanStatusText();
         scheduleScanPoll();
       }).catch(reportError);
     }
     return postJson('/fs/storage/scan/start', { folder: currentFolder() }).then(function (payload) {
       storageState.scan = payload.scan || { status: 'running' };
       reportConsoleInfo('Storage', 'Scan requested for current scope.');
-      render();
+      syncScanButton();
+      var status = el('storage-status');
+      if (status) status.textContent = scanStatusText();
       scheduleScanPoll();
     }).catch(reportError);
   }

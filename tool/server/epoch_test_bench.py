@@ -607,6 +607,19 @@ def _session_status(session_directory):
     return visible
 
 
+def _session_status_from_payload(session_directory, payload):
+    if not payload:
+        return None
+    visible = dict(payload)
+    visible["session"] = Path(session_directory).name
+    if not visible.get("modelId"):
+        visible["modelId"] = str(visible.get("model") or get_test_model().PROFILE_ID)
+    if not visible.get("resultFolder"):
+        visible["resultFolder"] = _session_result_folder(session_directory)
+    _project_wildcard_fields(visible)
+    return visible
+
+
 def _session_rating_map(session_directory):
     state = read_folder_state(Path(session_directory) / ".webcap_state.json")
     raw = state.get("ratings_by_media") if isinstance(state, dict) else {}
@@ -649,12 +662,14 @@ def _with_session_ratings(session_directory, payload):
     return visible
 
 
-def _candidate_rating_scores(folder_path, model_id=None):
+def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None):
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
     totals = {}
-    for session in _session_directories(folder_path):
-        payload = _read_status(session) or {}
+    snapshots = session_snapshot if session_snapshot is not None else (
+        (session, _read_status(session) or {}) for session in _session_directories(folder_path)
+    )
+    for session, payload in snapshots:
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
         if selected_model_id and session_model_id != selected_model_id:
             continue
@@ -951,6 +966,12 @@ def prepare(folder_path, model_id=None):
             "Could not load optional Test setting choices from ComfyUI: " + str(exc)
         )
     candidate_runs, candidate_metadata = _staged_candidate_catalog(loras, model)
+    # One filesystem discovery/read pass serves rating scores, history and
+    # latest-status selection. Live sessions still use authoritative sync.
+    session_snapshot = [
+        (session, _read_status(session) or {})
+        for session in _session_directories(folder_path)
+    ]
     return {
         "operation": "test_prepare",
         "modelId": model.PROFILE_ID,
@@ -970,9 +991,9 @@ def prepare(folder_path, model_id=None):
         "removableFiles": [path.name for path in loras],
         "candidateRuns": candidate_runs,
         "candidateMetadata": candidate_metadata,
-        "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID),
-        "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID),
-        "latest": status(folder_path, model_id=model.PROFILE_ID),
+        "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot),
+        "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID, session_snapshot=session_snapshot),
+        "latest": status(folder_path, model_id=model.PROFILE_ID, session_snapshot=session_snapshot),
     }
 
 def handle_request(folder_path, mode, selection_criteria=None):
@@ -2504,11 +2525,13 @@ def clear_queued(folder_path, model_id=None):
         removed += 1
     return {"operation": "test_queue_clear", "removed": removed, "jobs": queued_jobs(folder_path, model_id=model_id)["jobs"]}
 
-def _visible_session_status(folder_path, session_directory):
-    status_payload = _read_status(session_directory) or {}
-    if isinstance(status_payload.get("inferenceJobs"), list):
+def _visible_session_status(folder_path, session_directory, stored=None):
+    status_payload = stored if stored is not None else (_read_status(session_directory) or {})
+    if isinstance(status_payload.get("inferenceJobs"), list) and str(status_payload.get("status") or "") not in {"complete", "stopped", "failed", "interrupted"}:
         return _sync_inference_session(session_directory)
-    payload = _session_status(session_directory)
+    if isinstance(status_payload.get("inferenceJobs"), list):
+        return _session_status_from_payload(session_directory, status_payload)
+    payload = _session_status_from_payload(session_directory, status_payload)
     if payload and str(payload.get("status") or "") in {"starting", "running", "stopping"}:
         _mark_session_interrupted(session_directory)
         payload = _session_status(session_directory)
@@ -2516,16 +2539,15 @@ def _visible_session_status(folder_path, session_directory):
 
 
 
-def list_sessions(folder_path, model_id=None):
+def list_sessions(folder_path, model_id=None, session_snapshot=None):
     sessions = []
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
-    for session in sorted(
-        _session_directories(folder_path),
-        key=lambda path: path.name.lower(),
-        reverse=True,
-    ):
-        payload = _visible_session_status(folder_path, session)
+    snapshots = session_snapshot if session_snapshot is not None else [
+        (session, _read_status(session) or {}) for session in _session_directories(folder_path)
+    ]
+    for session, stored in sorted(snapshots, key=lambda item: item[0].name.lower(), reverse=True):
+        payload = _visible_session_status(folder_path, session, stored=stored)
         if not payload or payload.get("status") == "queued":
             continue
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
@@ -2549,16 +2571,14 @@ def list_sessions(folder_path, model_id=None):
     return sessions
 
 
-def _latest_status(folder_path, model_id=None):
+def _latest_status(folder_path, model_id=None, session_snapshot=None):
     selected_model = str(model_id or "").strip()
-    sessions = sorted(
-        _session_directories(folder_path),
-        key=lambda path: path.name.lower(),
-        reverse=True,
-    )
+    snapshots = session_snapshot if session_snapshot is not None else [
+        (session, _read_status(session) or {}) for session in _session_directories(folder_path)
+    ]
     payloads = []
-    for session in sessions:
-        payload = _visible_session_status(folder_path, session)
+    for session, stored in sorted(snapshots, key=lambda item: item[0].name.lower(), reverse=True):
+        payload = _visible_session_status(folder_path, session, stored=stored)
         if not payload:
             continue
         if selected_model and str(payload.get("modelId") or payload.get("model") or "") != selected_model:
@@ -2570,12 +2590,12 @@ def _latest_status(folder_path, model_id=None):
     return payloads[0] if payloads else {"status": "idle"}
 
 
-def _visible_status(folder_path, model_id=None):
-    return _latest_status(folder_path, model_id=model_id)
+def _visible_status(folder_path, model_id=None, session_snapshot=None):
+    return _latest_status(folder_path, model_id=model_id, session_snapshot=session_snapshot)
 
 
-def status(folder_path, model_id=None):
-    payload = _visible_status(folder_path, model_id=model_id)
+def status(folder_path, model_id=None, session_snapshot=None):
+    payload = _visible_status(folder_path, model_id=model_id, session_snapshot=session_snapshot)
     session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
     if not session_name:
         return payload

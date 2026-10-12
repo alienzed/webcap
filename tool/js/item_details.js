@@ -291,9 +291,16 @@ function captionContainsTagWithAllowances(captionText, tagText) {
 
   for (var i = 0; i <= captionTokens.length - tagTokens.length; i += 1) {
     var matched = true;
+    var tokenIndex = i;
     for (var j = 0; j < tagTokens.length; j += 1) {
       var expected = tagTokens[j];
-      var actual = captionTokens[i + j];
+      // Natural captions may insert a linking verb between tag words.
+      // Do not skip other words (especially negation) or alter the tag itself.
+      if (j > 0 && captionTokens[tokenIndex] !== expected &&
+          /^(is|are|was|were)$/.test(captionTokens[tokenIndex])) {
+        tokenIndex += 1;
+      }
+      var actual = captionTokens[tokenIndex];
       if (j === lastIdx) {
         if (!lastTokenVariants[actual]) {
           matched = false;
@@ -303,6 +310,7 @@ function captionContainsTagWithAllowances(captionText, tagText) {
         matched = false;
         break;
       }
+      tokenIndex += 1;
     }
     if (matched) return true;
   }

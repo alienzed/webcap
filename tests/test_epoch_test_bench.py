@@ -361,7 +361,7 @@ def test_prepare_exposes_supported_test_aspect_ratios(tmp_path, monkeypatch):
     staged.mkdir()
     (staged / "epoch01.safetensors").write_bytes(b"weights")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None: {"status": "idle"})
+    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None, **_kwargs: {"status": "idle"})
 
     payload = bench.prepare(tmp_path)
 
@@ -376,7 +376,7 @@ def test_prepare_survives_optional_setting_choice_failure(tmp_path, monkeypatch)
     model = bench.get_test_model("krea2_raw")
 
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model: staged)
-    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None: {"status": "idle"})
+    monkeypatch.setattr(bench, "_visible_status", lambda _folder, model_id=None, **_kwargs: {"status": "idle"})
     monkeypatch.setattr(
         model,
         "setting_options",
@@ -1647,8 +1647,8 @@ def test_prepare_returns_candidates_from_current_test_folder(tmp_path, monkeypat
     staged = tmp_path / "staged"
     staged.mkdir()
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
-    monkeypatch.setattr(bench, "list_sessions", lambda _folder, model_id=None: [])
-    monkeypatch.setattr(bench, "status", lambda _folder, model_id=None: {"status": "idle"})
+    monkeypatch.setattr(bench, "list_sessions", lambda _folder, model_id=None, **_kwargs: [])
+    monkeypatch.setattr(bench, "status", lambda _folder, model_id=None, **_kwargs: {"status": "idle"})
 
     set_folder = tmp_path / "sets" / "demo"
     set_folder.mkdir(parents=True)

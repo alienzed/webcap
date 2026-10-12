@@ -899,7 +899,8 @@ def test_test_generations_surfaces_save_and_selected_epoch_state():
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
 
-    assert '"candidateMetadata": _staged_candidate_metadata(loras, model)' in backend
+    assert '"candidateMetadata": candidate_metadata' in backend
+    assert "candidate_runs, candidate_metadata = _staged_candidate_catalog(loras, model)" in backend
     assert "candidate_selected_epoch_from_provenance(provenance)" in backend
     assert "data-save-candidate" in script
     assert "Save this epoch" in script

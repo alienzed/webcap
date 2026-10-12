@@ -322,7 +322,11 @@
     var wasActive = scanIsActive();
     return requestJson('/fs/storage/scan/status').then(function (payload) {
       storageState.scan = payload.scan || { status: 'idle' };
-      render();
+      // A scan status tick does not change the item inventory. Keep buttons
+      // and rows intact until the completed scan refreshes authoritative data.
+      syncScanButton();
+      var status = el('storage-status');
+      if (status) status.textContent = scanStatusText();
       if (scanIsActive()) {
         scheduleScanPoll();
       } else {

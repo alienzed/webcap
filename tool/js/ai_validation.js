@@ -43,6 +43,8 @@ function aiValidationSightInput(item) {
 
 function isAiValidatedForItem(item) {
   if (!item || !item.key) return false;
+  // The receipt is provisional until its folder-state write succeeds.
+  if (aiValidationSavePending && state.currentItem && item.key === state.currentItem.key) return false;
   var receipt = aiValidationReceiptsByMedia[item.key];
   if (!receipt || receipt.version !== 1 || receipt.content !== aiValidationCurrentInput(item)) return false;
   var sightInput = aiValidationSightInput(item);

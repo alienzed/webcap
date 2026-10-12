@@ -7035,7 +7035,7 @@ html[data-theme="dark"] iframe {
   right: var(--caption-editor-right);
   bottom: var(--caption-editor-bottom);
   width: auto;
-  max-height: min(68vh, 590px);
+  max-height: max(120px, min(68vh, 590px, calc(100vh - var(--caption-editor-bottom) - 12px)));
   overflow: auto;
   pointer-events: auto;
   border-radius: 9px 9px 5px 5px;

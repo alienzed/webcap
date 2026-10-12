@@ -892,9 +892,13 @@ function refreshFolderQueueStatusBadges() {
     var host = row.querySelector('.folder-training-indicator');
     if (!host) throw new Error('Folder row is missing its training-status host.');
     var status = liveFolderTrainingStatus(row.getAttribute('data-key') || '');
-    host.innerHTML = status
-      ? '<span class="training-folder-status training-folder-status--' + escapeHtml(status.status) + '">' + escapeHtml(status.label) + '</span>'
-      : '';
+    var statusKey = status ? status.status + ':' + status.label : '';
+    if (host.dataset.trainingStatusKey !== statusKey) {
+      host.innerHTML = status
+        ? '<span class="training-folder-status training-folder-status--' + escapeHtml(status.status) + '">' + escapeHtml(status.label) + '</span>'
+        : '';
+      host.dataset.trainingStatusKey = statusKey;
+    }
   });
 }
 

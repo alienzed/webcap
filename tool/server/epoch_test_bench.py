@@ -746,8 +746,8 @@ def _staged_lora_provenance(lora_file):
     return payload if isinstance(payload, dict) else {}
 
 
-def _has_webcap_staged_provenance(lora_file, model):
-    payload = _staged_lora_provenance(lora_file)
+def _has_webcap_staged_provenance(lora_file, model, provenance=None):
+    payload = provenance if provenance is not None else _staged_lora_provenance(lora_file)
     if payload.get("version") != 1:
         return False
     if str(payload.get("stage") or "").strip().lower() != str(model.STAGING_KEY or "").strip().lower():
@@ -808,30 +808,58 @@ def _selected_lora_files_for_set(folder_path, model, selected_files=None):
         raise ValueError("Select at least one staged LoRA to test.")
     return sorted(selected, key=lambda path: path.name.lower())
 
-def _staged_candidate_runs(lora_files, model):
+def _staged_candidate_catalog(lora_files, model):
+    """Build both Test candidate views using one sidecar read per LoRA.
+
+    Training run lookup and selected-epoch lookup are reused per run, not
+    repeated for every staged epoch. This cache exists only for this request.
+    """
     runs = {}
+    metadata = {}
+    resolved_by_identity = {}
+    selected_by_run = {}
     for lora_file in lora_files:
-        if not _has_webcap_staged_provenance(lora_file, model):
-            continue
         provenance = _staged_lora_provenance(lora_file)
-        source_job_id = str(provenance.get("sourceJobId") or "").strip()
+        if not _has_webcap_staged_provenance(lora_file, model, provenance):
+            continue
+
         folder = str(provenance.get("sourceFolder") or "").strip()
+        source_job_id = str(provenance.get("sourceJobId") or "").strip()
+        epoch = int(provenance.get("sourceEpoch"))
+        stage = str(provenance.get("stage") or "").strip().lower()
         run_name = str(provenance.get("sourceRunName") or "").strip()
         run_sequence = str(provenance.get("sourceRunSequence") or "").strip()
         run_summary = provenance.get("runSummary") if isinstance(provenance.get("runSummary"), dict) else {}
-        job_id = source_job_id
-        run_key = source_job_id
-        try:
-            run_dir, resolved_run = candidate_run_snapshot_from_provenance(provenance)
+        # Include every field used by current and legacy run lookup so that
+        # different training runs are never collapsed into one cached result.
+        identity = (
+            folder, stage, str(provenance.get("sourceRunPath") or "").strip(),
+            str(provenance.get("sourceActionId") or "").strip(),
+            source_job_id, run_name, run_sequence,
+        )
+        if identity not in resolved_by_identity:
+            try:
+                run_dir, resolved_run = candidate_run_snapshot_from_provenance(provenance)
+                resolved_by_identity[identity] = (str(run_dir), resolved_run)
+            except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
+                resolved_by_identity[identity] = None
+
+        resolved = resolved_by_identity[identity]
+        if resolved is None:
+            job_id = source_job_id
+            metadata_run_key = (folder, source_job_id)
+            runs_key = source_job_id
+        else:
+            run_dir, resolved_run = resolved
             job_id = str(resolved_run.get("id") or source_job_id)
+            metadata_run_key = run_dir
+            runs_key = run_dir
             run_name = str(resolved_run.get("runName") or run_name)
             run_sequence = str(resolved_run.get("sequence") or run_sequence)
             run_summary = resolved_run.get("runSummary") if isinstance(resolved_run.get("runSummary"), dict) else run_summary
-            run_key = str(run_dir)
-        except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
-            pass
+
         if job_id:
-            runs[run_key] = {
+            runs[runs_key] = {
                 "jobId": job_id,
                 "sourceJobId": source_job_id,
                 "folder": folder,
@@ -839,43 +867,24 @@ def _staged_candidate_runs(lora_files, model):
                 "runSequence": run_sequence,
                 "runSummary": run_summary,
             }
-    return list(runs.values())
 
-
-def _staged_candidate_metadata(lora_files, model):
-    selected_by_run = {}
-    result = {}
-    for lora_file in lora_files:
-        if not _has_webcap_staged_provenance(lora_file, model):
-            continue
-        provenance = _staged_lora_provenance(lora_file)
-        folder = str(provenance.get("sourceFolder") or "").strip()
-        job_id = str(provenance.get("sourceJobId") or "").strip()
-        epoch = int(provenance.get("sourceEpoch"))
-        try:
-            run_dir, resolved_run = candidate_run_snapshot_from_provenance(provenance)
-            resolved_job_id = str(resolved_run.get("id") or job_id)
-            run_key = str(run_dir)
-        except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
-            resolved_job_id = job_id
-            run_key = (folder, job_id)
-        if run_key not in selected_by_run:
+        if metadata_run_key not in selected_by_run:
             try:
-                selected_by_run[run_key] = candidate_selected_epoch_from_provenance(provenance)
+                selected_by_run[metadata_run_key] = candidate_selected_epoch_from_provenance(provenance)
             except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
-                selected_by_run[run_key] = None
-        selected = selected_by_run[run_key]
-        result[lora_file.name] = {
-            "jobId": resolved_job_id,
-            "sourceJobId": job_id,
+                selected_by_run[metadata_run_key] = None
+        selected = selected_by_run[metadata_run_key]
+        metadata[lora_file.name] = {
+            "jobId": job_id,
+            "sourceJobId": source_job_id,
             "folder": folder,
             "epoch": epoch,
-            "stage": str(provenance.get("stage") or "").strip().lower(),
+            "stage": stage,
             "sourceFileName": str(provenance.get("sourceFileName") or "").strip(),
             "selected": bool(selected and int(selected.get("epoch") or 0) == epoch),
             "selectedEpoch": selected,
         }
-    return result
+    return list(runs.values()), metadata
 
 
 def _new_session_seed():
@@ -941,6 +950,7 @@ def prepare(folder_path, model_id=None):
         prepare_warnings.append(
             "Could not load optional Test setting choices from ComfyUI: " + str(exc)
         )
+    candidate_runs, candidate_metadata = _staged_candidate_catalog(loras, model)
     return {
         "operation": "test_prepare",
         "modelId": model.PROFILE_ID,
@@ -958,8 +968,8 @@ def prepare(folder_path, model_id=None):
         "count": len(loras),
         "files": [path.name for path in loras],
         "removableFiles": [path.name for path in loras],
-        "candidateRuns": _staged_candidate_runs(loras, model),
-        "candidateMetadata": _staged_candidate_metadata(loras, model),
+        "candidateRuns": candidate_runs,
+        "candidateMetadata": candidate_metadata,
         "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID),
         "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID),
         "latest": status(folder_path, model_id=model.PROFILE_ID),

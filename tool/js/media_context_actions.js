@@ -490,6 +490,12 @@ function buildMediaContextMenuActions(mediaItem, key) {
     });
   }
   actions.push({
+    label: 'View Saved Intelligence',
+    run: function () {
+      openSavedIntelligenceForMedia(mediaItem);
+    }
+  });
+  actions.push({
     label: 'Copy Tags',
     run: function () {
       copyTagsForMediaKey(mediaItem.key);

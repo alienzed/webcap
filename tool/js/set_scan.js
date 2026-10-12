@@ -668,6 +668,36 @@
     setReviewDetailTab('qa');
   }
 
+  function closeSavedIntelligence() {
+    el('saved-intelligence-modal').classList.add('hidden');
+  }
+
+  function openSavedIntelligenceForMedia(mediaItem) {
+    if (!mediaItem || !mediaItem.fileName) throw new Error('Select a media item to view saved intelligence.');
+    var modal = el('saved-intelligence-modal');
+    var filename = el('saved-intelligence-file');
+    var status = el('saved-intelligence-status');
+    var output = el('saved-intelligence-output');
+    if (!modal || !filename || !status || !output) throw new Error('Saved Intelligence UI is incomplete.');
+
+    filename.textContent = mediaItem.fileName;
+    var sight = mediaItem.metadata && mediaItem.metadata.vision_sight;
+    if (sight && typeof sight === 'object' && String(sight.description || '').trim()) {
+      status.textContent = 'Cached Sight' + (sight.model ? ' · ' + sight.model : '');
+      output.textContent = JSON.stringify({
+        description: String(sight.description || ''),
+        inventory: sight.inventory && typeof sight.inventory === 'object' ? sight.inventory : {}
+      }, null, 2);
+    } else {
+      status.textContent = 'No saved Sight';
+      output.textContent = isMediaMetadataLoading()
+        ? 'Metadata is still loading. Reopen this view when loading finishes.'
+        : 'No Sight has been saved for this item. Run Set Intelligence to collect it.';
+    }
+    modal.classList.remove('hidden');
+    el('saved-intelligence-close-btn').focus();
+  }
+
   function bindSetIntelligence() {
     var openBtn = el('set-intelligence-open-btn');
     var closeBtn = el('set-scan-close-btn');
@@ -681,6 +711,9 @@
     var guidedBtn = el('set-intelligence-guided-btn');
     var qaBtn = el('set-intelligence-qa-btn');
     var modal = el('set-scan-modal');
+    var savedModal = el('saved-intelligence-modal');
+    var savedCloseBtn = el('saved-intelligence-close-btn');
+    if (!savedModal || !savedCloseBtn) throw new Error('Saved Intelligence controls are missing.');
     if (!openBtn || !closeBtn || !stopBtn || !rescanBtn || !forceBtn || !forceMode || !entireSetToggle || !responseSelect || !primaryBtn || !guidedBtn || !qaBtn || !modal) {
       throw new Error('Set Intelligence controls are missing.');
     }
@@ -699,6 +732,17 @@
     modal.addEventListener('click', function (event) {
       if (event.target === modal) closeSetIntelligence();
     });
+    savedCloseBtn.onclick = closeSavedIntelligence;
+    savedModal.addEventListener('click', function (event) {
+      if (event.target === savedModal) closeSavedIntelligence();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !savedModal.classList.contains('hidden')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeSavedIntelligence();
+      }
+    }, true);
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && setScanState.open) {
         event.preventDefault();
@@ -770,6 +814,7 @@
 
   window.cancelItemSightRefresh = cancelItemSightRefresh;
   window.refreshSetIntelligenceItem = refreshSetIntelligenceItem;
+  window.openSavedIntelligenceForMedia = openSavedIntelligenceForMedia;
   window.openSetIntelligence = openSetIntelligence;
   window.stopSetIntelligence = stopSetIntelligence;
   window.isSetIntelligenceRunning = isSetIntelligenceRunning;

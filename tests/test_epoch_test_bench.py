@@ -326,6 +326,47 @@ def test_session_status_projects_resolved_wildcard_values(tmp_path):
     assert status["wildcardValues"] == ["rooftop", "side"]
 
 
+def test_session_status_distinguishes_unmatched_from_plain_and_pending(tmp_path):
+    session = tmp_path / "session"
+    session.mkdir()
+    status_path = session / "test.json"
+
+    def read_status(source, resolved):
+        status_path.write_text(json.dumps({
+            "status": "complete",
+            "sourcePrompt": source,
+            "resolvedPrompt": resolved,
+        }), encoding="utf-8")
+        return bench._session_status(session)
+
+    unmatched = read_status("person in {studio|rooftop}", "person somewhere else")
+    assert unmatched["wildcardValues"] == []
+    assert unmatched["wildcardSummary"] == []
+    assert unmatched["wildcardSummaryUnmatched"] is True
+
+    assert read_status("plain prompt", "plain prompt")["wildcardSummaryUnmatched"] is False
+    assert read_status("person in {studio|rooftop}", "person in {studio|rooftop}")[
+        "wildcardSummaryUnmatched"
+    ] is False
+    assert read_status("person in {studio|rooftop}", "person in studio")[
+        "wildcardSummaryUnmatched"
+    ] is False
+
+
+def test_session_status_reopens_optional_empty_wildcard_selection(tmp_path):
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "test.json").write_text(json.dumps({
+        "status": "complete",
+        "sourcePrompt": "person in {studio|} room",
+        "resolvedPrompt": "person in room",
+    }), encoding="utf-8")
+    response = bench._session_status(session)
+    assert response["wildcardValues"] == []
+    assert response["wildcardSummary"] == []
+    assert response["wildcardSummaryUnmatched"] is False
+
+
 def test_session_status_ignores_legacy_stored_wildcard_values(tmp_path):
     session = tmp_path / "session"
     session.mkdir()

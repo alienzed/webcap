@@ -855,12 +855,16 @@
       folder: String(state.folder || ''), scope: qaBuildScopeKey(items),
       selectedFiles: items.map(function (item) { return item.fileName; }),
       investigationId: investigation && investigation.concept === concept ? investigation.id : '',
+      dismissIf: investigation && investigation.concept === concept ? investigation.dismissIf : '',
       concept: concept, model: model, items: available,
       vocabulary: vocabulary, missingCount: missingCount,
       signatures: qaConceptInputSignatures(items), index: 0,
       jobId: '', stopped: false
     };
-    qaWorkbenchState.conceptFindings = [];
+    // Preserve prior independently validated actions; only the same question is replaced.
+    qaWorkbenchState.conceptFindings = qaWorkbenchState.conceptFindings.filter(function (finding) {
+      return finding.conceptQuestion !== concept;
+    });
     qaMergeFindings();
     qaSyncFocusReview();
     qaWorkbenchState.conceptSession = session;
@@ -884,7 +888,14 @@
           qaWorkbenchState.investigation.finished = true;
           qaWorkbenchState.investigation.examined = session.items.length;
           qaWorkbenchState.investigation.missing = missingCount;
-          qaWorkbenchState.investigation.actions = qaWorkbenchState.conceptFindings.length;
+          qaWorkbenchState.investigation.actions = qaWorkbenchState.conceptFindings.filter(function (finding) {
+            return finding.conceptQuestion === session.concept;
+          }).length;
+          qaWorkbenchState.investigation.verdict = qaWorkbenchState.investigation.verdicts.some(function (v) {
+            return v.status === 'supported';
+          }) ? 'supported' : (missingCount || qaWorkbenchState.investigation.verdicts.some(function (v) {
+            return v.status === 'inconclusive';
+          }) ? 'inconclusive' : 'dismissed');
         }
         qaWorkbenchState.conceptStatus = 'Concept check finished · ' + session.items.length + ' items examined' + (missingCount ? ' · ' + missingCount + ' without Sight (not checked).' : '.');
         reportConsoleInfo('QA Concept Check', qaWorkbenchState.conceptStatus);
@@ -900,7 +911,8 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folder: session.folder, model: model, concept: concept,
-          knownVocabulary: session.vocabulary, items: batch
+          knownVocabulary: session.vocabulary, items: batch,
+          dismissIf: session.dismissIf
         })
       }).then(function (payload) {
         if (!current()) {
@@ -924,6 +936,13 @@
           return batch.some(function (row) { return row.fileName === item.fileName; });
         });
         var currentSignatures = qaConceptInputSignatures(liveItems);
+        if (session.investigationId && qaWorkbenchState.investigation &&
+            qaWorkbenchState.investigation.id === session.investigationId) {
+          var verdict = String(analysis.investigationStatus || 'inconclusive');
+          qaWorkbenchState.investigation.verdicts.push({
+            status: verdict, reason: String(analysis.investigationReason || '')
+          });
+        }
         qaNormalizeAiFindings(analysis, session.model).forEach(function (finding) {
           var files = (finding.files || []).filter(function (file) { return session.signatures[file] === currentSignatures[file]; });
           finding.tagActions = (finding.tagActions || []).filter(function (action) {
@@ -942,6 +961,7 @@
           finding.files = files;
           finding.inputSignatures = Object.assign({}, session.signatures);
           finding.source = 'concept';
+          finding.conceptQuestion = concept;
           finding.sourceLabel = 'Concept QA · ' + concept;
           qaWorkbenchState.conceptFindings.push(finding);
         });
@@ -953,7 +973,11 @@
             return (finding.files || []).indexOf(row.fileName) !== -1 &&
               finding.inputSignatures[row.fileName] === signature;
           });
-          coverage.items[row.fileName] = { signature: signature, status: hasAction ? 'actionable' : 'clean' };
+          coverage.items[row.fileName] = {
+            signature: signature,
+            status: session.signatures[row.fileName] !== signature ? 'unchecked' :
+              (hasAction ? 'actionable' : (session.dismissIf ? 'inconclusive' : 'clean'))
+          };
         });
         session.index += batch.length;
         qaMergeFindings();
@@ -1035,6 +1059,7 @@
     qaWorkbenchState.deepScanStatus = 'Stopping Deep QA…';
     renderQaWorkbench();
     if (!qaWorkbenchState.deepScanJobId) {
+      qaWorkbenchState.deepScanSessionToken += 1;
       var challengerId = qaWorkbenchState.deepScanChallengerJobId;
       if (challengerId) {
         qaRequestJson('/fs/director/job', {
@@ -1042,15 +1067,16 @@
           body: JSON.stringify({ operation: 'cancel_job', jobId: challengerId })
         }).catch(function (err) { window.reportConsoleError('QA Deep Scan · Cancel challenger', err); });
       }
-      cancelItemSightRefresh().catch(function (err) {
-        window.reportConsoleError('QA Deep Scan · Cancel Vision', err);
-      });
       qaWorkbenchState.deepScanSessionActive = false;
       qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
       renderQaWorkbench();
       return;
     }
     var jobId = qaWorkbenchState.deepScanJobId;
+    qaWorkbenchState.deepScanSessionToken += 1;
+    qaWorkbenchState.deepScanSessionActive = false;
+    qaWorkbenchState.deepScanJobId = '';
+    qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
     qaRequestJson('/fs/director/job', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2088,7 +2114,7 @@
       if (active && active.finished) {
         var outcome = document.createElement('p');
         outcome.className = 'qa-investigation-result';
-        outcome.textContent = active.examined + ' items checked · ' + active.actions +
+        outcome.textContent = (active.verdict || 'inconclusive') + ' · ' + active.examined + ' items checked · ' + active.actions +
           ' actionable findings · ' + active.missing + ' without Sight (unchecked).';
         article.appendChild(outcome);
       } else if (active && active.error) {
@@ -2983,6 +3009,7 @@
         qaWorkbenchState.conceptQuery = concern.concept;
         qaWorkbenchState.investigation = {
           id: concern.id, concept: concern.concept, files: files,
+          dismissIf: concern.dismissIf, verdicts: [], verdict: '',
           finished: false, examined: 0, missing: 0, actions: 0, error: ''
         };
         if (!files.length) {

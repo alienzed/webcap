@@ -1555,8 +1555,8 @@ function directorModelTestStartCalibration() {
     directorModelTestState.maximumProbes = 0;
     directorModelTestState.currentRuntimeName = '';
     directorModelTestState.calibrationTotal = 0;
-    directorModelTestState.startedAt = 0;
     window.finishActivityProgress('director-diagnostics-' + String(directorModelTestState.startedAt), assessmentFailed ? 'failed' : (directorModelTestState.stopRequested ? 'stopped' : 'completed'));
+    directorModelTestState.startedAt = 0;
     directorModelTestState.mode = '';
     directorModelTestStopActivityClock();
     directorModelTestSyncControls();
@@ -1836,8 +1836,10 @@ function directorModelTestStart() {
     directorModelTestState.currentModelNumber = 0;
     directorModelTestState.currentPhase = '';
     directorModelTestState.currentRuntimeName = '';
+    window.finishActivityProgress('director-diagnostics-' + String(directorModelTestState.startedAt),
+      directorModelTestState.stopRequested ? 'stopped' :
+        (directorModelTestState.session && directorModelTestState.session.status === 'failed' ? 'failed' : 'completed'));
     directorModelTestState.startedAt = 0;
-    window.finishActivityProgress('director-diagnostics-' + String(directorModelTestState.startedAt), assessmentFailed ? 'failed' : (directorModelTestState.stopRequested ? 'stopped' : 'completed'));
     directorModelTestState.mode = '';
     directorModelTestStopActivityClock();
     directorModelTestSyncControls();

@@ -401,3 +401,18 @@ def test_output_pathologies_warn_in_normal_selectors(calibration_root, failure_k
     }])
     saved = calibration.save_report(report)
     assert _assessment_signal(saved["modelRef"])["seriousWarning"] is True
+
+
+def test_confirmation_does_not_change_existing_profile(calibration_root):
+    calibration.save_profile(_profile())
+    report = calibration.save_report(_report(
+        assessmentKind="confirmation", contextMode="runtime", contextSize=8192, maxTokens=2048,
+        attempts=[{"kind": "prose", "target": 2048, "status": "passed", "observedContextSize": 8192}],
+    ))
+    assert report["assessmentKind"] == "confirmation"
+    assert calibration.get_report("local::director.gguf")["assessmentKind"] == "confirmation"
+    assert calibration.get_profile("local::director.gguf")["maxTokens"] == 4096
+
+
+def test_legacy_reports_remain_calibration_kind(calibration_root):
+    assert calibration.save_report(_report())["assessmentKind"] == "calibration"

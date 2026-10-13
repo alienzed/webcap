@@ -64,7 +64,7 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "Run Deep QA" in qa
     assert "qaRunDeepScan();" in qa
     assert "qaStartFocusReview();" in qa
-    assert "Run scan only" in qa
+    assert "Stop Deep QA" in qa
     assert "'deep-scan'" in qa
     assert "'/fs/qa/deep-scan'" in qa
     assert "qaBuildDeepScanItems" in qa
@@ -74,8 +74,7 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "metadata.face_focus" in qa
     assert "metadata.selection_pose" in qa
     assert "metadata.vision_sight" in qa
-    assert "metadata.vision_vocabulary_sight" in qa
-    assert "out.contextSight" in qa
+    assert "out.visionSight" in qa
     assert "qaBuildVisualAgreementFindings" in qa
     assert "qaPrimeDeterministicSources" in qa
     assert "ensurePruneCandidatesForCurrentFolder(false, scopeFiles)" in qa

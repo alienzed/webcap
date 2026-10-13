@@ -445,7 +445,7 @@
     }).catch(function () {
       if (state.pending) renderProgress(null, null);
     }).then(function () {
-      if (state.pending) state.progressTimer = setTimeout(pollProgress, 1000);
+      if (state.pending) state.progressTimer = setTimeout(pollProgress, 2500);
     });
   }
 
@@ -601,7 +601,7 @@
         terminalError.jobStatus = status;
         throw terminalError;
       }
-      var delay = status === 'queued' ? 3000 : 1500;
+      var delay = status === 'queued' ? 4000 : 2500;
       return new Promise(function (resolve) { setTimeout(resolve, delay); })
         .then(function () { return jobRequest(current.jobId); })
         .then(poll);

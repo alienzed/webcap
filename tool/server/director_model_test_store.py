@@ -271,10 +271,10 @@ def calibration_protocol():
         "marker": CALIBRATION_MARKER,
         "proseMarker": PROSE_MARKER,
         "description": (
-            "Calibration starts with small probes so limited models can establish useful capability before stress testing. "
-            "Local llama.cpp context is tested progressively until a tier fails or the test range is exhausted. "
-            "Each output tier is a requested generation budget, not a claim about the provider or model hard maximum. "
-            "Each tier must pass both a mechanical completion test and a coherent long-form prose test."
+            "Director assessment runs one 2048-token long-form writing task at the current runtime context; "
+            "only a capacity failure triggers one smaller retry. "
+            "Each output target is a requested generation budget, not a measured model maximum. "
+            "Historical context and structured-output tiers remain available for reading legacy evidence."
         ),
     }
 

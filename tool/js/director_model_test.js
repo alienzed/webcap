@@ -285,6 +285,7 @@ function directorModelTestRenderActivity() {
   var card = host.querySelector('[data-progress-card-id]');
   if (!card) {
     card = ProgressCard.create();
+    card.classList.add('director-model-test-activity-card');
     host.replaceChildren(card);
   }
   ProgressCard.update(card, snapshot);
@@ -1334,7 +1335,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   directorModelTestState.currentProbeLabel = '';
   directorModelTestState.completedProbes = 0;
   directorModelTestState.maximumProbes = (model.runtimeId === 'local' ? contextSteps.length : 0) + 2 * outputSteps.length;
-  directorModelTestRenderActivity();
+  if (directorModelTestState.running) directorModelTestRenderActivity();
 
   if (isFinite(recommendedContextMax) && recommendedContextMax > 0) {
     reportConsoleInfo(
@@ -1394,7 +1395,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
       attempts.push(attempt);
       directorModelTestState.completedProbes = attempts.length;
       directorModelTestState.currentPhase = 'recording';
-      directorModelTestRenderActivity();
+      if (directorModelTestState.running) directorModelTestRenderActivity();
       if (kind === 'context' && attempt.status === 'passed') contextSize = Number(target);
       if (contextMode === 'runtime' && attempt.observedContextSize > contextSize) {
         contextSize = attempt.observedContextSize;

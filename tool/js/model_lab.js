@@ -144,8 +144,21 @@ function modelLabRunProgress(run) {
 function modelLabPublishProgress(run) {
   var id = run && run.id ? 'model-lab:' + String(run.id) : '';
   var status = String(run && run.status || '');
-  // Browsing a different run does not stop the server-owned active run.
-  if (modelLabState.progressRunId && modelLabState.progressRunId !== id) return;
+  // Browsing history must not stop the active run. When a *new* run is
+  // started, however, retire a completed predecessor before following it.
+  if (modelLabState.progressRunId && modelLabState.progressRunId !== id) {
+    if (status !== 'running') return;
+    var previousId = modelLabState.progressRunId.replace(/^model-lab:/, '');
+    var previous = modelLabState.runs.find(function (row) {
+      return String(row.id || '') === previousId;
+    });
+    if (previous && previous.active) return;
+    var previousStatus = String(previous && previous.status || '');
+    window.finishActivityProgress(modelLabState.progressRunId,
+      previousStatus === 'error' ? 'failed' :
+        (previousStatus === 'completed' ? 'completed' : 'stopped'));
+    modelLabState.progressRunId = '';
+  }
   if (modelLabState.progressRunId && status !== 'running') {
     window.finishActivityProgress(modelLabState.progressRunId,
       status === 'error' ? 'failed' : (status === 'completed' ? 'completed' : 'stopped'));
@@ -312,10 +325,21 @@ function modelLabSchedulePoll() {
     window.clearTimeout(modelLabState.polling);
     modelLabState.polling = 0;
   }
-  if (!modelLabState.run || modelLabState.run.status !== 'running') return;
+  var selected = modelLabState.run;
+  var selectedActive = selected && selected.status === 'running';
+  var activeId = modelLabState.progressRunId.replace(/^model-lab:/, '');
+  if (!selectedActive && !activeId) return;
   modelLabState.polling = window.setTimeout(function () {
     modelLabState.polling = 0;
-    modelLabFetch(modelLabState.run.id).catch(function (error) {
+    // Keep the server-owned active run current without changing the selected
+    // historical run or introducing another polling cycle.
+    var request = selectedActive
+      ? modelLabFetch(selected.id)
+      : modelLabRequest('/app/model-lab?run=' + encodeURIComponent(activeId)).then(function (payload) {
+          modelLabPublishProgress(payload.run);
+          modelLabSchedulePoll();
+        });
+    request.catch(function (error) {
       reportConsoleError('Model Lab', error);
     });
   }, 1500);

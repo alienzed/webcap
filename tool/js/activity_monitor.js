@@ -62,7 +62,9 @@
   function publishProgress(snapshot) {
     if (!snapshot || !snapshot.id) throw new Error('Activity progress requires a stable ID.');
     state.localProgress[String(snapshot.id)] = Object.assign({}, snapshot);
-    if (snapshot.childJobId) state.progressChildIds[String(snapshot.childJobId)] = true;
+    if (snapshot.childJobId) {
+      state.progressChildIds[String(snapshot.childJobId)] = { owner: String(snapshot.id), expiresAt: 0 };
+    }
     renderProgressFollower();
     if (state.open) render();
   }
@@ -71,6 +73,12 @@
     var item = state.localProgress[String(id || '')];
     if (!item) return;
     delete state.localProgress[String(id)];
+    // Keep terminal child jobs suppressed until their recent receipts are seen.
+    // Running parents retain their child IDs regardless of execution duration.
+    Object.keys(state.progressChildIds).forEach(function (childId) {
+      var child = state.progressChildIds[childId];
+      if (child.owner === String(id)) child.expiresAt = Date.now() + 120000;
+    });
     if (status === 'failed') {
       window.reportConsoleError('Activity', item.title + ' failed. See Diagnostics and Console.');
     }
@@ -82,11 +90,32 @@
     return Object.keys(state.localProgress).map(function (id) { return state.localProgress[id]; });
   }
 
+  function pruneProgressChildren() {
+    var now = Date.now();
+    Object.keys(state.progressChildIds).forEach(function (id) {
+      var child = state.progressChildIds[id];
+      if (child.expiresAt && child.expiresAt <= now) delete state.progressChildIds[id];
+    });
+  }
+
   function isProgressChild(item) {
     var id = String(item && item.id || '');
-    return !!id && (state.progressChildIds[id] || localItems().some(function (progress) {
-      return String(progress.childJobId || '') === id;
-    }));
+    return !!id && !!state.progressChildIds[id];
+  }
+
+  function directorFollowerSnapshot(item) {
+    if (item.kind !== 'director' || item.lane !== 'llm') return null;
+    return {
+      id: 'managed:director:' + String(item.id),
+      kind: 'director',
+      title: activityTitle(item),
+      status: item.status,
+      phase: String(item.status || 'queued').replace(/_/g, ' '),
+      detail: activityDetail(item),
+      startedAt: item.startedAt || item.createdAt,
+      progress: null,
+      original: item
+    };
   }
 
   function renderProgressFollower() {
@@ -95,7 +124,8 @@
     var host = el('activity-progress-follower');
     var managed = (Array.isArray(state.payload.active) ? state.payload.active : [])
       .filter(function (item) { return !isProgressChild(item); })
-      .map(managedProgressSnapshot).filter(Boolean);
+      .map(function (item) { return managedProgressSnapshot(item) || directorFollowerSnapshot(item); })
+      .filter(Boolean);
     var items = managed.concat(localItems());
     if (!items.length) {
       if (host) host.remove();
@@ -130,6 +160,9 @@
           window.setReviewDetailTab('qa');
         } else if (item.kind === 'model-lab') {
           window.openDiagnosticsModal('model-lab');
+        } else if (item.kind === 'director' && item.original &&
+            ['chat', 'generate', 'test', 'storyboard'].indexOf(item.original.client) === -1) {
+          setOpen(true);
         } else if (item.original) {
           openItem(item.original);
         } else {
@@ -510,7 +543,10 @@
 
   function notifyRecent(items) {
     items.forEach(function (item) {
-      if (isProgressChild(item)) return;
+      if (isProgressChild(item)) {
+        state.notified[recentKey(item)] = true;
+        return;
+      }
       var status = String(item.status || '');
       if (['completed', 'finished_early', 'failed', 'interrupted', 'stopped', 'cancelled'].indexOf(status) === -1) return;
       var key = recentKey(item);
@@ -849,6 +885,7 @@
     state.pending = true;
     state.pendingPromise = requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
       state.payload = payload;
+      pruneProgressChildren();
       captureRecent(payload.recent);
       window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);
       var activeErrorKeys = Object.create(null);

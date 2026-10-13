@@ -209,6 +209,7 @@ def _report_with_derived_fields(report):
     except (TypeError, ValueError):
         max_tokens = 0
     status = str(value.get("status") or "incomplete").strip()
+    value["assessmentKind"] = str(value.get("assessmentKind") or "calibration")
 
     value["health"] = _report_health(attempts, context_mode, context_size, max_tokens, status)
     value["pathologies"] = _report_pathologies(attempts)
@@ -262,8 +263,13 @@ def save_report(report):
     if status not in {"complete", "incomplete", "error", "stopped"}:
         raise ValueError("Director calibration report status is invalid.")
 
+    assessment_kind = str(report.get("assessmentKind") or "calibration")
+    if assessment_kind not in {"calibration", "confirmation"}:
+        raise ValueError("Director assessmentKind must be calibration or confirmation.")
+
     normalized = {
         "version": PROFILE_VERSION,
+        "assessmentKind": assessment_kind,
         "modelRef": model_ref,
         "runtimeId": runtime_id,
         "runtimeName": str(report.get("runtimeName") or "").strip(),

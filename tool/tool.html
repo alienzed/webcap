@@ -1210,6 +1210,14 @@
                                                 <span id="test-generations-files-count">0</span>
                                             </div>
                                         </div>
+                                        <div class="test-generations-sweep-setup">
+                                            <div class="test-generations-sweep-modes" role="group" aria-label="Test mode">
+                                                <button id="test-generations-normal-mode" type="button" class="review-captions-btn active" aria-pressed="true">Normal</button>
+                                                <button id="test-generations-sweep-mode" type="button" class="review-captions-btn" aria-pressed="false">Weight Sweep</button>
+                                            </div>
+                                            <label id="test-generations-sweep-field" class="test-generations-sweep-field hidden"><span>Weights</span><input id="test-generations-sweep-weights" type="text" value="0.6, 0.8, 1.0, 1.2" aria-label="Sweep weights, comma separated"></label>
+                                            <span id="test-generations-sweep-count" class="test-generations-sweep-count hidden"></span>
+                                        </div>
                                         <div id="test-generations-files" class="test-generations-staged-list"></div>
                                     </div>
                                     <div class="test-generations-library-panel test-generations-sessions">

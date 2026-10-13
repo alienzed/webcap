@@ -171,3 +171,18 @@ def test_execution_item_exposes_llm_finish_diagnostics():
     assert item["finishReason"] == "stop"
     assert item["promptTokens"] == 4210
     assert item["outputTokens"] == 3781
+
+
+def test_inference_activity_projects_provider_progress_without_changing_job():
+    job = {
+        "id": "inference-42",
+        "status": "running",
+        "metadata": {"client": "storyboard", "sceneId": "s1"},
+        "progress": {"step": 3, "steps": 12},
+    }
+    # Inference snapshots already use the public job view's progress field.
+    result = activity_monitor._execution_item("inference", job)
+    assert result["kind"] == "storyboard"
+    assert result["progress"] == {"step": 3, "steps": 12}
+    assert job["progress"] == {"step": 3, "steps": 12}
+    assert activity_monitor._execution_item("llm", job)["progress"] == {}

@@ -1377,18 +1377,20 @@ def _recover_wildcard_selections(source, resolved):
             if not choice:
                 continue
             token = r"(?<!\w)" + re.escape(choice) + r"(?!\w)"
-            anchors = []
-            if before and after:
-                anchors.append(re.escape(before) + r"\s*" + token + r"\s*" + re.escape(after))
+            # Prefer the source's left context. Finding an option elsewhere
+            # beside the right context is not proof it was selected here.
             if before:
-                anchors.append(re.escape(before) + r"\s*" + token)
-            if after:
-                anchors.append(token + r"\s*" + re.escape(after))
-            if not anchors and resolved == choice:
+                prefix = re.escape(before) + r"\s*" + token
+                if after and re.search(prefix + r"\s*" + re.escape(after), resolved):
+                    matches.append((3, choice))
+                elif re.search(prefix, resolved):
+                    matches.append((2, choice))
+            elif after:
+                # With no left context, the first group must match the start.
+                if re.search(r"^" + token + r"\s*" + re.escape(after), resolved):
+                    matches.append((1, choice))
+            elif resolved == choice:
                 matches.append((1, choice))
-            for strength, pattern in enumerate(reversed(anchors), 1):
-                if re.search(pattern, resolved):
-                    matches.append((strength, choice))
         if matches:
             strongest = max(score for score, _choice in matches)
             choices = {choice for score, choice in matches if score == strongest}

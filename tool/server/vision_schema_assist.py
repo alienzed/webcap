@@ -663,7 +663,7 @@ def _add_evidence(buckets, media, category, label, context):
         row["contexts"].append(context)
 
 
-def mine_sight_records(records, limit=240):
+def mine_sight_records(records, limit=240, minimum_support=None):
     prepared = []
     for row in records if isinstance(records, list) else []:
         if not isinstance(row, dict):
@@ -706,7 +706,7 @@ def mine_sight_records(records, limit=240):
             for value in inventory[field]:
                 _add_evidence(buckets, media, category, value, context)
 
-    minimum_support = 2 if len(prepared) >= 4 else 1
+    minimum_support = (2 if len(prepared) >= 4 else 1) if minimum_support is None else minimum_support
     candidates = [
         row for row in buckets.values()
         if len(row["media"]) >= minimum_support

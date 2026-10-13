@@ -1401,3 +1401,19 @@ def test_test_session_details_and_empty_compare_are_not_rebuilt_on_refresh():
     assert "if (markup !== lastSessionDetailsMarkup)" in details
     compare = script.split("function renderCompare(status)", 1)[1].split("function renderResults", 1)[0]
     assert "if (host.dataset.compareKey !== 'empty')" in compare
+
+
+def test_test_generations_sweep_is_opt_in_and_avoids_destructive_result_actions():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    assert 'id="test-generations-normal-mode"' in html
+    assert 'id="test-generations-sweep-mode"' in html
+    assert 'id="test-generations-sweep-weights"' in html
+    assert "var sweepMode = false;" in script
+    assert "if (weights) criteria.sweepWeights = weights;" in script
+    assert "sweepMode = false;" in script
+    assert "if (result && result.strength !== undefined && result.strength !== null) return null;" in script
+    assert "identity.primary += ' · Weight ' + String(result.strength);" in script
+    assert "defaultStrength: defaultCandidateStrength" in script
+    assert ".test-generations-sweep-setup" in css

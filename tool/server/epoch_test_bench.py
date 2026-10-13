@@ -2,6 +2,7 @@ import copy
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import secrets
@@ -673,6 +674,9 @@ def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None):
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
         if selected_model_id and session_model_id != selected_model_id:
             continue
+        # A sweep rates LoRA/weight renditions, not the ordinary LoRA candidate.
+        if payload.get("sweepWeights"):
+            continue
         results = payload.get("results") if isinstance(payload.get("results"), list) else []
         ratings = _session_rating_map(session)
         for result in results:
@@ -1077,6 +1081,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             name=criteria.get("name"),
             selected_files=criteria.get("selectedFiles"),
             candidate_strengths=criteria.get("candidateStrengths"),
+            sweep_weights=criteria.get("sweepWeights"),
             include_base=criteria.get("includeBase"),
             model_id=criteria.get("modelId"),
         )
@@ -1548,7 +1553,7 @@ def _project_wildcard_fields(payload):
 
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
                            selected_files=None, candidate_strengths=None, include_base=True, model_id=None,
-                           aspect_ratio=None, megapixels=None, duration=None):
+                           aspect_ratio=None, megapixels=None, duration=None, sweep_weights=None):
     from . import inference_runtime
 
     model = get_test_model(model_id)
@@ -1571,6 +1576,24 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
             if strength < -2 or strength > 2:
                 raise ValueError("Test candidate strength must be between -2 and 2.")
             strength_by_file[path.name] = strength
+    weights = None
+    if sweep_weights is not None:
+        if not isinstance(sweep_weights, list) or not sweep_weights:
+            raise ValueError("Weight sweep requires a nonempty list of weights.")
+        weights = []
+        for item in sweep_weights:
+            if isinstance(item, bool):
+                raise ValueError("Sweep weights must be numeric.")
+            try:
+                value = float(item)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Sweep weights must be numeric.") from exc
+            if not math.isfinite(value) or value < -2 or value > 2:
+                raise ValueError("Sweep weights must be between -2 and 2.")
+            if value in weights:
+                raise ValueError("Weight sweep cannot contain duplicate weights.")
+            weights.append(value)
+        weights.sort()
     session_name = str(name or "").strip()
     if len(session_name) > 120:
         raise ValueError("Test session name must be 120 characters or fewer.")
@@ -1609,6 +1632,8 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
         "workflow": copy.deepcopy(template),
         "candidateStrengths": strength_by_file,
     }
+    if weights is not None:
+        request["sweepWeights"] = weights
     request.update(_workflow_evidence(model, template))
     return request, loras, include_base is not False
 
@@ -1829,13 +1854,17 @@ def _sync_inference_session(session_directory):
                 and job_id not in failure_job_ids
             ):
                 _kind, candidate_file, label = _job_candidate_identity(job)
-                failures.append({
+                failure = {
                     "jobId": job_id,
                     "sourceLoRA": label or candidate_file or "Generation",
                     "candidateFile": candidate_file,
                     "error": str(job.get("error") or "Test generation failed."),
                     "elapsedMs": 0,
-                })
+                }
+                metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
+                if status.get("sweepWeights") and metadata.get("candidateStrength") is not None:
+                    failure["strength"] = float(metadata["candidateStrength"])
+                failures.append(failure)
                 failure_job_ids.add(job_id)
                 changed = True
             if (
@@ -1937,7 +1966,7 @@ def _record_skipped_inference(session_directory, job_id):
             _atomic_write_json(_status_path(session_directory), status)
 
 
-def _record_failed_inference(session_directory, job_id, candidate_label, candidate_file, exc, elapsed_ms):
+def _record_failed_inference(session_directory, job_id, candidate_label, candidate_file, exc, elapsed_ms, strength=None):
     with _status_lock:
         status = _read_status(session_directory) or {}
         failures = status.get("failures") if isinstance(status.get("failures"), list) else []
@@ -1951,6 +1980,8 @@ def _record_failed_inference(session_directory, job_id, candidate_label, candida
         }
         if candidate_file:
             failure["candidateFile"] = candidate_file
+        if strength is not None:
+            failure["strength"] = float(strength)
         failures.append(failure)
         status["failures"] = failures
         status["failed"] = len(failures)
@@ -2087,10 +2118,14 @@ def execute_inference(job_id, request, context):
         output_extension = Path(str(output_ref.get("filename") or "")).suffix
         if not output_extension:
             raise RuntimeError("ComfyUI Test output has no file extension.")
+        sweep = bool(request.get("sweepWeights"))
         media_path, caption_path = _result_paths(
             session_directory,
             lora_file,
-            stem_override="base" if candidate_kind == "base" else None,
+            stem_override=(
+                "base" if candidate_kind == "base" else
+                (lora_file.stem + "-w" + str(context["candidateStrength"]) if sweep else None)
+            ),
             extension=output_extension,
         )
         _move_saved_output(
@@ -2113,6 +2148,8 @@ def execute_inference(job_id, request, context):
         }
         if candidate_kind == "lora":
             result["candidateFile"] = candidate_file
+            if sweep:
+                result["strength"] = float(context["candidateStrength"])
             provenance = _staged_lora_provenance(lora_file)
             if provenance:
                 result["provenance"] = provenance
@@ -2141,6 +2178,7 @@ def execute_inference(job_id, request, context):
             candidate_file,
             exc,
             _candidate_elapsed_ms(started),
+            strength=context.get("candidateStrength") if request.get("sweepWeights") and candidate_kind == "lora" else None,
         )
         raise
 
@@ -2154,16 +2192,29 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
     candidates = []
     if include_base:
         candidates.append({"kind": "base", "label": "Base", "file": ""})
-    candidates.extend(
-        {
-            "kind": "lora",
-            "label": path.name,
-            "file": path.name,
-            "provenance": _staged_lora_provenance(path),
-            "strength": float((request.get("candidateStrengths") or {}).get(path.name, (request.get("settings") or {}).get("strength", 1))),
-        }
-        for path in loras
-    )
+    sweep_weights = request.get("sweepWeights")
+    if sweep_weights is not None:
+        for path in loras:
+            provenance = _staged_lora_provenance(path)
+            for weight in sweep_weights:
+                candidates.append({
+                    "kind": "lora",
+                    "label": path.name + " · Weight " + str(weight),
+                    "file": path.name,
+                    "provenance": provenance,
+                    "strength": weight,
+                })
+    else:
+        candidates.extend(
+            {
+                "kind": "lora",
+                "label": path.name,
+                "file": path.name,
+                "provenance": _staged_lora_provenance(path),
+                "strength": float((request.get("candidateStrengths") or {}).get(path.name, (request.get("settings") or {}).get("strength", 1))),
+            }
+            for path in loras
+        )
     payload = {
         "status": "queued",
         "modelId": model.PROFILE_ID,
@@ -2205,6 +2256,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "legacyJobId": str(legacy_job_id or ""),
         "migrationComplete": False,
     }
+    if sweep_weights is not None:
+        payload["sweepWeights"] = list(sweep_weights)
     payload.update(payload["settings"])
     with _status_lock:
         _atomic_write_json(_status_path(session_directory), payload)
@@ -2414,7 +2467,8 @@ def reconcile_startup():
 
 
 def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
-            candidate_strengths=None, include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None):
+            candidate_strengths=None, include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None,
+            sweep_weights=None):
     reconcile_startup()
     request, loras, include_base = _new_inference_request(
         folder_path,
@@ -2424,6 +2478,7 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
         name=name,
         selected_files=selected_files,
         candidate_strengths=candidate_strengths,
+        sweep_weights=sweep_weights,
         include_base=include_base,
         model_id=model_id,
         aspect_ratio=aspect_ratio,

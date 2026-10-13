@@ -1250,7 +1250,9 @@ def _resolved_wildcard_values(source_prompt, resolved_prompt):
         return []
 
     matched = _match_wildcard_source(source, resolved, _match_wildcard_nodes)
-    return matched[2] if matched is not None else []
+    if matched is not None:
+        return matched[2]
+    return [selection for selection in _recover_wildcard_selections(source, resolved)[2] if selection]
 
 
 _WILDCARD_SUMMARY_LOW_TERMS = {
@@ -1350,6 +1352,50 @@ def _wildcard_neighbor_literal(nodes, node_index, direction):
                 return text
         index += direction
     return ""
+
+
+def _recover_wildcard_selections(source, resolved):
+    """Recover only choices unambiguously anchored in the resolved prompt.
+
+    The normal whole-prompt matcher takes precedence. This local fallback never
+    guesses a value for an empty, nested or ambiguous group.
+    """
+    source = _strip_wildcard_comments(str(source or ""))
+    resolved = _normalize_wildcard_text(_strip_wildcard_comments(resolved))
+    nodes = _parse_wildcard_nodes(source)
+    selections = []
+    for index, (kind, options) in enumerate(nodes):
+        if kind != "group":
+            continue
+        before = " ".join(_wildcard_neighbor_literal(nodes, index, -1).split()[-2:])
+        after = " ".join(_wildcard_neighbor_literal(nodes, index, 1).split()[:2])
+        matches = []
+        for option in options:
+            if any(option_kind != "literal" for option_kind, _ in option):
+                continue
+            choice = _normalize_wildcard_text("".join(value for _, value in option))
+            if not choice:
+                continue
+            token = r"(?<!\\w)" + re.escape(choice) + r"(?!\\w)"
+            anchors = []
+            if before and after:
+                anchors.append(re.escape(before) + r"\\s*" + token + r"\\s*" + re.escape(after))
+            if before:
+                anchors.append(re.escape(before) + r"\\s*" + token)
+            if after:
+                anchors.append(token + r"\\s*" + re.escape(after))
+            if not anchors and resolved == choice:
+                matches.append((1, choice))
+            for strength, pattern in enumerate(reversed(anchors), 1):
+                if re.search(pattern, resolved):
+                    matches.append((strength, choice))
+        if matches:
+            strongest = max(score for score, _choice in matches)
+            choices = {choice for score, choice in matches if score == strongest}
+            selections.append(next(iter(choices)) if len(choices) == 1 else "")
+        else:
+            selections.append("")
+    return source, nodes, selections
 
 
 def _wildcard_summary_suffix(after_literal):
@@ -1461,9 +1507,9 @@ def _wildcard_summary_items(source_prompt, resolved_prompt):
         return []
 
     matched = _match_wildcard_source(source, resolved, _match_top_level_wildcard_selections)
-    if matched is None:
-        return []
-    source, nodes, selections = matched
+    source, nodes, selections = (
+        matched if matched is not None else _recover_wildcard_selections(source, resolved)
+    )
 
     spans = _top_level_wildcard_spans(source)
     group_nodes = [
@@ -1560,19 +1606,6 @@ def _resolved_wildcard_summary(source_prompt, resolved_prompt, owner_folder=""):
     ]
 
 
-def _unmatched_wildcard_summary(source_prompt, resolved_prompt):
-    source = str(source_prompt or "")
-    resolved = _normalize_wildcard_text(resolved_prompt)
-    if not source or not resolved or _normalize_wildcard_text(source) == resolved:
-        # The prompt may still be waiting for the wildcard resolver.
-        return False
-    nodes = _parse_wildcard_nodes(_strip_wildcard_comments(source))
-    return (
-        _wildcard_nodes_have_group(nodes)
-        and _match_wildcard_source(source, resolved, _match_wildcard_nodes) is None
-    )
-
-
 def _project_wildcard_fields(payload):
     visible = payload
     source = visible.get("sourcePrompt")
@@ -1580,12 +1613,6 @@ def _project_wildcard_fields(payload):
     visible["wildcardValues"] = _resolved_wildcard_values(source, resolved)
     visible["wildcardSummary"] = _resolved_wildcard_summary(
         source, resolved, visible.get("ownerFolder"),
-    )
-    # Derived only for the UI; never persist a diagnostic in the session.
-    visible["wildcardSummaryUnmatched"] = (
-        not visible["wildcardValues"]
-        and not visible["wildcardSummary"]
-        and _unmatched_wildcard_summary(source, resolved)
     )
     return visible
 

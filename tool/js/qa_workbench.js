@@ -1926,7 +1926,7 @@
     var intro = document.createElement('p');
     intro.textContent = undisposed.length
       ? 'Investigations are unverified hypotheses; only concrete corrections enter QA Focus Review.'
-      : (evaluationIncomplete ? 'No current set-wide Deep QA review. Existing observations remain in Reports.'
+      : (evaluationIncomplete ? 'No current Deep QA review for this training selection. Reviews of other selections remain saved.'
         : 'No outstanding findings from the current checks. Observations remain in Reports.');
     copy.appendChild(h2);
     copy.appendChild(intro);

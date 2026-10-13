@@ -22,7 +22,8 @@ def test_set_review_is_compact_and_bounded():
     assert contract["operation"] == "qa_set_review"
     assert contract["source_files"] == ["a.jpg", "b.jpg"]
     assert contract["response_schema"]["properties"]["findings"]["maxItems"] == 5
-    assert contract["max_tokens"] == 2048
+    assert contract["max_tokens"] == 4096
+    assert "Keep the response compact" in contract["prompt"]
     assert "An irrelevant long caption" not in contract["prompt"]
     assert "Teach garment shapes" in contract["prompt"]
     assert "triangle" in contract["prompt"]

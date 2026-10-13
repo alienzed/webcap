@@ -240,62 +240,55 @@ function directorModelTestStopActivityClock() {
   directorModelTestState.activityTimer = 0;
 }
 
+function directorModelTestPublishProgress(status) {
+  var isAssessment = directorModelTestState.mode === 'calibration';
+  var number = Number(directorModelTestState.currentModelNumber || 0);
+  var total = isAssessment ? Number(directorModelTestState.calibrationTotal || 0) :
+    (directorModelTestState.session && directorModelTestState.session.models || []).length;
+  var completed = isAssessment ? Number(directorModelTestState.completedProbes || 0) :
+    (directorModelTestState.session && directorModelTestState.session.runs || []).length;
+  var upper = isAssessment ? Number(directorModelTestState.maximumProbes || 0) : total;
+  var label = isAssessment
+    ? (number ? 'Model ' + number + ' / ' + total + ' · ' + completed + ' of up to ' + upper + ' probes complete' : total + ' models selected')
+    : completed + ' / ' + total + ' models complete';
+  var phase = directorModelTestState.stopRequested ? 'Stopping' :
+    directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued');
+  if (isAssessment && directorModelTestState.currentProbeLabel) phase += ' · ' + directorModelTestState.currentProbeLabel;
+  return {
+    id: 'director-diagnostics-' + String(directorModelTestState.startedAt),
+    kind: 'director-diagnostics',
+    title: isAssessment ? 'Director Model Assessment' : 'Director Benchmark',
+    status: status || (directorModelTestState.stopRequested ? 'stopping' : 'running'),
+    detail: [directorModelTestState.currentModelLabel || 'Preparing next model…',
+      directorModelTestState.currentRuntimeName || ''].filter(Boolean).join(' · '),
+    phase: phase,
+    progressLabel: label,
+    progress: isAssessment
+      ? (upper > 0 ? { completed: completed, total: upper, totalIsUpperBound: true } : null)
+      : (total > 0 ? { completed: completed, total: total } : null),
+    startedAt: directorModelTestState.startedAt,
+    childJobId: directorModelTestState.currentJobId || ''
+  };
+}
+
 function directorModelTestRenderActivity() {
   var benchmarkHost = directorModelTestEl('director-model-test-activity');
   var assessmentHost = directorModelTestEl('director-model-assessment-activity');
   if (!benchmarkHost || !assessmentHost) throw new Error('Director diagnostic activity markup is incomplete.');
-
-  var isAssessment = directorModelTestState.mode === 'calibration';
-  benchmarkHost.classList.toggle('hidden', !directorModelTestState.running || isAssessment);
-  assessmentHost.classList.toggle('hidden', !directorModelTestState.running || !isAssessment);
-  if (!directorModelTestState.running) return;
-
-  var host = isAssessment ? assessmentHost : benchmarkHost;
-  var session = directorModelTestState.session;
-  var total = isAssessment
-    ? Number(directorModelTestState.calibrationTotal || 0)
-    : (Array.isArray(session && session.models) ? session.models.length : 0);
-  var number = Number(directorModelTestState.currentModelNumber || 0);
-  var model = directorModelTestState.currentModelLabel || 'Preparing next model…';
-  var runtime = directorModelTestState.currentRuntimeName || '';
-  var phase = directorModelTestState.stopRequested ? 'Stopping' :
-    directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued');
-  var progress = total > 0 && number > 0 ? Math.max(0, Math.min(100, number / total * 100)) : 0;
-  var detail = [model, runtime].filter(Boolean).join(' · ');
-  var stage = phase;
-  var counts = number > 0 && total > 0 ? 'Model ' + String(number) + ' / ' + String(total) : '';
-  if (isAssessment) {
-    var completed = Number(directorModelTestState.completedProbes || 0);
-    var maximum = Number(directorModelTestState.maximumProbes || 0);
-    var probe = directorModelTestState.currentProbeLabel;
-    if (probe) stage += ' · ' + probe;
-    if (maximum > 0) counts += (counts ? ' · ' : '') + String(completed) + ' of up to ' + String(maximum) + ' probes complete';
-    // Assessments can finish early. This shows completed checks, not elapsed-time estimates.
-    progress = total > 0 ? Math.max(0, Math.min(100,
-      ((Math.max(0, number - 1) + (maximum > 0 ? completed / maximum : 0)) / total) * 100)) : 0;
-  } else {
-    if (number > 0 && total > 0) counts = String(number) + ' / ' + String(total);
-  }
-
-  var card = host.querySelector('.director-model-test-activity-card');
+  var active = directorModelTestState.running;
+  var assessment = directorModelTestState.mode === 'calibration';
+  benchmarkHost.classList.toggle('hidden', !active || assessment);
+  assessmentHost.classList.toggle('hidden', !active || !assessment);
+  if (!active) return;
+  var host = assessment ? assessmentHost : benchmarkHost;
+  var snapshot = directorModelTestPublishProgress();
+  var card = host.querySelector('[data-progress-card-id]');
   if (!card) {
-    host.innerHTML =
-      '<article class="activity-monitor-card status-running director-model-test-activity-card">' +
-        '<span class="activity-monitor-dot active"></span>' +
-        '<div class="activity-monitor-copy">' +
-          '<strong></strong><span></span><small data-diagnostic-stage></small>' +
-          '<small data-diagnostic-counts></small><small data-diagnostic-elapsed aria-live="off"></small>' +
-          '<div class="activity-monitor-progress" title="Checks completed, not estimated time"><span></span></div>' +
-        '</div>' +
-      '</article>';
-    card = host.querySelector('.director-model-test-activity-card');
+    card = ProgressCard.create();
+    host.replaceChildren(card);
   }
-  card.querySelector('strong').textContent = isAssessment ? 'Director Model Assessment' : 'Director Benchmark';
-  card.querySelector('.activity-monitor-copy > span').textContent = detail;
-  card.querySelector('[data-diagnostic-stage]').textContent = stage;
-  card.querySelector('[data-diagnostic-counts]').textContent = counts;
-  card.querySelector('[data-diagnostic-elapsed]').textContent = directorModelTestFormatElapsed(directorModelTestState.startedAt);
-  card.querySelector('.activity-monitor-progress span').style.width = progress.toFixed(1) + '%';
+  ProgressCard.update(card, snapshot);
+  window.publishActivityProgress(snapshot);
 }
 
 function directorModelTestSetStatus(text, state, summaryText) {
@@ -1563,6 +1556,7 @@ function directorModelTestStartCalibration() {
     directorModelTestState.currentRuntimeName = '';
     directorModelTestState.calibrationTotal = 0;
     directorModelTestState.startedAt = 0;
+    window.finishActivityProgress('director-diagnostics-' + String(directorModelTestState.startedAt), assessmentFailed ? 'failed' : (directorModelTestState.stopRequested ? 'stopped' : 'completed'));
     directorModelTestState.mode = '';
     directorModelTestStopActivityClock();
     directorModelTestSyncControls();
@@ -1843,6 +1837,7 @@ function directorModelTestStart() {
     directorModelTestState.currentPhase = '';
     directorModelTestState.currentRuntimeName = '';
     directorModelTestState.startedAt = 0;
+    window.finishActivityProgress('director-diagnostics-' + String(directorModelTestState.startedAt), assessmentFailed ? 'failed' : (directorModelTestState.stopRequested ? 'stopped' : 'completed'));
     directorModelTestState.mode = '';
     directorModelTestStopActivityClock();
     directorModelTestSyncControls();

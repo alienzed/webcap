@@ -80,6 +80,13 @@
     return Object.keys(state.localProgress).map(function (id) { return state.localProgress[id]; });
   }
 
+  function isProgressChild(item) {
+    var id = String(item && item.id || '');
+    return !!id && localItems().some(function (progress) {
+      return String(progress.childJobId || '') === id;
+    });
+  }
+
   function renderProgressFollower() {
     var root = el('app-overlay-root');
     if (!root) throw new Error('Activity overlay root is missing.');
@@ -421,6 +428,7 @@
 
   function notifyRecent(items) {
     items.forEach(function (item) {
+      if (isProgressChild(item)) return;
       var status = String(item.status || '');
       if (['completed', 'finished_early', 'failed', 'interrupted', 'stopped', 'cancelled'].indexOf(status) === -1) return;
       var key = recentKey(item);
@@ -615,7 +623,9 @@
   }
 
   function render() {
-    var active = (Array.isArray(state.payload.active) ? state.payload.active : []).concat(localItems());
+    var active = (Array.isArray(state.payload.active) ? state.payload.active : []).filter(function (item) {
+      return !isProgressChild(item);
+    }).concat(localItems());
     var recent = sessionRecent();
     var queues = state.payload.queues || {};
     var drawer = el('activity-monitor-drawer');

@@ -624,7 +624,7 @@ def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=Fa
     return result
 
 
-def build_set_review_request(items, vocabulary=None, training_focus="", primer=""):
+def build_set_review_request(items, vocabulary=None, training_focus="", primer="", sight_evidence=None):
     """Compact, set-wide discovery. No per-item caption judgment or asserted edits."""
     if not isinstance(items, list) or not items:
         raise ValueError("Deep QA needs a non-empty training selection.")
@@ -676,8 +676,16 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
             "evidence": {"type": "array", "maxItems": 4, "items": {"type": "string"}},
         }
     }
+    evidence = sight_evidence if isinstance(sight_evidence, dict) else {}
+    visual = [
+        {"category": _clean(row.get("category")), "label": _clean(row.get("label")),
+         "count": int(row.get("count") or 0), "examples": list(row.get("examples") or [])[:3]}
+        for row in (evidence.get("evidence") or [])[:160] if isinstance(row, dict)
+    ]
     payload = {"trainingFocus": _clean(training_focus), "captionPrimer": str(primer or "").strip(),
-               "vocabulary": groups, "items": compact}
+               "vocabulary": groups, "items": compact,
+               "sightCoverage": {"current": int(evidence.get("itemCount") or 0), "selected": len(compact)},
+               "savedVisualObservations": visual}
     prompt = (
         "[ROLE]\nYou review a LoRA training Set for consequential semantic omissions remaining after normal tagging and captioning.\n"
         "Human-approved tags are compact proxies for captions; they are not exhaustive descriptions of the media.\n\n"
@@ -694,7 +702,10 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
         "- Provide a concise concept-check QUESTION to ask about the candidate media using saved Sight.\n"
         "- Provide dismissIf: concrete evidence that would DISPROVE or make this concern irrelevant. "
         "This is a test criterion, not a model verdict or automatic-dismiss rule.\n"
-        "- State why the proposed concept is worth checking and cite specific patterns in the supplied tags.\n"
+        "- Saved visual observations are evidence from Sight, not guaranteed ground truth. "
+        "Compare observed nouns and properties with approved vocabulary and assigned tags; "
+        "prioritize meaningful discoveries left unrepresented, including rare one-item observations.\n"
+        "- State why the proposed concept is worth checking and cite specific patterns in the supplied tags or Sight.\n"
         "- The user will fix the highest-value findings and run this again. Return at most five, including zero if nothing matters.\n"
         "- Do not propose caption patches, tag edits, or new vocabulary as if already verified.\n"
         "- Confidence expresses strength of the hypothesis from this input, NOT certainty about any image.\n\n"

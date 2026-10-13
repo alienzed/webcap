@@ -341,6 +341,7 @@
       trainingFocus: qaWorkbenchState.trainingFocus,
       itemSignatures: Object.assign({}, qaWorkbenchState.aiItemSignatures),
       aiFindings: qaWorkbenchState.aiFindings,
+      conceptFindings: qaWorkbenchState.conceptFindings,
       captionQuality: qaWorkbenchState.captionQuality,
       qaAlternatives: qaWorkbenchState.qaAlternatives,
       aiSummary: qaWorkbenchState.aiSummary,
@@ -352,11 +353,12 @@
   function qaSaveReview(requireSuccess) {
     var folder = String(state.folder || '');
     var review = qaReviewPayload();
+    var scopeKey = review.scopeKey;
     qaReviewSaveChain = qaReviewSaveChain.catch(function () {}).then(function () {
       return qaRequestJson('/fs/qa/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: folder, review: review })
+        body: JSON.stringify({ folder: folder, scopeKey: scopeKey, review: review })
       });
     }).catch(function (err) {
       window.reportConsoleError('QA · Save review', err);
@@ -372,6 +374,7 @@
     var scopeKey = qaBuildScopeKey(qaGetTrainingItems());
     var focus = qaWorkbenchState.trainingFocus;
     qaWorkbenchState.aiFindings = [];
+    qaWorkbenchState.conceptFindings = [];
     qaWorkbenchState.captionQuality = {};
     qaWorkbenchState.qaAlternatives = {};
     qaWorkbenchState.aiSummary = '';
@@ -382,7 +385,7 @@
     qaWorkbenchState.aiCoverageTotal = 0;
     qaWorkbenchState.aiModel = '';
     qaWorkbenchState.dispositions = {};
-    return qaRequestJson('/fs/qa/review?folder=' + encodeURIComponent(folder)).then(function (payload) {
+    return qaRequestJson('/fs/qa/review?folder=' + encodeURIComponent(folder) + '&scopeKey=' + encodeURIComponent(scopeKey)).then(function (payload) {
       if (token !== qaReviewLoadToken || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting || String(state.folder || '') !== folder
           || qaBuildScopeKey(qaGetTrainingItems()) !== scopeKey
           || qaWorkbenchState.trainingFocus !== focus) return;
@@ -414,6 +417,12 @@
         return !(finding.files || []).some(function (file) { return changed[file]; });
       }).map(function (finding) {
         return legacyReview ? Object.assign({}, finding, { sourceLabel: 'Legacy Deep QA · ' + String(saved.aiModel || 'Director') }) : finding;
+      });
+      var conceptCurrent = qaConceptInputSignatures(qaGetTrainingItems());
+      qaWorkbenchState.conceptFindings = (saved.conceptFindings || []).filter(function (finding) {
+        return (finding.files || []).some(function (file) {
+          return finding.inputSignatures && finding.inputSignatures[file] === conceptCurrent[file];
+        });
       });
       qaWorkbenchState.captionQuality = Object.fromEntries(Object.entries(saved.captionQuality || {}).filter(function (entry) { return !changed[entry[0]]; }));
       qaWorkbenchState.qaAlternatives = Object.fromEntries(Object.entries(saved.qaAlternatives || {}).filter(function (entry) {
@@ -902,9 +911,7 @@
       jobId: '', stopped: false
     };
     // Preserve prior independently validated actions; only the same question is replaced.
-    qaWorkbenchState.conceptFindings = qaWorkbenchState.conceptFindings.filter(function (finding) {
-      return finding.conceptQuestion !== concept;
-    });
+    // Do not discard previously validated actions until their replacement succeeds.
     qaMergeFindings();
     qaSyncFocusReview();
     qaWorkbenchState.conceptSession = session;
@@ -989,7 +996,21 @@
             reason: inputsStillCurrent ? String(analysis.investigationReason || '') : 'Annotations changed during the check.'
           });
         }
-        qaNormalizeAiFindings(analysis, session.model).forEach(function (finding) {
+        var returnedFindings = qaNormalizeAiFindings(analysis, session.model);
+        var checkedFiles = batch.map(function (row) { return row.fileName; });
+        qaWorkbenchState.conceptFindings = qaWorkbenchState.conceptFindings.map(function (finding) {
+          if (finding.conceptQuestion !== concept) return finding;
+          var remaining = (finding.files || []).filter(function (file) {
+            return checkedFiles.indexOf(file) === -1;
+          });
+          if (!remaining.length) return null;
+          return Object.assign({}, finding, {
+            files: remaining,
+            tagActions: (finding.tagActions || []).filter(function (action) { return remaining.indexOf(action.file) !== -1; }),
+            patches: (finding.patches || []).filter(function (patch) { return remaining.indexOf(patch.file) !== -1; })
+          });
+        }).filter(Boolean);
+        returnedFindings.forEach(function (finding) {
           var files = (finding.files || []).filter(function (file) { return session.signatures[file] === currentSignatures[file]; });
           finding.tagActions = (finding.tagActions || []).filter(function (action) {
             if (files.indexOf(action.file) === -1) return false;
@@ -1028,6 +1049,7 @@
         session.index += batch.length;
         qaMergeFindings();
         qaSyncFocusReview();
+        qaSaveReview();
         return next();
       }).catch(function (err) {
         if (!current()) return;

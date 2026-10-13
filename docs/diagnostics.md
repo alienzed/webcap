@@ -62,6 +62,8 @@ Benchmark and Director Model Assessment deliberately own separate UI selection/s
 - Durable Director calibration / learned findings: `tool/server/director_model_calibration.py`
 - Temporary raw assessment evidence: `tool/server/director_model_assessment_store.py`
 - Advertised capability hints: shipped `tool/data/director_model_capabilities.json`, loaded and validated at startup by `tool/server/director_model_capabilities.py` (restart after edits). These are published hints, not measured calibration results.
+
+Published `contextTokens` is separate from any packaged `runtimeContextTokens` (e.g. Ollama `num_ctx`). `contextKind`, `sourceUrl`, and optional `verifiedAt` document the evidence; `inherited` is not a measurement on a fine-tune or quantization. Unknown custom aliases do not receive guessed capacities. These catalogue hints do not change existing runtime settings, probe scheduling, or Auto calibration profiles.
 - Shared modal styling: `tool/css/modals.css`
 - Environment checks: `tool/server/environment_check.py`
 - H3 probe: `tool/server/h3_probe.py`

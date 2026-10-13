@@ -9,7 +9,8 @@
     "sourceUrl": "https://huggingface.co/DavidAU/gemma-4-31B-it-Mystery-Fine-Tune-HERETIC-UNCENSORED-Thinking-Instruct-GGUF",
     "notes": [
       "Publisher card states max context 128k."
-    ]
+    ],
+    "verifiedAt": "2026-10-13"
   },
   {
     "match": [
@@ -17,11 +18,12 @@
     ],
     "contextTokens": 131072,
     "contextLabel": "128k",
-    "contextKind": "inherited",
-    "sourceUrl": "https://huggingface.co/llmfan46/gemma-4-E4B-it-ultra-uncensored-heretic",
+    "contextKind": "model-config",
+    "sourceUrl": "https://huggingface.co/llmfan46/gemma-4-E4B-it-ultra-uncensored-heretic/blob/main/config.json",
     "notes": [
-      "Gemma 4 E4B derivative; context inherited from the base architecture."
-    ]
+      "This fine-tune declares text_config.max_position_embeddings=131072; runtime allowance is separate."
+    ],
+    "verifiedAt": "2026-10-13"
   },
   {
     "match": [
@@ -57,12 +59,12 @@
     ],
     "contextTokens": 262144,
     "contextLabel": "262,144",
-    "contextKind": "publisher",
-    "sourceUrl": "https://huggingface.co/richardyoung/Hemmingway-1-heretic-GGUF",
+    "contextKind": "inherited",
+    "sourceUrl": "https://huggingface.co/JohnDi/Hemmingway-1-Abliterated-Extreme-GGUF",
     "notes": [
-      "Model supports 262,144 context.",
-      "Some Ollama packages ship with a much smaller runtime num_ctx; runtime configuration still matters."
-    ]
+      "Exact Extreme GGUF. Context 262144 is inherited from Altworld/Hemmingway-1, not tested on this quant."
+    ],
+    "verifiedAt": "2026-10-13"
   },
   {
     "match": [
@@ -85,11 +87,11 @@
     "contextKind": "inherited",
     "recommendedOutputTokens": 32768,
     "extendedRecommendedOutputTokens": 81920,
-    "sourceUrl": "https://huggingface.co/Qwen/Qwen3.5-4B",
+    "sourceUrl": "https://huggingface.co/mradermacher/Qwen3.5-4B-NSFW-ARA-Heretic-Literotica-i1-GGUF",
     "notes": [
-      "Context and output guidance are inherited from the Qwen3.5 base family.",
-      "32,768 output is the normal recommendation; 81,920 is suggested for unusually complex reasoning workloads."
-    ]
+      "Exact i1 GGUF; context and output guidance are inherited from the Qwen3.5-4B base family."
+    ],
+    "verifiedAt": "2026-10-13"
   },
   {
     "match": [
@@ -120,7 +122,8 @@
     "notes": [
       "Native context is 262,144; YaRN can extend supported runtimes toward 1M.",
       "Publisher guidance suggests up to 131,072 tokens for the final response."
-    ]
+    ],
+    "verifiedAt": "2026-10-13"
   },
   {
     "match": [
@@ -134,7 +137,8 @@
     "notes": [
       "Publisher recommends 16,384 max_new_tokens.",
       "Greedy decoding on long generations is documented as a repetition-loop failure mode for this model family."
-    ]
+    ],
+    "verifiedAt": "2026-10-13"
   },
   {
     "match": [
@@ -161,5 +165,162 @@
     "notes": [
       "Ollama package advertises a 256k context window."
     ]
+  },
+  {
+    "match": [
+      "g4-meromero-v2-31b-heretic"
+    ],
+    "contextTokens": 262144,
+    "contextLabel": "262,144",
+    "contextKind": "inherited",
+    "sourceUrl": "https://huggingface.co/DogOnKeyboard/G4-MeroMero-v2-31B-heretic",
+    "notes": [
+      "Gemma 4 31B-based fine-tune; native 262144 context is inherited, not tested on this GGUF."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "gemma-4-26b-a4b-it-heretic"
+    ],
+    "contextTokens": 262144,
+    "contextLabel": "262,144",
+    "contextKind": "model-config",
+    "sourceUrl": "https://huggingface.co/coder3101/gemma-4-26B-A4B-it-heretic/blob/main/config.json",
+    "notes": [
+      "Fine-tune text_config.max_position_embeddings=262144; Q4 and Q6 share the same model entry."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "gliese-qwen3.5-9b-abliterated-caption"
+    ],
+    "contextTokens": 262144,
+    "contextLabel": "262,144",
+    "contextKind": "inherited",
+    "sourceUrl": "https://huggingface.co/prithivMLmods/Gliese-Qwen3.5-9B-Abliterated-Caption",
+    "notes": [
+      "Qwen3.5-9B derivative; inherited native context; local and remote runtime configuration may differ."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "qwen2-vl-2b-abliterated-caption-it"
+    ],
+    "contextTokens": 32768,
+    "contextLabel": "32,768",
+    "contextKind": "inherited",
+    "sourceUrl": "https://huggingface.co/Qwen/Qwen2-VL-2B-Instruct/blob/main/config.json",
+    "notes": [
+      "Matching GGUF is Qwen2-VL-2B-derived; base max_position_embeddings=32768."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "qwen3.5-9b-nsfw-captioning-v5"
+    ],
+    "contextTokens": 262144,
+    "contextLabel": "262,144",
+    "contextKind": "inherited",
+    "sourceUrl": "https://huggingface.co/oldhag88/qwen3.5-9b-nsfw-captioning-v5",
+    "notes": [
+      "Qwen3.5-9B caption fine-tune; inherited native context, not tested on this GGUF."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "qwen3.8-27b-heretic"
+    ],
+    "contextTokens": 262144,
+    "contextLabel": "262,144",
+    "contextKind": "publisher",
+    "sourceUrl": "https://huggingface.co/0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored-GGUF",
+    "notes": [
+      "The publisher explicitly lists Qwen3.8-27B-Heretic-Q4_K_M.gguf as the legacy pre-RVN abliteration variant. This file and RVN-Q5_K_M.gguf share the same repository."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "rvn"
+    ],
+    "contextTokens": 262144,
+    "contextLabel": "262,144",
+    "contextKind": "publisher",
+    "sourceUrl": "https://huggingface.co/0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored-GGUF",
+    "notes": [
+      "Same 0bserverx GGUF repository as Qwen3.8-27B-Heretic-Q4_K_M.gguf; RVN-Q5_K_M.gguf is the newer RVN refinement, not the legacy Q4 variant."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "deepseek-r1-0528-qwen3-8b-heretic"
+    ],
+    "contextTokens": 131072,
+    "contextLabel": "131,072",
+    "contextKind": "inherited",
+    "sourceUrl": "https://huggingface.co/deepseek-ai/DeepSeek-R1-0528-Qwen3-8B/blob/main/config.json",
+    "notes": [
+      "Base max_position_embeddings=131072 through YaRN; original_max_position_embeddings=32768."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "gemma-3-12b-it-heretic"
+    ],
+    "contextTokens": 131072,
+    "contextLabel": "131,072",
+    "contextKind": "runtime-package",
+    "sourceUrl": "https://ollama.com/R4C3R/gemma-3-12b-it-heretic",
+    "notes": [
+      "Matching Ollama q5_k_m package advertises 128K; digest not verified."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "gemma4-12b-it-qat_q4_64k_16gb-gpu"
+    ],
+    "contextTokens": 262144,
+    "contextLabel": "262,144",
+    "contextKind": "runtime-package",
+    "sourceUrl": "https://ollama.com/SetneufPT/Gemma4-12B-IT-QAT_Q4_64K_16GB-GPU",
+    "notes": [
+      "Ollama advertises model 256K but published params configure num_ctx=64000."
+    ],
+    "verifiedAt": "2026-10-13",
+    "runtimeContextTokens": 64000
+  },
+  {
+    "match": [
+      "nullguard"
+    ],
+    "contextTokens": 131072,
+    "contextLabel": "128K",
+    "contextKind": "runtime-package",
+    "sourceUrl": "https://ollama.com/h4rithd/nullguard",
+    "notes": [
+      "Ollama publisher identifies this package as a Gemma 4 E4B abliteration and lists a 128K context window. Local alias may omit publisher namespace."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "gemma4-e4b-uncensored"
+    ],
+    "contextTokens": 131072,
+    "contextLabel": "128K",
+    "contextKind": "runtime-package",
+    "sourceUrl": "https://ollama.com/mo-shakib/gemma4-e4b-uncensored",
+    "notes": [
+      "Ollama publisher identifies Gemma 4 E4B (8B) with 131072 context; local model alias uses the same model name without namespace."
+    ],
+    "verifiedAt": "2026-10-13"
   }
 ]

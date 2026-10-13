@@ -8,6 +8,8 @@
     workStopRequested: false,
     schemaStarting: false,
     schemaJobId: '',
+    tagActivityId: '',
+    tagActivityStartedAt: 0,
     schemaRequestToken: 0,
     statusPayload: null,
     analysis: null,
@@ -726,6 +728,7 @@
   function stopWork() {
     var stoppingStage = schemaState.discoveryStage;
     schemaState.workStopRequested = true;
+    finishTagActivity('stopped');
     publishVocabularyActivity('Stopping');
     finishVocabularyActivity('stopped');
     schemaState.schemaRequestToken += 1;
@@ -840,10 +843,30 @@
     });
   }
 
+  function publishTagActivity(completed, total, phase) {
+    if (!schemaState.tagActivityId) return;
+    window.publishActivityProgress({
+      id: schemaState.tagActivityId, kind: 'vision-tag-assist',
+      title: schemaState.guidedLaunch ? 'Guided Tag Pass' : 'Vision Tag Assist',
+      status: schemaState.workStopRequested ? 'stopping' : 'running',
+      detail: schemaState.folder, phase: phase,
+      progressLabel: completed + ' / ' + total + ' batches complete',
+      progress: { completed: completed, total: total },
+      startedAt: schemaState.tagActivityStartedAt, childJobId: schemaState.schemaJobId
+    });
+  }
+  function finishTagActivity(status) {
+    if (!schemaState.tagActivityId) return;
+    window.finishActivityProgress(schemaState.tagActivityId, status);
+    schemaState.tagActivityId = '';
+    schemaState.tagActivityStartedAt = 0;
+  }
+
   function requestTagSuggestionBatch(batchFiles, batchIndex, batchCount, context) {
     if (context.token !== schemaState.schemaRequestToken || schemaState.workStopRequested) {
       return Promise.resolve(null);
     }
+    publishTagActivity(batchIndex, batchCount, 'Preparing batch ' + (batchIndex + 1));
     setStatus(
       'Preparing tag candidates · batch ' + String(batchIndex + 1) + ' of ' + String(batchCount) +
       ' · ' + String(batchFiles.length) + ' media'
@@ -877,7 +900,7 @@
         return cancelCaptionAssistJob(jobId).then(function () { return null; });
       }
       schemaState.schemaJobId = jobId;
-      publishVocabularyActivity();
+      publishTagActivity(batchIndex, batchCount, 'Director tag suggestions');
       trackTransientLlmJob(payload.job);
       render();
       return waitForCaptionAssistJob(payload.job);
@@ -933,12 +956,16 @@
       existingOnly: !!schemaState.guidedLaunch
     };
     var combined = { version: 1, items: [] };
+    schemaState.tagActivityStartedAt = Date.now() / 1000;
+    schemaState.tagActivityId = 'tag-assist:' + String(Date.now());
+    publishTagActivity(0, batches.length, 'Preparing');
 
     function runBatch(index) {
       if (index >= batches.length) return Promise.resolve(combined);
       return requestTagSuggestionBatch(batches[index], index, batches.length, context).then(function (result) {
         if (!result) return null;
         combined.items = combined.items.concat(result.items || []);
+        publishTagActivity(index + 1, batches.length, 'Batch complete');
         return runBatch(index + 1);
       });
     }
@@ -946,7 +973,11 @@
     runBatch(0).then(function (result) {
       schemaState.schemaStarting = false;
       schemaState.schemaJobId = '';
-      if (!result || token !== schemaState.schemaRequestToken || schemaState.workStopRequested) return;
+      if (!result || token !== schemaState.schemaRequestToken || schemaState.workStopRequested) {
+        finishTagActivity('stopped');
+        return;
+      }
+      finishTagActivity('completed');
       if (!schemaState.open || folder !== schemaState.folder || visionModel !== schemaState.visionModel) return;
       schemaState.tagCandidates = result;
       if (schemaState.guidedLaunch) {
@@ -965,6 +996,7 @@
       if (token !== schemaState.schemaRequestToken) return;
       schemaState.schemaStarting = false;
       schemaState.schemaJobId = '';
+      finishTagActivity(schemaState.workStopRequested ? 'stopped' : 'failed');
       if (schemaState.workStopRequested) {
         setStatus('Vision Tag Assist stopped.');
       } else {

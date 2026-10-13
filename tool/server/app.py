@@ -1454,6 +1454,10 @@ def qa_review_route():
         folder_path = _resolve_folder(folder)
         review_path = folder_path / ".webcap_qa_review.json"
         scope_key = str(data.get("scopeKey") or "")
+        if request.method == "POST" and not scope_key:
+            incoming = data.get("review")
+            if isinstance(incoming, dict):
+                scope_key = str(incoming.get("scopeKey") or "")
         saved = None
         if review_path.exists():
             with review_path.open("r", encoding="utf-8") as stream:
@@ -1462,7 +1466,13 @@ def qa_review_route():
         if not scope_key:
             # Preserve legacy clients while requiring a scope for the new multi-review format.
             if request.method == "GET":
-                return jsonify({"ok": True, "review": saved if isinstance(saved, dict) and saved.get("version") == 1 else None})
+                if isinstance(saved, dict) and saved.get("version") == 1:
+                    return jsonify({"ok": True, "review": saved})
+                if isinstance(saved, dict) and saved.get("version") == 2:
+                    entries = list((saved.get("reviews") or {}).values())
+                    if len(entries) == 1:
+                        return jsonify({"ok": True, "review": entries[0].get("review")})
+                return jsonify({"ok": True, "review": None})
             raise ValueError("QA review scope is required for writing.")
 
         if len(scope_key) > 250000:

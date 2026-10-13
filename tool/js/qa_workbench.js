@@ -249,6 +249,10 @@
     return JSON.stringify({
       folder: String(state.folder || ''),
       trainingFocus: qaWorkbenchState.trainingFocus,
+      vocabulary: checklistItems.map(function (group) {
+        return [group, getRequirementGroupAlias(group), getChecklistKeywordTermsForRequirement(group)];
+      }),
+      primer: String(statsGetPrimerOptionsFromDom().template || ''),
       items: qaBuildDeepScanItems(items)
     });
   }

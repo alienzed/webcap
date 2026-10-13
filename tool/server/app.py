@@ -1506,11 +1506,11 @@ def qa_deep_scan_route():
                 # Deliberately approximate: not a tokenizer or a hard capacity gate.
                 import math
                 prompt_tokens = math.ceil(len(contract["prompt"]) / 3)
-                reserve = 1024
+                reserve = int(contract.get("max_tokens") or 2048)
                 model_ref = str(data.get("model") or "").strip()
                 settings = app_config.load_config_from_disk() or {}
                 director = ((settings.get("storyboard") or {}).get("director") or {})
-                context_size = director.get("context_size")
+                context_size = director.get("context_size") if model_ref.startswith("local::") or "::" not in model_ref else None
                 if context_size is None:
                     from .director_model_calibration import get_profile
                     profile = get_profile(model_ref)

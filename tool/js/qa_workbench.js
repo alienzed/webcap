@@ -58,6 +58,7 @@
     captionQuality: {},
     qaAlternatives: {},
     aiSummary: '',
+    qaReviewMode: '',
     aiScopeSignature: '',
     aiItemSignatures: {},
     aiCoverageValid: 0,
@@ -308,6 +309,7 @@
         facts: [{ value: String(files.length), label: 'affected items' }],
         meta: evidence,
         source: 'ai',
+        concept: String(finding.concept || ''),
         sourceLabel: 'AI · ' + String(model || 'Director')
       };
     });
@@ -324,6 +326,8 @@
   function qaReviewPayload() {
     return {
       version: 1,
+      qaReviewMode: qaWorkbenchState.qaReviewMode,
+      aiScopeSignature: qaWorkbenchState.aiScopeSignature,
       scopeKey: qaWorkbenchState.scopeKey,
       trainingFocus: qaWorkbenchState.trainingFocus,
       itemSignatures: Object.assign({}, qaWorkbenchState.aiItemSignatures),
@@ -362,6 +366,7 @@
     qaWorkbenchState.captionQuality = {};
     qaWorkbenchState.qaAlternatives = {};
     qaWorkbenchState.aiSummary = '';
+    qaWorkbenchState.qaReviewMode = '';
     qaWorkbenchState.aiScopeSignature = '';
     qaWorkbenchState.aiItemSignatures = {};
     qaWorkbenchState.aiCoverageValid = 0;
@@ -380,6 +385,8 @@
         qaWorkbenchState.trainingFocus = String(saved.trainingFocus);
       }
       if (saved.trainingFocus !== qaWorkbenchState.trainingFocus) return;
+      if (saved.qaReviewMode !== 'set-review-v1' || saved.aiScopeSignature !== signature) return;
+      qaWorkbenchState.qaReviewMode = saved.qaReviewMode;
       var before = saved.itemSignatures && typeof saved.itemSignatures === 'object'
         ? saved.itemSignatures
         : {};
@@ -402,7 +409,7 @@
       }));
       qaWorkbenchState.aiSummary = String(saved.aiSummary || '');
       qaWorkbenchState.aiModel = String(saved.aiModel || '');
-      qaWorkbenchState.aiScopeSignature = signature;
+      qaWorkbenchState.aiScopeSignature = saved.aiScopeSignature;
       qaWorkbenchState.aiItemSignatures = Object.assign({}, before);
       qaWorkbenchState.aiCoverageValid = validCount;
       qaWorkbenchState.aiCoverageTotal = Object.keys(current).length;
@@ -420,19 +427,20 @@
   }
 
   function qaMergeFindings() {
-    var current = qaCurrentItemSignatureMap(qaGetTrainingItems());
-    var byFile = {};
-    qaGetTrainingItems().forEach(function (item) { byFile[item.fileName] = item; });
-    var visibleAi = qaWorkbenchState.aiFindings.map(function (finding) {
+    var items = qaGetTrainingItems(), current = qaCurrentItemSignatureMap(items), byFile = {};
+    items.forEach(function (item) { byFile[item.fileName] = item; });
+    var fresh = qaWorkbenchState.aiScopeSignature === qaBuildDeepScanSignature(items);
+    var visibleAi = fresh ? qaWorkbenchState.aiFindings.map(function (finding) {
+      if (finding.concept) return finding; // hypothesis, not a verified edit
       var files = (finding.files || []).filter(function (file) {
         var item = byFile[file];
         return item && current[file] && qaWorkbenchState.aiItemSignatures[file] === current[file]
           && qaFocusReviewHasAction(item.key, file, item.caption || '', finding);
       });
       return files.length ? Object.assign({}, finding, { files: files }) : null;
-    }).filter(Boolean);
+    }).filter(Boolean) : [];
+    var conceptCurrent = qaConceptInputSignatures(items);
     var visibleConcept = qaWorkbenchState.conceptFindings.map(function (finding) {
-      var conceptCurrent = qaConceptInputSignatures(qaGetTrainingItems());
       var files = (finding.files || []).filter(function (file) {
         var item = byFile[file];
         return item && conceptCurrent[file] && finding.inputSignatures[file] === conceptCurrent[file]
@@ -441,8 +449,7 @@
       return files.length ? Object.assign({}, finding, { files: files }) : null;
     }).filter(Boolean);
     qaWorkbenchState.findings = qaSortFindings(
-      qaWorkbenchState.deterministicFindings.concat(visibleAi, visibleConcept)
-    );
+      qaWorkbenchState.deterministicFindings.concat(visibleAi, visibleConcept));
   }
 
   function qaGetReportObservations() {
@@ -585,248 +592,82 @@
     }
   }
 
+  // One user-initiated set-wide discovery. No challenger, per-item judge, or implicit Sight run.
   function qaRunNextDeepScanBatch() {
-    if (qaInteractiveRefreshCount) {
-      var token = qaWorkbenchState.deepScanSessionToken;
-      return qaWaitForInteractiveRefresh().then(function () {
-        if (token === qaWorkbenchState.deepScanSessionToken) return qaRunNextDeepScanBatch();
-      });
-    }
-    if (!qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) {
-      qaWorkbenchState.deepScanSessionActive = false;
-      qaWorkbenchState.deepScanSubmitting = false;
-      qaWorkbenchState.deepScanJobId = '';
-      qaRefreshAiCoverage();
-      qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
-      renderQaWorkbench();
-      return;
-    }
-
-    var pending = qaPendingDeepScanItems();
-    var candidates = {};
-    qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.statisticalCandidates).forEach(function (finding) {
-      (finding.files || []).forEach(function (file) { candidates[file] = true; });
+    if (!qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return;
+    var items = qaGetTrainingItems(), signature = qaBuildDeepScanSignature(items);
+    var token = qaWorkbenchState.deepScanSessionToken;
+    var folder = String(state.folder || ''), model = qaWorkbenchState.aiModel;
+    var inputItems = items.map(function (item) {
+      return {
+        fileName: item.fileName,
+        groupedTags: getChecklistAssignmentEntriesForMediaKey(item.key).map(function (entry) {
+          return { group: entry.requirement, term: entry.term };
+        }),
+        otherTags: getUnscopedTagsForMediaKey(item.key)
+      };
     });
-    pending.sort(function (a, b) { return Number(!!candidates[b.fileName]) - Number(!!candidates[a.fileName]); });
-    qaRefreshAiCoverage();
-    if (!pending.length) {
-      if (isSetIntelligenceRunning()) {
-        qaWorkbenchState.deepScanStatus =
-          'Deep QA current for available inputs · waiting for new Set Intelligence evidence…';
-        qaWorkbenchState.deepScanSubmitting = false;
-        qaWorkbenchState.deepScanJobId = '';
-        renderQaWorkbench();
-        return;
-      }
-      qaWorkbenchState.deepScanSessionActive = false;
-      qaWorkbenchState.deepScanSubmitting = false;
-      qaWorkbenchState.deepScanJobId = '';
-      var skippedCount = Object.keys(qaWorkbenchState.deepScanSkipped).length;
-      qaWorkbenchState.deepScanStatus = 'Deep QA finished · ' + qaWorkbenchState.aiCoverageValid + '/' +
-        qaWorkbenchState.aiCoverageTotal + ' items interpreted' +
-        (skippedCount ? ' · ' + skippedCount + ' skipped (see Console)' : '') + '.';
-      qaWorkbenchState.aiScopeSignature = qaBuildDeepScanSignature(qaGetTrainingItems());
-      reportConsoleInfo('Deep QA', 'Finished: ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' items reviewed; ' + skippedCount + ' skipped.');
-      qaSaveReview().catch(function () {});
-      qaMergeFindings();
-      qaSyncFocusReview();
-      renderQaWorkbench();
-      return;
-    }
-
-    var batchItems = pending.slice(0, 1);
-    var batchSignatures = qaCurrentItemSignatureMap(batchItems);
-    var model = qaWorkbenchState.aiModel;
-    var sessionToken = qaWorkbenchState.deepScanSessionToken;
-    var sessionFolder = String(state.folder || '');
-    var sessionScopeKey = qaBuildScopeKey(qaGetTrainingItems());
-    var sessionFocus = qaWorkbenchState.trainingFocus;
-    var sessionVisionModel = qaWorkbenchState.deepScanVisionModel;
-    var candidateCaptionText = '';
     qaWorkbenchState.deepScanSubmitting = true;
-    qaWorkbenchState.deepScanStatus = 'Deep QA · Sight check ' + batchItems[0].fileName +
-      ' · ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' reviewed';
+    qaWorkbenchState.deepScanStatus = 'Deep QA · Reviewing ' + items.length + ' selected items';
     renderQaWorkbench();
-
-    refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: false, silent: true }).then(function () {
-      return qaWaitForInteractiveRefresh();
-    }).then(function () {
-      if (sessionToken !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
-      if (getCaptionVisionModelId() !== sessionVisionModel) throw new Error('Deep QA Vision model changed while running; restart the scan.');
-      batchSignatures = qaCurrentItemSignatureMap(batchItems);
-      qaWorkbenchState.deepScanStatus = 'Deep QA · Caption challenger ' + batchItems[0].fileName;
-      renderQaWorkbench();
-      var item = batchItems[0];
-      var request = buildCaptionAssistRequest(item);
-      var saved = captionAssistSavedCandidatesByMedia[item.key];
-      var annotations = JSON.stringify([request.assignments, request.tags]);
-      // This is analysis, not an editor operation: never overwrite an unfinished draft.
-      // Older saved candidates have no fingerprint; their caption, model and tags are enough
-      // to make them a useful comparison hypothesis, not authoritative evidence.
-      var reusable = saved && saved.text &&
-        saved.sourceCaption === String(item.caption || '') &&
-        saved.annotationsAtGeneration === annotations &&
-        (!saved.model || saved.model === String(request.model || ''));
-      var candidatePromise = reusable
-        ? Promise.resolve(saved)
-        : requestCaptionAssistCandidate(item, request, {
-          onJob: function (job) {
-            if (qaWorkbenchState.deepScanStopRequested || !qaWorkbenchState.deepScanSessionActive ||
-                sessionToken !== qaWorkbenchState.deepScanSessionToken) {
-              return qaRequestJson('/fs/director/job', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ operation: 'cancel_job', jobId: job.jobId })
-              });
-            }
-            qaWorkbenchState.deepScanChallengerJobId = String(job.jobId || '');
-          }
-        }).catch(function (err) {
-          // The Director can still assess the original caption and saved Sight.
-          // Report the failed supplemental call rather than marking the item failed or silent.
-          if (!qaWorkbenchState.deepScanStopRequested &&
-              sessionToken === qaWorkbenchState.deepScanSessionToken) {
-            reportConsoleError('Deep QA · Caption challenger ' + item.fileName, err);
-          }
-          return null;
-        });
-      return candidatePromise.then(function (candidate) {
-        if (sessionToken === qaWorkbenchState.deepScanSessionToken) qaWorkbenchState.deepScanChallengerJobId = '';
-        if (sessionToken !== qaWorkbenchState.deepScanSessionToken ||
-            !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return null;
-        qaWorkbenchState.deepScanStatus = 'Deep QA · Value judge ' + item.fileName;
-        renderQaWorkbench();
-        var inputItems = qaBuildDeepScanItems(batchItems);
-        candidateCaptionText = String(candidate && candidate.text || '');
-        inputItems[0].candidateCaption = candidateCaptionText;
-        return qaRequestJson('/fs/qa/deep-scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            folder: sessionFolder,
-            model: model,
-            trainingFocus: sessionFocus,
-            items: inputItems,
-            deterministicFindings: qaDeepScanFindingPayload(batchItems)
-          })
-        });
-      });
+    qaRequestJson('/fs/qa/deep-scan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        setReview: true, folder: folder, model: model, trainingFocus: qaWorkbenchState.trainingFocus,
+        primer: String(statsGetPrimerOptionsFromDom().template || ''),
+        vocabulary: checklistItems.map(function (group) {
+          return { group: group, alias: getRequirementGroupAlias(group), terms: getChecklistKeywordTermsForRequirement(group) };
+        }),
+        items: inputItems
+      })
     }).then(function (payload) {
-      if (!payload) {
-        qaWorkbenchState.deepScanSubmitting = false;
-        renderQaWorkbench();
-        return null;
-      }
-      if (
-        sessionToken !== qaWorkbenchState.deepScanSessionToken ||
-        !qaWorkbenchState.deepScanSessionActive ||
-        qaWorkbenchState.deepScanStopRequested
-      ) {
-        if (payload.job && payload.job.jobId) {
-          return qaRequestJson('/fs/director/job', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ operation: 'cancel_job', jobId: payload.job.jobId })
-          }).then(function () { return null; });
-        }
+      if (token !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive) {
+        if (payload.job && payload.job.jobId) return qaRequestJson('/fs/director/job', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ operation: 'cancel_job', jobId: payload.job.jobId })
+        }).then(function () { return null; });
         return null;
       }
       qaWorkbenchState.deepScanSubmitting = false;
       return qaWaitForDeepScan(payload.job);
     }).then(function (job) {
-      if (!job) return false;
-      if (sessionToken !== qaWorkbenchState.deepScanSessionToken) {
-        return false;
-      }
-      if (!qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) {
-        qaWorkbenchState.deepScanSessionActive = false;
-        qaWorkbenchState.deepScanSubmitting = false;
-        qaWorkbenchState.deepScanJobId = '';
-        qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
-        qaRefreshAiCoverage();
+      if (!job || token !== qaWorkbenchState.deepScanSessionToken ||
+          !qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanStopRequested) return;
+      if (folder !== String(state.folder || '') || signature !== qaBuildDeepScanSignature(qaGetTrainingItems())) {
+        qaInvalidateDeepScanSession('Deep QA inputs changed. Run again for this Set.');
         renderQaWorkbench();
-        return false;
+        return;
       }
-      if (
-        String(state.folder || '') !== sessionFolder ||
-        qaBuildScopeKey(qaGetTrainingItems()) !== sessionScopeKey ||
-        qaWorkbenchState.trainingFocus !== sessionFocus
-      ) {
-        qaInvalidateDeepScanSession('Deep QA stopped because its review context changed.');
-        renderQaWorkbench();
-        return false;
-      }
-      qaWorkbenchState.deepScanJobId = '';
-      var currentItems = qaGetTrainingItems();
-      var currentSignatures = qaCurrentItemSignatureMap(currentItems);
-      var changed = {};
-      Object.keys(batchSignatures).forEach(function (file) {
-        if (currentSignatures[file] !== batchSignatures[file]) changed[file] = true;
-      });
-
       var analysis = job.result && job.result.analysis;
-      if (!analysis || !Array.isArray(analysis.findings) || !Array.isArray(analysis.captionQuality) ||
-          !analysis.captionQuality.some(function (assessment) { return assessment.file === batchItems[0].fileName; })) {
-        throw new Error('QA Deep Scan batch completed without structured findings.');
-      }
-      if (Array.isArray(analysis.patchWarnings) && analysis.patchWarnings.length) {
-        window.reportConsoleError('QA · Ignored invalid suggested edits',
-          new Error(analysis.patchWarnings.join('; ')));
-      }
-      if (Array.isArray(analysis.findingWarnings) && analysis.findingWarnings.length) {
-        window.reportConsoleError('QA · Ignored invalid findings',
-          new Error(analysis.findingWarnings.join('; ')));
-      }
-      var batchFindings = qaNormalizeAiFindings(analysis, job.result.model).filter(function (finding) {
-        return !(finding.files || []).some(function (file) { return changed[file]; });
-      });
-      qaMergeAiBatch(batchFindings);
-      (analysis.captionQuality || []).forEach(function (assessment) {
-        if (!changed[assessment.file]) qaWorkbenchState.captionQuality[assessment.file] = assessment;
-      });
-      Object.keys(batchSignatures).forEach(function (file) {
-        if (changed[file]) return;
-        qaWorkbenchState.aiItemSignatures[file] = batchSignatures[file];
-        if (candidateCaptionText.trim()) qaWorkbenchState.qaAlternatives[file] = candidateCaptionText;
-        else delete qaWorkbenchState.qaAlternatives[file];
-      });
+      if (!analysis || !Array.isArray(analysis.findings)) throw new Error('Deep QA returned no structured investigation list.');
+      var findings = qaNormalizeAiFindings(analysis, job.result.model);
+      qaWorkbenchState.aiFindings = findings;
+      qaWorkbenchState.captionQuality = {};
+      qaWorkbenchState.qaAlternatives = {};
       qaWorkbenchState.aiSummary = String(analysis.summary || '');
+      qaWorkbenchState.qaReviewMode = 'set-review-v1';
+      qaWorkbenchState.aiScopeSignature = signature;
+      qaWorkbenchState.aiItemSignatures = qaCurrentItemSignatureMap(items);
       qaWorkbenchState.aiModel = String(job.result.model || model);
-      qaWorkbenchState.aiScopeSignature = qaBuildDeepScanSignature(currentItems);
+      qaWorkbenchState.deepScanJobId = '';
+      qaWorkbenchState.deepScanSubmitting = false;
+      qaWorkbenchState.deepScanSessionActive = false;
+      qaWorkbenchState.deepScanStatus = 'Deep QA · ' + findings.length + ' investigation' + (findings.length === 1 ? '' : 's') + '.';
       qaRefreshAiCoverage();
-      if (qaWorkbenchState.aiCoverageValid > 0 && qaWorkbenchState.aiCoverageValid % Math.max(1, Math.ceil(qaWorkbenchState.aiCoverageTotal / 10)) === 0) {
-        reportConsoleInfo('Deep QA', 'Progress: ' + qaWorkbenchState.aiCoverageValid + '/' + qaWorkbenchState.aiCoverageTotal + ' reviewed.');
-      }
+      reportConsoleInfo('Deep QA', 'Reviewed ' + items.length + ' items; ' + findings.length + ' investigations.');
       qaMergeFindings();
       qaSyncFocusReview();
       renderQaWorkbench();
-      return qaSaveReview(true).then(function () { return qaRunNextDeepScanBatch(); });
-    }).then(function (continued) {
-      if (continued === false && sessionToken !== qaWorkbenchState.deepScanSessionToken) return false;
-      return continued;
+      return qaSaveReview(true);
     }).catch(function (err) {
-      if (sessionToken !== qaWorkbenchState.deepScanSessionToken) return false;
-      qaWorkbenchState.deepScanChallengerJobId = '';
+      if (token !== qaWorkbenchState.deepScanSessionToken) return;
       qaWorkbenchState.deepScanSubmitting = false;
       qaWorkbenchState.deepScanJobId = '';
-      if (['cancelled', 'stopped', 'interrupted'].indexOf(String(err && err.jobStatus || '')) !== -1) {
-        qaWorkbenchState.deepScanStopRequested = true;
-        qaWorkbenchState.deepScanSessionActive = false;
-        qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
-      } else {
-        var message = String(err && err.message || err);
-        var unusableResponse = /WebCap ingest failed after a successful model response: QA Deep Scan (response|finding|invented a filename)|QA Deep Scan batch completed without structured findings|Director returned invalid structured JSON|Director structured output must be a JSON object/.test(message);
-        window.reportConsoleError('QA Deep Scan · ' + (unusableResponse ? 'Skipped ' + batchItems[0].fileName : 'Failed'), err);
-        if (unusableResponse && qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStopRequested) {
-          qaWorkbenchState.deepScanSkipped[batchItems[0].fileName] = true;
-          qaWorkbenchState.deepScanStatus = 'Deep QA · skipped ' + batchItems[0].fileName + ' (see Console). Continuing…';
-          qaRefreshAiCoverage();
-          renderQaWorkbench();
-          return qaRunNextDeepScanBatch();
-        }
-        qaWorkbenchState.deepScanSessionActive = false;
-        qaWorkbenchState.deepScanStatus = 'Deep QA failed: ' + message;
+      qaWorkbenchState.deepScanSessionActive = false;
+      qaWorkbenchState.deepScanStatus = 'Deep QA failed: ' + String(err.message || err);
+      if (['cancelled', 'stopped', 'interrupted'].indexOf(String(err.jobStatus || '')) === -1) {
+        reportConsoleError('Deep QA · Set review', err);
       }
-      qaRefreshAiCoverage();
       renderQaWorkbench();
     });
   }
@@ -1092,35 +933,19 @@
   }
 
   function qaRunDeepScan() {
-    if (qaWorkbenchState.conceptSession) { setStatus('Stop the concept check before starting Deep QA.'); return; }
+    if (qaWorkbenchState.conceptSession) { setStatus('Stop the concept check before Deep QA.'); return; }
     if (qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting) return;
     var items = qaGetTrainingItems();
-    if (!items.length) throw new Error('QA Deep Scan requires at least one training item.');
+    if (!items.length) throw new Error('Deep QA requires selected media.');
     var model = String(getDirectorModelPreference() || '').trim();
-    if (!model) throw new Error('Select a Director model before running Deep QA Scan.');
-    if (!getCaptionVisionModelId()) throw new Error('Select a Vision model before running Deep QA Scan.');
-    qaWorkbenchState.deepScanVisionModel = getCaptionVisionModelId();
-
+    if (!model) throw new Error('Select a Director model for Deep QA.');
     ++qaReviewLoadToken;
-    if (qaWorkbenchState.aiModel && qaWorkbenchState.aiModel !== model) {
-      qaWorkbenchState.aiFindings = [];
-      qaWorkbenchState.captionQuality = {};
-      qaWorkbenchState.qaAlternatives = {};
-      qaWorkbenchState.aiSummary = '';
-      qaWorkbenchState.aiItemSignatures = {};
-      qaWorkbenchState.aiCoverageValid = 0;
-    }
     qaWorkbenchState.aiModel = model;
     qaWorkbenchState.deepScanSessionToken += 1;
-    qaWorkbenchState.deepScanSkipped = {};
-    qaWorkbenchState.deepScanInputSignature = qaBuildDeepScanSignature(items);
     qaWorkbenchState.deepScanSessionActive = true;
     qaWorkbenchState.deepScanStopRequested = false;
-    qaWorkbenchState.deepScanChallengerJobId = '';
-    qaWorkbenchState.deepScanStatus = 'Starting progressive Deep QA…';
-    qaRefreshAiCoverage();
-    reportConsoleInfo('Deep QA', 'Started: ' + items.length + ' eligible items; ' + qaWorkbenchState.aiCoverageValid + ' already current.');
-    renderQaWorkbench();
+    qaWorkbenchState.deepScanStatus = 'Starting set-wide Deep QA…';
+    reportConsoleInfo('Deep QA', 'Starting focused review for ' + items.length + ' items.');
     qaRunNextDeepScanBatch();
   }
 
@@ -1680,7 +1505,8 @@
   function qaFindingActionRank(finding) {
     // An item-specific, evidence-backed discrepancy is more useful than rarity alone.
     var concrete = finding.files && finding.files.length;
-    if (!concrete) return 0;
+    if (!concrete && !(finding.source === 'ai' && finding.concept)) return 0;
+    if (finding.source === 'ai' && finding.concept) return 3;
     if (finding.source === 'ai' && ['captioning', 'consistency'].indexOf(finding.category) !== -1) return 3;
     if (['captioning', 'consistency'].indexOf(finding.category) !== -1) return 2;
     return 1;
@@ -1852,14 +1678,14 @@
     copy.className = 'qa-hero-copy';
     var h2 = document.createElement('h2');
     var deepCoverageCounts = qaDeepCoverageCounts(items);
-    var evaluationIncomplete = deepCoverageCounts.unchecked > 0 || deepCoverageCounts.failed > 0 || qaWorkbenchState.externalAnalysisRunning;
+    var evaluationIncomplete = qaWorkbenchState.aiScopeSignature !== qaBuildDeepScanSignature(items) || qaWorkbenchState.externalAnalysisRunning;
     h2.textContent = undisposed.length
       ? undisposed.length + ' actionable finding' + (undisposed.length === 1 ? '' : 's') + ' to review'
       : (evaluationIncomplete ? 'No actionable findings in available checks' : 'No outstanding QA findings');
     var intro = document.createElement('p');
     intro.textContent = undisposed.length
       ? 'Inspect the affected media and decide what, if anything, needs changing.'
-      : (evaluationIncomplete ? 'Deep QA has not checked every item. Details and observations are in Reports.'
+      : (evaluationIncomplete ? 'No current set-wide Deep QA review. Existing observations remain in Reports.'
         : 'No outstanding findings from the current checks. Observations remain in Reports.');
     copy.appendChild(h2);
     copy.appendChild(intro);
@@ -1889,7 +1715,7 @@
       qaWorkbenchState.deepScanSessionActive ? 'deep-scan-stop' : 'deep-scan'
     );
     deep.disabled = qaWorkbenchState.deepScanSubmitting;
-    deep.title = 'Run or stop the existing progressive Deep QA scan without opening the correction flow';
+    deep.title = 'Run or stop the focused set-wide Deep QA review';
     deepWrap.appendChild(deep);
     var note = document.createElement('span');
     note.className = 'qa-deep-scan-note';
@@ -1904,7 +1730,9 @@
     heroActions.appendChild(deepWrap);
     var deepCoverage = document.createElement('div');
     deepCoverage.className = 'qa-deep-scan-note';
-    deepCoverage.textContent = 'Deep QA: ' + qaCoverageLine(qaDeepCoverageCounts(items), false);
+    deepCoverage.textContent = 'Deep QA: ' + (qaWorkbenchState.aiScopeSignature === qaBuildDeepScanSignature(items)
+      ? 'Set review current · ' + qaWorkbenchState.aiFindings.length + ' investigations'
+      : 'Set review not current');
     deepWrap.appendChild(deepCoverage);
     hero.appendChild(heroActions);
     container.appendChild(hero);
@@ -2176,7 +2004,9 @@
 
     var actions = document.createElement('div');
     actions.className = 'qa-recommendation-actions';
-    if (finding.files && finding.files.length) {
+    if (finding.concept) {
+      actions.appendChild(qaCreateButton('Check this concept', 'qa-primary', 'check-finding-concept', finding.id));
+    } else if (finding.files && finding.files.length) {
       var primaryLabel = (finding.category === 'captioning' || (finding.patches || []).length) ? 'Open Caption Assist'
         : finding.utilityTab === 'duplicates' ? 'Inspect exact duplicates'
         : 'Inspect ' + finding.files.length;
@@ -2994,7 +2824,9 @@
 
   function qaInspectFinding(findingId) {
     var finding = qaWorkbenchState.findings.find(function (row) { return row.id === findingId; });
-    if (!finding || !finding.files || !finding.files.length) return;
+    if (!finding) return;
+    if (finding.concept) { qaWorkbenchState.conceptQuery = finding.concept; qaWorkbenchState.view = 'overview'; renderQaWorkbench(); return; }
+    if (!finding.files || !finding.files.length) return;
     if (finding.category === 'captioning' || (finding.patches || []).length) {
       qaReviewCaptionFiles(finding.files, 'QA · ' + finding.title, finding.id);
       return;
@@ -3047,6 +2879,16 @@
       // saved and arriving findings without introducing a second QA engine.
       if (!qaWorkbenchState.deepScanSessionActive) qaRunDeepScan();
       qaStartFocusReview();
+      return;
+    }
+    if (action === 'check-finding-concept') {
+      var concern = qaWorkbenchState.findings.find(function (finding) { return finding.id === value; });
+      if (concern && concern.concept) {
+        qaWorkbenchState.conceptQuery = concern.concept;
+        qaWorkbenchState.view = 'overview';
+        renderQaWorkbench();
+        qaRunConceptCheck();
+      }
       return;
     }
     if (action === 'concept-run') { qaRunConceptCheck(); return; }

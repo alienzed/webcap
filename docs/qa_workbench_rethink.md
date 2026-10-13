@@ -5,7 +5,7 @@ Audit basis: current `main` review, metadata, annotation, focus-set, prune, dupl
 
 ## Focused Deep QA implementation (2026-10-12)
 
-**Implemented on feature branch; real-model and browser acceptance pending.** Deep QA now asks for up to five set-wide investigations from compact assigned tags, the current vocabulary, training focus, and primer. It no longer runs the per-item Sight/challenger/judge sequence. A model-context preflight warns without gating, and each investigation opens existing targeted Concept Check for visual evidence and concrete actions. QA Focus Review remains action-only; user-authorized edits remain in existing workflows. Existing review receipts carry an explicit mode and freshness signature; legacy per-item results are not reinterpreted as new investigations.
+**Implemented on feature branch; real-model and browser acceptance pending.** Deep QA now asks for up to five set-wide investigations from compact assigned tags, the current vocabulary, training focus, and primer. It no longer runs the per-item Sight/challenger/judge sequence. A model-context preflight warns without gating, and each investigation opens existing targeted Concept Check for visual evidence and concrete actions. QA Focus Review remains action-only; user-authorized edits remain in existing workflows. Existing review receipts carry an explicit mode and freshness signature; legacy per-item findings remain labeled and actionable where their original edits are still valid, but are not reinterpreted as new investigations.
 
 This section supersedes older Deep QA orchestration and per-item coverage contracts below. Concept Check and targeted recheck continue to use their original QA contract.
 

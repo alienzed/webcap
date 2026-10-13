@@ -118,6 +118,28 @@ def test_resolved_wildcard_values_ignores_plain_or_unmatched_prompts():
     ) == []
 
 
+def test_single_option_wildcards_do_not_hide_other_resolved_choices():
+    source = "wearing a {black} {triangle|bandeau} top and {v-front} {thong|micro} bottom"
+    resolved = "wearing a black triangle top and v-front thong bottom"
+
+    assert bench._resolved_wildcard_values(source, resolved) == [
+        "black", "triangle", "v-front", "thong",
+    ]
+    summary = bench._resolved_wildcard_summary(source, resolved, "sets/bikini")
+    assert any("triangle top" in value for value in summary)
+    assert any("thong bottom" in value for value in summary)
+    assert any("black" in value for value in summary)
+
+
+def test_single_option_only_wildcard_resolves_in_session_summary():
+    source = "wearing a {black} bikini"
+    resolved = "wearing a black bikini"
+    assert bench._resolved_wildcard_values(source, resolved) == ["black"]
+    assert "black bikini" in bench._resolved_wildcard_summary(
+        source, resolved, "sets/bikini",
+    )
+
+
 def test_resolved_wildcard_values_supports_optional_empty_choice():
     assert bench._resolved_wildcard_values(
         "person wearing a {black|white} {ruched|} bikini",

@@ -1,5 +1,20 @@
 # Set Intelligence
 
+## Focused Deep QA set review (2026-10-12)
+
+Deep QA is now an explicit, bounded **set-wide investigation** rather than an unattended caption challenger/quality judge for each media item.
+
+- Input: current filtered training selection, approved grouped/unscoped tags, vocabulary with group aliases, caption primer and training focus, **plus compact evidence mined from fresh saved Open Sight** (including singleton objects/properties omitted by vocabulary-frequency filtering). Full captions and per-item Sight are not repeated. The 160-evidence budget is explicit; unavailable Sight is not interpreted as visual absence.
+- Output: up to five ranked, consequential hypotheses about omitted or inconsistent training-relevant concepts, including concepts absent from both captions and tags. Zero is valid.
+- Each hypothesis includes a specific question, a falsification criterion, and up to five justified candidate media (or none when unsupported). **Investigate** invokes existing cached-Sight Concept Check on only that shortlist, preserving missing-Sight counts and human review. The dismissal criterion is guidance, not an automatic verdict. Only concrete Concept Check actions flow into QA Focus Review.
+- Deep QA itself performs no VL scans, tag assignments, caption generation, or edits. It retains the existing model queue, cancel control, set scoping, and QA review persistence.
+- A token-budget preflight estimates prompt plus bounded output and warns about known context overruns, with explicit **Proceed Anyway**. Unknown context is not a gate.
+- Saved legacy per-item Deep QA results remain available as explicitly labeled, action-backed legacy findings until replaced by a new set review; they are never reinterpreted as new investigations. Changes to the Set, its annotations, vocabulary, primer, Sight or training focus invalidate the current review; rerun explicitly when ready.
+- Balance and technical hygiene remain separate supporting analyses. The old per-item contract remains for existing Concept Check/recheck callers.
+
+This section supersedes the older per-item Deep QA implementation notes below. Semantic reliability of novel discovery still requires acceptance testing against real Sets.
+
+
 Status: focused LLM/VL-driven annotation workflow.
 
 ## Approved primary workflow: from media folder to reviewed training Set (2026-10-11)

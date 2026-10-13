@@ -232,6 +232,17 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
 
     if client == "qa":
         operation = str((frozen_contract or {}).get("operation") or "").strip()
+        if operation == "qa_set_review":
+            from .qa_llm_contract import normalize_set_review_result
+            return {
+                "analysis": normalize_set_review_result(
+                    llm_result.get("data"), allowed_files=(frozen_contract or {}).get("source_files") or [],
+                ),
+                "model": llm_result["model"],
+                "finishReason": llm_result.get("finishReason"),
+                "usage": llm_result.get("usage"),
+                "timings": llm_result.get("timings"),
+            }
         if operation != "qa_deep_scan":
             raise RuntimeError("Unsupported QA LLM operation: " + (operation or "empty"))
         from .qa_llm_contract import normalize_result
@@ -241,6 +252,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 allowed_files=(frozen_contract or {}).get("source_files") or [],
                 captions_by_file=context.get("captionsByFile") or {},
                 recheck=bool((frozen_contract or {}).get("recheck")),
+                investigate=bool((frozen_contract or {}).get("investigate")),
             ),
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),

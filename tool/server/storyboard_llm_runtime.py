@@ -2005,6 +2005,8 @@ def run_contract(model_id, contract, gpu_reserved=False):
             }
             if gpu_reserved:
                 chat_kwargs["gpu_reserved"] = True
+            if contract.get("max_tokens") is not None:
+                chat_kwargs["max_tokens"] = int(contract["max_tokens"])
             result = chat(
                 model_id,
                 [{"role": "user", "content": prompt}],

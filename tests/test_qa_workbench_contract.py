@@ -61,10 +61,10 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     runner = _read("tool/server/llm_runner.py")
     contract = _read("tool/server/qa_llm_contract.py")
 
-    assert "Start QA & Review" in qa
+    assert "Run Deep QA" in qa
     assert "qaRunDeepScan();" in qa
     assert "qaStartFocusReview();" in qa
-    assert "Run scan only" in qa
+    assert "Stop Deep QA" in qa
     assert "'deep-scan'" in qa
     assert "'/fs/qa/deep-scan'" in qa
     assert "qaBuildDeepScanItems" in qa
@@ -74,18 +74,17 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "metadata.face_focus" in qa
     assert "metadata.selection_pose" in qa
     assert "metadata.vision_sight" in qa
-    assert "metadata.vision_vocabulary_sight" in qa
-    assert "out.contextSight" in qa
+    assert "out.visionSight" in qa
     assert "qaBuildVisualAgreementFindings" in qa
     assert "qaPrimeDeterministicSources" in qa
     assert "ensurePruneCandidatesForCurrentFolder(false, scopeFiles)" in qa
     assert "ensureDuplicateCandidatesForCurrentFolder(false, scopeFiles)" in qa
     assert "getSelectionPoseSuggestedTags" in qa
     assert "qaSightSupportsTerm" in qa
-    assert "qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.aiFindings)" in qa
+    assert "qaWorkbenchState.deterministicFindings.concat(visibleAi, visibleConcept)" in qa
     # Statistical associations can prioritize and inform Deep QA, not become direct recommendations.
     assert "statisticalCandidates: []" in qa
-    assert "qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.statisticalCandidates).forEach" in qa
+    assert "qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.statisticalCandidates).filter" in qa
     assert "qaWorkbenchState.deterministicFindings.concat(qaWorkbenchState.statisticalCandidates).filter" in qa
     assert "files: exceptionFiles.slice()" in qa
     computed = qa.split("function qaComputeFindings(items)", 1)[1].split("function qaGetRecommendations()", 1)[0]
@@ -109,16 +108,17 @@ def test_qa_deep_scan_is_native_structured_and_merges_into_current_scope():
     assert "window.openAssistant({ mode: 'review-dataset' })" not in qa
 
 
-def test_progressive_qa_freezes_batch_identity_and_invalidates_context_changes():
+def test_focused_qa_freezes_set_identity_and_invalidates_context_changes():
     qa = _read("tool/js/qa_workbench.js")
-
-    assert "var sessionToken = qaWorkbenchState.deepScanSessionToken;" in qa
-    assert "var sessionFolder = String(state.folder || '');" in qa
-    assert "var sessionScopeKey = qaBuildScopeKey(qaGetTrainingItems());" in qa
-    assert "qaInvalidateDeepScanSession('Deep QA stopped because its review context changed.');" in qa
+    run = qa.split("function qaRunNextDeepScanBatch()", 1)[1].split("function qaConceptCoverageCounts()", 1)[0]
+    assert "var token = qaWorkbenchState.deepScanSessionToken;" in run
+    assert "var folder = String(state.folder || '')" in run
+    assert "qaBuildDeepScanSignature(qaGetTrainingItems())" in run
+    assert "qaInvalidateDeepScanSession('Deep QA inputs changed." in run
     assert "qaInvalidateDeepScanSession('Deep QA stopped because the review scope changed.');" in qa
-    assert "qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';" in qa
     assert "qaWorkbenchState.deepScanJobId = '';" in qa
+    assert "qaReviewMode: qaWorkbenchState.qaReviewMode" in qa
+    assert "saved.qaReviewMode !== 'set-review-v1'" in qa
 
 
 def test_qa_isolated_styles_keep_large_editorial_typography():

@@ -132,7 +132,7 @@ def _normalize_deterministic_findings(findings, allowed_files):
     return rows
 
 
-def _response_schema(recheck=False):
+def _response_schema(recheck=False, investigate=False):
     finding = {
         "type": "object",
         "additionalProperties": False,
@@ -213,6 +213,12 @@ def _response_schema(recheck=False):
             },
         },
     }
+    if investigate:
+        schema["required"].extend(["investigationStatus", "investigationReason"])
+        schema["properties"]["investigationStatus"] = {
+            "type": "string", "enum": ["supported", "dismissed", "inconclusive"]
+        }
+        schema["properties"]["investigationReason"] = {"type": "string", "minLength": 1}
     if recheck:
         schema["required"].extend(["recheckStatus", "recheckReason"])
         schema["properties"]["recheckStatus"] = {
@@ -338,7 +344,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
 
 
 
-def build_concept_request(items, concept, known_vocabulary=None, recheck_concern=None):
+def build_concept_request(items, concept, known_vocabulary=None, recheck_concern=None, dismiss_if=None):
     """Narrow, cache-only concept investigation; output reuses the Deep QA finding contract."""
     concept = _clean(concept)[:240]
     if not concept:
@@ -354,6 +360,7 @@ def build_concept_request(items, concept, known_vocabulary=None, recheck_concern
             vocabulary.append({"group": name, "alias": _clean(group.get("alias"))[:120], "terms": terms})
         if len(vocabulary) >= 24:
             break
+    dismiss_if = _clean(dismiss_if)[:360]
     concern = None
     if recheck_concern is not None:
         if len(rows) != 1 or not isinstance(recheck_concern, dict):
@@ -410,7 +417,13 @@ def build_concept_request(items, concept, known_vocabulary=None, recheck_concern
             "observation as proof of absence, and do not remove a user tag without affirmative contrary evidence. "
             "If Sight is missing or inconclusive, do not invent a visual verdict. "
             "Zero findings is valid; do not manufacture a quota.\n\n"
-            "[ACTIONS]\n"
+            + ("[FALSIFICATION CRITERION]\n" + dismiss_if + "\n"
+             "Explicitly assess whether supplied Sight AFFIRMATIVELY supports or refutes the hypothesis. "
+             "Absent observations or zero actionable edits NEVER prove dismissal. "
+             "Use supported only with positive evidence of the omission, dismissed only with affirmative "
+             "evidence meeting the stated criterion, otherwise inconclusive. Explain in investigationReason.\n\n"
+             if dismiss_if else "")
+            + "[ACTIONS]\n"
             "Each finding must identify actual supplied filenames. Use category consistency or captioning. "
             "Prefer an exact per-file tagAction (add/remove) when a canonical group and term are supplied; "
             "never invent groups or terms. Match add-tag terms only to KNOWN VOCABULARY supplied below. Otherwise, provide a concise exact caption patch if the evidence "
@@ -427,13 +440,14 @@ def build_concept_request(items, concept, known_vocabulary=None, recheck_concern
         "operation": "qa_deep_scan",
         "output": "json",
         "prompt": prompt,
-        "response_schema": _response_schema(recheck=bool(concern)),
+        "response_schema": _response_schema(recheck=bool(concern), investigate=bool(dismiss_if and not concern)),
         "recheck": bool(concern),
+        "investigate": bool(dismiss_if and not concern),
         "source_files": [row["fileName"] for row in rows],
     }
 
 
-def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=False):
+def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=False, investigate=False):
     if not isinstance(data, dict):
         raise ValueError("QA Deep Scan response must be an object.")
 
@@ -587,6 +601,13 @@ def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=Fa
         except ValueError as exc:
             finding_warnings.append('Finding ' + str(finding_index + 1) + ': ' + str(exc))
     result = {"summary": summary, "findings": normalized[:8]}
+    if investigate:
+        status = str(data.get("investigationStatus") or "").strip()
+        reason = _clean(data.get("investigationReason"))
+        if status not in {"supported", "dismissed", "inconclusive"} or not reason:
+            raise ValueError("QA investigation response is missing its status or evidence.")
+        result["investigationStatus"] = status
+        result["investigationReason"] = reason
     if recheck:
         status = str(data.get("recheckStatus") or "").strip()
         reason = _clean(data.get("recheckReason"))
@@ -601,3 +622,156 @@ def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=Fa
     if finding_warnings:
         result["findingWarnings"] = finding_warnings
     return result
+
+
+def build_set_review_request(items, vocabulary=None, training_focus="", primer="", sight_evidence=None):
+    """Compact, set-wide discovery. No per-item caption judgment or asserted edits."""
+    if not isinstance(items, list) or not items:
+        raise ValueError("Deep QA needs a non-empty training selection.")
+    compact = []
+    seen = set()
+    for raw in items:
+        if not isinstance(raw, dict):
+            raise ValueError("Deep QA items must be objects.")
+        file_name = str(raw.get("fileName") or "").strip()
+        if not file_name or file_name in seen:
+            raise ValueError("Deep QA needs unique filenames.")
+        seen.add(file_name)
+        tags = raw.get("groupedTags") if isinstance(raw.get("groupedTags"), list) else []
+        grouped = [
+            {"group": _clean(row.get("group")), "term": _clean(row.get("term"))}
+            for row in tags if isinstance(row, dict) and _clean(row.get("group")) and _clean(row.get("term"))
+        ]
+        other = [_clean(tag) for tag in (raw.get("otherTags") or []) if _clean(tag)] if isinstance(raw.get("otherTags"), list) else []
+        compact.append({"file": file_name, "tags": grouped, "otherTags": other})
+
+    groups = []
+    for raw in vocabulary if isinstance(vocabulary, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        name = _clean(raw.get("group"))
+        if not name:
+            continue
+        terms = [_clean(term) for term in (raw.get("terms") or []) if _clean(term)] if isinstance(raw.get("terms"), list) else []
+        groups.append({"group": name, "alias": _clean(raw.get("alias")), "terms": terms})
+
+    finding = {
+        "type": "object", "additionalProperties": False,
+        "required": ["concept", "title", "summary", "why", "dismissIf", "priority", "confidence", "trainingValue", "candidates", "evidence"],
+        "properties": {
+            "concept": {"type": "string", "minLength": 1},
+            "title": {"type": "string", "minLength": 1},
+            "summary": {"type": "string", "minLength": 1},
+            "why": {"type": "string", "minLength": 1},
+            "dismissIf": {"type": "string", "minLength": 1},
+            "priority": {"type": "string", "enum": ["high", "normal", "low"]},
+            "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+            "trainingValue": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+            "candidates": {"type": "array", "maxItems": 5, "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["file", "reason"],
+                "properties": {"file": {"type": "string", "minLength": 1},
+                               "reason": {"type": "string", "minLength": 1}}
+            }},
+            "evidence": {"type": "array", "maxItems": 4, "items": {"type": "string"}},
+        }
+    }
+    evidence = sight_evidence if isinstance(sight_evidence, dict) else {}
+    visual = [
+        {"category": _clean(row.get("category")), "label": _clean(row.get("label")),
+         "count": int(row.get("count") or 0), "examples": list(row.get("examples") or [])[:3]}
+        for row in (evidence.get("evidence") or [])[:160] if isinstance(row, dict)
+    ]
+    payload = {"trainingFocus": _clean(training_focus), "captionPrimer": str(primer or "").strip(),
+               "vocabulary": groups, "items": compact,
+               "sightCoverage": {"current": int(evidence.get("itemCount") or 0), "selected": len(compact)},
+               "savedVisualObservations": visual}
+    prompt = (
+        "[ROLE]\nYou review a LoRA training Set for consequential semantic omissions remaining after normal tagging and captioning.\n"
+        "Human-approved tags are compact proxies for captions; they are not exhaustive descriptions of the media.\n\n"
+        "[GOAL]\nFind up to FIVE of the most important omissions or inconsistencies in what the Set currently teaches.\n"
+        "Especially consider meaningful visual dimensions that may be absent from BOTH tags and captions, "
+        "including dimensions not yet represented in the vocabulary. Think independently about the training objective.\n\n"
+        "[RULES]\n"
+        "- This is discovery, not a verdict about unseen pixels. Do not claim a particular media item is wrong without visual evidence.\n"
+        "- Prefer systematic, training-relevant omissions over style, balance, rare vocabulary, or trivial wording.\n"
+        "- Compare semantic meaning, not just exact tag spellings; a missing tag isn't proof of a missing visual attribute.\n"
+        "- Supply a short candidate-file shortlist (up to five), each with a specific reason based on supplied tags. "
+        "These are priority examples to inspect, NOT confirmed defective images. A zero-length shortlist is valid only "
+        "when no particular file can be justified; never manufacture suspicious files.\n"
+        "- Provide a concise concept-check QUESTION to ask about the candidate media using saved Sight.\n"
+        "- Provide dismissIf: concrete evidence that would DISPROVE or make this concern irrelevant. "
+        "This is a test criterion, not a model verdict or automatic-dismiss rule.\n"
+        "- Saved visual observations are evidence from Sight, not guaranteed ground truth. "
+        "Compare observed nouns and properties with approved vocabulary and assigned tags; "
+        "prioritize meaningful discoveries left unrepresented, including rare one-item observations.\n"
+        "- State why the proposed concept is worth checking and cite specific patterns in the supplied tags or Sight.\n"
+        "- The user will fix the highest-value findings and run this again. Return at most five, including zero if nothing matters.\n"
+        "- Do not propose caption patches, tag edits, or new vocabulary as if already verified.\n"
+        "- Confidence expresses strength of the hypothesis from this input, NOT certainty about any image.\n\n"
+        "[CURRENT SET]\n" + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) +
+        "\n\n[OUTPUT]\nReturn JSON matching the schema, with a brief summary and no more than five findings."
+    )
+    return {
+        "operation": "qa_set_review", "output": "json", "prompt": prompt, "max_tokens": 2048,
+        "response_schema": {
+            "type": "object", "additionalProperties": False,
+            "required": ["summary", "findings"],
+            "properties": {
+                "summary": {"type": "string", "minLength": 1},
+                "findings": {"type": "array", "maxItems": 5, "items": finding}
+            }
+        },
+        "source_files": [row["file"] for row in compact],
+    }
+
+
+def normalize_set_review_result(data, allowed_files=None):
+    """Adapt investigations to existing QA display/storage, never to direct edit actions."""
+    if not isinstance(data, dict) or not isinstance(data.get("findings"), list) or not _clean(data.get("summary")):
+        raise ValueError("Deep QA set review is missing structured findings.")
+    allowed = set(allowed_files or [])
+    findings = []
+    for raw in data["findings"][:5]:
+        if not isinstance(raw, dict):
+            raise ValueError("Deep QA set review contains an invalid finding.")
+        concept = _clean(raw.get("concept"))[:240]
+        title = _clean(raw.get("title"))
+        summary = _clean(raw.get("summary"))
+        why = _clean(raw.get("why"))
+        priority = str(raw.get("priority") or "")
+        confidence = str(raw.get("confidence") or "")
+        training_value = str(raw.get("trainingValue") or "")
+        candidates = raw.get("candidates")
+        dismiss_if = _clean(raw.get("dismissIf"))
+        evidence = raw.get("evidence")
+        if (not concept or not title or not summary or not why or not dismiss_if or
+                priority not in _ALLOWED_PRIORITIES or confidence not in _ALLOWED_CONFIDENCE or
+                training_value not in {"critical", "high", "medium", "low"} or
+                not isinstance(candidates, list) or not isinstance(evidence, list)):
+            raise ValueError("Deep QA set review contains an incomplete finding.")
+        selected = []
+        seen = set()
+        for candidate in candidates[:5]:
+            if not isinstance(candidate, dict):
+                raise ValueError("Deep QA set review contains an invalid candidate.")
+            name = str(candidate.get("file") or "").strip()
+            reason = _clean(candidate.get("reason"))[:160]
+            if not name or name not in allowed:
+                raise ValueError("Deep QA set review invented a filename.")
+            if not reason:
+                raise ValueError("Deep QA set review candidate requires a reason.")
+            if name not in seen:
+                selected.append({"file": name, "reason": reason})
+                seen.add(name)
+        names = [candidate["file"] for candidate in selected]
+        # Zero example files is valid if no meaningful shortlist is supported.
+        findings.append({
+            "category": "consistency", "priority": priority, "confidence": confidence,
+            "trainingValue": training_value, "title": title, "summary": summary,
+            "why": why, "concept": concept, "dismissIf": dismiss_if[:360],
+            "candidates": selected, "files": names,
+            "evidence": [_clean(value) for value in evidence[:4] if _clean(value)],
+            "patches": [], "tagActions": [],
+        })
+    return {"summary": _clean(data["summary"]), "findings": findings, "captionQuality": []}

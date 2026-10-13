@@ -1497,6 +1497,40 @@ def qa_deep_scan_route():
                 + ", ".join(unknown_files[:10])
             )
 
+        if data.get("setReview") is True:
+            from .qa_llm_contract import build_set_review_request
+            from .vision_schema_assist import vision_sight_records, mine_sight_records
+            # Mine all current Sight including singleton properties; vocabulary mining's
+            # frequency threshold remains unchanged. No Vision inference is launched.
+            sight_records = vision_sight_records(folder, "", files=requested_files)
+            visual_evidence = mine_sight_records(sight_records, limit=160, minimum_support=1)
+            contract = build_set_review_request(
+                items, data.get("vocabulary"), data.get("trainingFocus"), data.get("primer"),
+                sight_evidence=visual_evidence,
+            )
+            if data.get("preflight") is True:
+                # Deliberately approximate: not a tokenizer or a hard capacity gate.
+                import math
+                prompt_tokens = math.ceil(len(contract["prompt"]) / 3)
+                reserve = int(contract.get("max_tokens") or 2048)
+                model_ref = str(data.get("model") or "").strip()
+                settings = app_config.load_config_from_disk() or {}
+                director = ((settings.get("storyboard") or {}).get("director") or {})
+                context_size = director.get("context_size") if model_ref.startswith("local::") or "::" not in model_ref else None
+                if context_size is None:
+                    from .director_model_calibration import get_profile
+                    profile = get_profile(model_ref)
+                    if isinstance(profile, dict) and profile.get("contextMode") == "calibrated":
+                        context_size = profile.get("contextSize")
+                context_size = int(context_size or 0)
+                return jsonify({
+                    "ok": True, "estimatedTokens": prompt_tokens + reserve,
+                    "contextTokens": context_size, "estimateKind": "conservative_characters",
+                })
+            job = enqueue_llm("qa", str(data.get("model") or "").strip(), contract,
+                              context={}, label="QA Set Review")
+            return jsonify({"ok": True, "job": job}), 202
+
         from .qa_llm_contract import build_request as build_qa_llm_request
         contract = build_qa_llm_request(
             items,
@@ -1535,7 +1569,7 @@ def qa_concept_check_route():
         if len(names) != len(items) or len(set(names)) != len(names) or any(name not in available for name in names):
             raise ValueError("Concept QA includes duplicate or unknown Set media.")
         from .qa_llm_contract import build_concept_request
-        contract = build_concept_request(items, data.get("concept"), data.get("knownVocabulary"), data.get("recheckConcern"))
+        contract = build_concept_request(items, data.get("concept"), data.get("knownVocabulary"), data.get("recheckConcern"), data.get("dismissIf"))
         job = enqueue_llm(
             "qa",
             str(data.get("model") or "").strip(),

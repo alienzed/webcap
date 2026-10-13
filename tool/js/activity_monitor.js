@@ -93,18 +93,26 @@
     var root = el('app-overlay-root');
     if (!root) throw new Error('Activity overlay root is missing.');
     var host = el('activity-progress-follower');
-    var items = localItems();
+    var managed = (Array.isArray(state.payload.active) ? state.payload.active : [])
+      .filter(function (item) { return !isProgressChild(item); })
+      .map(managedProgressSnapshot).filter(Boolean);
+    var items = managed.concat(localItems());
     if (!items.length) {
       if (host) host.remove();
       return;
     }
+    // Follow the most recently started work; stable start times prevent card
+    // switching on each refresh. Other operations remain in the Activity drawer.
+    items.sort(function (a, b) {
+      return Number(a.startedAt || 0) - Number(b.startedAt || 0);
+    });
+    var item = items[items.length - 1];
     if (!host) {
       host = document.createElement('div');
       host.id = 'activity-progress-follower';
       host.className = 'activity-progress-follower';
       root.appendChild(host);
     }
-    var item = items[items.length - 1];
     var card = host.querySelector('[data-progress-card-id]');
     if (!card || card.getAttribute('data-progress-card-id') !== String(item.id)) {
       card = ProgressCard.create({ compact: true });
@@ -115,6 +123,8 @@
       onOpen: function () {
         if (item.kind === 'director-diagnostics') {
           window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
+        } else if (item.original) {
+          openItem(item.original);
         } else {
           setOpen(true);
         }
@@ -236,19 +246,55 @@
     return parts.join(' · ');
   }
 
-  function progressPercent(item) {
+  // Convert existing managed work to the same presentation contract as Diagnostics.
+  // The backend and owning workspace remain authoritative; no new progress polling.
+  function managedProgressSnapshot(item) {
+    if (item.kind !== 'training' && item.kind !== 'storage') return null;
+    var snapshot = {
+      id: 'managed:' + String(item.kind) + ':' + String(item.id),
+      kind: item.kind,
+      title: activityTitle(item),
+      status: String(item.status || 'running'),
+      startedAt: item.startedAt,
+      detail: String(item.folder || ''),
+      phase: '',
+      progressLabel: '',
+      progress: null
+    };
     if (item.kind === 'training') {
-      var progress = item.progress && typeof item.progress === 'object' ? item.progress : {};
-      var epoch = Number(progress.epoch);
-      var epochs = Number(progress.epochs);
-      if (isFinite(epoch) && isFinite(epochs) && epochs > 0) return Math.max(0, Math.min(100, epoch / epochs * 100));
-    }
-    if (item.kind === 'storage') {
+      var source = item.progress && typeof item.progress === 'object' ? item.progress : {};
+      var stage = String(source.stage || item.stage || '').replace(/_/g, ' ');
+      snapshot.phase = (item.status === 'stopping' ? 'Stopping' : 'Training') +
+        (stage ? ' · ' + stage : '');
+      var epoch = Number(source.epoch);
+      var epochs = Number(source.epochs);
+      var hasEpoch = source.epoch != null && source.epochs != null &&
+        isFinite(epoch) && epoch >= 0 && isFinite(epochs) && epochs > 0;
+      if (hasEpoch) snapshot.progressLabel = 'Epoch ' + Math.round(epoch) + ' / ' + Math.round(epochs);
+      var overall = Number(source.overallPercent);
+      if (source.overallPercent != null && isFinite(overall) && overall >= 0 && overall <= 100) {
+        snapshot.progress = { completed: overall, total: 100 };
+        snapshot.progressLabel += (snapshot.progressLabel ? ' · ' : '') +
+          (source.source === 'steps' ? '~' : '') + Math.round(overall) + '% overall';
+      } else if (hasEpoch) {
+        snapshot.progress = { completed: epoch, total: epochs };
+        snapshot.progressLabel += ' · current stage';
+      }
+    } else {
+      snapshot.phase = (item.status === 'cancelling' ? 'Cancelling' :
+        String(item.phase || 'Measuring').replace(/_/g, ' '));
       var measured = Number(item.itemsMeasured);
       var total = Number(item.itemsTotal);
-      if (isFinite(measured) && isFinite(total) && total > 0) return Math.max(0, Math.min(100, measured / total * 100));
+      if (item.itemsTotal != null && isFinite(total) && total > 0 &&
+          item.itemsMeasured != null && isFinite(measured) && measured >= 0) {
+        snapshot.progress = { completed: measured, total: total };
+        snapshot.progressLabel = String(measured) + ' / ' + String(total) + ' items measured';
+      }
+      var scanned = bytesLabel(item.bytesScanned);
+      if (scanned) snapshot.progressLabel += (snapshot.progressLabel ? ' · ' : '') + scanned + ' scanned';
     }
-    return null;
+    snapshot.original = item;
+    return snapshot;
   }
 
   function openItem(item) {
@@ -297,6 +343,24 @@
     }
   }
 
+  function activeCardKey(item) {
+    return [String(item.lane || item.kind || ''), String(item.kind || ''), String(item.id || '')].join(':');
+  }
+
+  function syncActiveCard(card, item) {
+    card.setAttribute('data-activity-active-key', activeCardKey(item));
+    card.className = 'activity-monitor-card status-' + String(item.status || '');
+    card.querySelector('.activity-monitor-dot').className = 'activity-monitor-dot active';
+    card.querySelector('.activity-monitor-copy strong').textContent = activityTitle(item);
+    card.querySelector('.activity-monitor-copy span').textContent =
+      activityDetail(item) || String(item.status || '').replace(/_/g, ' ');
+    var elapsed = formatElapsed(item.startedAt);
+    card.querySelector('.activity-monitor-copy small').textContent =
+      [String(item.status || '').replace(/_/g, ' '), elapsed ? elapsed + ' elapsed' : ''].filter(Boolean).join(' · ');
+    card.querySelector('.activity-monitor-open').onclick = function () { openItem(item); };
+    return card;
+  }
+
   function createActiveCard(item) {
     var article = document.createElement('article');
     article.className = 'activity-monitor-card status-' + String(item.status || '');
@@ -317,16 +381,6 @@
     copy.appendChild(detail);
     copy.appendChild(meta);
 
-    var percent = progressPercent(item);
-    if (percent !== null) {
-      var track = document.createElement('div');
-      track.className = 'activity-monitor-progress';
-      var fill = document.createElement('span');
-      fill.style.width = percent.toFixed(1) + '%';
-      track.appendChild(fill);
-      copy.appendChild(track);
-    }
-
     var open = document.createElement('button');
     open.type = 'button';
     open.className = 'activity-monitor-open';
@@ -336,7 +390,7 @@
     article.appendChild(dot);
     article.appendChild(copy);
     article.appendChild(open);
-    return article;
+    return syncActiveCard(article, item);
   }
 
   function recentStatusClass(status) {
@@ -591,6 +645,30 @@
     return section;
   }
 
+  function ensureActivitySection(host, key, title, note) {
+    var section = Array.prototype.find.call(host.children, function (child) {
+      return child.getAttribute('data-activity-section') === key;
+    });
+    if (!section) {
+      section = appendSection(host, title, note);
+      section.setAttribute('data-activity-section', key);
+    }
+    section.querySelector('.activity-monitor-section-heading span').textContent = note || '';
+    return section;
+  }
+
+  function reconcileActivityRows(section, wanted) {
+    // Keep mounted cards and controls stable while polling.
+    wanted.forEach(function (node, index) {
+      if (section.children[index + 1] !== node) {
+        section.insertBefore(node, section.children[index + 1] || null);
+      }
+    });
+    Array.prototype.slice.call(section.children, 1).forEach(function (node) {
+      if (wanted.indexOf(node) === -1) node.remove();
+    });
+  }
+
   function syncActivityRailWork(active) {
     var activeIds = Object.create(null);
     (active || []).forEach(function (item) {
@@ -654,39 +732,77 @@
     Array.prototype.forEach.call(host.querySelectorAll('[data-progress-card-id]'), function (card) {
       retainedProgressCards[card.getAttribute('data-progress-card-id')] = card;
     });
-    host.innerHTML = '';
+    var retainedActiveCards = Object.create(null);
+    Array.prototype.forEach.call(host.querySelectorAll('[data-activity-active-key]'), function (card) {
+      retainedActiveCards[card.getAttribute('data-activity-active-key')] = card;
+    });
 
-    var nowSection = appendSection(host, 'Now', active.length ? String(active.length) + ' active' : '');
+    var nowSection = ensureActivitySection(host, 'now', 'Now', active.length ? String(active.length) + ' active' : '');
+    var nowRows = [];
     if (!active.length) {
-      var emptyNow = document.createElement('div');
-      emptyNow.className = 'activity-monitor-empty';
-      emptyNow.textContent = 'Nothing is running right now.';
-      nowSection.appendChild(emptyNow);
+      var emptyNow = nowSection.querySelector('.activity-monitor-empty');
+      if (!emptyNow) {
+        emptyNow = document.createElement('div');
+        emptyNow.className = 'activity-monitor-empty';
+        emptyNow.textContent = 'Nothing is running right now.';
+      }
+      nowRows.push(emptyNow);
     } else {
       active.forEach(function (item) {
-        if (item.kind === 'director-diagnostics') {
-          var card = retainedProgressCards[String(item.id)] || ProgressCard.create();
-          ProgressCard.update(card, item, { onOpen: function () { setOpen(false); window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models'); } });
-          nowSection.appendChild(card);
-        } else nowSection.appendChild(createActiveCard(item));
+        var managedSnapshot = managedProgressSnapshot(item);
+        if (managedSnapshot || item.kind === 'director-diagnostics') {
+          var progressItem = managedSnapshot || item;
+          var card = retainedProgressCards[String(progressItem.id)] || ProgressCard.create();
+          ProgressCard.update(card, progressItem, { onOpen: function () {
+            if (item.kind === 'director-diagnostics') {
+              setOpen(false);
+              window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
+            } else openItem(item);
+          } });
+          nowRows.push(card);
+        } else {
+          var existingCard = retainedActiveCards[activeCardKey(item)];
+          nowRows.push(existingCard ? syncActiveCard(existingCard, item) : createActiveCard(item));
+        }
       });
     }
+    reconcileActivityRows(nowSection, nowRows);
 
-    var recentSection = appendSection(host, 'Recent', unseen ? String(unseen) + ' new' : '');
+    var recentSection = ensureActivitySection(host, 'recent', 'Recent', unseen ? String(unseen) + ' new' : '');
+    var recentRows = [];
     if (!recent.length) {
-      var emptyRecent = document.createElement('div');
-      emptyRecent.className = 'activity-monitor-empty';
-      emptyRecent.textContent = 'No recent managed work.';
-      recentSection.appendChild(emptyRecent);
+      var emptyRecent = recentSection.querySelector('.activity-monitor-empty');
+      if (!emptyRecent) {
+        emptyRecent = document.createElement('div');
+        emptyRecent.className = 'activity-monitor-empty';
+        emptyRecent.textContent = 'No recent managed work.';
+      }
+      recentRows.push(emptyRecent);
     } else {
-      recent.slice(0, 12).forEach(function (item) { recentSection.appendChild(createRecentRow(item)); });
+      var existingRecent = Object.create(null);
+      Array.prototype.forEach.call(recentSection.querySelectorAll('[data-activity-recent-key]'), function (row) {
+        existingRecent[row.getAttribute('data-activity-recent-key')] = row;
+      });
+      recent.slice(0, 12).forEach(function (item) {
+        var key = recentKey(item);
+        var row = existingRecent[key] || createRecentRow(item);
+        row.setAttribute('data-activity-recent-key', key);
+        row.querySelector('time').textContent = formatAge(finishedAt(item));
+        recentRows.push(row);
+      });
     }
+    reconcileActivityRows(recentSection, recentRows);
 
-    var queueSection = appendSection(host, 'Queue Status', '');
+    var queueSection = ensureActivitySection(host, 'queues', 'Queue Status', '');
     queueSection.classList.add('activity-monitor-queue-section');
-    queueSection.appendChild(createQueueStatusBar(queues));
-    var directorQueueList = createDirectorQueueList(queues.director);
-    if (directorQueueList) queueSection.appendChild(directorQueueList);
+    var queueSignature = JSON.stringify(queues);
+    if (queueSection.getAttribute('data-activity-queue-signature') !== queueSignature) {
+      var queueRows = [createQueueStatusBar(queues)];
+      var directorQueueList = createDirectorQueueList(queues.director);
+      if (directorQueueList) queueRows.push(directorQueueList);
+      reconcileActivityRows(queueSection, queueRows);
+      queueSection.setAttribute('data-activity-queue-signature', queueSignature);
+    }
   }
 
   function refresh() {

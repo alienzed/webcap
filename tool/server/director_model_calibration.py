@@ -120,7 +120,7 @@ def _normalize_attempt(attempt):
 
 
 
-def _report_abilities(attempts, context_mode, context_size, max_tokens):
+def _report_abilities(attempts, context_mode, context_size, max_tokens, assessment_kind="calibration"):
     passed = [attempt for attempt in attempts if attempt["status"] == "passed"]
     structured_output = max(
         [attempt["target"] for attempt in passed if attempt["kind"] == "output"],
@@ -130,9 +130,12 @@ def _report_abilities(attempts, context_mode, context_size, max_tokens):
         [attempt["target"] for attempt in passed if attempt["kind"] == "prose"],
         default=0,
     )
-    proven_context = context_size if context_mode == "calibrated" else max(
-        [attempt.get("observedContextSize", 0) for attempt in passed],
-        default=0,
+    # The quick confirmation never exercises its advertised context window.
+    # Keep observed runtime context in the individual attempt's evidence instead.
+    proven_context = 0 if assessment_kind == "confirmation" else (
+        context_size if context_mode == "calibrated" else max(
+            [attempt.get("observedContextSize", 0) for attempt in passed], default=0
+        )
     )
     return {
         "responds": bool(passed),
@@ -154,7 +157,7 @@ def _report_pathologies(attempts):
     })
 
 
-def _report_health(attempts, context_mode, context_size, max_tokens, status):
+def _report_health(attempts, context_mode, context_size, max_tokens, status, assessment_kind="calibration"):
     max_tokens = max([attempt["target"] for attempt in attempts
                       if attempt["kind"] == "prose" and attempt["status"] == "passed"], default=0)
     if status == "stopped":
@@ -174,7 +177,7 @@ def _report_health(attempts, context_mode, context_size, max_tokens, status):
             return "assessment-incomplete"
         if any(attempt.get("failureKind") == "runtime" for attempt in failed):
             return "assessment-incomplete"
-        if any(
+        if assessment_kind != "confirmation" and any(
             attempt.get("failureKind") == "capacity" and attempt.get("kind") in {"output", "prose"}
             for attempt in failed
         ):
@@ -211,9 +214,9 @@ def _report_with_derived_fields(report):
     status = str(value.get("status") or "incomplete").strip()
     value["assessmentKind"] = str(value.get("assessmentKind") or "calibration")
 
-    value["health"] = _report_health(attempts, context_mode, context_size, max_tokens, status)
+    value["health"] = _report_health(attempts, context_mode, context_size, max_tokens, status, value["assessmentKind"])
     value["pathologies"] = _report_pathologies(attempts)
-    value["abilities"] = _report_abilities(attempts, context_mode, context_size, max_tokens)
+    value["abilities"] = _report_abilities(attempts, context_mode, context_size, max_tokens, value["assessmentKind"])
     return value
 
 
@@ -280,9 +283,9 @@ def save_report(report):
         "maxTokens": max_tokens,
         "status": status,
         "error": str(report.get("error") or ""),
-        "health": _report_health(normalized_attempts, context_mode, context_size, max_tokens, status),
+        "health": _report_health(normalized_attempts, context_mode, context_size, max_tokens, status, assessment_kind),
         "pathologies": _report_pathologies(normalized_attempts),
-        "abilities": _report_abilities(normalized_attempts, context_mode, context_size, max_tokens),
+        "abilities": _report_abilities(normalized_attempts, context_mode, context_size, max_tokens, assessment_kind),
         "updatedAt": _now_iso(),
         "attempts": normalized_attempts,
     }

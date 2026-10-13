@@ -1126,15 +1126,22 @@ def _parse_wildcard_nodes(source):
                 return nodes, position
 
             if char == "{":
+                try:
+                    options, next_position = parse_group(position)
+                except ValueError:
+                    # An unmatched opening brace is literal text. A later valid
+                    # group can still contribute to the session summary.
+                    position += 1
+                    continue
                 if literal_start < position:
                     nodes.append(("literal", text[literal_start:position]))
-                options, position = parse_group(position)
                 nodes.append(("group", options))
+                position = next_position
                 literal_start = position
                 continue
 
-            if char == "}":
-                raise ValueError("Unmatched wildcard closing brace.")
+            # Stray closing braces are literal too: summary extraction must
+            # not discard unrelated valid wildcard groups.
 
             position += 1
 
@@ -1153,8 +1160,6 @@ def _parse_wildcard_nodes(source):
             if text[position] == "|":
                 position += 1
                 continue
-            if len(options) < 2:
-                raise ValueError("Wildcard group must contain at least two options.")
             return options, position + 1
 
     nodes, position = parse_sequence(0)
@@ -1165,6 +1170,12 @@ def _parse_wildcard_nodes(source):
 
 def _wildcard_nodes_have_group(nodes):
     return any(kind == "group" for kind, _value in nodes)
+
+
+def _singleton_wildcard_literal(options):
+    if len(options) != 1 or any(kind != "literal" for kind, _value in options[0]):
+        return ""
+    return "{" + "".join(value for _kind, value in options[0]) + "}"
 
 
 def _match_wildcard_nodes(nodes, resolved, node_index=0, position=0):
@@ -1195,30 +1206,39 @@ def _match_wildcard_nodes(nodes, resolved, node_index=0, position=0):
             selected_values = [selected_text] if selected_text else []
         return tail_position, selected_values + tail_values
 
+    singleton = _singleton_wildcard_literal(value)
+    if singleton:
+        # Impact Wildcards can leave one-choice braces verbatim. They are not
+        # a resolved selection, but must not invalidate surrounding choices.
+        end = _consume_wildcard_fragment(resolved, position, singleton)
+        if end is not None:
+            tail = _match_wildcard_nodes(nodes, resolved, node_index + 1, end)
+            if tail is not None:
+                return tail
     return None
 
 
-def _match_wildcard_source(source, resolved, matcher):
-    candidates = [source]
-    if "#" in source:
-        # Keep the original match first; retry without explicit comments only
-        # when the resolver omitted them. Inline notes may end at a sentence.
-        uncommented = re.sub(r"(?m)^[ 	]*#[^\r\n]*(?:\r?\n|$)", " ", source)
-        uncommented = re.sub(
-            r"(?<!\S)#[^\r\n]*?(?:\.(?=\s+[A-Z])|(?=\r?\n)|$)",
-            "",
-            uncommented,
-        )
-        if uncommented != source:
-            candidates.append(uncommented)
+def _strip_wildcard_comments(text):
+    text = re.sub(r"(?m)^[ \t]*#[^\r\n]*(?:\r?\n|$)", " ", text)
+    return re.sub(
+        r"(?<!\S)#[^\r\n]*?(?:\.(?=\s+[A-Z])|(?=\r?\n)|$)",
+        "",
+        text,
+    )
 
-    for candidate in candidates:
-        try:
-            nodes = _parse_wildcard_nodes(candidate)
-        except ValueError:
-            continue
-        matched = matcher(nodes, resolved)
-        if matched is not None and matched[0] == len(resolved):
+
+def _match_wildcard_source(source, resolved, matcher):
+    # Treat comments as non-prompt content even if the resolver echoes them.
+    # Try a cleaned resolved prompt as well as one where Impact removed them.
+    candidate = _strip_wildcard_comments(source)
+    resolved_candidates = [resolved]
+    uncommented_resolved = _normalize_wildcard_text(_strip_wildcard_comments(resolved))
+    if uncommented_resolved != resolved:
+        resolved_candidates.insert(0, uncommented_resolved)
+    nodes = _parse_wildcard_nodes(candidate)
+    for text in resolved_candidates:
+        matched = matcher(nodes, text)
+        if matched is not None and matched[0] == len(text):
             return candidate, nodes, matched[1]
     return None
 
@@ -1226,7 +1246,7 @@ def _match_wildcard_source(source, resolved, matcher):
 def _resolved_wildcard_values(source_prompt, resolved_prompt):
     source = str(source_prompt or "")
     resolved = _normalize_wildcard_text(resolved_prompt)
-    if "|" not in source or "{" not in source:
+    if "{" not in source:
         return []
 
     matched = _match_wildcard_source(source, resolved, _match_wildcard_nodes)
@@ -1294,27 +1314,30 @@ def _match_top_level_wildcard_selections(nodes, resolved, node_index=0, position
         selected_text = _normalize_wildcard_text(resolved[position:option_position])
         return tail_position, [selected_text] + tail_values
 
+    singleton = _singleton_wildcard_literal(value)
+    if singleton:
+        end = _consume_wildcard_fragment(resolved, position, singleton)
+        if end is not None:
+            tail = _match_top_level_wildcard_selections(nodes, resolved, node_index + 1, end)
+            if tail is not None:
+                return tail[0], [""] + tail[1]
     return None
 
 
 def _top_level_wildcard_spans(source):
-    text = str(source or "")
+    starts = []
     spans = []
-    depth = 0
-    start = None
-    for index, char in enumerate(text):
+    for index, char in enumerate(str(source or "")):
         if char == "{":
-            if depth == 0:
-                start = index
-            depth += 1
-        elif char == "}":
-            if depth <= 0:
-                return []
-            depth -= 1
-            if depth == 0 and start is not None:
-                spans.append((start, index + 1))
-                start = None
-    return spans if depth == 0 else []
+            starts.append(index)
+        elif char == "}" and starts:
+            spans.append((starts.pop(), index + 1))
+    # Ignore unmatched braces; prefer complete outer groups over nested ones.
+    top_level = []
+    for span in sorted(spans):
+        if not top_level or span[0] >= top_level[-1][1]:
+            top_level.append(span)
+    return top_level
 
 
 def _wildcard_neighbor_literal(nodes, node_index, direction):
@@ -1434,7 +1457,7 @@ def _wildcard_summary_score(item, source_prompt, owner_folder):
 def _wildcard_summary_items(source_prompt, resolved_prompt):
     source = str(source_prompt or "")
     resolved = _normalize_wildcard_text(resolved_prompt)
-    if "|" not in source or "{" not in source:
+    if "{" not in source:
         return []
 
     matched = _match_wildcard_source(source, resolved, _match_top_level_wildcard_selections)

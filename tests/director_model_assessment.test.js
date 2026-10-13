@@ -225,3 +225,17 @@ test('short confirmation does not claim scene-only limit', () => {
   assert.match(html, /not a model maximum/);
   assert.equal(html.includes('Proven limits:'), false);
 });
+
+
+test('advertised capability matching respects model-name boundaries', () => {
+  const { ui } = assessmentUI();
+  ui.directorModelTestState.advertisedCapabilities = [
+    { match: ['rvn'], contextTokens: 262144 },
+    { match: ['nullguard'], contextTokens: 131072 },
+  ];
+  ui.directorModelTestState.models = [];
+  assert.equal(ui.directorModelTestAdvertisedCapability('local::RVN-Q5_K_M.gguf').contextTokens, 262144);
+  assert.equal(ui.directorModelTestAdvertisedCapability('local::RVNery-Q5_K_M.gguf'), null);
+  assert.equal(ui.directorModelTestAdvertisedCapability('ollama::nullguard:latest').contextTokens, 131072);
+  assert.equal(ui.directorModelTestAdvertisedCapability('ollama::othernullguarder'), null);
+});

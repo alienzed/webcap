@@ -55,6 +55,7 @@
     conceptStatus: '',
     conceptSession: null,
     conceptCoverage: null, // Session-only coverage of the last explicit concept check.
+    investigation: null, // Session-only outcome of the last selected hypothesis.
     captionQuality: {},
     qaAlternatives: {},
     aiSummary: '',
@@ -314,6 +315,8 @@
         meta: evidence,
         source: 'ai',
         concept: String(finding.concept || ''),
+        dismissIf: String(finding.dismissIf || ''),
+        candidates: Array.isArray(finding.candidates) ? finding.candidates.slice() : [],
         sourceLabel: 'AI · ' + String(model || 'Director')
       };
     });
@@ -823,8 +826,12 @@
     var model = String(getDirectorModelPreference() || '').trim();
     if (!model) { setStatus('Select a Director model for the concept check.'); return; }
     if (qaWorkbenchState.deepScanSubmitting || qaWorkbenchState.deepScanJobId) { setStatus('Finish or stop Deep QA first.'); return; }
-    var items = qaGetTrainingItems();
-    if (!items.length) { setStatus('No media in current training selection.'); return; }
+    var selected = qaGetTrainingItems(), investigation = qaWorkbenchState.investigation;
+    var candidateFiles = investigation && investigation.concept === concept ? investigation.files : null;
+    var items = candidateFiles ? selected.filter(function (item) {
+      return candidateFiles.indexOf(item.fileName) !== -1;
+    }) : selected;
+    if (!items.length) { setStatus('No media in current investigation selection.'); return; }
     var conceptItems = qaBuildConceptItems(items);
     var available = conceptItems.filter(function (row) { return !!row.analysis.visionSight; });
     var missingCount = conceptItems.length - available.length;
@@ -843,6 +850,7 @@
     qaWorkbenchState.conceptCoverage = coverage;
     var session = {
       folder: String(state.folder || ''), scope: qaBuildScopeKey(items),
+      investigationId: investigation && investigation.concept === concept ? investigation.id : '',
       concept: concept, model: model, items: available,
       vocabulary: vocabulary, missingCount: missingCount,
       signatures: qaConceptInputSignatures(items), index: 0,
@@ -856,7 +864,9 @@
     function current() {
       return qaWorkbenchState.conceptSession === session && !session.stopped &&
         String(state.folder || '') === session.folder &&
-        qaBuildScopeKey(qaGetTrainingItems()) === session.scope;
+        qaBuildScopeKey(qaGetTrainingItems().filter(function (item) {
+          return !session.investigationId || session.items.some(function (row) { return row.fileName === item.fileName; });
+        })) === session.scope;
     }
     function next() {
       if (!current()) {
@@ -865,6 +875,13 @@
       }
       if (session.index >= session.items.length) {
         qaWorkbenchState.conceptSession = null;
+        if (session.investigationId && qaWorkbenchState.investigation &&
+            qaWorkbenchState.investigation.id === session.investigationId) {
+          qaWorkbenchState.investigation.finished = true;
+          qaWorkbenchState.investigation.examined = session.items.length;
+          qaWorkbenchState.investigation.missing = missingCount;
+          qaWorkbenchState.investigation.actions = qaWorkbenchState.conceptFindings.length;
+        }
         qaWorkbenchState.conceptStatus = 'Concept check finished · ' + session.items.length + ' items examined' + (missingCount ? ' · ' + missingCount + ' without Sight (not checked).' : '.');
         reportConsoleInfo('QA Concept Check', qaWorkbenchState.conceptStatus);
         qaMergeFindings();
@@ -947,6 +964,10 @@
           };
         });
         qaWorkbenchState.conceptSession = null;
+        if (session.investigationId && qaWorkbenchState.investigation &&
+            qaWorkbenchState.investigation.id === session.investigationId) {
+          qaWorkbenchState.investigation.error = String(err.message || err);
+        }
         qaWorkbenchState.conceptStatus = 'Concept check failed at ' + session.index + '/' + session.items.length + ' · see Console.';
         reportConsoleError('QA Concept Check', err);
         renderQaWorkbench();
@@ -2012,19 +2033,40 @@
     why.textContent = finding.why;
     // Keep the short diagnosis visible; explanation and metrics are optional.
 
+    if (finding.concept) {
+      var question = document.createElement('p');
+      question.className = 'qa-investigation-question';
+      question.textContent = 'Investigate: ' + finding.concept;
+      article.appendChild(question);
+      var condition = document.createElement('p');
+      condition.className = 'qa-muted';
+      condition.textContent = 'Dismiss if: ' + (finding.dismissIf || 'Visual evidence does not support the concern.');
+      article.appendChild(condition);
+    }
     if (finding.files && finding.files.length) {
       var evidenceHeading = document.createElement('div');
       evidenceHeading.className = 'qa-evidence-heading';
       var h3 = document.createElement('h3');
       h3.textContent = 'Evidence';
       var note = document.createElement('span');
-      note.textContent = finding.files.length > 1 ? finding.files.length + ' affected items' : '1 affected item';
+      note.textContent = finding.concept ? finding.files.length + ' candidate items · not verified' :
+        (finding.files.length > 1 ? finding.files.length + ' affected items' : '1 affected item');
       evidenceHeading.appendChild(h3);
       evidenceHeading.appendChild(note);
       article.appendChild(evidenceHeading);
       var strip = document.createElement('div');
       strip.className = 'qa-evidence-strip';
-      finding.files.slice(0, 6).forEach(function (fileName) { strip.appendChild(qaCreateEvidenceMedia(fileName)); });
+      finding.files.slice(0, 6).forEach(function (fileName) {
+        var media = qaCreateEvidenceMedia(fileName);
+        var candidate = (finding.candidates || []).find(function (entry) { return entry.file === fileName; });
+        if (candidate) {
+          var reason = document.createElement('span');
+          reason.className = 'qa-muted';
+          reason.textContent = candidate.reason;
+          media.appendChild(reason);
+        }
+        strip.appendChild(media);
+      });
       if (finding.files.length > 6) {
         var overflow = document.createElement('span');
         overflow.className = 'qa-muted';
@@ -2037,7 +2079,24 @@
     var actions = document.createElement('div');
     actions.className = 'qa-recommendation-actions';
     if (finding.concept) {
-      actions.appendChild(qaCreateButton('Check this concept', 'qa-primary', 'check-finding-concept', finding.id));
+      var active = qaWorkbenchState.investigation && qaWorkbenchState.investigation.id === finding.id
+        ? qaWorkbenchState.investigation : null;
+      if (active && active.finished) {
+        var outcome = document.createElement('p');
+        outcome.className = 'qa-investigation-result';
+        outcome.textContent = active.examined + ' items checked · ' + active.actions +
+          ' actionable findings · ' + active.missing + ' without Sight (unchecked).';
+        article.appendChild(outcome);
+      } else if (active && active.error) {
+        var failure = document.createElement('p');
+        failure.className = 'qa-investigation-result';
+        failure.textContent = 'Investigation failed: ' + active.error;
+        article.appendChild(failure);
+      }
+      var check = qaCreateButton(active && qaWorkbenchState.conceptSession ? 'Investigating…' :
+        (active && active.finished ? 'Run check again' : 'Investigate'), 'qa-primary', 'check-finding-concept', finding.id);
+      check.disabled = !!qaWorkbenchState.conceptSession || !(finding.candidates || []).length;
+      actions.appendChild(check);
     } else if (finding.files && finding.files.length) {
       var primaryLabel = (finding.category === 'captioning' || (finding.patches || []).length) ? 'Open Caption Assist'
         : finding.utilityTab === 'duplicates' ? 'Inspect exact duplicates'
@@ -2226,6 +2285,7 @@
       && qaWorkbenchState.deepScanInputSignature !== inputSignature;
 
     if (folderChanged || scopeChanged) {
+      qaWorkbenchState.investigation = null;
       qaStopConceptCheck(true);
       qaWorkbenchState.conceptFindings = [];
       qaWorkbenchState.conceptStatus = '';
@@ -2915,10 +2975,20 @@
     if (action === 'check-finding-concept') {
       var concern = qaWorkbenchState.findings.find(function (finding) { return finding.id === value; });
       if (concern && concern.concept) {
+        var files = (concern.candidates || []).map(function (entry) { return entry.file; });
         qaWorkbenchState.conceptQuery = concern.concept;
-        qaWorkbenchState.view = 'overview';
-        renderQaWorkbench();
+        qaWorkbenchState.investigation = {
+          id: concern.id, concept: concern.concept, files: files,
+          finished: false, examined: 0, missing: 0, actions: 0, error: ''
+        };
+        if (!files.length) {
+          qaWorkbenchState.statusMessage = 'No justified candidate files. Use a manual concept check if needed.';
+          renderQaWorkbench();
+          return;
+        }
         qaRunConceptCheck();
+        qaWorkbenchState.view = 'browse';
+        renderQaWorkbench();
       }
       return;
     }

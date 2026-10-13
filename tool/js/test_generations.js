@@ -21,6 +21,8 @@
   var selectedCandidates = null;
   var candidateStrengths = null;
   var defaultCandidateStrength = null;
+  var sweepMode = false;
+  var sweepWeights = '0.6, 0.8, 1.0, 1.2';
   var pendingActivitySession = '';
   var queuedTestJobs = [];
   var trackedTestInferenceSessions = Object.create(null);
@@ -935,6 +937,7 @@
       duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0),
       dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || ''),
       defaultStrength: defaultCandidateStrength,
+      sweepWeights: sweepWeights,
       candidateStrengths: candidateStrengths && typeof candidateStrengths === 'object'
         ? Object.assign({}, candidateStrengths)
         : {},
@@ -1357,6 +1360,37 @@
     });
   }
 
+  function parseSweepWeights(value) {
+    var parts = String(value || '').split(',').map(function (part) { return part.trim(); });
+    if (!parts.length || parts.some(function (part) { return !part; })) throw new Error('Enter comma-separated sweep weights.');
+    var weights = parts.map(function (part) { return Number(part); });
+    if (weights.some(function (weight) { return !isFinite(weight) || weight < -2 || weight > 2; })) {
+      throw new Error('Sweep weights must be between -2 and 2.');
+    }
+    if (new Set(weights).size !== weights.length) throw new Error('Sweep weights must be unique.');
+    return weights.sort(function (a, b) { return a - b; });
+  }
+
+  function syncSweepControls() {
+    var normal = el('test-generations-normal-mode');
+    var sweep = el('test-generations-sweep-mode');
+    normal.classList.toggle('active', !sweepMode);
+    normal.setAttribute('aria-pressed', sweepMode ? 'false' : 'true');
+    sweep.classList.toggle('active', sweepMode);
+    sweep.setAttribute('aria-pressed', sweepMode ? 'true' : 'false');
+    el('test-generations-sweep-field').classList.toggle('hidden', !sweepMode);
+    var count = el('test-generations-sweep-count');
+    count.classList.toggle('hidden', !sweepMode);
+    if (!sweepMode) return;
+    try {
+      var countValue = parseSweepWeights(sweepWeights).length * selectedCandidateFiles().length;
+      count.textContent = String(countValue) + ' generations' +
+        (el('test-generations-base-include') && el('test-generations-base-include').checked ? ' + Base' : '');
+    } catch (err) {
+      count.textContent = err.message;
+    }
+  }
+
   function renderStagedFiles(payload) {
     var count = Number(payload && payload.count || 0);
     var files = payload && Array.isArray(payload.files) ? payload.files : [];
@@ -1380,6 +1414,8 @@
     });
     if (!candidateStrengths || typeof candidateStrengths !== 'object') {
       var savedSettings = savedTestModelState().settings;
+      sweepWeights = typeof savedSettings.sweepWeights === 'string' ? savedSettings.sweepWeights : sweepWeights;
+      el('test-generations-sweep-weights').value = sweepWeights;
       var modelDefaultStrength = Number(payload && payload.defaultStrength);
       if (!isFinite(modelDefaultStrength)) modelDefaultStrength = 1;
       var savedDefault = savedSettings.defaultStrength;
@@ -1438,6 +1474,7 @@
     baseInclude.title = 'Include the Base rendition in the next Test run';
     baseInclude.setAttribute('aria-label', 'Include Base rendition in next Test run');
     baseInclude.addEventListener('change', function () {
+      syncSweepControls();
       saveTestBenchState();
     });
 
@@ -1477,6 +1514,7 @@
       emptyCandidates.textContent = 'No staged candidates for this Set.';
       host.appendChild(emptyCandidates);
       syncCandidateMasterSelect(files);
+      syncSweepControls();
       return;
     }
     files.forEach(function (fileName) {
@@ -1570,6 +1608,7 @@
       host.appendChild(row);
     });
     syncCandidateMasterSelect(files);
+    syncSweepControls();
   }
 
   function sessionStatusText(session) {
@@ -2188,6 +2227,7 @@
   }
 
   function buildResultRemoveButton(result) {
+    if (result && result.strength !== undefined && result.strength !== null) return null;
     var candidateFile = candidateFileForResult(result);
     if (!candidateFile) return null;
 
@@ -2209,6 +2249,10 @@
 
   function testResultStrength(status, result) {
     if (String(result && result.kind || '') === 'base' || String(result && result.sourceLoRA || '') === 'Base') return null;
+    if (result && result.strength !== undefined && result.strength !== null) {
+      var frozenStrength = Number(result.strength);
+      return isFinite(frozenStrength) ? frozenStrength : null;
+    }
     var candidateFile = candidateFileForResult(result);
     if (!candidateFile) return null;
     var candidates = status && Array.isArray(status.candidates) ? status.candidates : [];
@@ -2228,6 +2272,9 @@
     copy.className = opts.failed ? 'test-generations-failure-copy' : 'test-generations-result-copy';
 
     var identity = candidateIdentity(result);
+    if (result && result.strength !== undefined && result.strength !== null) {
+      identity.primary += ' · Weight ' + String(result.strength);
+    }
     var primaryRow = document.createElement('div');
     primaryRow.className = 'test-generations-result-primary';
 
@@ -3380,6 +3427,9 @@
     selectedCandidates = null;
     candidateStrengths = null;
     defaultCandidateStrength = null;
+    sweepMode = false;
+    sweepWeights = '0.6, 0.8, 1.0, 1.2';
+    syncSweepControls();
     currentStatus = {};
     showSessionError = false;
     compareIndex = 0;
@@ -3491,13 +3541,17 @@
       }
       selectedStrengths[strengthFile] = strengthValue;
     }
+    var weights = null;
+    if (sweepMode) {
+      try { weights = parseSweepWeights(sweepWeights); } catch (err) { return showError(err); }
+    }
     saveTestWorkspacePrompt(prompt);
     saveTestBenchState();
     var runBtn = el('test-generations-run-btn');
     var errorEl = el('test-generations-error');
     if (runBtn) runBtn.disabled = true;
     if (errorEl) errorEl.classList.add('hidden');
-    request('test_enqueue', {
+    var criteria = {
       name: name,
       selectedFiles: selectedFiles,
       modelId: currentTestModelId(),
@@ -3505,7 +3559,9 @@
       candidateStrengths: selectedStrengths,
       prompt: prompt,
       settings: settings
-    }).then(function (payload) {
+    };
+    if (weights) criteria.sweepWeights = weights;
+    request('test_enqueue', criteria).then(function (payload) {
       var startedStatus = payload && payload.latest ? payload.latest : null;
       var status = startedStatus || currentStatus;
       syncActiveRunControls(status);
@@ -3641,6 +3697,13 @@
     if (!button || !workspace || !node) throw new Error('Test Generations requires its Training handoff and Test workspace markup.');
 
     button.onclick = openPane;
+    el('test-generations-normal-mode').onclick = function () { sweepMode = false; syncSweepControls(); };
+    el('test-generations-sweep-mode').onclick = function () { sweepMode = true; syncSweepControls(); };
+    el('test-generations-sweep-weights').addEventListener('input', function () {
+      sweepWeights = this.value;
+      syncSweepControls();
+      saveTestBenchState();
+    });
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
@@ -3758,6 +3821,7 @@
       if (checkbox.checked) selectedCandidates.add(fileName);
       else selectedCandidates.delete(fileName);
       syncCandidateMasterSelect(prepared && Array.isArray(prepared.files) ? prepared.files : []);
+      syncSweepControls();
       saveTestBenchState();
       syncActiveRunControls(currentStatus);
     });

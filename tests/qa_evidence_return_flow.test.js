@@ -38,6 +38,6 @@ const context = {
 };
 vm.runInNewContext(handleSource + '\nthis.handle = qaHandleAction;', context);
 context.handle('inspect-file', 'b.jpg');
-assert.deepEqual(Array.from(visited[0]), [['b.jpg'], 'QA · Evidence', 'second'],
+assert.deepEqual([Array.from(visited[0][0]), visited[0][1], visited[0][2]], [['b.jpg'], 'QA · Evidence', 'second'],
   'Evidence preview must remember its originating recommendation');
 console.log('qa_evidence_return_flow: all assertions passed');

@@ -1141,3 +1141,27 @@ def test_set_review_vocabulary_progress_is_session_only_and_uses_existing_owners
     assert "window.publishActivityProgress" in scan
     assert "window.publishActivityProgress" in qa
     assert "window.publishActivityProgress" in schema
+
+
+def test_remaining_multistep_llm_consumers_publish_shared_progress_without_new_pollers():
+    model = (ROOT / 'tool/js/model_lab.js').read_text(encoding='utf-8')
+    qa = (ROOT / 'tool/js/qa_workbench.js').read_text(encoding='utf-8')
+    schema = (ROOT / 'tool/js/vision_schema_assist.js').read_text(encoding='utf-8')
+    activity = (ROOT / 'tool/js/activity_monitor.js').read_text(encoding='utf-8')
+    assert 'function modelLabPublishProgress(run)' in model
+    assert 'modelLabPublishProgress(run);' in model
+    assert "kind: 'model-lab'" in model
+    assert "progress: null" in model
+    assert 'childJobId: String(current && current.jobId' in model
+    assert 'function qaPublishConceptActivity(session, phase)' in qa
+    assert "kind: 'qa-concept-check'" in qa
+    assert "progress: { completed: session.index, total: session.items.length }" in qa
+    assert "qaFinishConceptActivity(session, 'stopped')" in qa
+    assert "qaFinishConceptActivity(session, 'completed')" in qa
+    assert "qaFinishConceptActivity(session, 'failed')" in qa
+    assert 'function publishTagActivity(completed, total, phase)' in schema
+    assert "kind: 'vision-tag-assist'" in schema
+    assert "progress: { completed: completed, total: total }" in schema
+    assert 'finishTagActivity' in schema
+    assert "window.openDiagnosticsModal('model-lab');" in activity
+    assert "item.kind === 'qa-concept-check'" in activity

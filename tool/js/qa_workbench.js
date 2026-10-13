@@ -723,9 +723,13 @@
 
   function qaConceptCoverageCounts() {
     var report = qaWorkbenchState.conceptCoverage;
-    if (!report || report.scope !== qaBuildScopeKey(qaGetTrainingItems())) return null;
+    if (!report) return null;
+    var subset = qaGetTrainingItems().filter(function (item) {
+      return Object.prototype.hasOwnProperty.call(report.items, item.fileName);
+    });
+    if (!subset.length || report.scope !== qaBuildScopeKey(subset)) return null;
     var counts = { actionable: 0, clean: 0, inconclusive: 0, failed: 0, unchecked: 0 };
-    qaGetTrainingItems().forEach(function (item) {
+    subset.forEach(function (item) {
       var record = report.items[item.fileName];
       var status = record && record.signature === qaConceptInputSignatures([item])[item.fileName]
         ? record.status : 'unchecked';

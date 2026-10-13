@@ -140,3 +140,49 @@ def test_scoped_investigation_reuses_concept_check_and_no_automatic_vision():
     assert "condition.textContent = 'Dismiss if: '" in source
     assert "reason.textContent = candidate.reason" in source
     assert "qaWorkbenchState.investigation.finished = true" in source
+
+
+def test_set_review_consumes_compact_sight_including_single_item_properties():
+    from tool.server.vision_schema_assist import mine_sight_records
+    records = [{
+        "file": "a.jpg", "description": "A garment with a distinctive connector.",
+        "inventory": {
+            "viewpoint": [], "position": [],
+            "things": [{"name": "top", "qualities": ["metal ring connector"]}],
+            "colors": [{"thing": "top", "color": "red"}],
+            "setting": [], "background": [], "lighting": [], "surface": [],
+            "details": ["dual ring hardware"],
+        },
+    }]
+    evidence = mine_sight_records(records, limit=160, minimum_support=1)
+    assert any("ring connector" in row["label"] for row in evidence["evidence"])
+    contract = build_set_review_request(_items(), sight_evidence=evidence)
+    assert "metal ring connector" in contract["prompt"]
+    assert "savedVisualObservations" in contract["prompt"]
+
+
+def test_investigation_verdict_requires_affirmative_evidence_and_keeps_legacy_concept_contract():
+    from tool.server.qa_llm_contract import build_concept_request, normalize_result
+    item = {"fileName": "a.jpg", "caption": "A top.", "groupedTags": [], "tags": [],
+            "analysis": {"visionSight": {"description": "Garment with ring hardware",
+                                        "inventory": {"details": ["ring hardware"]}}}}
+    contract = build_concept_request([item], "Are ring fastenings omitted?",
+                                     dismiss_if="No relevant ring fastenings are visually supported.")
+    assert "investigationStatus" in contract["response_schema"]["required"]
+    assert "FALSIFICATION CRITERION" in contract["prompt"]
+    with pytest.raises(ValueError, match="status or evidence"):
+        normalize_result({"summary": "No edits.", "findings": [], "captionQuality": []},
+                         allowed_files=["a.jpg"], investigate=True)
+    legacy = build_concept_request([item], "Check ring")
+    assert "investigationStatus" not in legacy["response_schema"]["required"]
+
+
+def test_deep_qa_does_not_cancel_other_sight_scan_and_keeps_prior_concept_actions():
+    qa = (Path(__file__).resolve().parents[1] / "tool/js/qa_workbench.js").read_text()
+    stop = qa.split("function qaCancelDeepScan()", 1)[1].split("function qaBuildGroupStats(", 1)[0]
+    assert "cancelItemSightRefresh" not in stop
+    concept = qa.split("function qaBeginConceptCheck(", 1)[1].split("function qaWaitForConceptJob(", 1)[0]
+    assert "finding.conceptQuestion !== concept" in concept
+    assert "session.signatures[row.fileName] !== signature ? 'unchecked'" in concept
+    assert "conceptPreflightToken" in qa
+    assert "check-finding-full" in qa

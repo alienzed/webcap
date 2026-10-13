@@ -82,7 +82,7 @@ def test_director_assessment_activity_uses_shared_renderer_and_probe_counts():
     assert 'directorModelTestStartActivityClock();' in script
     assert 'directorModelTestStopActivityClock();' in script
     assert 'ProgressCard.create()' in script
-    assert 'ProgressCard.update(card, snapshot)' in script
+    assert "ProgressCard.update(card, snapshot, { className: 'director-model-test-activity-card' })" in script
     assert 'number / total * 100' not in script
 
 

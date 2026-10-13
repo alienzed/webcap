@@ -625,6 +625,30 @@
     return section;
   }
 
+  function ensureActivitySection(host, key, title, note) {
+    var section = Array.prototype.find.call(host.children, function (child) {
+      return child.getAttribute('data-activity-section') === key;
+    });
+    if (!section) {
+      section = appendSection(host, title, note);
+      section.setAttribute('data-activity-section', key);
+    }
+    section.querySelector('.activity-monitor-section-heading span').textContent = note || '';
+    return section;
+  }
+
+  function reconcileActivityRows(section, wanted) {
+    // Keep mounted cards and controls stable while polling.
+    wanted.forEach(function (node, index) {
+      if (section.children[index + 1] !== node) {
+        section.insertBefore(node, section.children[index + 1] || null);
+      }
+    });
+    Array.prototype.slice.call(section.children, 1).forEach(function (node) {
+      if (wanted.indexOf(node) === -1) node.remove();
+    });
+  }
+
   function syncActivityRailWork(active) {
     var activeIds = Object.create(null);
     (active || []).forEach(function (item) {
@@ -688,14 +712,17 @@
     Array.prototype.forEach.call(host.querySelectorAll('[data-progress-card-id]'), function (card) {
       retainedProgressCards[card.getAttribute('data-progress-card-id')] = card;
     });
-    host.innerHTML = '';
 
-    var nowSection = appendSection(host, 'Now', active.length ? String(active.length) + ' active' : '');
+    var nowSection = ensureActivitySection(host, 'now', 'Now', active.length ? String(active.length) + ' active' : '');
+    var nowRows = [];
     if (!active.length) {
-      var emptyNow = document.createElement('div');
-      emptyNow.className = 'activity-monitor-empty';
-      emptyNow.textContent = 'Nothing is running right now.';
-      nowSection.appendChild(emptyNow);
+      var emptyNow = nowSection.querySelector('.activity-monitor-empty');
+      if (!emptyNow) {
+        emptyNow = document.createElement('div');
+        emptyNow.className = 'activity-monitor-empty';
+        emptyNow.textContent = 'Nothing is running right now.';
+      }
+      nowRows.push(emptyNow);
     } else {
       active.forEach(function (item) {
         var managedSnapshot = managedProgressSnapshot(item);
@@ -708,26 +735,49 @@
               window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
             } else openItem(item);
           } });
-          nowSection.appendChild(card);
-        } else nowSection.appendChild(createActiveCard(item));
+          nowRows.push(card);
+        } else {
+          nowRows.push(createActiveCard(item));
+        }
       });
     }
+    reconcileActivityRows(nowSection, nowRows);
 
-    var recentSection = appendSection(host, 'Recent', unseen ? String(unseen) + ' new' : '');
+    var recentSection = ensureActivitySection(host, 'recent', 'Recent', unseen ? String(unseen) + ' new' : '');
+    var recentRows = [];
     if (!recent.length) {
-      var emptyRecent = document.createElement('div');
-      emptyRecent.className = 'activity-monitor-empty';
-      emptyRecent.textContent = 'No recent managed work.';
-      recentSection.appendChild(emptyRecent);
+      var emptyRecent = recentSection.querySelector('.activity-monitor-empty');
+      if (!emptyRecent) {
+        emptyRecent = document.createElement('div');
+        emptyRecent.className = 'activity-monitor-empty';
+        emptyRecent.textContent = 'No recent managed work.';
+      }
+      recentRows.push(emptyRecent);
     } else {
-      recent.slice(0, 12).forEach(function (item) { recentSection.appendChild(createRecentRow(item)); });
+      var existingRecent = Object.create(null);
+      Array.prototype.forEach.call(recentSection.querySelectorAll('[data-activity-recent-key]'), function (row) {
+        existingRecent[row.getAttribute('data-activity-recent-key')] = row;
+      });
+      recent.slice(0, 12).forEach(function (item) {
+        var key = recentKey(item);
+        var row = existingRecent[key] || createRecentRow(item);
+        row.setAttribute('data-activity-recent-key', key);
+        row.querySelector('time').textContent = formatAge(finishedAt(item));
+        recentRows.push(row);
+      });
     }
+    reconcileActivityRows(recentSection, recentRows);
 
-    var queueSection = appendSection(host, 'Queue Status', '');
+    var queueSection = ensureActivitySection(host, 'queues', 'Queue Status', '');
     queueSection.classList.add('activity-monitor-queue-section');
-    queueSection.appendChild(createQueueStatusBar(queues));
-    var directorQueueList = createDirectorQueueList(queues.director);
-    if (directorQueueList) queueSection.appendChild(directorQueueList);
+    var queueSignature = JSON.stringify(queues);
+    if (queueSection.getAttribute('data-activity-queue-signature') !== queueSignature) {
+      var queueRows = [createQueueStatusBar(queues)];
+      var directorQueueList = createDirectorQueueList(queues.director);
+      if (directorQueueList) queueRows.push(directorQueueList);
+      reconcileActivityRows(queueSection, queueRows);
+      queueSection.setAttribute('data-activity-queue-signature', queueSignature);
+    }
   }
 
   function refresh() {

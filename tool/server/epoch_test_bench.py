@@ -1148,8 +1148,6 @@ def _parse_wildcard_nodes(source):
             if text[position] == "|":
                 position += 1
                 continue
-            if len(options) < 2:
-                raise ValueError("Wildcard group must contain at least two options.")
             return options, position + 1
 
     nodes, position = parse_sequence(0)
@@ -1221,7 +1219,7 @@ def _match_wildcard_source(source, resolved, matcher):
 def _resolved_wildcard_values(source_prompt, resolved_prompt):
     source = str(source_prompt or "")
     resolved = _normalize_wildcard_text(resolved_prompt)
-    if "|" not in source or "{" not in source:
+    if "{" not in source:
         return []
 
     matched = _match_wildcard_source(source, resolved, _match_wildcard_nodes)
@@ -1429,7 +1427,7 @@ def _wildcard_summary_score(item, source_prompt, owner_folder):
 def _wildcard_summary_items(source_prompt, resolved_prompt):
     source = str(source_prompt or "")
     resolved = _normalize_wildcard_text(resolved_prompt)
-    if "|" not in source or "{" not in source:
+    if "{" not in source:
         return []
 
     matched = _match_wildcard_source(source, resolved, _match_top_level_wildcard_selections)

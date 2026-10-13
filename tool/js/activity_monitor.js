@@ -249,7 +249,8 @@
   // Convert existing managed work to the same presentation contract as Diagnostics.
   // The backend and owning workspace remain authoritative; no new progress polling.
   function managedProgressSnapshot(item) {
-    if (item.kind !== 'training' && item.kind !== 'storage') return null;
+    if (['training', 'storage', 'generate', 'test', 'storyboard'].indexOf(item.kind) === -1 ||
+        (['generate', 'test', 'storyboard'].indexOf(item.kind) !== -1 && item.lane !== 'inference')) return null;
     var snapshot = {
       id: 'managed:' + String(item.kind) + ':' + String(item.id),
       kind: item.kind,
@@ -280,7 +281,7 @@
         snapshot.progress = { completed: epoch, total: epochs };
         snapshot.progressLabel += ' · current stage';
       }
-    } else {
+    } else if (item.kind === 'storage') {
       snapshot.phase = (item.status === 'cancelling' ? 'Cancelling' :
         String(item.phase || 'Measuring').replace(/_/g, ' '));
       var measured = Number(item.itemsMeasured);
@@ -292,6 +293,24 @@
       }
       var scanned = bytesLabel(item.bytesScanned);
       if (scanned) snapshot.progressLabel += (snapshot.progressLabel ? ' · ' : '') + scanned + ' scanned';
+    } else {
+      var raw = item.progress && typeof item.progress === 'object' ? item.progress : {};
+      snapshot.detail = activityDetail(item);
+      snapshot.phase = item.status === 'stopping' ? 'Stopping' :
+        (item.status === 'starting' ? 'Starting' : 'Generating');
+      var steps = Number(raw.steps);
+      var step = Number(raw.step);
+      var percent = Number(raw.percent);
+      if (raw.steps != null && raw.step != null && isFinite(steps) && steps > 0 &&
+          isFinite(step) && step >= 0 && step <= steps) {
+        snapshot.progress = { completed: step, total: steps };
+        snapshot.progressLabel = Math.round(step) + ' / ' + Math.round(steps) + ' steps';
+      } else if (raw.percent != null && isFinite(percent) && percent >= 0 && percent <= 100) {
+        snapshot.progress = { completed: percent, total: 100 };
+      }
+      if (raw.percent != null && isFinite(percent) && percent >= 0 && percent <= 100) {
+        snapshot.progressLabel += (snapshot.progressLabel ? ' · ' : '') + Math.round(percent) + '%';
+      }
     }
     snapshot.original = item;
     return snapshot;

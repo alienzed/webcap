@@ -1700,7 +1700,7 @@ function directorModelTestWaitForJob(jobId, tracker) {
           resolve(job);
           return;
         }
-        directorModelTestSleep(750).then(poll);
+        directorModelTestSleep(2500).then(poll);
       }).catch(reject);
     }
     poll();

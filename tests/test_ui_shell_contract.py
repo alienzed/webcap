@@ -1090,3 +1090,13 @@ def test_activity_training_and_storage_use_shared_progress_cards():
     assert "ProgressCard.update(card, progressItem" in activity
     assert "function reconcileActivityRows(section, wanted)" in activity
     assert "host.innerHTML = '';" not in activity.split("  function render() {", 1)[1].split("  function refresh() {", 1)[0]
+
+
+def test_activity_polling_preserves_other_active_cards_and_navigation():
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    assert "function activeCardKey(item)" in activity
+    assert "function syncActiveCard(card, item)" in activity
+    assert "retainedActiveCards[activeCardKey(item)]" in activity
+    assert "existingCard ? syncActiveCard(existingCard, item) : createActiveCard(item)" in activity
+    assert "openItem(item.original);" in activity
+    assert "setOpen(true);" in activity

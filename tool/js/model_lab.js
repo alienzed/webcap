@@ -144,10 +144,11 @@ function modelLabRunProgress(run) {
 function modelLabPublishProgress(run) {
   var id = run && run.id ? 'model-lab:' + String(run.id) : '';
   var status = String(run && run.status || '');
-  if (modelLabState.progressRunId && (modelLabState.progressRunId !== id || status !== 'running')) {
+  // Browsing a different run does not stop the server-owned active run.
+  if (modelLabState.progressRunId && modelLabState.progressRunId !== id) return;
+  if (modelLabState.progressRunId && status !== 'running') {
     window.finishActivityProgress(modelLabState.progressRunId,
-      modelLabState.progressRunId !== id ? 'stopped' :
-        (status === 'error' ? 'failed' : (status === 'completed' ? 'completed' : 'stopped')));
+      status === 'error' ? 'failed' : (status === 'completed' ? 'completed' : 'stopped'));
     modelLabState.progressRunId = '';
   }
   if (!id || status !== 'running') return;

@@ -3,6 +3,10 @@
 Status: product / IA proposal  
 Audit basis: current `main` review, metadata, annotation, focus-set, prune, duplicate, Assistant, and per-item QA code as of 2026-10-06.
 
+## QA lifecycle clarification (2026-10-13)
+
+Concept Check's individually fingerprinted corrections are independent of a global Deep QA signature. Ordinary caption/tag edits should reconcile visible actions in place, not reload a saved review over a running Concept Check. Deep QA's compact evidence budget is applied **after** mining all eligible current Sight buckets. These focused changes do not alter explicit inference control or QA Focus Review's human decision boundary.
+
 ## Focused Deep QA implementation (2026-10-12)
 
 **Implemented on feature branch; real-model and browser acceptance pending.** Deep QA now asks for up to five set-wide investigations from compact assigned tags, the current vocabulary, training focus, and primer. It no longer runs the per-item Sight/challenger/judge sequence. A model-context preflight warns without gating, and each investigation opens existing targeted Concept Check for visual evidence and concrete actions. QA Focus Review remains action-only; user-authorized edits remain in existing workflows. Existing review receipts carry an explicit mode and freshness signature; legacy per-item findings remain labeled and actionable where their original edits are still valid, but are not reinterpreted as new investigations.

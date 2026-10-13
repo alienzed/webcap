@@ -163,6 +163,13 @@ def test_wildcard_summary_recovers_after_stray_closing_brace():
     assert any("micro bottom" in item for item in bench._resolved_wildcard_summary(source, resolved))
 
 
+def test_wildcard_summary_recovers_after_unclosed_brace_without_duplicate_literal():
+    source = "wearing {black|red} top {unfinished note {thong|micro} bottom"
+    resolved = "wearing red top {unfinished note micro bottom"
+    assert bench._resolved_wildcard_values(source, resolved) == ["red", "micro"]
+    assert any("micro bottom" in phrase for phrase in bench._resolved_wildcard_summary(source, resolved))
+
+
 def test_resolved_wildcard_values_supports_optional_empty_choice():
     assert bench._resolved_wildcard_values(
         "person wearing a {black|white} {ruched|} bikini",

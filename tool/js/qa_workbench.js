@@ -485,7 +485,7 @@
         delete qaWorkbenchState.qaAlternatives[file];
       });
       qaWorkbenchState.aiFindings = qaWorkbenchState.aiFindings.filter(function (finding) {
-        return !(finding.files || []).some(function (file) { return invalid[file]; });
+        return finding.concept || !(finding.files || []).some(function (file) { return invalid[file]; });
       });
     }
     qaRefreshAiCoverage();
@@ -621,6 +621,9 @@
     qaRequestJson('/fs/qa/deep-scan', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ preflight: true }, reviewRequest))
+    }).catch(function (err) {
+      reportConsoleWarning('Deep QA · Context estimate unavailable', String(err.message || err));
+      return { contextTokens: 0, estimatedTokens: 0 };
     }).then(function (capacity) {
       if (token !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive) return null;
       var known = Number(capacity.contextTokens || 0);

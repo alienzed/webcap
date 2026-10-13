@@ -417,7 +417,7 @@ def build_concept_request(items, concept, known_vocabulary=None, recheck_concern
             "observation as proof of absence, and do not remove a user tag without affirmative contrary evidence. "
             "If Sight is missing or inconclusive, do not invent a visual verdict. "
             "Zero findings is valid; do not manufacture a quota.\n\n"
-            ("[FALSIFICATION CRITERION]\n" + dismiss_if + "\n"
+            + ("[FALSIFICATION CRITERION]\n" + dismiss_if + "\n"
              "Explicitly assess whether supplied Sight AFFIRMATIVELY supports or refutes the hypothesis. "
              "Absent observations or zero actionable edits NEVER prove dismissal. "
              "Use supported only with positive evidence of the omission, dismissed only with affirmative "

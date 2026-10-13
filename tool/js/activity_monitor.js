@@ -13,7 +13,8 @@
     recentCompletions: [],
     notified: Object.create(null),
     reportedErrors: Object.create(null),
-    localProgress: Object.create(null)
+    localProgress: Object.create(null),
+    progressChildIds: Object.create(null)
   };
 
   function el(id) { return document.getElementById(id); }
@@ -61,6 +62,7 @@
   function publishProgress(snapshot) {
     if (!snapshot || !snapshot.id) throw new Error('Activity progress requires a stable ID.');
     state.localProgress[String(snapshot.id)] = Object.assign({}, snapshot);
+    if (snapshot.childJobId) state.progressChildIds[String(snapshot.childJobId)] = true;
     renderProgressFollower();
     if (state.open) render();
   }
@@ -82,9 +84,9 @@
 
   function isProgressChild(item) {
     var id = String(item && item.id || '');
-    return !!id && localItems().some(function (progress) {
+    return !!id && (state.progressChildIds[id] || localItems().some(function (progress) {
       return String(progress.childJobId || '') === id;
-    });
+    }));
   }
 
   function renderProgressFollower() {

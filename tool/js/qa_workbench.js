@@ -1729,7 +1729,7 @@
       });
     });
     heroActions.appendChild(qaCreateButton(
-      qaWorkbenchState.deepScanSessionActive ? 'QA running · Review & Fix' : 'Start QA & Review',
+      qaWorkbenchState.deepScanSessionActive ? 'Deep QA running' : 'Run Deep QA',
       'qa-primary', 'qa-start'
     ));
     if (reviewReady && !qaWorkbenchState.deepScanSessionActive) {
@@ -2906,7 +2906,6 @@
       // Explicit user intent starts the existing progressive scan; review follows
       // saved and arriving findings without introducing a second QA engine.
       if (!qaWorkbenchState.deepScanSessionActive) qaRunDeepScan();
-      qaStartFocusReview();
       return;
     }
     if (action === 'check-finding-concept') {

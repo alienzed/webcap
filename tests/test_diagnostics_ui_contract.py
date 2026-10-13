@@ -84,3 +84,27 @@ def test_director_assessment_activity_shows_probe_progress_without_rebuilding_ca
     assert "host.querySelector('.director-model-test-activity-card')" in script
     assert "card.querySelector('[data-diagnostic-stage]').textContent = stage" in script
     assert 'number / total * 100' in script  # Benchmark retains its own model-based progress.
+
+
+def test_shared_progress_card_is_loaded_before_consumers():
+    html = (ROOT / 'tool' / 'tool.html').read_text(encoding='utf-8')
+    activity = (ROOT / 'tool' / 'js' / 'activity_monitor.js').read_text(encoding='utf-8')
+    diagnostics = (ROOT / 'tool' / 'js' / 'director_model_test.js').read_text(encoding='utf-8')
+    card = (ROOT / 'tool' / 'js' / 'progress_card.js').read_text(encoding='utf-8')
+
+    assert html.index('js/progress_card.js') < html.index('js/activity_monitor.js')
+    assert 'window.ProgressCard = { create: create, update: update }' in card
+    assert 'window.publishActivityProgress = publishProgress' in activity
+    assert 'window.finishActivityProgress = finishProgress' in activity
+    assert "window.publishActivityProgress(snapshot)" in diagnostics
+    assert "ProgressCard.update(card, snapshot)" in diagnostics
+    assert "isProgressChild(item)" in activity
+
+
+def test_director_progress_stays_operation_scoped():
+    script = (ROOT / 'tool' / 'js' / 'director_model_test.js').read_text(encoding='utf-8')
+    assert "id: 'director-diagnostics-' + String(directorModelTestState.startedAt)" in script
+    assert 'childJobId: directorModelTestState.currentJobId' in script
+    assert 'totalIsUpperBound: true' in script
+    assert 'completedProbes = attempts.length' in script
+    assert 'directorModelTestStopActivityClock()' in script

@@ -1831,6 +1831,8 @@
     var recommendations = qaGetRecommendations();
     var undisposed = recommendations.filter(function (finding) { return !qaWorkbenchState.dispositions[finding.id]; });
     var handled = recommendations.length - undisposed.length;
+    var investigations = undisposed.filter(function (finding) { return !!finding.concept; }).length;
+    var corrections = undisposed.length - investigations;
     var high = undisposed.filter(function (finding) { return finding.priority === 'high'; }).length;
 
     var hero = document.createElement('section');
@@ -1841,11 +1843,11 @@
     var deepCoverageCounts = qaDeepCoverageCounts(items);
     var evaluationIncomplete = true; // No set-level inference is equivalent to per-item QA certification.
     h2.textContent = undisposed.length
-      ? undisposed.length + ' actionable finding' + (undisposed.length === 1 ? '' : 's') + ' to review'
+      ? corrections + ' corrections · ' + investigations + ' investigations'
       : (evaluationIncomplete ? 'No actionable findings in available checks' : 'No outstanding QA findings');
     var intro = document.createElement('p');
     intro.textContent = undisposed.length
-      ? 'Inspect the affected media and decide what, if anything, needs changing.'
+      ? 'Investigations are unverified hypotheses; only concrete corrections enter QA Focus Review.'
       : (evaluationIncomplete ? 'No current set-wide Deep QA review. Existing observations remain in Reports.'
         : 'No outstanding findings from the current checks. Observations remain in Reports.');
     copy.appendChild(h2);

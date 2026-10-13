@@ -146,7 +146,8 @@ function modelLabPublishProgress(run) {
   var status = String(run && run.status || '');
   if (modelLabState.progressRunId && (modelLabState.progressRunId !== id || status !== 'running')) {
     window.finishActivityProgress(modelLabState.progressRunId,
-      status === 'error' && modelLabState.progressRunId === id ? 'failed' : 'stopped');
+      modelLabState.progressRunId !== id ? 'stopped' :
+        (status === 'error' ? 'failed' : (status === 'completed' ? 'completed' : 'stopped')));
     modelLabState.progressRunId = '';
   }
   if (!id || status !== 'running') return;

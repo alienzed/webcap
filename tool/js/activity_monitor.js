@@ -12,7 +12,8 @@
     openedAt: 0,
     recentCompletions: [],
     notified: Object.create(null),
-    reportedErrors: Object.create(null)
+    reportedErrors: Object.create(null),
+    localProgress: Object.create(null)
   };
 
   function el(id) { return document.getElementById(id); }
@@ -55,6 +56,61 @@
     }).sort(function (a, b) {
       return finishedAt(b) - finishedAt(a);
     }).slice(0, 24);
+  }
+
+  function publishProgress(snapshot) {
+    if (!snapshot || !snapshot.id) throw new Error('Activity progress requires a stable ID.');
+    state.localProgress[String(snapshot.id)] = Object.assign({}, snapshot);
+    renderProgressFollower();
+    if (state.open) render();
+  }
+
+  function finishProgress(id, status) {
+    var item = state.localProgress[String(id || '')];
+    if (!item) return;
+    delete state.localProgress[String(id)];
+    if (status === 'failed') {
+      window.reportConsoleError('Activity', item.title + ' failed. See Diagnostics and Console.');
+    }
+    renderProgressFollower();
+    if (state.open) render();
+  }
+
+  function localItems() {
+    return Object.keys(state.localProgress).map(function (id) { return state.localProgress[id]; });
+  }
+
+  function renderProgressFollower() {
+    var root = el('app-overlay-root');
+    if (!root) throw new Error('Activity overlay root is missing.');
+    var host = el('activity-progress-follower');
+    var items = localItems();
+    if (!items.length) {
+      if (host) host.remove();
+      return;
+    }
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'activity-progress-follower';
+      host.className = 'activity-progress-follower';
+      root.appendChild(host);
+    }
+    var item = items[items.length - 1];
+    var card = host.querySelector('[data-progress-card-id]');
+    if (!card || card.getAttribute('data-progress-card-id') !== String(item.id)) {
+      card = ProgressCard.create({ compact: true });
+      host.replaceChildren(card);
+    }
+    ProgressCard.update(card, item, {
+      compact: true,
+      onOpen: function () {
+        if (item.kind === 'director-diagnostics') {
+          window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
+        } else {
+          setOpen(true);
+        }
+      }
+    });
   }
 
   function requestJson(url) {
@@ -559,7 +615,7 @@
   }
 
   function render() {
-    var active = Array.isArray(state.payload.active) ? state.payload.active : [];
+    var active = (Array.isArray(state.payload.active) ? state.payload.active : []).concat(localItems());
     var recent = sessionRecent();
     var queues = state.payload.queues || {};
     var drawer = el('activity-monitor-drawer');
@@ -591,7 +647,13 @@
       emptyNow.textContent = 'Nothing is running right now.';
       nowSection.appendChild(emptyNow);
     } else {
-      active.forEach(function (item) { nowSection.appendChild(createActiveCard(item)); });
+      active.forEach(function (item) {
+        if (item.kind === 'director-diagnostics') {
+          var card = ProgressCard.create();
+          ProgressCard.update(card, item, { onOpen: function () { setOpen(false); window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models'); } });
+          nowSection.appendChild(card);
+        } else nowSection.appendChild(createActiveCard(item));
+      });
     }
 
     var recentSection = appendSection(host, 'Recent', unseen ? String(unseen) + ' new' : '');
@@ -631,6 +693,7 @@
       });
       notifyRecent(sessionRecent());
       render();
+      renderProgressFollower();
       return payload;
     }).catch(function (err) {
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Activity', err);
@@ -708,6 +771,8 @@
     window.addEventListener('webcap:inference-queue-changed', wake);
   }
 
+  window.publishActivityProgress = publishProgress;
+  window.finishActivityProgress = finishProgress;
   window.recordActivityCompletion = rememberRecentCompletion;
   window.setActivityDrawerOpen = setOpen;
   window.refreshActivityMonitor = wake;

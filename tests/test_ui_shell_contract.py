@@ -1077,6 +1077,21 @@ def test_pending_media_reselection_waits_for_metadata_hydration():
     assert refresh.index(metadata_refresh) < refresh.index(metadata_apply) < refresh.index(reselect)
 
 
+
+def test_shared_progress_follower_sits_below_header_and_respects_immersive_mode():
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+
+    follower = css.split("/* Persistent, non-blocking presentation of the shared activity progress card. */", 1)[1]
+    assert "top: 48px;" in follower
+    assert "#app-frame.shell-immersive + #app-overlay-root .activity-progress-follower {" in follower
+    assert "top: 14px;" in follower
+    assert "bottom:" not in follower
+    assert "root.appendChild(host);" in activity
+    assert "host.className = 'activity-progress-follower';" in activity
+
+
+
 def test_activity_training_and_storage_use_shared_progress_cards():
     root = ROOT
     activity = (root / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")

@@ -636,16 +636,22 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
 
     finding = {
         "type": "object", "additionalProperties": False,
-        "required": ["concept", "title", "summary", "why", "priority", "confidence", "trainingValue", "files", "evidence"],
+        "required": ["concept", "title", "summary", "why", "dismissIf", "priority", "confidence", "trainingValue", "candidates", "evidence"],
         "properties": {
             "concept": {"type": "string", "minLength": 1},
             "title": {"type": "string", "minLength": 1},
             "summary": {"type": "string", "minLength": 1},
             "why": {"type": "string", "minLength": 1},
+            "dismissIf": {"type": "string", "minLength": 1},
             "priority": {"type": "string", "enum": ["high", "normal", "low"]},
             "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
             "trainingValue": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
-            "files": {"type": "array", "maxItems": 8, "items": {"type": "string"}},
+            "candidates": {"type": "array", "maxItems": 5, "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["file", "reason"],
+                "properties": {"file": {"type": "string", "minLength": 1},
+                               "reason": {"type": "string", "minLength": 1}}
+            }},
             "evidence": {"type": "array", "maxItems": 4, "items": {"type": "string"}},
         }
     }
@@ -661,8 +667,12 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
         "- This is discovery, not a verdict about unseen pixels. Do not claim a particular media item is wrong without visual evidence.\n"
         "- Prefer systematic, training-relevant omissions over style, balance, rare vocabulary, or trivial wording.\n"
         "- Compare semantic meaning, not just exact tag spellings; a missing tag isn't proof of a missing visual attribute.\n"
-        "- Use the supplied filenames only as useful examples to investigate, NOT as confirmed defective images.\n"
-        "- Provide a concise, specific concept-check question for each finding; it must be usable in a focused Vision/Sight review.\n"
+        "- Supply a short candidate-file shortlist (up to five), each with a specific reason based on supplied tags. "
+        "These are priority examples to inspect, NOT confirmed defective images. A zero-length shortlist is valid only "
+        "when no particular file can be justified; never manufacture suspicious files.\\n"
+        "- Provide a concise concept-check QUESTION to ask about the candidate media using saved Sight.\\n"
+        "- Provide dismissIf: concrete evidence that would DISPROVE or make this concern irrelevant. "
+        "This is a test criterion, not a model verdict or automatic-dismiss rule.\\n"
         "- State why the proposed concept is worth checking and cite specific patterns in the supplied tags.\n"
         "- The user will fix the highest-value findings and run this again. Return at most five, including zero if nothing matters.\n"
         "- Do not propose caption patches, tag edits, or new vocabulary as if already verified.\n"
@@ -700,21 +710,35 @@ def normalize_set_review_result(data, allowed_files=None):
         priority = str(raw.get("priority") or "")
         confidence = str(raw.get("confidence") or "")
         training_value = str(raw.get("trainingValue") or "")
-        files = raw.get("files")
+        candidates = raw.get("candidates")
+        dismiss_if = _clean(raw.get("dismissIf"))
         evidence = raw.get("evidence")
-        if (not concept or not title or not summary or not why or
+        if (not concept or not title or not summary or not why or not dismiss_if or
                 priority not in _ALLOWED_PRIORITIES or confidence not in _ALLOWED_CONFIDENCE or
                 training_value not in {"critical", "high", "medium", "low"} or
-                not isinstance(files, list) or not isinstance(evidence, list)):
+                not isinstance(candidates, list) or not isinstance(evidence, list)):
             raise ValueError("Deep QA set review contains an incomplete finding.")
-        names = list(dict.fromkeys(str(file or "").strip() for file in files if str(file or "").strip()))
-        if any(name not in allowed for name in names):
-            raise ValueError("Deep QA set review invented a filename.")
-        # Zero example files is valid for concepts wholly absent from the vocabulary.
+        selected = []
+        seen = set()
+        for candidate in candidates[:5]:
+            if not isinstance(candidate, dict):
+                raise ValueError("Deep QA set review contains an invalid candidate.")
+            name = str(candidate.get("file") or "").strip()
+            reason = _clean(candidate.get("reason"))[:160]
+            if not name or name not in allowed:
+                raise ValueError("Deep QA set review invented a filename.")
+            if not reason:
+                raise ValueError("Deep QA set review candidate requires a reason.")
+            if name not in seen:
+                selected.append({"file": name, "reason": reason})
+                seen.add(name)
+        names = [candidate["file"] for candidate in selected]
+        # Zero example files is valid if no meaningful shortlist is supported.
         findings.append({
             "category": "consistency", "priority": priority, "confidence": confidence,
             "trainingValue": training_value, "title": title, "summary": summary,
-            "why": why, "concept": concept, "files": names[:8],
+            "why": why, "concept": concept, "dismissIf": dismiss_if[:360],
+            "candidates": selected, "files": names,
             "evidence": [_clean(value) for value in evidence[:4] if _clean(value)],
             "patches": [], "tagActions": [],
         })

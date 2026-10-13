@@ -237,10 +237,10 @@
     ],
     "contextTokens": 262144,
     "contextLabel": "262,144",
-    "contextKind": "inherited",
-    "sourceUrl": "https://huggingface.co/darrellbest/Qwen3.8-27B-Heretic-GGUF",
+    "contextKind": "publisher",
+    "sourceUrl": "https://huggingface.co/0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored-GGUF",
     "notes": [
-      "Qwen3.8-27B Heretic GGUF; distinct from RVN and Fable."
+      "The publisher explicitly lists Qwen3.8-27B-Heretic-Q4_K_M.gguf as the legacy pre-RVN abliteration variant. This file and RVN-Q5_K_M.gguf share the same repository."
     ],
     "verifiedAt": "2026-10-13"
   },
@@ -253,7 +253,7 @@
     "contextKind": "publisher",
     "sourceUrl": "https://huggingface.co/0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored-GGUF",
     "notes": [
-      "RVN Qwen3.8-27B refinement; publisher states 262144 native context."
+      "Same 0bserverx GGUF repository as Qwen3.8-27B-Heretic-Q4_K_M.gguf; RVN-Q5_K_M.gguf is the newer RVN refinement, not the legacy Q4 variant."
     ],
     "verifiedAt": "2026-10-13"
   },
@@ -296,5 +296,31 @@
     ],
     "verifiedAt": "2026-10-13",
     "runtimeContextTokens": 64000
+  },
+  {
+    "match": [
+      "nullguard"
+    ],
+    "contextTokens": 131072,
+    "contextLabel": "128K",
+    "contextKind": "runtime-package",
+    "sourceUrl": "https://ollama.com/h4rithd/nullguard",
+    "notes": [
+      "Ollama publisher identifies this package as a Gemma 4 E4B abliteration and lists a 128K context window. Local alias may omit publisher namespace."
+    ],
+    "verifiedAt": "2026-10-13"
+  },
+  {
+    "match": [
+      "gemma4-e4b-uncensored"
+    ],
+    "contextTokens": 131072,
+    "contextLabel": "128K",
+    "contextKind": "runtime-package",
+    "sourceUrl": "https://ollama.com/mo-shakib/gemma4-e4b-uncensored",
+    "notes": [
+      "Ollama publisher identifies Gemma 4 E4B (8B) with 131072 context; local model alias uses the same model name without namespace."
+    ],
+    "verifiedAt": "2026-10-13"
   }
 ]

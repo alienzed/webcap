@@ -850,8 +850,12 @@
     renderQaWorkbench();
     qaRequestJson('/fs/vision_schema?folder=' + encodeURIComponent(String(state.folder || '')) +
       '&model=' + encodeURIComponent(String(getCaptionVisionModelId() || ''))).then(function (status) {
-      if (token !== qaWorkbenchState.conceptPreflightToken || folder !== String(state.folder || '') ||
-          scope !== qaBuildScopeKey(qaGetTrainingItems()) || qaWorkbenchState.conceptQuery !== concept) return;
+      if (token !== qaWorkbenchState.conceptPreflightToken) return;
+      if (folder !== String(state.folder || '') || scope !== qaBuildScopeKey(qaGetTrainingItems()) ||
+          qaWorkbenchState.conceptQuery !== concept) {
+        qaWorkbenchState.conceptPreflightPending = false;
+        return;
+      }
       qaWorkbenchState.conceptPreflightPending = false;
       if (qaWorkbenchState.conceptSession) return;
       var currentFiles = {};
@@ -929,7 +933,7 @@
           }).length;
           qaWorkbenchState.investigation.verdict = qaWorkbenchState.investigation.verdicts.some(function (v) {
             return v.status === 'supported';
-          }) ? 'supported' : (missingCount || qaWorkbenchState.investigation.verdicts.some(function (v) {
+          }) ? 'supported' : (missingCount || !qaWorkbenchState.investigation.verdicts.length || qaWorkbenchState.investigation.verdicts.some(function (v) {
             return v.status === 'inconclusive';
           }) ? 'inconclusive' : 'dismissed');
         }

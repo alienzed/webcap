@@ -171,3 +171,21 @@ def test_execution_item_exposes_llm_finish_diagnostics():
     assert item["finishReason"] == "stop"
     assert item["promptTokens"] == 4210
     assert item["outputTokens"] == 3781
+
+
+def test_inference_activity_projects_provider_progress_without_changing_job():
+    # This matches the public inference_runner.snapshot() job representation.
+    job = {
+        "jobId": "inference-42",
+        "client": "storyboard",
+        "sceneId": "s1",
+        "status": "running",
+        "progress": {"step": 3, "steps": 12},
+    }
+    result = activity_monitor._execution_item("inference", job)
+    assert result["id"] == "inference-42"
+    assert result["sceneId"] == "s1"
+    assert result["kind"] == "storyboard"
+    assert result["progress"] == {"step": 3, "steps": 12}
+    assert job["progress"] == {"step": 3, "steps": 12}
+    assert activity_monitor._execution_item("llm", job)["progress"] == {}

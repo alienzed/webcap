@@ -1100,3 +1100,17 @@ def test_activity_polling_preserves_other_active_cards_and_navigation():
     assert "existingCard ? syncActiveCard(existingCard, item) : createActiveCard(item)" in activity
     assert "openItem(item.original);" in activity
     assert "setOpen(true);" in activity
+
+
+def test_activity_inference_consumers_use_shared_progress_without_touching_workflows():
+    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    monitor = (ROOT / "tool" / "server" / "activity_monitor.py").read_text(encoding="utf-8")
+    assert "['training', 'storage', 'generate', 'test', 'storyboard']" in activity
+    assert "item.lane !== 'inference'" in activity
+    assert "raw.steps != null && raw.step != null" in activity
+    assert "raw.percent != null" in activity
+    assert "snapshot.original = item;" in activity
+    assert "var managedSnapshot = managedProgressSnapshot(item)" in activity
+    assert "managed.concat(localItems())" in activity
+    assert "openItem(item.original);" in activity
+    assert '"progress": job.get("progress") if lane == "inference"' in monitor

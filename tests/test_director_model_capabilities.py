@@ -11,7 +11,7 @@ def test_shipped_json_catalogue_matches_runtime_hints():
     assert path.name == "director_model_capabilities.json"
     catalogue = json.loads(path.read_text(encoding="utf-8"))
 
-    assert len(catalogue) == 22
+    assert len(catalogue) == 24
     assert capabilities.list_capability_hints() == catalogue
     assert model_test.list_capability_hints() == catalogue
 
@@ -28,6 +28,8 @@ def test_shipped_json_catalogue_matches_runtime_hints():
     ("RVN-Q5_K_M.gguf", 262144, None),
     ("deepseek-r1-0528-qwen3-8b-heretic:Q6_K", 131072, None),
     ("gemma-3-12b-it-heretic:q5_k_m", 131072, None),
+    ("nullguard:latest", 131072, None),
+    ("gemma4-e4b-uncensored:q4_k_m", 131072, None),
     ("Gemma4-12B-IT-QAT_Q4_64K_16GB-GPU:latest", 262144, None),
     ("Qwen3.8-27B-TTURBO-Fable-Cold-Fusion-709-ULTRA-HERETIC-Uncensored-NM-DAU-NEO-MTP.gguf", 262144, 131072),
 ])
@@ -81,5 +83,5 @@ def test_runtime_package_context_is_distinct_from_published_model_context():
 
 
 def test_ambiguous_and_partial_aliases_remain_unmatched():
-    for name in ("nullguard:latest", "gemma-4b-uncensored:q4_k_m", "xg4-meromero-v2-31b-heretic.gguf", "rvnery.gguf"):
+    for name in ("unknown-guard:latest", "gemma-4b-uncensored:q4_k_m", "xg4-meromero-v2-31b-heretic.gguf", "rvnery.gguf"):
         assert capabilities.capability_for_model(model_id=name) is None

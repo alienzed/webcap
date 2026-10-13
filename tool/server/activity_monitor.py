@@ -62,6 +62,8 @@ def _execution_item(lane, job):
         "finishReason": str(result.get("finishReason") or ""),
         "promptTokens": _usage_token_count(usage, "prompt_tokens", "promptTokens", "input_tokens", "inputTokens"),
         "outputTokens": _usage_token_count(usage, "completion_tokens", "completionTokens", "output_tokens", "outputTokens", "eval_count"),
+        # Already recorded by the inference runtime; presentation-only projection.
+        "progress": job.get("progress") if lane == "inference" and isinstance(job.get("progress"), dict) else {},
         "queuePosition": int(job.get("queuePosition") or 0),
         "createdAt": job.get("createdAt"),
         "startedAt": job.get("startedAt"),

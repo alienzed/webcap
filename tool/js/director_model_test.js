@@ -6,6 +6,9 @@ var directorModelTestState = {
   currentModelLabel: '',
   currentModelNumber: 0,
   currentPhase: '',
+  currentProbeLabel: '',
+  completedProbes: 0,
+  maximumProbes: 0,
   currentRuntimeName: '',
   startedAt: 0,
   activityTimer: 0,
@@ -165,6 +168,7 @@ function directorModelTestPhaseText(phase) {
   if (phase === 'preparing' || phase === 'freeing_comfy') return 'Preparing';
   if (phase === 'loading_model') return 'Loading model';
   if (phase === 'generating') return 'Generating';
+  if (phase === 'recording') return 'Saving result';
   if (phase === 'completed') return 'Completed';
   if (phase === 'failed') return 'Failed';
   if (phase === 'stopped' || phase === 'cancelled' || phase === 'interrupted') return 'Stopped';
@@ -223,41 +227,75 @@ function directorModelTestFormatElapsed(startedAt) {
   return String(hours) + 'h ' + String(minutes % 60).padStart(2, '0') + 'm elapsed';
 }
 
+function directorModelTestStartActivityClock() {
+  if (directorModelTestState.activityTimer) window.clearInterval(directorModelTestState.activityTimer);
+  directorModelTestState.activityTimer = window.setInterval(function () {
+    if (directorModelTestState.running) directorModelTestRenderActivity();
+  }, 1000);
+}
+
+function directorModelTestStopActivityClock() {
+  if (!directorModelTestState.activityTimer) return;
+  window.clearInterval(directorModelTestState.activityTimer);
+  directorModelTestState.activityTimer = 0;
+}
+
 function directorModelTestRenderActivity() {
   var benchmarkHost = directorModelTestEl('director-model-test-activity');
   var assessmentHost = directorModelTestEl('director-model-assessment-activity');
   if (!benchmarkHost || !assessmentHost) throw new Error('Director diagnostic activity markup is incomplete.');
 
-  [benchmarkHost, assessmentHost].forEach(function (host) {
-    host.innerHTML = '';
-    host.classList.add('hidden');
-  });
+  var isAssessment = directorModelTestState.mode === 'calibration';
+  benchmarkHost.classList.toggle('hidden', !directorModelTestState.running || isAssessment);
+  assessmentHost.classList.toggle('hidden', !directorModelTestState.running || !isAssessment);
   if (!directorModelTestState.running) return;
 
-  var host = directorModelTestState.mode === 'calibration' ? assessmentHost : benchmarkHost;
+  var host = isAssessment ? assessmentHost : benchmarkHost;
   var session = directorModelTestState.session;
-  var total = directorModelTestState.mode === 'calibration'
+  var total = isAssessment
     ? Number(directorModelTestState.calibrationTotal || 0)
     : (Array.isArray(session && session.models) ? session.models.length : 0);
   var number = Number(directorModelTestState.currentModelNumber || 0);
   var model = directorModelTestState.currentModelLabel || 'Preparing next model…';
   var runtime = directorModelTestState.currentRuntimeName || '';
-  var phase = directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued');
+  var phase = directorModelTestState.stopRequested ? 'Stopping' :
+    directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued');
   var progress = total > 0 && number > 0 ? Math.max(0, Math.min(100, number / total * 100)) : 0;
   var detail = [model, runtime].filter(Boolean).join(' · ');
-  var meta = [phase, number > 0 && total > 0 ? String(number) + ' / ' + String(total) : '', directorModelTestFormatElapsed(directorModelTestState.startedAt)].filter(Boolean).join(' · ');
+  var stage = phase;
+  var counts = number > 0 && total > 0 ? 'Model ' + String(number) + ' / ' + String(total) : '';
+  if (isAssessment) {
+    var completed = Number(directorModelTestState.completedProbes || 0);
+    var maximum = Number(directorModelTestState.maximumProbes || 0);
+    var probe = directorModelTestState.currentProbeLabel;
+    if (probe) stage += ' · ' + probe;
+    if (maximum > 0) counts += (counts ? ' · ' : '') + String(completed) + ' of up to ' + String(maximum) + ' probes complete';
+    // Assessments can finish early. This shows completed checks, not elapsed-time estimates.
+    progress = total > 0 ? Math.max(0, Math.min(100,
+      ((Math.max(0, number - 1) + (maximum > 0 ? completed / maximum : 0)) / total) * 100)) : 0;
+  } else {
+    if (number > 0 && total > 0) counts = String(number) + ' / ' + String(total);
+  }
 
-  host.classList.remove('hidden');
-  host.innerHTML =
-    '<article class="activity-monitor-card status-running director-model-test-activity-card">' +
-      '<span class="activity-monitor-dot active"></span>' +
-      '<div class="activity-monitor-copy">' +
-        '<strong>' + (directorModelTestState.mode === 'calibration' ? 'Director Model Assessment' : 'Director Benchmark') + '</strong>' +
-        '<span>' + escapeHtml(detail) + '</span>' +
-        '<small>' + escapeHtml(meta) + '</small>' +
-        '<div class="activity-monitor-progress"><span style="width:' + progress.toFixed(1) + '%"></span></div>' +
-      '</div>' +
-    '</article>';
+  var card = host.querySelector('.director-model-test-activity-card');
+  if (!card) {
+    host.innerHTML =
+      '<article class="activity-monitor-card status-running director-model-test-activity-card">' +
+        '<span class="activity-monitor-dot active"></span>' +
+        '<div class="activity-monitor-copy">' +
+          '<strong></strong><span></span><small data-diagnostic-stage></small>' +
+          '<small data-diagnostic-counts></small><small data-diagnostic-elapsed aria-live="off"></small>' +
+          '<div class="activity-monitor-progress" title="Checks completed, not estimated time"><span></span></div>' +
+        '</div>' +
+      '</article>';
+    card = host.querySelector('.director-model-test-activity-card');
+  }
+  card.querySelector('strong').textContent = isAssessment ? 'Director Model Assessment' : 'Director Benchmark';
+  card.querySelector('.activity-monitor-copy > span').textContent = detail;
+  card.querySelector('[data-diagnostic-stage]').textContent = stage;
+  card.querySelector('[data-diagnostic-counts]').textContent = counts;
+  card.querySelector('[data-diagnostic-elapsed]').textContent = directorModelTestFormatElapsed(directorModelTestState.startedAt);
+  card.querySelector('.activity-monitor-progress span').style.width = progress.toFixed(1) + '%';
 }
 
 function directorModelTestSetStatus(text, state, summaryText) {
@@ -1146,6 +1184,8 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
   var tracker = { phase: '', phaseStartedAt: 0, phases: {}, observedContextSize: 0 };
   var prompt = '';
   var localStartedAt = Date.now() / 1000;
+  directorModelTestState.currentProbeLabel = (kind === 'context' ? 'Context ' : (kind === 'prose' ? 'Long-form ' : 'Output ')) +
+    directorModelTestFormatCapacity(target);
   directorModelTestState.currentPhase = 'queued';
   directorModelTestRenderStatus();
   return directorModelTestPost({
@@ -1298,6 +1338,10 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   directorModelTestState.currentModelLabel = String(model.label || model.modelId || model.modelRef || 'Model');
   directorModelTestState.currentModelNumber = modelNumber;
   directorModelTestState.currentRuntimeName = String(model.runtimeName || model.runtimeId || 'runtime');
+  directorModelTestState.currentProbeLabel = '';
+  directorModelTestState.completedProbes = 0;
+  directorModelTestState.maximumProbes = (model.runtimeId === 'local' ? contextSteps.length : 0) + 2 * outputSteps.length;
+  directorModelTestRenderActivity();
 
   if (isFinite(recommendedContextMax) && recommendedContextMax > 0) {
     reportConsoleInfo(
@@ -1355,6 +1399,9 @@ function directorModelTestCalibrateOne(model, modelNumber) {
       };
     }).then(function (attempt) {
       attempts.push(attempt);
+      directorModelTestState.completedProbes = attempts.length;
+      directorModelTestState.currentPhase = 'recording';
+      directorModelTestRenderActivity();
       if (kind === 'context' && attempt.status === 'passed') contextSize = Number(target);
       if (contextMode === 'runtime' && attempt.observedContextSize > contextSize) {
         contextSize = attempt.observedContextSize;
@@ -1480,6 +1527,10 @@ function directorModelTestStartCalibration() {
   directorModelTestState.stopRequested = false;
   directorModelTestState.calibrationTotal = models.length;
   directorModelTestState.startedAt = Date.now() / 1000;
+  directorModelTestState.currentProbeLabel = '';
+  directorModelTestState.completedProbes = 0;
+  directorModelTestState.maximumProbes = 0;
+  directorModelTestStartActivityClock();
   directorModelTestSyncControls();
   directorModelTestRenderStatus();
   reportConsoleInfo('Director Model Calibration', 'Starting progressive calibration for ' + String(models.length) + ' model' + (models.length === 1 ? '' : 's') + '.');
@@ -1506,10 +1557,14 @@ function directorModelTestStartCalibration() {
     directorModelTestState.currentModelLabel = '';
     directorModelTestState.currentModelNumber = 0;
     directorModelTestState.currentPhase = '';
+    directorModelTestState.currentProbeLabel = '';
+    directorModelTestState.completedProbes = 0;
+    directorModelTestState.maximumProbes = 0;
     directorModelTestState.currentRuntimeName = '';
     directorModelTestState.calibrationTotal = 0;
     directorModelTestState.startedAt = 0;
     directorModelTestState.mode = '';
+    directorModelTestStopActivityClock();
     directorModelTestSyncControls();
     directorModelTestRenderStatus();
     directorModelTestRefresh().catch(function () {});
@@ -1712,10 +1767,7 @@ function directorModelTestStart() {
   directorModelTestState.mode = 'test';
   directorModelTestState.stopRequested = false;
   directorModelTestState.startedAt = Date.now() / 1000;
-  if (directorModelTestState.activityTimer) window.clearInterval(directorModelTestState.activityTimer);
-  directorModelTestState.activityTimer = window.setInterval(function () {
-    if (directorModelTestState.running) directorModelTestRenderActivity();
-  }, 1000);
+  directorModelTestStartActivityClock();
   directorModelTestState.session = null;
   directorModelTestState.currentModelLabel = '';
   directorModelTestState.currentModelNumber = 0;
@@ -1792,10 +1844,7 @@ function directorModelTestStart() {
     directorModelTestState.currentRuntimeName = '';
     directorModelTestState.startedAt = 0;
     directorModelTestState.mode = '';
-    if (directorModelTestState.activityTimer) {
-      window.clearInterval(directorModelTestState.activityTimer);
-      directorModelTestState.activityTimer = 0;
-    }
+    directorModelTestStopActivityClock();
     directorModelTestSyncControls();
     directorModelTestRenderStatus();
     directorModelTestRefresh().catch(function () {});

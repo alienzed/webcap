@@ -210,3 +210,18 @@ test('successful probe notes are shown as notes, not failures', () => {
   assert.ok(html.includes('Note: Completion marker omitted'));
   assert.equal(html.includes('director-model-finding-error'), false);
 });
+
+
+test('short confirmation does not claim scene-only limit', () => {
+  const { ui } = assessmentUI();
+  ui.escapeHtml = text => String(text);
+  const report = { assessmentKind: 'confirmation', status: 'complete', health: 'healthy',
+    attempts: [{ kind: 'prose', target: 2048, status: 'passed' }],
+    abilities: { coherentOutputTokens: 2048 } };
+  const result = ui.directorModelAssessmentCapability(report, null);
+  assert.equal(result.label, 'Sample passed');
+  assert.equal(result.copy.includes('Scene development'), false);
+  const html = ui.directorModelAssessmentDetailSummary(report, null, 'remote::qwen');
+  assert.match(html, /not a model maximum/);
+  assert.equal(html.includes('Proven limits:'), false);
+});

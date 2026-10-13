@@ -610,17 +610,42 @@
     qaWorkbenchState.deepScanSubmitting = true;
     qaWorkbenchState.deepScanStatus = 'Deep QA · Reviewing ' + items.length + ' selected items';
     renderQaWorkbench();
-    qaRequestJson('/fs/qa/deep-scan', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    var reviewRequest = {
         setReview: true, folder: folder, model: model, trainingFocus: qaWorkbenchState.trainingFocus,
         primer: String(statsGetPrimerOptionsFromDom().template || ''),
         vocabulary: checklistItems.map(function (group) {
           return { group: group, alias: getRequirementGroupAlias(group), terms: getChecklistKeywordTermsForRequirement(group) };
         }),
         items: inputItems
-      })
+    };
+    qaRequestJson('/fs/qa/deep-scan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ preflight: true }, reviewRequest))
+    }).then(function (capacity) {
+      if (token !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive) return null;
+      var known = Number(capacity.contextTokens || 0);
+      var needed = Number(capacity.estimatedTokens || 0);
+      if (known && needed > known) {
+        var proceed = window.confirm(
+          'Deep QA may exceed this Director model\'s context.\n\n' +
+          'Estimated requirement: ~' + needed.toLocaleString() + ' tokens (including response allowance)\n' +
+          'Known context: ' + known.toLocaleString() + ' tokens\n\n' +
+          'This is an estimate, not a guaranteed failure.\n\nProceed anyway?'
+        );
+        if (!proceed) {
+          qaWorkbenchState.deepScanSessionActive = false;
+          qaWorkbenchState.deepScanSubmitting = false;
+          qaWorkbenchState.deepScanStatus = 'Deep QA cancelled before inference.';
+          renderQaWorkbench();
+          return null;
+        }
+      }
+      return qaRequestJson('/fs/qa/deep-scan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reviewRequest)
+      });
     }).then(function (payload) {
+      if (!payload) return null;
       if (token !== qaWorkbenchState.deepScanSessionToken || !qaWorkbenchState.deepScanSessionActive) {
         if (payload.job && payload.job.jobId) return qaRequestJson('/fs/director/job', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },

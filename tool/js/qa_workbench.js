@@ -1741,14 +1741,11 @@
     }
     var deepWrap = document.createElement('div');
     deepWrap.className = 'qa-deep-scan-wrap';
-    var deep = qaCreateButton(
-      qaWorkbenchState.deepScanSubmitting ? 'Starting…' : (qaWorkbenchState.deepScanSessionActive ? 'Stop QA scan' : 'Run scan only'),
-      '',
-      qaWorkbenchState.deepScanSessionActive ? 'deep-scan-stop' : 'deep-scan'
-    );
-    deep.disabled = qaWorkbenchState.deepScanSubmitting;
-    deep.title = 'Run or stop the focused set-wide Deep QA review';
-    deepWrap.appendChild(deep);
+    if (qaWorkbenchState.deepScanSessionActive) {
+      var deep = qaCreateButton('Stop Deep QA', '', 'deep-scan-stop');
+      deep.title = 'Stop the current set-wide Director review';
+      deepWrap.appendChild(deep);
+    }
     var note = document.createElement('span');
     note.className = 'qa-deep-scan-note';
     var coveragePartial = qaWorkbenchState.aiCoverageTotal > 0

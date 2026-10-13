@@ -37,8 +37,9 @@ def test_set_review_keeps_unrepresented_concept_without_inventing_actions():
             "title": "Construction may be under-described",
             "summary": "No corresponding vocabulary dimension.",
             "why": "Important for training garment differences.",
+            "dismissIf": "Sight finds no meaningful construction variation.",
             "priority": "high", "confidence": "medium", "trainingValue": "high",
-            "files": [], "evidence": ["Tags cover color and shape but not construction."]
+            "candidates": [], "evidence": ["Tags cover color and shape but not construction."]
         }]
     }, ["a.jpg", "b.jpg"])
     finding = result["findings"][0]
@@ -51,8 +52,8 @@ def test_set_review_keeps_unrepresented_concept_without_inventing_actions():
 def test_set_review_rejects_invented_filenames():
     item = {
         "concept": "Inspect construction", "title": "Construction", "summary": "Missing",
-        "why": "Relevant", "priority": "high", "confidence": "medium",
-        "trainingValue": "high", "files": ["invented.jpg"], "evidence": [],
+        "why": "Relevant", "dismissIf": "No visual distinction", "priority": "high", "confidence": "medium",
+        "trainingValue": "high", "candidates": [{"file": "invented.jpg", "reason": "Tag pattern"}], "evidence": [],
     }
     with pytest.raises(ValueError, match="invented a filename"):
         normalize_set_review_result({"summary": "Review", "findings": [item]}, ["a.jpg"])
@@ -108,3 +109,34 @@ def test_set_review_ui_keeps_concept_check_and_human_edits_separate():
     assert "qaStartFocusReview()" in source
     assert "qaRunConceptCheck()" in source
     assert "if (finding.concept) return finding;" in source
+
+
+def test_set_review_preserves_reasons_and_falsifier():
+    result = normalize_set_review_result({
+        "summary": "One possible gap.", "findings": [{
+            "concept": "Are fastening details missing from tags?",
+            "title": "Fastenings", "summary": "Potential gap.",
+            "why": "Fastenings may distinguish training concepts.",
+            "dismissIf": "Sight and approved tags already capture significant fastenings.",
+            "priority": "high", "confidence": "medium", "trainingValue": "high",
+            "candidates": [{"file": "a.jpg", "reason": "Tagged by shape only."}],
+            "evidence": ["Construction isn't represented in the listed vocabulary."]
+        }]
+    }, ["a.jpg"])
+    finding = result["findings"][0]
+    assert finding["files"] == ["a.jpg"]
+    assert finding["candidates"][0]["reason"] == "Tagged by shape only."
+    assert "Sight and approved tags" in finding["dismissIf"]
+    assert finding["tagActions"] == []
+    assert finding["patches"] == []
+
+
+def test_scoped_investigation_reuses_concept_check_and_no_automatic_vision():
+    source = (Path(__file__).resolve().parents[1] / "tool/js/qa_workbench.js").read_text()
+    assert "selectedFiles: items.map(function (item)" in source
+    assert "candidateFiles.indexOf(item.fileName) !== -1" in source
+    assert "qaBuildConceptItems(items)" in source
+    assert "question.textContent = 'Investigate: ' + finding.concept" in source
+    assert "condition.textContent = 'Dismiss if: '" in source
+    assert "reason.textContent = candidate.reason" in source
+    assert "qaWorkbenchState.investigation.finished = true" in source

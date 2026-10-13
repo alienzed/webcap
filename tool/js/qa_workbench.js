@@ -56,6 +56,8 @@
     conceptSession: null,
     conceptCoverage: null, // Session-only coverage of the last explicit concept check.
     investigation: null, // Session-only outcome of the last selected hypothesis.
+    conceptPreflightToken: 0,
+    conceptPreflightPending: false,
     captionQuality: {},
     qaAlternatives: {},
     aiSummary: '',
@@ -819,7 +821,7 @@
   }
 
   function qaRunConceptCheck() {
-    if (qaWorkbenchState.conceptSession) return;
+    if (qaWorkbenchState.conceptSession || qaWorkbenchState.conceptPreflightPending) return;
     if (qaWorkbenchState.deepScanSessionActive) { setStatus('Stop Deep QA before running a concept check.'); return; }
     var concept = qaNormalizeLabel(qaWorkbenchState.conceptQuery).slice(0, 240);
     if (!concept) { setStatus('Describe the concept to investigate.'); return; }
@@ -838,11 +840,17 @@
     var conceptItems = qaBuildConceptItems(items);
     var available = [];
     var missingCount = 0;
-    // Set Intelligence owns freshness; never treat a locally cached block as current without checking.
+    // Set Intelligence owns freshness; invalidate a pending preflight on any changed context.
+    var token = ++qaWorkbenchState.conceptPreflightToken;
+    var folder = String(state.folder || ''), scope = qaBuildScopeKey(qaGetTrainingItems());
+    qaWorkbenchState.conceptPreflightPending = true;
     qaWorkbenchState.conceptStatus = 'Checking saved Sight freshness…';
     renderQaWorkbench();
     qaRequestJson('/fs/vision_schema?folder=' + encodeURIComponent(String(state.folder || '')) +
       '&model=' + encodeURIComponent(String(getCaptionVisionModelId() || ''))).then(function (status) {
+      if (token !== qaWorkbenchState.conceptPreflightToken || folder !== String(state.folder || '') ||
+          scope !== qaBuildScopeKey(qaGetTrainingItems()) || qaWorkbenchState.conceptQuery !== concept) return;
+      qaWorkbenchState.conceptPreflightPending = false;
       if (qaWorkbenchState.conceptSession) return;
       var currentFiles = {};
       (status.items || []).forEach(function (row) {
@@ -854,6 +862,8 @@
       missingCount = conceptItems.length - available.length;
       qaBeginConceptCheck(concept, model, items, available, missingCount, investigation);
     }).catch(function (err) {
+      if (token !== qaWorkbenchState.conceptPreflightToken) return;
+      qaWorkbenchState.conceptPreflightPending = false;
       qaWorkbenchState.conceptStatus = 'Sight freshness check failed · see Console.';
       reportConsoleError('QA Concept Check · Sight freshness', err);
       renderQaWorkbench();
@@ -2339,6 +2349,8 @@
       && qaWorkbenchState.deepScanInputSignature !== inputSignature;
 
     if (folderChanged || scopeChanged) {
+      qaWorkbenchState.conceptPreflightToken += 1;
+      qaWorkbenchState.conceptPreflightPending = false;
       qaWorkbenchState.investigation = null;
       qaStopConceptCheck(true);
       qaWorkbenchState.conceptFindings = [];

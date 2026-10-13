@@ -239,3 +239,26 @@ test('advertised capability matching respects model-name boundaries', () => {
   assert.equal(ui.directorModelTestAdvertisedCapability('ollama::nullguard:latest').contextTokens, 131072);
   assert.equal(ui.directorModelTestAdvertisedCapability('ollama::othernullguarder'), null);
 });
+
+
+test('benchmark renders saved confirmation samples without a new model call', () => {
+  const { ui } = assessmentUI();
+  ui.escapeHtml = value => String(value);
+  const host = { innerHTML: '' };
+  ui.directorModelTestEl = id => id === 'director-model-test-saved-samples' ? host : null;
+  ui.directorModelTestState.calibrationReports = [{
+    modelRef: 'remote::qwen', assessmentKind: 'confirmation', updatedAt: 'matching'
+  }];
+  ui.directorModelTestState.assessmentRuns = [{
+    id: 'saved', status: 'complete', startedAt: '2026-10-13T12:00:00Z',
+    model: { modelRef: 'remote::qwen', label: 'Qwen' },
+    summary: { updatedAt: 'matching', attempts: [{ kind: 'prose', target: 2048, status: 'passed', text: 'A saved paragraph.', totalSeconds: 5 }] }
+  }];
+  ui.directorModelTestRenderSavedSamples();
+  assert.match(host.innerHTML, /A saved paragraph/);
+  assert.match(host.innerHTML, /not a proven model limit/);
+  assert.doesNotMatch(host.innerHTML, /Director Benchmark run/);
+  ui.directorModelTestState.assessmentRuns[0].summary.updatedAt = 'old';
+  ui.directorModelTestRenderSavedSamples();
+  assert.match(host.innerHTML, /No completed Director assessment samples/);
+});

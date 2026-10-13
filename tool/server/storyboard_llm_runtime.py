@@ -1677,25 +1677,9 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
         base_settings = _director_config()
     if base_settings.get("mode", "local") == "local" and not gpu_reserved:
         raise RuntimeError("Local Director runtime requires existing LLM GPU ownership.")
-    profile = None
-    needs_profile_context = (
-        runtime_id == "local"
-        and context_size is None
-        and base_settings.get("context_size") is None
-    )
-    needs_profile_output = max_tokens is None and base_settings.get("max_tokens") is None
-    if needs_profile_context or needs_profile_output:
-        from .director_model_calibration import get_profile
-        profile = get_profile(model_ref)
-
+    # Saved assessment profiles are historical evidence, not implicit runtime limits.
+    # Explicit configuration and per-request overrides continue to take precedence.
     effective_context_size = context_size
-    if (
-        effective_context_size is None
-        and needs_profile_context
-        and isinstance(profile, dict)
-        and profile.get("contextMode") == "calibrated"
-    ):
-        effective_context_size = profile.get("contextSize")
 
     with _request_lock, _use_runtime(runtime_id), _use_context_size_override(effective_context_size):
         _ensure_server()
@@ -1712,8 +1696,6 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             "frequency_penalty": float(sampling.get("frequency_penalty", 0.0)),
         }
         requested_max_tokens = max_tokens if max_tokens is not None else settings["max_tokens"]
-        if requested_max_tokens is None and needs_profile_output and isinstance(profile, dict):
-            requested_max_tokens = profile.get("maxTokens")
         if requested_max_tokens is not None:
             requested_max_tokens = int(requested_max_tokens)
             if requested_max_tokens <= 0:

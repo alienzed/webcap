@@ -1560,16 +1560,32 @@ def _resolved_wildcard_summary(source_prompt, resolved_prompt, owner_folder=""):
     ]
 
 
+def _unmatched_wildcard_summary(source_prompt, resolved_prompt):
+    source = str(source_prompt or "")
+    resolved = _normalize_wildcard_text(resolved_prompt)
+    if not source or not resolved or _normalize_wildcard_text(source) == resolved:
+        # The prompt may still be waiting for the wildcard resolver.
+        return False
+    nodes = _parse_wildcard_nodes(_strip_wildcard_comments(source))
+    return (
+        _wildcard_nodes_have_group(nodes)
+        and _match_wildcard_source(source, resolved, _match_wildcard_nodes) is None
+    )
+
+
 def _project_wildcard_fields(payload):
     visible = payload
-    visible["wildcardValues"] = _resolved_wildcard_values(
-        visible.get("sourcePrompt"),
-        visible.get("resolvedPrompt") or visible.get("prompt"),
-    )
+    source = visible.get("sourcePrompt")
+    resolved = visible.get("resolvedPrompt") or visible.get("prompt")
+    visible["wildcardValues"] = _resolved_wildcard_values(source, resolved)
     visible["wildcardSummary"] = _resolved_wildcard_summary(
-        visible.get("sourcePrompt"),
-        visible.get("resolvedPrompt") or visible.get("prompt"),
-        visible.get("ownerFolder"),
+        source, resolved, visible.get("ownerFolder"),
+    )
+    # Derived only for the UI; never persist a diagnostic in the session.
+    visible["wildcardSummaryUnmatched"] = (
+        not visible["wildcardValues"]
+        and not visible["wildcardSummary"]
+        and _unmatched_wildcard_summary(source, resolved)
     )
     return visible
 

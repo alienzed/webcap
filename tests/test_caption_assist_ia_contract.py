@@ -75,10 +75,12 @@ def test_preview_caption_assist_uses_editor_dock_without_changing_qa_overlay():
     primer = _source("tool/js/primer_settings.js")
     focus = _source("tool/js/focused_caption.js")
     css = _source("tool/css/styles.css")
-    assert "var editorDocked = !!(panelVisible && !isFocusedQaReviewMode());" in primer
+    assert "var focusOverlay = !!(focusVisible && isFocusedQaReviewMode());" in primer
+    assert "var editorDocked = !!(panelVisible && !focusOverlay);" in primer
     assert "panel.classList.toggle('is-editor-docked', editorDocked);" in primer
-    assert "panel.classList.toggle('is-focus-caption', focusVisible);" in primer
+    assert "panel.classList.toggle('is-focus-caption', focusOverlay);" in primer
     assert "if (editorDocked) {" in primer
     assert "if (isFocusedCaptionOpen()\n    ? !isFocusedQaReviewMode()" in primer
     assert "startFocusedCaption((state.currentItem && state.currentItem.key) || '');" in focus
     assert ".editor-caption-candidate.is-editor-docked .editor-caption-candidate-dialog {" in css
+    assert "QA Focus Review keeps its dedicated overlay." in css

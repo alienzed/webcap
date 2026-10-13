@@ -123,6 +123,11 @@
       onOpen: function () {
         if (item.kind === 'director-diagnostics') {
           window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
+        } else if (item.kind === 'set-intelligence') {
+          window.openSetIntelligence();
+        } else if (item.kind === 'deep-qa') {
+          window.setWorkspaceSurface('reviewOutput');
+          window.setReviewDetailTab('qa');
         } else if (item.original) {
           openItem(item.original);
         } else {
@@ -776,6 +781,15 @@
             if (item.kind === 'director-diagnostics') {
               setOpen(false);
               window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
+            } else if (item.kind === 'set-intelligence') {
+              setOpen(false);
+              window.openSetIntelligence();
+            } else if (item.kind === 'deep-qa') {
+              setOpen(false);
+              window.setWorkspaceSurface('reviewOutput');
+              window.setReviewDetailTab('qa');
+            } else if (item.kind === 'vocabulary-discovery') {
+              setOpen(false);
             } else openItem(item);
           } });
           nowRows.push(card);

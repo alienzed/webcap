@@ -23,6 +23,8 @@
     vocabularyComplete: false,
     draftSchema: null,
     discoveryStage: 'idle',
+    discoveryActivityId: '',
+    discoveryActivityStartedAt: 0,
     failedDiscoveryStage: '',
     discoverySessionKey: '',
     error: ''
@@ -144,6 +146,24 @@
     });
   }
 
+  function publishVocabularyActivity(phase) {
+    if (!schemaState.discoveryActivityId) return;
+    window.publishActivityProgress({
+      id: schemaState.discoveryActivityId, kind: 'vocabulary-discovery',
+      title: 'Discover Vocabulary',
+      status: schemaState.workStopRequested ? 'stopping' : 'running',
+      phase: String(phase || schemaState.discoveryStage || 'Preparing'),
+      detail: schemaState.folder,
+      startedAt: schemaState.discoveryActivityStartedAt,
+      childJobId: schemaState.schemaJobId, progress: null
+    });
+  }
+  function finishVocabularyActivity(status) {
+    if (!schemaState.discoveryActivityId) return;
+    window.finishActivityProgress(schemaState.discoveryActivityId, status);
+    schemaState.discoveryActivityId = '';
+    schemaState.discoveryActivityStartedAt = 0;
+  }
   function setStatus(message, error) {
     schemaState.error = error ? String(message || '') : '';
     var node = el('vision-schema-status');
@@ -601,6 +621,7 @@
     schemaState.schemaStarting = false;
     schemaState.failedDiscoveryStage = '';
     schemaState.discoveryStage = schemaState.vocabularyComplete ? 'complete' : 'review';
+    finishVocabularyActivity('completed');
     setStatus(finalSchema.groups.length
       ? ('Found ' + String(finalSchema.groups.length) + ' vocabulary group' + (finalSchema.groups.length === 1 ? '' : 's') + ' to review.')
       : 'The discovery passes did not find useful vocabulary additions.');
@@ -634,33 +655,42 @@
     schemaState.schemaStarting = true;
     schemaState.failedDiscoveryStage = '';
     schemaState.error = '';
+    schemaState.discoveryActivityStartedAt = Date.now() / 1000;
+    schemaState.discoveryActivityId = 'vocabulary:' + String(Date.now());
 
     var work;
     if (resumeStage === 'challenge' && schemaState.draftSchema) {
       schemaState.discoveryStage = 'challenge';
+      publishVocabularyActivity('Challenging vocabulary');
       setStatus('Retrying the vocabulary challenge…');
       render();
       work = runVocabularyChallenge(schemaState.draftSchema);
     } else {
       schemaState.discoveryStage = 'evidence';
+      publishVocabularyActivity('Checking saved Sight');
       setStatus('Checking current Set Intelligence…');
       render();
       work = prepareDiscoveryEvidence().then(function (ready) {
         if (ready === false || schemaState.workStopRequested) return false;
         schemaState.discoveryStage = 'synthesis';
+        publishVocabularyActivity('Synthesizing vocabulary');
         setStatus('Usable visual evidence is ready. Making sense of the vocabulary…');
         return runVocabularySynthesis();
       }).then(function (draft) {
         if (!draft || schemaState.workStopRequested) return false;
         schemaState.draftSchema = draft;
         schemaState.discoveryStage = 'challenge';
+        publishVocabularyActivity('Challenging vocabulary');
         setStatus('Challenging the draft for missed distinctions and weak vocabulary…');
         return runVocabularyChallenge(draft);
       });
     }
 
     work.then(function (finalSchema) {
-      if (!finalSchema || schemaState.workStopRequested) return;
+      if (!finalSchema || schemaState.workStopRequested) {
+        finishVocabularyActivity('stopped');
+        return;
+      }
       completeDiscovery(finalSchema);
     }).catch(function (err) {
       schemaState.schemaStarting = false;
@@ -669,6 +699,7 @@
         ? 'challenge'
         : 'evidence';
       schemaState.discoveryStage = 'failed';
+      finishVocabularyActivity(schemaState.workStopRequested ? 'stopped' : 'failed');
       if (schemaState.workStopRequested) {
         setStatus('Vocabulary discovery stopped. You can resume from here.');
       } else {
@@ -695,6 +726,8 @@
   function stopWork() {
     var stoppingStage = schemaState.discoveryStage;
     schemaState.workStopRequested = true;
+    publishVocabularyActivity('Stopping');
+    finishVocabularyActivity('stopped');
     schemaState.schemaRequestToken += 1;
     var jobs = [];
     if (schemaState.schemaJobId) jobs.push(cancelCaptionAssistJob(schemaState.schemaJobId));
@@ -752,6 +785,7 @@
       if (!jobId) throw new Error('Vocabulary synthesis did not return a queued job.');
       schemaState.analysis = payload.analysis || schemaState.analysis;
       schemaState.schemaJobId = jobId;
+      publishVocabularyActivity();
       trackTransientLlmJob(payload.job);
       render();
       return waitForCaptionAssistJob(payload.job);
@@ -791,6 +825,7 @@
       if (!jobId) throw new Error('Vocabulary challenge did not return a queued job.');
       schemaState.analysis = payload.analysis || schemaState.analysis;
       schemaState.schemaJobId = jobId;
+      publishVocabularyActivity();
       trackTransientLlmJob(payload.job);
       render();
       return waitForCaptionAssistJob(payload.job);
@@ -842,6 +877,7 @@
         return cancelCaptionAssistJob(jobId).then(function () { return null; });
       }
       schemaState.schemaJobId = jobId;
+      publishVocabularyActivity();
       trackTransientLlmJob(payload.job);
       render();
       return waitForCaptionAssistJob(payload.job);

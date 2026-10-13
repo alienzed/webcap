@@ -71,6 +71,8 @@
     deepScanStopRequested: false,
     deepScanSessionToken: 0,
     deepScanJobId: '',
+    deepScanActivityId: '',
+    deepScanActivityStartedAt: 0,
     deepScanChallengerJobId: '',
     deepScanSubmitting: false,
     deepScanStatus: '',
@@ -521,10 +523,33 @@
     qaRefreshAiCoverage();
   }
 
+  function qaPublishDeepScanActivity(phase) {
+    if (!qaWorkbenchState.deepScanActivityId) return;
+    window.publishActivityProgress({
+      id: qaWorkbenchState.deepScanActivityId,
+      kind: 'deep-qa',
+      title: 'Deep QA',
+      status: qaWorkbenchState.deepScanStopRequested ? 'stopping' : 'running',
+      phase: String(phase || 'Reviewing Set'),
+      detail: qaWorkbenchState.deepScanStatus,
+      startedAt: qaWorkbenchState.deepScanActivityStartedAt,
+      childJobId: qaWorkbenchState.deepScanJobId,
+      progress: null
+    });
+  }
+
+  function qaFinishDeepScanActivity(status) {
+    if (!qaWorkbenchState.deepScanActivityId) return;
+    window.finishActivityProgress(qaWorkbenchState.deepScanActivityId, status);
+    qaWorkbenchState.deepScanActivityId = '';
+    qaWorkbenchState.deepScanActivityStartedAt = 0;
+  }
+
   function qaWaitForDeepScan(job) {
     if (!job || !job.jobId) throw new Error('QA Deep Scan did not return a queued job.');
     var jobId = String(job.jobId || '');
     qaWorkbenchState.deepScanJobId = jobId;
+    qaPublishDeepScanActivity('Director review');
     renderQaWorkbench();
 
     function poll(current) {
@@ -611,6 +636,7 @@
     qaWorkbenchState.aiCoverageTotal = 0;
     qaWorkbenchState.aiScopeSignature = '';
     qaWorkbenchState.deepScanStatus = String(message || 'Deep QA context changed; run it again for the current scope.');
+    qaFinishDeepScanActivity('stopped');
     if (jobId) {
       qaRequestJson('/fs/director/job', {
         method: 'POST',
@@ -639,6 +665,7 @@
     });
     qaWorkbenchState.deepScanSubmitting = true;
     qaWorkbenchState.deepScanStatus = 'Deep QA · Reviewing ' + items.length + ' selected items';
+    qaPublishDeepScanActivity('Preparing Director review');
     renderQaWorkbench();
     var reviewRequest = {
         setReview: true, folder: folder, model: model, trainingFocus: qaWorkbenchState.trainingFocus,
@@ -669,6 +696,7 @@
           qaWorkbenchState.deepScanSessionActive = false;
           qaWorkbenchState.deepScanSubmitting = false;
           qaWorkbenchState.deepScanStatus = 'Deep QA cancelled before inference.';
+          qaFinishDeepScanActivity('stopped');
           renderQaWorkbench();
           return null;
         }
@@ -711,6 +739,7 @@
       qaWorkbenchState.deepScanSubmitting = false;
       qaWorkbenchState.deepScanSessionActive = false;
       qaWorkbenchState.deepScanStatus = 'Deep QA · ' + findings.length + ' investigation' + (findings.length === 1 ? '' : 's') + '.';
+      qaFinishDeepScanActivity('completed');
       qaRefreshAiCoverage();
       reportConsoleInfo('Deep QA', 'Reviewed ' + items.length + ' items; ' + findings.length + ' investigations.');
       qaMergeFindings();
@@ -723,6 +752,7 @@
       qaWorkbenchState.deepScanJobId = '';
       qaWorkbenchState.deepScanSessionActive = false;
       qaWorkbenchState.deepScanStatus = 'Deep QA failed: ' + String(err.message || err);
+      qaFinishDeepScanActivity(['cancelled', 'stopped', 'interrupted'].indexOf(String(err.jobStatus || '')) === -1 ? 'failed' : 'stopped');
       if (['cancelled', 'stopped', 'interrupted'].indexOf(String(err.jobStatus || '')) === -1) {
         reportConsoleError('Deep QA · Set review', err);
       }
@@ -1116,6 +1146,9 @@
     qaWorkbenchState.deepScanSessionActive = true;
     qaWorkbenchState.deepScanStopRequested = false;
     qaWorkbenchState.deepScanStatus = 'Starting set-wide Deep QA…';
+    qaWorkbenchState.deepScanActivityStartedAt = Date.now() / 1000;
+    qaWorkbenchState.deepScanActivityId = 'deep-qa:' + String(Date.now());
+    qaPublishDeepScanActivity('Preparing');
     reportConsoleInfo('Deep QA', 'Starting focused review for ' + items.length + ' items.');
     qaRunNextDeepScanBatch();
   }
@@ -1144,6 +1177,7 @@
     qaWorkbenchState.deepScanStopRequested = true;
     reportConsoleInfo('Deep QA', 'Stop requested.');
     qaWorkbenchState.deepScanStatus = 'Stopping Deep QA…';
+    qaPublishDeepScanActivity('Stopping');
     renderQaWorkbench();
     if (!qaWorkbenchState.deepScanJobId) {
       qaWorkbenchState.deepScanSessionToken += 1;
@@ -1156,6 +1190,7 @@
       }
       qaWorkbenchState.deepScanSessionActive = false;
       qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
+      qaFinishDeepScanActivity('stopped');
       renderQaWorkbench();
       return;
     }
@@ -1164,6 +1199,7 @@
     qaWorkbenchState.deepScanSessionActive = false;
     qaWorkbenchState.deepScanJobId = '';
     qaWorkbenchState.deepScanStatus = 'Deep QA stopped.';
+    qaFinishDeepScanActivity('stopped');
     qaRequestJson('/fs/director/job', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

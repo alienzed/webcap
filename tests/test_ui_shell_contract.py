@@ -1114,3 +1114,30 @@ def test_activity_inference_consumers_use_shared_progress_without_touching_workf
     assert "managed.concat(localItems())" in activity
     assert "openItem(item.original);" in activity
     assert '"progress": job.get("progress") if lane == "inference"' in monitor
+
+
+def test_set_review_vocabulary_progress_is_session_only_and_uses_existing_owners():
+    root = ROOT
+    scan = (root / "tool" / "js" / "set_scan.js").read_text(encoding="utf-8")
+    qa = (root / "tool" / "js" / "qa_workbench.js").read_text(encoding="utf-8")
+    schema = (root / "tool" / "js" / "vision_schema_assist.js").read_text(encoding="utf-8")
+    activity = (root / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+
+    assert "function publishSetIntelligenceActivity(title, message)" in scan
+    assert "function finishSetIntelligenceActivity(status)" in scan
+    assert "setScanState.completed = index + 1;" in scan
+    assert "childJobId: setScanState.currentVisionJobId" in scan
+    assert "function qaPublishDeepScanActivity(phase)" in qa
+    assert "function qaFinishDeepScanActivity(status)" in qa
+    assert "childJobId: qaWorkbenchState.deepScanJobId" in qa
+    assert "progress: null" in qa
+    assert "function publishVocabularyActivity(phase)" in schema
+    assert "function finishVocabularyActivity(status)" in schema
+    assert "childJobId: schemaState.schemaJobId" in schema
+    assert "progress: null" in schema
+    assert "window.openSetIntelligence();" in activity
+    assert "window.setReviewDetailTab('qa');" in activity
+    assert "item.kind === 'vocabulary-discovery'" in activity
+    assert "window.publishActivityProgress" in scan
+    assert "window.publishActivityProgress" in qa
+    assert "window.publishActivityProgress" in schema

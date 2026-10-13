@@ -10,6 +10,8 @@
     scopeRequestToken: 0,
     visionModel: '',
     currentVisionJobId: '',
+    activityId: '',
+    activityStartedAt: 0,
     currentRawResponse: null,
     rawResponses: [],
     rawResponseIndex: -1,
@@ -186,6 +188,31 @@
     });
   }
 
+  function publishSetIntelligenceActivity(title, message) {
+    if (!setScanState.running || !setScanState.activityId) return;
+    var total = Number(setScanState.total || 0);
+    var completed = Number(setScanState.completed || 0);
+    window.publishActivityProgress({
+      id: setScanState.activityId,
+      kind: 'set-intelligence',
+      title: 'Set Intelligence',
+      status: setScanState.stopRequested ? 'stopping' : 'running',
+      detail: String(message || ''),
+      phase: String(title || 'Preparing Sight'),
+      progressLabel: total > 0 ? completed + ' / ' + total + ' Sight checks attempted' : '',
+      progress: total > 0 ? { completed: completed, total: total } : null,
+      childJobId: setScanState.currentVisionJobId,
+      startedAt: setScanState.activityStartedAt
+    });
+  }
+
+  function finishSetIntelligenceActivity(status) {
+    if (!setScanState.activityId) return;
+    window.finishActivityProgress(setScanState.activityId, status);
+    setScanState.activityId = '';
+    setScanState.activityStartedAt = 0;
+  }
+
   function setSetIntelligenceStatus(title, message) {
     var stageEl = el('set-scan-stage');
     var statusEl = el('set-scan-status');
@@ -193,6 +220,7 @@
     stageEl.textContent = String(title || '');
     statusEl.textContent = String(message || '');
     renderSetIntelligence();
+    publishSetIntelligenceActivity(title, message);
   }
 
   function showRawResponse(fileName, passLabel, text) {
@@ -348,6 +376,7 @@
         throw new Error('Set Intelligence Vision scan did not return a queued job.');
       }
       setScanState.currentVisionJobId = String(payload.job.jobId || '');
+      if (setScanState.running) publishSetIntelligenceActivity('Sight', 'Collecting visual evidence…');
       trackTransientLlmJob(payload.job);
       if (isCancelled && isCancelled()) {
         return cancelCaptionAssistJob(setScanState.currentVisionJobId).then(function () {
@@ -393,6 +422,7 @@
       if (saved) setScanState.coverage.openCurrent = Math.min(
         setScanState.coverage.total, setScanState.coverage.openCurrent + 1);
       setScanState.completed = index + 1;
+      publishSetIntelligenceActivity('Sight', 'Saving completed visual evidence…');
       if ((index + 1) % Math.max(1, Math.ceil(pending.length / 10)) === 0 && index + 1 < pending.length) {
         reportConsoleInfo('Set Intelligence', 'Sight: ' + (index + 1) + '/' + pending.length + ' attempted.');
       }
@@ -438,6 +468,7 @@
     var failureCount = setScanState.failures.length;
     reportConsoleInfo('Set Intelligence', 'Scan finished: ' + setScanState.coverage.openCurrent + '/' + setScanState.coverage.total + ' Sight current; ' + failureCount + ' item failures.');
     if (failureCount) {
+      finishSetIntelligenceActivity('completed');
       setSetIntelligenceStatus(
         'Set understood with gaps',
         String(failureCount) + ' Vision item failure' + (failureCount === 1 ? '' : 's') +
@@ -446,6 +477,7 @@
       window.setStatus('Set Intelligence completed with ' + String(failureCount) + ' Vision gap' + (failureCount === 1 ? '' : 's') + '.');
       return;
     }
+    finishSetIntelligenceActivity('completed');
     setSetIntelligenceStatus('Set understood', message || 'Ready for the next decision.');
     window.setStatus('Set Intelligence is ready.');
   }
@@ -497,6 +529,8 @@
     setScanState.completed = 0;
     setScanState.total = 0;
     setScanState.phase = 'preparing';
+    setScanState.activityStartedAt = Date.now() / 1000;
+    setScanState.activityId = 'set-intelligence:' + String(Date.now());
     setSetIntelligenceStatus('Understanding Set', 'Preparing ' + String(files.length) + ' media item' + (files.length === 1 ? '' : 's') + '…');
     reportConsoleInfo('Set Intelligence', 'Scan started: ' + files.length + ' visible items; mode ' + (selectedMode || 'missing Sight') + '.');
 
@@ -543,6 +577,7 @@
         setScanState.running = false;
         setScanState.phase = 'idle';
         qaInputsUpdated();
+        finishSetIntelligenceActivity('stopped');
         setSetIntelligenceStatus('Scan stopped', 'Completed understanding remains cached.');
         window.setStatus('Set Intelligence stopped. Completed understanding remains cached.');
         reportConsoleInfo('Set Intelligence', 'Scan stopped; saved evidence retained.');
@@ -553,6 +588,7 @@
       setScanState.running = false;
       setScanState.currentVisionJobId = '';
       qaInputsUpdated();
+      finishSetIntelligenceActivity('failed');
       if (previousReport.hasRun) {
         setScanState.hasRun = true;
         setScanState.phase = previousReport.phase;
@@ -577,6 +613,7 @@
   function stopSetIntelligence() {
     if (!setScanState.running) return;
     setScanState.stopRequested = true;
+    publishSetIntelligenceActivity('Stopping', 'Completed understanding will remain cached.');
     reportConsoleInfo('Set Intelligence', 'Stop requested.');
     var jobId = setScanState.currentVisionJobId;
     setScanState.currentVisionJobId = '';

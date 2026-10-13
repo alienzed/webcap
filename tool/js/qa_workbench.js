@@ -386,8 +386,11 @@
     qaWorkbenchState.aiModel = '';
     qaWorkbenchState.dispositions = {};
     return qaRequestJson('/fs/qa/review?folder=' + encodeURIComponent(folder) + '&scopeKey=' + encodeURIComponent(scopeKey)).then(function (payload) {
-      if (token !== qaReviewLoadToken || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting || String(state.folder || '') !== folder
+      if (token !== qaReviewLoadToken || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting
+          || qaWorkbenchState.conceptSession || qaWorkbenchState.conceptPreflightPending
+          || String(state.folder || '') !== folder
           || qaBuildScopeKey(qaGetTrainingItems()) !== scopeKey
+          || qaBuildDeepScanSignature(qaGetTrainingItems()) !== signature
           || qaWorkbenchState.trainingFocus !== focus) return;
       var saved = payload.review;
       if (!saved) return;
@@ -857,6 +860,8 @@
     if (qaWorkbenchState.investigation && qaWorkbenchState.investigation.concept !== concept) {
       qaWorkbenchState.investigation = null;
     }
+    // A saved review requested before this user-started check must not overwrite its results.
+    qaReviewLoadToken += 1;
     var conceptItems = qaBuildConceptItems(items);
     var available = [];
     var missingCount = 0;
@@ -2430,8 +2435,8 @@
         }
         qaRestoreReview(inputSignature);
       } else if (inputsChanged) {
-        // Same Set/selection: do not reload storage over an active Concept Check.
-        // Reconcile changed annotations in memory and retain other valid actions.
+        // Same selection: discard any prior pending restore, not current in-memory findings.
+        qaReviewLoadToken += 1;
         qaReconcileAiFindingsToCurrentInputs();
       }
       if (!qaWorkbenchState.deepScanJobId && !qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStatus) {

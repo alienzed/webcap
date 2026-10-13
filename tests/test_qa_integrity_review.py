@@ -103,3 +103,16 @@ def test_qa_restores_concept_findings_without_valid_deep_review_and_reconciles_e
     assert "else if (inputsChanged)" in refresh
     assert "qaReconcileAiFindingsToCurrentInputs();" in refresh
     assert "qaRestoreReview(inputSignature);" in refresh
+
+
+def test_inflight_restore_cannot_replace_active_or_changed_concept_review():
+    source = (Path(__file__).resolve().parents[1] / "tool/js/qa_workbench.js").read_text()
+    restore = source.split("function qaRestoreReview(", 1)[1].split("function qaMergeFindings(", 1)[0]
+    assert "qaWorkbenchState.conceptSession || qaWorkbenchState.conceptPreflightPending" in restore
+    assert "qaBuildDeepScanSignature(qaGetTrainingItems()) !== signature" in restore
+    check = source.split("function qaRunConceptCheck(", 1)[1].split("function qaBeginConceptCheck(", 1)[0]
+    assert "qaReviewLoadToken += 1" in check
+    refresh = source.split("function qaRefreshComputedState(", 1)[1].split("function qaFocusReviewCurrent(", 1)[0]
+    assert "else if (inputsChanged)" in refresh
+    assert "qaReviewLoadToken += 1" in refresh
+    assert "qaReconcileAiFindingsToCurrentInputs();" in refresh

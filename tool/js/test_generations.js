@@ -20,6 +20,7 @@
   var testActivity = {};
   var selectedCandidates = null;
   var candidateStrengths = null;
+  var defaultCandidateStrength = null;
   var pendingActivitySession = '';
   var queuedTestJobs = [];
   var trackedTestInferenceSessions = Object.create(null);
@@ -933,6 +934,7 @@
       megapixels: Number(el('test-generations-megapixels') && el('test-generations-megapixels').value || 0),
       duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0),
       dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || ''),
+      defaultStrength: defaultCandidateStrength,
       candidateStrengths: candidateStrengths && typeof candidateStrengths === 'object'
         ? Object.assign({}, candidateStrengths)
         : {},
@@ -1377,17 +1379,27 @@
       if (files.indexOf(fileName) === -1) selectedCandidates.delete(fileName);
     });
     if (!candidateStrengths || typeof candidateStrengths !== 'object') {
+      var savedSettings = savedTestModelState().settings;
+      var modelDefaultStrength = Number(payload && payload.defaultStrength);
+      if (!isFinite(modelDefaultStrength)) modelDefaultStrength = 1;
+      var savedDefault = savedSettings.defaultStrength;
+      var hasSavedDefault = savedDefault !== null && savedDefault !== undefined && String(savedDefault).trim() !== '';
+      var parsedDefault = Number(savedDefault);
+      defaultCandidateStrength = hasSavedDefault && isFinite(parsedDefault) && parsedDefault >= -2 && parsedDefault <= 2
+        ? parsedDefault
+        : modelDefaultStrength;
       candidateStrengths = Object.create(null);
       var savedStrengths = savedSettings.candidateStrengths && typeof savedSettings.candidateStrengths === 'object'
         ? savedSettings.candidateStrengths
         : {};
-      var defaultStrength = Number(payload && payload.defaultStrength);
-      if (!isFinite(defaultStrength)) defaultStrength = 1;
       files.forEach(function (fileName) {
-        var savedStrength = Number(savedStrengths[fileName]);
-        candidateStrengths[fileName] = isFinite(savedStrength) && savedStrength >= -2 && savedStrength <= 2
-          ? savedStrength
-          : defaultStrength;
+        var rawStrength = savedStrengths[fileName];
+        if (rawStrength === null || rawStrength === undefined || String(rawStrength).trim() === '') return;
+        var savedStrength = Number(rawStrength);
+        if (!isFinite(savedStrength) || savedStrength < -2 || savedStrength > 2) return;
+        // Older settings populated every candidate; only differences from the model default are overrides.
+        if (!hasSavedDefault && savedStrength === defaultCandidateStrength) return;
+        candidateStrengths[fileName] = savedStrength;
       });
     }
     Object.keys(candidateStrengths).forEach(function (fileName) {
@@ -1438,8 +1450,25 @@
     baseCopy.appendChild(baseName);
     baseCopy.appendChild(baseDetail);
 
+    var defaultWeightLabel = document.createElement('label');
+    defaultWeightLabel.className = 'test-generations-default-strength-label';
+    defaultWeightLabel.textContent = 'Default weight';
+    var defaultWeight = document.createElement('input');
+    defaultWeight.id = 'test-generations-default-strength';
+    defaultWeight.type = 'number';
+    defaultWeight.className = 'test-generations-candidate-strength';
+    defaultWeight.dataset.defaultCandidateStrength = '1';
+    defaultWeight.min = '-2';
+    defaultWeight.max = '2';
+    defaultWeight.step = '0.05';
+    defaultWeight.title = 'Used for LoRAs without a weight override';
+    defaultWeight.setAttribute('aria-label', 'Default LoRA weight');
+    defaultWeight.value = String(defaultCandidateStrength);
+    defaultWeightLabel.appendChild(defaultWeight);
+
     baseRow.appendChild(baseInclude);
     baseRow.appendChild(baseCopy);
+    baseRow.appendChild(defaultWeightLabel);
     host.appendChild(baseRow);
 
     if (!files.length) {
@@ -1496,9 +1525,12 @@
       strength.min = '-2';
       strength.max = '2';
       strength.step = '0.05';
-      strength.title = 'Strength';
-      strength.setAttribute('aria-label', 'Strength for ' + String(parts.label || fileName || 'candidate'));
-      strength.value = String(candidateStrengths[fileName]);
+      strength.title = 'Override weight (blank uses default)';
+      strength.setAttribute('aria-label', 'Weight override for ' + String(parts.label || fileName || 'candidate') + ' (blank uses default)');
+      strength.placeholder = String(defaultCandidateStrength);
+      strength.value = Object.prototype.hasOwnProperty.call(candidateStrengths, fileName)
+        ? String(candidateStrengths[fileName])
+        : '';
 
       var actions = document.createElement('div');
       actions.className = 'test-generations-staged-actions';
@@ -3347,6 +3379,7 @@
     prepared = null;
     selectedCandidates = null;
     candidateStrengths = null;
+    defaultCandidateStrength = null;
     currentStatus = {};
     showSessionError = false;
     compareIndex = 0;
@@ -3443,10 +3476,16 @@
     if (!prompt) return showError(new Error('A test prompt is required.'));
     if (declaredSettings.indexOf('aspectRatio') !== -1 && !settings.aspectRatio) return showError(new Error('An aspect ratio is required.'));
     if (declaredSettings.indexOf('dimensions') !== -1 && !settings.dimensions.trim()) return showError(new Error('Dimensions are required.'));
+    var defaultStrength = Number(defaultCandidateStrength);
+    if (!isFinite(defaultStrength) || defaultStrength < -2 || defaultStrength > 2) {
+      return showError(new Error('Default weight must be between -2 and 2.'));
+    }
     var selectedStrengths = {};
     for (var strengthIndex = 0; strengthIndex < selectedFiles.length; strengthIndex += 1) {
       var strengthFile = selectedFiles[strengthIndex];
-      var strengthValue = Number(candidateStrengths && candidateStrengths[strengthFile]);
+      var strengthValue = Object.prototype.hasOwnProperty.call(candidateStrengths || {}, strengthFile)
+        ? Number(candidateStrengths[strengthFile])
+        : defaultStrength;
       if (!isFinite(strengthValue) || strengthValue < -2 || strengthValue > 2) {
         return showError(new Error('Strength must be between -2 and 2.'));
       }
@@ -3678,10 +3717,32 @@
       try { openRecentPromptsMenu(this); } catch (err) { showError(err); }
     };
     el('test-generations-files').addEventListener('change', function (event) {
+      var defaultInput = event.target.closest('[data-default-candidate-strength]');
+      if (defaultInput) {
+        var defaultText = String(defaultInput.value || '').trim();
+        var defaultValue = Number(defaultText);
+        if (!defaultText || !isFinite(defaultValue) || defaultValue < -2 || defaultValue > 2) {
+          showError(new Error('Default weight must be between -2 and 2.'));
+          defaultInput.value = String(defaultCandidateStrength);
+          return;
+        }
+        defaultCandidateStrength = defaultValue;
+        Array.prototype.forEach.call(el('test-generations-files').querySelectorAll('[data-candidate-strength]'), function (input) {
+          input.placeholder = String(defaultCandidateStrength);
+        });
+        saveTestBenchState();
+        return;
+      }
       var strengthInput = event.target.closest('[data-candidate-strength]');
       if (strengthInput) {
         var strengthFile = String(strengthInput.dataset.candidateStrength || '');
-        var strengthValue = Number(strengthInput.value);
+        var strengthText = String(strengthInput.value || '').trim();
+        if (!strengthText) {
+          delete candidateStrengths[strengthFile];
+          saveTestBenchState();
+          return;
+        }
+        var strengthValue = Number(strengthText);
         if (!isFinite(strengthValue) || strengthValue < -2 || strengthValue > 2) {
           showError(new Error('Strength must be between -2 and 2.'));
           renderStagedFiles(prepared || { files: [], count: 0, candidateScores: {} });

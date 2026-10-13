@@ -7077,8 +7077,8 @@ html[data-theme="dark"] iframe {
   padding-bottom: 9px;
 }
 
-/* Caption Assist uses the existing candidate dialog as a nonmodal editor dock.
-   Focus Caption and QA Focus Review keep their existing dedicated overlay. */
+/* Single-item and progressive Caption Assist share the nonmodal editor dock.
+   QA Focus Review keeps its dedicated overlay. */
 .editor-caption-candidate.is-editor-docked {
   inset: 0;
   padding: 0;

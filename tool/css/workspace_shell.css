@@ -2826,6 +2826,12 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   width: 35% !important;
   opacity: .6;
 }
-.activity-progress-follower:has(+ .activity-toast-stack) {
-  bottom: calc(var(--shell-status-height) + 86px);
+.activity-progress-follower {
+  bottom: calc(var(--shell-status-height) + 14px);
+}
+.activity-toast-stack:has(> .activity-toast) ~ .activity-progress-follower {
+  bottom: calc(var(--shell-status-height) + 250px);
+}
+.activity-progress-follower:has(~ .activity-toast-stack > .activity-toast) {
+  bottom: calc(var(--shell-status-height) + 250px);
 }

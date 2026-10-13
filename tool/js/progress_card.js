@@ -45,7 +45,7 @@
     if (!card || !item || !item.id) throw new Error('Progress card requires a node and stable operation ID.');
     var status = String(item.status || 'running');
     card.className = 'activity-monitor-card progress-card status-' + status +
-      (options.compact ? ' progress-card-compact' : '');
+      (options.compact ? ' progress-card-compact' : '') + (options.className ? ' ' + options.className : '');
     card.setAttribute('data-progress-card-id', String(item.id));
     card.querySelector('[data-progress-title]').textContent = String(item.title || item.label || 'Activity');
     card.querySelector('[data-progress-detail]').textContent = String(item.detail || '');

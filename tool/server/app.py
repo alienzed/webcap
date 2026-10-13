@@ -1499,8 +1499,14 @@ def qa_deep_scan_route():
 
         if data.get("setReview") is True:
             from .qa_llm_contract import build_set_review_request
+            from .vision_schema_assist import vision_sight_records, mine_sight_records
+            # Mine all current Sight including singleton properties; vocabulary mining's
+            # frequency threshold remains unchanged. No Vision inference is launched.
+            sight_records = vision_sight_records(folder, "", files=requested_files)
+            visual_evidence = mine_sight_records(sight_records, limit=160, minimum_support=1)
             contract = build_set_review_request(
-                items, data.get("vocabulary"), data.get("trainingFocus"), data.get("primer")
+                items, data.get("vocabulary"), data.get("trainingFocus"), data.get("primer"),
+                sight_evidence=visual_evidence,
             )
             if data.get("preflight") is True:
                 # Deliberately approximate: not a tokenizer or a hard capacity gate.

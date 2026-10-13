@@ -744,6 +744,10 @@
   function qaDeepCoverageCounts(items) {
     var signatures = qaCurrentItemSignatureMap(items);
     var counts = { actionable: 0, clean: 0, failed: 0, unchecked: 0 };
+    if (qaWorkbenchState.qaReviewMode === 'set-review-v1') {
+      counts.unchecked = items.length; // Set-level review does not certify individual media.
+      return counts;
+    }
     items.forEach(function (item) {
       var file = item.fileName;
       if (qaWorkbenchState.aiItemSignatures[file] === signatures[file]) {
@@ -1692,12 +1696,15 @@
       .concat(qaBuildOverrepresentedFindings(items, groups));
     var findings = []
       .concat(qaBuildPruneFindings(items))
-      .concat(qaBuildDuplicateFindings(items))
-      .concat(qaBuildVisualAgreementFindings(items));
+      .concat(qaBuildDuplicateFindings(items));
     return {
       findings: qaSortFindings(findings),
       statisticalCandidates: statisticalCandidates,
       observations: qaBuildObservations(items).concat(representationObservations)
+        .concat(qaBuildVisualAgreementFindings(items).map(function (finding) {
+          return { id: finding.id, title: 'Unverified visual agreement: ' + finding.title,
+            summary: 'Check with current Sight before applying tags. ' + finding.summary, files: finding.files };
+        }))
         .concat(qaBuildCaptionFindings(items))
         .concat(qaBuildPruneObservations(items))
         .concat(qaBuildDuplicateObservations(items))
@@ -1832,7 +1839,7 @@
     copy.className = 'qa-hero-copy';
     var h2 = document.createElement('h2');
     var deepCoverageCounts = qaDeepCoverageCounts(items);
-    var evaluationIncomplete = qaWorkbenchState.aiScopeSignature !== qaBuildDeepScanSignature(items) || qaWorkbenchState.externalAnalysisRunning;
+    var evaluationIncomplete = true; // No set-level inference is equivalent to per-item QA certification.
     h2.textContent = undisposed.length
       ? undisposed.length + ' actionable finding' + (undisposed.length === 1 ? '' : 's') + ' to review'
       : (evaluationIncomplete ? 'No actionable findings in available checks' : 'No outstanding QA findings');
@@ -2759,9 +2766,9 @@
     var ready = Object.keys(qaFocusReviewState.queued).filter(function (key) {
       return !qaFocusReviewState.handled[key];
     }).length;
-    var pending = qaWorkbenchState.aiCoverageTotal - qaWorkbenchState.aiCoverageValid;
-    var failed = Object.keys(qaWorkbenchState.deepScanSkipped).length;
-    var complete = !qaWorkbenchState.deepScanSessionActive && pending === 0 && failed === 0;
+    var complete = false; // Set-level hypothesis generation never certifies every item.
+    var pending = 0;
+    var failed = 0;
     var suffix = qaWorkbenchState.deepScanSessionActive
       ? ' · ' + Math.max(0, pending) + ' checking'
       : (!complete && (pending || failed) ? ' · review incomplete' : '');

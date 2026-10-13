@@ -312,10 +312,21 @@ function modelLabSchedulePoll() {
     window.clearTimeout(modelLabState.polling);
     modelLabState.polling = 0;
   }
-  if (!modelLabState.run || modelLabState.run.status !== 'running') return;
+  var selected = modelLabState.run;
+  var selectedActive = selected && selected.status === 'running';
+  var activeId = modelLabState.progressRunId.replace(/^model-lab:/, '');
+  if (!selectedActive && !activeId) return;
   modelLabState.polling = window.setTimeout(function () {
     modelLabState.polling = 0;
-    modelLabFetch(modelLabState.run.id).catch(function (error) {
+    // Keep the server-owned active run current without changing the selected
+    // historical run or introducing another polling cycle.
+    var request = selectedActive
+      ? modelLabFetch(selected.id)
+      : modelLabRequest('/app/model-lab?run=' + encodeURIComponent(activeId)).then(function (payload) {
+          modelLabPublishProgress(payload.run);
+          modelLabSchedulePoll();
+        });
+    request.catch(function (error) {
       reportConsoleError('Model Lab', error);
     });
   }, 1500);

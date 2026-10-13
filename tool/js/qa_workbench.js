@@ -1877,6 +1877,7 @@
     conceptWrap.appendChild(conceptInput);
     var conceptButton = qaCreateButton(qaWorkbenchState.conceptSession ? 'Stop concept check' : 'Check selection',
       '', qaWorkbenchState.conceptSession ? 'concept-stop' : 'concept-run');
+    conceptButton.disabled = !!qaWorkbenchState.conceptPreflightPending;
     conceptWrap.appendChild(conceptButton);
     var conceptNote = document.createElement('div');
     conceptNote.className = 'qa-deep-scan-note';
@@ -2161,8 +2162,11 @@
       }
       var check = qaCreateButton(active && qaWorkbenchState.conceptSession ? 'Investigating…' :
         (active && active.finished ? 'Run check again' : 'Investigate'), 'qa-primary', 'check-finding-concept', finding.id);
-      check.disabled = !!qaWorkbenchState.conceptSession || !(finding.candidates || []).length;
+      check.disabled = !!qaWorkbenchState.conceptSession || !!qaWorkbenchState.conceptPreflightPending || !(finding.candidates || []).length;
       actions.appendChild(check);
+      if (!(finding.candidates || []).length) {
+        actions.appendChild(qaCreateButton('Check whole selection', '', 'check-finding-full', finding.id));
+      }
     } else if (finding.files && finding.files.length) {
       var primaryLabel = (finding.category === 'captioning' || (finding.patches || []).length) ? 'Open Caption Assist'
         : finding.utilityTab === 'duplicates' ? 'Inspect exact duplicates'
@@ -3038,6 +3042,14 @@
       // Explicit user intent starts the existing progressive scan; review follows
       // saved and arriving findings without introducing a second QA engine.
       if (!qaWorkbenchState.deepScanSessionActive) qaRunDeepScan();
+      return;
+    }
+    if (action === 'check-finding-full') {
+      var concern = qaWorkbenchState.findings.find(function (finding) { return finding.id === value; });
+      if (!concern || !concern.concept) return;
+      qaWorkbenchState.investigation = null;
+      qaWorkbenchState.conceptQuery = concern.concept;
+      qaRunConceptCheck();
       return;
     }
     if (action === 'check-finding-concept') {

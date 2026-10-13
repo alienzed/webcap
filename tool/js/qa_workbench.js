@@ -861,12 +861,26 @@
     });
   }
 
+  function qaPublishConceptActivity(session, phase) {
+    window.publishActivityProgress({
+      id: session.activityId, kind: 'qa-concept-check', title: 'QA Concept Check',
+      status: session.stopped ? 'stopping' : 'running',
+      phase: phase || 'Checking concept', detail: session.concept,
+      progressLabel: session.index + ' / ' + session.items.length + ' items examined',
+      progress: { completed: session.index, total: session.items.length },
+      startedAt: session.activityStartedAt, childJobId: session.jobId
+    });
+  }
+  function qaFinishConceptActivity(session, status) {
+    window.finishActivityProgress(session.activityId, status);
+  }
   function qaStopConceptCheck(silent) {
     qaWorkbenchState.conceptPreflightToken += 1;
     qaWorkbenchState.conceptPreflightPending = false;
     var session = qaWorkbenchState.conceptSession;
     if (!session) return;
     session.stopped = true;
+    qaFinishConceptActivity(session, 'stopped');
     qaWorkbenchState.conceptSession = null;
     qaWorkbenchState.conceptStatus = 'Concept check stopped · completed findings retained.';
     if (session.jobId) {
@@ -957,13 +971,15 @@
       concept: concept, model: model, items: available,
       vocabulary: vocabulary, missingCount: missingCount,
       signatures: qaConceptInputSignatures(items), index: 0,
-      jobId: '', stopped: false
+      jobId: '', stopped: false,
+      activityId: 'qa-concept:' + String(Date.now()), activityStartedAt: Date.now() / 1000
     };
     // Preserve prior independently validated actions; only the same question is replaced.
     // Do not discard previously validated actions until their replacement succeeds.
     qaMergeFindings();
     qaSyncFocusReview();
     qaWorkbenchState.conceptSession = session;
+    qaPublishConceptActivity(session, 'Preparing');
     reportConsoleInfo('QA Concept Check', 'Started "' + concept + '" for ' + available.length + '/' + items.length + ' items with cached Sight' + (missingCount ? '; ' + missingCount + ' need Sight.' : '.') );
     function current() {
       return qaWorkbenchState.conceptSession === session && !session.stopped &&
@@ -978,6 +994,7 @@
         return Promise.resolve();
       }
       if (session.index >= session.items.length) {
+        qaFinishConceptActivity(session, 'completed');
         qaWorkbenchState.conceptSession = null;
         if (session.investigationId && qaWorkbenchState.investigation &&
             qaWorkbenchState.investigation.id === session.investigationId) {
@@ -1002,6 +1019,7 @@
       }
       var batch = session.items.slice(session.index, session.index + 4);
       qaWorkbenchState.conceptStatus = 'Concept check · ' + session.index + '/' + session.items.length + ' examined';
+      qaPublishConceptActivity(session, 'Reviewing batch');
       // Polling must not replace the recommendation browser while the user is reading it.
       var progress = document.querySelector('#qa-workbench .qa-recommendation-status, #qa-workbench .qa-deep-scan-note');
       if (progress) progress.textContent = qaWorkbenchState.conceptStatus;
@@ -1022,6 +1040,7 @@
         }
         session.jobId = String(payload.job && payload.job.jobId || '');
         if (!session.jobId) throw new Error('Concept QA did not queue a Director job.');
+        qaPublishConceptActivity(session, 'Director review');
         return qaWaitForConceptJob(payload.job);
       }).then(function (job) {
         if (!current() || !job) return;
@@ -1096,6 +1115,7 @@
           };
         });
         session.index += batch.length;
+        qaPublishConceptActivity(session, 'Batch reviewed');
         qaMergeFindings();
         qaSyncFocusReview();
         qaSaveReview();
@@ -1114,6 +1134,7 @@
           qaWorkbenchState.investigation.error = String(err.message || err);
         }
         qaWorkbenchState.conceptStatus = 'Concept check failed at ' + session.index + '/' + session.items.length + ' · see Console.';
+        qaFinishConceptActivity(session, 'failed');
         reportConsoleError('QA Concept Check', err);
         renderQaWorkbench();
       });

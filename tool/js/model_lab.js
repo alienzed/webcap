@@ -3,7 +3,8 @@ var modelLabState = {
   polling: 0,
   models: { visions: [], directors: [] },
   runs: [],
-  run: null
+  run: null,
+  progressRunId: ''
 };
 
 function modelLabEl(id) {
@@ -138,8 +139,51 @@ function modelLabRunProgress(run) {
   return bits.join(' · ');
 }
 
+// The server owns Model Lab; this is only its existing run snapshot
+// projected into the browser's shared Activity presentation.
+function modelLabPublishProgress(run) {
+  var id = run && run.id ? 'model-lab:' + String(run.id) : '';
+  var status = String(run && run.status || '');
+  // Browsing a different run does not stop the server-owned active run.
+  if (modelLabState.progressRunId && modelLabState.progressRunId !== id) return;
+  if (modelLabState.progressRunId && status !== 'running') {
+    window.finishActivityProgress(modelLabState.progressRunId,
+      status === 'error' ? 'failed' : (status === 'completed' ? 'completed' : 'stopped'));
+    modelLabState.progressRunId = '';
+  }
+  if (!id || status !== 'running') return;
+
+  var progress = run.progress || {};
+  var attempts = Array.isArray(run.attempts) ? run.attempts : [];
+  var current = attempts.find(function (attempt) { return attempt.status === 'running'; });
+  var summary = run.summary || {};
+  var completed = Number(summary.completed || 0);
+  var failed = Number(summary.failed || 0);
+  var skipped = Number(summary.skipped || 0);
+  var interrupted = Number(summary.interrupted || 0);
+  var counts = [completed + ' completed'];
+  if (failed) counts.push(failed + ' failed');
+  if (skipped) counts.push(skipped + ' skipped');
+  if (interrupted) counts.push(interrupted + ' interrupted');
+  var start = Date.parse(run.startedAt || '');
+  var detail = [progress.currentModelRef, progress.currentFile].filter(Boolean).join(' · ');
+  window.publishActivityProgress({
+    id: id, kind: 'model-lab', title: 'Model Lab',
+    status: 'running',
+    phase: [String(progress.phase || 'Running').replace(/_/g, ' '),
+      progress.currentKind ? modelLabAttemptLabel(progress.currentKind) : ''].filter(Boolean).join(' · '),
+    detail: detail,
+    progressLabel: counts.join(' · '),
+    progress: null,
+    startedAt: isFinite(start) && start > 0 ? start / 1000 : 0,
+    childJobId: String(current && current.jobId || '')
+  });
+  modelLabState.progressRunId = id;
+}
+
 function modelLabRenderRun() {
   var run = modelLabState.run;
+  modelLabPublishProgress(run);
   var results = modelLabEl('model-lab-results');
   var activity = modelLabEl('model-lab-activity');
   var badge = modelLabEl('model-lab-summary-status');

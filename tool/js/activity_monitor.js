@@ -125,9 +125,11 @@
           window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
         } else if (item.kind === 'set-intelligence') {
           window.openSetIntelligence();
-        } else if (item.kind === 'deep-qa') {
+        } else if (item.kind === 'deep-qa' || item.kind === 'qa-concept-check') {
           window.setWorkspaceSurface('reviewOutput');
           window.setReviewDetailTab('qa');
+        } else if (item.kind === 'model-lab') {
+          window.openDiagnosticsModal('model-lab');
         } else if (item.original) {
           openItem(item.original);
         } else {
@@ -774,24 +776,28 @@
     } else {
       active.forEach(function (item) {
         var managedSnapshot = managedProgressSnapshot(item);
-        if (managedSnapshot || item.kind === 'director-diagnostics') {
+        // Locally published operation snapshots are already ProgressCard-shaped.
+        var localSnapshot = !!state.localProgress[String(item.id)];
+        if (managedSnapshot || localSnapshot) {
           var progressItem = managedSnapshot || item;
           var card = retainedProgressCards[String(progressItem.id)] || ProgressCard.create();
-          ProgressCard.update(card, progressItem, { onOpen: function () {
+          var canOpen = item.kind !== 'vocabulary-discovery' && item.kind !== 'vision-tag-assist';
+          ProgressCard.update(card, progressItem, { onOpen: canOpen ? function () {
             if (item.kind === 'director-diagnostics') {
               setOpen(false);
               window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
             } else if (item.kind === 'set-intelligence') {
               setOpen(false);
               window.openSetIntelligence();
-            } else if (item.kind === 'deep-qa') {
+            } else if (item.kind === 'deep-qa' || item.kind === 'qa-concept-check') {
               setOpen(false);
               window.setWorkspaceSurface('reviewOutput');
               window.setReviewDetailTab('qa');
-            } else if (item.kind === 'vocabulary-discovery') {
+            } else if (item.kind === 'model-lab') {
               setOpen(false);
+              window.openDiagnosticsModal('model-lab');
             } else openItem(item);
-          } });
+          } : null });
           nowRows.push(card);
         } else {
           var existingCard = retainedActiveCards[activeCardKey(item)];

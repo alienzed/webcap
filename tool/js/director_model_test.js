@@ -246,12 +246,10 @@ function directorModelTestPublishProgress(status) {
   var number = Number(directorModelTestState.currentModelNumber || 0);
   var total = isAssessment ? Number(directorModelTestState.calibrationTotal || 0) :
     (directorModelTestState.session && directorModelTestState.session.models || []).length;
-  var completed = isAssessment ? Number(directorModelTestState.completedProbes || 0) :
-    (directorModelTestState.session && directorModelTestState.session.runs || []).length;
-  var upper = isAssessment ? Number(directorModelTestState.maximumProbes || 0) : total;
+  var completed = (directorModelTestState.session && directorModelTestState.session.runs || []).length;
   var completedModels = Number(directorModelTestState.completedModels || 0);
   var label = isAssessment
-    ? (number ? 'Model ' + number + ' / ' + total + ' · ' + completed + ' probes complete (up to two per model)' : total + ' models selected')
+    ? (number ? 'Model ' + number + ' / ' + total + ' · one writing test, optional retry' : total + ' models selected')
     : completed + ' / ' + total + ' models complete';
   var phase = directorModelTestState.stopRequested ? 'Stopping' :
     directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued');
@@ -267,7 +265,7 @@ function directorModelTestPublishProgress(status) {
     progressLabel: label,
     progress: isAssessment
       ? (total > 0 ? {
-          completed: Math.min(total - 0.01, completedModels + (directorModelTestState.currentJobId ? 0 : 0)),
+          completed: Math.min(total - 0.01, completedModels),
           total: total, totalIsUpperBound: true
         } : null)
       : (total > 0 ? { completed: completed, total: total } : null),

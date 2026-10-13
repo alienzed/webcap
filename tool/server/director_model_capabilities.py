@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 
@@ -26,7 +27,7 @@ def _load_capabilities(path=_CAPABILITIES_PATH):
         ):
             if field in capability and (type(capability[field]) is not int or capability[field] <= 0):
                 raise ValueError(f"Director capability entry {index} has invalid {field}.")
-        for field in ("contextLabel", "contextKind", "sourceUrl"):
+        for field in ("contextLabel", "contextKind", "sourceUrl", "verifiedAt"):
             if field in capability and not isinstance(capability[field], str):
                 raise ValueError(f"Director capability entry {index} has invalid {field}.")
         if "notes" in capability and (
@@ -50,7 +51,7 @@ def capability_for_model(model_ref="", model_id="", label=""):
         return None
     for capability in ADVERTISED_CAPABILITIES:
         matches = capability.get("match") if isinstance(capability.get("match"), list) else []
-        if any(str(token or "").lower() in haystack for token in matches):
+        if any(re.search(r"(?<![a-z0-9])" + re.escape(token.lower()) + r"(?![a-z0-9])", haystack) for token in matches):
             value = {key: item for key, item in capability.items() if key != "match"}
             return json.loads(json.dumps(value))
     return None

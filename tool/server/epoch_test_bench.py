@@ -1121,16 +1121,17 @@ def _parse_wildcard_nodes(source):
                 return nodes, position
 
             if char == "{":
-                if literal_start < position:
-                    nodes.append(("literal", text[literal_start:position]))
                 try:
-                    options, position = parse_group(position)
+                    options, next_position = parse_group(position)
                 except ValueError:
                     # An unmatched opening brace is literal text. A later valid
                     # group can still contribute to the session summary.
                     position += 1
                     continue
+                if literal_start < position:
+                    nodes.append(("literal", text[literal_start:position]))
                 nodes.append(("group", options))
+                position = next_position
                 literal_start = position
                 continue
 

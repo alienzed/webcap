@@ -1832,7 +1832,7 @@ def _calibration_runtime_base(tmp_path, context_size=None, max_tokens=None):
     }
 
 
-def test_chat_uses_calibrated_limits_when_director_settings_are_auto(monkeypatch, tmp_path):
+def test_chat_auto_settings_do_not_consult_historical_calibration(monkeypatch, tmp_path):
     observed = {}
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -1841,12 +1841,7 @@ def test_chat_uses_calibrated_limits_when_director_settings_are_auto(monkeypatch
     )
     monkeypatch.setattr(
         "tool.server.director_model_calibration.get_profile",
-        lambda model_ref: {
-            "modelRef": model_ref,
-            "contextMode": "calibrated",
-            "contextSize": 16384,
-            "maxTokens": 4096,
-        },
+        lambda _model_ref: pytest.fail("Historical profiles must not constrain Auto inference."),
     )
     monkeypatch.setattr(
         storyboard_llm_runtime,
@@ -1871,9 +1866,9 @@ def test_chat_uses_calibrated_limits_when_director_settings_are_auto(monkeypatch
         gpu_reserved=True,
     )
 
-    assert observed["context"] == 16384
-    assert observed["payload"]["max_tokens"] == 4096
-    assert result["contextSize"] == 16384
+    assert observed["context"] is None
+    assert "max_tokens" not in observed["payload"]
+    assert result["text"] == "done"
 
 
 def test_explicit_director_settings_take_priority_over_calibration(monkeypatch, tmp_path):

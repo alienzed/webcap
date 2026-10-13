@@ -1502,6 +1502,25 @@ def qa_deep_scan_route():
             contract = build_set_review_request(
                 items, data.get("vocabulary"), data.get("trainingFocus"), data.get("primer")
             )
+            if data.get("preflight") is True:
+                # Deliberately approximate: not a tokenizer or a hard capacity gate.
+                import math
+                prompt_tokens = math.ceil(len(contract["prompt"]) / 3)
+                reserve = 1024
+                model_ref = str(data.get("model") or "").strip()
+                settings = app_config.load_config_from_disk() or {}
+                director = ((settings.get("storyboard") or {}).get("director") or {})
+                context_size = director.get("context_size")
+                if context_size is None:
+                    from .director_model_calibration import get_profile
+                    profile = get_profile(model_ref)
+                    if isinstance(profile, dict) and profile.get("contextMode") == "calibrated":
+                        context_size = profile.get("contextSize")
+                context_size = int(context_size or 0)
+                return jsonify({
+                    "ok": True, "estimatedTokens": prompt_tokens + reserve,
+                    "contextTokens": context_size, "estimateKind": "conservative_characters",
+                })
             job = enqueue_llm("qa", str(data.get("model") or "").strip(), contract,
                               context={}, label="QA Set Review")
             return jsonify({"ok": True, "job": job}), 202

@@ -796,7 +796,8 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-width: 0;
+  flex: 0 0 210px;
+  white-space: nowrap;
 }
 
 .director-model-assessment-group-heading::before {
@@ -816,6 +817,8 @@
 }
 
 .director-model-assessment-group > summary .app-settings-help {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   text-align: right;
 }
@@ -1101,6 +1104,10 @@
   .director-model-assessment-group > summary {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .director-model-assessment-group-heading {
+    flex: 0 0 auto;
   }
 
   .director-model-assessment-group > summary .app-settings-help {

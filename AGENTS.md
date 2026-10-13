@@ -77,6 +77,16 @@ When in doubt, ask:
 - What is the smallest explicit change?
 - Is this solving a real user workflow cost, or just reorganizing code?
 
+## Capability Before Design
+
+A concrete example can make the desired outcome obvious without proving the system can deliver it.
+
+- Identify the hard capability a proposed workflow depends on: what must actually be observed, inferred, calculated, or controlled, and which component would do it.
+- Distinguish what a human can recognize from what the available code, models, libraries, APIs, hardware, and input data can reliably support. A prompt or algorithmic sketch is not proof of capability.
+- Verify the critical capability against actual interfaces, constraints, or representative behavior before designing around it. When feasibility is materially uncertain, test the smallest meaningful case first rather than building orchestration on an assumption.
+- Be explicit about what is demonstrated, plausible but unverified, or unsupported. Do not promise reliability from a compelling example or bury a capability gap behind extra heuristics and workflow complexity.
+- Design toward achievable outcomes; simplify or adjust the approach when a core capability is missing. Equally, do not artificially restrict capabilities that are already demonstrated.
+
 ## Error Handling
 
 Fail loudly when required wiring or invariants are broken. Functionality is all that matters; a guard that prevents something from working is an additional failure mode, not a solution.

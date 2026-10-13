@@ -894,13 +894,14 @@ function syncCaptionAssistCandidateUi() {
   var panelVisible = focusVisible || assistVisible;
   // Standard Focus Caption and one-item Assist share the editor dock.
   // QA Focus Review retains its workbench overlay.
-  var editorDocked = !!(panelVisible && !isFocusedQaReviewMode());
+  var focusOverlay = !!(focusVisible && isFocusedQaReviewMode());
+  var editorDocked = !!(panelVisible && !focusOverlay);
   var pending = panelVisible && isCaptionAssistRunning();
   var omittedAssignments = visible && Array.isArray(candidate.omittedAssignments) ? candidate.omittedAssignments : [];
   var missingGroups = visible && !isFocusedQaReviewMode() ? getCaptionAssistMissingGroups(mediaKey) : [];
 
   panel.classList.toggle('hidden', !panelVisible);
-  panel.classList.toggle('is-focus-caption', focusVisible);
+  panel.classList.toggle('is-focus-caption', focusOverlay);
   panel.classList.toggle('is-editor-docked', editorDocked);
   panel.querySelector('.editor-caption-candidate-dialog').setAttribute('aria-modal', editorDocked ? 'false' : 'true');
   if (editorDocked) {

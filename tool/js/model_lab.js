@@ -144,8 +144,21 @@ function modelLabRunProgress(run) {
 function modelLabPublishProgress(run) {
   var id = run && run.id ? 'model-lab:' + String(run.id) : '';
   var status = String(run && run.status || '');
-  // Browsing a different run does not stop the server-owned active run.
-  if (modelLabState.progressRunId && modelLabState.progressRunId !== id) return;
+  // Browsing history must not stop the active run. When a *new* run is
+  // started, however, retire a completed predecessor before following it.
+  if (modelLabState.progressRunId && modelLabState.progressRunId !== id) {
+    if (status !== 'running') return;
+    var previousId = modelLabState.progressRunId.replace(/^model-lab:/, '');
+    var previous = modelLabState.runs.find(function (row) {
+      return String(row.id || '') === previousId;
+    });
+    if (previous && previous.active) return;
+    var previousStatus = String(previous && previous.status || '');
+    window.finishActivityProgress(modelLabState.progressRunId,
+      previousStatus === 'error' ? 'failed' :
+        (previousStatus === 'completed' ? 'completed' : 'stopped'));
+    modelLabState.progressRunId = '';
+  }
   if (modelLabState.progressRunId && status !== 'running') {
     window.finishActivityProgress(modelLabState.progressRunId,
       status === 'error' ? 'failed' : (status === 'completed' ? 'completed' : 'stopped'));

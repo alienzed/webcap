@@ -671,7 +671,7 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
         "\n\n[OUTPUT]\nReturn JSON matching the schema, with a brief summary and no more than five findings."
     )
     return {
-        "operation": "qa_set_review", "output": "json", "prompt": prompt,
+        "operation": "qa_set_review", "output": "json", "prompt": prompt, "max_tokens": 2048,
         "response_schema": {
             "type": "object", "additionalProperties": False,
             "required": ["summary", "findings"],

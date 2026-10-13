@@ -72,7 +72,7 @@ def test_llm_stop_uses_shared_reset_and_existing_diagnostics_stop_state():
     assert "operation: 'stop_or_cancel'" not in diagnostics
 
 
-def test_director_assessment_activity_shows_probe_progress_without_rebuilding_card():
+def test_director_assessment_activity_uses_shared_renderer_and_probe_counts():
     script = (ROOT / 'tool' / 'js' / 'director_model_test.js').read_text(encoding='utf-8')
 
     assert 'currentProbeLabel' in script
@@ -81,9 +81,10 @@ def test_director_assessment_activity_shows_probe_progress_without_rebuilding_ca
     assert "' of up to '" in script
     assert 'directorModelTestStartActivityClock();' in script
     assert 'directorModelTestStopActivityClock();' in script
-    assert "host.querySelector('.director-model-test-activity-card')" in script
-    assert "card.querySelector('[data-diagnostic-stage]').textContent = stage" in script
-    assert 'number / total * 100' in script  # Benchmark retains its own model-based progress.
+    assert 'ProgressCard.create()' in script
+    assert 'ProgressCard.update(card, snapshot)' in script
+    assert 'number / total * 100' not in script
+
 
 
 def test_shared_progress_card_is_loaded_before_consumers():

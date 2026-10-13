@@ -1319,24 +1319,16 @@ def _match_top_level_wildcard_selections(nodes, resolved, node_index=0, position
 
 
 def _top_level_wildcard_spans(source):
-    text = str(source or "")
+    starts = []
     spans = []
-    for index, char in enumerate(text):
-        if char != "{":
-            continue
-        depth = 0
-        for end in range(index, len(text)):
-            if text[end] == "{":
-                depth += 1
-            elif text[end] == "}":
-                depth -= 1
-                if depth == 0:
-                    spans.append((index, end + 1))
-                    break
-        # Nested starts are not top-level; only a group beginning outside a
-        # previously accepted group belongs in the summary.
+    for index, char in enumerate(str(source or "")):
+        if char == "{":
+            starts.append(index)
+        elif char == "}" and starts:
+            spans.append((starts.pop(), index + 1))
+    # Ignore unmatched braces; prefer complete outer groups over nested ones.
     top_level = []
-    for span in spans:
+    for span in sorted(spans):
         if not top_level or span[0] >= top_level[-1][1]:
             top_level.append(span)
     return top_level

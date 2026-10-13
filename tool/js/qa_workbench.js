@@ -2423,13 +2423,15 @@
     if (folderChanged || scopeChanged || inputsChanged || !qaWorkbenchState.deepScanInputSignature) {
       qaWorkbenchState.browseIndex = 0;
       qaWorkbenchState.statusMessage = '';
-      if (qaWorkbenchState.deepScanSessionActive && (folderChanged || scopeChanged)) {
-        qaInvalidateDeepScanSession('Deep QA stopped because the review scope changed.');
+      if (folderChanged || scopeChanged || !qaWorkbenchState.deepScanInputSignature) {
+        if (qaWorkbenchState.deepScanSessionActive && (folderChanged || scopeChanged)) {
+          qaInvalidateDeepScanSession('Deep QA stopped because the review scope changed.');
+        }
         qaRestoreReview(inputSignature);
-      } else if (qaWorkbenchState.deepScanSessionActive) {
+      } else if (inputsChanged) {
+        // Same Set/selection: do not reload storage over an active Concept Check.
+        // Reconcile changed annotations in memory and retain other valid actions.
         qaReconcileAiFindingsToCurrentInputs();
-      } else {
-        qaRestoreReview(inputSignature);
       }
       if (!qaWorkbenchState.deepScanJobId && !qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStatus) {
         qaWorkbenchState.deepScanStatus = '';

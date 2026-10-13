@@ -836,8 +836,32 @@
       qaWorkbenchState.investigation = null;
     }
     var conceptItems = qaBuildConceptItems(items);
-    var available = conceptItems.filter(function (row) { return !!row.analysis.visionSight; });
-    var missingCount = conceptItems.length - available.length;
+    var available = [];
+    var missingCount = 0;
+    // Set Intelligence owns freshness; never treat a locally cached block as current without checking.
+    qaWorkbenchState.conceptStatus = 'Checking saved Sight freshness…';
+    renderQaWorkbench();
+    qaRequestJson('/fs/vision_schema?folder=' + encodeURIComponent(String(state.folder || '')) +
+      '&model=' + encodeURIComponent(String(getCaptionVisionModelId() || ''))).then(function (status) {
+      if (qaWorkbenchState.conceptSession) return;
+      var currentFiles = {};
+      (status.items || []).forEach(function (row) {
+        if (row.structured) currentFiles[row.file] = true;
+      });
+      available = conceptItems.filter(function (row) {
+        return !!row.analysis.visionSight && !!currentFiles[row.fileName];
+      });
+      missingCount = conceptItems.length - available.length;
+      qaBeginConceptCheck(concept, model, items, available, missingCount, investigation);
+    }).catch(function (err) {
+      qaWorkbenchState.conceptStatus = 'Sight freshness check failed · see Console.';
+      reportConsoleError('QA Concept Check · Sight freshness', err);
+      renderQaWorkbench();
+    });
+  }
+
+  function qaBeginConceptCheck(concept, model, items, available, missingCount, investigation) {
+    if (qaWorkbenchState.conceptSession) return;
     if (!available.length) {
       qaWorkbenchState.conceptStatus = 'No cached Sight for this selection. Run Set Intelligence explicitly first.';
       renderQaWorkbench();

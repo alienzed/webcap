@@ -677,10 +677,30 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
         }
     }
     evidence = sight_evidence if isinstance(sight_evidence, dict) else {}
+    rows = [row for row in (evidence.get("evidence") or []) if isinstance(row, dict)]
+    # Reserve some of the fixed 160-entry budget for singleton details that
+    # frequency-sorted vocabulary mining otherwise hides. Never infer absence
+    # from evidence that did not fit the prompt.
+    rare = [row for row in rows if int(row.get("count") or 0) == 1
+            and row.get("category") in {"quality", "detail", "thing"}]
+    selected = rows[:120]
+    used = {(row.get("category"), row.get("label")) for row in selected}
+    for row in rare:
+        key = (row.get("category"), row.get("label"))
+        if key not in used and len(selected) < 160:
+            selected.append(row)
+            used.add(key)
+    for row in rows:
+        if len(selected) >= 160:
+            break
+        key = (row.get("category"), row.get("label"))
+        if key not in used:
+            selected.append(row)
+            used.add(key)
     visual = [
         {"category": _clean(row.get("category")), "label": _clean(row.get("label")),
          "count": int(row.get("count") or 0), "examples": list(row.get("examples") or [])[:3]}
-        for row in (evidence.get("evidence") or [])[:160] if isinstance(row, dict)
+        for row in selected
     ]
     payload = {"trainingFocus": _clean(training_focus), "captionPrimer": str(primer or "").strip(),
                "vocabulary": groups, "items": compact,

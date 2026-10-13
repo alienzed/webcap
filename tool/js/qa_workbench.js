@@ -85,6 +85,7 @@
     folderKey: '',
     scopeKey: '',
     parentFocusSet: undefined,
+    returnTrainingFiles: null,
     returnFindingId: '',
     statusMessage: '',
     externalAnalysisAttemptKey: '',
@@ -121,6 +122,11 @@
   }
 
   function qaGetTrainingFileNames() {
+    // Opening QA evidence creates a temporary Focus Set, not a new QA review scope.
+    if (state.focusSet && state.focusSet.reportType === 'qa' &&
+        qaWorkbenchState.parentFocusSet !== undefined && qaWorkbenchState.returnTrainingFiles) {
+      return qaWorkbenchState.returnTrainingFiles.slice();
+    }
     return getVisibleMediaSelectionForTraining();
   }
 
@@ -1002,7 +1008,10 @@
           qaWorkbenchState.investigation.examined = session.items.length;
           qaWorkbenchState.investigation.missing = missingCount;
           qaWorkbenchState.investigation.actions = qaWorkbenchState.conceptFindings.filter(function (finding) {
-            return finding.conceptQuestion === session.concept;
+            return finding.conceptQuestion === session.concept &&
+              (finding.files || []).some(function (file) {
+                return session.selectedFiles.indexOf(file) !== -1;
+              });
           }).length;
           qaWorkbenchState.investigation.verdict = qaWorkbenchState.investigation.verdicts.some(function (v) {
             return v.status === 'supported';
@@ -1920,7 +1929,7 @@
     var intro = document.createElement('p');
     intro.textContent = undisposed.length
       ? 'Investigations are unverified hypotheses; only concrete corrections enter QA Focus Review.'
-      : (evaluationIncomplete ? 'No current set-wide Deep QA review. Existing observations remain in Reports.'
+      : (evaluationIncomplete ? 'No current Deep QA review for this training selection. Reviews of other selections remain saved.'
         : 'No outstanding findings from the current checks. Observations remain in Reports.');
     copy.appendChild(h2);
     copy.appendChild(intro);
@@ -2211,17 +2220,29 @@
     var why = document.createElement('p');
     why.className = 'qa-recommendation-why';
     why.textContent = finding.why;
-    // Keep the short diagnosis visible; explanation and metrics are optional.
+    // Preserve the complete diagnosis, but keep secondary reasoning expandable.
+    var active = finding.concept && qaWorkbenchState.investigation &&
+      qaWorkbenchState.investigation.id === finding.id ? qaWorkbenchState.investigation : null;
+    var finished = !!(active && active.finished);
+    var dismissed = finished && active.verdict === 'dismissed';
+    var supported = finished && active.verdict === 'supported';
+    var resultTitle = dismissed ? 'Hypothesis not supported' :
+      supported ? (active.actions ? 'Potential corrections identified' : 'Concern supported; no correction identified') :
+      'Check inconclusive';
+    var resultDetail = dismissed ? 'The evidence did not substantiate this concern.' :
+      supported ? (active.actions ? 'Review the suggested actions before making changes.' :
+        'The concern has supporting evidence, but no actionable edit was identified.') :
+      'Evidence was insufficient to confirm or dismiss the concern.';
 
     if (finding.concept) {
       var question = document.createElement('p');
       question.className = 'qa-investigation-question';
       question.textContent = 'Investigate: ' + finding.concept;
-      article.appendChild(question);
       var condition = document.createElement('p');
       condition.className = 'qa-muted';
       condition.textContent = 'Dismiss if: ' + (finding.dismissIf || 'Visual evidence does not support the concern.');
-      article.appendChild(condition);
+      // Both lines are retained in the explanation panel below.
+      var explanation = [question, condition];
     }
     if (finding.files && finding.files.length) {
       var evidenceHeading = document.createElement('div');
@@ -2259,13 +2280,16 @@
     var actions = document.createElement('div');
     actions.className = 'qa-recommendation-actions';
     if (finding.concept) {
-      var active = qaWorkbenchState.investigation && qaWorkbenchState.investigation.id === finding.id
-        ? qaWorkbenchState.investigation : null;
-      if (active && active.finished) {
-        var outcome = document.createElement('p');
+      if (finished) {
+        var outcome = document.createElement('div');
         outcome.className = 'qa-investigation-result';
-        outcome.textContent = (active.verdict || 'inconclusive') + ' · ' + active.examined + ' items checked · ' + active.actions +
-          ' actionable findings · ' + active.missing + ' without Sight (unchecked).';
+        var verdictHeading = document.createElement('strong');
+        verdictHeading.textContent = resultTitle;
+        outcome.appendChild(verdictHeading);
+        var outcomeDetail = document.createElement('span');
+        outcomeDetail.textContent = resultDetail + ' · ' + active.examined + ' checked · ' +
+          active.actions + ' actionable · ' + active.missing + ' without Sight.';
+        outcome.appendChild(outcomeDetail);
         article.appendChild(outcome);
       } else if (active && active.error) {
         var failure = document.createElement('p');
@@ -2273,8 +2297,19 @@
         failure.textContent = 'Investigation failed: ' + active.error;
         article.appendChild(failure);
       }
+      if (finished) {
+        if (dismissed) actions.appendChild(qaCreateButton('Dismiss & next', 'qa-primary', 'dispose', 'keep'));
+        else if (supported && active.actions) actions.appendChild(qaCreateButton('View findings', 'qa-primary', 'view', 'report'));
+        else {
+          var hasNext = recommendations.slice(qaWorkbenchState.browseIndex + 1).some(function (row) {
+            return !qaWorkbenchState.dispositions[row.id];
+          });
+          actions.appendChild(qaCreateButton(hasNext ? 'Next recommendation' : 'Back to QA',
+            'qa-primary', hasNext ? 'browse-next-index' : 'view', hasNext ? undefined : 'overview'));
+        }
+      }
       var check = qaCreateButton(active && qaWorkbenchState.conceptSession ? 'Investigating…' :
-        (active && active.finished ? 'Run check again' : 'Investigate'), 'qa-primary', 'check-finding-concept', finding.id);
+        (finished ? 'Run check again' : 'Investigate'), finished ? '' : 'qa-primary', 'check-finding-concept', finding.id);
       check.disabled = !!qaWorkbenchState.conceptSession || !!qaWorkbenchState.conceptPreflightPending || !(finding.candidates || []).length;
       actions.appendChild(check);
       if (!(finding.candidates || []).length) {
@@ -2286,7 +2321,7 @@
         : 'Inspect ' + finding.files.length;
       actions.appendChild(qaCreateButton(primaryLabel, 'qa-primary', 'inspect-finding', finding.id));
     }
-    actions.appendChild(qaCreateButton('Dismiss', '', 'dispose', 'keep'));
+    if (!dismissed) actions.appendChild(qaCreateButton('Dismiss', '', 'dispose', 'keep'));
 
     var nav = document.createElement('div');
     nav.className = 'qa-recommendation-nav';
@@ -2298,18 +2333,25 @@
     nav.appendChild(next);
     actions.appendChild(nav);
     article.appendChild(actions);
-    // Keep visual evidence visible while browsing. Detailed explanation stays collapsed.
+    // Lead with the decision. Keep candidate evidence visible until a check finishes.
     article.insertBefore(summary, actions);
-    if (finding.files && finding.files.length) {
-      article.insertBefore(evidenceHeading, actions);
-      article.insertBefore(strip, actions);
+    if (!finished && finding.files && finding.files.length) {
+      article.appendChild(evidenceHeading);
+      article.appendChild(strip);
     }
     var details = document.createElement('details');
     details.className = 'qa-recommendation-details';
     var detailsLabel = document.createElement('summary');
-    detailsLabel.textContent = 'Why / evidence';
+    detailsLabel.textContent = finished ? 'Original hypothesis & evidence' : 'Why / investigation criteria';
     details.appendChild(detailsLabel);
+    if (finding.concept) {
+      explanation.forEach(function (element) { details.appendChild(element); });
+    }
     details.appendChild(why);
+    if (finished && finding.files && finding.files.length) {
+      details.appendChild(evidenceHeading);
+      details.appendChild(strip);
+    }
     qaRenderFacts(details, finding);
     article.appendChild(details);
 
@@ -2481,6 +2523,7 @@
       qaWorkbenchState.trainingFocus = '';
       qaWorkbenchState.focusExplicitlyEdited = false;
       qaWorkbenchState.parentFocusSet = undefined;
+      qaWorkbenchState.returnTrainingFiles = null;
       qaWorkbenchState.returnFindingId = '';
     }
     if (qaFocusReviewState.active && (folderChanged || scopeChanged) &&
@@ -3075,6 +3118,7 @@
   function qaSelectFiles(files, source, findingId) {
     var clean = (files || []).filter(Boolean);
     if (!clean.length) return;
+    qaWorkbenchState.returnTrainingFiles = qaGetTrainingFileNames().slice();
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = String(findingId || '');
     qaWorkbenchState.statusMessage = '';
@@ -3084,6 +3128,7 @@
   function qaReviewCaptionFiles(files, source, findingId) {
     var clean = (files || []).filter(Boolean);
     if (!clean.length) return;
+    qaWorkbenchState.returnTrainingFiles = qaGetTrainingFileNames().slice();
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = String(findingId || '');
     qaWorkbenchState.statusMessage = '';
@@ -3119,6 +3164,7 @@
     }
     // Group inspection belongs in the existing Grid: rate, select, or prune.
     // Keep the original selection so Return to QA restores its prior context.
+    qaWorkbenchState.returnTrainingFiles = qaGetTrainingFileNames().slice();
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = finding.id;
     qaWorkbenchState.statusMessage = '';
@@ -3145,6 +3191,7 @@
     var returnToFinding = !!qaWorkbenchState.returnFindingId;
     state.focusSet = parent ? qaCloneFocusSet(parent) : null;
     qaWorkbenchState.parentFocusSet = undefined;
+    qaWorkbenchState.returnTrainingFiles = null;
     qaWorkbenchState.view = returnToFinding ? 'browse' : 'overview';
     updateFocusSetUi();
     renderFileList(ui.filterEl.value);
@@ -3244,7 +3291,8 @@
       return;
     }
     if (action === 'inspect-file') {
-      qaSelectFiles([value], 'QA · Evidence', '');
+      var origin = qaGetRecommendations()[qaWorkbenchState.browseIndex];
+      qaSelectFiles([value], 'QA · Evidence', origin ? origin.id : '');
       return;
     }
     if (action === 'inspect-health') {

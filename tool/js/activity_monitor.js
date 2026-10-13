@@ -648,6 +648,10 @@
       ? String(active.length) + ' active · ' + (unseen ? String(unseen) + ' new' : 'up to date')
       : (unseen ? String(unseen) + ' new this session' : 'Current work and this session');
 
+    var retainedProgressCards = Object.create(null);
+    Array.prototype.forEach.call(host.querySelectorAll('[data-progress-card-id]'), function (card) {
+      retainedProgressCards[card.getAttribute('data-progress-card-id')] = card;
+    });
     host.innerHTML = '';
 
     var nowSection = appendSection(host, 'Now', active.length ? String(active.length) + ' active' : '');
@@ -659,7 +663,7 @@
     } else {
       active.forEach(function (item) {
         if (item.kind === 'director-diagnostics') {
-          var card = ProgressCard.create();
+          var card = retainedProgressCards[String(item.id)] || ProgressCard.create();
           ProgressCard.update(card, item, { onOpen: function () { setOpen(false); window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models'); } });
           nowSection.appendChild(card);
         } else nowSection.appendChild(createActiveCard(item));

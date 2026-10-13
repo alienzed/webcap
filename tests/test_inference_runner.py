@@ -1674,3 +1674,18 @@ def test_inference_dispatch_failure_before_claim_releases_gpu(inference_root, mo
 
     assert execution_queue.resource_owner() == ""
     assert execution_queue.get_job(queued["id"])["status"] == "queued"
+
+
+def test_weight_sweep_job_preserves_strength_in_failure_metadata(inference_root):
+    request = {"modelId": "minimax_h3", "mediaKind": "video", "sweepWeights": [0.6, 1.0]}
+    context = {"folder": "sets/demo", "sessionId": "session1", "candidateKind": "lora",
+               "candidateFile": "epoch10.safetensors", "candidateStrength": 0.6}
+    job = inference_runner.enqueue_test(request, context, deferred=True)
+    stored = execution_queue.get_job(job["id"])
+    assert stored["metadata"]["candidateStrength"] == 0.6
+
+    ordinary = dict(request)
+    ordinary.pop("sweepWeights")
+    normal_job = inference_runner.enqueue_test(ordinary, context, deferred=True)
+    normal_stored = execution_queue.get_job(normal_job["id"])
+    assert "candidateStrength" not in normal_stored["metadata"]

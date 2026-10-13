@@ -341,6 +341,13 @@ def test_session_status_recovers_good_choices_from_imperfect_resolved_prompt(tmp
     assert "wildcardSummaryUnmatched" not in response
 
 
+def test_partial_wildcard_summary_does_not_take_choice_from_wrong_clause():
+    source = "wearing a {red|blue} top and {thong|micro} bottom in {studio|beach}"
+    resolved = "wearing a yellow top and micro bottom in a blue top studio"
+    assert bench._resolved_wildcard_values(source, resolved) == ["micro"]
+    assert not any("blue top" in phrase for phrase in bench._resolved_wildcard_summary(source, resolved))
+
+
 def test_session_status_empty_optional_selection_is_not_an_error(tmp_path):
     session = tmp_path / "session"
     session.mkdir()

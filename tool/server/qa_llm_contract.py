@@ -726,6 +726,9 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
         "Compare observed nouns and properties with approved vocabulary and assigned tags; "
         "prioritize meaningful discoveries left unrepresented, including rare one-item observations.\n"
         "- State why the proposed concept is worth checking and cite specific patterns in the supplied tags or Sight.\n"
+        "- Keep the response compact: summary under 35 words; each title under 12 words; "
+        "concept, why, summary and dismissIf under 35 words each; candidate reasons and individual "
+        "evidence statements under 20 words each. Do not repeat the Set inventory or explain the schema.\n"
         "- The user will fix the highest-value findings and run this again. Return at most five, including zero if nothing matters.\n"
         "- Do not propose caption patches, tag edits, or new vocabulary as if already verified.\n"
         "- Confidence expresses strength of the hypothesis from this input, NOT certainty about any image.\n\n"
@@ -733,7 +736,7 @@ def build_set_review_request(items, vocabulary=None, training_focus="", primer="
         "\n\n[OUTPUT]\nReturn JSON matching the schema, with a brief summary and no more than five findings."
     )
     return {
-        "operation": "qa_set_review", "output": "json", "prompt": prompt, "max_tokens": 2048,
+        "operation": "qa_set_review", "output": "json", "prompt": prompt, "max_tokens": 4096,
         "response_schema": {
             "type": "object", "additionalProperties": False,
             "required": ["summary", "findings"],

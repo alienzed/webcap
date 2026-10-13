@@ -1075,3 +1075,18 @@ def test_pending_media_reselection_waits_for_metadata_hydration():
     assert reselect in refresh
     assert refresh.index(capture) < refresh.index(metadata_refresh)
     assert refresh.index(metadata_refresh) < refresh.index(metadata_apply) < refresh.index(reselect)
+
+
+def test_activity_training_and_storage_use_shared_progress_cards():
+    root = ROOT
+    activity = (root / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    assert "function managedProgressSnapshot(item)" in activity
+    assert "source.overallPercent" in activity
+    assert "snapshot.progress = { completed: epoch, total: epochs }" in activity
+    assert "snapshot.progress = { completed: measured, total: total }" in activity
+    assert "var managed = (Array.isArray(state.payload.active)" in activity
+    assert "managed.concat(localItems())" in activity
+    assert "var managedSnapshot = managedProgressSnapshot(item)" in activity
+    assert "ProgressCard.update(card, progressItem" in activity
+    assert "function reconcileActivityRows(section, wanted)" in activity
+    assert "host.innerHTML = '';" not in activity.split("  function render() {", 1)[1].split("  function refresh() {", 1)[0]

@@ -2223,8 +2223,8 @@
     var finished = !!(active && active.finished);
     var dismissed = finished && active.verdict === 'dismissed';
     var supported = finished && active.verdict === 'supported';
-    var resultTitle = dismissed ? 'No issue confirmed' :
-      supported ? 'Potential corrections identified' : 'No confirmed correction';
+    var resultTitle = dismissed ? 'Hypothesis not supported' :
+      supported ? 'Potential corrections identified' : 'Check inconclusive';
     var resultDetail = dismissed ? 'The evidence did not substantiate this concern.' :
       supported ? 'Review the suggested actions before making changes.' :
       'Evidence was insufficient to confirm or dismiss the concern.';
@@ -2237,7 +2237,6 @@
       condition.className = 'qa-muted';
       condition.textContent = 'Dismiss if: ' + (finding.dismissIf || 'Visual evidence does not support the concern.');
       // Both lines are retained in the explanation panel below.
-      why.appendChild(document.createTextNode(''));
       var explanation = [question, condition];
     }
     if (finding.files && finding.files.length) {
@@ -2295,7 +2294,7 @@
       }
       if (finished) {
         if (dismissed) actions.appendChild(qaCreateButton('Dismiss & next', 'qa-primary', 'dispose', 'keep'));
-        else if (supported && active.actions) actions.appendChild(qaCreateButton('Review suggested fixes', 'qa-primary', 'view', 'overview'));
+        else if (supported && active.actions) actions.appendChild(qaCreateButton('View findings', 'qa-primary', 'view', 'report'));
         else actions.appendChild(qaCreateButton('Next recommendation', 'qa-primary', 'browse-next-index'));
       }
       var check = qaCreateButton(active && qaWorkbenchState.conceptSession ? 'Investigating…' :

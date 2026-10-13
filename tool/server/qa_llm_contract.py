@@ -132,7 +132,7 @@ def _normalize_deterministic_findings(findings, allowed_files):
     return rows
 
 
-def _response_schema(recheck=False):
+def _response_schema(recheck=False, investigate=False):
     finding = {
         "type": "object",
         "additionalProperties": False,
@@ -213,6 +213,12 @@ def _response_schema(recheck=False):
             },
         },
     }
+    if investigate:
+        schema["required"].extend(["investigationStatus", "investigationReason"])
+        schema["properties"]["investigationStatus"] = {
+            "type": "string", "enum": ["supported", "dismissed", "inconclusive"]
+        }
+        schema["properties"]["investigationReason"] = {"type": "string", "minLength": 1}
     if recheck:
         schema["required"].extend(["recheckStatus", "recheckReason"])
         schema["properties"]["recheckStatus"] = {
@@ -338,7 +344,7 @@ def build_request(items, training_focus="", deterministic_findings=None):
 
 
 
-def build_concept_request(items, concept, known_vocabulary=None, recheck_concern=None):
+def build_concept_request(items, concept, known_vocabulary=None, recheck_concern=None, dismiss_if=None):
     """Narrow, cache-only concept investigation; output reuses the Deep QA finding contract."""
     concept = _clean(concept)[:240]
     if not concept:
@@ -354,6 +360,7 @@ def build_concept_request(items, concept, known_vocabulary=None, recheck_concern
             vocabulary.append({"group": name, "alias": _clean(group.get("alias"))[:120], "terms": terms})
         if len(vocabulary) >= 24:
             break
+    dismiss_if = _clean(dismiss_if)[:360]
     concern = None
     if recheck_concern is not None:
         if len(rows) != 1 or not isinstance(recheck_concern, dict):
@@ -410,7 +417,13 @@ def build_concept_request(items, concept, known_vocabulary=None, recheck_concern
             "observation as proof of absence, and do not remove a user tag without affirmative contrary evidence. "
             "If Sight is missing or inconclusive, do not invent a visual verdict. "
             "Zero findings is valid; do not manufacture a quota.\n\n"
-            "[ACTIONS]\n"
+            ("[FALSIFICATION CRITERION]\n" + dismiss_if + "\n"
+             "Explicitly assess whether supplied Sight AFFIRMATIVELY supports or refutes the hypothesis. "
+             "Absent observations or zero actionable edits NEVER prove dismissal. "
+             "Use supported only with positive evidence of the omission, dismissed only with affirmative "
+             "evidence meeting the stated criterion, otherwise inconclusive. Explain in investigationReason.\n\n"
+             if dismiss_if else "")
+            + "[ACTIONS]\n"
             "Each finding must identify actual supplied filenames. Use category consistency or captioning. "
             "Prefer an exact per-file tagAction (add/remove) when a canonical group and term are supplied; "
             "never invent groups or terms. Match add-tag terms only to KNOWN VOCABULARY supplied below. Otherwise, provide a concise exact caption patch if the evidence "
@@ -427,13 +440,14 @@ def build_concept_request(items, concept, known_vocabulary=None, recheck_concern
         "operation": "qa_deep_scan",
         "output": "json",
         "prompt": prompt,
-        "response_schema": _response_schema(recheck=bool(concern)),
+        "response_schema": _response_schema(recheck=bool(concern), investigate=bool(dismiss_if and not concern)),
         "recheck": bool(concern),
+        "investigate": bool(dismiss_if and not concern),
         "source_files": [row["fileName"] for row in rows],
     }
 
 
-def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=False):
+def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=False, investigate=False):
     if not isinstance(data, dict):
         raise ValueError("QA Deep Scan response must be an object.")
 
@@ -587,6 +601,13 @@ def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=Fa
         except ValueError as exc:
             finding_warnings.append('Finding ' + str(finding_index + 1) + ': ' + str(exc))
     result = {"summary": summary, "findings": normalized[:8]}
+    if investigate:
+        status = str(data.get("investigationStatus") or "").strip()
+        reason = _clean(data.get("investigationReason"))
+        if status not in {"supported", "dismissed", "inconclusive"} or not reason:
+            raise ValueError("QA investigation response is missing its status or evidence.")
+        result["investigationStatus"] = status
+        result["investigationReason"] = reason
     if recheck:
         status = str(data.get("recheckStatus") or "").strip()
         reason = _clean(data.get("recheckReason"))

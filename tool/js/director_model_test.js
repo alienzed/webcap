@@ -470,7 +470,16 @@ function directorModelTestAdvertisedCapability(modelRef) {
   return items.find(function (entry) {
     var matches = Array.isArray(entry.match) ? entry.match : [];
     return matches.some(function (token) {
-      return haystack.indexOf(String(token || '').toLowerCase()) !== -1;
+      var value = String(token || '').toLowerCase();
+      if (!value) return false;
+      var index = haystack.indexOf(value);
+      while (index !== -1) {
+        var before = index ? haystack.charAt(index - 1) : '';
+        var after = haystack.charAt(index + value.length);
+        if (!/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after)) return true;
+        index = haystack.indexOf(value, index + 1);
+      }
+      return false;
     });
   }) || null;
 }

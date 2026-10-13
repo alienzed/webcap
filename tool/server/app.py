@@ -1497,6 +1497,15 @@ def qa_deep_scan_route():
                 + ", ".join(unknown_files[:10])
             )
 
+        if data.get("setReview") is True:
+            from .qa_llm_contract import build_set_review_request
+            contract = build_set_review_request(
+                items, data.get("vocabulary"), data.get("trainingFocus"), data.get("primer")
+            )
+            job = enqueue_llm("qa", str(data.get("model") or "").strip(), contract,
+                              context={}, label="QA Set Review")
+            return jsonify({"ok": True, "job": job}), 202
+
         from .qa_llm_contract import build_request as build_qa_llm_request
         contract = build_qa_llm_request(
             items,

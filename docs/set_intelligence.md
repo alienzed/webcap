@@ -1,5 +1,11 @@
 # Set Intelligence
 
+## QA evidence lifecycle correction (2026-10-13)
+
+QA retains in-memory, individually current Concept Check actions when an annotation changes within the same selection. A saved Concept Check action can also restore even when the separate set-wide Deep QA result is stale; stale Deep QA hypotheses themselves remain excluded. Set/scope switches still reload the matching review receipt. Deep QA mines all currently eligible cached Sight observations before choosing the bounded 160 observations sent to Director; normal Vocabulary Discovery remains frequency-limited.
+
+This is the intended contract for the follow-up patch; runtime and browser acceptance remain necessary.
+
 ## QA integrity follow-up (2026-10-12)
 
 The QA Workbench preserves saved Concept Check corrections in the existing Set-owned review receipt, keyed by the current filtered training selection; earlier one-scope receipts migrate in place. A failed rerun does not remove earlier valid actions. The QA overview differentiates unverified Deep QA hypotheses from corrections, and a set-wide Director review is **not** reported as per-item certification. Cached Vision/MediaPipe agreement is a diagnostic observation, not an automatically actionable tag correction until Sight freshness is corroborated. Prune and Duplicate utilities remain explicitly opened, not background work triggered by visiting QA. The 160-observation discovery budget reserves capacity for rare concrete Sight details.

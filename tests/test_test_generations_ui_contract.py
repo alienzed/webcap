@@ -1280,11 +1280,30 @@ def test_test_generations_strength_control_is_per_candidate_row():
     assert "strength.min = '-2';" in script
     assert "strength.max = '2';" in script
     assert "strength.step = '0.05';" in script
-    assert "strength.title = 'Strength';" in script
+    assert "strength.title = 'Override weight (blank uses default)';" in script
     assert "candidateStrengths: selectedStrengths" in script
     assert "Strength must be between -2 and 2." in script
     assert ".test-generations-candidate-strength" in css
 
+
+
+def test_test_generation_default_weight_inherits_unless_candidate_overridden():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "defaultWeightLabel.textContent = 'Default weight';" in script
+    assert "defaultWeight.id = 'test-generations-default-strength';" in script
+    assert "baseRow.appendChild(defaultWeightLabel);" in script
+    assert ".test-generations-default-strength-label" in css
+    assert "defaultStrength: defaultCandidateStrength" in script
+    assert "var savedDefault = savedSettings.defaultStrength;" in script
+    assert "if (!hasSavedDefault && savedStrength === defaultCandidateStrength) return;" in script
+    assert "strength.placeholder = String(defaultCandidateStrength);" in script
+    assert "delete candidateStrengths[strengthFile];" in script
+    assert "input.placeholder = String(defaultCandidateStrength);" in script
+    assert "Object.prototype.hasOwnProperty.call(candidateStrengths || {}, strengthFile)" in script
+    assert "selectedStrengths[strengthFile] = strengthValue;" in script
+    assert "Default weight must be between -2 and 2." in script
 
 def test_global_director_model_control_lives_in_header():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")

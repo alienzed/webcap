@@ -718,7 +718,8 @@ def mine_sight_records(records, limit=240, minimum_support=None):
     ))
 
     evidence = []
-    for index, row in enumerate(candidates[:max(1, int(limit))], start=1):
+    selected = candidates if limit is None else candidates[:max(1, int(limit))]
+    for index, row in enumerate(selected, start=1):
         media = sorted(row["media"], key=str.casefold)
         evidence.append({
             "id": "e{:03d}".format(index),

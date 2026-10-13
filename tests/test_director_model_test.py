@@ -223,7 +223,7 @@ def test_model_test_surfaces_live_status_without_extra_polling():
 
 
 
-def test_calibration_protocol_is_progressive_and_versioned():
+def test_retained_legacy_calibration_protocol_remains_versioned():
     protocol = model_test.calibration_protocol()
 
     assert protocol["contextSteps"] == [4096, 8192, 16384, 32768, 65536, 98304, 131072, 163840]
@@ -457,12 +457,14 @@ def test_diagnostics_separates_assessment_from_benchmark():
 
 
 
-def test_assessment_ladder_respects_advertised_recommended_ceilings():
+def test_single_pass_assessment_respects_published_output_guidance_without_ascending():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
 
-    assert "advertised.recommendedContextMax" in frontend
+    assert "var target = 2048;" in frontend
     assert "advertised.recommendedOutputTokens" in frontend
-    assert "Number(target) <= recommendedContextMax" in frontend
-    assert "Number(target) <= recommendedOutputTokens" in frontend
-    assert "respecting published recommended context ceiling" in frontend
+    assert "value <= limit" in frontend
+    assert "value <= Math.floor(target / 2)" in frontend
+    assert "first.failureKind !== 'capacity'" in frontend
+    assert "directorModelTestCalibrationAttempt(model, 'prose', targetTokens, null)" in frontend
+    assert "respecting published recommended context ceiling" not in frontend

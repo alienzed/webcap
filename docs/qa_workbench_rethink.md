@@ -3,6 +3,12 @@
 Status: product / IA proposal  
 Audit basis: current `main` review, metadata, annotation, focus-set, prune, duplicate, Assistant, and per-item QA code as of 2026-10-06.
 
+## Focused Deep QA implementation (2026-10-12)
+
+**Implemented on feature branch; real-model and browser acceptance pending.** Deep QA now asks for up to five set-wide investigations from compact assigned tags, the current vocabulary, training focus, and primer. It no longer runs the per-item Sight/challenger/judge sequence. A model-context preflight warns without gating, and each investigation opens existing targeted Concept Check for visual evidence and concrete actions. QA Focus Review remains action-only; user-authorized edits remain in existing workflows. Existing review receipts carry an explicit mode and freshness signature; legacy per-item results are not reinterpreted as new investigations.
+
+This section supersedes older Deep QA orchestration and per-item coverage contracts below. Concept Check and targeted recheck continue to use their original QA contract.
+
 ## Current approved direction: primer-driven guided validation (2026-10-11)
 
 **Approved target; not yet implemented. Supersedes the earlier caption-first and Deep-QA-as-main-orchestrator proposals below.** The **primary path** is: explicit VL scan → Vocabulary Discovery and concept-specific primer extensions → one continuous per-item guided validation (Director suggests group tags, human approves/edits/rejects, **primer provides a strong caption baseline and existing Caption Assist may propose a complete caption or useful refinements**, human adjusts and marks reviewed, then Next). Reuse existing Sight, Guided Tagging, Focus Annotation, Caption Assist generation/editing, primer, filter, and review mechanisms rather than building a parallel UI or job system. User-approved group tags are authoritative; preserve existing manual caption overrides. Caption proposals remain useful, not a separate mandatory workflow.

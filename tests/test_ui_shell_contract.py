@@ -1165,3 +1165,12 @@ def test_remaining_multistep_llm_consumers_publish_shared_progress_without_new_p
     assert 'finishTagActivity' in schema
     assert "window.openDiagnosticsModal('model-lab');" in activity
     assert "item.kind === 'qa-concept-check'" in activity
+
+
+def test_shared_activity_renders_local_operations_and_preserves_model_lab_run_identity():
+    activity = (ROOT / 'tool/js/activity_monitor.js').read_text(encoding='utf-8')
+    model = (ROOT / 'tool/js/model_lab.js').read_text(encoding='utf-8')
+    assert 'var localSnapshot = !!state.localProgress[String(item.id)];' in activity
+    assert 'if (managedSnapshot || localSnapshot)' in activity
+    assert "item.kind !== 'vocabulary-discovery' && item.kind !== 'vision-tag-assist'" in activity
+    assert "if (modelLabState.progressRunId && modelLabState.progressRunId !== id) return;" in model

@@ -892,15 +892,18 @@ function syncCaptionAssistCandidateUi() {
   var focusVisible = !!(focusOpen && mediaKey);
   var assistVisible = !!(!focusOpen && mediaKey && isCaptionAssistPresentationOpenFor(mediaKey));
   var panelVisible = focusVisible || assistVisible;
+  // Standard Focus Caption and one-item Assist share the editor dock.
+  // QA Focus Review retains its workbench overlay.
+  var editorDocked = !!(panelVisible && !isFocusedQaReviewMode());
   var pending = panelVisible && isCaptionAssistRunning();
   var omittedAssignments = visible && Array.isArray(candidate.omittedAssignments) ? candidate.omittedAssignments : [];
   var missingGroups = visible && !isFocusedQaReviewMode() ? getCaptionAssistMissingGroups(mediaKey) : [];
 
   panel.classList.toggle('hidden', !panelVisible);
   panel.classList.toggle('is-focus-caption', focusVisible);
-  panel.classList.toggle('is-editor-docked', !focusOpen && assistVisible);
-  panel.querySelector('.editor-caption-candidate-dialog').setAttribute('aria-modal', focusOpen ? 'true' : 'false');
-  if (!focusOpen && assistVisible) {
+  panel.classList.toggle('is-editor-docked', editorDocked);
+  panel.querySelector('.editor-caption-candidate-dialog').setAttribute('aria-modal', editorDocked ? 'false' : 'true');
+  if (editorDocked) {
     var editorRect = ui.editorEl.getBoundingClientRect();
     panel.style.setProperty('--caption-editor-left', Math.max(8, editorRect.left) + 'px');
     panel.style.setProperty('--caption-editor-right', Math.max(8, window.innerWidth - editorRect.right) + 'px');
@@ -1937,7 +1940,9 @@ function refreshCaptionAssistCurrentCandidate() {
 
 // The editor and docked candidate use one geometry source, without a second editor.
 function syncCaptionAssistEditorDock() {
-  if (!isFocusedCaptionOpen() && isCaptionAssistPresentationOpenFor(state.currentItem && state.currentItem.key)) {
+  if (isFocusedCaptionOpen()
+    ? !isFocusedQaReviewMode()
+    : isCaptionAssistPresentationOpenFor(state.currentItem && state.currentItem.key)) {
     syncCaptionAssistCandidateUi();
   }
 }

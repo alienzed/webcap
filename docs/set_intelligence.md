@@ -4,7 +4,7 @@
 
 Deep QA is now an explicit, bounded **set-wide investigation** rather than an unattended caption challenger/quality judge for each media item.
 
-- Input: current filtered training selection, approved grouped/unscoped tags, vocabulary with group aliases, caption primer, and training focus. Full captions and Sight are **not** repeated in this initial Director prompt.
+- Input: current filtered training selection, approved grouped/unscoped tags, vocabulary with group aliases, caption primer and training focus, **plus compact evidence mined from fresh saved Open Sight** (including singleton objects/properties omitted by vocabulary-frequency filtering). Full captions and per-item Sight are not repeated. The 160-evidence budget is explicit; unavailable Sight is not interpreted as visual absence.
 - Output: up to five ranked, consequential hypotheses about omitted or inconsistent training-relevant concepts, including concepts absent from both captions and tags. Zero is valid.
 - Each hypothesis includes a specific question, a falsification criterion, and up to five justified candidate media (or none when unsupported). **Investigate** invokes existing cached-Sight Concept Check on only that shortlist, preserving missing-Sight counts and human review. The dismissal criterion is guidance, not an automatic verdict. Only concrete Concept Check actions flow into QA Focus Review.
 - Deep QA itself performs no VL scans, tag assignments, caption generation, or edits. It retains the existing model queue, cancel control, set scoping, and QA review persistence.

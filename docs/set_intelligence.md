@@ -1,5 +1,20 @@
 # Set Intelligence
 
+## Focused Deep QA set review (2026-10-12)
+
+Deep QA is now an explicit, bounded **set-wide investigation** rather than an unattended caption challenger/quality judge for each media item.
+
+- Input: current filtered training selection, approved grouped/unscoped tags, vocabulary with group aliases, caption primer, and training focus. Full captions and Sight are **not** repeated in this initial Director prompt.
+- Output: up to five ranked, consequential hypotheses about omitted or inconsistent training-relevant concepts, including concepts absent from both captions and tags. Zero is valid.
+- Each hypothesis includes a specific concept question; **Check this concept** invokes the existing cached-Sight Concept Check for item-level verification. Only verified Concept Check findings with valid concrete actions flow into QA Focus Review.
+- Deep QA itself performs no VL scans, tag assignments, caption generation, or edits. It retains the existing model queue, cancel control, set scoping, and QA review persistence.
+- A token-budget preflight estimates prompt plus bounded output and warns about known context overruns, with explicit **Proceed Anyway**. Unknown context is not a gate.
+- Saved legacy per-item Deep QA results remain on disk but are not falsely reinterpreted as set-wide review results. Changes to the Set, its annotations, vocabulary, primer, Sight or training focus invalidate the current review; rerun explicitly when ready.
+- Balance and technical hygiene remain separate supporting analyses. The old per-item contract remains for existing Concept Check/recheck callers.
+
+This section supersedes the older per-item Deep QA implementation notes below. Semantic reliability of novel discovery still requires acceptance testing against real Sets.
+
+
 Status: focused LLM/VL-driven annotation workflow.
 
 ## Approved primary workflow: from media folder to reviewed training Set (2026-10-11)

@@ -1446,22 +1446,50 @@ def director_job_route():
 
 @app.route("/fs/qa/review", methods=["GET", "POST"])
 def qa_review_route():
+    """Keep independently reviewed selections in the existing Set-owned QA file."""
     try:
-        folder = str((request.get_json(silent=True) or {}).get("folder") or "").strip() if request.method == "POST" else str(request.args.get("folder") or "").strip()
+        import hashlib
+        data = (request.get_json(silent=True) or {}) if request.method == "POST" else request.args
+        folder = str(data.get("folder") or "").strip()
         folder_path = _resolve_folder(folder)
         review_path = folder_path / ".webcap_qa_review.json"
-        if request.method == "GET":
-            if not review_path.exists():
-                return jsonify({"ok": True, "review": None})
+        scope_key = str(data.get("scopeKey") or "")
+        saved = None
+        if review_path.exists():
             with review_path.open("r", encoding="utf-8") as stream:
-                return jsonify({"ok": True, "review": json.load(stream)})
-        review = (request.get_json(silent=True) or {}).get("review")
-        if not isinstance(review, dict) or review.get("version") != 1:
-            raise ValueError("QA review payload is invalid.")
+                saved = json.load(stream)
+
+        if not scope_key:
+            # Preserve legacy clients while requiring a scope for the new multi-review format.
+            if request.method == "GET":
+                return jsonify({"ok": True, "review": saved if isinstance(saved, dict) and saved.get("version") == 1 else None})
+            raise ValueError("QA review scope is required for writing.")
+
+        if len(scope_key) > 250000:
+            raise ValueError("QA review scope is too large.")
+        key = hashlib.sha256(scope_key.encode("utf-8")).hexdigest()
+        reviews = {}
+        if isinstance(saved, dict) and saved.get("version") == 2:
+            reviews = saved.get("reviews") if isinstance(saved.get("reviews"), dict) else {}
+        elif isinstance(saved, dict) and saved.get("version") == 1:
+            old_scope = str(saved.get("scopeKey") or "")
+            if old_scope:
+                old_key = hashlib.sha256(old_scope.encode("utf-8")).hexdigest()
+                reviews[old_key] = {"scopeKey": old_scope, "review": saved}
+
+        if request.method == "GET":
+            entry = reviews.get(key)
+            review = entry.get("review") if isinstance(entry, dict) and entry.get("scopeKey") == scope_key else None
+            return jsonify({"ok": True, "review": review})
+
+        review = data.get("review")
+        if not isinstance(review, dict) or review.get("version") != 1 or review.get("scopeKey") != scope_key:
+            raise ValueError("QA review payload or scope is invalid.")
+        reviews[key] = {"scopeKey": scope_key, "review": review}
         temp_path = review_path.with_name(review_path.name + ".tmp")
         try:
             with temp_path.open("w", encoding="utf-8") as stream:
-                json.dump(review, stream, ensure_ascii=False)
+                json.dump({"version": 2, "reviews": reviews}, stream, ensure_ascii=False)
             os.replace(temp_path, review_path)
         finally:
             if temp_path.exists():

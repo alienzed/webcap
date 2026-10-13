@@ -11,6 +11,7 @@ function assessmentUI() {
     reportConsoleInfo() {},
     reportConsoleError(...args) { errors.push(args); },
     resetLlmExecution() { return Promise.resolve({ ok: true }); },
+    window: { setInterval() { return 1; }, clearInterval() {}, finishActivityProgress() {} },
   };
   const source = fs.readFileSync(path.join(__dirname, '../tool/js/director_model_test.js'), 'utf8');
   vm.runInNewContext(source.replace(/initializeDirectorModelTest\(\);\s*$/, ''), ui);

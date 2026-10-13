@@ -251,7 +251,7 @@ function directorModelTestPublishProgress(status) {
   var upper = isAssessment ? Number(directorModelTestState.maximumProbes || 0) : total;
   var completedModels = Number(directorModelTestState.completedModels || 0);
   var label = isAssessment
-    ? (number ? 'Model ' + number + ' / ' + total + ' · ' + completed + ' of up to ' + upper + ' probes complete' : total + ' models selected')
+    ? (number ? 'Model ' + number + ' / ' + total + ' · ' + completed + ' probes complete (up to two per model)' : total + ' models selected')
     : completed + ' / ' + total + ' models complete';
   var phase = directorModelTestState.stopRequested ? 'Stopping' :
     directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued');
@@ -267,7 +267,7 @@ function directorModelTestPublishProgress(status) {
     progressLabel: label,
     progress: isAssessment
       ? (total > 0 ? {
-          completed: Math.min(total - 0.01, completedModels + (upper > 0 ? Math.min(0.99, completed / upper) : 0)),
+          completed: Math.min(total - 0.01, completedModels + (directorModelTestState.currentJobId ? 0 : 0)),
           total: total, totalIsUpperBound: true
         } : null)
       : (total > 0 ? { completed: completed, total: total } : null),
@@ -1326,7 +1326,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   if (limit > 0 && limit < target) {
     target = steps.filter(function (value) { return value <= limit; }).pop() || 0;
   }
-  var fallback = steps.filter(function (value) { return value < target; }).pop() || 0;
+  var fallback = steps.filter(function (value) { return value <= Math.floor(target / 2); }).pop() || 0;
   var attempts = [];
   var assessmentId = '';
   var maxTokens = 0;
@@ -1337,10 +1337,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   directorModelTestState.currentModelLabel = String(model.label || model.modelId || model.modelRef || 'Model');
   directorModelTestState.currentModelNumber = modelNumber;
   directorModelTestState.currentRuntimeName = String(model.runtimeName || model.runtimeId || 'runtime');
-  if (!target) {
-    reportConsoleWarning('Director Model Assessment', model.label + ': no supported probe fits its published output recommendation.');
-    return Promise.resolve(null);
-  }
+  if (!target) throw new Error('No supported Director probe fits the published output recommendation for ' + model.label + '.');
 
   function record(status, error, final) {
     return directorModelTestSaveCalibrationReport(model, contextMode, contextSize, maxTokens, attempts, status, error).then(function (report) {
@@ -1375,13 +1372,13 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   }).then(function (first) {
     // A runtime error, a control failure or deliberate Stop is not evidence that
     // a smaller output allowance will help. Only retry a clean capacity exhaustion.
-    if (directorModelTestState.stopRequested || !first || first.status === 'passed' ||
+    if (directorModelTestState.stopRequested || !first || first.status === 'passed' || first.status === 'stopped' ||
         first.failureKind !== 'capacity' || !fallback) return;
     reportConsoleInfo('Director Model Assessment', model.label + ': capacity exhausted; retrying ' +
       directorModelTestFormatCapacity(fallback) + ' output once.');
     return run(fallback);
   }).then(function () {
-    if (directorModelTestState.stopRequested) return record('stopped', '', true);
+    if (directorModelTestState.stopRequested || attempts.some(function (attempt) { return attempt.status === 'stopped'; })) return record('stopped', '', true);
     var runtimeFailure = attempts.find(function (attempt) { return attempt.failureKind === 'runtime'; });
     var status = maxTokens > 0 ? 'complete' : (runtimeFailure ? 'error' : 'incomplete');
     var error = maxTokens > 0 ? '' : (runtimeFailure ? String(runtimeFailure.error || '') : '');

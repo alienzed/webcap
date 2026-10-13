@@ -589,6 +589,17 @@ function directorModelAssessmentCapability(report, profile) {
 
   var health = String(report.health || '');
   var status = String(report.status || '');
+  if (report.assessmentKind === 'confirmation') {
+    var attempts = Array.isArray(report.attempts) ? report.attempts : [];
+    var completed = attempts.some(function (attempt) { return attempt.kind === 'prose' && attempt.status === 'passed'; });
+    if (health === 'likely-unusable') return { label: 'Output warning', tone: 'bad', copy: 'Review captured output.' };
+    if (completed) return {
+      label: attempts.length > 1 ? 'Sample passed on retry' : 'Sample passed',
+      tone: health === 'warning' ? 'limited' : 'good',
+      copy: 'Director writing task completed; maximum output capacity not established.'
+    };
+    return { label: 'Sample inconclusive', tone: 'limited', copy: directorModelAssessmentRetryReason(report) };
+  }
   var abilities = report.abilities && typeof report.abilities === 'object' ? report.abilities : {};
   var coherentOutput = Number(abilities.coherentOutputTokens || 0);
 
@@ -659,8 +670,12 @@ function directorModelAssessmentDetailSummary(report, profile, modelRef) {
       : '<p class="app-settings-help">This model has not been assessed yet.</p>';
   }
 
+  var confirmation = report.assessmentKind === 'confirmation';
+  var successful = (Array.isArray(report.attempts) ? report.attempts : []).find(function (attempt) {
+    return attempt.kind === 'prose' && attempt.status === 'passed';
+  });
   var abilities = report.abilities && typeof report.abilities === 'object' ? report.abilities : {};
-  var limits = [
+  var limits = confirmation ? [] : [
     Number(abilities.contextTokens || 0) > 0
       ? 'Context: ' + directorModelTestFormatCapacity(abilities.contextTokens)
       : '',
@@ -684,8 +699,10 @@ function directorModelAssessmentDetailSummary(report, profile, modelRef) {
   var pathologies = Array.isArray(report.pathologies) ? report.pathologies : [];
   var reportError = String(report.error || '');
   return '<div class="director-model-assessment-detail-summary">' +
+    (confirmation && successful ? '<div class="app-settings-help"><strong>Observed:</strong> Task completed at ' +
+      escapeHtml(directorModelTestFormatCapacity(successful.target)) + ' output budget; not a model maximum.</div>' : '') +
     (limits.length ? '<div class="app-settings-help"><strong>Proven limits:</strong> ' + escapeHtml(limits.join(' · ')) + '</div>' : '') +
-    (profile ? '<div class="app-settings-help">Auto profile saved.</div>' : '') +
+    (profile ? '<div class="app-settings-help">Legacy Auto profile saved separately.</div>' : '') +
     (advertisedText ? '<div class="app-settings-help">' + escapeHtml(advertisedText) + '</div>' : '') +
     (pathologies.length ? '<div class="app-settings-help director-model-finding-error">Model warning: ' +
       escapeHtml(pathologies.map(directorModelAssessmentFailureLabel).join(', ')) + '</div>' : '') +
@@ -951,6 +968,7 @@ function directorModelTestSaveCalibrationReport(model, contextMode, contextSize,
       runtimeName: model.runtimeName,
       modelId: model.modelId,
       label: model.label,
+      assessmentKind: "confirmation",
       contextMode: contextMode,
       contextSize: contextSize,
       maxTokens: maxTokens,

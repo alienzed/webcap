@@ -8,6 +8,7 @@ var directorModelTestState = {
   currentPhase: '',
   currentProbeLabel: '',
   completedProbes: 0,
+  completedModels: 0,
   maximumProbes: 0,
   currentRuntimeName: '',
   startedAt: 0,
@@ -248,6 +249,7 @@ function directorModelTestPublishProgress(status) {
   var completed = isAssessment ? Number(directorModelTestState.completedProbes || 0) :
     (directorModelTestState.session && directorModelTestState.session.runs || []).length;
   var upper = isAssessment ? Number(directorModelTestState.maximumProbes || 0) : total;
+  var completedModels = Number(directorModelTestState.completedModels || 0);
   var label = isAssessment
     ? (number ? 'Model ' + number + ' / ' + total + ' · ' + completed + ' of up to ' + upper + ' probes complete' : total + ' models selected')
     : completed + ' / ' + total + ' models complete';
@@ -264,7 +266,10 @@ function directorModelTestPublishProgress(status) {
     phase: phase,
     progressLabel: label,
     progress: isAssessment
-      ? (upper > 0 ? { completed: completed, total: upper, totalIsUpperBound: true } : null)
+      ? (total > 0 ? {
+          completed: Math.min(total - 0.01, completedModels + (upper > 0 ? Math.min(0.99, completed / upper) : 0)),
+          total: total, totalIsUpperBound: true
+        } : null)
       : (total > 0 ? { completed: completed, total: total } : null),
     startedAt: directorModelTestState.startedAt,
     childJobId: directorModelTestState.currentJobId || ''
@@ -288,7 +293,7 @@ function directorModelTestRenderActivity() {
     card.classList.add('director-model-test-activity-card');
     host.replaceChildren(card);
   }
-  ProgressCard.update(card, snapshot);
+  ProgressCard.update(card, snapshot, { className: 'director-model-test-activity-card' });
   window.publishActivityProgress(snapshot);
 }
 
@@ -1523,6 +1528,7 @@ function directorModelTestStartCalibration() {
   directorModelTestState.startedAt = Date.now() / 1000;
   directorModelTestState.currentProbeLabel = '';
   directorModelTestState.completedProbes = 0;
+  directorModelTestState.completedModels = 0;
   directorModelTestState.maximumProbes = 0;
   directorModelTestStartActivityClock();
   directorModelTestSyncControls();
@@ -1534,7 +1540,14 @@ function directorModelTestStartCalibration() {
   models.forEach(function (model, index) {
     chain = chain.then(function () {
       if (directorModelTestState.stopRequested) return;
-      return directorModelTestCalibrateOne(model, index + 1);
+      return directorModelTestCalibrateOne(model, index + 1).then(function (result) {
+        if (!directorModelTestState.stopRequested) {
+          directorModelTestState.completedModels += 1;
+          directorModelTestState.currentProbeLabel = '';
+          directorModelTestRenderActivity();
+        }
+        return result;
+      });
     });
   });
 
@@ -1553,6 +1566,7 @@ function directorModelTestStartCalibration() {
     directorModelTestState.currentPhase = '';
     directorModelTestState.currentProbeLabel = '';
     directorModelTestState.completedProbes = 0;
+    directorModelTestState.completedModels = 0;
     directorModelTestState.maximumProbes = 0;
     directorModelTestState.currentRuntimeName = '';
     directorModelTestState.calibrationTotal = 0;
@@ -1775,6 +1789,7 @@ function directorModelTestStart() {
   );
   reportConsoleInfo('Director Model Test', 'Starting ' + String(models.length) + '-model ' + String((directorModelTestState.protocol || {}).id || 'benchmark') + '.');
 
+  var benchmarkFailed = false;
   directorModelTestPost({ action: 'start', models: models, prompt: prompt }).then(function (payload) {
     directorModelTestState.session = payload.session;
     directorModelTestRenderSession();
@@ -1817,6 +1832,7 @@ function directorModelTestStart() {
       reportConsoleInfo('Director Model Test', directorModelTestState.stopRequested ? 'Model test stopped.' : 'Model test completed.');
     });
   }).catch(function (error) {
+    benchmarkFailed = true;
     reportConsoleError('Director Model Test', error);
     if (directorModelTestState.session) {
       return directorModelTestPost({
@@ -1839,7 +1855,7 @@ function directorModelTestStart() {
     directorModelTestState.currentRuntimeName = '';
     window.finishActivityProgress('director-diagnostics-' + String(directorModelTestState.startedAt),
       directorModelTestState.stopRequested ? 'stopped' :
-        (directorModelTestState.session && directorModelTestState.session.status === 'failed' ? 'failed' : 'completed'));
+        (benchmarkFailed || (directorModelTestState.session && directorModelTestState.session.status === 'failed') ? 'failed' : 'completed'));
     directorModelTestState.startedAt = 0;
     directorModelTestState.mode = '';
     directorModelTestStopActivityClock();

@@ -832,6 +832,9 @@
       return candidateFiles.indexOf(item.fileName) !== -1;
     }) : selected;
     if (!items.length) { setStatus('No media in current investigation selection.'); return; }
+    if (qaWorkbenchState.investigation && qaWorkbenchState.investigation.concept !== concept) {
+      qaWorkbenchState.investigation = null;
+    }
     var conceptItems = qaBuildConceptItems(items);
     var available = conceptItems.filter(function (row) { return !!row.analysis.visionSight; });
     var missingCount = conceptItems.length - available.length;
@@ -850,6 +853,7 @@
     qaWorkbenchState.conceptCoverage = coverage;
     var session = {
       folder: String(state.folder || ''), scope: qaBuildScopeKey(items),
+      selectedFiles: items.map(function (item) { return item.fileName; }),
       investigationId: investigation && investigation.concept === concept ? investigation.id : '',
       concept: concept, model: model, items: available,
       vocabulary: vocabulary, missingCount: missingCount,
@@ -865,7 +869,7 @@
       return qaWorkbenchState.conceptSession === session && !session.stopped &&
         String(state.folder || '') === session.folder &&
         qaBuildScopeKey(qaGetTrainingItems().filter(function (item) {
-          return !session.investigationId || session.items.some(function (row) { return row.fileName === item.fileName; });
+          return !session.investigationId || session.selectedFiles.indexOf(item.fileName) !== -1;
         })) === session.scope;
     }
     function next() {

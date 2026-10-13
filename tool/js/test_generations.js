@@ -3157,11 +3157,14 @@
       ? status.wildcardSummary.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
       : [];
     var wildcardHeader = wildcardSummary.length ? wildcardSummary : wildcardValues;
-    wildcardTagline.textContent = wildcardHeader.join(' · ');
-    wildcardTagline.classList.toggle('hidden', !wildcardHeader.length);
-    wildcardTagline.title = wildcardValues.length
-      ? 'All resolved wildcard choices: ' + wildcardValues.join(' · ')
-      : '';
+    var wildcardUnmatched = hasSession && status.wildcardSummaryUnmatched === true;
+    wildcardTagline.textContent = wildcardHeader.length
+      ? wildcardHeader.join(' · ')
+      : (wildcardUnmatched ? 'Wildcard choices unavailable' : '');
+    wildcardTagline.classList.toggle('hidden', !wildcardHeader.length && !wildcardUnmatched);
+    wildcardTagline.title = wildcardUnmatched
+      ? 'Resolved prompt did not match the wildcard source. Check the session details.'
+      : (wildcardValues.length ? 'All resolved wildcard choices: ' + wildcardValues.join(' · ') : '');
     if (infoBtn) infoBtn.classList.toggle('hidden', !hasSession);
     if (!details) return;
     if (!hasSession) {

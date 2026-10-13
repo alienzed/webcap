@@ -946,7 +946,9 @@
       }
       var batch = session.items.slice(session.index, session.index + 4);
       qaWorkbenchState.conceptStatus = 'Concept check · ' + session.index + '/' + session.items.length + ' examined';
-      renderQaWorkbench();
+      // Polling must not replace the recommendation browser while the user is reading it.
+      var progress = document.querySelector('#qa-workbench .qa-recommendation-status, #qa-workbench .qa-deep-scan-note');
+      if (progress) progress.textContent = qaWorkbenchState.conceptStatus;
       return qaRequestJson('/fs/qa/concept-check', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -979,8 +981,12 @@
         if (session.investigationId && qaWorkbenchState.investigation &&
             qaWorkbenchState.investigation.id === session.investigationId) {
           var verdict = String(analysis.investigationStatus || 'inconclusive');
+          var inputsStillCurrent = batch.every(function (row) {
+            return session.signatures[row.fileName] === currentSignatures[row.fileName];
+          });
           qaWorkbenchState.investigation.verdicts.push({
-            status: verdict, reason: String(analysis.investigationReason || '')
+            status: inputsStillCurrent ? verdict : 'inconclusive',
+            reason: inputsStillCurrent ? String(analysis.investigationReason || '') : 'Annotations changed during the check.'
           });
         }
         qaNormalizeAiFindings(analysis, session.model).forEach(function (finding) {

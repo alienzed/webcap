@@ -971,9 +971,10 @@
     }
 
     runBatch(0).then(function (result) {
+      if (token !== schemaState.schemaRequestToken) return;
       schemaState.schemaStarting = false;
       schemaState.schemaJobId = '';
-      if (!result || token !== schemaState.schemaRequestToken || schemaState.workStopRequested) {
+      if (!result || schemaState.workStopRequested) {
         finishTagActivity('stopped');
         return;
       }

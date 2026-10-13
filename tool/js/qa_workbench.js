@@ -389,8 +389,9 @@
         qaWorkbenchState.trainingFocus = String(saved.trainingFocus);
       }
       if (saved.trainingFocus !== qaWorkbenchState.trainingFocus) return;
-      if (saved.qaReviewMode !== 'set-review-v1' || saved.aiScopeSignature !== signature) return;
-      qaWorkbenchState.qaReviewMode = saved.qaReviewMode;
+      var legacyReview = !saved.qaReviewMode || saved.qaReviewMode === 'legacy-per-item';
+      if (!legacyReview && (saved.qaReviewMode !== 'set-review-v1' || saved.aiScopeSignature !== signature)) return;
+      qaWorkbenchState.qaReviewMode = legacyReview ? 'legacy-per-item' : saved.qaReviewMode;
       var before = saved.itemSignatures && typeof saved.itemSignatures === 'object'
         ? saved.itemSignatures
         : {};
@@ -406,6 +407,8 @@
       });
       qaWorkbenchState.aiFindings = (saved.aiFindings || []).filter(function (finding) {
         return !(finding.files || []).some(function (file) { return changed[file]; });
+      }).map(function (finding) {
+        return legacyReview ? Object.assign({}, finding, { sourceLabel: 'Legacy Deep QA · ' + String(saved.aiModel || 'Director') }) : finding;
       });
       qaWorkbenchState.captionQuality = Object.fromEntries(Object.entries(saved.captionQuality || {}).filter(function (entry) { return !changed[entry[0]]; }));
       qaWorkbenchState.qaAlternatives = Object.fromEntries(Object.entries(saved.qaAlternatives || {}).filter(function (entry) {
@@ -413,7 +416,7 @@
       }));
       qaWorkbenchState.aiSummary = String(saved.aiSummary || '');
       qaWorkbenchState.aiModel = String(saved.aiModel || '');
-      qaWorkbenchState.aiScopeSignature = saved.aiScopeSignature;
+      qaWorkbenchState.aiScopeSignature = legacyReview ? signature : saved.aiScopeSignature;
       qaWorkbenchState.aiItemSignatures = Object.assign({}, before);
       qaWorkbenchState.aiCoverageValid = validCount;
       qaWorkbenchState.aiCoverageTotal = Object.keys(current).length;

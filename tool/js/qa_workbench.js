@@ -85,6 +85,7 @@
     folderKey: '',
     scopeKey: '',
     parentFocusSet: undefined,
+    returnTrainingFiles: null,
     returnFindingId: '',
     statusMessage: '',
     externalAnalysisAttemptKey: '',
@@ -121,6 +122,11 @@
   }
 
   function qaGetTrainingFileNames() {
+    // Opening QA evidence creates a temporary Focus Set, not a new QA review scope.
+    if (state.focusSet && state.focusSet.reportType === 'qa' &&
+        qaWorkbenchState.parentFocusSet !== undefined && qaWorkbenchState.returnTrainingFiles) {
+      return qaWorkbenchState.returnTrainingFiles.slice();
+    }
     return getVisibleMediaSelectionForTraining();
   }
 
@@ -2481,6 +2487,7 @@
       qaWorkbenchState.trainingFocus = '';
       qaWorkbenchState.focusExplicitlyEdited = false;
       qaWorkbenchState.parentFocusSet = undefined;
+      qaWorkbenchState.returnTrainingFiles = null;
       qaWorkbenchState.returnFindingId = '';
     }
     if (qaFocusReviewState.active && (folderChanged || scopeChanged) &&
@@ -3075,6 +3082,7 @@
   function qaSelectFiles(files, source, findingId) {
     var clean = (files || []).filter(Boolean);
     if (!clean.length) return;
+    qaWorkbenchState.returnTrainingFiles = qaGetTrainingFileNames().slice();
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = String(findingId || '');
     qaWorkbenchState.statusMessage = '';
@@ -3084,6 +3092,7 @@
   function qaReviewCaptionFiles(files, source, findingId) {
     var clean = (files || []).filter(Boolean);
     if (!clean.length) return;
+    qaWorkbenchState.returnTrainingFiles = qaGetTrainingFileNames().slice();
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = String(findingId || '');
     qaWorkbenchState.statusMessage = '';
@@ -3119,6 +3128,7 @@
     }
     // Group inspection belongs in the existing Grid: rate, select, or prune.
     // Keep the original selection so Return to QA restores its prior context.
+    qaWorkbenchState.returnTrainingFiles = qaGetTrainingFileNames().slice();
     qaWorkbenchState.parentFocusSet = qaCloneFocusSet(state.focusSet);
     qaWorkbenchState.returnFindingId = finding.id;
     qaWorkbenchState.statusMessage = '';
@@ -3145,6 +3155,7 @@
     var returnToFinding = !!qaWorkbenchState.returnFindingId;
     state.focusSet = parent ? qaCloneFocusSet(parent) : null;
     qaWorkbenchState.parentFocusSet = undefined;
+    qaWorkbenchState.returnTrainingFiles = null;
     qaWorkbenchState.view = returnToFinding ? 'browse' : 'overview';
     updateFocusSetUi();
     renderFileList(ui.filterEl.value);
@@ -3244,7 +3255,8 @@
       return;
     }
     if (action === 'inspect-file') {
-      qaSelectFiles([value], 'QA · Evidence', '');
+      var origin = qaGetRecommendations()[qaWorkbenchState.browseIndex];
+      qaSelectFiles([value], 'QA · Evidence', origin ? origin.id : '');
       return;
     }
     if (action === 'inspect-health') {

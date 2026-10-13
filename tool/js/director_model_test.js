@@ -349,15 +349,16 @@ function directorModelTestRenderSavedSamples() {
       Number(attempt.tokensPerSecond || 0) > 0 ? directorModelTestRate(attempt.tokensPerSecond) + ' tok/s' : '',
       row.run.startedAt ? new Date(row.run.startedAt).toLocaleString() : ''
     ].filter(Boolean).join(' · ');
-    return '<details class="app-settings-advanced director-model-test-saved-sample">' +
+    return '<details class="app-settings-advanced director-model-test-saved-sample" ' +
+      'data-director-assessment-evidence-id="' + escapeHtml(row.run.id || '') + '">' +
       '<summary><strong>' + escapeHtml(model.label || model.modelId || model.modelRef || '') +
       '</strong><span class="app-settings-help">' + escapeHtml(meta) + '</span></summary>' +
       '<div class="app-settings-disclosure-body">' +
-      '<p class="app-settings-help">Previously completed writing sample. The output budget is not a proven model limit. ' +
-      'This is a different prompt from the editable benchmark.</p>' +
-      '<pre class="app-settings-json director-model-test-output">' +
-      escapeHtml(String(attempt.text || '')) + '</pre></div></details>';
+      '<p class="app-settings-help">Previously completed writing sample; not a proven model limit or the editable benchmark prompt.</p>' +
+      '<div data-director-assessment-evidence-host><p class="app-settings-help">Expand to load the saved prompt and output.</p></div>' +
+      '</div></details>';
   }).join('');
+  directorModelAssessmentWireEvidenceToggles(host);
 }
 
 function directorModelTestRenderSession() {

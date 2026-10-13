@@ -601,3 +601,121 @@ def normalize_result(data, allowed_files=None, captions_by_file=None, recheck=Fa
     if finding_warnings:
         result["findingWarnings"] = finding_warnings
     return result
+
+
+def build_set_review_request(items, vocabulary=None, training_focus="", primer=""):
+    """Compact, set-wide discovery. No per-item caption judgment or asserted edits."""
+    if not isinstance(items, list) or not items:
+        raise ValueError("Deep QA needs a non-empty training selection.")
+    compact = []
+    seen = set()
+    for raw in items:
+        if not isinstance(raw, dict):
+            raise ValueError("Deep QA items must be objects.")
+        file_name = str(raw.get("fileName") or "").strip()
+        if not file_name or file_name in seen:
+            raise ValueError("Deep QA needs unique filenames.")
+        seen.add(file_name)
+        tags = raw.get("groupedTags") if isinstance(raw.get("groupedTags"), list) else []
+        grouped = [
+            {"group": _clean(row.get("group")), "term": _clean(row.get("term"))}
+            for row in tags if isinstance(row, dict) and _clean(row.get("group")) and _clean(row.get("term"))
+        ]
+        other = [_clean(tag) for tag in (raw.get("otherTags") or []) if _clean(tag)] if isinstance(raw.get("otherTags"), list) else []
+        compact.append({"file": file_name, "tags": grouped, "otherTags": other})
+
+    groups = []
+    for raw in vocabulary if isinstance(vocabulary, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        name = _clean(raw.get("group"))
+        if not name:
+            continue
+        terms = [_clean(term) for term in (raw.get("terms") or []) if _clean(term)] if isinstance(raw.get("terms"), list) else []
+        groups.append({"group": name, "alias": _clean(raw.get("alias")), "terms": terms})
+
+    finding = {
+        "type": "object", "additionalProperties": False,
+        "required": ["concept", "title", "summary", "why", "priority", "confidence", "trainingValue", "files", "evidence"],
+        "properties": {
+            "concept": {"type": "string", "minLength": 1},
+            "title": {"type": "string", "minLength": 1},
+            "summary": {"type": "string", "minLength": 1},
+            "why": {"type": "string", "minLength": 1},
+            "priority": {"type": "string", "enum": ["high", "normal", "low"]},
+            "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+            "trainingValue": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+            "files": {"type": "array", "maxItems": 8, "items": {"type": "string"}},
+            "evidence": {"type": "array", "maxItems": 4, "items": {"type": "string"}},
+        }
+    }
+    payload = {"trainingFocus": _clean(training_focus), "captionPrimer": str(primer or "").strip(),
+               "vocabulary": groups, "items": compact}
+    prompt = (
+        "[ROLE]\nYou review a LoRA training Set for consequential semantic omissions remaining after normal tagging and captioning.\n"
+        "Human-approved tags are compact proxies for captions; they are not exhaustive descriptions of the media.\n\n"
+        "[GOAL]\nFind up to FIVE of the most important omissions or inconsistencies in what the Set currently teaches.\n"
+        "Especially consider meaningful visual dimensions that may be absent from BOTH tags and captions, "
+        "including dimensions not yet represented in the vocabulary. Think independently about the training objective.\n\n"
+        "[RULES]\n"
+        "- This is discovery, not a verdict about unseen pixels. Do not claim a particular media item is wrong without visual evidence.\n"
+        "- Prefer systematic, training-relevant omissions over style, balance, rare vocabulary, or trivial wording.\n"
+        "- Compare semantic meaning, not just exact tag spellings; a missing tag isn't proof of a missing visual attribute.\n"
+        "- Use the supplied filenames only as useful examples to investigate, NOT as confirmed defective images.\n"
+        "- Provide a concise, specific concept-check question for each finding; it must be usable in a focused Vision/Sight review.\n"
+        "- State why the proposed concept is worth checking and cite specific patterns in the supplied tags.\n"
+        "- The user will fix the highest-value findings and run this again. Return at most five, including zero if nothing matters.\n"
+        "- Do not propose caption patches, tag edits, or new vocabulary as if already verified.\n"
+        "- Confidence expresses strength of the hypothesis from this input, NOT certainty about any image.\n\n"
+        "[CURRENT SET]\n" + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) +
+        "\n\n[OUTPUT]\nReturn JSON matching the schema, with a brief summary and no more than five findings."
+    )
+    return {
+        "operation": "qa_set_review", "output": "json", "prompt": prompt,
+        "response_schema": {
+            "type": "object", "additionalProperties": False,
+            "required": ["summary", "findings"],
+            "properties": {
+                "summary": {"type": "string", "minLength": 1},
+                "findings": {"type": "array", "maxItems": 5, "items": finding}
+            }
+        },
+        "source_files": [row["file"] for row in compact],
+    }
+
+
+def normalize_set_review_result(data, allowed_files=None):
+    """Adapt investigations to existing QA display/storage, never to direct edit actions."""
+    if not isinstance(data, dict) or not isinstance(data.get("findings"), list) or not _clean(data.get("summary")):
+        raise ValueError("Deep QA set review is missing structured findings.")
+    allowed = set(allowed_files or [])
+    findings = []
+    for raw in data["findings"][:5]:
+        if not isinstance(raw, dict):
+            raise ValueError("Deep QA set review contains an invalid finding.")
+        concept = _clean(raw.get("concept"))[:240]
+        title = _clean(raw.get("title"))
+        summary = _clean(raw.get("summary"))
+        why = _clean(raw.get("why"))
+        priority = str(raw.get("priority") or "")
+        confidence = str(raw.get("confidence") or "")
+        training_value = str(raw.get("trainingValue") or "")
+        files = raw.get("files")
+        evidence = raw.get("evidence")
+        if (not concept or not title or not summary or not why or
+                priority not in _ALLOWED_PRIORITIES or confidence not in _ALLOWED_CONFIDENCE or
+                training_value not in {"critical", "high", "medium", "low"} or
+                not isinstance(files, list) or not isinstance(evidence, list)):
+            raise ValueError("Deep QA set review contains an incomplete finding.")
+        names = list(dict.fromkeys(str(file or "").strip() for file in files if str(file or "").strip()))
+        if any(name not in allowed for name in names):
+            raise ValueError("Deep QA set review invented a filename.")
+        # Zero example files is valid for concepts wholly absent from the vocabulary.
+        findings.append({
+            "category": "consistency", "priority": priority, "confidence": confidence,
+            "trainingValue": training_value, "title": title, "summary": summary,
+            "why": why, "concept": concept, "files": names[:8],
+            "evidence": [_clean(value) for value in evidence[:4] if _clean(value)],
+            "patches": [], "tagActions": [],
+        })
+    return {"summary": _clean(data["summary"]), "findings": findings, "captionQuality": []}

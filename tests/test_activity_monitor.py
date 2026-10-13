@@ -174,14 +174,17 @@ def test_execution_item_exposes_llm_finish_diagnostics():
 
 
 def test_inference_activity_projects_provider_progress_without_changing_job():
+    # This matches the public inference_runner.snapshot() job representation.
     job = {
-        "id": "inference-42",
+        "jobId": "inference-42",
+        "client": "storyboard",
+        "sceneId": "s1",
         "status": "running",
-        "metadata": {"client": "storyboard", "sceneId": "s1"},
         "progress": {"step": 3, "steps": 12},
     }
-    # Inference snapshots already use the public job view's progress field.
     result = activity_monitor._execution_item("inference", job)
+    assert result["id"] == "inference-42"
+    assert result["sceneId"] == "s1"
     assert result["kind"] == "storyboard"
     assert result["progress"] == {"step": 3, "steps": 12}
     assert job["progress"] == {"step": 3, "steps": 12}

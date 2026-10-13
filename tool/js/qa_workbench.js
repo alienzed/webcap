@@ -2963,7 +2963,7 @@
     var root = document.getElementById('qa-workbench');
     if (!root) throw new Error('QA workbench root is missing.');
     var currentItems = qaGetTrainingItems();
-    qaPrimeDeterministicSources(currentItems);
+    // Prune/Duplicate utilities run only when explicitly opened; QA reads ready results.
     var data = qaRefreshComputedState(!!force);
     if (qaWorkbenchState.view === 'browse') {
       qaRenderBrowse(root, data.items);

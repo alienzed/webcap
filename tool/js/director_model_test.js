@@ -318,6 +318,49 @@ function directorModelTestRenderStatus() {
   directorModelTestSetStatus(directorModelTestStatusText(session), state, summary);
 }
 
+function directorModelTestRenderSavedSamples() {
+  var host = directorModelTestEl('director-model-test-saved-samples');
+  if (!host) throw new Error('Director benchmark saved-samples markup is missing.');
+  var runs = Array.isArray(directorModelTestState.assessmentRuns) ? directorModelTestState.assessmentRuns : [];
+  var reports = Array.isArray(directorModelTestState.calibrationReports) ? directorModelTestState.calibrationReports : [];
+  var rows = runs.filter(function (run) {
+    var modelRef = String(run && run.model && run.model.modelRef || '');
+    var report = reports.find(function (item) { return String(item.modelRef || '') === modelRef; });
+    return modelRef && report && report.assessmentKind === 'confirmation' &&
+      run.summary && run.summary.updatedAt === report.updatedAt &&
+      (run.status === 'complete' || run.status === 'incomplete');
+  }).map(function (run) {
+    var model = run.model || {};
+    var attempt = (run.summary.attempts || []).find(function (item) {
+      return item.kind === 'prose' && item.status === 'passed';
+    });
+    return { run: run, model: model, attempt: attempt };
+  }).filter(function (row) { return !!row.attempt; });
+  if (!rows.length) {
+    host.innerHTML = '<p class="app-settings-help">No completed Director assessment samples are saved.</p>';
+    return;
+  }
+  host.innerHTML = rows.map(function (row) {
+    var attempt = row.attempt;
+    var model = row.model;
+    var meta = [
+      directorModelTestFormatCapacity(attempt.target) + ' output budget',
+      Number(attempt.totalSeconds || 0) > 0 ? directorModelTestSeconds(attempt.totalSeconds) : '',
+      Number(attempt.tokensPerSecond || 0) > 0 ? directorModelTestRate(attempt.tokensPerSecond) + ' tok/s' : '',
+      row.run.startedAt ? new Date(row.run.startedAt).toLocaleString() : ''
+    ].filter(Boolean).join(' · ');
+    return '<details class="app-settings-advanced director-model-test-saved-sample" ' +
+      'data-director-assessment-evidence-id="' + escapeHtml(row.run.id || '') + '">' +
+      '<summary><strong>' + escapeHtml(model.label || model.modelId || model.modelRef || '') +
+      '</strong><span class="app-settings-help">' + escapeHtml(meta) + '</span></summary>' +
+      '<div class="app-settings-disclosure-body">' +
+      '<p class="app-settings-help">Previously completed writing sample; not a proven model limit or the editable benchmark prompt.</p>' +
+      '<div data-director-assessment-evidence-host><p class="app-settings-help">Expand to load the saved prompt and output.</p></div>' +
+      '</div></details>';
+  }).join('');
+  directorModelAssessmentWireEvidenceToggles(host);
+}
+
 function directorModelTestRenderSession() {
   var session = directorModelTestState.session;
   var results = directorModelTestEl('director-model-test-results');
@@ -413,6 +456,7 @@ function directorModelTestRefresh() {
     }
     directorModelTestRenderModels();
     directorModelAssessmentRenderHistory();
+    directorModelTestRenderSavedSamples();
     directorModelTestRenderSession();
     directorModelTestSyncControls();
   }).catch(function (error) {

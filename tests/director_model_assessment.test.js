@@ -239,3 +239,27 @@ test('advertised capability matching respects model-name boundaries', () => {
   assert.equal(ui.directorModelTestAdvertisedCapability('ollama::nullguard:latest').contextTokens, 131072);
   assert.equal(ui.directorModelTestAdvertisedCapability('ollama::othernullguarder'), null);
 });
+
+
+test('benchmark uses saved assessment evidence without a fresh generation', () => {
+  const { ui } = assessmentUI();
+  ui.escapeHtml = value => String(value);
+  ui.directorModelAssessmentWireEvidenceToggles = () => {};
+  const host = { innerHTML: '' };
+  ui.directorModelTestEl = id => id === 'director-model-test-saved-samples' ? host : null;
+  ui.directorModelTestState.calibrationReports = [{
+    modelRef: 'remote::qwen', assessmentKind: 'confirmation', updatedAt: 'matching'
+  }];
+  ui.directorModelTestState.assessmentRuns = [{
+    id: 'saved', status: 'complete', startedAt: '2026-10-13T12:00:00Z',
+    model: { modelRef: 'remote::qwen', label: 'Qwen' },
+    summary: { updatedAt: 'matching', attempts: [{ kind: 'prose', target: 2048, status: 'passed', totalSeconds: 5 }] }
+  }];
+  ui.directorModelTestRenderSavedSamples();
+  assert.match(host.innerHTML, /data-director-assessment-evidence-id="saved"/);
+  assert.match(host.innerHTML, /Expand to load the saved prompt and output/);
+  assert.doesNotMatch(host.innerHTML, /A saved paragraph/);
+  ui.directorModelTestState.assessmentRuns[0].summary.updatedAt = 'old';
+  ui.directorModelTestRenderSavedSamples();
+  assert.match(host.innerHTML, /No completed Director assessment samples/);
+});

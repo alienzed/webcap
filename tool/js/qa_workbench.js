@@ -3260,7 +3260,12 @@
       if (!current) return;
       qaWorkbenchState.dispositions[current.id] = value;
       qaSaveReview();
-      qaWorkbenchState.statusMessage = qaDispositionLabel(value) + '. This finding remains in Full Report.';
+      var remaining = qaGetUndisposedRecommendationIndexes();
+      var next = remaining.find(function (index) { return index > qaWorkbenchState.browseIndex; });
+      if (next === undefined) next = remaining[0];
+      if (next === undefined) qaWorkbenchState.view = 'overview';
+      else qaWorkbenchState.browseIndex = next;
+      qaWorkbenchState.statusMessage = '';
       renderQaWorkbench();
       return;
     }

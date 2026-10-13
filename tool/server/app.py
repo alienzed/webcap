@@ -1486,13 +1486,20 @@ def qa_review_route():
         if not isinstance(review, dict) or review.get("version") != 1 or review.get("scopeKey") != scope_key:
             raise ValueError("QA review payload or scope is invalid.")
         reviews[key] = {"scopeKey": scope_key, "review": review}
-        temp_path = review_path.with_name(review_path.name + ".tmp")
+        import tempfile
+        temp_path = None
         try:
-            with temp_path.open("w", encoding="utf-8") as stream:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=folder_path,
+                prefix=".webcap_qa_review.", suffix=".tmp", delete=False,
+            ) as stream:
+                temp_path = Path(stream.name)
                 json.dump({"version": 2, "reviews": reviews}, stream, ensure_ascii=False)
+                stream.flush()
+                os.fsync(stream.fileno())
             os.replace(temp_path, review_path)
         finally:
-            if temp_path.exists():
+            if temp_path is not None and temp_path.exists():
                 temp_path.unlink()
         return jsonify({"ok": True})
     except Exception as exc:

@@ -123,8 +123,10 @@
       onOpen: function () {
         if (item.kind === 'director-diagnostics') {
           window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
+        } else if (item.original) {
+          openItem(item.original);
         } else {
-          openItem(item.original || item);
+          setOpen(true);
         }
       }
     });
@@ -341,6 +343,24 @@
     }
   }
 
+  function activeCardKey(item) {
+    return [String(item.lane || item.kind || ''), String(item.kind || ''), String(item.id || '')].join(':');
+  }
+
+  function syncActiveCard(card, item) {
+    card.setAttribute('data-activity-active-key', activeCardKey(item));
+    card.className = 'activity-monitor-card status-' + String(item.status || '');
+    card.querySelector('.activity-monitor-dot').className = 'activity-monitor-dot active';
+    card.querySelector('.activity-monitor-copy strong').textContent = activityTitle(item);
+    card.querySelector('.activity-monitor-copy span').textContent =
+      activityDetail(item) || String(item.status || '').replace(/_/g, ' ');
+    var elapsed = formatElapsed(item.startedAt);
+    card.querySelector('.activity-monitor-copy small').textContent =
+      [String(item.status || '').replace(/_/g, ' '), elapsed ? elapsed + ' elapsed' : ''].filter(Boolean).join(' · ');
+    card.querySelector('.activity-monitor-open').onclick = function () { openItem(item); };
+    return card;
+  }
+
   function createActiveCard(item) {
     var article = document.createElement('article');
     article.className = 'activity-monitor-card status-' + String(item.status || '');
@@ -370,7 +390,7 @@
     article.appendChild(dot);
     article.appendChild(copy);
     article.appendChild(open);
-    return article;
+    return syncActiveCard(article, item);
   }
 
   function recentStatusClass(status) {
@@ -712,6 +732,10 @@
     Array.prototype.forEach.call(host.querySelectorAll('[data-progress-card-id]'), function (card) {
       retainedProgressCards[card.getAttribute('data-progress-card-id')] = card;
     });
+    var retainedActiveCards = Object.create(null);
+    Array.prototype.forEach.call(host.querySelectorAll('[data-activity-active-key]'), function (card) {
+      retainedActiveCards[card.getAttribute('data-activity-active-key')] = card;
+    });
 
     var nowSection = ensureActivitySection(host, 'now', 'Now', active.length ? String(active.length) + ' active' : '');
     var nowRows = [];
@@ -737,7 +761,8 @@
           } });
           nowRows.push(card);
         } else {
-          nowRows.push(createActiveCard(item));
+          var existingCard = retainedActiveCards[activeCardKey(item)];
+          nowRows.push(existingCard ? syncActiveCard(existingCard, item) : createActiveCard(item));
         }
       });
     }

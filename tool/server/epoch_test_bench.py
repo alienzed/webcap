@@ -1376,14 +1376,14 @@ def _recover_wildcard_selections(source, resolved):
             choice = _normalize_wildcard_text("".join(value for _, value in option))
             if not choice:
                 continue
-            token = r"(?<!\\w)" + re.escape(choice) + r"(?!\\w)"
+            token = r"(?<!\w)" + re.escape(choice) + r"(?!\w)"
             anchors = []
             if before and after:
-                anchors.append(re.escape(before) + r"\\s*" + token + r"\\s*" + re.escape(after))
+                anchors.append(re.escape(before) + r"\s*" + token + r"\s*" + re.escape(after))
             if before:
-                anchors.append(re.escape(before) + r"\\s*" + token)
+                anchors.append(re.escape(before) + r"\s*" + token)
             if after:
-                anchors.append(token + r"\\s*" + re.escape(after))
+                anchors.append(token + r"\s*" + re.escape(after))
             if not anchors and resolved == choice:
                 matches.append((1, choice))
             for strength, pattern in enumerate(reversed(anchors), 1):

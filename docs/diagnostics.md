@@ -28,9 +28,9 @@ Calibration continues to use the existing H3 probe routes and persisted training
 
 ### Director Models
 
-Assesses selected local or remote Director models progressively from small probes upward. The assessment records mechanical evidence WebCap can defend: usable context/output tiers, clean completion, truncation/capacity limits, runtime failures, empty output, obvious repetition/looping, garbled output, and obvious control/reasoning-token leakage.
+Assesses selected local or remote Director models with one representative long-form writing probe (2K token request budget by default) and, only on capacity exhaustion, one retry at half that budget. Published output guidance bounds the probe. No ascending context or structured-output ladder is run. The assessment records mechanical evidence WebCap can defend: usable context/output tiers, clean completion, truncation/capacity limits, runtime failures, empty output, obvious repetition/looping, garbled output, and obvious control/reasoning-token leakage.
 
-Assessment intentionally does **not** score writing quality. Compact current findings and strict Auto calibration profiles live under app-data `state/diagnostics`. Full probe prompts and full model outputs are timestamped temporary evidence under app-data `cache/director-model-assessments`; the latest evidence is expandable directly from each finding, full raw runs are listed below, and either can be purged independently through Storage Manager.
+Assessment intentionally does **not** score writing quality. Compact current findings and legacy Auto calibration profiles live under app-data `state/diagnostics`. Full probe prompts and full model outputs are timestamped temporary evidence under app-data `cache/director-model-assessments`; the latest evidence is expandable directly from each finding, full raw runs are listed below, and either can be purged independently through Storage Manager.
 
 Normal Director model selectors receive only a compact operational signal:
 
@@ -70,3 +70,7 @@ Published `contextTokens` is separate from any packaged `runtimeContextTokens` (
 - Director assessment / benchmark routes: `tool/server/director_model_test_store.py`
 
 Diagnostics shares Director model discovery and the LLM execution lane, but Assessment and Benchmark keep separate lifecycle semantics rather than sharing one diagnostic session.
+
+## Single-pass assessment rollout (2026-10-13)
+
+The new one-pass assessment reuses the existing prose probe, report/evidence store and shared LLM execution lane. It does not clear, create, or replace legacy Auto calibration profiles, which may still influence ordinary Director requests; migrating that behavior requires separate validation. The benchmark remains separately selectable for qualitative comparison until its UI/evidence contracts can be safely consolidated. Existing raw historical reports and evidence are retained.

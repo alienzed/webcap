@@ -70,3 +70,42 @@ def test_llm_stop_uses_shared_reset_and_existing_diagnostics_stop_state():
     assert "currentLlmResetEpoch" not in diagnostics
     assert "assertLlmWorkflowCurrent" not in diagnostics
     assert "operation: 'stop_or_cancel'" not in diagnostics
+
+
+def test_director_assessment_activity_uses_shared_renderer_and_probe_counts():
+    script = (ROOT / 'tool' / 'js' / 'director_model_test.js').read_text(encoding='utf-8')
+
+    assert 'currentProbeLabel' in script
+    assert 'completedProbes = attempts.length' in script
+    assert 'maximumProbes = (model.runtimeId' in script
+    assert "' of up to '" in script
+    assert 'directorModelTestStartActivityClock();' in script
+    assert 'directorModelTestStopActivityClock();' in script
+    assert 'ProgressCard.create()' in script
+    assert "ProgressCard.update(card, snapshot, { className: 'director-model-test-activity-card' })" in script
+    assert 'number / total * 100' not in script
+
+
+
+def test_shared_progress_card_is_loaded_before_consumers():
+    html = (ROOT / 'tool' / 'tool.html').read_text(encoding='utf-8')
+    activity = (ROOT / 'tool' / 'js' / 'activity_monitor.js').read_text(encoding='utf-8')
+    diagnostics = (ROOT / 'tool' / 'js' / 'director_model_test.js').read_text(encoding='utf-8')
+    card = (ROOT / 'tool' / 'js' / 'progress_card.js').read_text(encoding='utf-8')
+
+    assert html.index('js/progress_card.js') < html.index('js/activity_monitor.js')
+    assert 'window.ProgressCard = { create: create, update: update }' in card
+    assert 'window.publishActivityProgress = publishProgress' in activity
+    assert 'window.finishActivityProgress = finishProgress' in activity
+    assert "window.publishActivityProgress(snapshot)" in diagnostics
+    assert "ProgressCard.update(card, snapshot)" in diagnostics
+    assert "isProgressChild(item)" in activity
+
+
+def test_director_progress_stays_operation_scoped():
+    script = (ROOT / 'tool' / 'js' / 'director_model_test.js').read_text(encoding='utf-8')
+    assert "id: 'director-diagnostics-' + String(directorModelTestState.startedAt)" in script
+    assert 'childJobId: directorModelTestState.currentJobId' in script
+    assert 'totalIsUpperBound: true' in script
+    assert 'completedProbes = attempts.length' in script
+    assert 'directorModelTestStopActivityClock()' in script

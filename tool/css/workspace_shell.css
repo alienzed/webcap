@@ -2806,3 +2806,32 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   flex: 0 0 auto;
   margin-left: 4px;
 }
+
+/* Persistent, non-blocking presentation of the shared activity progress card. */
+.activity-progress-follower {
+  position: absolute;
+  right: 14px;
+  bottom: calc(var(--shell-status-height) + 14px);
+  z-index: 115;
+  width: min(340px, calc(100vw - 76px));
+  pointer-events: none;
+}
+.activity-progress-follower .progress-card {
+  margin: 0;
+  pointer-events: auto;
+  background: var(--panel);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .22);
+}
+.activity-progress-follower .activity-monitor-progress.indeterminate span {
+  width: 35% !important;
+  opacity: .6;
+}
+.activity-progress-follower {
+  bottom: calc(var(--shell-status-height) + 14px);
+}
+.activity-toast-stack:has(> .activity-toast) ~ .activity-progress-follower {
+  bottom: calc(var(--shell-status-height) + 250px);
+}
+.activity-progress-follower:has(~ .activity-toast-stack > .activity-toast) {
+  bottom: calc(var(--shell-status-height) + 250px);
+}

@@ -1189,3 +1189,16 @@ def test_shared_activity_renders_local_operations_and_preserves_model_lab_run_id
     assert 'if (managedSnapshot || localSnapshot)' in activity
     assert "item.kind !== 'vocabulary-discovery' && item.kind !== 'vision-tag-assist'" in activity
     assert "if (modelLabState.progressRunId && modelLabState.progressRunId !== id) return;" in model
+
+
+def test_activity_follower_tracks_director_and_bounds_child_job_suppression():
+    activity = (ROOT / 'tool/js/activity_monitor.js').read_text(encoding='utf-8')
+    model = (ROOT / 'tool/js/model_lab.js').read_text(encoding='utf-8')
+    assert 'function directorFollowerSnapshot(item)' in activity
+    assert "item.lane !== 'llm'" in activity
+    assert "managedProgressSnapshot(item) || directorFollowerSnapshot(item)" in activity
+    assert "child.expiresAt = Date.now() + 120000" in activity
+    assert 'function pruneProgressChildren()' in activity
+    assert "state.notified[recentKey(item)] = true;" in activity
+    assert "modelLabRequest('/app/model-lab?run=' + encodeURIComponent(activeId))" in model
+    assert 'modelLabPublishProgress(payload.run);' in model

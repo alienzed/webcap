@@ -1008,7 +1008,10 @@
           qaWorkbenchState.investigation.examined = session.items.length;
           qaWorkbenchState.investigation.missing = missingCount;
           qaWorkbenchState.investigation.actions = qaWorkbenchState.conceptFindings.filter(function (finding) {
-            return finding.conceptQuestion === session.concept;
+            return finding.conceptQuestion === session.concept &&
+              (finding.files || []).some(function (file) {
+                return session.selectedFiles.indexOf(file) !== -1;
+              });
           }).length;
           qaWorkbenchState.investigation.verdict = qaWorkbenchState.investigation.verdicts.some(function (v) {
             return v.status === 'supported';
@@ -2224,9 +2227,11 @@
     var dismissed = finished && active.verdict === 'dismissed';
     var supported = finished && active.verdict === 'supported';
     var resultTitle = dismissed ? 'Hypothesis not supported' :
-      supported ? 'Potential corrections identified' : 'Check inconclusive';
+      supported ? (active.actions ? 'Potential corrections identified' : 'Concern supported; no correction identified') :
+      'Check inconclusive';
     var resultDetail = dismissed ? 'The evidence did not substantiate this concern.' :
-      supported ? 'Review the suggested actions before making changes.' :
+      supported ? (active.actions ? 'Review the suggested actions before making changes.' :
+        'The concern has supporting evidence, but no actionable edit was identified.') :
       'Evidence was insufficient to confirm or dismiss the concern.';
 
     if (finding.concept) {
@@ -2295,7 +2300,13 @@
       if (finished) {
         if (dismissed) actions.appendChild(qaCreateButton('Dismiss & next', 'qa-primary', 'dispose', 'keep'));
         else if (supported && active.actions) actions.appendChild(qaCreateButton('View findings', 'qa-primary', 'view', 'report'));
-        else actions.appendChild(qaCreateButton('Next recommendation', 'qa-primary', 'browse-next-index'));
+        else {
+          var hasNext = recommendations.slice(qaWorkbenchState.browseIndex + 1).some(function (row) {
+            return !qaWorkbenchState.dispositions[row.id];
+          });
+          actions.appendChild(qaCreateButton(hasNext ? 'Next recommendation' : 'Back to QA',
+            'qa-primary', hasNext ? 'browse-next-index' : 'view', hasNext ? undefined : 'overview'));
+        }
       }
       var check = qaCreateButton(active && qaWorkbenchState.conceptSession ? 'Investigating…' :
         (finished ? 'Run check again' : 'Investigate'), finished ? '' : 'qa-primary', 'check-finding-concept', finding.id);
@@ -2331,7 +2342,6 @@
     var details = document.createElement('details');
     details.className = 'qa-recommendation-details';
     var detailsLabel = document.createElement('summary');
-    detailsLabel.textContent = 'Why / evidence';
     detailsLabel.textContent = finished ? 'Original hypothesis & evidence' : 'Why / investigation criteria';
     details.appendChild(detailsLabel);
     if (finding.concept) {

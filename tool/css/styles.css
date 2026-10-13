@@ -3753,6 +3753,19 @@ iframe {
   padding: 2px 5px;
   font-size: 12px;
 }
+.test-generations-candidate-strength::placeholder {
+  color: var(--muted);
+  opacity: .75;
+}
+.test-generations-default-strength-label {
+  grid-column: 3 / 5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
+  color: var(--muted);
+}
 
 .test-generations-staged-actions {
   display: flex;

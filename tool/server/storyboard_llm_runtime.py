@@ -1360,15 +1360,18 @@ def _assessment_signal(model_ref):
     health = str(report.get("health") or "").strip()
     pathologies = report.get("pathologies") if isinstance(report.get("pathologies"), list) else []
     serious = bool(pathologies) or health == "likely-unusable"
-    limited = (not serious and report.get("status") == "complete"
+    confirmation = report.get("assessmentKind") == "confirmation"
+    # Short workload confirmation never establishes a model's maximum output.
+    limited = (not confirmation and not serious and report.get("status") == "complete"
                and health in {"healthy", "limited"} and 0 < coherent_output < 8192)
     return {
         "status": str(report.get("status") or ""),
         "health": health,
+        "assessmentKind": report.get("assessmentKind") or "calibration",
         "pathologies": [str(item) for item in pathologies if str(item or "").strip()],
         "seriousWarning": serious,
         "limited": limited,
-        "fullStoryCapable": coherent_output >= 8192 and not serious,
+        "fullStoryCapable": None if confirmation else (coherent_output >= 8192 and not serious),
         "individualScenesRecommended": limited,
         "abilities": {
             "contextTokens": max(0, int(abilities.get("contextTokens") or 0)),

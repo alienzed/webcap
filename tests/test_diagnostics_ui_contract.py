@@ -72,13 +72,12 @@ def test_llm_stop_uses_shared_reset_and_existing_diagnostics_stop_state():
     assert "operation: 'stop_or_cancel'" not in diagnostics
 
 
-def test_director_assessment_activity_uses_shared_renderer_and_probe_counts():
+def test_director_assessment_activity_uses_shared_renderer_and_model_progress():
     script = (ROOT / 'tool' / 'js' / 'director_model_test.js').read_text(encoding='utf-8')
 
     assert 'currentProbeLabel' in script
-    assert 'completedProbes = attempts.length' in script
-    assert 'maximumProbes = (model.runtimeId' in script
-    assert "' of up to '" in script
+    assert 'one writing test, optional retry' in script
+    assert 'completedModels' in script
     assert 'directorModelTestStartActivityClock();' in script
     assert 'directorModelTestStopActivityClock();' in script
     assert 'ProgressCard.create()' in script
@@ -107,5 +106,5 @@ def test_director_progress_stays_operation_scoped():
     assert "id: 'director-diagnostics-' + String(directorModelTestState.startedAt)" in script
     assert 'childJobId: directorModelTestState.currentJobId' in script
     assert 'totalIsUpperBound: true' in script
-    assert 'completedProbes = attempts.length' in script
+    assert 'completedModels' in script
     assert 'directorModelTestStopActivityClock()' in script

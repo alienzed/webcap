@@ -380,14 +380,14 @@ def test_assessment_orders_remote_models_first_only_while_training():
     frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
 
     assert "function directorModelAssessmentOrderModels(models)" in frontend
-    assert "if (!shellWorkloadState.trainingActive) return models;" in frontend
+    assert "var sharedGpuBusy = shellWorkloadState.trainingActive ||" in frontend
     assert "model.runtimeId !== 'local'" in frontend
     assert "model.runtimeId === 'local'" in frontend
     assert "return remote.concat(local);" in frontend
     assert "directorModelAssessmentOrderModels(directorModelAssessmentSelectedModels())" in frontend
 
 
-def test_model_test_diagnostics_exposes_progressive_calibration_controls():
+def test_model_test_diagnostics_exposes_single_pass_and_legacy_controls():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     html = (root / "tool" / "tool.html").read_text(encoding="utf-8")
     frontend = (root / "tool" / "js" / "director_model_test.js").read_text(encoding="utf-8")
@@ -402,7 +402,7 @@ def test_model_test_diagnostics_exposes_progressive_calibration_controls():
     assert "WEB_CAP_LONGFORM_COMPLETE" in frontend
     assert "'prose'" in frontend
     assert "finish_reason=" in frontend
-    assert "save_calibration_profile" in frontend
+    assert "save_calibration_profile" not in frontend
     assert "save_calibration_report" in frontend
     assert "directorModelTestCalibrationFailureKind" in frontend
     assert "directorModelTestLooksLeaky" in frontend

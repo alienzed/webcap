@@ -401,3 +401,37 @@ def test_output_pathologies_warn_in_normal_selectors(calibration_root, failure_k
     }])
     saved = calibration.save_report(report)
     assert _assessment_signal(saved["modelRef"])["seriousWarning"] is True
+
+
+def test_confirmation_does_not_change_existing_profile(calibration_root):
+    calibration.save_profile(_profile())
+    report = calibration.save_report(_report(
+        assessmentKind="confirmation", contextMode="runtime", contextSize=8192, maxTokens=2048,
+        attempts=[{"kind": "prose", "target": 2048, "status": "passed", "observedContextSize": 8192}],
+    ))
+    assert report["assessmentKind"] == "confirmation"
+    assert report["abilities"]["contextTokens"] == 0
+    assert report["attempts"][0]["observedContextSize"] == 8192
+    assert calibration.get_report("local::director.gguf")["assessmentKind"] == "confirmation"
+    assert calibration.get_profile("local::director.gguf")["maxTokens"] == 4096
+
+
+def test_legacy_reports_remain_calibration_kind(calibration_root):
+    assert calibration.save_report(_report())["assessmentKind"] == "calibration"
+
+
+def test_confirmation_fallback_does_not_claim_model_output_ceiling(calibration_root):
+    from tool.server.storyboard_llm_runtime import _assessment_signal
+    report = calibration.save_report(_report(
+        assessmentKind="confirmation", contextMode="runtime", contextSize=8192,
+        maxTokens=1024, attempts=[
+            {"kind": "prose", "target": 2048, "status": "failed", "failureKind": "capacity"},
+            {"kind": "prose", "target": 1024, "status": "passed", "observedContextSize": 8192},
+        ],
+    ))
+    assert report["health"] == "healthy"
+    assert report["abilities"]["contextTokens"] == 0
+    signal = _assessment_signal(report["modelRef"])
+    assert signal["limited"] is False
+    assert signal["individualScenesRecommended"] is False
+    assert signal["fullStoryCapable"] is None

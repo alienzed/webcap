@@ -83,54 +83,43 @@ async function probe(text, kind = 'output', status = 'completed', finishReason =
 }
 
 
-test('output ladder continues after non-capacity failures and stops at truncation', async () => {
+test('single pass retries only a capacity failure once at half the target and leaves Auto profiles untouched', async () => {
   const { ui } = assessmentUI();
-  ui.directorModelTestAdvertisedCapability = () => null;
+  ui.directorModelTestAdvertisedCapability = () => ({ recommendedOutputTokens: 2048 });
   ui.directorModelTestStartAssessment = () => Promise.resolve({ id: 'assessment' });
   ui.directorModelTestRenderCalibrationProfiles = () => {};
   ui.directorModelTestUpdateAssessment = () => Promise.resolve({});
   ui.directorModelTestSaveCalibrationReport = () => Promise.resolve({ updatedAt: 'latest' });
   ui.directorModelTestState.calibrationProtocol.outputSteps = [512, 1024, 2048];
-  ui.directorModelTestState.calibrationProtocol.contextSteps = [];
-
   const calls = [];
   ui.directorModelTestCalibrationAttempt = (_model, kind, target) => {
     calls.push([kind, target]);
-    if (kind === 'output' && target === 512) {
-      return Promise.resolve({ kind, target, status: 'failed', failureKind: 'contract', error: 'format miss' });
-    }
-    if (kind === 'output' && target === 1024) {
-      return Promise.resolve({ kind, target, status: 'passed', failureKind: '' });
-    }
-    if (kind === 'prose' && target === 1024) {
-      return Promise.resolve({ kind, target, status: 'passed', failureKind: '' });
-    }
-    if (kind === 'output' && target === 2048) {
-      return Promise.resolve({ kind, target, status: 'failed', failureKind: 'capacity', finishReason: 'length' });
-    }
+    return Promise.resolve({ kind, target, status: target === 2048 ? 'failed' : 'passed',
+      failureKind: target === 2048 ? 'capacity' : '', observedContextSize: 8192 });
+  };
+  ui.directorModelTestPost = () => { throw new Error('Must not erase or overwrite an Auto profile'); };
+  await ui.directorModelTestCalibrateOne({
+    modelRef: 'ollama::qwen', runtimeId: 'remote', modelId: 'qwen', label: 'Qwen'
+  }, 1);
+  assert.deepEqual(calls, [['prose', 2048], ['prose', 1024]]);
+});
+
+test('single-pass assessment does not retry a contract failure', async () => {
+  const { ui } = assessmentUI();
+  ui.directorModelTestAdvertisedCapability = () => null;
+  ui.directorModelTestStartAssessment = () => Promise.resolve({ id: 'assessment' });
+  ui.directorModelTestUpdateAssessment = () => Promise.resolve({});
+  ui.directorModelTestSaveCalibrationReport = () => Promise.resolve({});
+  ui.directorModelTestState.calibrationProtocol.outputSteps = [512, 1024, 2048];
+  const calls = [];
+  ui.directorModelTestCalibrationAttempt = (_model, kind, target) => {
+    calls.push(target);
     return Promise.resolve({ kind, target, status: 'failed', failureKind: 'contract' });
   };
-  ui.directorModelTestPost = payload => {
-    if (payload.action === 'begin_calibration') return Promise.resolve({ calibrationProfiles: [], calibrationReports: [] });
-    if (payload.action === 'save_calibration_profile') return Promise.resolve({ profile: {}, calibrationProfiles: [], calibrationReports: [] });
-    return Promise.resolve({});
-  };
-
   await ui.directorModelTestCalibrateOne({
-    modelRef: 'ollama::qwen',
-    runtimeId: 'remote',
-    runtimeName: 'Ollama',
-    modelId: 'qwen',
-    label: 'Qwen',
+    modelRef: 'local::qwen', runtimeId: 'local', modelId: 'qwen', label: 'Qwen'
   }, 1);
-
-  assert.deepEqual(calls, [
-    ['output', 512],
-    ['prose', 512],
-    ['output', 1024],
-    ['prose', 1024],
-    ['output', 2048],
-  ]);
+  assert.deepEqual(calls, [2048]);
 });
 
 test('operational failure stays operational even with pathological partial output and logs its detail', async () => {
@@ -220,4 +209,33 @@ test('successful probe notes are shown as notes, not failures', () => {
   assert.ok(html.includes('Passed'));
   assert.ok(html.includes('Note: Completion marker omitted'));
   assert.equal(html.includes('director-model-finding-error'), false);
+});
+
+
+test('short confirmation does not claim scene-only limit', () => {
+  const { ui } = assessmentUI();
+  ui.escapeHtml = text => String(text);
+  const report = { assessmentKind: 'confirmation', status: 'complete', health: 'healthy',
+    attempts: [{ kind: 'prose', target: 2048, status: 'passed' }],
+    abilities: { coherentOutputTokens: 2048 } };
+  const result = ui.directorModelAssessmentCapability(report, null);
+  assert.equal(result.label, 'Sample passed');
+  assert.equal(result.copy.includes('Scene development'), false);
+  const html = ui.directorModelAssessmentDetailSummary(report, null, 'remote::qwen');
+  assert.match(html, /not a model maximum/);
+  assert.equal(html.includes('Proven limits:'), false);
+});
+
+
+test('advertised capability matching respects model-name boundaries', () => {
+  const { ui } = assessmentUI();
+  ui.directorModelTestState.advertisedCapabilities = [
+    { match: ['rvn'], contextTokens: 262144 },
+    { match: ['nullguard'], contextTokens: 131072 },
+  ];
+  ui.directorModelTestState.models = [];
+  assert.equal(ui.directorModelTestAdvertisedCapability('local::RVN-Q5_K_M.gguf').contextTokens, 262144);
+  assert.equal(ui.directorModelTestAdvertisedCapability('local::RVNery-Q5_K_M.gguf'), null);
+  assert.equal(ui.directorModelTestAdvertisedCapability('ollama::nullguard:latest').contextTokens, 131072);
+  assert.equal(ui.directorModelTestAdvertisedCapability('ollama::othernullguarder'), null);
 });

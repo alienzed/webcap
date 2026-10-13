@@ -246,12 +246,10 @@ function directorModelTestPublishProgress(status) {
   var number = Number(directorModelTestState.currentModelNumber || 0);
   var total = isAssessment ? Number(directorModelTestState.calibrationTotal || 0) :
     (directorModelTestState.session && directorModelTestState.session.models || []).length;
-  var completed = isAssessment ? Number(directorModelTestState.completedProbes || 0) :
-    (directorModelTestState.session && directorModelTestState.session.runs || []).length;
-  var upper = isAssessment ? Number(directorModelTestState.maximumProbes || 0) : total;
+  var completed = (directorModelTestState.session && directorModelTestState.session.runs || []).length;
   var completedModels = Number(directorModelTestState.completedModels || 0);
   var label = isAssessment
-    ? (number ? 'Model ' + number + ' / ' + total + ' · ' + completed + ' of up to ' + upper + ' probes complete' : total + ' models selected')
+    ? (number ? 'Model ' + number + ' / ' + total + ' · one writing test, optional retry' : total + ' models selected')
     : completed + ' / ' + total + ' models complete';
   var phase = directorModelTestState.stopRequested ? 'Stopping' :
     directorModelTestPhaseText(directorModelTestState.currentPhase || 'queued');
@@ -267,7 +265,7 @@ function directorModelTestPublishProgress(status) {
     progressLabel: label,
     progress: isAssessment
       ? (total > 0 ? {
-          completed: Math.min(total - 0.01, completedModels + (upper > 0 ? Math.min(0.99, completed / upper) : 0)),
+          completed: Math.min(total - 0.01, completedModels),
           total: total, totalIsUpperBound: true
         } : null)
       : (total > 0 ? { completed: completed, total: total } : null),
@@ -472,7 +470,16 @@ function directorModelTestAdvertisedCapability(modelRef) {
   return items.find(function (entry) {
     var matches = Array.isArray(entry.match) ? entry.match : [];
     return matches.some(function (token) {
-      return haystack.indexOf(String(token || '').toLowerCase()) !== -1;
+      var value = String(token || '').toLowerCase();
+      if (!value) return false;
+      var index = haystack.indexOf(value);
+      while (index !== -1) {
+        var before = index ? haystack.charAt(index - 1) : '';
+        var after = haystack.charAt(index + value.length);
+        if (!/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after)) return true;
+        index = haystack.indexOf(value, index + 1);
+      }
+      return false;
     });
   }) || null;
 }
@@ -591,6 +598,17 @@ function directorModelAssessmentCapability(report, profile) {
 
   var health = String(report.health || '');
   var status = String(report.status || '');
+  if (report.assessmentKind === 'confirmation') {
+    var attempts = Array.isArray(report.attempts) ? report.attempts : [];
+    var completed = attempts.some(function (attempt) { return attempt.kind === 'prose' && attempt.status === 'passed'; });
+    if (health === 'likely-unusable') return { label: 'Output warning', tone: 'bad', copy: 'Review captured output.' };
+    if (completed) return {
+      label: attempts.length > 1 ? 'Sample passed on retry' : 'Sample passed',
+      tone: health === 'warning' ? 'limited' : 'good',
+      copy: 'Director writing task completed; maximum output capacity not established.'
+    };
+    return { label: 'Sample inconclusive', tone: 'limited', copy: directorModelAssessmentRetryReason(report) };
+  }
   var abilities = report.abilities && typeof report.abilities === 'object' ? report.abilities : {};
   var coherentOutput = Number(abilities.coherentOutputTokens || 0);
 
@@ -661,8 +679,12 @@ function directorModelAssessmentDetailSummary(report, profile, modelRef) {
       : '<p class="app-settings-help">This model has not been assessed yet.</p>';
   }
 
+  var confirmation = report.assessmentKind === 'confirmation';
+  var successful = (Array.isArray(report.attempts) ? report.attempts : []).find(function (attempt) {
+    return attempt.kind === 'prose' && attempt.status === 'passed';
+  });
   var abilities = report.abilities && typeof report.abilities === 'object' ? report.abilities : {};
-  var limits = [
+  var limits = confirmation ? [] : [
     Number(abilities.contextTokens || 0) > 0
       ? 'Context: ' + directorModelTestFormatCapacity(abilities.contextTokens)
       : '',
@@ -686,8 +708,10 @@ function directorModelAssessmentDetailSummary(report, profile, modelRef) {
   var pathologies = Array.isArray(report.pathologies) ? report.pathologies : [];
   var reportError = String(report.error || '');
   return '<div class="director-model-assessment-detail-summary">' +
+    (confirmation && successful ? '<div class="app-settings-help"><strong>Observed:</strong> Task completed at ' +
+      escapeHtml(directorModelTestFormatCapacity(successful.target)) + ' output budget; not a model maximum.</div>' : '') +
     (limits.length ? '<div class="app-settings-help"><strong>Proven limits:</strong> ' + escapeHtml(limits.join(' · ')) + '</div>' : '') +
-    (profile ? '<div class="app-settings-help">Auto profile saved.</div>' : '') +
+    (profile ? '<div class="app-settings-help">Legacy Auto profile saved separately.</div>' : '') +
     (advertisedText ? '<div class="app-settings-help">' + escapeHtml(advertisedText) + '</div>' : '') +
     (pathologies.length ? '<div class="app-settings-help director-model-finding-error">Model warning: ' +
       escapeHtml(pathologies.map(directorModelAssessmentFailureLabel).join(', ')) + '</div>' : '') +
@@ -953,6 +977,7 @@ function directorModelTestSaveCalibrationReport(model, contextMode, contextSize,
       runtimeName: model.runtimeName,
       modelId: model.modelId,
       label: model.label,
+      assessmentKind: "confirmation",
       contextMode: contextMode,
       contextSize: contextSize,
       maxTokens: maxTokens,
@@ -1316,185 +1341,73 @@ function directorModelTestCalibrationAttempt(model, kind, target, contextSize) {
 }
 
 function directorModelTestCalibrateOne(model, modelNumber) {
+  // Confirm useful Director work once instead of climbing the old context/output ladder.
+  // Historical Auto profiles are not invalidated or rewritten by this assessment.
   var protocol = directorModelTestState.calibrationProtocol || {};
-  var contextSteps = Array.isArray(protocol.contextSteps) ? protocol.contextSteps.slice() : [];
-  var outputSteps = Array.isArray(protocol.outputSteps) ? protocol.outputSteps.slice() : [];
   var advertised = directorModelTestAdvertisedCapability(model.modelRef);
-  var recommendedContextMax = Number(advertised && advertised.recommendedContextMax || 0);
-  var recommendedOutputTokens = Number(advertised && advertised.recommendedOutputTokens || 0);
-  if (isFinite(recommendedContextMax) && recommendedContextMax > 0) {
-    contextSteps = contextSteps.filter(function (target) { return Number(target) <= recommendedContextMax; });
+  var steps = Array.isArray(protocol.outputSteps) ? protocol.outputSteps : [];
+  var limit = Number(advertised && advertised.recommendedOutputTokens || 0);
+  var target = 2048;
+  if (limit > 0 && limit < target) {
+    target = steps.filter(function (value) { return value <= limit; }).pop() || 0;
   }
-  if (isFinite(recommendedOutputTokens) && recommendedOutputTokens > 0) {
-    outputSteps = outputSteps.filter(function (target) { return Number(target) <= recommendedOutputTokens; });
-  }
+  var fallback = steps.filter(function (value) { return value <= Math.floor(target / 2); }).pop() || 0;
   var attempts = [];
-  var contextMode = model.runtimeId === 'local' ? 'calibrated' : 'runtime';
-  var contextSize = 0;
-  var maxTokens = 0;
   var assessmentId = '';
+  var maxTokens = 0;
+  var contextSize = 0;
+  // A successful reply does not prove that the model can use its entire advertised context.
+  var contextMode = 'runtime';
 
   directorModelTestState.currentModelLabel = String(model.label || model.modelId || model.modelRef || 'Model');
   directorModelTestState.currentModelNumber = modelNumber;
   directorModelTestState.currentRuntimeName = String(model.runtimeName || model.runtimeId || 'runtime');
-  directorModelTestState.currentProbeLabel = '';
-  directorModelTestState.completedProbes = 0;
-  directorModelTestState.maximumProbes = (model.runtimeId === 'local' ? contextSteps.length : 0) + 2 * outputSteps.length;
-  if (directorModelTestState.running) directorModelTestRenderActivity();
-
-  if (isFinite(recommendedContextMax) && recommendedContextMax > 0) {
-    reportConsoleInfo(
-      'Director Model Assessment',
-      model.label + ' · respecting published recommended context ceiling ' +
-        directorModelTestFormatCapacity(recommendedContextMax) + '.'
-    );
-  }
-  if (isFinite(recommendedOutputTokens) && recommendedOutputTokens > 0 &&
-      outputSteps.length && Number(outputSteps[outputSteps.length - 1]) < Number((protocol.outputSteps || [])[protocol.outputSteps.length - 1] || 0)) {
-    reportConsoleInfo(
-      'Director Model Assessment',
-      model.label + ' · respecting published recommended output ceiling ' +
-        directorModelTestFormatCapacity(recommendedOutputTokens) + '.'
-    );
-  }
+  if (!target) throw new Error('No supported Director probe fits the published output recommendation for ' + model.label + '.');
 
   function record(status, error, final) {
-    return directorModelTestSaveCalibrationReport(
-      model, contextMode, contextSize, maxTokens, attempts, status || 'incomplete', error || ''
-    ).then(function (report) {
-      return directorModelTestUpdateAssessment(
-        assessmentId,
-        attempts,
-        report || {},
-        status || 'incomplete',
-        error || '',
-        !!final
-      ).then(function () { return report; });
+    return directorModelTestSaveCalibrationReport(model, contextMode, contextSize, maxTokens, attempts, status, error).then(function (report) {
+      return directorModelTestUpdateAssessment(assessmentId, attempts, report || {}, status, error, final).then(function () {
+        return report;
+      });
     });
   }
 
-  function runAttempt(kind, target) {
-    return directorModelTestCalibrationAttempt(
-      model,
-      kind,
-      target,
-      contextMode === 'calibrated' && kind !== 'context' ? contextSize : null
-    ).catch(function (error) {
+  function run(targetTokens) {
+    return directorModelTestCalibrationAttempt(model, 'prose', targetTokens, null).catch(function (error) {
       reportConsoleError('Director Model Assessment', error);
       return {
-        kind: kind,
-        target: Number(target),
-        status: 'failed',
-        finishReason: '',
-        error: error.message || String(error),
-        failureKind: 'runtime',
-        prompt: String(error && error.directorCalibrationPrompt || ''),
-        text: '',
-        promptTokens: 0,
-        completionTokens: 0,
-        observedContextSize: 0,
-        totalSeconds: 0,
-        tokensPerSecond: 0
+        kind: 'prose', target: targetTokens, status: 'failed', finishReason: '',
+        error: String(error.message || error), failureKind: 'runtime',
+        prompt: String(error && error.directorCalibrationPrompt || ''), text: '',
+        promptTokens: 0, completionTokens: 0, observedContextSize: 0,
+        totalSeconds: 0, tokensPerSecond: 0
       };
     }).then(function (attempt) {
       attempts.push(attempt);
-      directorModelTestState.completedProbes = attempts.length;
-      directorModelTestState.currentPhase = 'recording';
-      if (directorModelTestState.running) directorModelTestRenderActivity();
-      if (kind === 'context' && attempt.status === 'passed') contextSize = Number(target);
-      if (contextMode === 'runtime' && attempt.observedContextSize > contextSize) {
-        contextSize = attempt.observedContextSize;
-      }
-      if (kind === 'prose' && attempt.status === 'passed') maxTokens = Number(target);
-      var runtimeFailure = attempt.failureKind === 'runtime';
-      return record(runtimeFailure ? 'error' : 'incomplete', runtimeFailure ? attempt.error : '', false)
-        .then(function () { return attempt; });
+      contextSize = Math.max(contextSize, Number(attempt.observedContextSize || 0));
+      if (attempt.status === 'passed') maxTokens = targetTokens;
+      return record('incomplete', '', false).then(function () { return attempt; });
     });
   }
 
-  var chain = directorModelTestStartAssessment(model).then(function (assessment) {
+  return directorModelTestStartAssessment(model).then(function (assessment) {
     assessmentId = String(assessment && assessment.id || '');
     if (!assessmentId) throw new Error('Director assessment did not receive an assessment ID.');
-    return directorModelTestPost({
-      action: 'begin_calibration',
-      modelRef: model.modelRef
-    });
-  }).then(function (payload) {
-    directorModelTestState.calibrationProfiles = Array.isArray(payload.calibrationProfiles) ? payload.calibrationProfiles : [];
-    directorModelTestState.calibrationReports = Array.isArray(payload.calibrationReports) ? payload.calibrationReports : [];
-    directorModelTestRenderCalibrationProfiles();
-  });
-  if (model.runtimeId === 'local') {
-    contextSteps.forEach(function (target) {
-      chain = chain.then(function () {
-        if (directorModelTestState.stopRequested) return;
-        var previous = attempts.filter(function (attempt) { return attempt.kind === 'context'; });
-        if (previous.length && previous[previous.length - 1].status === 'failed') return;
-        return runAttempt('context', target);
-      });
-    });
-  }
-
-  outputSteps.forEach(function (target) {
-    chain = chain.then(function () {
-      if (directorModelTestState.stopRequested) return;
-      if (contextMode === 'calibrated' && !contextSize) return;
-      var previousCapacity = attempts.filter(function (attempt) {
-        return attempt.kind === 'output' || attempt.kind === 'prose';
-      });
-      if (previousCapacity.length && previousCapacity[previousCapacity.length - 1].failureKind === 'capacity') return;
-      return runAttempt('output', target).then(function (attempt) {
-        if (!attempt || attempt.status === 'stopped' || attempt.failureKind === 'capacity' || directorModelTestState.stopRequested) return;
-        return runAttempt('prose', target);
-      });
-    });
-  });
-
-  return chain.then(function () {
-    if (directorModelTestState.stopRequested) {
-      return record('stopped', '', true).then(function () { return null; });
-    }
-
-    var runtimeFailure = attempts.slice().reverse().find(function (attempt) {
-      return attempt.status === 'failed' && attempt.failureKind === 'runtime';
-    }) || null;
-    var reportStatus = maxTokens > 0 ? 'complete' : (runtimeFailure ? 'error' : 'incomplete');
-    var reportError = maxTokens > 0 ? '' : (runtimeFailure ? String(runtimeFailure.error || '') : '');
-    return record(reportStatus, reportError, true).then(function () {
-      if (contextMode === 'calibrated' && !contextSize) {
-        reportConsoleWarning('Director Model Calibration', 'No local context tier passed for ' + model.label + '; findings were saved but no Auto profile was created.');
-        return null;
-      }
-      if (!maxTokens) {
-        reportConsoleWarning('Director Model Calibration', 'No coherent output tier passed for ' + model.label + '; findings were saved but no Auto profile was created.');
-        return null;
-      }
-      return directorModelTestPost({
-        action: 'save_calibration_profile',
-        profile: {
-          modelRef: model.modelRef,
-          runtimeId: model.runtimeId,
-          runtimeName: model.runtimeName,
-          modelId: model.modelId,
-          label: model.label,
-          contextMode: contextMode,
-          contextSize: contextSize,
-          maxTokens: maxTokens,
-          attempts: attempts
-        }
-      }).then(function (payload) {
-        directorModelTestState.calibrationProfiles = Array.isArray(payload.calibrationProfiles) ? payload.calibrationProfiles : [];
-        directorModelTestState.calibrationReports = Array.isArray(payload.calibrationReports) ? payload.calibrationReports : directorModelTestState.calibrationReports;
-        directorModelTestRenderCalibrationProfiles();
-        reportConsoleInfo(
-          'Director Model Calibration',
-          'Saved ' + model.label + ' · ' +
-            (contextMode === 'calibrated' ? directorModelTestFormatCapacity(contextSize) + ' context · ' : '') +
-            directorModelTestFormatCapacity(maxTokens) + ' coherent output proven.'
-        );
-        return payload.profile || null;
-      });
-    });
+    return run(target);
+  }).then(function (first) {
+    // A runtime error, a control failure or deliberate Stop is not evidence that
+    // a smaller output allowance will help. Only retry a clean capacity exhaustion.
+    if (directorModelTestState.stopRequested || !first || first.status === 'passed' || first.status === 'stopped' ||
+        first.failureKind !== 'capacity' || !fallback) return;
+    reportConsoleInfo('Director Model Assessment', model.label + ': capacity exhausted; retrying ' +
+      directorModelTestFormatCapacity(fallback) + ' output once.');
+    return run(fallback);
+  }).then(function () {
+    if (directorModelTestState.stopRequested || attempts.some(function (attempt) { return attempt.status === 'stopped'; })) return record('stopped', '', true);
+    var runtimeFailure = attempts.find(function (attempt) { return attempt.failureKind === 'runtime'; });
+    var status = maxTokens > 0 ? 'complete' : (runtimeFailure ? 'error' : 'incomplete');
+    var error = maxTokens > 0 ? '' : (runtimeFailure ? String(runtimeFailure.error || '') : '');
+    return record(status, error, true);
   });
 }
 
@@ -1533,7 +1446,7 @@ function directorModelTestStartCalibration() {
   directorModelTestStartActivityClock();
   directorModelTestSyncControls();
   directorModelTestRenderStatus();
-  reportConsoleInfo('Director Model Calibration', 'Starting progressive calibration for ' + String(models.length) + ' model' + (models.length === 1 ? '' : 's') + '.');
+  reportConsoleInfo('Director Model Calibration', 'Starting single-pass assessment for ' + String(models.length) + ' model' + (models.length === 1 ? '' : 's') + '.');
 
   var chain = Promise.resolve();
   var assessmentFailed = false;

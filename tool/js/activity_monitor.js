@@ -125,9 +125,11 @@
           window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
         } else if (item.kind === 'set-intelligence') {
           window.openSetIntelligence();
-        } else if (item.kind === 'deep-qa') {
+        } else if (item.kind === 'deep-qa' || item.kind === 'qa-concept-check') {
           window.setWorkspaceSurface('reviewOutput');
           window.setReviewDetailTab('qa');
+        } else if (item.kind === 'model-lab') {
+          window.openDiagnosticsModal('model-lab');
         } else if (item.original) {
           openItem(item.original);
         } else {
@@ -784,10 +786,13 @@
             } else if (item.kind === 'set-intelligence') {
               setOpen(false);
               window.openSetIntelligence();
-            } else if (item.kind === 'deep-qa') {
+            } else if (item.kind === 'deep-qa' || item.kind === 'qa-concept-check') {
               setOpen(false);
               window.setWorkspaceSurface('reviewOutput');
               window.setReviewDetailTab('qa');
+            } else if (item.kind === 'model-lab') {
+              setOpen(false);
+              window.openDiagnosticsModal('model-lab');
             } else if (item.kind === 'vocabulary-discovery') {
               setOpen(false);
             } else openItem(item);

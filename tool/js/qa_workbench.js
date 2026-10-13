@@ -398,8 +398,9 @@
       }
       if (saved.trainingFocus !== qaWorkbenchState.trainingFocus) return;
       var legacyReview = !saved.qaReviewMode || saved.qaReviewMode === 'legacy-per-item';
-      if (!legacyReview && (saved.qaReviewMode !== 'set-review-v1' || saved.aiScopeSignature !== signature)) return;
-      qaWorkbenchState.qaReviewMode = legacyReview ? 'legacy-per-item' : saved.qaReviewMode;
+      var deepReviewCurrent = legacyReview || (saved.qaReviewMode === 'set-review-v1' && saved.aiScopeSignature === signature);
+      // A stale set-wide review must not suppress separately validated Concept Check actions.
+      qaWorkbenchState.qaReviewMode = deepReviewCurrent ? (legacyReview ? 'legacy-per-item' : saved.qaReviewMode) : '';
       var before = saved.itemSignatures && typeof saved.itemSignatures === 'object'
         ? saved.itemSignatures
         : {};
@@ -413,7 +414,7 @@
           validCount += 1;
         }
       });
-      qaWorkbenchState.aiFindings = (saved.aiFindings || []).filter(function (finding) {
+      qaWorkbenchState.aiFindings = (deepReviewCurrent ? (saved.aiFindings || []) : []).filter(function (finding) {
         return !(finding.files || []).some(function (file) { return changed[file]; });
       }).map(function (finding) {
         return legacyReview ? Object.assign({}, finding, { sourceLabel: 'Legacy Deep QA · ' + String(saved.aiModel || 'Director') }) : finding;
@@ -428,9 +429,9 @@
       qaWorkbenchState.qaAlternatives = Object.fromEntries(Object.entries(saved.qaAlternatives || {}).filter(function (entry) {
         return !changed[entry[0]] && typeof entry[1] === 'string' && !!entry[1].trim();
       }));
-      qaWorkbenchState.aiSummary = String(saved.aiSummary || '');
-      qaWorkbenchState.aiModel = String(saved.aiModel || '');
-      qaWorkbenchState.aiScopeSignature = legacyReview ? signature : saved.aiScopeSignature;
+      qaWorkbenchState.aiSummary = deepReviewCurrent ? String(saved.aiSummary || '') : '';
+      qaWorkbenchState.aiModel = deepReviewCurrent ? String(saved.aiModel || '') : '';
+      qaWorkbenchState.aiScopeSignature = deepReviewCurrent ? (legacyReview ? signature : saved.aiScopeSignature) : '';
       qaWorkbenchState.aiItemSignatures = Object.assign({}, before);
       qaWorkbenchState.aiCoverageValid = validCount;
       qaWorkbenchState.aiCoverageTotal = Object.keys(current).length;
@@ -2423,13 +2424,15 @@
     if (folderChanged || scopeChanged || inputsChanged || !qaWorkbenchState.deepScanInputSignature) {
       qaWorkbenchState.browseIndex = 0;
       qaWorkbenchState.statusMessage = '';
-      if (qaWorkbenchState.deepScanSessionActive && (folderChanged || scopeChanged)) {
-        qaInvalidateDeepScanSession('Deep QA stopped because the review scope changed.');
+      if (folderChanged || scopeChanged || !qaWorkbenchState.deepScanInputSignature) {
+        if (qaWorkbenchState.deepScanSessionActive && (folderChanged || scopeChanged)) {
+          qaInvalidateDeepScanSession('Deep QA stopped because the review scope changed.');
+        }
         qaRestoreReview(inputSignature);
-      } else if (qaWorkbenchState.deepScanSessionActive) {
+      } else if (inputsChanged) {
+        // Same Set/selection: do not reload storage over an active Concept Check.
+        // Reconcile changed annotations in memory and retain other valid actions.
         qaReconcileAiFindingsToCurrentInputs();
-      } else {
-        qaRestoreReview(inputSignature);
       }
       if (!qaWorkbenchState.deepScanJobId && !qaWorkbenchState.deepScanSessionActive && !qaWorkbenchState.deepScanStatus) {
         qaWorkbenchState.deepScanStatus = '';

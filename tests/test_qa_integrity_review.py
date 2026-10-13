@@ -64,3 +64,42 @@ def test_qa_open_is_passive_and_set_review_does_not_certify_all_items():
     assert "qaPrimeDeterministicSources(currentItems);" not in source
     assert "counts.unchecked = items.length" in source
     assert "qaBuildVisualAgreementFindings(items).map" in source
+
+
+def test_deep_qa_mines_full_eligible_sight_before_sampling():
+    from tool.server.vision_schema_assist import mine_sight_records
+    records = []
+    for index in range(170):
+        records.append({
+            "file": f"{index:03d}.jpg",
+            "description": f"Item {index}",
+            "inventory": {
+                "viewpoint": [], "position": [], "things": [],
+                "colors": [{"thing": "top", "color": f"shade {index}"}],
+                "setting": [], "background": [], "lighting": [],
+                "surface": [],
+                "details": ["unique ring construction"] if index == 169 else [],
+            },
+        })
+    full = mine_sight_records(records, limit=None, minimum_support=1)
+    assert len(full["evidence"]) > 160
+    assert any(row["label"] == "unique ring construction" for row in full["evidence"])
+    request = build_set_review_request(
+        [{"fileName": "169.jpg"}], sight_evidence=full
+    )
+    assert "unique ring construction" in request["prompt"]
+    import inspect
+    route = inspect.getsource(app_module.qa_deep_scan_route)
+    assert "mine_sight_records(sight_records, limit=None, minimum_support=1)" in route
+
+
+def test_qa_restores_concept_findings_without_valid_deep_review_and_reconciles_edits():
+    source = (Path(__file__).resolve().parents[1] / "tool/js/qa_workbench.js").read_text()
+    restore = source.split("function qaRestoreReview(", 1)[1].split("function qaMergeFindings(", 1)[0]
+    assert "deepReviewCurrent = legacyReview ||" in restore
+    assert "saved.conceptFindings || []" in restore
+    assert "if (!legacyReview &&" not in restore
+    refresh = source.split("function qaRefreshComputedState(", 1)[1].split("function qaFocusReviewCurrent(", 1)[0]
+    assert "else if (inputsChanged)" in refresh
+    assert "qaReconcileAiFindingsToCurrentInputs();" in refresh
+    assert "qaRestoreReview(inputSignature);" in refresh

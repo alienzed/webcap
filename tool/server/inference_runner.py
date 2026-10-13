@@ -684,23 +684,27 @@ def enqueue_test(request, context, label="", deferred=False):
     if not folder or not session_id or candidate_kind not in {"base", "lora"}:
         raise ValueError("Test inference requires folder, session, and candidate context.")
     status = "backlog" if deferred else "queued"
+    metadata = {
+        "client": "test",
+        "label": str(label or "Test"),
+        "modelId": str(request.get("modelId") or ""),
+        "mediaKind": str(request.get("mediaKind") or ""),
+        "folder": folder,
+        "source": str(context.get("source") or ""),
+        "sessionId": session_id,
+        "candidateKind": candidate_kind,
+        "candidateFile": str(context.get("candidateFile") or ""),
+    }
+    # Failed sweep jobs still need their weight when no result file was produced.
+    if request.get("sweepWeights") and candidate_kind == "lora":
+        metadata["candidateStrength"] = float(context["candidateStrength"])
     job = execution_enqueue(
         EXECUTION_LANE,
         {
             "request": copy.deepcopy(request),
             "clientContext": context,
         },
-        metadata={
-            "client": "test",
-            "label": str(label or "Test"),
-            "modelId": str(request.get("modelId") or ""),
-            "mediaKind": str(request.get("mediaKind") or ""),
-            "folder": folder,
-            "source": str(context.get("source") or ""),
-            "sessionId": session_id,
-            "candidateKind": candidate_kind,
-            "candidateFile": str(context.get("candidateFile") or ""),
-        },
+        metadata=metadata,
         initial_status=status,
     )
     if not deferred:

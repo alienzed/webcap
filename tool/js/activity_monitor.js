@@ -93,18 +93,26 @@
     var root = el('app-overlay-root');
     if (!root) throw new Error('Activity overlay root is missing.');
     var host = el('activity-progress-follower');
-    var items = localItems();
+    var managed = (Array.isArray(state.payload.active) ? state.payload.active : [])
+      .filter(function (item) { return !isProgressChild(item); })
+      .map(managedProgressSnapshot).filter(Boolean);
+    var items = managed.concat(localItems());
     if (!items.length) {
       if (host) host.remove();
       return;
     }
+    // Follow the most recently started work; stable start times prevent card
+    // switching on each refresh. Other operations remain in the Activity drawer.
+    items.sort(function (a, b) {
+      return Number(a.startedAt || 0) - Number(b.startedAt || 0);
+    });
+    var item = items[items.length - 1];
     if (!host) {
       host = document.createElement('div');
       host.id = 'activity-progress-follower';
       host.className = 'activity-progress-follower';
       root.appendChild(host);
     }
-    var item = items[items.length - 1];
     var card = host.querySelector('[data-progress-card-id]');
     if (!card || card.getAttribute('data-progress-card-id') !== String(item.id)) {
       card = ProgressCard.create({ compact: true });
@@ -116,7 +124,7 @@
         if (item.kind === 'director-diagnostics') {
           window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
         } else {
-          setOpen(true);
+          openItem(item.original || item);
         }
       }
     });
@@ -236,19 +244,55 @@
     return parts.join(' · ');
   }
 
-  function progressPercent(item) {
+  // Convert existing managed work to the same presentation contract as Diagnostics.
+  // The backend and owning workspace remain authoritative; no new progress polling.
+  function managedProgressSnapshot(item) {
+    if (item.kind !== 'training' && item.kind !== 'storage') return null;
+    var snapshot = {
+      id: 'managed:' + String(item.kind) + ':' + String(item.id),
+      kind: item.kind,
+      title: activityTitle(item),
+      status: String(item.status || 'running'),
+      startedAt: item.startedAt,
+      detail: String(item.folder || ''),
+      phase: '',
+      progressLabel: '',
+      progress: null
+    };
     if (item.kind === 'training') {
-      var progress = item.progress && typeof item.progress === 'object' ? item.progress : {};
-      var epoch = Number(progress.epoch);
-      var epochs = Number(progress.epochs);
-      if (isFinite(epoch) && isFinite(epochs) && epochs > 0) return Math.max(0, Math.min(100, epoch / epochs * 100));
-    }
-    if (item.kind === 'storage') {
+      var source = item.progress && typeof item.progress === 'object' ? item.progress : {};
+      var stage = String(source.stage || item.stage || '').replace(/_/g, ' ');
+      snapshot.phase = (item.status === 'stopping' ? 'Stopping' : 'Training') +
+        (stage ? ' · ' + stage : '');
+      var epoch = Number(source.epoch);
+      var epochs = Number(source.epochs);
+      var hasEpoch = source.epoch != null && source.epochs != null &&
+        isFinite(epoch) && epoch >= 0 && isFinite(epochs) && epochs > 0;
+      if (hasEpoch) snapshot.progressLabel = 'Epoch ' + Math.round(epoch) + ' / ' + Math.round(epochs);
+      var overall = Number(source.overallPercent);
+      if (source.overallPercent != null && isFinite(overall) && overall >= 0 && overall <= 100) {
+        snapshot.progress = { completed: overall, total: 100 };
+        snapshot.progressLabel += (snapshot.progressLabel ? ' · ' : '') +
+          (source.source === 'steps' ? '~' : '') + Math.round(overall) + '% overall';
+      } else if (hasEpoch) {
+        snapshot.progress = { completed: epoch, total: epochs };
+        snapshot.progressLabel += ' · current stage';
+      }
+    } else {
+      snapshot.phase = (item.status === 'cancelling' ? 'Cancelling' :
+        String(item.phase || 'Measuring').replace(/_/g, ' '));
       var measured = Number(item.itemsMeasured);
       var total = Number(item.itemsTotal);
-      if (isFinite(measured) && isFinite(total) && total > 0) return Math.max(0, Math.min(100, measured / total * 100));
+      if (item.itemsTotal != null && isFinite(total) && total > 0 &&
+          item.itemsMeasured != null && isFinite(measured) && measured >= 0) {
+        snapshot.progress = { completed: measured, total: total };
+        snapshot.progressLabel = String(measured) + ' / ' + String(total) + ' items measured';
+      }
+      var scanned = bytesLabel(item.bytesScanned);
+      if (scanned) snapshot.progressLabel += (snapshot.progressLabel ? ' · ' : '') + scanned + ' scanned';
     }
-    return null;
+    snapshot.original = item;
+    return snapshot;
   }
 
   function openItem(item) {
@@ -316,16 +360,6 @@
     copy.appendChild(title);
     copy.appendChild(detail);
     copy.appendChild(meta);
-
-    var percent = progressPercent(item);
-    if (percent !== null) {
-      var track = document.createElement('div');
-      track.className = 'activity-monitor-progress';
-      var fill = document.createElement('span');
-      fill.style.width = percent.toFixed(1) + '%';
-      track.appendChild(fill);
-      copy.appendChild(track);
-    }
 
     var open = document.createElement('button');
     open.type = 'button';
@@ -664,9 +698,16 @@
       nowSection.appendChild(emptyNow);
     } else {
       active.forEach(function (item) {
-        if (item.kind === 'director-diagnostics') {
-          var card = retainedProgressCards[String(item.id)] || ProgressCard.create();
-          ProgressCard.update(card, item, { onOpen: function () { setOpen(false); window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models'); } });
+        var managedSnapshot = managedProgressSnapshot(item);
+        if (managedSnapshot || item.kind === 'director-diagnostics') {
+          var progressItem = managedSnapshot || item;
+          var card = retainedProgressCards[String(progressItem.id)] || ProgressCard.create();
+          ProgressCard.update(card, progressItem, { onOpen: function () {
+            if (item.kind === 'director-diagnostics') {
+              setOpen(false);
+              window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
+            } else openItem(item);
+          } });
           nowSection.appendChild(card);
         } else nowSection.appendChild(createActiveCard(item));
       });

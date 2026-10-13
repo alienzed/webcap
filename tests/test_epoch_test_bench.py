@@ -326,6 +326,41 @@ def test_session_status_projects_resolved_wildcard_values(tmp_path):
     assert status["wildcardValues"] == ["rooftop", "side"]
 
 
+def test_session_status_recovers_good_choices_from_imperfect_resolved_prompt(tmp_path):
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "test.json").write_text(json.dumps({
+        "status": "complete",
+        "sourcePrompt": "wearing a {red|blue} top and {thong|micro} bottom in {studio|beach}",
+        "resolvedPrompt": "wearing a blue top and micro bottom somewhere unexpected",
+    }), encoding="utf-8")
+    response = bench._session_status(session)
+    assert response["wildcardValues"] == ["blue", "micro"]
+    assert any("blue top" in phrase for phrase in response["wildcardSummary"])
+    assert any("micro bottom" in phrase for phrase in response["wildcardSummary"])
+    assert "wildcardSummaryUnmatched" not in response
+
+
+def test_partial_wildcard_summary_does_not_take_choice_from_wrong_clause():
+    source = "wearing a {red|blue} top and {thong|micro} bottom in {studio|beach}"
+    resolved = "wearing a yellow top and micro bottom in a blue top studio"
+    assert bench._resolved_wildcard_values(source, resolved) == ["micro"]
+    assert not any("blue top" in phrase for phrase in bench._resolved_wildcard_summary(source, resolved))
+
+
+def test_session_status_empty_optional_selection_is_not_an_error(tmp_path):
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "test.json").write_text(json.dumps({
+        "status": "complete",
+        "sourcePrompt": "person in {studio|} room",
+        "resolvedPrompt": "person in room",
+    }), encoding="utf-8")
+    response = bench._session_status(session)
+    assert response["wildcardValues"] == []
+    assert response["wildcardSummary"] == []
+
+
 def test_session_status_ignores_legacy_stored_wildcard_values(tmp_path):
     session = tmp_path / "session"
     session.mkdir()

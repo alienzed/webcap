@@ -2309,3 +2309,72 @@ def test_queued_jobs_skips_terminal_history_without_reconciling(tmp_path, monkey
                             "terminal history must not be reconciled during queue listing"
                         )))
     assert bench.queued_jobs(tmp_path)["jobs"] == []
+
+
+def test_sweep_request_expands_multiple_loras_and_freezes_weights(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    model = patch_default_test_model(monkeypatch, template={}, settings={"seed": 77})
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    loras = [staged / name for name in ("epoch10.safetensors", "epoch20.safetensors")]
+    for lora in loras:
+        lora.write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
+    monkeypatch.setattr(inference_runtime, "resolve_wildcard_prompt", lambda prompt, seed: prompt)
+    request, selected, include_base = bench._new_inference_request(
+        tmp_path, "prompt", selected_files=[path.name for path in loras],
+        sweep_weights=[1.2, 0.6, 0.8], include_base=True,
+    )
+    assert include_base
+    assert selected == loras
+    assert request["sweepWeights"] == [0.6, 0.8, 1.2]
+    contexts = []
+    monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="", deferred=False:
+                        contexts.append(context) or {"jobId": "job-" + str(len(contexts))})
+    monkeypatch.setattr(bench, "execution_promote_backlog", lambda job_id: None)
+    monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
+    monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
+    set_folder = tmp_path / "sets" / "demo"
+    set_folder.mkdir(parents=True)
+    session = bench._enqueue_frozen_test_request(set_folder, request, selected, include_base)
+    payload = json.loads((tmp_path / "output" / bench.TEST_RESULTS_DIR / session["session"] / "test.json").read_text(encoding="utf-8"))
+    assert payload["total"] == 7
+    assert payload["sweepWeights"] == [0.6, 0.8, 1.2]
+    assert [(item["fileName"], item["strength"]) for item in payload["candidates"][1:]] == [
+        (lora.name, strength) for lora in loras for strength in (0.6, 0.8, 1.2)
+    ]
+    assert len({context["candidateIndex"] for context in contexts}) == 7
+    assert [(context["candidateFile"], context["candidateStrength"]) for context in contexts[1:]] == [
+        (lora.name, strength) for lora in loras for strength in (0.6, 0.8, 1.2)
+    ]
+
+
+@pytest.mark.parametrize("weights, message", [
+    ([], "nonempty"),
+    ([0.8, 0.8], "duplicate"),
+    ([0.8, 2.1], "between"),
+    ([float("nan")], "between"),
+    (["bad"], "numeric"),
+])
+def test_sweep_weight_validation_rejects_invalid_batches(tmp_path, monkeypatch, weights, message):
+    patch_default_test_model(monkeypatch, template={}, settings={"seed": 1})
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    (staged / "epoch10.safetensors").write_bytes(b"weights")
+    monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
+    with pytest.raises(ValueError, match=message):
+        bench._new_inference_request(tmp_path, "prompt", selected_files=["epoch10.safetensors"], sweep_weights=weights)
+
+
+def test_sweep_ratings_do_not_pollute_normal_candidate_average(tmp_path, monkeypatch):
+    model = bench.get_test_model()
+    session = tmp_path / "session"
+    session.mkdir()
+    normal = {"modelId": model.PROFILE_ID, "results": [{"candidateFile": "epoch10.safetensors", "mediaFile": "normal.mp4"}]}
+    sweep = {"modelId": model.PROFILE_ID, "sweepWeights": [0.6, 1.0], "results": [
+        {"candidateFile": "epoch10.safetensors", "mediaFile": "sweep.mp4", "strength": 0.6}
+    ]}
+    monkeypatch.setattr(bench, "_session_rating_map", lambda path: {"normal.mp4": 5, "sweep.mp4": 1})
+    scores = bench._candidate_rating_scores(tmp_path, model.PROFILE_ID, session_snapshot=[(session, normal), (session, sweep)])
+    assert scores["epoch10.safetensors"]["average"] == 5
+    assert scores["epoch10.safetensors"]["count"] == 1

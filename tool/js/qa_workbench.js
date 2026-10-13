@@ -806,6 +806,8 @@
   }
 
   function qaStopConceptCheck(silent) {
+    qaWorkbenchState.conceptPreflightToken += 1;
+    qaWorkbenchState.conceptPreflightPending = false;
     var session = qaWorkbenchState.conceptSession;
     if (!session) return;
     session.stopped = true;
@@ -3175,6 +3177,9 @@
     });
     root.addEventListener('input', function (event) {
       if (event.target && event.target.id === 'qa-concept-input') {
+        qaWorkbenchState.conceptPreflightToken += 1;
+        qaWorkbenchState.conceptPreflightPending = false;
+        qaWorkbenchState.investigation = null;
         qaWorkbenchState.conceptQuery = event.target.value;
       }
     });

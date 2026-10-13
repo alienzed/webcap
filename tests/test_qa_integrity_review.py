@@ -116,3 +116,16 @@ def test_inflight_restore_cannot_replace_active_or_changed_concept_review():
     assert "else if (inputsChanged)" in refresh
     assert "qaReviewLoadToken += 1" in refresh
     assert "qaReconcileAiFindingsToCurrentInputs();" in refresh
+
+
+def test_focus_review_keeps_active_concept_findings_and_focus_only_invalidates_deep_qa():
+    qa = (Path(__file__).resolve().parents[1] / "tool/js/qa_workbench.js").read_text()
+    restore = qa.split("function qaRestoreReview(", 1)[1].split("function qaMergeFindings(", 1)[0]
+    assert "var focusMatches = saved.trainingFocus === qaWorkbenchState.trainingFocus;" in restore
+    assert "var deepReviewCurrent = focusMatches &&" in restore
+    assert "qaWorkbenchState.conceptFindings = (saved.conceptFindings || [])" in restore
+    assert "if (saved.trainingFocus !== qaWorkbenchState.trainingFocus) return;" not in restore
+    focus = qa.split("function qaStartFocusReview(", 1)[1].split("function renderQaWorkbench(", 1)[0]
+    assert "qaWorkbenchState.conceptSession ||" in focus
+    assert "qaWorkbenchState.conceptPreflightPending || qaWorkbenchState.aiFindings.length ||" in focus
+    assert "qaWorkbenchState.conceptFindings.length" in focus

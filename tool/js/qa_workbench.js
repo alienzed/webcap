@@ -399,9 +399,10 @@
       if (!qaWorkbenchState.focusExplicitlyEdited && !focus && saved.trainingFocus) {
         qaWorkbenchState.trainingFocus = String(saved.trainingFocus);
       }
-      if (saved.trainingFocus !== qaWorkbenchState.trainingFocus) return;
+      var focusMatches = saved.trainingFocus === qaWorkbenchState.trainingFocus;
       var legacyReview = !saved.qaReviewMode || saved.qaReviewMode === 'legacy-per-item';
-      var deepReviewCurrent = legacyReview || (saved.qaReviewMode === 'set-review-v1' && saved.aiScopeSignature === signature);
+      var deepReviewCurrent = focusMatches &&
+        (legacyReview || (saved.qaReviewMode === 'set-review-v1' && saved.aiScopeSignature === signature));
       // A stale set-wide review must not suppress separately validated Concept Check actions.
       qaWorkbenchState.qaReviewMode = deepReviewCurrent ? (legacyReview ? 'legacy-per-item' : saved.qaReviewMode) : '';
       var before = saved.itemSignatures && typeof saved.itemSignatures === 'object'
@@ -428,10 +429,14 @@
           return finding.inputSignatures && finding.inputSignatures[file] === conceptCurrent[file];
         });
       });
-      qaWorkbenchState.captionQuality = Object.fromEntries(Object.entries(saved.captionQuality || {}).filter(function (entry) { return !changed[entry[0]]; }));
-      qaWorkbenchState.qaAlternatives = Object.fromEntries(Object.entries(saved.qaAlternatives || {}).filter(function (entry) {
-        return !changed[entry[0]] && typeof entry[1] === 'string' && !!entry[1].trim();
-      }));
+      qaWorkbenchState.captionQuality = deepReviewCurrent
+        ? Object.fromEntries(Object.entries(saved.captionQuality || {}).filter(function (entry) { return !changed[entry[0]]; }))
+        : {};
+      qaWorkbenchState.qaAlternatives = deepReviewCurrent
+        ? Object.fromEntries(Object.entries(saved.qaAlternatives || {}).filter(function (entry) {
+            return !changed[entry[0]] && typeof entry[1] === 'string' && !!entry[1].trim();
+          }))
+        : {};
       qaWorkbenchState.aiSummary = deepReviewCurrent ? String(saved.aiSummary || '') : '';
       qaWorkbenchState.aiModel = deepReviewCurrent ? String(saved.aiModel || '') : '';
       qaWorkbenchState.aiScopeSignature = deepReviewCurrent ? (legacyReview ? signature : saved.aiScopeSignature) : '';
@@ -2951,8 +2956,11 @@
     qaRefreshComputedState(true);
     var session = qaFocusReviewState;
     var loadToken = ++session.loadToken;
-    // Never clear an active Deep QA session just to restore saved findings.
-    var restore = qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanJobId || qaWorkbenchState.deepScanSubmitting
+    // Reuse current findings: restoring the same receipt would clear active Concept Check work.
+    var restore = qaWorkbenchState.deepScanSessionActive || qaWorkbenchState.deepScanJobId ||
+      qaWorkbenchState.deepScanSubmitting || qaWorkbenchState.conceptSession ||
+      qaWorkbenchState.conceptPreflightPending || qaWorkbenchState.aiFindings.length ||
+      qaWorkbenchState.conceptFindings.length
       ? Promise.resolve()
       : qaRestoreReview(qaBuildDeepScanSignature(items));
     restore.then(function () {

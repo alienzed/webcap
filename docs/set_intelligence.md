@@ -1,5 +1,11 @@
 # Set Intelligence
 
+## QA integrity follow-up (2026-10-12)
+
+The QA Workbench preserves saved Concept Check corrections in the existing Set-owned review receipt, keyed by the current filtered training selection; earlier one-scope receipts migrate in place. A failed rerun does not remove earlier valid actions. The QA overview differentiates unverified Deep QA hypotheses from corrections, and a set-wide Director review is **not** reported as per-item certification. Cached Vision/MediaPipe agreement is a diagnostic observation, not an automatically actionable tag correction until Sight freshness is corroborated. Prune and Duplicate utilities remain explicitly opened, not background work triggered by visiting QA. The 160-observation discovery budget reserves capacity for rare concrete Sight details.
+
+This section describes the implementation on the QA-integrity feature branch. End-to-end browser and Python acceptance are still required before treating it as validated.
+
 ## Focused Deep QA set review (2026-10-12)
 
 Deep QA is now an explicit, bounded **set-wide investigation** rather than an unattended caption challenger/quality judge for each media item.

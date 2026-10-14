@@ -16,6 +16,7 @@ from . import config as app_config
 from .training_commands import build_h3_command_plan, build_training_command_plan
 from .training_profiles import config_for_stage, profile, resolved_profile, profile_run, profiles as training_profiles
 from .training_bundle import materialize_training_bundle
+from .training_config_files import rewrite_toml_assignment
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets
 from .training_history import discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume, run_summary_from_capture
@@ -34,6 +35,7 @@ from .training_progress import (
     log_has_progress as _log_has_progress,
     normalize_training_stages as _normalize_training_stages,
     read_log_tail as _read_log_tail,
+    read_config_epochs as _read_config_epochs,
     sync_job_progress as _sync_job_progress,
 )
 from .training_runtime import (
@@ -2715,6 +2717,74 @@ def _bundle_from_recorded_capture(action_id, capture_path, folder_path, profile_
 
 
 
+
+def _history_continue_epoch_plan(bundle, stage, resume_path, inherited_epochs=0, requested_epochs=None, recorded_epoch=0):
+    """Best-effort Continue guard; the captured config is the trainer's actual input."""
+    source = Path(bundle["artifacts"][stage + "Config"])
+    captured_epochs = _read_config_epochs(source)
+    if captured_epochs < 1:
+        raise ValueError("Recorded training config has no valid epoch target: " + str(source))
+    target = int(inherited_epochs or captured_epochs)
+    if target < 1 or target > 999:
+        raise ValueError("Recorded Continue epoch target is invalid.")
+
+    run_dir = host_path_for_training_path(resume_path)
+    latest = run_dir / "latest"
+    try:
+        tag = latest.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+    except (OSError, IndexError) as exc:
+        raise ValueError("Cannot Continue: the recorded run has no readable latest checkpoint.") from exc
+    _validated_resume_checkpoint(resume_path, tag)
+    saved_epoch = 0
+    for entry in run_dir.iterdir():
+        match = re.fullmatch(r"epoch(\\d+)", entry.name, re.IGNORECASE)
+        if match and entry.is_dir():
+            saved_epoch = max(saved_epoch, int(match.group(1)))
+    observed_epoch = max(saved_epoch, int(recorded_epoch or 0))
+
+    if requested_epochs is not None:
+        value = str(requested_epochs).strip()
+        if not re.fullmatch(r"[0-9]{1,3}", value):
+            raise ValueError("New total epoch target must be a whole number from 1 to 999.")
+        extended = int(value)
+        if extended <= max(target, observed_epoch):
+            raise ValueError("New total epoch target must exceed the existing target and last known epoch.")
+        target = extended
+    elif observed_epoch > 0 and target - observed_epoch <= 5:
+        return {
+            "epochExtensionRequired": True,
+            "lastEpoch": observed_epoch,
+            "plannedEpochs": target,
+            "remainingEpochs": max(0, target - observed_epoch),
+        }
+    return {"epochs": target, "capturedEpochs": captured_epochs}
+
+
+def _apply_history_continue_epoch_plan(job, stage, target, captured_epochs):
+    """Only the new job's config changes; the captured and trainer-run TOMLs do not."""
+    target = int(target)
+    job["continueEpochs"] = target
+    job.setdefault("trainingSettings", {})["epochs"] = target
+    if target != int(captured_epochs):
+        original = Path(job["snapshot"][stage])
+        copied = Path(job["artifactDir"]) / original.name
+        modified = rewrite_toml_assignment(original.read_text(encoding="utf-8"), "epochs", str(target))
+        copied.write_text(modified, encoding="utf-8")
+        job["snapshot"][stage] = str(copied)
+        job["bundleArtifacts"][stage + "Config"] = str(copied)
+        job.setdefault("runSummary", {})["epochs"] = target
+
+    # Captured plans may still reflect the set template, not the effective job target.
+    stage_plan = job.get("progressPlan", {}).get(stage)
+    if isinstance(stage_plan, dict):
+        plan_epochs = int(stage_plan.get("epochs") or 0)
+        if plan_epochs > 0 and plan_epochs != target:
+            for key in ("estimatedSteps", "estimatedImageExposures", "estimatedVideoExposures", "sampleExposures"):
+                if stage_plan.get(key) is not None:
+                    stage_plan[key] = round(int(stage_plan[key]) * target / plan_epochs)
+            stage_plan["epochs"] = target
+
+
 def start_response(
     folder,
     queue=False,
@@ -2740,6 +2810,7 @@ def start_response(
     reuse_capture_path="",
     config_settings=None,
     resume_checkpoint_tag="",
+    continue_epochs=None,
 ):
     try:
         selected_profile, selected_run = profile_run(profile_id, run_id)
@@ -2829,12 +2900,31 @@ def start_response(
             # force_constant_lr is present. Keep the user-selected LR effective
             # for checkpoint resumes and LoRA continuation alike.
             effective_config_settings["forceConstantLr"] = effective_config_settings["optimizerLr"]
+        continue_plan = None
         if reuse_capture:
             action_root, action = read_action(str(reuse_capture_action_id).strip())
             bundle = _bundle_from_recorded_capture(
                 str(reuse_capture_action_id).strip(), reuse_capture_path, folder_path,
                 selected_profile["id"], stages,
             )
+            inherited_epochs = 0
+            recorded_epoch = 0
+            if parent_job_id:
+                previous = _find_history_job(folder, parent_job_id)
+                if not previous or any((
+                    str(previous.get("actionId") or "") != str(reuse_capture_action_id),
+                    str(previous.get("inputPath") or "") != str(reuse_capture_path),
+                    str(previous.get("outputRunPath") or previous.get("resumeFromCheckpoint") or "") != resume_path,
+                    str(previous.get("stages") or "") != stages,
+                )):
+                    raise ValueError("History Continue source no longer matches the selected recorded run.")
+                inherited_epochs = int(previous.get("continueEpochs") or 0)
+                recorded_epoch = int((previous.get("progress") or {}).get("epoch") or 0)
+            continue_plan = _history_continue_epoch_plan(
+                bundle, stages, resume_path, inherited_epochs, continue_epochs, recorded_epoch,
+            )
+            if continue_plan.get("epochExtensionRequired"):
+                return {"ok": False, **continue_plan}, 409
         elif resume_action is not None:
             action_root = resume_action
             action = read_action(action_id_for_root(action_root))[1]
@@ -2863,12 +2953,14 @@ def start_response(
         preflight = {"checks": [], "summary": {"blockers": 0, "warnings": 0}}
         job = _new_job(
             str(folder).strip(), preflight, stages, bundle, output_root, output_dir,
-            resume_path, resume_stage, "", selected_profile["id"], selected_run["id"],
+            resume_path, resume_stage, parent_job_id if reuse_capture else "", selected_profile["id"], selected_run["id"],
             action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, 0,
             resume_checkpoint_tag=resume_checkpoint_tag,
         )
         job["resumePoint"] = resume_point
         job["trainingSettings"] = dict(effective_config_settings)
+        if continue_plan is not None:
+            _apply_history_continue_epoch_plan(job, stages, continue_plan["epochs"], continue_plan["capturedEpochs"])
         def record_capture(data):
             _assign_candidate_revision(data, job, deliberate_rewind)
             if not reuse_capture:

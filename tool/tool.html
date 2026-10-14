@@ -912,10 +912,6 @@
                                                 <input id="training-run-dropout-input" type="number" min="0" max="0.2" step="0.01" inputmode="decimal" aria-describedby="training-run-parameters-error">
                                             </label>
                                         </div>
-                                        <label id="training-run-h3-adapter-option" class="training-run-h3-adapter-option hidden">
-                                            <input id="training-run-h3-adapter" type="checkbox">
-                                            <span>Use image training adapter</span>
-                                        </label>
                                         <div id="training-run-parameters-note" class="training-run-parameters-note hidden"></div>
                                         <div id="training-run-parameters-error" class="training-run-parameters-error hidden" role="status"></div>
                                     </section>
@@ -934,14 +930,20 @@
                                                 <span>Run name <em>(optional)</em></span>
                                                 <input id="training-run-name-input" type="text" maxlength="80" placeholder="e.g. clothing baseline">
                                             </label>
-                                            <label class="training-run-option training-run-starting-point-option">
-                                                <span>Starting point</span>
+                                            <div class="training-run-option training-run-starting-point-option">
+                                                <div class="training-run-starting-point-heading">
+                                                    <label for="training-run-starting-point-select">Starting point</label>
+                                                    <label id="training-run-h3-adapter-option" class="training-run-h3-adapter-option hidden">
+                                                        <input id="training-run-h3-adapter" type="checkbox">
+                                                        <span>Use image training adapter</span>
+                                                    </label>
+                                                </div>
                                                 <select id="training-run-starting-point-select">
                                                     <option value="fresh">Fresh</option>
                                                     <option value="resume">Resume from checkpoint</option>
                                                     <option value="initializer">Fine-tune from saved LoRA</option>
                                                 </select>
-                                            </label>
+                                            </div>
                                         </div>
                                         <div id="training-run-resume-fields" class="training-run-dependent-fields hidden">
                                             <label class="training-run-option training-run-resume-option">

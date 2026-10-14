@@ -313,3 +313,17 @@ def test_training_workspace_has_no_setup_mode_state_or_browser_persistence():
     assert "mode: options.mode" not in runner
     assert "job.mode" not in history
     assert "job.datasetTarget" not in history
+
+
+def test_image_adapter_shares_starting_point_heading_without_duplicate_controls():
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/workbench.css").read_text(encoding="utf-8")
+    start = html.index('class="training-run-starting-point-heading"')
+    end = html.index('id="training-run-starting-point-select"', start)
+    heading = html[start:end]
+    assert 'id="training-run-h3-adapter-option"' in heading
+    assert 'id="training-run-h3-adapter"' in heading
+    assert html.count('id="training-run-h3-adapter"') == 1
+    assert 'for="training-run-starting-point-select"' in heading
+    assert ".training-run-h3-adapter-option.hidden" in css
+    assert "white-space: nowrap;" in css

@@ -14,7 +14,8 @@
     notified: Object.create(null),
     reportedErrors: Object.create(null),
     localProgress: Object.create(null),
-    progressChildIds: Object.create(null)
+    progressChildIds: Object.create(null),
+    hiddenFollowers: Object.create(null)
   };
 
   function el(id) { return document.getElementById(id); }
@@ -118,25 +119,38 @@
     };
   }
 
-  function renderProgressFollower() {
-    var root = el('app-overlay-root');
-    if (!root) throw new Error('Activity overlay root is missing.');
-    var host = el('activity-progress-follower');
+  function currentFollowerItem() {
     var managed = (Array.isArray(state.payload.active) ? state.payload.active : [])
       .filter(function (item) { return !isProgressChild(item); })
       .map(function (item) { return managedProgressSnapshot(item) || directorFollowerSnapshot(item); })
       .filter(Boolean);
     var items = managed.concat(localItems());
-    if (!items.length) {
-      if (host) host.remove();
-      return;
-    }
+    if (!items.length) return null;
     // Follow the most recently started work; stable start times prevent card
     // switching on each refresh. Other operations remain in the Activity drawer.
     items.sort(function (a, b) {
       return Number(a.startedAt || 0) - Number(b.startedAt || 0);
     });
-    var item = items[items.length - 1];
+    return items[items.length - 1];
+  }
+
+  function toggleProgressFollower() {
+    var item = currentFollowerItem();
+    if (!item) return;
+    if (state.hiddenFollowers[item.id]) delete state.hiddenFollowers[item.id];
+    else state.hiddenFollowers[item.id] = true;
+    renderProgressFollower();
+  }
+
+  function renderProgressFollower() {
+    var root = el('app-overlay-root');
+    if (!root) throw new Error('Activity overlay root is missing.');
+    var host = el('activity-progress-follower');
+    var item = currentFollowerItem();
+    if (!item || state.hiddenFollowers[item.id]) {
+      if (host) host.remove();
+      return;
+    }
     if (!host) {
       host = document.createElement('div');
       host.id = 'activity-progress-follower';
@@ -146,6 +160,17 @@
     var card = host.querySelector('[data-progress-card-id]');
     if (!card || card.getAttribute('data-progress-card-id') !== String(item.id)) {
       card = ProgressCard.create({ compact: true });
+      var close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'activity-progress-close';
+      close.setAttribute('aria-label', 'Hide floating progress');
+      close.title = 'Hide progress without stopping the job';
+      close.textContent = '×';
+      close.onclick = function () {
+        state.hiddenFollowers[item.id] = true;
+        renderProgressFollower();
+      };
+      card.appendChild(close);
       host.replaceChildren(card);
     }
     ProgressCard.update(card, item, {
@@ -979,6 +1004,7 @@
     window.addEventListener('webcap:inference-queue-changed', wake);
   }
 
+  window.toggleActivityProgressFollower = toggleProgressFollower;
   window.publishActivityProgress = publishProgress;
   window.finishActivityProgress = finishProgress;
   window.recordActivityCompletion = rememberRecentCompletion;

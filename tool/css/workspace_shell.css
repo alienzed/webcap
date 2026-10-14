@@ -507,18 +507,28 @@
 
 .shell-workload-indicator {
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
+  padding: 1px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--muted);
-  opacity: 0.52;
+  opacity: 0.72;
+  cursor: pointer;
+}
+.shell-workload-indicator:hover,
+.shell-workload-indicator:focus-visible {
+  opacity: 1;
+  outline: 1px solid var(--accent);
 }
 
 .shell-workload-icon {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   overflow: visible;
   transform-origin: 50% 50%;
 }
@@ -2818,10 +2828,31 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   pointer-events: none;
 }
 .activity-progress-follower .progress-card {
+  position: relative;
   margin: 0;
+  padding-right: 29px;
   pointer-events: auto;
   background: var(--panel);
   box-shadow: 0 10px 24px rgba(0, 0, 0, .22);
+}
+.activity-progress-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 19px;
+  cursor: pointer;
+}
+.activity-progress-close:hover,
+.activity-progress-close:focus-visible {
+  background: var(--hover);
+  color: var(--text);
 }
 .activity-progress-follower .activity-monitor-progress.indeterminate span {
   width: 35% !important;

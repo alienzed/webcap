@@ -736,7 +736,6 @@ def caption_vision_check_route():
                 "messages": messages,
             },
             context={
-                "runtimeOverrides": {"maxTokens": 320},
                 "visionGroups": groups,
                 "visionCaption": str(data.get("caption") or ""),
             },

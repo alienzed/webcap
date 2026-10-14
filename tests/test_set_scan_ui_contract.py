@@ -56,6 +56,12 @@ def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secon
     assert 'id="set-scan-open-card"' in html
     assert 'id="set-scan-context-card"' not in html
     assert "Broad discovery, optionally guided by existing groups" in html
+    assert 'id="set-scan-item-view"' in html
+    assert 'id="set-scan-quality-summary"' in html
+    assert 'id="set-scan-force-mode"' not in html
+    assert 'class="set-scan-sight-shell"' in html
+    assert "itemView.onclick = viewSelectedSightResponse;" in scan
+    assert "forceBtn.onclick = function () { runSetIntelligence('open'); };" in scan
     assert 'id="set-scan-details"' in html
     assert "<strong>Vision report</strong>" in html
     assert 'id="set-scan-report-count"' in html

@@ -105,3 +105,16 @@ def test_set_intelligence_uses_visible_training_scope_with_explicit_full_set_ove
     assert "openGuidedTagPass({ source: 'set' });" in scan
     assert 'schemaState.scopeFiles = getCurrentSetMediaFileNames();' in schema
     assert "if (opts.source === 'set') {\n      return getCurrentSetMediaFileNames();" in schema
+
+
+def test_prepare_set_sight_retry_and_unlimited_output_contract():
+    html = _read("tool/tool.html")
+    scan = _read("tool/js/set_scan.js")
+    app = _read("tool/server/app.py")
+    assert \'id="set-scan-item-select"\' in html
+    assert \'id="set-scan-item-retry"\' in html
+    assert \'id="set-scan-bad-retry"\' in html
+    assert "save_sight_attempt" in scan
+    assert "item.issue || !item.structured" in scan
+    assert "operation == \"save_sight_attempt\"" in app
+    assert \'"maxTokens": 1800\' not in app

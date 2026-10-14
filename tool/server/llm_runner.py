@@ -204,8 +204,13 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             result["visionExtras"] = normalize_vision_caption_extras_result(llm_result["text"])
         if client == "caption" and operation == "vision_schema_sight":
             from .vision_schema_assist import normalize_vision_schema_sight_result
+            raw_text = llm_result["text"]
+            finish_reason = str(llm_result.get("finishReason") or "").lower()
+            if finish_reason in {"length", "max_tokens"}:
+                raw_text = raw_text.split("\n\n[Output truncated by model/runtime token or context limit.]", 1)[0]
+                result["structureWarning"] = "Output truncated by model/runtime limit."
             try:
-                result["sight"] = normalize_vision_schema_sight_result(llm_result["text"])
+                result["sight"] = normalize_vision_schema_sight_result(raw_text)
             except ValueError as exc:
                 result["sight"] = None
                 result["structureWarning"] = str(exc)

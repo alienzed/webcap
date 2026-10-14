@@ -891,6 +891,8 @@ def candidate_run_snapshot_from_provenance(provenance):
 
 def candidate_selected_epoch_from_provenance(provenance):
     run_dir, run = candidate_run_snapshot_from_provenance(provenance)
+    if int(provenance.get("sourceRevision") or 1) != int(run.get("candidateRevision") or 1):
+        return None
     return _candidate_selected_epoch(run_dir, run)
 
 

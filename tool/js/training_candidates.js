@@ -1330,8 +1330,8 @@ function syncTrainingCandidatesDisplayControls() {
   var autoRange = trainingWorkspaceState.candidateAutoYRange || {};
   var comparing = trainingCandidatesComparisonActive();
   if (els.algorithm) els.algorithm.disabled = comparing;
-  if (els.smoothing) { els.smoothing.value = String(display.smoothing); els.smoothing.disabled = comparing; }
-  if (els.smoothingNumber) { els.smoothingNumber.value = Number(display.smoothing).toFixed(3); els.smoothingNumber.disabled = comparing; }
+  if (els.smoothing) { els.smoothing.value = String(display.smoothing); els.smoothing.disabled = false; }
+  if (els.smoothingNumber) { els.smoothingNumber.value = Number(display.smoothing).toFixed(3); els.smoothingNumber.disabled = false; }
   if (els.yMin) els.yMin.value = display.yMin === null ? trainingCandidatesRangeInputValue(autoRange.min) : String(display.yMin);
   if (els.yMax) els.yMax.value = display.yMax === null ? trainingCandidatesRangeInputValue(autoRange.max) : String(display.yMax);
 }

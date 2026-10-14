@@ -501,6 +501,17 @@ def test_revision_candidate_copy_preserves_previously_staged_same_epoch(tmp_path
     training_runner.remove_candidate_epoch_from_test("sets/subject", "job-1", 12)
     assert first_path.exists()
     assert not second_path.exists()
+    assert first_path.read_bytes() == b"test weights"
+
+    # The legacy source-filename staging convention must not make revision 2
+    # appear staged or let revision 2 remove revision 1's old-style copy.
+    legacy = first_path.parent / source.name
+    legacy.write_bytes(b"legacy original")
+    training_runner._annotate_candidate_test_folder_status(run, analysis)
+    assert analysis["savedArtifacts"][0]["inTestFolder"] is False
+    with pytest.raises(LookupError, match="not present"):
+        training_runner.remove_candidate_epoch_from_test("sets/subject", "job-1", 12)
+    assert legacy.read_bytes() == b"legacy original"
 
 
 def test_candidate_analysis_reports_unavailable_test_folder_without_blocking_analysis(tmp_path, monkeypatch):

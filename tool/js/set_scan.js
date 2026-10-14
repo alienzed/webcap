@@ -510,6 +510,7 @@
       ? 'complete' : 'idle';
     qaInputsUpdated();
     var failureCount = setScanState.failures.length;
+    var flaggedCount = setScanState.sightItems.filter(function (item) { return !!item.issue || !item.structured; }).length;
     reportConsoleInfo('Set Intelligence', 'Scan finished: ' + setScanState.coverage.openCurrent + '/' + setScanState.coverage.total + ' Sight current; ' + failureCount + ' item failures.');
     if (failureCount) {
       finishSetIntelligenceActivity('completed');
@@ -522,7 +523,8 @@
       return;
     }
     finishSetIntelligenceActivity('completed');
-    setSetIntelligenceStatus('Set understood', message || 'Ready for the next decision.');
+    setSetIntelligenceStatus(flaggedCount ? 'Set understood with flags' : 'Set understood',
+      flaggedCount ? String(flaggedCount) + ' items need attention. Inspect or retry them below.' : (message || 'Ready for the next decision.'));
     window.setStatus('Set Intelligence is ready.');
   }
 

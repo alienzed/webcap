@@ -266,6 +266,11 @@ def activity_snapshot(limit=20, since=0):
                 "paused": bool(inference.get("paused")),
                 "pauseReason": str(inference.get("pauseReason") or ""),
                 "unavailable": bool(inference.get("unavailable")),
+                "jobs": [
+                    _execution_item("inference", job)
+                    for job in inference_jobs
+                    if str(job.get("status") or "") == "queued"
+                ],
             },
             "training": training_queue,
             "director": {

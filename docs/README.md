@@ -55,7 +55,7 @@ These describe implemented features, but they are narrower than `README.md` / `d
 
 These are useful product notes, not authoritative implementation references:
 
-- `docs/live_activity_panel.md` - agreed direction and open UX questions for a unified live Activity card (not yet implemented)
+- `docs/live_activity_panel.md` - agreed design and interaction rules for a unified live Activity card (not yet implemented)
 
 - `docs/model-modules.md` - North Star for model-owned training configuration and policy boundaries
 - `docs/filesystem_state_contract.md` - North Star for app-data, cache, queue persistence, temporary work, and filesystem lifecycle ownership

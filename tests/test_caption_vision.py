@@ -182,7 +182,7 @@ def test_caption_vision_route_queues_normalized_multimodal_caption_job(monkeypat
     assert captured["model"] == "local::vision"
     assert captured["contract"]["operation"] == "caption_vision_validate"
     assert captured["contract"]["messages"][1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
-    assert captured["context"]["runtimeOverrides"]["maxTokens"] == 320
+    assert "runtimeOverrides" not in captured["context"]
     assert captured["context"]["visionGroups"][0]["group"] == "Connector"
     assert captured["context"]["visionCaption"] == "a bikini"
 

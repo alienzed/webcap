@@ -77,6 +77,10 @@
     return setScanState.coverage.known && setScanState.coverage.openCurrent > 0;
   }
 
+  function itemsCountNeedingAttention(items) {
+    return items.filter(function (item) { return !!item.issue || !item.structured; }).length;
+  }
+
   function renderSetIntelligence() {
     var modal = el('set-scan-modal');
     var stopBtn = el('set-scan-stop-btn');
@@ -88,7 +92,8 @@
     var reportCount = el('set-scan-report-count');
     var rescanBtn = el('set-scan-rescan-btn');
     var forceBtn = el('set-scan-force-btn');
-    var forceMode = el('set-scan-force-mode');
+    var itemView = el('set-scan-item-view');
+    var qualitySummary = el('set-scan-quality-summary');
     var scopeToggle = el('set-scan-entire-set');
     var scopeSummary = el('set-scan-scope-summary');
     var issues = el('set-scan-issues');
@@ -102,7 +107,7 @@
     var openDetail = el('set-scan-open-detail');
     if (
       !modal || !stopBtn || !progressFill || !next || !details || !responseSelect || !output ||
-      !reportCount || !rescanBtn || !forceBtn || !forceMode || !scopeToggle || !scopeSummary || !openCard || !openBadge || !openCount || !openDetail
+      !reportCount || !rescanBtn || !forceBtn || !itemView || !qualitySummary || !scopeToggle || !scopeSummary || !issues || !issueCount || !itemSelect || !itemRetry || !badRetry || !openCard || !openBadge || !openCount || !openDetail
     ) {
       throw new Error('Set Intelligence UI is incomplete.');
     }
@@ -132,13 +137,28 @@
     rescanBtn.classList.toggle('hidden', setScanState.running);
     rescanBtn.disabled = !scopeCount || !!(coverage.known && !openMissing);
     rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
+    if (setScanState.running) rescanBtn.classList.add('hidden');
     forceBtn.disabled = setScanState.running || !scopeCount;
-    forceMode.disabled = setScanState.running;
+    var issueCountTotal = itemsCountNeedingAttention(setScanState.sightItems);
+    badRetry.classList.toggle('hidden', setScanState.running || !issueCountTotal);
+    badRetry.textContent = 'Retry ' + String(issueCountTotal) + ' needing attention';
+    forceBtn.classList.toggle('hidden', setScanState.running);
+    qualitySummary.innerHTML = '';
+    var flaggedTotal = setScanState.sightItems.filter(function (item) { return !!item.issue; }).length;
+    var missingTotal = setScanState.sightItems.filter(function (item) { return !item.structured; }).length;
+    if (setScanState.coverage.known) {
+      [['flagged', flaggedTotal + ' flagged'], ['missing', missingTotal + ' missing']].forEach(function (entry) {
+        var label = document.createElement('span');
+        label.className = entry[0];
+        label.textContent = entry[1];
+        qualitySummary.appendChild(label);
+      });
+    }
     var previousSelection = itemSelect.value;
     var items = setScanState.sightItems;
     var flagged = items.filter(function (item) { return !!item.issue || !item.structured; });
     issues.classList.toggle('hidden', !items.length);
-    issueCount.textContent = flagged.length + ' items need attention';
+    issueCount.textContent = flagged.length ? flagged.length + ' need attention' : 'No issues · manual refresh available';
     itemSelect.innerHTML = '';
     items.forEach(function (item) {
       var option = document.createElement('option');
@@ -149,8 +169,16 @@
     if (items.some(function (item) { return item.file === previousSelection; })) itemSelect.value = previousSelection;
     else if (flagged.length) itemSelect.value = flagged[0].file;
     itemSelect.disabled = setScanState.running;
+    itemView.disabled = !items.length;
     itemRetry.disabled = setScanState.running || !items.length;
     badRetry.disabled = setScanState.running || !flagged.length;
+    if (!setScanState.running && scopeCount && flagged.length) {
+      rescanBtn.classList.remove('set-scan-primary');
+      badRetry.classList.add('set-scan-primary');
+    } else {
+      badRetry.classList.remove('set-scan-primary');
+      rescanBtn.classList.toggle('set-scan-primary', !setScanState.running && !!openMissing);
+    }
 
     var percent = 0;
     if (setScanState.phase === 'preparing') percent = 8;
@@ -257,6 +285,24 @@
     setScanState.currentRawResponse = response;
     // Raw model output stays opt-in; live progress remains the primary signal.
     renderSetIntelligence();
+  }
+
+  function viewSelectedSightResponse() {
+    var itemSelect = el('set-scan-item-select');
+    var file = String(itemSelect.value || '');
+    var index = setScanState.rawResponses.findIndex(function (row) { return row.file === file || row.file.indexOf(file + ' · ') === 0; });
+    if (index < 0) {
+      // The item may have no saved result yet; inspection must not start inference.
+      var details = el('set-scan-details');
+      details.classList.remove('hidden');
+      details.open = true;
+      el('set-scan-raw-output').textContent = 'No saved Sight response for ' + file + '.';
+      return;
+    }
+    setScanState.rawResponseIndex = index;
+    renderSetIntelligence();
+    var details = el('set-scan-details');
+    details.open = true;
   }
 
   function selectRawResponse() {
@@ -789,7 +835,7 @@
     var stopBtn = el('set-scan-stop-btn');
     var rescanBtn = el('set-scan-rescan-btn');
     var forceBtn = el('set-scan-force-btn');
-    var forceMode = el('set-scan-force-mode');
+    var itemView = el('set-scan-item-view');
     var entireSetToggle = el('set-scan-entire-set');
     var responseSelect = el('set-scan-response-select');
     var primaryBtn = el('set-intelligence-primary-btn');
@@ -799,7 +845,7 @@
     var savedModal = el('saved-intelligence-modal');
     var savedCloseBtn = el('saved-intelligence-close-btn');
     if (!savedModal || !savedCloseBtn) throw new Error('Saved Intelligence controls are missing.');
-    if (!openBtn || !closeBtn || !stopBtn || !rescanBtn || !forceBtn || !forceMode || !entireSetToggle || !responseSelect || !primaryBtn || !guidedBtn || !qaBtn || !modal) {
+    if (!openBtn || !closeBtn || !stopBtn || !rescanBtn || !forceBtn || !itemView || !entireSetToggle || !responseSelect || !primaryBtn || !guidedBtn || !qaBtn || !modal) {
       throw new Error('Set Intelligence controls are missing.');
     }
 
@@ -807,7 +853,8 @@
     closeBtn.onclick = closeSetIntelligence;
     stopBtn.onclick = stopSetIntelligence;
     rescanBtn.onclick = function () { runSetIntelligence(); };
-    forceBtn.onclick = function () { runSetIntelligence(forceMode.value); };
+    forceBtn.onclick = function () { runSetIntelligence('open'); };
+    itemView.onclick = viewSelectedSightResponse;
     el('set-scan-item-retry').onclick = function () {
       var file = el('set-scan-item-select').value;
       if (file) runSetIntelligence('open', [file]);

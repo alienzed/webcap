@@ -2950,6 +2950,19 @@ html[data-theme="dark"] .app-settings-environment-check {
   font-size: 14px;
 }
 
+.set-scan-issues {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 18px 0;
+  font-size: 14px;
+}
+.set-scan-issues.hidden { display: none; }
+.set-scan-issues select { min-width: 180px; max-width: 100%; flex: 1 1 220px; }
+.set-scan-issues .review-captions-btn { font-size: 14px; }
+
+
 .set-intelligence-next {
   display: flex;
   flex-direction: column;

@@ -478,15 +478,11 @@ vm.runInContext(source, context);
 context.isTrainingWorkspaceActive = () => true;
 context.getVisibleMediaSelectionForTraining = () => [];
 context.getTrainingWorkspaceEls = () => ({
-  review: { innerHTML: '', querySelectorAll() { return []; } },
+  review: { set innerHTML(value) { renders++; this.text = value; }, querySelectorAll() { return []; } },
   reviewModalContent: { innerHTML: '', querySelectorAll() { return []; } },
   queueJobBtn: button
 });
 context.escapeHtml = value => String(value);
-context.renderTrainingReview = () => {
-  renders++;
-  if (!context.trainingWorkspaceState.review) button.disabled = true;
-};
 context.refreshTrainingReview().then(value => {
   if (value !== null || posts !== 0 || renders !== 1 || !button.disabled)
     throw new Error('Empty selection must clear the review, disable training, and skip the request');

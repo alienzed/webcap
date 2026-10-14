@@ -859,26 +859,6 @@
         primaryHost.replaceChildren(primaryCard);
       }
       ProgressCard.update(primaryCard, snapshot, { onOpen: function () { itemOpen(snapshot); } });
-      var key = activityLane(primary) === 'llm' ? 'director' : activityLane(primary);
-      var queue = queues[key] || {};
-      var count = Number(queue.queued || 0);
-      var backlog = Number(queue.backlog || 0);
-      primaryQueue.textContent = (count ? String(count) + ' waiting' : 'No jobs waiting') +
-        (backlog ? ' · ' + String(backlog) + ' backlog' : '') +
-        (queue.paused ? ' · paused' : '');
-    } else {
-      primaryHost.replaceChildren();
-      primaryQueue.textContent = '';
-    }
-    renderSystemTrend();
-    if (primary) {
-      var snapshot = itemProgress(primary);
-      var primaryCard = primaryHost.querySelector('[data-progress-card-id]');
-      if (!primaryCard || primaryCard.getAttribute('data-progress-card-id') !== String(snapshot.id)) {
-        primaryCard = ProgressCard.create();
-        primaryHost.replaceChildren(primaryCard);
-      }
-      ProgressCard.update(primaryCard, snapshot, { onOpen: function () { itemOpen(snapshot); } });
       var queueKey = activityLane(primary) === 'llm' ? 'director' : activityLane(primary);
       var queue = queues[queueKey] || {};
       var waiting = Number(queue.queued || 0);

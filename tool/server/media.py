@@ -511,7 +511,7 @@ def write_media_metadata_file(metadata_path, metadata):
                 pass
 
 
-def set_media_metadata_analysis_block(folder_path, file_name, block_name, block, merge_existing=False):
+def set_media_metadata_analysis_block(folder_path, file_name, block_name, block):
     folder_path = Path(folder_path)
     file_name = str(file_name or "").strip()
     block_name = str(block_name or "").strip()
@@ -541,8 +541,7 @@ def set_media_metadata_analysis_block(folder_path, file_name, block_name, block,
         stat = media_path.stat()
         info["mtime"] = int(stat.st_mtime)
         info["size"] = int(stat.st_size)
-        previous = info.get(block_name) if merge_existing else None
-        info[block_name] = {**previous, **block} if isinstance(previous, dict) else dict(block)
+        info[block_name] = dict(block)
         metadata[file_name] = info
         write_media_metadata_file(metadata_path, metadata)
         return dict(info[block_name])

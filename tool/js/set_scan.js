@@ -286,11 +286,13 @@
     var responses = [];
     var items = payload && payload.open && Array.isArray(payload.open.items) ? payload.open.items : [];
     items.forEach(function (item) {
-      if (!item || !item.structured || !item.sight) return;
-      responses.push({
-        file: String(item.file || '') + ' · Sight',
-        text: JSON.stringify(item.sight, null, 2)
-      });
+      if (!item) return;
+      var attempt = item.attempt;
+      if ((!item.structured || item.issue) && attempt && attempt.text) {
+        responses.push({file: String(item.file || '') + ' · ' + (item.issue || 'Sight attempt'), text: attempt.text});
+      } else if (item.structured && item.sight) {
+        responses.push({file: String(item.file || '') + ' · Sight', text: JSON.stringify(item.sight, null, 2)});
+      }
     });
     setScanState.rawResponses = responses;
     setScanState.rawResponseIndex = responses.length ? responses.length - 1 : -1;

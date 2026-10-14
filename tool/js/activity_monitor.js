@@ -816,6 +816,7 @@
 
   function render() {
     var active = currentActivityItems();
+    var pendingItems = [].concat((state.payload.queues.inference || {}).jobs || [], (state.payload.queues.director || {}).jobs || []);
     var recent = sessionRecent().filter(function (item) { return Date.now() / 1000 - finishedAt(item) <= 30; });
     var queues = state.payload.queues || {};
     var drawer = el('activity-monitor-drawer');
@@ -832,12 +833,12 @@
     var detailsToggle = el('activity-monitor-details-toggle');
     var detailsCount = el('activity-monitor-details-count');
     if (!primaryHost || !primaryQueue || !details || !detailsToggle || !detailsCount) throw new Error('Activity panel markup missing.');
-    if (state.open && !active.length && !recent.length) state.open = false;
+    if (state.open && !active.length && !pendingItems.length && !recent.length) state.open = false;
     drawer.classList.toggle('hidden', !state.open);
     details.classList.toggle('hidden', !state.detailsOpen);
     detailsToggle.setAttribute('aria-expanded', state.detailsOpen ? 'true' : 'false');
-    detailsCount.textContent = '(' + String(active.length - (primary ? 1 : 0) + recent.length) + ')';
-    detailsToggle.classList.toggle('hidden', !active.length && !recent.length);
+    detailsCount.textContent = '(' + String(active.length - (primary ? 1 : 0) + pendingItems.length + recent.length) + ')';
+    detailsToggle.classList.toggle('hidden', !active.length && !pendingItems.length && !recent.length);
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
     toggle.classList.toggle('activity-running', active.length > 0);
@@ -924,6 +925,30 @@
     }
     reconcileActivityRows(nowSection, nowRows);
 
+    var pendingSection = ensureActivitySection(host, 'pending', 'Queued', pendingItems.length ? String(pendingItems.length) + ' waiting' : '');
+    pendingSection.classList.toggle('hidden', !pendingItems.length);
+    var existingPending = Object.create(null);
+    Array.prototype.forEach.call(pendingSection.querySelectorAll('[data-activity-pending-key]'), function (node) {
+      existingPending[node.getAttribute('data-activity-pending-key')] = node;
+    });
+    var pendingRows = pendingItems.map(function (job) {
+      var key = activeCardKey(job);
+      var button = existingPending[key];
+      if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'activity-monitor-pending-row';
+        button.setAttribute('data-activity-pending-key', key);
+      }
+      var label = activityTitle(job) + ' · queued';
+      if (job.queuePosition) label += ' #' + String(job.queuePosition);
+      button.textContent = label;
+      button.title = activityDetail(job);
+      button.onclick = function () { openItem(job); };
+      return button;
+    });
+    reconcileActivityRows(pendingSection, pendingRows);
+
     var recentSection = ensureActivitySection(host, 'recent', 'Recent', unseen ? String(unseen) + ' new' : '');
     recentSection.classList.toggle('hidden', !recent.length);
     var recentRows = [];
@@ -971,6 +996,7 @@
       pruneProgressChildren();
       captureRecent(payload.recent);
       window.reconcileTrainingRunnerActivity(Array.isArray(payload.active) ? payload.active : []);
+      if (state.open) window.refreshShellSystemStatus();
       var activeErrorKeys = Object.create(null);
       (Array.isArray(payload.errors) ? payload.errors : []).forEach(function (item) {
         var key = String(item.area || 'activity') + ':' + String(item.error || '');

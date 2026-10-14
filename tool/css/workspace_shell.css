@@ -1451,12 +1451,12 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .activity-monitor-drawer {
   position: absolute;
-  z-index: 72;
-  top: 10px;
-  right: 10px;
+  z-index: 115;
+  top: 48px;
+  right: 14px;
   bottom: auto;
-  width: min(440px, calc(100% - 60px));
-  max-height: min(70vh, calc(100vh - var(--shell-status-height) - 20px));
+  width: min(520px, calc(100vw - 70px));
+  max-height: min(78vh, calc(100vh - var(--shell-status-height) - 58px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2817,48 +2817,93 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   margin-left: 4px;
 }
 
-/* Persistent, non-blocking presentation of the shared activity progress card. */
-.activity-progress-follower {
-  position: absolute;
-  right: 14px;
-  /* The overlay root is outside the 34px app-frame header. */
-  top: 48px;
-  z-index: 115;
-  width: min(340px, calc(100vw - 76px));
-  pointer-events: none;
+/* One temporary, readable Activity panel; existing Director graph styling is reused. */
+.activity-monitor-primary {
+  padding: 4px 13px 0;
 }
-.activity-progress-follower .progress-card {
-  position: relative;
-  margin: 0;
-  padding-right: 29px;
-  pointer-events: auto;
-  background: var(--panel);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, .22);
+.activity-monitor-primary .progress-card {
+  margin-top: 10px;
 }
-.activity-progress-close {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 23px;
-  height: 23px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
+.activity-monitor-trend {
+  flex: 0 0 auto;
+  margin: 10px 13px 8px;
+  min-height: 90px;
+}
+.activity-monitor-trend svg {
+  width: 100%;
+  height: 72px;
+}
+.activity-monitor-trend.is-unavailable svg,
+.activity-monitor-trend.is-unavailable .director-activity-trend-legend {
+  opacity: .35;
+}
+.activity-monitor-primary-queue {
+  min-height: 0;
+  margin: 0 13px 10px;
+  font-size: 13px;
   color: var(--muted);
-  font-size: 19px;
+}
+.activity-monitor-primary-queue:empty {
+  display: none;
+}
+.activity-monitor-details-toggle {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: var(--panel-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
   cursor: pointer;
 }
-.activity-progress-close:hover,
-.activity-progress-close:focus-visible {
+.activity-monitor-details-toggle:hover,
+.activity-monitor-details-toggle:focus-visible {
   background: var(--hover);
-  color: var(--text);
 }
-.activity-progress-follower .activity-monitor-progress.indeterminate span {
-  width: 35% !important;
-  opacity: .6;
+.activity-monitor-details-toggle span {
+  margin-left: 5px;
+  color: var(--muted);
 }
-/* Immersive workspaces hide the global header. */
-#app-frame.shell-immersive + #app-overlay-root .activity-progress-follower {
+.activity-monitor-details {
+  min-height: 0;
+  overflow-y: auto;
+  max-height: min(35vh, 360px);
+}
+.activity-monitor-details.hidden {
+  display: none;
+}
+.activity-monitor-details .activity-monitor-list {
+  overflow: visible;
+  padding-top: 3px;
+}
+.activity-monitor-details .activity-monitor-section {
+  margin-bottom: 8px;
+}
+.activity-monitor-details .activity-monitor-recent-row,
+.activity-monitor-details .activity-monitor-card {
+  min-height: 38px;
+  margin-top: 4px;
+}
+.activity-monitor-details .activity-monitor-copy small {
+  display: none;
+}
+.activity-monitor-details .activity-monitor-recent-copy small {
+  display: none;
+}
+.activity-monitor-details .activity-monitor-recent-copy,
+.activity-monitor-details .activity-monitor-copy {
+  min-width: 0;
+}
+#app-frame.shell-immersive + #app-overlay-root .activity-monitor-drawer {
   top: 14px;
+}
+@media (max-width: 720px) {
+  .activity-monitor-drawer {
+    right: 8px;
+    width: min(520px, calc(100vw - 60px));
+  }
 }

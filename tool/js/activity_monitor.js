@@ -871,58 +871,50 @@
       primaryQueue.textContent = '';
     }
     renderSystemTrend();
-    var retainedProgressCards = Object.create(null);
-    Array.prototype.forEach.call(host.querySelectorAll('[data-progress-card-id]'), function (card) {
-      retainedProgressCards[card.getAttribute('data-progress-card-id')] = card;
-    });
-    var retainedActiveCards = Object.create(null);
-    Array.prototype.forEach.call(host.querySelectorAll('[data-activity-active-key]'), function (card) {
-      retainedActiveCards[card.getAttribute('data-activity-active-key')] = card;
-    });
+    if (primary) {
+      var snapshot = itemProgress(primary);
+      var primaryCard = primaryHost.querySelector('[data-progress-card-id]');
+      if (!primaryCard || primaryCard.getAttribute('data-progress-card-id') !== String(snapshot.id)) {
+        primaryCard = ProgressCard.create();
+        primaryHost.replaceChildren(primaryCard);
+      }
+      ProgressCard.update(primaryCard, snapshot, { onOpen: function () { itemOpen(snapshot); } });
+      var queueKey = activityLane(primary) === 'llm' ? 'director' : activityLane(primary);
+      var queue = queues[queueKey] || {};
+      var waiting = Number(queue.queued || 0);
+      var backlog = Number(queue.backlog || 0);
+      var nextJob = Array.isArray(queue.jobs) ? queue.jobs[0] : null;
+      primaryQueue.textContent = (waiting ? String(waiting) + ' waiting' : 'No jobs waiting') +
+        (nextJob ? ' · Next: ' + activityTitle(nextJob) : '') +
+        (backlog ? ' · ' + String(backlog) + ' backlog' : '') +
+        (queue.paused ? ' · paused' : '');
+    } else {
+      primaryHost.replaceChildren();
+      primaryQueue.textContent = '';
+    }
+    renderSystemTrend();
 
     var nowSection = ensureActivitySection(host, 'now', 'Other active', active.length > 1 ? String(active.length - 1) + ' active' : '');
-    nowSection.classList.toggle('hidden', !active.length || (primary && active.length === 1));
-    var nowRows = [];
-    if (!active.length || (primary && active.length === 1)) {
-      var emptyNow = nowSection.querySelector('.activity-monitor-empty');
-      if (!emptyNow) {
-        emptyNow = document.createElement('div');
-        emptyNow.className = 'activity-monitor-empty';
-        emptyNow.textContent = 'Nothing is running right now.';
+    var otherActive = active.filter(function (item) { return item !== primary; });
+    nowSection.classList.toggle('hidden', !otherActive.length);
+    var existingActive = Object.create(null);
+    Array.prototype.forEach.call(nowSection.querySelectorAll('[data-activity-active-line]'), function (row) {
+      existingActive[row.getAttribute('data-activity-active-line')] = row;
+    });
+    var nowRows = otherActive.map(function (item) {
+      var key = activeCardKey(item);
+      var row = existingActive[key];
+      if (!row) {
+        row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'activity-monitor-pending-row';
+        row.setAttribute('data-activity-active-line', key);
       }
-      nowRows.push(emptyNow);
-    } else {
-      active.filter(function (item) { return item !== primary; }).forEach(function (item) {
-        var managedSnapshot = managedProgressSnapshot(item);
-        // Locally published operation snapshots are already ProgressCard-shaped.
-        var localSnapshot = !!state.localProgress[String(item.id)];
-        if (managedSnapshot || localSnapshot) {
-          var progressItem = managedSnapshot || item;
-          var card = retainedProgressCards[String(progressItem.id)] || ProgressCard.create();
-          var canOpen = item.kind !== 'vocabulary-discovery' && item.kind !== 'vision-tag-assist';
-          ProgressCard.update(card, progressItem, { onOpen: canOpen ? function () {
-            if (item.kind === 'director-diagnostics') {
-              setOpen(false);
-              window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
-            } else if (item.kind === 'set-intelligence') {
-              setOpen(false);
-              window.openSetIntelligence();
-            } else if (item.kind === 'deep-qa' || item.kind === 'qa-concept-check') {
-              setOpen(false);
-              window.setWorkspaceSurface('reviewOutput');
-              window.setReviewDetailTab('qa');
-            } else if (item.kind === 'model-lab') {
-              setOpen(false);
-              window.openDiagnosticsModal('model-lab');
-            } else openItem(item);
-          } : null });
-          nowRows.push(card);
-        } else {
-          var existingCard = retainedActiveCards[activeCardKey(item)];
-          nowRows.push(existingCard ? syncActiveCard(existingCard, item) : createActiveCard(item));
-        }
-      });
-    }
+      row.textContent = activityTitle(item) + ' · ' + String(item.status || 'running').replace(/_/g, ' ');
+      row.title = activityDetail(item);
+      row.onclick = function () { itemOpen(itemProgress(item)); };
+      return row;
+    });
     reconcileActivityRows(nowSection, nowRows);
 
     var pendingSection = ensureActivitySection(host, 'pending', 'Queued', pendingItems.length ? String(pendingItems.length) + ' waiting' : '');
@@ -1061,7 +1053,7 @@
     state.open = !!open;
     if (state.open) {
       var current = currentPrimaryItem();
-      if (current && manualClose === 'manual-open') delete state.silencedLanes[activityLane(current)];
+      if (manualClose === 'manual-open') state.silencedLanes = Object.create(null);
       if (!wasOpen) state.openedAt = Date.now() / 1000;
       if (typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
       if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);

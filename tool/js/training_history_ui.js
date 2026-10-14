@@ -695,27 +695,50 @@ function resumeTrainingHistoryJob(jobId) {
   if (!job.actionId || !job.inputPath) {
     throw new Error('This Training History run has no recorded capture. Use Resume from checkpoint in Run Setup if you want to create a new capture.');
   }
-  trainingRunnerRequest('/fs/training_runner/start', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      folder: job.folder,
-      queue: true,
-      stages: resumeStage,
-      resumeStage: resumeStage,
-      resumeFromCheckpoint: resumePath,
-      profileId: job.profileId || '',
-      runId: job.runId || '',
-      reuseCaptureActionId: job.actionId,
-      reuseCapturePath: job.inputPath
-    })
-  }).then(function (payload) {
-    trainingWorkspaceState.runnerSelectedJobId = payload.job.id;
-    trainingWorkspaceState.runnerLogOffsets[payload.job.id] = 0;
-    setStatus(payload.queued ? 'Captured run queued to continue.' : 'Captured run continuing.');
-    refreshTrainingRunnerStatus();
-    refreshTrainingHistory();
-  }).catch(function (err) {
+  function startContinue(epochs) {
+    return trainingRunnerRequest('/fs/training_runner/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder: job.folder,
+        queue: true,
+        stages: resumeStage,
+        resumeStage: resumeStage,
+        resumeFromCheckpoint: resumePath,
+        profileId: job.profileId || '',
+        runId: job.runId || '',
+        parentJobId: job.id,
+        reuseCaptureActionId: job.actionId,
+        reuseCapturePath: job.inputPath,
+        continueEpochs: epochs
+      }),
+      allowNotOk: true
+    }).then(function (payload) {
+      if (payload.epochExtensionRequired) {
+        var current = Number(payload.lastEpoch);
+        var target = Number(payload.plannedEpochs);
+        var value = window.prompt(
+          'Last saved epoch: ' + current + ' of ' + target + '. Only ' +
+          Number(payload.remainingEpochs) + ' epoch(s) remain.\n' +
+          'Enter a higher TOTAL epoch target (not additional epochs). Cancel to abort.',
+          String(Math.min(999, Math.max(target + 10, current + 10)))
+        );
+        if (value === null) return;
+        value = String(value).trim();
+        if (!/^[0-9]{1,3}$/.test(value) || Number(value) <= Math.max(current, target)) {
+          throw new Error('Total epoch target must exceed ' + Math.max(current, target) + ' (maximum 999).');
+        }
+        return startContinue(Number(value));
+      }
+      if (!payload.ok || !payload.job) throw new Error(payload.error || 'Could not continue captured run.');
+      trainingWorkspaceState.runnerSelectedJobId = payload.job.id;
+      trainingWorkspaceState.runnerLogOffsets[payload.job.id] = 0;
+      setStatus(payload.queued ? 'Captured run queued to continue.' : 'Captured run continuing.');
+      refreshTrainingRunnerStatus();
+      refreshTrainingHistory();
+    });
+  }
+  startContinue(null).catch(function (err) {
     setStatus('Could not continue captured run: ' + String(err && err.message ? err.message : err));
   });
 }

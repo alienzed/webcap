@@ -166,7 +166,7 @@
       state.autoOpenSeen[id] = true;
       // Short interactive Director work; bulk Inference and long Training are never auto-raised.
       var lane = activityLane(item);
-      if (!state.open && lane === 'llm' && !state.silencedLanes[lane]) setOpen(true, false);
+      if (!state.open && lane === 'llm' && !state.silencedLanes[lane]) setOpen(true);
     });
   }
 
@@ -219,7 +219,7 @@
   }
 
   function toggleProgressFollower() {
-    setOpen(!state.open, !state.open ? false : true);
+    setOpen(!state.open, state.open ? true : 'manual-open');
   }
 
   function requestJson(url) {
@@ -879,7 +879,8 @@
       retainedActiveCards[card.getAttribute('data-activity-active-key')] = card;
     });
 
-    var nowSection = ensureActivitySection(host, 'now', 'Now', active.length ? String(active.length) + ' active' : '');
+    var nowSection = ensureActivitySection(host, 'now', 'Other active', active.length > 1 ? String(active.length - 1) + ' active' : '');
+    nowSection.classList.toggle('hidden', !active.length || (primary && active.length === 1));
     var nowRows = [];
     if (!active.length || (primary && active.length === 1)) {
       var emptyNow = nowSection.querySelector('.activity-monitor-empty');
@@ -924,6 +925,7 @@
     reconcileActivityRows(nowSection, nowRows);
 
     var recentSection = ensureActivitySection(host, 'recent', 'Recent', unseen ? String(unseen) + ' new' : '');
+    recentSection.classList.toggle('hidden', !recent.length);
     var recentRows = [];
     if (!recent.length) {
       var emptyRecent = recentSection.querySelector('.activity-monitor-empty');
@@ -1033,7 +1035,7 @@
     state.open = !!open;
     if (state.open) {
       var current = currentPrimaryItem();
-      if (current) delete state.silencedLanes[activityLane(current)];
+      if (current && manualClose === 'manual-open') delete state.silencedLanes[activityLane(current)];
       if (!wasOpen) state.openedAt = Date.now() / 1000;
       if (typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
       if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
@@ -1054,7 +1056,7 @@
     var close = el('activity-monitor-close');
     var drawer = el('activity-monitor-drawer');
     if (!toggle || !close || !drawer) return;
-    toggle.onclick = function () { setOpen(!state.open, state.open); };
+    toggle.onclick = function () { setOpen(!state.open, state.open ? true : 'manual-open'); };
     close.onclick = function () { setOpen(false, true); };
     el('activity-monitor-details-toggle').onclick = function () { state.detailsOpen = !state.detailsOpen; render(); };
     document.addEventListener('pointerdown', function (event) {

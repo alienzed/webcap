@@ -1,6 +1,6 @@
 # Live Activity Panel — Product Direction
 
-**Status:** agreed direction with three presentation decisions locked and a few remaining interaction details; **not yet implemented**. This is a UX plan, not a change to the current execution or queue contract. See `docs/execution_queue.md` for what ships now and `docs/queue-semantics.md` for execution semantics.
+**Status:** agreed product and interaction direction; **not yet implemented**. This is a UX plan, not a change to the current execution or queue contract. See `docs/execution_queue.md` for what ships now and `docs/queue-semantics.md` for execution semantics.
 
 ## Problem to solve
 
@@ -13,14 +13,14 @@ WebCap has useful, resource-rich Director progress cards, a floating global prog
 3. **Resource graphs are a first-class part of the card**, not exclusive to Director/LLM work. Reuse/consolidate the existing GPU/resource time-series visuals and underlying measurements wherever applicable to local GPU workloads such as LLM, Inference, and Training. Graphs show observed **machine resources**, not an assertion that every visible change is caused by the displayed job. Remote LLM work must not be represented as local GPU usage. Make missing/unavailable telemetry explicit rather than fabricate it.
 4. **Short, legible activity rows below the card**, in an expandable section *within the same floating surface*, give ongoing/queued work and recent completions **equal visibility**, rather than relegating completions to a separate hidden history view. Keep recent completion receipts bounded so they cannot crowd out live work. Rows provide direct navigation to their owning screen/item. These should be single-line rows, **not tiny type**. A click must retain relevant job, Story, Scene, Session, or source context; opening an unrelated feature landing screen is insufficient. This section is secondary to the primary live operation.
 5. **Other queues get little or no default real estate.** A generic “3 Training items queued” count is rarely worth persistent display. The owning Training and Inference workspaces already provide complete details a click away. Idle lanes should not fill the card; an abbreviated cue for another *currently relevant* lane is acceptable.
-6. **Opening policy:** Short, interactive actions (for example Director/LLM assistance) automatically surface the card. Long-running Training and bulk Inference do not auto-open it; they update header status and remain available on demand. **Closing the card is presentation-only.** It does not pause, reset, stop, cancel, reorder, or modify work. The global header control remains the reliable way to reopen the same surface. The card is not intended to remain permanently open on top of the user's workspace, particularly throughout multi-hour Training runs.
+6. **Opening and dismissal:** Short, interactive actions (for example Director/LLM assistance) automatically surface the card unless the user has silenced that lane. Long-running Training and bulk Inference do not auto-open it; they update header status and remain available on demand. **Manually closing the card silences automatic reopening for its displayed primary lane for the remainder of the current browser session, until the user explicitly reopens the card.** Other lanes retain their own short-operation opening behavior. Silence is presentation-only; it never hides work when the panel is manually opened and never pauses, resets, stops, cancels, reorders, or modifies work. The global header control remains the reliable way to reopen the same surface. The card is not intended to remain permanently open on top of the user's workspace, particularly throughout multi-hour Training runs.
 7. **Preserve execution ownership.** Activity remains a passive projection of authoritative lane/domain state. Inference Queue retains its separate scheduling-management surface and actions; Training retains its mature queue, runtime, checkpoint/recovery, and controls; LLM retains its session-bound queue/reset semantics. No new polling owner, queue, persisted activity state, or GPU arbitration logic is justified by this redesign.
 8. **Keep useful contextual feedback until replacement is proven.** Existing Director resource graphs and action-specific controls must not disappear prematurely. Consolidation must avoid duplicated overlapping global cards while retaining feature-owned actions and progress detail.
 
 ## Intended information hierarchy
 
 - **Primary:** current local GPU-owning operation/lane when available, otherwise current non-GPU work; phase, elapsed/progress, live resource graphs where observed, and that lane's relevant queue context.
-- **Secondary, expandable:** other ongoing/queued operations **and** bounded recent completions, presented as equally visible, legible single-line activity rows; rows navigate directly to the right context.
+- **Secondary, expandable:** other ongoing/queued operations **and** bounded recent completions, presented as equally visible, legible single-line activity rows; rows navigate directly to the right context. Completion receipts are short-lived and must not keep an otherwise empty panel visible indefinitely.
 - **Elsewhere:** full Inference Queue ordering, Backlog and dispatch actions; Training queue and history; full logs/errors in global Console.
 
 The Activity card is **a live operations companion, not a completion-history dashboard or another scheduler**. A queue summary is for orientation, not for managing queue state.
@@ -41,9 +41,9 @@ The Activity card is **a live operations companion, not a completion-history das
 2. **Primary operation:** the **current local GPU owner**, whenever one exists. Simultaneous remote LLM activity belongs in secondary rows. When no GPU owner exists, show the relevant current non-GPU operation without suggesting local GPU ownership.
 3. **Expandable rows:** ongoing/queued work and recent completions **equally**, with bounded history, readable one-line rows, and direct navigation.
 
-## Remaining product questions (do not silently decide)
+## Confirmed interaction behavior (2026-10-13)
 
-- **Dismissal persistence:** After the user manually closes the panel, should a subsequent short operation reopen it, or should it stay suppressed until manually reopened? Recommended default: respect manual dismissal for the current session.
-- **Idle closure:** Should an open panel automatically close when all work becomes idle, or stay visible until explicitly dismissed? Avoid disappearing before a recently completed result is readable.
+- **Lane-specific silence:** Dismissing the panel suppresses subsequent automatic opening **for the primary lane shown at dismissal** until the user explicitly reopens the panel or the browser session ends. An eligible short operation from another unsilenced lane may still open the panel. The user can always reopen it from the header, and that clears the dismissed lane's suppression. Silence must not alter job status, queue processing, Activity reads, or globally stored preferences.
+- **Automatic idle close:** Close the floating panel once there is genuinely nothing useful left to show. Active or queued work and still-relevant recent completion receipts count as content; a bounded, briefly readable completion receipt is fine, but stale history must never hold the panel open indefinitely. Closing automatically due to an empty panel must **not** silence a lane; only manual dismissal does.
 
 These are presentation decisions only. They must not change queue ownership, scheduling, stop scope, or recovery.

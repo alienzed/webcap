@@ -2738,7 +2738,7 @@ def _history_continue_epoch_plan(bundle, stage, resume_path, inherited_epochs=0,
     saved_epoch = 0
     for entry in run_dir.iterdir():
         match = re.fullmatch(r"epoch(\d+)", entry.name, re.IGNORECASE)
-        if match and entry.is_dir():
+        if match:
             saved_epoch = max(saved_epoch, int(match.group(1)))
     observed_epoch = max(saved_epoch, int(recorded_epoch or 0))
 

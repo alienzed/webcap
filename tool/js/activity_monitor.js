@@ -15,7 +15,11 @@
     reportedErrors: Object.create(null),
     localProgress: Object.create(null),
     progressChildIds: Object.create(null),
-    hiddenFollowers: Object.create(null)
+    silencedLanes: Object.create(null),
+    detailsOpen: false,
+    systemHistory: [],
+    lastSystemSampleAt: 0,
+    autoOpenSeen: Object.create(null)
   };
 
   function el(id) { return document.getElementById(id); }
@@ -66,8 +70,8 @@
     if (snapshot.childJobId) {
       state.progressChildIds[String(snapshot.childJobId)] = { owner: String(snapshot.id), expiresAt: 0 };
     }
-    renderProgressFollower();
     if (state.open) render();
+    else maybeAutoOpen();
   }
 
   function finishProgress(id, status) {
@@ -83,7 +87,6 @@
     if (status === 'failed') {
       window.reportConsoleError('Activity', item.title + ' failed. See Diagnostics and Console.');
     }
-    renderProgressFollower();
     if (state.open) render();
   }
 
@@ -119,82 +122,104 @@
     };
   }
 
-  function currentFollowerItem() {
-    var managed = (Array.isArray(state.payload.active) ? state.payload.active : [])
+  function currentActivityItems() {
+    return (Array.isArray(state.payload.active) ? state.payload.active : [])
       .filter(function (item) { return !isProgressChild(item); })
-      .map(function (item) { return managedProgressSnapshot(item) || directorFollowerSnapshot(item); })
-      .filter(Boolean);
-    var items = managed.concat(localItems());
-    if (!items.length) return null;
-    // Follow the most recently started work; stable start times prevent card
-    // switching on each refresh. Other operations remain in the Activity drawer.
-    items.sort(function (a, b) {
-      return Number(a.startedAt || 0) - Number(b.startedAt || 0);
+      .concat(localItems());
+  }
+
+  function activityLane(item) {
+    return String(item && (item.lane || item.kind) || 'background');
+  }
+
+  function currentPrimaryItem() {
+    var items = currentActivityItems();
+    var owner = String(state.payload.gpuOwner || '');
+    if (owner && owner !== 'none') {
+      var matching = items.filter(function (item) { return activityLane(item) === owner; });
+      if (matching.length) return matching[0];
+    }
+    return items.length ? items[items.length - 1] : null;
+  }
+
+  function itemProgress(item) {
+    return managedProgressSnapshot(item) || directorFollowerSnapshot(item) || item;
+  }
+
+  function itemOpen(item) {
+    if (item.original) return openItem(item.original);
+    if (item.kind === 'director-diagnostics') return window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
+    if (item.kind === 'set-intelligence') return window.openSetIntelligence();
+    if (item.kind === 'deep-qa' || item.kind === 'qa-concept-check') {
+      window.setWorkspaceSurface('reviewOutput');
+      return window.setReviewDetailTab('qa');
+    }
+    if (item.kind === 'model-lab') return window.openDiagnosticsModal('model-lab');
+    if (item.kind !== 'vocabulary-discovery' && item.kind !== 'vision-tag-assist') return openItem(item);
+  }
+
+  function maybeAutoOpen() {
+    var items = currentActivityItems();
+    items.forEach(function (item) {
+      var id = activityLane(item) + ':' + String(item.id);
+      if (state.autoOpenSeen[id]) return;
+      state.autoOpenSeen[id] = true;
+      // Short interactive Director work; bulk Inference and long Training are never auto-raised.
+      var lane = activityLane(item);
+      if (!state.open && lane === 'llm' && !state.silencedLanes[lane]) setOpen(true, false);
     });
-    return items[items.length - 1];
+  }
+
+  function updateSystemHistory(sample) {
+    if (!sample || !sample.gpu || !sample.ram) return;
+    var now = Date.now();
+    if (now - state.lastSystemSampleAt < 1200) return;
+    state.lastSystemSampleAt = now;
+    var gpu = sample.gpu.available && Array.isArray(sample.gpu.gpus) ? sample.gpu.gpus[0] : null;
+    var ram = sample.ram.available ? sample.ram : null;
+    var ratio = function (a, b) {
+      a = Number(a); b = Number(b);
+      return isFinite(a) && isFinite(b) && b > 0 ? a / b * 100 : NaN;
+    };
+    state.systemHistory.push({
+      time: now,
+      ram: ram ? ratio(ram.used, ram.total) : NaN,
+      vram: gpu ? ratio(gpu.memoryUsed, gpu.memoryTotal) : NaN,
+      gpu: gpu && gpu.utilization != null ? Number(gpu.utilization) : NaN,
+      thermal: gpu && gpu.temperature != null ? Number(gpu.temperature) : NaN
+    });
+    state.systemHistory = state.systemHistory.filter(function (p) { return p.time >= now - 60000; }).slice(-40);
+    renderSystemTrend();
+  }
+
+  function renderSystemTrend() {
+    var graph = el('activity-monitor-trend');
+    if (!graph) return;
+    var recent = state.systemHistory;
+    var cutoff = Date.now() - 60000;
+    var keys = { ram: 'ram', vram: 'vram', gpu: 'gpu', thermal: 'thermal' };
+    Object.keys(keys).forEach(function (key) {
+      var d = '';
+      recent.forEach(function (p) {
+        var value = p[key];
+        if (!isFinite(value)) return;
+        var x = Math.max(0, Math.min(120, (p.time - cutoff) / 60000 * 120));
+        var y = 28 - Math.max(0, Math.min(100, value)) * .26;
+        d += (d ? ' L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+      });
+      graph.querySelector('.director-activity-trend-' + key + '-line').setAttribute('d', d);
+    });
+    graph.classList.toggle('is-unavailable', !recent.length);
+    var latest = recent[recent.length - 1];
+    graph.setAttribute('aria-label', latest
+      ? 'Local system resource history. GPU ' + (isFinite(latest.gpu) ? Math.round(latest.gpu) + '%' : 'unavailable') +
+        ', VRAM ' + (isFinite(latest.vram) ? Math.round(latest.vram) + '%' : 'unavailable') +
+        ', RAM ' + (isFinite(latest.ram) ? Math.round(latest.ram) + '%' : 'unavailable')
+      : 'Local system resource history unavailable');
   }
 
   function toggleProgressFollower() {
-    var item = currentFollowerItem();
-    if (!item) return;
-    if (state.hiddenFollowers[item.id]) delete state.hiddenFollowers[item.id];
-    else state.hiddenFollowers[item.id] = true;
-    renderProgressFollower();
-  }
-
-  function renderProgressFollower() {
-    var root = el('app-overlay-root');
-    if (!root) throw new Error('Activity overlay root is missing.');
-    var host = el('activity-progress-follower');
-    var item = currentFollowerItem();
-    if (!item || state.hiddenFollowers[item.id]) {
-      if (host) host.remove();
-      return;
-    }
-    if (!host) {
-      host = document.createElement('div');
-      host.id = 'activity-progress-follower';
-      host.className = 'activity-progress-follower';
-      root.appendChild(host);
-    }
-    var card = host.querySelector('[data-progress-card-id]');
-    if (!card || card.getAttribute('data-progress-card-id') !== String(item.id)) {
-      card = ProgressCard.create({ compact: true });
-      var close = document.createElement('button');
-      close.type = 'button';
-      close.className = 'activity-progress-close';
-      close.setAttribute('aria-label', 'Hide floating progress');
-      close.title = 'Hide progress without stopping the job';
-      close.textContent = '×';
-      close.onclick = function () {
-        state.hiddenFollowers[item.id] = true;
-        renderProgressFollower();
-      };
-      card.appendChild(close);
-      host.replaceChildren(card);
-    }
-    ProgressCard.update(card, item, {
-      compact: true,
-      onOpen: function () {
-        if (item.kind === 'director-diagnostics') {
-          window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
-        } else if (item.kind === 'set-intelligence') {
-          window.openSetIntelligence();
-        } else if (item.kind === 'deep-qa' || item.kind === 'qa-concept-check') {
-          window.setWorkspaceSurface('reviewOutput');
-          window.setReviewDetailTab('qa');
-        } else if (item.kind === 'model-lab') {
-          window.openDiagnosticsModal('model-lab');
-        } else if (item.kind === 'director' && item.original &&
-            ['chat', 'generate', 'test', 'storyboard'].indexOf(item.original.client) === -1) {
-          setOpen(true);
-        } else if (item.original) {
-          openItem(item.original);
-        } else {
-          setOpen(true);
-        }
-      }
-    });
+    setOpen(!state.open, !state.open ? false : true);
   }
 
   function requestJson(url) {
@@ -790,10 +815,8 @@
   }
 
   function render() {
-    var active = (Array.isArray(state.payload.active) ? state.payload.active : []).filter(function (item) {
-      return !isProgressChild(item);
-    }).concat(localItems());
-    var recent = sessionRecent();
+    var active = currentActivityItems();
+    var recent = sessionRecent().filter(function (item) { return Date.now() / 1000 - finishedAt(item) <= 30; });
     var queues = state.payload.queues || {};
     var drawer = el('activity-monitor-drawer');
     var host = el('activity-monitor-list');
@@ -802,7 +825,19 @@
     var badge = toggle && toggle.querySelector('[data-activity-monitor-badge]');
     if (!drawer || !host || !summary || !toggle || !badge) return;
 
+    var primary = currentPrimaryItem();
+    var primaryHost = el('activity-monitor-primary');
+    var primaryQueue = el('activity-monitor-primary-queue');
+    var details = el('activity-monitor-details');
+    var detailsToggle = el('activity-monitor-details-toggle');
+    var detailsCount = el('activity-monitor-details-count');
+    if (!primaryHost || !primaryQueue || !details || !detailsToggle || !detailsCount) throw new Error('Activity panel markup missing.');
+    if (state.open && !active.length && !recent.length) state.open = false;
     drawer.classList.toggle('hidden', !state.open);
+    details.classList.toggle('hidden', !state.detailsOpen);
+    detailsToggle.setAttribute('aria-expanded', state.detailsOpen ? 'true' : 'false');
+    detailsCount.textContent = '(' + String(active.length - (primary ? 1 : 0) + recent.length) + ')';
+    detailsToggle.classList.toggle('hidden', !active.length && !recent.length);
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
     toggle.classList.toggle('activity-running', active.length > 0);
@@ -815,6 +850,26 @@
       ? String(active.length) + ' active · ' + (unseen ? String(unseen) + ' new' : 'up to date')
       : (unseen ? String(unseen) + ' new this session' : 'Current work and this session');
 
+    if (primary) {
+      var snapshot = itemProgress(primary);
+      var primaryCard = primaryHost.querySelector('[data-progress-card-id]');
+      if (!primaryCard || primaryCard.getAttribute('data-progress-card-id') !== String(snapshot.id)) {
+        primaryCard = ProgressCard.create();
+        primaryHost.replaceChildren(primaryCard);
+      }
+      ProgressCard.update(primaryCard, snapshot, { onOpen: function () { itemOpen(snapshot); } });
+      var key = activityLane(primary) === 'llm' ? 'director' : activityLane(primary);
+      var queue = queues[key] || {};
+      var count = Number(queue.queued || 0);
+      var backlog = Number(queue.backlog || 0);
+      primaryQueue.textContent = (count ? String(count) + ' waiting' : 'No jobs waiting') +
+        (backlog ? ' · ' + String(backlog) + ' backlog' : '') +
+        (queue.paused ? ' · paused' : '');
+    } else {
+      primaryHost.replaceChildren();
+      primaryQueue.textContent = '';
+    }
+    renderSystemTrend();
     var retainedProgressCards = Object.create(null);
     Array.prototype.forEach.call(host.querySelectorAll('[data-progress-card-id]'), function (card) {
       retainedProgressCards[card.getAttribute('data-progress-card-id')] = card;
@@ -826,7 +881,7 @@
 
     var nowSection = ensureActivitySection(host, 'now', 'Now', active.length ? String(active.length) + ' active' : '');
     var nowRows = [];
-    if (!active.length) {
+    if (!active.length || (primary && active.length === 1)) {
       var emptyNow = nowSection.querySelector('.activity-monitor-empty');
       if (!emptyNow) {
         emptyNow = document.createElement('div');
@@ -835,7 +890,7 @@
       }
       nowRows.push(emptyNow);
     } else {
-      active.forEach(function (item) {
+      active.filter(function (item) { return item !== primary; }).forEach(function (item) {
         var managedSnapshot = managedProgressSnapshot(item);
         // Locally published operation snapshots are already ProgressCard-shaped.
         var localSnapshot = !!state.localProgress[String(item.id)];
@@ -894,6 +949,7 @@
     reconcileActivityRows(recentSection, recentRows);
 
     var queueSection = ensureActivitySection(host, 'queues', 'Queue Status', '');
+    queueSection.classList.add('hidden');
     queueSection.classList.add('activity-monitor-queue-section');
     var queueSignature = JSON.stringify(queues);
     if (queueSection.getAttribute('data-activity-queue-signature') !== queueSignature) {
@@ -925,8 +981,8 @@
         if (!activeErrorKeys[key]) delete state.reportedErrors[key];
       });
       notifyRecent(sessionRecent());
+      maybeAutoOpen();
       render();
-      renderProgressFollower();
       return payload;
     }).catch(function (err) {
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Activity', err);
@@ -972,14 +1028,20 @@
     });
   }
 
-  function setOpen(open) {
+  function setOpen(open, manualClose) {
     var wasOpen = state.open;
     state.open = !!open;
     if (state.open) {
+      var current = currentPrimaryItem();
+      if (current) delete state.silencedLanes[activityLane(current)];
       if (!wasOpen) state.openedAt = Date.now() / 1000;
       if (typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
       if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
     } else if (wasOpen) {
+      if (manualClose) {
+        var item = currentPrimaryItem();
+        if (item) state.silencedLanes[activityLane(item)] = true;
+      }
       storeLastSeen(Date.now() / 1000);
       state.openedAt = 0;
     }
@@ -992,19 +1054,21 @@
     var close = el('activity-monitor-close');
     var drawer = el('activity-monitor-drawer');
     if (!toggle || !close || !drawer) return;
-    toggle.onclick = function () { setOpen(!state.open); };
-    close.onclick = function () { setOpen(false); };
+    toggle.onclick = function () { setOpen(!state.open, state.open); };
+    close.onclick = function () { setOpen(false, true); };
+    el('activity-monitor-details-toggle').onclick = function () { state.detailsOpen = !state.detailsOpen; render(); };
     document.addEventListener('pointerdown', function (event) {
       if (!state.open || drawer.contains(event.target) || toggle.contains(event.target)) return;
-      setOpen(false);
+      setOpen(false, true);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open) setOpen(false);
+      if (event.key === 'Escape' && state.open) setOpen(false, true);
     });
     window.addEventListener('webcap:inference-queue-changed', wake);
   }
 
   window.toggleActivityProgressFollower = toggleProgressFollower;
+  window.updateActivitySystemTelemetry = updateSystemHistory;
   window.publishActivityProgress = publishProgress;
   window.finishActivityProgress = finishProgress;
   window.recordActivityCompletion = rememberRecentCompletion;

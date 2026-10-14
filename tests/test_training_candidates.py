@@ -448,6 +448,19 @@ def test_candidate_revisions_increment_only_for_explicit_rewind():
     assert action["candidateRevision"] == 3
 
 
+def test_staged_revision_selection_does_not_follow_newer_rewind(monkeypatch, tmp_path):
+    run = tmp_path / "run"
+    run.mkdir()
+    monkeypatch.setattr(training_runner, "candidate_run_snapshot_from_provenance",
+                        lambda provenance: (run, {"candidateRevision": 2}))
+    monkeypatch.setattr(training_runner, "_candidate_selected_epoch",
+                        lambda path, job: {"epoch": 60})
+    assert training_runner.candidate_selected_epoch_from_provenance(
+        {"sourceRevision": 1}) is None
+    assert training_runner.candidate_selected_epoch_from_provenance(
+        {"sourceRevision": 2}) == {"epoch": 60}
+
+
 def test_candidate_revision_filenames_keep_legacy_identity_and_allow_same_epoch():
     run = {"id": "job-1", "runName": "baseline", "sequence": "3"}
     original = training_runner._candidate_test_file_name(run, 60)

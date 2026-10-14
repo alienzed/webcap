@@ -197,6 +197,7 @@ function trainingCandidatesComparisonState() {
       pending: {},
       errors: {},
       colors: {},
+      visitedRuns: {},
       nextColor: 1,
       open: false,
       archiveListPending: false,
@@ -250,6 +251,11 @@ function trainingCandidatesComparisonSources() {
       folder: String(job.folder || ''),
       jobId: String(job.id || '')
     };
+  });
+  var visited = trainingCandidatesComparisonState().visitedRuns;
+  Object.keys(visited).forEach(function (key) {
+    var source = visited[key];
+    if (source.jobId !== currentJobId && !runs.some(function (run) { return run.key === key; })) runs.push(source);
   });
   var archives = (Array.isArray(trainingWorkspaceState.archives) ? trainingWorkspaceState.archives : []).filter(function (archive) {
     return archive && !archive.invalid && String(archive.name || '').trim();
@@ -572,6 +578,13 @@ function trainingCandidatesOpenComparisonRun(key) {
   var previousId = String(trainingWorkspaceState.candidateJobId || '');
   var previousKey = 'run:' + previousId;
   var previousRun = trainingWorkspaceState.candidatePayload.run || {};
+  comparison.visitedRuns[previousKey] = {
+    key: previousKey,
+    type: 'run',
+    label: String(previousRun.runName || previousRun.folder || trainingWorkspaceState.candidateFolder),
+    folder: String(trainingWorkspaceState.candidateFolder || ''),
+    jobId: previousId
+  };
   var previousLabel = String(previousRun.runName || previousRun.folder ||
     trainingWorkspaceState.candidateFolder || 'Current run');
   if (!comparison.curves[previousKey]) {

@@ -242,7 +242,7 @@ def test_structured_sight_scan_uses_caption_vision_lane_and_response_contract(tm
     assert seen["model"] == "vl"
     assert seen["label"] == "Vision Sight"
     assert seen["contract"]["operation"] == "vision_schema_sight"
-    assert seen["context"]["runtimeOverrides"]["maxTokens"] == 1800
+    assert not seen["context"] or "runtimeOverrides" not in seen["context"]
 
 
 

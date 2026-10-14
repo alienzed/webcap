@@ -656,6 +656,8 @@ def _update_media_metadata_locked(folder_path, include_face_focus=False, include
         next_info = probe_media_metadata(entry, face_detector, selection_pose_analyzers)
         if unchanged and isinstance(cached, dict) and isinstance(cached.get("vision_sight"), dict):
             next_info["vision_sight"] = cached["vision_sight"]
+        if unchanged and isinstance(cached, dict) and isinstance(cached.get("vision_sight_attempt"), dict):
+            next_info["vision_sight_attempt"] = cached["vision_sight_attempt"]
         metadata[entry.name] = next_info
         generated_count += 1
         if (include_face_focus and is_face_focus_image(entry)) or (include_selection_pose and is_selection_pose_image(entry)):

@@ -482,11 +482,20 @@ def vision_sight_status(folder, model, include_sight=False):
             continue
         sight = _cached_sight_block(folder_path, media_name, metadata, model)
         structured = _structured_sight_block(folder_path, media_name, metadata, model)
+        info = metadata.get(media_name) if isinstance(metadata.get(media_name), dict) else {}
+        attempt = info.get("vision_sight_attempt") if isinstance(info.get("vision_sight_attempt"), dict) else {}
+        stat = media_path.stat()
+        attempt_current = (int(attempt.get("mtime") or -1) == int(stat.st_mtime)
+                           and int(attempt.get("size") or -1) == int(stat.st_size))
         item = {
             "file": media_name,
             "cached": bool(sight),
             "structured": bool(structured),
+            "issue": str(attempt.get("issue") or "") if attempt_current else "",
         }
+        if include_sight and attempt_current:
+            item["attempt"] = {"text": str(attempt.get("text") or ""), "issue": item["issue"]}
+
         if include_sight:
             item["sight"] = {
                 "description": str((structured or {}).get("description") or ""),
@@ -504,6 +513,24 @@ def vision_sight_status(folder, model, include_sight=False):
         "pending": max(0, len(items) - cached),
         "items": items,
     }
+
+
+def save_vision_sight_attempt(folder, media_name, model, raw_text, finish_reason="", issue=""):
+    folder_path = _resolve_folder(folder)
+    media_name = _validate_media_name(media_name)
+    media_path = folder_path / media_name
+    if not media_path.is_file():
+        raise FileNotFoundError("Media file not found")
+    stat = media_path.stat()
+    return set_media_metadata_analysis_block(folder_path, media_name, "vision_sight_attempt", {
+        "model": str(model or ""),
+        "text": str(raw_text or ""),
+        "finishReason": str(finish_reason or ""),
+        "issue": str(issue or ""),
+        "mtime": int(stat.st_mtime),
+        "size": int(stat.st_size),
+        "updatedAt": time.time(),
+    })
 
 
 def save_vision_sight(folder, media_name, model, sight_payload):

@@ -19,6 +19,7 @@ from .vision_schema_assist import (
     mine_vision_sight,
     mine_vision_vocabulary,
     save_vision_sight,
+    save_vision_sight_attempt,
     save_vision_vocabulary_sight,
     vision_sight_records,
     vision_sight_status,
@@ -843,9 +844,6 @@ def vision_schema_assist_route():
                     "operation": "vision_schema_sight",
                     "messages": messages,
                 },
-                context={
-                    "runtimeOverrides": {"maxTokens": 1800},
-                },
                 label="Vision Sight",
             )
             return jsonify({"ok": True, "job": job}), 202
@@ -874,6 +872,11 @@ def vision_schema_assist_route():
                 label="Context Vision",
             )
             return jsonify({"ok": True, "job": job}), 202
+        if operation == "save_sight_attempt":
+            return jsonify({"ok": True, "attempt": save_vision_sight_attempt(
+                folder, data.get("media", ""), vision_model,
+                data.get("text", ""), data.get("finishReason", ""), data.get("issue", ""),
+            )})
         if operation == "save_sight":
             return jsonify({
                 "ok": True,

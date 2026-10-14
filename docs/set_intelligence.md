@@ -81,7 +81,7 @@ Current versioned evidence is reused. No separate scan manifest or durable workf
 
 ### Visibility
 
-The Set Intelligence surface shows one Sight coverage count for the selected scope, progress, failures, and an optional cached Vision report. Opening it never starts a scan. **Run/Resume** reads only missing Sight; **Force Refresh Sight** explicitly replaces successful observations. Failed responses preserve older evidence, and partial coverage can still inform downstream work.
+The Set Intelligence surface shows one Sight coverage count for the selected scope, progress, failures, and an optional cached Vision report. Opening it never starts a scan. **Run/Resume** reads only missing Sight; **Force Refresh Sight** explicitly replaces successful observations. Individual Sight results can also be refreshed directly in Prepare Set, and flagged or missing items can be retried together. There is no Prepare Set-specific output-token cap: the selected runtime/model configuration controls generation length. Each returned attempt saves its raw response and any truncation/structure issue alongside the existing Set metadata, without discarding previously valid structured Sight when a later attempt cannot be parsed. Older scans without attempt metadata cannot be classified retrospectively. Partial coverage can still inform downstream work.
 
 Closing the modal does not stop an active scan. The explicit Stop action cancels the current job, and completed per-item writes remain usable. No second cache or scan manifest is created.
 

@@ -1077,10 +1077,11 @@ def _annotate_candidate_test_folder_status(run, analysis):
         except (ValueError, OSError):
             artifact["testSource"] = ""
         destination = destination_directory / test_file_name
-        legacy_destination = destination_directory / str(artifact.get("fileName") or "")
         artifact["inTestFolder"] = (
             (destination.is_file() and not destination.is_symlink())
-            or (legacy_destination.is_file() and not legacy_destination.is_symlink())
+            or (int(run.get("candidateRevision") or 1) == 1
+                and (destination_directory / str(artifact.get("fileName") or "")).is_file()
+                and not (destination_directory / str(artifact.get("fileName") or "")).is_symlink())
         )
     analysis["testFolderStatus"] = {"state": "available"}
 
@@ -1266,10 +1267,9 @@ def remove_candidate_epoch_from_test(folder, job_id, epoch):
     _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
     source = _candidate_safetensors_path(folder, job_id, epoch)
     destination_directory = _candidate_test_directory_for_run(run, create_missing=False)
-    destinations = [
-        destination_directory / _candidate_test_file_name(run, epoch),
-        destination_directory / source.name,
-    ]
+    destinations = [destination_directory / _candidate_test_file_name(run, epoch)]
+    if int(run.get("candidateRevision") or 1) == 1:
+        destinations.append(destination_directory / source.name)
     removable = []
     seen = set()
     for destination in destinations:

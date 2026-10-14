@@ -663,6 +663,7 @@ def _candidate_staged_run_snapshot_for_job(folder, job_id):
         "folder": folder_text,
         "runName": str(provenance.get("sourceRunName") or "").strip(),
         "sequence": str(provenance.get("sourceRunSequence") or "").strip(),
+        "candidateRevision": int(provenance.get("sourceRevision") or 1),
         "actionId": str(provenance.get("sourceActionId") or "").strip(),
         "stage": stage,
         "stages": stage,
@@ -729,6 +730,7 @@ def _candidate_run_snapshot(folder, job_id):
             "currentEpoch": progress.get("epoch"),
             "plannedEpochs": progress.get("epochs"),
             "resumeCheckpointTag": str(job.get("resumeCheckpointTag") or ""),
+            "candidateRevision": int(job.get("candidateRevision") or 1),
             "resumeCheckpointWallTime": checkpoint_wall_time,
             "resumeBranchStartedAt": branch_started_at,
             "runSummary": run_summary,
@@ -869,7 +871,7 @@ def candidate_run_snapshot_from_provenance(provenance):
         if not action_id:
             raise LookupError("Staged Test candidate has no resolvable managed training run.")
         run_dir = _candidate_validate_managed_run(folder, raw_run_path, action_id)
-        return run_dir, {"id": source_job_id, "folder": folder, "runName": str(provenance.get("sourceRunName") or "").strip(), "sequence": str(provenance.get("sourceRunSequence") or "").strip(), "actionId": action_id, "stage": stage, "stages": stage, "status": "unknown", "runSummary": provenance.get("runSummary") if isinstance(provenance.get("runSummary"), dict) else {}}
+        return run_dir, {"id": source_job_id, "folder": folder, "runName": str(provenance.get("sourceRunName") or "").strip(), "sequence": str(provenance.get("sourceRunSequence") or "").strip(), "candidateRevision": int(provenance.get("sourceRevision") or 1), "actionId": action_id, "stage": stage, "stages": stage, "status": "unknown", "runSummary": provenance.get("runSummary") if isinstance(provenance.get("runSummary"), dict) else {}}
 
     if source_job_id:
         try:
@@ -889,6 +891,8 @@ def candidate_run_snapshot_from_provenance(provenance):
 
 def candidate_selected_epoch_from_provenance(provenance):
     run_dir, run = candidate_run_snapshot_from_provenance(provenance)
+    if int(provenance.get("sourceRevision") or 1) != int(run.get("candidateRevision") or 1):
+        return None
     return _candidate_selected_epoch(run_dir, run)
 
 
@@ -987,12 +991,14 @@ def _candidate_short_run_id(run):
 
 def _candidate_test_prefix(run):
     short_id = _candidate_short_run_id(run)
+    revision = int(run.get("candidateRevision") or 1)
+    revision_suffix = "-r" + str(revision) if revision > 1 else ""
     run_name = re.sub(r"[^A-Za-z0-9]+", "-", str(run.get("runName") or "").strip()).strip("-").lower()
     if not run_name:
-        return "run-" + short_id
-    max_name_length = 29
+        return "run-" + short_id + revision_suffix
+    max_name_length = max(1, 29 - len(revision_suffix))
     run_name = run_name[:max_name_length].rstrip("-")
-    return run_name + "-" + short_id
+    return run_name + "-" + short_id + revision_suffix
 
 
 def _candidate_test_file_name(run, epoch):
@@ -1071,10 +1077,11 @@ def _annotate_candidate_test_folder_status(run, analysis):
         except (ValueError, OSError):
             artifact["testSource"] = ""
         destination = destination_directory / test_file_name
-        legacy_destination = destination_directory / str(artifact.get("fileName") or "")
         artifact["inTestFolder"] = (
             (destination.is_file() and not destination.is_symlink())
-            or (legacy_destination.is_file() and not legacy_destination.is_symlink())
+            or (int(run.get("candidateRevision") or 1) == 1
+                and (destination_directory / str(artifact.get("fileName") or "")).is_file()
+                and not (destination_directory / str(artifact.get("fileName") or "")).is_symlink())
         )
     analysis["testFolderStatus"] = {"state": "available"}
 
@@ -1212,6 +1219,7 @@ def copy_candidate_epoch_to_test(folder, job_id, epoch):
         "sourceJobId": str(run.get("id") or ""),
         "sourceRunName": str(run.get("runName") or ""),
         "sourceRunSequence": _candidate_short_run_id(run),
+        "sourceRevision": int(run.get("candidateRevision") or 1),
         "sourceRunPath": str(_raw_run_path or ""),
         "sourceActionId": str(run.get("actionId") or ""),
         "sourceEpoch": int(epoch),
@@ -1259,10 +1267,9 @@ def remove_candidate_epoch_from_test(folder, job_id, epoch):
     _raw_run_path, run = _candidate_run_snapshot(folder, job_id)
     source = _candidate_safetensors_path(folder, job_id, epoch)
     destination_directory = _candidate_test_directory_for_run(run, create_missing=False)
-    destinations = [
-        destination_directory / _candidate_test_file_name(run, epoch),
-        destination_directory / source.name,
-    ]
+    destinations = [destination_directory / _candidate_test_file_name(run, epoch)]
+    if int(run.get("candidateRevision") or 1) == 1:
+        destinations.append(destination_directory / source.name)
     removable = []
     seen = set()
     for destination in destinations:
@@ -2452,7 +2459,7 @@ def start_observer():
 
 
 def _public_job(job):
-    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "resumeCheckpointTag", "resumeCheckpointRewritePending", "resumeCheckpointWallTime", "resumeBranchStartedAt", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
+    fields = ("id", "folder", "stages", "profileId", "profileLabel", "mode", "runId", "actionRunId", "datasetTarget", "modelLabel", "model", "input", "artifactDir", "artifactSummary", "actionId", "actionPath", "runName", "recordPath", "inputPath", "bundleSummary", "capturedItemCount", "runSummary", "resumeFromCheckpoint", "resumeStage", "resumePoint", "resumePointError", "resumeActionId", "resumeOutputId", "resumeCheckpointTag", "resumeCheckpointRewritePending", "resumeCheckpointWallTime", "resumeBranchStartedAt", "candidateRevision", "outputRunPath", "status", "stage", "pid", "createdAt", "startedAt", "finishedAt", "updatedAt", "lastLogAt", "error", "confirmationNote", "completionNote", "exitCode", "failureScope", "failureExcerpt", "resolvedConfigs", "preflight", "outputRoot", "effectiveOutputDir", "outputSlug", "sequence", "parentJobId", "trainingSettings", "progress", "progressPlan", "actionRequested", "actionRequestedAt", "finishAfterEpoch", "finishScheduledAt", "finishTriggeredEpoch", "activeTrainingSeconds", "activeTrainingTimingComplete")
     payload = {field: job.get(field) for field in fields if field in job}
     if job.get("status") == "queued":
         folder = str(job.get("folder") or "").strip()
@@ -2527,6 +2534,14 @@ def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage
         return payload, 200
     except Exception as exc:
         return {"ok": False, "error": str(exc), "checks": [], "summary": {"blockers": 1, "warnings": 0}}, 400
+
+
+def _assign_candidate_revision(action, job, deliberate_rewind):
+    """Keep revisions on the existing action; only a chosen older checkpoint advances one."""
+    previous = int(action.get("candidateRevision") or 1)
+    revision = previous + 1 if deliberate_rewind else previous
+    action["candidateRevision"] = revision
+    job["candidateRevision"] = revision
 
 
 def _new_job(
@@ -2610,6 +2625,7 @@ def _new_job(
         "resumeOutputId": str(resume_output_id or ""),
         "resumeCheckpointTag": str(resume_checkpoint_tag or ""),
         "resumeCheckpointRewritePending": bool(str(resume_checkpoint_tag or "").strip()),
+        "candidateRevision": 1,
         "parentJobId": str(parent_job_id or ""),
         "activeTrainingSeconds": float(parent_active_seconds or 0),
         "activeTrainingTimingComplete": parent_active_seconds is not None,
@@ -2806,6 +2822,7 @@ def start_response(
                 key: validated_resume.get(key)
                 for key in ("checkpointAvailable", "checkpointTag", "epoch", "step", "expectedEpochs", "completed")
             }
+        deliberate_rewind = bool(resume_output_id and str(resume_checkpoint_tag or "").strip())
         effective_config_settings = dict(requested_config_settings)
         if (resume_path or initializer) and effective_config_settings.get("optimizerLr") not in (None, ""):
             # diffusion-pipe restores scheduler state on resume unless
@@ -2853,6 +2870,7 @@ def start_response(
         job["resumePoint"] = resume_point
         job["trainingSettings"] = dict(effective_config_settings)
         def record_capture(data):
+            _assign_candidate_revision(data, job, deliberate_rewind)
             if not reuse_capture:
                 try:
                     capture_path = Path(bundle["path"]).relative_to(action_root).as_posix()

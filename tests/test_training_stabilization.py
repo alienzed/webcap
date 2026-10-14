@@ -1702,6 +1702,63 @@ def test_training_bundle_applies_run_settings_without_mutating_set_config(tmp_pa
     assert (folder / "config.h3.toml").read_text(encoding="utf-8") == source_before
 
 
+def test_h3_image_adapter_checkbox_only_rewrites_captured_config(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    from tool.server import config as app_config
+
+    models = tmp_path / "models"
+    monkeypatch.setitem(app_config.config["filesystem"], "models", str(models))
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    original = (folder / "config.h3.toml").read_text(encoding="utf-8")
+    action, _ = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
+    bundle = training_bundle.materialize_training_bundle(
+        folder, action, MINIMAX_H3_PROFILE_ID, "h3", ["one.png"],
+        output_dirs={"h3": str(action / "output" / "minimax-h3")},
+        config_settings={"h3": {"h3ImageTrainingAdapter": True}},
+    )
+    parsed = tomllib.loads(Path(bundle["artifacts"]["h3Config"]).read_text(encoding="utf-8"))
+    assert "cfg" not in parsed["model"]
+    assert parsed["model"]["merge_adapters"] == [
+        str(models / "adapters" / "minimax_h3_image_training_adapter.safetensors")
+    ]
+    assert (folder / "config.h3.toml").read_text(encoding="utf-8") == original
+
+
+def test_h3_adapter_rewrite_removes_cfg_and_keeps_other_model_settings(tmp_path, monkeypatch):
+    from tool.server import config as app_config
+    from tool.server.training_config_files import apply_h3_image_training_adapter
+
+    monkeypatch.setitem(app_config.config["filesystem"], "models", str(tmp_path / "models"))
+    source = "[model]\ncfg = 4\nshift = 8\n"
+    parsed = tomllib.loads(apply_h3_image_training_adapter(source))
+    assert "cfg" not in parsed["model"]
+    assert parsed["model"]["shift"] == 8
+    assert parsed["model"]["merge_adapters"] == [
+        str(tmp_path / "models" / "adapters" / "minimax_h3_image_training_adapter.safetensors")
+    ]
+    assert tomllib.loads(source)["model"]["cfg"] == 4
+
+
+def test_h3_adapter_unchecked_does_not_change_cfg(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    source = (folder / "config.h3.toml").read_text(encoding="utf-8")
+    action, _ = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
+    bundle = training_bundle.materialize_training_bundle(
+        folder, action, MINIMAX_H3_PROFILE_ID, "h3", ["one.png"],
+        output_dirs={"h3": str(action / "output" / "minimax-h3")},
+        config_settings={"h3": {"h3ImageTrainingAdapter": False}},
+    )
+    parsed = tomllib.loads(Path(bundle["artifacts"]["h3Config"]).read_text(encoding="utf-8"))
+    assert parsed["model"]["cfg"] == 4
+    assert "merge_adapters" not in parsed["model"]
+    assert (folder / "config.h3.toml").read_text(encoding="utf-8") == source
+
+
 def test_checkpoint_resume_forces_selected_learning_rate(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     _fake_runtime(monkeypatch)

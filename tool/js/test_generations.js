@@ -2111,6 +2111,12 @@
 
     var identity = [];
     if (runSequence) identity.push('Run ' + String(runSequence).padStart(2, '0'));
+    var revision = Number(provenance.sourceRevision || 0);
+    if (!revision && match) {
+      var revisionMatch = String(match[1] || '').match(/-r(\d+)$/i);
+      if (revisionMatch) revision = Number(revisionMatch[1]);
+    }
+    if (revision > 1) identity.push('Rev ' + revision);
     if (epoch !== undefined && epoch !== null && String(epoch).trim() !== '') identity.push('Epoch ' + String(epoch).trim());
 
     return {

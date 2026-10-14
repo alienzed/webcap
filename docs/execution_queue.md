@@ -178,6 +178,8 @@ Queue reads are passive and must not become a dispatch mechanism. Navigating to 
 
 Shared scheduling does not imply one monolithic workflow UI.
 
+**Planned UX direction:** `docs/live_activity_panel.md` describes a future unified floating live Activity card. The existing drawer described below remains the shipped behavior until that design is implemented; the plan does not change queue or GPU semantics.
+
 The permanent shell also exposes a read-only **Activity** drawer. Activity is a projection over domain-owned state: it shows what is running now, a bounded list of recently finished managed work, and compact queue summaries. It does not own scheduling, result state, or a second history database. Inference and LLM lanes retain a small bounded terminal receipt history so completed work remains visible after the owning client consumes its delivery receipt; Training and Storage continue to provide their own existing history/scan state.
 
 The Activity drawer and Inference Queue drawer are sibling global surfaces: Activity answers **what is happening / what just finished**, while Inference Queue answers **what is scheduled and in what order**.

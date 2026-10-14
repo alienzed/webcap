@@ -18,6 +18,7 @@
     hasRun: false,
     failures: [],
     sightItems: [],
+    inspectionMissingFile: '',
     completed: 0,
     total: 0,
     phase: 'idle',
@@ -214,7 +215,7 @@
     var responses = Array.isArray(setScanState.rawResponses) ? setScanState.rawResponses : [];
     var currentRaw = responses[setScanState.rawResponseIndex] || null;
     setScanState.currentRawResponse = currentRaw;
-    details.classList.toggle('hidden', !responses.length);
+    details.classList.toggle('hidden', !responses.length && !setScanState.inspectionMissingFile);
     reportCount.textContent = String(responses.length) + ' saved response' + (responses.length === 1 ? '' : 's');
     responseSelect.innerHTML = '';
     responses.forEach(function (response, index) {
@@ -227,7 +228,8 @@
     if (currentRaw) {
       output.textContent = String(currentRaw.text || '');
     } else {
-      output.textContent = '';
+      output.textContent = setScanState.inspectionMissingFile
+        ? 'No saved Sight response for ' + setScanState.inspectionMissingFile + '.' : '';
     }
   }
 
@@ -292,14 +294,13 @@
     var file = String(itemSelect.value || '');
     var index = setScanState.rawResponses.findIndex(function (row) { return row.file === file || row.file.indexOf(file + ' · ') === 0; });
     if (index < 0) {
-      // The item may have no saved result yet; inspection must not start inference.
-      var details = el('set-scan-details');
-      details.classList.remove('hidden');
-      details.open = true;
-      el('set-scan-raw-output').textContent = 'No saved Sight response for ' + file + '.';
-      return;
+      // Inspecting missing evidence never starts inference.
+      setScanState.inspectionMissingFile = file;
+      setScanState.rawResponseIndex = -1;
+    } else {
+      setScanState.inspectionMissingFile = '';
+      setScanState.rawResponseIndex = index;
     }
-    setScanState.rawResponseIndex = index;
     renderSetIntelligence();
     var details = el('set-scan-details');
     details.open = true;
@@ -310,6 +311,7 @@
     var index = Number(select && select.value);
     if (!Number.isInteger(index) || index < 0 || index >= setScanState.rawResponses.length) return;
     setScanState.rawResponseIndex = index;
+    setScanState.inspectionMissingFile = '';
     setScanState.currentRawResponse = setScanState.rawResponses[index];
     renderSetIntelligence();
   }
@@ -341,6 +343,7 @@
       }
     });
     setScanState.rawResponses = responses;
+    setScanState.inspectionMissingFile = '';
     setScanState.rawResponseIndex = responses.length ? responses.length - 1 : -1;
     setScanState.currentRawResponse = responses.length ? responses[responses.length - 1] : null;
   }

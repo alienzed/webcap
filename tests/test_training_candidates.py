@@ -431,6 +431,65 @@ def test_copy_to_test_prefix_is_short_and_uses_two_character_run_id():
     assert training_runner._candidate_test_file_name(run, 24).endswith("__epoch24.safetensors")
 
 
+def test_candidate_revisions_increment_only_for_explicit_rewind():
+    action = {"runName": "baseline"}
+    first = {}
+    training_runner._assign_candidate_revision(action, first, False)
+    assert first["candidateRevision"] == 1
+    rewound = {}
+    training_runner._assign_candidate_revision(action, rewound, True)
+    assert rewound["candidateRevision"] == 2
+    normal_resume = {}
+    training_runner._assign_candidate_revision(action, normal_resume, False)
+    assert normal_resume["candidateRevision"] == 2
+    second_rewind = {}
+    training_runner._assign_candidate_revision(action, second_rewind, True)
+    assert second_rewind["candidateRevision"] == 3
+    assert action["candidateRevision"] == 3
+
+
+def test_candidate_revision_filenames_keep_legacy_identity_and_allow_same_epoch():
+    run = {"id": "job-1", "runName": "baseline", "sequence": "3"}
+    original = training_runner._candidate_test_file_name(run, 60)
+    assert original == "baseline-03__epoch60.safetensors"
+    run["candidateRevision"] = 2
+    second = training_runner._candidate_test_file_name(run, 60)
+    assert second == "baseline-03-r2__epoch60.safetensors"
+    run["candidateRevision"] = 3
+    third = training_runner._candidate_test_file_name(run, 60)
+    assert third == "baseline-03-r3__epoch60.safetensors"
+    assert len({original, second, third}) == 3
+
+
+def test_revision_candidate_copy_preserves_previously_staged_same_epoch(tmp_path, monkeypatch):
+    source, destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
+    first = training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
+    source.write_bytes(b"retrained weights")
+    original_snapshot = training_runner._candidate_run_snapshot
+
+    def revised_snapshot(folder, job_id):
+        path, run = original_snapshot(folder, job_id)
+        return path, dict(run, candidateRevision=2)
+
+    monkeypatch.setattr(training_runner, "_candidate_run_snapshot", revised_snapshot)
+    second = training_runner.copy_candidate_epoch_to_test("sets/subject", "job-1", 12)
+    first_path = Path(first["destination"])
+    second_path = Path(second["destination"])
+    assert first_path != second_path
+    assert first_path.read_bytes() == b"test weights"
+    assert second_path.read_bytes() == b"retrained weights"
+    assert json.loads(second_path.with_suffix(".webcap.json").read_text())["sourceRevision"] == 2
+    assert json.loads(first_path.with_suffix(".webcap.json").read_text())["sourceRevision"] == 1
+    analysis = {"savedArtifacts": [{"epoch": 12, "fileName": source.name, "status": "available"}]}
+    run = {"folder": "sets/subject", "stages": "h3", "runName": "baseline", "sequence": "3",
+           "candidateRevision": 2, "id": "job-1"}
+    training_runner._annotate_candidate_test_folder_status(run, analysis)
+    assert analysis["savedArtifacts"][0]["inTestFolder"] is True
+    training_runner.remove_candidate_epoch_from_test("sets/subject", "job-1", 12)
+    assert first_path.exists()
+    assert not second_path.exists()
+
+
 def test_candidate_analysis_reports_unavailable_test_folder_without_blocking_analysis(tmp_path, monkeypatch):
     source, _destination_root = _copy_to_test_fixture(tmp_path, monkeypatch)
     run = {"folder": "sets/subject", "stages": "h3", "runName": "baseline", "sequence": "3", "id": "job-1"}

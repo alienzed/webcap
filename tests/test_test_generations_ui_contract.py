@@ -560,6 +560,9 @@ def test_test_result_footer_identity_timing_and_remove_contract():
     assert "function candidateIdentity(result)" in script
     assert "provenance.sourceRunSequence" in script
     assert "provenance.sourceEpoch" in script
+    assert "provenance.sourceRevision" in script
+    assert "identity.push('Rev ' + revision)" in script
+    assert "replace(/-r\\d+$/i, '')" in script
     assert "Run ' + String(runSequence).padStart(2, '0')" in script
     assert "Epoch ' + String(epoch).trim()" in script
     assert "sourceFile.match(/^(.*)__epoch(\\d+)\\.safetensors$/i)" in script

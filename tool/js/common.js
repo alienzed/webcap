@@ -328,6 +328,12 @@ function trackTransientLlmJob(job) {
     if (Number(job.startedAt) > 0) entry.startedAt = Number(job.startedAt);
     if (Number(job.finishedAt) > 0) entry.finishedAt = Number(job.finishedAt);
   }
+  // Enqueue/start is a meaningful event: refresh the existing Activity projection
+  // instead of making idle polling aggressive enough to catch short Director jobs.
+  if (typeof window.refreshActivityMonitor === 'function' && !entry.activityWakeSent) {
+    entry.activityWakeSent = true;
+    window.refreshActivityMonitor();
+  }
   return entry;
 }
 

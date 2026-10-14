@@ -159,15 +159,18 @@
   }
 
   function maybeAutoOpen() {
-    var items = currentActivityItems();
-    items.forEach(function (item) {
-      var id = activityLane(item) + ':' + String(item.id);
+    var competingDrawer = ['director-chat-drawer', 'inference-queue-drawer'].some(function (id) {
+      var drawer = el(id);
+      return drawer && !drawer.classList.contains('hidden');
+    });
+    currentActivityItems().forEach(function (item) {
+      var lane = activityLane(item);
+      var id = lane + ':' + String(item.id);
       if (state.autoOpenSeen[id]) return;
       state.autoOpenSeen[id] = true;
-      // Short interactive Director/diagnostics work; bulk Inference and Training stay quiet.
-      var lane = activityLane(item);
+      // Never displace a workflow drawer for an automatically raised Activity panel.
       var shortInteractive = lane === 'llm' || item.kind === 'director-diagnostics';
-      if (!state.open && shortInteractive && !state.silencedLanes[lane]) setOpen(true);
+      if (!state.open && !competingDrawer && shortInteractive && !state.silencedLanes[lane]) setOpen(true);
     });
   }
 
@@ -835,12 +838,17 @@
     var detailsToggle = el('activity-monitor-details-toggle');
     var detailsCount = el('activity-monitor-details-count');
     if (!primaryHost || !primaryQueue || !details || !detailsToggle || !detailsCount) throw new Error('Activity panel markup missing.');
-    if (state.open && !active.length && !pendingItems.length && !recent.length) state.open = false;
+    if (state.open && !active.length && !pendingItems.length && !recent.length) {
+      state.open = false;
+      storeLastSeen(Date.now() / 1000);
+    }
+    var detailsVisible = state.detailsOpen || (!primary && (pendingItems.length || recent.length));
     drawer.classList.toggle('hidden', !state.open);
-    details.classList.toggle('hidden', !state.detailsOpen);
-    detailsToggle.setAttribute('aria-expanded', state.detailsOpen ? 'true' : 'false');
+    details.classList.toggle('hidden', !detailsVisible);
+    detailsToggle.setAttribute('aria-expanded', detailsVisible ? 'true' : 'false');
     detailsCount.textContent = '(' + String(active.length - (primary ? 1 : 0) + pendingItems.length + recent.length) + ')';
-    detailsToggle.classList.toggle('hidden', !active.length && !pendingItems.length && !recent.length);
+    detailsToggle.classList.toggle('hidden', !primary || !active.length && !pendingItems.length && !recent.length);
+    el('activity-monitor-trend').classList.toggle('hidden', !primary);
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
     toggle.classList.toggle('activity-running', active.length > 0);
@@ -949,17 +957,7 @@
     }
     reconcileActivityRows(recentSection, recentRows);
 
-    var queueSection = ensureActivitySection(host, 'queues', 'Queue Status', '');
-    queueSection.classList.add('hidden');
-    queueSection.classList.add('activity-monitor-queue-section');
-    var queueSignature = JSON.stringify(queues);
-    if (queueSection.getAttribute('data-activity-queue-signature') !== queueSignature) {
-      var queueRows = [createQueueStatusBar(queues)];
-      var directorQueueList = createDirectorQueueList(queues.director);
-      if (directorQueueList) queueRows.push(directorQueueList);
-      reconcileActivityRows(queueSection, queueRows);
-      queueSection.setAttribute('data-activity-queue-signature', queueSignature);
-    }
+    // Full queue controls remain in their owning workspaces; no hidden Queue Status redraw.
   }
 
   function refresh() {
@@ -1034,7 +1032,6 @@
     var wasOpen = state.open;
     state.open = !!open;
     if (state.open) {
-      var current = currentPrimaryItem();
       if (manualClose === 'manual-open') state.silencedLanes = Object.create(null);
       if (!wasOpen) state.openedAt = Date.now() / 1000;
       if (typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
@@ -1060,7 +1057,8 @@
     close.onclick = function () { setOpen(false, true); };
     el('activity-monitor-details-toggle').onclick = function () { state.detailsOpen = !state.detailsOpen; render(); };
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || drawer.contains(event.target) || toggle.contains(event.target)) return;
+      if (!state.open || drawer.contains(event.target) || toggle.contains(event.target) ||
+          event.target.closest('.shell-workload-indicator')) return;
       setOpen(false, true);
     });
     window.addEventListener('keydown', function (event) {

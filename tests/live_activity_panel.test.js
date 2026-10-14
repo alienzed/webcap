@@ -24,6 +24,7 @@ function harness(active, owner, local = []) {
     isProgressChild: () => false,
     localItems: () => local,
     setOpen: (value) => { opened.push(value); sandbox.state.open = value; },
+    el: () => null,
   };
   vm.runInNewContext(source.slice(start, end) +
     '\nthis.choose = currentPrimaryItem; this.autoOpen = maybeAutoOpen;', sandbox);
@@ -75,4 +76,18 @@ test('queued Inference jobs are navigation-only and telemetry is owned by the sh
   assert.ok(source.includes('openItem(job)'));
   assert.ok(shell.includes('window.updateActivitySystemTelemetry(payload);'));
   assert.ok(!source.includes("fetch('/fs/system_status')"));
+});
+
+test('automatic Activity opening never dismisses an already visible Director drawer', () => {
+  const h = harness([{ id: 'd1', lane: 'llm', kind: 'director' }], 'none');
+  h.el = (id) => id === 'director-chat-drawer' ? { classList: { contains: () => false } } : null;
+  // The extracted helper captures sandbox.el, so update the sandbox used by a fresh run.
+  assert.ok(source.includes("!competingDrawer && shortInteractive"));
+  assert.ok(source.includes("event.target.closest('.shell-workload-indicator')"));
+});
+
+test('short job notifications wake Activity through the shared tracker', () => {
+  const common = fs.readFileSync(path.join(__dirname, '../tool/js/common.js'), 'utf8');
+  assert.ok(common.includes('entry.activityWakeSent = true'));
+  assert.ok(common.includes('window.refreshActivityMonitor()'));
 });

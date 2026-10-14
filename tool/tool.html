@@ -141,8 +141,8 @@
                     type="button"
                     class="activity-rail-btn activity-monitor-rail-btn"
                     data-activity-monitor-toggle
-                    title="Activity"
-                    aria-label="Activity"
+                    title="Activity panel"
+                    aria-label="Activity panel"
                     aria-expanded="false"
                     aria-controls="activity-monitor-drawer"
                 >
@@ -1705,16 +1705,6 @@
                     </div>
                 </div>
             </aside>
-            <aside id="activity-monitor-drawer" class="activity-monitor-drawer hidden" aria-label="Activity" aria-hidden="true">
-                <header class="activity-monitor-drawer-header">
-                    <div>
-                        <strong>Activity</strong>
-                        <span id="activity-monitor-summary">Current work and this session</span>
-                    </div>
-                    <button id="activity-monitor-close" type="button" class="activity-monitor-close" aria-label="Close Activity">×</button>
-                </header>
-                <div id="activity-monitor-list" class="activity-monitor-list"></div>
-            </aside>
             <aside id="inference-queue-drawer" class="inference-queue-drawer hidden" aria-label="Inference Queue" aria-hidden="true">
                 <header class="inference-queue-drawer-header">
                     <div class="inference-queue-header-copy">
@@ -1742,6 +1732,25 @@
             </div>
         </div>
         <div id="app-overlay-root" class="app-overlay-root" aria-label="Application overlays">
+            <aside id="activity-monitor-drawer" class="activity-monitor-drawer hidden" aria-label="Activity" aria-hidden="true">
+                <header class="activity-monitor-drawer-header">
+                    <div>
+                        <strong>Activity</strong>
+                        <span id="activity-monitor-summary">Current work and this session</span>
+                    </div>
+                    <button id="activity-monitor-close" type="button" class="activity-monitor-close" aria-label="Close Activity">×</button>
+                </header>
+                <div id="activity-monitor-primary" class="activity-monitor-primary"></div>
+                <div id="activity-monitor-trend" class="director-activity-trend activity-monitor-trend" role="img" aria-label="System history, waiting for samples">
+                    <div class="director-activity-trend-legend"><span><i class="director-activity-trend-ram"></i>RAM</span><span><i class="director-activity-trend-vram"></i>VRAM</span><span><i class="director-activity-trend-gpu"></i>GPU</span><span><i class="director-activity-trend-thermal"></i>°C</span><small>last minute · local system</small></div>
+                    <svg viewBox="0 0 120 30" preserveAspectRatio="none" aria-hidden="true"><path class="director-activity-trend-grid" d="M0 7.5H120 M0 15H120 M0 22.5H120"></path><path class="director-activity-trend-ram-line"></path><path class="director-activity-trend-vram-line"></path><path class="director-activity-trend-gpu-line"></path><path class="director-activity-trend-thermal-line"></path></svg>
+                </div>
+                <div id="activity-monitor-primary-queue" class="activity-monitor-primary-queue"></div>
+                <button id="activity-monitor-details-toggle" class="activity-monitor-details-toggle" type="button" aria-expanded="false" aria-controls="activity-monitor-details">Other activity <span id="activity-monitor-details-count"></span></button>
+                <div id="activity-monitor-details" class="activity-monitor-details hidden">
+                    <div id="activity-monitor-list" class="activity-monitor-list"></div>
+                </div>
+            </aside>
             <div id="test-generations-wildcard-modal" class="keep-lora-modal test-generations-wildcard-modal hidden" aria-hidden="true" data-escape-close-id="test-generations-wildcard-close">
                 <section class="keep-lora-dialog test-generations-wildcard-dialog" role="dialog" aria-modal="true" aria-labelledby="test-generations-wildcard-title">
                     <header class="keep-lora-header">

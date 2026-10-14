@@ -200,14 +200,14 @@ def test_global_activity_drawer_is_a_read_only_sibling_of_inference_queue():
     assert html.index('id="activity-monitor-rail-btn"') < html.index('id="inference-queue-rail-btn"')
     assert 'src="/static/js/activity_monitor.js"' in html
     assert "fetch(url)" in activity
-    assert "'/fs/activity?limit=24'" in activity
-    assert "webcap.activity.lastSeen" in activity
+    assert "'/fs/activity?limit=24&since='" in activity
+    assert "sessionStartedAt" in activity
     assert "window.setActivityDrawerOpen = setOpen" in activity
     assert "window.setInferenceQueueOpen = setOpen" in inference
     assert "window.setActivityDrawerOpen(false)" in inference
     assert ".activity-monitor-drawer {" in css
     assert ".activity-monitor-recent-row" in css
-    assert ".activity-monitor-queue-row" in css
+    assert ".activity-monitor-pending-row" in css
 
 
 def test_inference_queue_polish_exposes_real_queue_actions_and_status():
@@ -887,18 +887,12 @@ def test_inference_drawer_exposes_backlog_without_treating_it_as_active_work():
 
 def test_activity_drawer_uses_readable_application_scale_typography():
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
-
-    activity = css.split(".activity-monitor-drawer {", 1)[1].split(".inference-queue-drawer {", 1)[0]
-    assert "width: min(440px, calc(100% - 60px));" in activity
-    assert ".activity-monitor-drawer-header strong" in activity
-    assert "font-size: 15px;" in activity
-    assert ".activity-monitor-recent-copy strong" in activity
-    assert "font-size: 12px;" in activity
-    assert ".activity-monitor-recent-copy small" in activity
-    assert "font-size: 10.5px;" in activity
-    assert ".activity-monitor-queue-row strong" in activity
-    assert "font-size: 12.5px;" in activity
-    assert "font-size: 9px;" not in activity
+    panel = css.split(".activity-monitor-drawer {", 1)[1].split("}", 1)[0]
+    assert "width: min(520px, calc(100vw - 70px));" in panel
+    assert ".activity-monitor-trend svg" in css
+    assert "height: 72px;" in css
+    assert ".activity-monitor-pending-row {" in css
+    assert "font-size: 13px;" in css
 
 
 def test_diagnostics_exposes_requirements_repair_without_startup_dependency_manager():
@@ -1078,57 +1072,59 @@ def test_pending_media_reselection_waits_for_metadata_hydration():
 
 
 
-def test_shared_progress_follower_sits_below_header_and_respects_immersive_mode():
+def test_unified_activity_panel_sits_below_header_and_respects_immersive_mode():
     css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
 
-    follower = css.split("/* Persistent, non-blocking presentation of the shared activity progress card. */", 1)[1]
-    assert "top: 48px;" in follower
-    assert "#app-frame.shell-immersive + #app-overlay-root .activity-progress-follower {" in follower
-    assert "top: 14px;" in follower
-    assert "bottom:" not in follower
-    assert "root.appendChild(host);" in activity
-    assert "host.className = 'activity-progress-follower';" in activity
-
+    panel = css.split(".activity-monitor-drawer {", 1)[1].split("}", 1)[0]
+    assert "top: 48px;" in panel
+    assert "#app-frame.shell-immersive + #app-overlay-root .activity-monitor-drawer {" in css
+    assert 'id="activity-monitor-primary"' in html
+    assert 'id="activity-monitor-trend"' in html
+    assert 'id="activity-monitor-details"' in html
+    assert "function currentPrimaryItem()" in activity
+    assert "function renderSystemTrend()" in activity
+    assert "function maybeAutoOpen()" in activity
+    assert "silencedLanes" in activity
 
 
 def test_activity_training_and_storage_use_shared_progress_cards():
-    root = ROOT
-    activity = (root / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    activity = (ROOT / "tool/js/activity_monitor.js").read_text(encoding="utf-8")
     assert "function managedProgressSnapshot(item)" in activity
     assert "source.overallPercent" in activity
     assert "snapshot.progress = { completed: epoch, total: epochs }" in activity
     assert "snapshot.progress = { completed: measured, total: total }" in activity
-    assert "var managed = (Array.isArray(state.payload.active)" in activity
-    assert "managed.concat(localItems())" in activity
-    assert "var managedSnapshot = managedProgressSnapshot(item)" in activity
-    assert "ProgressCard.update(card, progressItem" in activity
+    assert "function currentActivityItems()" in activity
+    assert ".concat(localItems())" in activity
+    assert "ProgressCard.update(primaryCard, snapshot" in activity
     assert "function reconcileActivityRows(section, wanted)" in activity
     assert "host.innerHTML = '';" not in activity.split("  function render() {", 1)[1].split("  function refresh() {", 1)[0]
 
 
 def test_activity_polling_preserves_other_active_cards_and_navigation():
-    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
+    activity = (ROOT / "tool/js/activity_monitor.js").read_text(encoding="utf-8")
     assert "function activeCardKey(item)" in activity
-    assert "function syncActiveCard(card, item)" in activity
-    assert "retainedActiveCards[activeCardKey(item)]" in activity
-    assert "existingCard ? syncActiveCard(existingCard, item) : createActiveCard(item)" in activity
-    assert "openItem(item.original);" in activity
-    assert "setOpen(true);" in activity
+    assert "existingActive[row.getAttribute('data-activity-active-line')]" in activity
+    assert "existingPending[node.getAttribute('data-activity-pending-key')]" in activity
+    assert "reconcileActivityRows(nowSection, nowRows)" in activity
+    assert "reconcileActivityRows(pendingSection, pendingRows)" in activity
+    assert "itemOpen(itemProgress(item))" in activity
+    assert "openItem(item.original)" in activity
 
 
 def test_activity_inference_consumers_use_shared_progress_without_touching_workflows():
-    activity = (ROOT / "tool" / "js" / "activity_monitor.js").read_text(encoding="utf-8")
-    monitor = (ROOT / "tool" / "server" / "activity_monitor.py").read_text(encoding="utf-8")
+    activity = (ROOT / "tool/js/activity_monitor.js").read_text(encoding="utf-8")
+    monitor = (ROOT / "tool/server/activity_monitor.py").read_text(encoding="utf-8")
     assert "['training', 'storage', 'generate', 'test', 'storyboard']" in activity
     assert "item.lane !== 'inference'" in activity
     assert "raw.steps != null && raw.step != null" in activity
     assert "raw.percent != null" in activity
     assert "snapshot.original = item;" in activity
-    assert "var managedSnapshot = managedProgressSnapshot(item)" in activity
-    assert "managed.concat(localItems())" in activity
-    assert "openItem(item.original);" in activity
+    assert "managedProgressSnapshot(item) || directorFollowerSnapshot(item) || item" in activity
+    assert "openItem(item.original)" in activity
     assert '"progress": job.get("progress") if lane == "inference"' in monitor
+    assert '"jobs": [' in monitor
 
 
 def test_set_review_vocabulary_progress_is_session_only_and_uses_existing_owners():
@@ -1183,20 +1179,21 @@ def test_remaining_multistep_llm_consumers_publish_shared_progress_without_new_p
 
 
 def test_shared_activity_renders_local_operations_and_preserves_model_lab_run_identity():
-    activity = (ROOT / 'tool/js/activity_monitor.js').read_text(encoding='utf-8')
-    model = (ROOT / 'tool/js/model_lab.js').read_text(encoding='utf-8')
-    assert 'var localSnapshot = !!state.localProgress[String(item.id)];' in activity
-    assert 'if (managedSnapshot || localSnapshot)' in activity
+    activity = (ROOT / "tool/js/activity_monitor.js").read_text(encoding="utf-8")
+    model = (ROOT / "tool/js/model_lab.js").read_text(encoding="utf-8")
+    assert "state.localProgress[String(snapshot.id)]" in activity
+    assert "function localItems()" in activity
+    assert "function itemProgress(item)" in activity
     assert "item.kind !== 'vocabulary-discovery' && item.kind !== 'vision-tag-assist'" in activity
     assert "if (modelLabState.progressRunId && modelLabState.progressRunId !== id) return;" in model
 
 
-def test_activity_follower_tracks_director_and_bounds_child_job_suppression():
+def test_activity_panel_tracks_director_and_bounds_child_job_suppression():
     activity = (ROOT / 'tool/js/activity_monitor.js').read_text(encoding='utf-8')
     model = (ROOT / 'tool/js/model_lab.js').read_text(encoding='utf-8')
     assert 'function directorFollowerSnapshot(item)' in activity
     assert "item.lane !== 'llm'" in activity
-    assert "managedProgressSnapshot(item) || directorFollowerSnapshot(item)" in activity
+    assert "managedProgressSnapshot(item) || directorFollowerSnapshot(item) || item" in activity
     assert "child.expiresAt = Date.now() + 120000" in activity
     assert 'function pruneProgressChildren()' in activity
     assert "state.notified[recentKey(item)] = true;" in activity

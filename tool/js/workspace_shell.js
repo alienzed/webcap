@@ -513,6 +513,7 @@ function refreshShellSystemStatus() {
       shellSystemStatusState.gpu = payload.gpu || null;
       shellSystemStatusState.ram = payload.ram || null;
       shellSystemStatusState.disk = payload.disk || null;
+      window.updateActivitySystemTelemetry(payload);
       shellSystemStatusState.error = '';
       renderShellSystemStatus();
     })

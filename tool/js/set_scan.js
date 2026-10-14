@@ -533,8 +533,8 @@
     }
 
     var folder = String(state && state.folder || '');
-    var files = getSetIntelligenceScopeFiles();
-    if (explicitFiles) files = files.filter(function (file) { return explicitFiles.indexOf(file) !== -1; });
+    var scopeFiles = getSetIntelligenceScopeFiles();
+    var files = explicitFiles ? scopeFiles.filter(function (file) { return explicitFiles.indexOf(file) !== -1; }) : scopeFiles;
     if (!folder || !isSetFolderContext(folder, state && state.items)) {
       window.setStatus('Open a Set before using Set Intelligence.');
       return;
@@ -606,9 +606,9 @@
         if (!result || result.ok === false) {
           throw new Error((result && result.error) || 'Set Intelligence refresh failed.');
         }
-        return requestCachedIntelligenceReport(folder, files, setScanState.visionModel).then(function (payload) {
+        return requestCachedIntelligenceReport(folder, scopeFiles, setScanState.visionModel).then(function (payload) {
           setCachedReportResponses(payload);
-          applyCoveragePayload(payload, files.length);
+          applyCoveragePayload(payload, scopeFiles.length);
           return true;
         });
       });

@@ -3105,6 +3105,52 @@ html[data-theme="dark"] .app-settings-environment-check {
 }
 
 
+/* Prepare Set: grouped Sight workflow; existing theme variables and scan contracts. */
+.set-scan-content { padding: 16px 18px 4px; }
+.set-scan-content .set-scan-scope-row { margin: 0 0 14px; justify-content: space-between; }
+.set-scan-scope-caption { display: flex; align-items: baseline; gap: 10px; }
+.set-scan-scope-caption strong { color: var(--text); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.set-scan-sight-shell { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel-soft); overflow: hidden; }
+.set-scan-content .set-scan-evidence-grid { display: block; margin: 0; }
+.set-scan-content .set-scan-evidence-card { border: 0; border-radius: 0; background: transparent; padding: 18px 20px 14px; }
+.set-scan-sight-totals { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-top: 14px; }
+.set-scan-sight-count-line { display: flex; align-items: baseline; gap: 10px; }
+.set-scan-sight-count-line > span { font-size: 14px; color: var(--muted); }
+.set-scan-content .set-scan-evidence-count { margin-top: 0; font-size: 36px; }
+.set-scan-quality-summary { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: 13px; }
+.set-scan-quality-summary span { white-space: nowrap; }
+.set-scan-quality-summary span::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; background: var(--muted); }
+.set-scan-quality-summary .flagged::before { background: #cfac70; }
+.set-scan-content .set-scan-progress-track { margin: 16px 0 0; height: 7px; }
+.set-scan-content .set-scan-summary { padding: 12px 0 0; justify-content: flex-start; flex-wrap: wrap; }
+.set-scan-content .set-scan-summary strong { font-size: 14px; }
+.set-scan-content .set-scan-evidence-detail { margin-top: 5px; }
+.set-scan-content .set-scan-run-actions { margin: 0; padding: 12px 18px; border-top: 1px solid var(--border-soft); flex-wrap: wrap; gap: 9px; }
+.set-scan-run-actions .set-scan-primary, .set-intelligence-next .set-scan-primary { background: var(--accent); color: var(--bg, #101823); border-color: var(--accent); }
+.set-scan-run-actions .set-scan-quiet { margin-left: auto; background: transparent; border-color: transparent; color: var(--muted); }
+.set-scan-run-actions .set-scan-quiet:hover { color: var(--text); }
+.set-scan-content .set-scan-issues { display: block; margin: 16px 0 0; padding: 14px 16px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel-soft); }
+.set-scan-content .set-scan-issues.hidden { display: none; }
+.set-scan-item-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.set-scan-item-heading strong { font-size: 15px; }
+.set-scan-item-heading span { color: var(--muted); font-size: 13px; }
+.set-scan-item-row { display: flex; align-items: center; gap: 9px; }
+.set-scan-item-row select { flex: 1 1 180px; min-width: 0; padding: 8px; }
+.set-scan-item-row .review-captions-btn { flex: 0 0 auto; font-size: 14px; }
+.set-scan-item-help { display: block; color: var(--muted); margin-top: 8px; font-size: 12px; }
+.set-scan-content .set-intelligence-next { margin: 20px 0 0; border: 0; border-top: 1px solid var(--border-soft); border-radius: 0; background: transparent; padding: 16px 0 0; }
+.set-intelligence-next-main { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.set-intelligence-next-main > button { flex: 0 0 auto; }
+.set-intelligence-kicker { text-transform: uppercase; letter-spacing: .06em; font-size: 11px !important; font-weight: 700; }
+.set-scan-content .set-scan-details { margin: 18px 0 14px; }
+@media (max-width: 700px) {
+  .set-scan-item-row { flex-wrap: wrap; }
+  .set-scan-item-row select { flex-basis: 100%; }
+  .set-intelligence-next-main { align-items: flex-start; flex-direction: column; }
+  .set-scan-run-actions .set-scan-quiet { margin-left: 0; }
+}
+
+
 .vision-schema-modal {
   position: fixed;
   inset: 0;

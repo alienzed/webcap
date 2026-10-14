@@ -164,9 +164,10 @@
       var id = activityLane(item) + ':' + String(item.id);
       if (state.autoOpenSeen[id]) return;
       state.autoOpenSeen[id] = true;
-      // Short interactive Director work; bulk Inference and long Training are never auto-raised.
+      // Short interactive Director/diagnostics work; bulk Inference and Training stay quiet.
       var lane = activityLane(item);
-      if (!state.open && lane === 'llm' && !state.silencedLanes[lane]) setOpen(true);
+      var shortInteractive = lane === 'llm' || item.kind === 'director-diagnostics';
+      if (!state.open && shortInteractive && !state.silencedLanes[lane]) setOpen(true);
     });
   }
 

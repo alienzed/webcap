@@ -258,6 +258,16 @@ assert(comparisonHtml.indexOf('Compare curves · 2') < comparisonHtml.indexOf('T
 const curveColors=Array.from(comparisonHtml.matchAll(/class="training-candidates-compare-line[^"]*" style="stroke:([^"]+)"/g)).map(match=>match[1]);
 assert.equal(curveColors.length,3);
 assert.equal(new Set(curveColors).size,3);
+assert(comparisonHtml.includes('data-training-candidate-open-run="run:older"'));
+assert(!comparisonHtml.includes('data-training-candidate-open-run="archive:archive-a"'));
+context.syncTrainingCandidatesDisplayControls();
+assert.equal(elements['training-candidates-smoothing'].disabled, false);
+assert.equal(elements['training-candidates-smoothing-number'].disabled, false);
+elements['training-candidates-smoothing'].value='.91';
+elements['training-candidates-smoothing'].oninput();
+assert.equal(context.trainingCandidatesDisplayState().smoothing,.91);
+assert(Math.abs(context.trainingCandidatesComparisonCurves(comparePayload)[1].points[1].loss-
+  context.trainingCandidatesEma(comparison.curves['run:older'].points,.91)[1].loss)<1e-12);
 context.trainingCandidatesResetComparison();
 context.trainingCandidatesDisplayState().showRawStep=false;
 context.trainingCandidatesDisplayState().showEpochLoss=false;
@@ -434,6 +444,33 @@ context.renderTrainingCandidates = function () { renders++; };
   await new Promise(setImmediate);
   assert(!context.trainingCandidatesComparisonState().selected.includes('run:older'));
   assert.equal(context.trainingCandidatesComparisonState().curves['run:older'].points.length, 1);
+
+  const switching = context.trainingCandidatesComparisonState();
+  switching.selected=['run:older','archive:cached'];
+  switching.colors={'run:older':1,'archive:cached':2};
+  switching.nextColor=3;
+  context.trainingWorkspaceState.candidatePayload={
+    run:{runName:'Current run'},analysis:{epochLossPoints:[{epoch:1,loss:.8},{epoch:2,loss:.4}]}
+  };
+  let switchedRefresh=0;
+  context.refreshTrainingCandidates=() => {switchedRefresh++;return Promise.resolve();};
+  context.trainingCandidatesOpenComparisonRun('run:older');
+  assert.equal(context.trainingWorkspaceState.candidateJobId,'older');
+  assert.equal(switchedRefresh,1);
+  assert(switching.selected.includes('run:current'));
+  assert(switching.selected.includes('archive:cached'));
+  assert(!switching.selected.includes('run:older'));
+  assert.equal(switching.curves['run:current'].points.length,2);
+  assert.equal(context.trainingCandidatesComparisonSourceByKey('run:current').jobId,'current');
+  context.trainingWorkspaceState.candidatePayload={
+    run:{runName:'Older run'},analysis:{epochLossPoints:[{epoch:1,loss:.6},{epoch:2,loss:.4}]}
+  };
+  context.trainingCandidatesOpenComparisonRun('run:current');
+  assert.equal(context.trainingWorkspaceState.candidateJobId,'current');
+  assert(switching.selected.includes('run:older'));
+  assert(switching.selected.includes('archive:cached'));
+  assert.equal(switching.colors['archive:cached'],2);
+  assert.throws(() => context.trainingCandidatesOpenComparisonRun('archive:cached'),/not a training run/);
 
   assert.throws(
     () => context.trainingCandidatesWireCompareControl({querySelector() { return null; }}),

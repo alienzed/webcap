@@ -450,7 +450,10 @@
       var issue = result.warning || (result.sight ? '' : 'Unstructured Vision response');
       var save = result.sight ? saveSight(folder, model, fileName, result.sight) : Promise.resolve(null);
       return save.then(function () { return saveSightAttempt(folder, model, fileName, result, issue); })
-        .then(function () { return !!result.sight; });
+        .then(function () {
+          if (!result.sight) recordSetIntelligenceFailure('Sight', fileName, issue);
+          return !!result.sight;
+        });
     }).catch(function (err) {
       setScanState.currentVisionJobId = '';
       if (setScanState.stopRequested) return false;

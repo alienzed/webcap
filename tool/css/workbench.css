@@ -1330,14 +1330,32 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.app.shell-revamp .training-run-h3-adapter-option {
+.app.shell-revamp .training-run-starting-point-heading {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-top: 10px;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 14px;
+  color: var(--muted);
   font-size: 12px;
+  font-weight: 650;
+}
+
+.app.shell-revamp .training-run-h3-adapter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
   color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+.app.shell-revamp .training-run-h3-adapter-option.hidden {
+  display: none;
 }
 
 .app.shell-revamp .training-run-h3-adapter-option input {

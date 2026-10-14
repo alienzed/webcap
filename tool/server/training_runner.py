@@ -2785,7 +2785,6 @@ def start_response(
                 else requested_config_settings.get("optimizerLr")
             )
         resume_path = str(resume_from_checkpoint or "").strip()
-        deliberate_rewind = bool(str(resume_checkpoint_tag or "").strip())
         if bool(resume_action_id) != bool(resume_output_id):
             raise ValueError("A managed resume requires both an action and output selection.")
         if resume_path and resume_output_id:
@@ -2823,6 +2822,7 @@ def start_response(
                 key: validated_resume.get(key)
                 for key in ("checkpointAvailable", "checkpointTag", "epoch", "step", "expectedEpochs", "completed")
             }
+        deliberate_rewind = bool(resume_output_id and str(resume_checkpoint_tag or "").strip())
         effective_config_settings = dict(requested_config_settings)
         if (resume_path or initializer) and effective_config_settings.get("optimizerLr") not in (None, ""):
             # diffusion-pipe restores scheduler state on resume unless

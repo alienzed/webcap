@@ -2907,3 +2907,31 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
     width: min(520px, calc(100vw - 60px));
   }
 }
+
+/* One readable line per pending operation, preserving direct navigation. */
+.activity-monitor-pending-row {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  margin-top: 4px;
+  padding: 8px 11px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.activity-monitor-pending-row:hover,
+.activity-monitor-pending-row:focus-visible {
+  background: var(--hover);
+  border-color: var(--accent);
+}
+.activity-monitor-details .activity-monitor-recent-row {
+  align-items: center;
+}

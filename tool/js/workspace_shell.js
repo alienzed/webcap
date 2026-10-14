@@ -363,8 +363,7 @@ function getShellWorkloadStatus() {
 function shellWorkloadIcon(lane) {
   if (lane === 'llm') {
     return '<svg class="shell-workload-icon shell-workload-icon--llm" viewBox="0 0 16 16" aria-hidden="true">' +
-      '<path d="M3 12.75l.72-2.82 6.77-6.77a1.35 1.35 0 0 1 1.91 0l.44.44a1.35 1.35 0 0 1 0 1.91l-6.77 6.77L4.25 13z"></path>' +
-      '<path d="M9.62 4.03l2.35 2.35M3.72 9.93l2.35 2.35"></path>' +
+      '<path d="M1.5 9.5h2.2l1.8-5 2.4 8 2.2-6 1.7 3h2.7"></path>' +
     '</svg>';
   }
   if (lane === 'inference') {
@@ -417,6 +416,10 @@ function renderShellSystemStatus() {
   var host = document.getElementById('shell-gpu-status');
   if (!host) return;
 
+  // The status contents are refreshed frequently; delegate the click on the stable host.
+  host.onclick = function (event) {
+    if (event.target.closest('.shell-workload-indicator')) window.toggleActivityProgressFollower();
+  };
   var parts = [];
   var workload = getShellWorkloadStatus();
   var laneLabel = workload.lane === 'llm'
@@ -428,9 +431,9 @@ function renderShellSystemStatus() {
     ? 'Idle'
     : ((laneLabel ? laneLabel + ' · ' : '') + workload.label);
   parts.push(
-    '<span class="shell-workload-indicator is-' + workload.key + ' is-' + workload.lane + '" title="' + escapeHtml(workloadTitle) + '" aria-label="' + escapeHtml(workloadTitle) + '">' +
+    '<button type="button" class="shell-workload-indicator is-' + workload.key + ' is-' + workload.lane + '" title="' + escapeHtml(workloadTitle) + ' · Toggle floating progress" aria-label="Toggle floating activity progress">' +
       shellWorkloadIcon(workload.lane) +
-    '</span>'
+    '</button>'
   );
   var gpu = shellSystemStatusState.gpu;
   if (gpu && gpu.available) {

@@ -352,6 +352,15 @@ def apply_review_config_settings(config_text, settings):
     return source
 
 
+def apply_h3_image_training_adapter(config_text):
+    """Apply the optional H3 image adapter to a captured config only."""
+    adapter_path = app_config.fill_template_placeholders(
+        "{MODELS_ROOT}/adapters/minimax_h3_image_training_adapter.safetensors", ""
+    )
+    source = rewrite_toml_assignment(config_text, "cfg", section="model")
+    return rewrite_toml_assignment(source, "merge_adapters", json.dumps([adapter_path]), "model")
+
+
 def apply_captured_initializer(config_text, initializer_dir, force_constant_lr=None):
     """Write run-only LoRA lineage into a captured config, never a set TOML."""
     source = rewrite_toml_assignment(str(config_text or ""), "init_from_existing", json.dumps(str(initializer_dir).replace("\\", "/")), "adapter")

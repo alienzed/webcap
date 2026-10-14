@@ -37,6 +37,7 @@ Wan2.2 High and Low are independent run choices. Every separate Train action cre
 - **Training History** is a lightweight metadata index in `.webcap_training/recent_runs.json`. Only recorded history rows appear; filesystem artifacts enrich those known rows with availability/actions but do not invent history.
 - Managed Resume discovers compatible current-set logical runs; Custom Resume accepts an explicit checkpoint directory and creates a new logical run without writing beside the source. H3 Resume includes the current capture's cache phase.
 - Resume applies the selected Run setup learning rate as `force_constant_lr` in the captured config so the chosen LR is effective after checkpoint restore.
+- Managed Resume from **latest** keeps the action's current candidate revision. Explicitly choosing an older saved `global_step` checkpoint advances the action's candidate revision (2, 3, …) without changing the physical trainer-run directory. Copy to Test includes `-rN` before `__epochN.safetensors` for revisions after the original, so separately tested candidates at the same epoch coexist. Old copied candidate filenames remain valid. Revisions identify candidate continuations, not separate trainer output directories.
 - Test Generations has its own FIFO/session flow and GPU reservation. Test jobs are not Training Queue jobs and do not appear in Training History.
 
 ## Candidate selection and finalization roadmap

@@ -196,8 +196,9 @@
   function renderSystemTrend() {
     var graph = el('activity-monitor-trend');
     if (!graph) return;
-    var recent = state.systemHistory;
     var cutoff = Date.now() - 60000;
+    state.systemHistory = state.systemHistory.filter(function (p) { return p.time >= cutoff; });
+    var recent = state.systemHistory;
     var keys = { ram: 'ram', vram: 'vram', gpu: 'gpu', thermal: 'thermal' };
     Object.keys(keys).forEach(function (key) {
       var d = '';

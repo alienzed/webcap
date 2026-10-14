@@ -17,6 +17,7 @@
     rawResponseIndex: -1,
     hasRun: false,
     failures: [],
+    sightItems: [],
     completed: 0,
     total: 0,
     phase: 'idle',
@@ -57,6 +58,7 @@
   }
 
   function applyCoveragePayload(payload, scopedTotal) {
+    setScanState.sightItems = (payload && payload.open && payload.open.items || []).slice();
     var items = payload && payload.open && Array.isArray(payload.open.items) ? payload.open.items : [];
     setCoverage(scopedTotal, items.filter(function (item) { return !!(item && item.structured); }).length);
   }
@@ -89,6 +91,11 @@
     var forceMode = el('set-scan-force-mode');
     var scopeToggle = el('set-scan-entire-set');
     var scopeSummary = el('set-scan-scope-summary');
+    var issues = el('set-scan-issues');
+    var issueCount = el('set-scan-issue-count');
+    var itemSelect = el('set-scan-item-select');
+    var itemRetry = el('set-scan-item-retry');
+    var badRetry = el('set-scan-bad-retry');
     var openCard = el('set-scan-open-card');
     var openBadge = el('set-scan-open-badge');
     var openCount = el('set-scan-open-count');
@@ -127,6 +134,23 @@
     rescanBtn.textContent = actionLabel || 'Run Set Intelligence';
     forceBtn.disabled = setScanState.running || !scopeCount;
     forceMode.disabled = setScanState.running;
+    var previousSelection = itemSelect.value;
+    var items = setScanState.sightItems;
+    var flagged = items.filter(function (item) { return !!item.issue || !item.structured; });
+    issues.classList.toggle('hidden', !items.length);
+    issueCount.textContent = flagged.length + ' items need attention';
+    itemSelect.innerHTML = '';
+    items.forEach(function (item) {
+      var option = document.createElement('option');
+      option.value = item.file;
+      option.textContent = item.file + (item.issue ? ' · ' + item.issue : (!item.structured ? ' · Missing Sight' : ''));
+      itemSelect.appendChild(option);
+    });
+    if (items.some(function (item) { return item.file === previousSelection; })) itemSelect.value = previousSelection;
+    else if (flagged.length) itemSelect.value = flagged[0].file;
+    itemSelect.disabled = setScanState.running;
+    itemRetry.disabled = setScanState.running || !items.length;
+    badRetry.disabled = setScanState.running || !flagged.length;
 
     var percent = 0;
     if (setScanState.phase === 'preparing') percent = 8;
@@ -389,8 +413,20 @@
       return {
         sight: job && job.result && job.result.sight || null,
         text: String(job && job.result && job.result.text || ''),
-        warning: String(job && job.result && job.result.structureWarning || '')
+        warning: String(job && job.result && job.result.structureWarning || ''),
+        finishReason: String(job && job.result && job.result.finishReason || '')
       };
+    });
+  }
+
+  function saveSightAttempt(folder, model, media, result, issue) {
+    return requestJson('/fs/vision_schema', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'save_sight_attempt', folder: folder, visionModel: model,
+        media: media, text: result.text, finishReason: result.finishReason, issue: issue
+      })
     });
   }
 
@@ -409,8 +445,10 @@
     return requestSight(folder, model, fileName, function () { return setScanState.stopRequested; }, groups).then(function (result) {
       if (setScanState.stopRequested) return false;
       showRawResponse(fileName, 'Sight', result.text);
-      if (!result.sight) throw new Error(result.warning || ('Vision returned unstructured evidence for ' + fileName + '.'));
-      return saveSight(folder, model, fileName, result.sight).then(function () { return true; });
+      var issue = result.warning || (result.sight ? '' : 'Unstructured Vision response');
+      var save = result.sight ? saveSight(folder, model, fileName, result.sight) : Promise.resolve(null);
+      return save.then(function () { return saveSightAttempt(folder, model, fileName, result, issue); })
+        .then(function () { return !!result.sight; });
     }).catch(function (err) {
       setScanState.currentVisionJobId = '';
       if (setScanState.stopRequested) return false;
@@ -430,7 +468,7 @@
     });
   }
 
-  function scanVision(folder, files, model, force, groups) {
+  function scanVision(folder, files, model, force, groups, explicitFiles) {
     return requestJson(
       '/fs/vision_schema?folder=' + encodeURIComponent(folder) + '&model=' + encodeURIComponent(model)
     ).then(function (payload) {
@@ -439,8 +477,9 @@
       var scopedItems = (payload.items || []).filter(function (item) {
         return !!wanted[String(item.file || '')];
       });
+      var selected = explicitFiles ? new Set(explicitFiles) : null;
       var pending = scopedItems.filter(function (item) {
-        return !!force || !item.structured;
+        return selected ? selected.has(item.file) : (!!force || !item.structured);
       }).map(function (item) { return String(item.file || ''); }).filter(Boolean);
 
       setCoverage(files.length, scopedItems.filter(function (item) { return !!item.structured; }).length);
@@ -482,7 +521,7 @@
     window.setStatus('Set Intelligence is ready.');
   }
 
-  function runSetIntelligence(forceMode) {
+  function runSetIntelligence(forceMode, explicitFiles) {
     var selectedMode = typeof forceMode === 'string' ? forceMode : '';
     if (selectedMode && selectedMode !== 'open') {
       throw new Error('Invalid Sight refresh selection.');
@@ -495,6 +534,7 @@
 
     var folder = String(state && state.folder || '');
     var files = getSetIntelligenceScopeFiles();
+    if (explicitFiles) files = files.filter(function (file) { return explicitFiles.indexOf(file) !== -1; });
     if (!folder || !isSetFolderContext(folder, state && state.items)) {
       window.setStatus('Open a Set before using Set Intelligence.');
       return;
@@ -555,7 +595,7 @@
       }
       if (setScanState.stopRequested) return false;
       visionContext = setIntelligenceVisionContext();
-      return scanVision(folder, files, setScanState.visionModel, !!selectedMode, visionContext.groups);
+      return scanVision(folder, files, setScanState.visionModel, !!selectedMode, visionContext.groups, explicitFiles);
     }).then(function (visionSuccess) {
       if (visionSuccess === false || setScanState.stopRequested) return false;
       return refreshMediaResolutionCache({
@@ -657,6 +697,7 @@
     setScanState.rawResponses = [];
     setScanState.rawResponseIndex = -1;
     setScanState.currentRawResponse = null;
+    setScanState.sightItems = [];
     renderSetIntelligence();
     if (!files.length) {
       setCoverage(0, 0);
@@ -760,6 +801,14 @@
     stopBtn.onclick = stopSetIntelligence;
     rescanBtn.onclick = function () { runSetIntelligence(); };
     forceBtn.onclick = function () { runSetIntelligence(forceMode.value); };
+    el('set-scan-item-retry').onclick = function () {
+      var file = el('set-scan-item-select').value;
+      if (file) runSetIntelligence('open', [file]);
+    };
+    el('set-scan-bad-retry').onclick = function () {
+      var files = setScanState.sightItems.filter(function (item) { return !!item.issue || !item.structured; }).map(function (item) { return item.file; });
+      if (files.length) runSetIntelligence('open', files);
+    };
     entireSetToggle.onchange = openSetIntelligence;
     responseSelect.onchange = selectRawResponse;
     primaryBtn.onclick = continueToVocabulary;

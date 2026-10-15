@@ -195,3 +195,16 @@ def test_h3_image_checkpoint_marker_uses_recorded_model_identity():
     assert "trainingH3ImageModelLabel(job)" in history
     assert "Premerged H3 image-training checkpoint" in history
     assert '"source": source' in backend
+
+
+def test_training_history_identifies_custom_named_runs_and_recorded_h3_variant():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+
+    assert 'var runIdentity = String(job.actionId || job.id || "").trim();' in script
+    assert "escapeHtml(runIdentityLabel)" in script
+    assert "runConfig.trainingVariant" in script
+    assert '"trainingVariant"' in history
+    assert 'bool(model.get("merge_adapters"))' in history
+    assert 'model_source == merged_source' in history
+    assert '"trainingVariant" not in item["runSummary"]' in history

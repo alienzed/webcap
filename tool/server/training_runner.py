@@ -2007,7 +2007,14 @@ def _checkpointed_stop_error(job, action):
         if latest_mtime <= baseline_mtime:
             return action_label + " ended without a newly written checkpoint."
         folder_path = app_config.safe_join_fs_root(job["folder"])
-        validate_resumable_run_for_path(folder_path, str(job.get("stages") or ""), raw_run_path)
+        snapshot = job.get("snapshot") if isinstance(job.get("snapshot"), dict) else {}
+        stage = str(job.get("stages") or "")
+        captured_config = snapshot.get(stage)
+        if not captured_config:
+            raise ValueError("The run has no recorded captured config for checkpoint verification.")
+        validate_resumable_run_for_path(
+            folder_path, stage, raw_run_path, reference_config_path=captured_config
+        )
     except (OSError, RuntimeError, ValueError) as exc:
         return action_label + " checkpoint could not be verified: " + str(exc)
     return ""

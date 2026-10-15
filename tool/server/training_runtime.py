@@ -6,9 +6,6 @@ import subprocess
 from . import config as app_config
 
 
-TRAINING_RUNTIME_DIR_NAME = ".webcap_training"
-
-
 def training_runtime_settings(training):
     source = training if isinstance(training, dict) else {}
     return {

@@ -66,3 +66,42 @@ def test_test_source_route_distinguishes_set_default_from_explicit_root(monkeypa
         {"modelId": "minimax_h3", "source": None, "setName": "demo"},
         {"modelId": "minimax_h3", "source": "", "setName": ""},
     ]
+
+
+def test_test_generations_vision_question_uses_resolved_test_media_and_queues_only(monkeypatch, tmp_path):
+    from tool.server import app as app_module
+
+    media = tmp_path / "preview.mp4"
+    media.write_bytes(b"video")
+    seen = {}
+    monkeypatch.setattr(app_module, "list_vision_models", lambda: [{"id": "vl-test"}])
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda folder: tmp_path / folder)
+    monkeypatch.setattr(app_module, "test_generations_resolve_result_media",
+                        lambda folder, session, file: (seen.update(folder=folder, session=session, file=file) or media))
+    monkeypatch.setattr(app_module, "vision_media_data_url", lambda path: "data:image/png;base64,YQ==")
+    monkeypatch.setattr(app_module, "enqueue_llm",
+                        lambda lane, model, payload, context, label: (
+                            seen.update(lane=lane, model=model, operation=payload["operation"],
+                                        context=context, label=label) or {"jobId": "vl-1"}))
+    response = app_module.app.test_client().post("/fs/test_generations/vision-question", json={
+        "folder": "sets/demo", "session": "session-1", "media": "preview.mp4",
+        "model": "vl-test", "question": "Describe the visible clothes."
+    })
+    assert response.status_code == 202
+    assert response.get_json()["job"]["jobId"] == "vl-1"
+    assert seen == {
+        "folder": tmp_path / "sets/demo", "session": "session-1", "file": "preview.mp4",
+        "lane": "caption", "model": "vl-test", "operation": "vision_question",
+        "context": {}, "label": "Test Generations Ask VL"
+    }
+
+
+def test_test_generations_vision_question_rejects_unknown_model(monkeypatch):
+    from tool.server import app as app_module
+    monkeypatch.setattr(app_module, "list_vision_models", lambda: [{"id": "vl-test"}])
+    response = app_module.app.test_client().post("/fs/test_generations/vision-question", json={
+        "folder": "sets/demo", "session": "session-1", "media": "preview.png",
+        "model": "unknown", "question": "Describe."
+    })
+    assert response.status_code == 400
+    assert "Vision model" in response.get_json()["error"]

@@ -130,6 +130,9 @@ function showContextMenu(clientX, clientY, actions) {
       var summary = document.createElement('summary');
       summary.className = 'caption-context-menu-item';
       summary.textContent = action.label;
+      // The document-level click handler closes context menus; keep disclosure
+      // toggles inside the menu without dismissing it.
+      summary.addEventListener('click', function (event) { event.stopPropagation(); });
       disclosure.appendChild(summary);
       var childList = document.createElement('div');
       childList.className = 'caption-context-menu-subactions';

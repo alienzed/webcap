@@ -2275,6 +2275,7 @@ def training_runner_start_route():
         config_settings=data.get("trainingSettings"),
         reuse_capture_action_id=data.get("reuseCaptureActionId") or "",
         reuse_capture_path=data.get("reuseCapturePath") or "",
+        continue_epochs=data.get("continueEpochs"),
     )
     return jsonify(payload), status
 

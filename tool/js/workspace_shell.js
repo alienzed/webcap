@@ -294,7 +294,9 @@ var shellWorkloadState = {
   directorActive: false,
   managedActive: false,
   managedLabels: [],
-  managedLane: ''
+  managedLane: '',
+  activityOpen: false,
+  activityUnseen: 0
 };
 
 function shellManagedActivityLabel(item) {
@@ -328,7 +330,7 @@ function shellManagedActivityLane(active, gpuOwner) {
   return items.length ? 'work' : '';
 }
 
-function setShellManagedActivity(active, gpuOwner) {
+function setShellManagedActivity(active, gpuOwner, activityPanel) {
   var labels = [];
   (Array.isArray(active) ? active : []).forEach(function (item) {
     var label = shellManagedActivityLabel(item);
@@ -341,6 +343,10 @@ function setShellManagedActivity(active, gpuOwner) {
   shellWorkloadState.managedActive = !!(labels.length || owner);
   shellWorkloadState.managedLabels = labels.slice(0, 4);
   shellWorkloadState.managedLane = shellManagedActivityLane(active, owner);
+  if (activityPanel) {
+    shellWorkloadState.activityOpen = !!activityPanel.open;
+    shellWorkloadState.activityUnseen = Math.max(0, Number(activityPanel.unseen) || 0);
+  }
   renderShellSystemStatus();
 }
 
@@ -431,8 +437,11 @@ function renderShellSystemStatus() {
     ? 'Idle'
     : ((laneLabel ? laneLabel + ' · ' : '') + workload.label);
   parts.push(
-    '<button type="button" class="shell-workload-indicator is-' + workload.key + ' is-' + workload.lane + '" title="' + escapeHtml(workloadTitle) + ' · Toggle floating progress" aria-label="Toggle floating activity progress">' +
+    '<button type="button" class="shell-workload-indicator is-' + workload.key + ' is-' + workload.lane + '" title="' + escapeHtml(workloadTitle) + ' · Activity panel" aria-label="Activity panel' + (shellWorkloadState.activityUnseen && !shellWorkloadState.activityOpen ? ' · ' + shellWorkloadState.activityUnseen + ' new' : '') + '" aria-expanded="' + (shellWorkloadState.activityOpen ? 'true' : 'false') + '" aria-controls="activity-monitor-drawer">' +
       shellWorkloadIcon(workload.lane) +
+      (shellWorkloadState.activityUnseen && !shellWorkloadState.activityOpen
+        ? '<span class="shell-workload-badge" aria-hidden="true">' + (shellWorkloadState.activityUnseen > 99 ? '99+' : String(shellWorkloadState.activityUnseen)) + '</span>'
+        : '') +
     '</button>'
   );
   var gpu = shellSystemStatusState.gpu;

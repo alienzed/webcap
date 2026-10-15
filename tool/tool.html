@@ -28,6 +28,7 @@
         <link rel="stylesheet" href="/static/css/modals.css">
         <link rel="stylesheet" href="/static/css/media_grid.css">
         <link rel="stylesheet" href="/static/css/crop_modal.css">
+        <link rel="stylesheet" href="/static/css/remove_object.css">
         <link rel="stylesheet" href="/static/vendor/cropperjs/dist/cropper.min.css">
     </head>
     <body>
@@ -2061,6 +2062,31 @@
                 </div>
             </div>
         </div>
+        <div id="remove-object-modal" class="remove-object-modal hidden" aria-hidden="true">
+            <div class="remove-object-dialog">
+                <div class="remove-object-header">
+                    <strong id="remove-object-title">Remove Object</strong>
+                    <button id="remove-object-close" type="button" aria-label="Close Remove Object">×</button>
+                </div>
+                <div class="remove-object-stage">
+                    <div id="remove-object-visual" class="remove-object-visual">
+                        <img id="remove-object-image" alt="Image to retouch">
+                        <canvas id="remove-object-mask" aria-label="Paint the area to remove"></canvas>
+                    </div>
+                </div>
+                <div class="remove-object-tools">
+                    <label for="remove-object-brush">Brush size</label>
+                    <input id="remove-object-brush" type="range" min="2" max="100" step="2" value="16">
+                    <span id="remove-object-brush-value">16 px</span>
+                    <button id="remove-object-clear" type="button">Clear Mask</button>
+                </div>
+                <div id="remove-object-status" class="remove-object-status"></div>
+                <div class="remove-object-actions">
+                    <button id="remove-object-apply" type="button">Apply</button>
+                    <button id="remove-object-cancel" type="button">Cancel</button>
+                </div>
+            </div>
+        </div>
         <!-- VIDEO_CLIP_MODAL -->
         <div id="app-settings-modal" class="app-settings-modal hidden" aria-hidden="true" data-escape-close-id="app-settings-close-btn">
             <div class="app-settings-dialog">
@@ -2792,6 +2818,7 @@
         <script src="/static/js/media.js"></script>
         <script src="/static/js/media_actions.js"></script>
         <script src="/static/js/crop.js"></script>
+        <script src="/static/js/remove_object.js"></script>
         <script src="/static/js/video_clip.js"></script>
         <script src="/static/js/review_output.js"></script>
         <script src="/static/js/focus_sets.js"></script>

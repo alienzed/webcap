@@ -546,6 +546,12 @@ function buildMediaContextMenuActions(mediaItem, key) {
       }
     });
     actions.push({
+      label: 'Remove Object...',
+      run: function () {
+        openRemoveObjectModal(mediaItem);
+      }
+    });
+    actions.push({
       label: 'Blur Background',
       run: function () {
         runBlurBackground(mediaItem);

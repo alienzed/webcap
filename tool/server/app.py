@@ -33,7 +33,7 @@ from .vision_schema_contract import (
 )
 from .originals import copy_media_to_originals, media_mutation_status_by_hash, is_transient_media_name
 from .file_ops import duplicate_folder_response, duplicate_media_response, open_in_explorer_response, open_path_in_explorer_response, open_in_vscode_response, rename_response
-from .media import color_suggestions_response, media_blur_background_response, media_convert_fps_response, media_convert_webp_png_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
+from .media import color_suggestions_response, media_blur_background_response, media_convert_fps_response, media_convert_webp_png_response, media_crop_response, media_flip_horizontal_response, media_image_transform_response, media_inpaint_response, media_metadata_response, media_prune_response, media_remove_background_response, media_reset_response, media_restore_response
 from .video_clip_ops import clip_video_response, get_clip_job_status
 from .video_frame_ops import extract_video_frame_response, inspect_video_frame_response
 from .run_ops import train_run_response
@@ -1080,6 +1080,11 @@ def media_flip_horizontal():
 def media_convert_fps():
     data = request.get_json(silent=True) or {}
     return media_convert_fps_response(data)
+
+
+@app.route("/media/inpaint", methods=["POST"])
+def media_inpaint():
+    return media_inpaint_response(request.get_json(silent=True) or {})
 
 
 @app.route("/media/image_transform", methods=["POST"])

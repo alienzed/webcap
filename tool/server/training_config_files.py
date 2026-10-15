@@ -352,13 +352,14 @@ def apply_review_config_settings(config_text, settings):
     return source
 
 
-def apply_h3_image_training_adapter(config_text):
-    """Apply the optional H3 image adapter to a captured config only."""
-    adapter_path = app_config.fill_template_placeholders(
-        "{MODELS_ROOT}/adapters/minimax_h3_image_training_adapter.safetensors", ""
+def apply_h3_premerged_image_model(config_text):
+    """Select the premerged H3 image checkpoint in this captured run only."""
+    model_path = app_config.fill_template_placeholders(
+        "{MODELS_ROOT}/Stable-diffusion/mh3/minimax_h3_fl2va_pruned_int8_convrot_image_adapter_fused.safetensors", ""
     )
-    source = rewrite_toml_assignment(config_text, "cfg", section="model")
-    return rewrite_toml_assignment(source, "merge_adapters", json.dumps([adapter_path]), "model")
+    source = rewrite_toml_assignment(config_text, "diffusion_model", json.dumps(model_path), "model")
+    source = rewrite_toml_assignment(source, "merge_adapters", section="model")
+    return rewrite_toml_assignment(source, "cfg", section="model")
 
 
 def apply_captured_initializer(config_text, initializer_dir, force_constant_lr=None):

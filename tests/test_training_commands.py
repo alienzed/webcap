@@ -124,38 +124,18 @@ def test_conda_runtime_wraps_child_commands_without_shell_activation():
     )
 
 
-def test_h3_fusion_uses_captured_launcher_only_for_training():
-    plan = build_h3_command_plan(
-        "/mnt/w/capture/config.h3.toml",
-        train_entrypoint="/mnt/w/capture/h3_force_fusion_launcher.py",
-        resume_from_checkpoint="/mnt/w/output/old-run",
-        reset_dataloader=True,
-    )
-    assert " /mnt/w/capture/h3_force_fusion_launcher.py --deepspeed " in plan["singleCommand"]
-    assert " /mnt/w/capture/h3_force_fusion_launcher.py --deepspeed " in plan["trainCommand"]
-    assert " train.py --deepspeed " in plan["cacheCommand"]
-    assert "--resume_from_checkpoint /mnt/w/output/old-run --reset_dataloader" in plan["trainCommand"]
-    assert "--resume_from_checkpoint" not in plan["cacheCommand"]
 
-
-def test_h3_runner_uses_captured_fusion_launcher_only_when_present(tmp_path, monkeypatch):
+def test_h3_standard_runner_uses_train_py_for_both_cache_and_training(tmp_path, monkeypatch):
     config = tmp_path / "config.h3.toml"
     config.write_text("config", encoding="utf-8")
-    launcher = tmp_path / "h3_force_fusion_launcher.py"
-    launcher.write_text("# captured launcher", encoding="utf-8")
-    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, _distribution="": str(path).replace("\\\\", "/"))
+    monkeypatch.setattr(training_runner, "_to_wsl_path", lambda path, _distribution="": str(path).replace("\\", "/"))
     job = {"id": "job", "stages": "h3", "artifactDir": str(tmp_path / "job")}
     settings = {
         "cwd": "/mnt/w/diffusion-pipe", "activate": "", "wslDistribution": "",
         "condaExecutable": "", "condaEnvironment": "", "h3SplitCachePhase": True,
     }
     script, _ = training_runner._build_runner_script(
-        job, settings, {"h3Config": config, "h3FusionLauncher": launcher}, tmp_path / "job",
-    )
-    assert str(launcher) + " --deepspeed" in script
-    assert " train.py --deepspeed --config " in script
-    ordinary, _ = training_runner._build_runner_script(
         job, settings, {"h3Config": config}, tmp_path / "job",
     )
-    assert str(launcher) not in ordinary
-    assert ordinary.count(" train.py --deepspeed --config ") >= 2
+    assert script.count(" train.py --deepspeed --config ") >= 2
+    assert "h3_force_fusion_launcher" not in script

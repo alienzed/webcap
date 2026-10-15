@@ -436,6 +436,14 @@ function trainingModelLabel(job) {
   return !label || label === 'Training model' || /^wan\s*2(?:\.2)?$/i.test(label) ? 'Wan2.2-T2V-A14B' : label;
 }
 
+function trainingH3ImageModelLabel(job) {
+  if (!job || job.stages !== 'h3') return '';
+  var source = String(job.model && job.model.source || '').replace(/\\/g, '/').split('/').pop();
+  return source === 'minimax_h3_fl2va_pruned_int8_convrot_image_adapter_fused.safetensors'
+    ? 'Image-adapted'
+    : '';
+}
+
 function trainingJobLabel(job) {
   var runName = String(job && job.runName || '').trim();
   if (runName) return runName;
@@ -756,6 +764,7 @@ function buildTrainingQueueHtml(queuedJobs) {
     queueLabel + '<span class="training-section-caret" aria-hidden="true">' + (collapsed ? '&#9656;' : '&#9662;') + '</span></button>' +
     '<div class="training-runner-queue-body' + (collapsed ? ' hidden' : '') + '">' + queuedJobs.map(function (queuedJob, index) {
       var stage = trainingJobLabel(queuedJob);
+      var imageModelLabel = trainingH3ImageModelLabel(queuedJob);
       var plannedSteps = trainingPlannedStepCount(queuedJob);
       var plannedEpochs = trainingPlannedEpochCount(queuedJob);
       var resumePoint = queuedJob && queuedJob.resumePoint && typeof queuedJob.resumePoint === 'object' ? queuedJob.resumePoint : {};
@@ -792,7 +801,8 @@ function buildTrainingQueueHtml(queuedJobs) {
       return '<div class="training-runner-queue-item' + (selected ? ' active' : '') + '" data-training-queue-job="' + escapeHtml(queuedJob.id) + '">' +
         '<div class="training-runner-queue-spine" aria-hidden="true"><span>' + (index + 1) + '</span></div>' +
         '<div class="training-runner-queue-copy">' +
-          '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(stage) + '</strong>' + workload + '</div>' +
+          '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(stage) + '</strong>' +
+          (imageModelLabel ? '<span class="training-runner-queue-workload">· ' + escapeHtml(imageModelLabel) + '</span>' : '') + workload + '</div>' +
           '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
           buildQueuedResumePointHtml(queuedJob) + output + captured + sourceUnavailable + error +
         '</div>' +
@@ -982,6 +992,7 @@ function renderTrainingRunner() {
   }
   var elapsed = formatTrainingRunnerElapsed(job);
   var activeSettings = formatTrainingJobSettings(job);
+  var imageModelLabel = trainingH3ImageModelLabel(job);
   var status = String(job.status || 'unknown');
   var statusLabel = trainingRunnerStatusLabel(status);
   var statusTitle = status === 'running'
@@ -1027,7 +1038,7 @@ function renderTrainingRunner() {
   els.runnerSummary.innerHTML = '<div class="training-runner-active-row">' +
     '<div class="training-runner-state" title="Active model and elapsed run time.">' +
       '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '" title="' + escapeHtml(statusTitle) + '">' + escapeHtml(statusLabel) + '</span>' +
-      '<span>' + escapeHtml(trainingJobLabel(job)) + (activeSettings ? ' · ' + escapeHtml(activeSettings) : '') + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span>' +
+      '<span>' + escapeHtml(trainingJobLabel(job)) + (imageModelLabel ? ' · ' + escapeHtml(imageModelLabel) : '') + (activeSettings ? ' · ' + escapeHtml(activeSettings) : '') + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span>' +
     '</div>' +
     '<button type="button" class="training-runner-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
     queuePosition +

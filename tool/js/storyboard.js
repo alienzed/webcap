@@ -2444,7 +2444,7 @@
     var toggleButton = el('storyboard-story-toggle');
     authoring.classList.toggle('hidden', storyState.storyCollapsed);
     editor.classList.toggle('story-collapsed', storyState.storyCollapsed);
-    toggleButton.textContent = storyState.storyCollapsed ? 'Show Overview' : 'Hide Overview';
+    toggleButton.textContent = storyState.storyCollapsed ? 'Show Story' : 'Hide Story';
     toggleButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
   }
 

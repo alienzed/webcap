@@ -1359,6 +1359,9 @@
 }
 
 .app.shell-revamp .training-run-h3-adapter-option input {
+  width: 14px;
+  height: 14px;
+  padding: 0;
   margin: 0;
   flex: 0 0 auto;
 }

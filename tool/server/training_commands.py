@@ -32,7 +32,7 @@ def build_training_command_plan(hi_config_path, lo_config_path, launcher=DEEPSPE
     }
 
 
-def build_h3_command_plan(config_path, launcher=DEEPSPEED_LAUNCHER, resume_from_checkpoint="", reset_dataloader=False, train_entrypoint="train.py"):
+def build_h3_command_plan(config_path, launcher=DEEPSPEED_LAUNCHER, resume_from_checkpoint="", reset_dataloader=False):
     base_plan = build_training_command_plan(config_path, config_path, launcher)
     train_plan = build_training_command_plan(
         config_path,
@@ -43,12 +43,6 @@ def build_h3_command_plan(config_path, launcher=DEEPSPEED_LAUNCHER, resume_from_
         reset_dataloader=reset_dataloader,
     )
     train_command = train_plan["loCommand"]
-    if train_entrypoint != "train.py":
-        train_command = train_command.replace(
-            " train.py --deepspeed --config ",
-            " " + shlex.quote(str(train_entrypoint)) + " --deepspeed --config ",
-            1,
-        )
     return {
         "singleCommand": train_command,
         "cacheCommand": base_plan["loCommand"] + " --cache_only",

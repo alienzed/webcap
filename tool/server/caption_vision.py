@@ -224,16 +224,20 @@ def resolve_caption_vision_media(folder, media_name):
     media_path = (folder_path / media_name).resolve()
     if not media_path.exists() or not media_path.is_file():
         raise FileNotFoundError("Media file not found")
+    root = Path(app_config.FS_ROOT).resolve()
+    try:
+        media_path.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("Vision media must be inside the configured dataset root.") from exc
+    return vision_media_data_url(media_path)
+
+
+def vision_media_data_url(media_path):
+    """Encode a trusted, previously resolved image or video for a VL request."""
+    media_path = Path(media_path)
     suffix = media_path.suffix.casefold()
     if suffix not in VISION_MEDIA_EXTS:
         raise ValueError("Vision currently supports image files and video first frames.")
-
-    root = Path(app_config.FS_ROOT).resolve()
-    try:
-        relative = media_path.relative_to(root)
-    except ValueError as exc:
-        raise ValueError("Vision media must be inside the configured dataset root.") from exc
-
     if suffix in VIDEO_EXTS:
         first_frame = extract_boundary_frame_png(media_path, "first")
         return "data:image/png;base64," + base64.b64encode(first_frame).decode("ascii")
@@ -246,10 +250,7 @@ def resolve_caption_vision_media(folder, media_name):
         ".bmp": "image/bmp",
         ".gif": "image/gif",
     }
-    mime_type = mime_by_suffix.get(suffix)
-    if not mime_type:
-        raise ValueError("Vision image format is unsupported.")
-    return "data:" + mime_type + ";base64," + base64.b64encode(media_path.read_bytes()).decode("ascii")
+    return "data:" + mime_by_suffix[suffix] + ";base64," + base64.b64encode(media_path.read_bytes()).decode("ascii")
 
 
 def build_caption_vision_messages(caption, groups, media_relative_path):

@@ -89,8 +89,9 @@
     var results = currentStatus && Array.isArray(currentStatus.results) ? currentStatus.results : [];
     button.disabled = !testVl.running && (!currentSession || !results.some(function (r) { return !!resultMediaFile(r); }));
     button.textContent = testVl.running ? 'Stop VL' : 'Ask VL';
-    progress.textContent = testVl.running ? (testVl.done + ' / ' + testVl.total) :
-      (testVl.total ? (testVl.done + ' / ' + testVl.total + ' analyzed') : '');
+    var sameScope = testVl.scope === testVlScope(currentStatus);
+    progress.textContent = !sameScope ? '' : testVl.running ? (testVl.done + ' / ' + testVl.total) :
+      (testVl.total ? (testVl.done + ' / ' + testVl.total + ' processed') : '');
   }
 
   function renderTestVlCard(card, result) {
@@ -194,7 +195,14 @@
         });
       }, Promise.resolve());
     }).catch(function (err) {
-      if (token === testVl.token) reportConsoleError('Test Generations Ask VL', err);
+      if (token !== testVl.token) return;
+      reportConsoleError('Test Generations Ask VL', err);
+      Object.keys(testVl.entries).forEach(function (file) {
+        var entry = testVl.entries[file];
+        if (entry.status !== 'pending') return;
+        entry.status = 'error';
+        entry.error = String(err && err.message ? err.message : err);
+      });
     }).finally(function () {
       if (token !== testVl.token) return;
       testVl.running = false;

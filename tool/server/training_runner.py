@@ -7,6 +7,7 @@ import hashlib
 import shlex
 import shutil
 import threading
+import tomllib
 import time
 import uuid
 from datetime import datetime
@@ -16,6 +17,7 @@ from . import config as app_config
 from .training_commands import build_h3_command_plan, build_training_command_plan
 from .training_profiles import config_for_stage, profile, resolved_profile, profile_run, profiles as training_profiles
 from .training_bundle import materialize_training_bundle
+from .training_config_files import h3_premerged_image_model_path
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets
 from .training_history import discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume, run_summary_from_capture
@@ -2831,6 +2833,14 @@ def start_response(
             }
         deliberate_rewind = bool(resume_output_id and str(resume_checkpoint_tag or "").strip())
         effective_config_settings = dict(requested_config_settings)
+        if resume_path and stages == "h3" and not reuse_capture:
+            # A checkpoint resume must retain the original model variant,
+            # regardless of the new-run checkbox's current default.
+            saved_config = host_path_for_training_path(resume_path) / "config.h3.toml"
+            saved_model = tomllib.loads(saved_config.read_text(encoding="utf-8")).get("model", {})
+            effective_config_settings["h3ImageTrainingAdapter"] = (
+                saved_model.get("diffusion_model") == h3_premerged_image_model_path()
+            )
         if (resume_path or initializer) and effective_config_settings.get("optimizerLr") not in (None, ""):
             # diffusion-pipe restores scheduler state on resume unless
             # force_constant_lr is present. Keep the user-selected LR effective

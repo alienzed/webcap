@@ -73,7 +73,7 @@
     // The actual wildcard choices remain hidden from VL to avoid leading its observations.
     // The source template supplies the attributes, surrounding nouns and their relationships.
     var source = String(status.sourcePrompt || '').replace(/\\{[^{}]*\\|[^{}]*\\}/g, '[attribute]');
-    source = source.replace(/(?m)^\\s*#[^\\n]*/g, '').trim();
+    source = source.replace(/^\\s*#[^\\n]*/gm, '').trim();
     return 'Describe what is visibly present for every attribute marked [attribute] in this template. ' +
       'Use the surrounding nouns and relationships to identify each attribute. ' +
       'If not visible, say unclear. Do not infer an attribute from the template. ' +

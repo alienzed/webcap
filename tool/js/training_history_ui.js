@@ -260,10 +260,10 @@ function renderTrainingHistory() {
             (selectedEpochLabel ? '<span class="training-history-selected-mark" title="' + escapeHtml(selectedEpochLabel) + '" aria-label="' + escapeHtml(selectedEpochLabel) + '"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="3.5"></circle><path d="M5.5 9l-1 5 3.5-2 3.5 2-1-5"></path></svg></span>' : '') +
             '<strong class="training-history-run-name">' + escapeHtml(runDisplayName) + '</strong>' +
             (runIdentityLabel ? '<span class="training-history-stage" title="Run: ' + escapeHtml(runIdentity) + '">' + escapeHtml(runIdentityLabel) + '</span>' : '') +
-            (trainingVariant ? '<span class="training-history-stage">' + escapeHtml(trainingVariant) + '</span>' : '') +
+            (trainingVariant ? '<span class="training-history-stage">' + (trainingVariant === 'Image Adapter' ? trainingH3ImageModelIconHtml() : '') + escapeHtml(trainingVariant) + '</span>' : '') +
             '<span class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>' +
             '<span class="training-history-stage"' + (modelTitle ? ' title="' + escapeHtml(modelTitle) + '"' : '') + '>' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span>' +
-            (imageModelLabel && !trainingVariant ? '<span class="training-history-stage" title="Premerged H3 image-training checkpoint">' + escapeHtml(imageModelLabel) + '</span>' : '') +
+            (imageModelLabel && !trainingVariant ? '<span class="training-history-stage" title="Premerged H3 image-training checkpoint">' + trainingH3ImageModelIconHtml() + escapeHtml(imageModelLabel) + '</span>' : '') +
           '</div>' +
           '<div class="training-history-meta">' +
             (timingLabel ? '<span class="training-history-timing"' + (timingTitle ? ' title="' + escapeHtml(timingTitle) + '"' : '') + '>' + escapeHtml(timingLabel) + '</span>' : '') +

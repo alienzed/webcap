@@ -1427,5 +1427,6 @@ def test_staged_candidates_show_recorded_h3_variant_without_guessing():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     assert '"trainingVariant": str(run_summary.get("trainingVariant") or "") if stage == "h3" else ""' in backend
-    assert "metadata.trainingVariant === 'Image Adapter' || metadata.trainingVariant === 'Standard'" in script
-    assert "[parts.detail, trainingVariant, scoreText].filter(Boolean).join(' · ')" in script
+    assert "metadata.trainingVariant === 'Image Adapter'" in script
+    assert "imageMark.innerHTML = trainingH3ImageModelIconHtml();" in script
+    assert "[parts.detail, scoreText].filter(Boolean).join(' · ')" in script

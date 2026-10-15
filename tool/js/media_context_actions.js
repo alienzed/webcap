@@ -489,6 +489,22 @@ function buildMediaContextMenuActions(mediaItem, key) {
       }
     });
   }
+  if (isCaptionVisionSupportedMedia(fileName)) {
+    actions.push({
+      label: 'Ask VL...',
+      run: function () {
+        var select = state.currentItem && state.currentItem.key === mediaItem.key
+          ? Promise.resolve()
+          : selectPathMedia(mediaItem);
+        return select.then(function () {
+          return openAskVisionQuestion();
+        }).catch(function (err) {
+          reportConsoleError('Ask VL', err);
+          setStatus('Ask VL failed: ' + String(err && err.message ? err.message : err));
+        });
+      }
+    });
+  }
   actions.push({
     label: 'View Saved Intelligence',
     run: function () {
@@ -677,6 +693,17 @@ function buildMediaContextMenuActions(mediaItem, key) {
       }
     });
   }
+
+  // Keep action entries flat for Preview buttons/shortcuts; the menu renderer
+  // alone collapses secondary media edits into one disclosure.
+  var editLabels = new Set([
+    'Blur Background', 'Remove Background', 'Deface', 'Deface...',
+    'Rotate Left 90 deg', 'Rotate Right 90 deg', 'Flip Vertical',
+    'Flip Horizontal', 'Convert to PNG', 'Convert to...'
+  ]);
+  actions.forEach(function (action) {
+    if (action && editLabels.has(action.label)) action.group = 'Edit Media';
+  });
 
   actions.push({ separator: true });
   actions.push({

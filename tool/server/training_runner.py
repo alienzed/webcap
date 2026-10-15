@@ -488,6 +488,8 @@ def _persist_reconciled_state(state):
         previous_id = str(job.get("continuedHistoryJobId") or "").strip()
         if not previous_id or job.get("status") == "cancelled":
             continue
+        if str(job.get("id") or "") in failed_history_ids:
+            continue
         try:
             folder = app_config.safe_join_fs_root(str(job.get("folder") or ""))
             clear_history_job(folder, previous_id)
@@ -3142,6 +3144,8 @@ def _finish_queued_resume(job):
         job["progress"] = progress
 
     job["outputRunPath"] = str(run_path)
+    if job.get("firstStartedAt") and not job.get("startedAt"):
+        job["startedAt"] = job["firstStartedAt"]
     job["status"] = "finished_early"
     job["stage"] = "finished_early"
     job["finishedAt"] = now

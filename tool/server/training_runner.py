@@ -3188,10 +3188,9 @@ def _return_queued_job_to_history(job):
     if progress:
         progress.setdefault("stage", str(job.get("resumeStage") or job.get("stages") or ""))
         job["progress"] = progress
+    # The ordinary reconciliation path clears the preceding History row only
+    # after this new outcome is recorded, and retains the queue row on error.
     record_job(folder, job)
-    previous_id = str(job.get("continuedHistoryJobId") or "").strip()
-    if previous_id:
-        clear_history_job(folder, previous_id)
     return True
 
 

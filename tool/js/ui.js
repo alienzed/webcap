@@ -72,7 +72,10 @@ function ensureContextMenu() {
       }
     }
   });
-  addEventListener('scroll', hideContextMenu, true);
+  addEventListener('scroll', function (event) {
+    if (contextMenuEl && contextMenuEl.contains(event.target)) return;
+    hideContextMenu();
+  }, true);
 
   return contextMenuEl;
 }

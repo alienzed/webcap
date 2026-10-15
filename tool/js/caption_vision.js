@@ -740,6 +740,7 @@ function closeVisionImageCaption() {
 
 function syncVisionImageCaptionSelection(mediaKey) {
   var key = String(mediaKey || '').trim();
+  if (askVisionState.open && askVisionState.key !== key) closeAskVisionQuestion();
   if (!visionImageCaptionState.open || !visionImageCaptionState.mediaKey) return;
   if (key === visionImageCaptionState.mediaKey) return;
   closeVisionImageCaption();
@@ -963,6 +964,142 @@ function wireVisionImageCaptionUi() {
   syncVisionImageCaptionModal();
 }
 
+// Disposable, per-item freeform Vision experiment. Nothing is saved.
+var askVisionState = { open: false, key: '', jobId: '', pending: false, token: 0, startedAt: 0 };
+function askVisionEl(id) {
+  var node = document.getElementById('ask-vision-' + id);
+  if (!node) throw new Error('Ask VL UI is missing ' + id);
+  return node;
+}
+function syncAskVisionUi() {
+  askVisionEl('modal').classList.toggle('hidden', !askVisionState.open);
+  askVisionEl('send').disabled = askVisionState.pending;
+  askVisionEl('question').disabled = askVisionState.pending;
+  askVisionEl('loading').classList.toggle('hidden', !askVisionState.pending);
+  askVisionEl('cancel').classList.toggle('hidden', !askVisionState.pending);
+  askVisionEl('copy').disabled = askVisionState.pending || !askVisionEl('answer').textContent;
+}
+function cancelAskVisionJob() {
+  var id = askVisionState.jobId;
+  askVisionState.token += 1;
+  askVisionState.pending = false;
+  askVisionState.jobId = '';
+  syncAskVisionUi();
+  if (!id) return Promise.resolve();
+  return cancelCaptionAssistJob(id).catch(function (err) {
+    reportConsoleWarning('Ask VL', 'Could not cancel: ' + String(err && err.message ? err.message : err));
+  });
+}
+function closeAskVisionQuestion() {
+  if (askVisionState.pending) cancelAskVisionJob();
+  askVisionState.open = false;
+  askVisionState.key = '';
+  syncAskVisionUi();
+}
+function openAskVisionQuestion() {
+  var media = state && state.currentItem;
+  if (!media || !isCaptionVisionSupportedMedia(media.fileName)) throw new Error('Ask VL requires an image or video.');
+  if (askVisionState.pending) cancelAskVisionJob();
+  askVisionState.open = true;
+  askVisionState.key = String(media.key);
+  askVisionEl('answer').textContent = '';
+  askVisionEl('answer').classList.add('hidden');
+  askVisionEl('error').textContent = '';
+  askVisionEl('error').classList.add('hidden');
+  askVisionEl('timing').textContent = '';
+  askVisionEl('model').textContent = '';
+  syncAskVisionUi();
+  loadCaptionVisionCapabilities().then(function () {
+    if (!askVisionState.open) return;
+    askVisionEl('model').textContent = 'Vision model · ' + getCaptionVisionModelId();
+  }).catch(function (err) {
+    if (!askVisionState.open) return;
+    askVisionEl('error').textContent = String(err && err.message ? err.message : err);
+    askVisionEl('error').classList.remove('hidden');
+    reportConsoleError('Ask VL', err);
+  });
+  askVisionEl('question').focus();
+}
+function sendAskVisionQuestion() {
+  if (askVisionState.pending || !askVisionState.open) return Promise.resolve(false);
+  var question = askVisionEl('question').value.trim();
+  if (!question) { askVisionEl('question').focus(); return Promise.resolve(false); }
+  var item = state.currentItem;
+  if (!item || String(item.key) !== askVisionState.key) throw new Error('Ask VL media selection changed.');
+  var token = ++askVisionState.token;
+  askVisionState.pending = true;
+  askVisionState.startedAt = Date.now();
+  askVisionEl('answer').textContent = '';
+  askVisionEl('answer').classList.add('hidden');
+  askVisionEl('error').textContent = '';
+  askVisionEl('error').classList.add('hidden');
+  askVisionEl('timing').textContent = '';
+  syncAskVisionUi();
+  return loadCaptionVisionCapabilities().then(function () {
+    if (token !== askVisionState.token || !askVisionState.open) return null;
+    var model = getCaptionVisionModelId();
+    if (!model) throw new Error('Select an available Vision model.');
+    return captionAssistRequestJson('/caption/vision-question', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: model, folder: state.folder, media: item.fileName, question: question })
+    });
+  }).then(function (payload) {
+    if (!payload) return null;
+    if (!payload.job || !payload.job.jobId) throw new Error('Ask VL did not return a job.');
+    trackTransientLlmJob(payload.job);
+    if (token !== askVisionState.token || !askVisionState.open) {
+      return cancelCaptionAssistJob(payload.job.jobId).then(function () { return null; });
+    }
+    askVisionState.jobId = String(payload.job.jobId);
+    return waitForCaptionAssistJob(payload.job);
+  }).then(function (job) {
+    if (!job || token !== askVisionState.token || !askVisionState.open) return false;
+    var result = job.result || {};
+    askVisionEl('answer').textContent = String(result.text || '').trim() || '(empty response)';
+    askVisionEl('answer').classList.remove('hidden');
+    askVisionEl('timing').textContent = ((Date.now() - askVisionState.startedAt) / 1000).toFixed(1) + 's';
+    return true;
+  }).catch(function (err) {
+    if (token !== askVisionState.token || !askVisionState.open) return false;
+    askVisionEl('error').textContent = String(err && err.message ? err.message : err);
+    askVisionEl('error').classList.remove('hidden');
+    reportConsoleError('Ask VL', err);
+    return false;
+  }).finally(function () {
+    if (token !== askVisionState.token) return;
+    askVisionState.jobId = '';
+    askVisionState.pending = false;
+    syncAskVisionUi();
+  });
+}
+function wireAskVisionUi() {
+  askVisionEl('close').addEventListener('click', closeAskVisionQuestion);
+  askVisionEl('cancel').addEventListener('click', cancelAskVisionJob);
+  askVisionEl('send').addEventListener('click', sendAskVisionQuestion);
+  askVisionEl('copy').addEventListener('click', function () {
+    navigator.clipboard.writeText(askVisionEl('answer').textContent).catch(function (err) {
+      reportConsoleError('Ask VL copy', err);
+    });
+  });
+  askVisionEl('question').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      sendAskVisionQuestion();
+    }
+  });
+  askVisionEl('modal').addEventListener('click', function (event) {
+    if (event.target === askVisionEl('modal')) closeAskVisionQuestion();
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape' || !askVisionState.open) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closeAskVisionQuestion();
+  }, true);
+  syncAskVisionUi();
+}
+
 function setCaptionVisionEnabled(enabled) {
   captionVisionEnabled = !!enabled;
   clearCaptionVisionResult();
@@ -1067,6 +1204,7 @@ function wireCaptionVisionUi() {
   }
   syncCaptionVisionUi();
   wireVisionImageCaptionUi();
+  wireAskVisionUi();
 }
 
 wireCaptionVisionUi();
@@ -1096,3 +1234,5 @@ window.requestVisionCaptionExtras = requestVisionCaptionExtras;
 
 window.createCaptionVisionTask = createCaptionVisionTask;
 window.cancelCaptionVisionTask = cancelCaptionVisionTask;
+
+window.openAskVisionQuestion = openAskVisionQuestion;

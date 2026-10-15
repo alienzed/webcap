@@ -40,3 +40,24 @@ def test_context_menu_places_focus_caption_after_focused_annotate():
     assert caption_action > annotate_action
     assert "startFocusedCaptionForMediaItem(mediaItem);" in script[caption_action:]
 
+
+
+def test_ask_vl_and_edit_media_use_shared_flat_actions():
+    root = Path(__file__).parents[1]
+    actions = (root / "tool" / "js" / "media_context_actions.js").read_text(encoding="utf-8")
+    ui = (root / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
+    grid = (root / "tool" / "js" / "media_grid_tiles.js").read_text(encoding="utf-8")
+    preview = (root / "tool" / "js" / "media.js").read_text(encoding="utf-8")
+    modal = (root / "tool" / "tool.html").read_text(encoding="utf-8")
+    runtime = (root / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
+
+    assert "label: 'Ask VL...'" in actions
+    assert "openAskVisionQuestion()" in actions
+    assert "action.group = 'Edit Media'" in actions
+    assert "action.group === 'Edit Media'" in ui
+    assert "caption-context-menu-disclosure" in ui
+    assert "group: action.group" in grid
+    assert "findPreviewActionByLabel(actions, 'Reset')" in preview
+    assert 'id="ask-vision-question"' in modal
+    assert 'id="ask-vision-answer"' in modal
+    assert '"vision_question"' in runtime

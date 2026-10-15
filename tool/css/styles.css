@@ -214,6 +214,29 @@ body {
   box-sizing: border-box;
 }
 
+.caption-context-menu-disclosure > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.caption-context-menu-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.caption-context-menu-disclosure > summary::after {
+  content: '›';
+  float: right;
+}
+.caption-context-menu-disclosure[open] > summary::after {
+  content: '⌄';
+}
+.caption-context-menu-subactions {
+  padding-left: 12px;
+  border-left: 2px solid var(--border-soft);
+  margin-left: 9px;
+}
+.caption-context-menu-disclosure[open] > summary {
+  background: var(--hover);
+}
+
 .caption-context-menu-separator {
   height: 1px;
   margin: 3px 6px;

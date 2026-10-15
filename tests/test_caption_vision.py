@@ -356,3 +356,40 @@ def test_caption_assist_prompt_targets_natural_semantic_prose():
         draft="a blue floral bikini",
     )
     assert "Use annotation group names as semantic context" in messages[1]["content"]
+
+
+def test_ask_vision_route_queues_direct_question_on_existing_multimodal_lane(monkeypatch):
+    from tool.server import app as app_module
+
+    captured = {}
+    monkeypatch.setattr(
+        app_module, "list_vision_models",
+        lambda reload=False: [{"id": "remote::qwen-vl"}],
+    )
+    monkeypatch.setattr(
+        app_module, "resolve_caption_vision_media",
+        lambda folder, media: "set/" + media,
+    )
+    def enqueue(client, model, contract, context=None, label=""):
+        captured.update(client=client, model=model, contract=contract, context=context, label=label)
+        return {"jobId": "ask-vl-test"}
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
+    response = app_module.app.test_client().post("/caption/vision-question", json={
+        "model": "remote::qwen-vl", "folder": "set", "media": "frame.mp4",
+        "question": "Are there rings on the bottom?",
+    })
+    assert response.status_code == 202
+    assert captured["client"] == "caption"
+    assert captured["model"] == "remote::qwen-vl"
+    assert captured["contract"]["operation"] == "vision_question"
+    parts = captured["contract"]["messages"][0]["content"]
+    assert parts[0]["text"] == "Are there rings on the bottom?"
+    assert parts[1]["image_url"]["url"] == "file://set/frame.mp4"
+    assert captured["context"] == {}
+    assert captured["label"] == "Ask VL"
+
+
+def test_ask_vision_requires_nonempty_question():
+    import pytest
+    with pytest.raises(ValueError, match="requires a question"):
+        caption_vision.build_vision_question_messages("   ", "a.jpg")

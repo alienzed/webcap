@@ -13,7 +13,7 @@ from .dataset_prep import (
     resolve_prepared_caption_text,
     write_prepared_caption,
 )
-from .training_config_files import apply_captured_initializer, apply_h3_image_training_adapter, apply_review_config_settings, with_dataset_path, with_output_dir
+from .training_config_files import apply_captured_initializer, apply_h3_premerged_image_model, apply_review_config_settings, with_dataset_path, with_output_dir
 from .training_profiles import resolved_profile
 from .training_runtime import to_wsl_path
 from .training_review import validate_managed_review_stage
@@ -558,10 +558,6 @@ def materialize_training_bundle(
                 to_wsl_path(captured_initializer["path"], distribution),
                 initializer.get("forceConstantLr"),
             )
-        if stage == "h3" and isinstance(stage_config_settings, dict) and stage_config_settings.get("h3ImageTrainingAdapter"):
-            fusion_launcher = configs_root / "h3_force_fusion_launcher.py"
-            shutil.copy2(Path(__file__).with_name("h3_force_fusion_launcher.py"), fusion_launcher)
-            bundle_artifacts["h3FusionLauncher"] = fusion_launcher
         config_target = configs_root / item["file"]
         config_target.write_text(config_text, encoding="utf-8")
         bundle_artifacts[stage + "Config"] = config_target

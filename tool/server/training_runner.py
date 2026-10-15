@@ -2920,6 +2920,10 @@ def start_response(
             resume_checkpoint_tag=resume_checkpoint_tag,
         )
         if continued_history:
+            if any(str(item.get("continuedHistoryJobId") or "") == str(parent_job_id) for item in state["jobs"]):
+                return {"ok": False, "error": "This historical run is already continuing in the queue."}, 409
+            if not any(str(item.get("id") or "") == str(parent_job_id) for item in read_history(folder_path)["jobs"]):
+                return {"ok": False, "error": "This run has already left Training History."}, 409
             job["continuedHistoryJobId"] = str(parent_job_id)
             job["continuedHistoryRecord"] = continued_history
         job["resumePoint"] = resume_point

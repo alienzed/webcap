@@ -1,3 +1,4 @@
+import json
 import re
 from collections import Counter
 
@@ -11,7 +12,7 @@ def _clean_context(value):
     return " ".join(str(value or "").strip().split())
 
 
-def build_request(captions, set_name="", focus=""):
+def build_request(captions, set_name="", focus="", vocabulary=None):
     cleaned = [_clean_caption(value) for value in (captions or [])]
     cleaned = [value for value in cleaned if value]
     if not cleaned:
@@ -19,6 +20,19 @@ def build_request(captions, set_name="", focus=""):
 
     set_name = _clean_context(set_name)
     focus = _clean_context(focus)
+
+    groups = []
+    for raw in vocabulary if isinstance(vocabulary, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        group = _clean_context(raw.get("group"))
+        if not group:
+            continue
+        terms = (
+            [_clean_context(term) for term in raw.get("terms", []) if str(term or "").strip()]
+            if isinstance(raw.get("terms"), list) else []
+        )
+        groups.append({"group": group, "alias": _clean_context(raw.get("alias")), "terms": terms})
 
     counts = Counter(cleaned)
     corpus = []
@@ -63,6 +77,7 @@ def build_request(captions, set_name="", focus=""):
     context_lines = [
         "Set name: " + (set_name or "(not supplied)"),
         "Explicit focus: " + (focus or "(auto - infer from Set name and repeated caption language)"),
+        "Annotation groups and terms: " + (json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"),
     ]
 
     prompt = (
@@ -81,12 +96,20 @@ def build_request(captions, set_name="", focus=""):
         "- The primary concept should receive the richest decomposition. Secondary recurring dimensions such as pose, camera/view, "
         "physical appearance, background, and lighting are valid and useful, but they must not crowd out the primary concept.\n\n"
         "[COMPOSITION RULES]\n"
-        "- Prefer independent, composable attributes over whole-phrase alternatives when the captions provide enough evidence. "
+        "- Each wildcard group must vary exactly one attribute, even when captions combine several. "
+        "For example write '{brown|black|blonde|ginger} hair', not "
+        "'{brown hair|black hair in braids|blonde wavy hair|ginger ponytail hair}'. "
+        "Keep hair style and hair color separate.\n"
+        "- Prefer independent, composable attributes over whole-phrase alternatives. "
         "For example, separate color, pattern, trim, top shape, and bottom shape rather than collapsing them into a single 'style' wildcard.\n"
-        "- Recombine observed attribute values across dimensions. The goal is to make compatible learned attributes independently selectable, "
+        "- Recombine attributes across dimensions so tests exercise independently selectable properties, "
         "not merely replay complete caption fragments.\n"
-        "- Use only information present in the supplied captions. Do not invent new attributes or options.\n"
-        "- Use only concrete values supported by the supplied captions. Do not invent unseen colors, garments, poses, locations, or traits.\n"
+        "- Annotation groups, aliases, and terms reveal the important dimensions and preferred terminology. "
+        "They are guidance, not a closed list of test values or proof that every term occurs in the captions.\n"
+        "- Include sensible concrete unseen alternatives where useful for testing generalization. "
+        "For example, black hair can be tested even when the captions mention only brown and blonde hair. "
+        "Do not claim unseen values were learned or observed. Avoid implausible combinations.\n"
+        "- Use supplied garment-construction terms accurately; do not invent nonsensical hardware or garment structures.\n"
         "- Every wildcard option must itself be usable prompt text. Never emit category placeholders such as 'various styles', "
         "'other background', 'different poses', 'multiple colors', 'etc.', or similar descriptions of options you failed to enumerate.\n"
         "- Empty alternatives are allowed when an attribute is genuinely optional, for example {striped|ruched|}. "
@@ -96,9 +119,10 @@ def build_request(captions, set_name="", focus=""):
         "[GENERAL RULES]\n"
         "- Each caption is prefixed with [count=N] frequency metadata. Use the count as evidence of prevalence; it is not caption text.\n"
         "- Keep stable subject tokens, identity terms, and consistently recurring descriptors outside wildcard braces.\n"
-        "- Put genuinely varying alternatives in {a|b|c} groups. Do not create a wildcard for something that is effectively constant.\n"
+        "- Put meaningful test alternatives in {a|b|c} groups. An attribute may be worth testing even if rare or constant in the captions.\n"
         "- Consolidate obvious synonymous wording only when the alternatives mean the same thing.\n"
-        "- Prefer meaningful phrases over isolated words when that preserves grammar or meaning.\n"
+        "- Put shared nouns and grammar outside braces; use the shortest interchangeable option that keeps every result natural. "
+        "Whole phrases are appropriate only for a genuinely inseparable single attribute.\n"
         "- Write the wildcard as natural caption prose. Prefer complete, readable sentences over comma-heavy fragments.\n"
         "- Preserve useful sentence or paragraph breaks when the caption content supports them; do not collapse unrelated ideas into one run-on line.\n"
         "- Keep the resulting caption grammatically usable for every alternative. Avoid nested wildcard braces.\n"

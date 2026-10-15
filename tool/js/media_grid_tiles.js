@@ -229,6 +229,7 @@ function mediaGridHandleTileContextMenu(mediaItem, e) {
     if (!action || action.separator) return action;
     return {
       label: action.label,
+      group: action.group,
       render: action.render,
       run: function () {
         action.run();

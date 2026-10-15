@@ -61,3 +61,18 @@ def test_ask_vl_and_edit_media_use_shared_flat_actions():
     assert 'id="ask-vision-question"' in modal
     assert 'id="ask-vision-answer"' in modal
     assert '"vision_question"' in runtime
+
+
+def test_ask_vl_reopen_keeps_session_question_and_result_without_persistence():
+    root = Path(__file__).parents[1]
+    script = (root / "tool" / "js" / "caption_vision.js").read_text(encoding="utf-8")
+    close = script.split("function closeAskVisionQuestion()", 1)[1].split("function openAskVisionQuestion()", 1)[0]
+    reopen = script.split("function openAskVisionQuestion()", 1)[1].split("function sendAskVisionQuestion()", 1)[0]
+    assert "cancelAskVisionJob()" not in close
+    assert "askVisionState.open = false;" in close
+    assert "askVisionState.key = ''" not in close
+    assert "if (askVisionState.key !== mediaKey || askVisionState.folder !== folder)" in reopen
+    assert "askVisionEl('question').value = ''" in reopen
+    assert "askVisionEl('answer').textContent = ''" in reopen
+    assert "if (token !== askVisionState.token) return false;" in script
+    assert "if (askVisionState.pending) cancelAskVisionJob();" in script

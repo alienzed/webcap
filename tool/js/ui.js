@@ -83,7 +83,23 @@ function showContextMenu(clientX, clientY, actions) {
   var normalizedActions = [];
   var sawNonSeparator = false;
   var pendingSeparator = false;
+  // Presentation-only grouping: callers retain the flat action list for
+  // Preview's label-based primary buttons and keyboard shortcuts.
+  var editGroup = [];
+  var seenEditGroup = false;
+  var presented = [];
   (actions || []).forEach(function (action) {
+    if (action && action.group === 'Edit Media') {
+      editGroup.push(action);
+      if (!seenEditGroup) {
+        presented.push({ editGroupPlaceholder: true });
+        seenEditGroup = true;
+      }
+    } else {
+      presented.push(action);
+    }
+  });
+  presented.forEach(function (action) {
     if (!action) return;
     if (action.separator) {
       if (sawNonSeparator) pendingSeparator = true;
@@ -93,7 +109,11 @@ function showContextMenu(clientX, clientY, actions) {
       normalizedActions.push({ separator: true });
       pendingSeparator = false;
     }
-    normalizedActions.push(action);
+    if (action.editGroupPlaceholder) {
+      normalizedActions.push({ label: 'Edit Media', children: editGroup });
+    } else {
+      normalizedActions.push(action);
+    }
     sawNonSeparator = true;
   });
   var customRenderers = [];
@@ -102,6 +122,31 @@ function showContextMenu(clientX, clientY, actions) {
       var sep = document.createElement('div');
       sep.className = 'caption-context-menu-separator';
       el.appendChild(sep);
+      return;
+    }
+    if (Array.isArray(action.children)) {
+      var disclosure = document.createElement('details');
+      disclosure.className = 'caption-context-menu-disclosure';
+      var summary = document.createElement('summary');
+      summary.className = 'caption-context-menu-item';
+      summary.textContent = action.label;
+      disclosure.appendChild(summary);
+      var childList = document.createElement('div');
+      childList.className = 'caption-context-menu-subactions';
+      action.children.forEach(function (childAction) {
+        var child = document.createElement('button');
+        child.type = 'button';
+        child.className = 'caption-context-menu-item';
+        child.textContent = childAction.label;
+        child.onclick = function (ev) {
+          ev.stopPropagation();
+          hideContextMenu();
+          childAction.run();
+        };
+        childList.appendChild(child);
+      });
+      disclosure.appendChild(childList);
+      el.appendChild(disclosure);
       return;
     }
     if (typeof action.render === 'function') {
@@ -161,6 +206,9 @@ function showContextMenu(clientX, clientY, actions) {
     el.appendChild(customContainer);
   }
 
+  // Long menus scroll within the viewport instead of overflowing above it.
+  el.style.maxHeight = 'calc(100vh - 16px)';
+  el.style.overflowY = 'auto';
   el.style.display = 'inline-block';
   el.style.left = clientX + 'px';
   el.style.top = clientY + 'px';

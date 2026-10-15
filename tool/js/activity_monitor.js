@@ -786,7 +786,7 @@
     });
   }
 
-  function syncActivityRailWork(active) {
+  function syncActivityRailWork(active, unseen) {
     var activeIds = Object.create(null);
     (active || []).forEach(function (item) {
       var kind = String(item && item.kind || '');
@@ -816,7 +816,7 @@
     if (typeof window.setShellTrainingActive === 'function') {
       window.setShellTrainingActive(!!activeIds['activity-training-btn']);
     }
-    window.setShellManagedActivity(active, state.payload.gpuOwner);
+    window.setShellManagedActivity(active, state.payload.gpuOwner, { open: state.open, unseen: unseen });
   }
 
   function render() {
@@ -827,9 +827,7 @@
     var drawer = el('activity-monitor-drawer');
     var host = el('activity-monitor-list');
     var summary = el('activity-monitor-summary');
-    var toggle = el('activity-monitor-rail-btn');
-    var badge = toggle && toggle.querySelector('[data-activity-monitor-badge]');
-    if (!drawer || !host || !summary || !toggle || !badge) return;
+    if (!drawer || !host || !summary) throw new Error('Activity panel markup missing.');
 
     var primary = currentPrimaryItem();
     var primaryHost = el('activity-monitor-primary');
@@ -850,13 +848,8 @@
     detailsToggle.classList.toggle('hidden', !primary || !active.length && !pendingItems.length && !recent.length);
     el('activity-monitor-trend').classList.toggle('hidden', !primary);
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
-    toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
-    toggle.classList.toggle('activity-running', active.length > 0);
-    syncActivityRailWork(active);
-
     var unseen = unseenCount();
-    badge.textContent = unseen > 99 ? '99+' : String(unseen);
-    badge.classList.toggle('hidden', unseen === 0 || state.open);
+    syncActivityRailWork(active, unseen);
     summary.textContent = active.length
       ? String(active.length) + ' active · ' + (unseen ? String(unseen) + ' new' : 'up to date')
       : (unseen ? String(unseen) + ' new this session' : 'Current work and this session');
@@ -1049,15 +1042,13 @@
   }
 
   function bind() {
-    var toggle = el('activity-monitor-rail-btn');
     var close = el('activity-monitor-close');
     var drawer = el('activity-monitor-drawer');
-    if (!toggle || !close || !drawer) return;
-    toggle.onclick = function () { setOpen(!state.open, state.open ? true : 'manual-open'); };
+    if (!close || !drawer) throw new Error('Activity panel controls missing.');
     close.onclick = function () { setOpen(false, true); };
     el('activity-monitor-details-toggle').onclick = function () { state.detailsOpen = !state.detailsOpen; render(); };
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || drawer.contains(event.target) || toggle.contains(event.target) ||
+      if (!state.open || drawer.contains(event.target) ||
           event.target.closest('.shell-workload-indicator')) return;
       setOpen(false, true);
     });

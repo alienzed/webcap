@@ -1858,6 +1858,32 @@
                     </div>
                 </section>
             </div>
+            <div id="ask-vision-modal" class="editor-caption-candidate hidden" aria-live="polite">
+                <section class="editor-caption-candidate-dialog vision-image-caption-dialog" role="dialog" aria-modal="true" aria-labelledby="ask-vision-title">
+                    <div class="editor-caption-candidate-header">
+                        <div class="editor-caption-candidate-heading">
+                            <strong id="ask-vision-title">Ask VL</strong>
+                            <span id="ask-vision-model" class="vision-image-caption-model"></span>
+                        </div>
+                        <button id="ask-vision-close" class="editor-caption-candidate-close" type="button" aria-label="Close Ask VL">&times;</button>
+                    </div>
+                    <div class="ask-vision-question-wrap">
+                        <label for="ask-vision-question">Question about this image (video: first frame)</label>
+                        <textarea id="ask-vision-question" rows="3" placeholder="What do you see?"></textarea>
+                        <button id="ask-vision-send" type="button">Ask</button>
+                    </div>
+                    <div id="ask-vision-loading" class="editor-caption-focus-loading hidden" role="status">Asking Vision…</div>
+                    <div id="ask-vision-error" class="vision-image-caption-error hidden"></div>
+                    <div id="ask-vision-answer" class="editor-caption-candidate-text hidden"></div>
+                    <div class="editor-caption-candidate-actions">
+                        <div class="editor-caption-candidate-actions-left"><span id="ask-vision-timing"></span></div>
+                        <div class="editor-caption-candidate-actions-right">
+                            <button id="ask-vision-copy" type="button" disabled>Copy</button>
+                            <button id="ask-vision-cancel" class="hidden" type="button">Cancel</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
             <div id="vision-image-caption-modal" class="editor-caption-candidate hidden" aria-live="polite">
                 <section class="editor-caption-candidate-dialog vision-image-caption-dialog" role="dialog" aria-modal="true" aria-labelledby="vision-image-caption-title">
                     <div class="editor-caption-candidate-header">

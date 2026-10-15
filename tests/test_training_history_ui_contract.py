@@ -201,7 +201,8 @@ def test_training_history_identifies_custom_named_runs_and_recorded_h3_variant()
     script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
     history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
 
-    assert 'var runIdentity = String(job.actionId || job.id || "").trim();' in script
+    assert "runDisplayName !== 'Run ' + runSequence" in script
+    assert "job.id || runIdentity" not in script
     assert "escapeHtml(runIdentityLabel)" in script
     assert "runConfig.trainingVariant" in script
     assert '"trainingVariant"' in history
@@ -247,3 +248,13 @@ def test_h3_variant_classifies_only_recognized_image_adapter(tmp_path, monkeypat
     assert variant(regular, [image_adapter]) == "Image Adapter"
     assert variant(regular, ["/models/adapters/unrelated.safetensors"]) == "Standard"
     assert variant(regular, []) == "Standard"
+
+
+def test_training_history_hides_internal_job_id_and_redundant_run_number():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+
+    assert "runDisplayName !== 'Run ' + runSequence" in script
+    assert "runIdentityLabel ? '<span" in script
+    assert "job.id || runIdentity" not in script
+    assert "escapeHtml(runIdentity)" not in script
+    assert "job.runName, job.sequence" in script

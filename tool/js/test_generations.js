@@ -1551,7 +1551,9 @@
       var scoreText = score && Number(score.count || 0)
         ? ('★ ' + Number(score.average || 0).toFixed(1) + ' (' + Number(score.count || 0) + ')')
         : '';
-      detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
+      var trainingVariant = metadata && (metadata.trainingVariant === 'Image Adapter' || metadata.trainingVariant === 'Standard')
+        ? metadata.trainingVariant : '';
+      detail.textContent = [parts.detail, trainingVariant, scoreText].filter(Boolean).join(' · ');
       copy.appendChild(name);
       detail.classList.toggle('hidden', !detail.textContent);
       copy.appendChild(detail);

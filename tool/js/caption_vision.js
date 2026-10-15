@@ -965,7 +965,7 @@ function wireVisionImageCaptionUi() {
 }
 
 // Disposable, per-item freeform Vision experiment. Nothing is saved.
-var askVisionState = { open: false, key: '', jobId: '', pending: false, token: 0, startedAt: 0 };
+var askVisionState = { open: false, key: '', folder: '', jobId: '', pending: false, token: 0, startedAt: 0 };
 function askVisionEl(id) {
   var node = document.getElementById('ask-vision-' + id);
   if (!node) throw new Error('Ask VL UI is missing ' + id);
@@ -991,29 +991,35 @@ function cancelAskVisionJob() {
   });
 }
 function closeAskVisionQuestion() {
-  if (askVisionState.pending) cancelAskVisionJob();
+  // Closing is only a view change. The request and last answer remain in memory.
+  // Cancel explicitly via the Cancel button or when opening a different item.
   askVisionState.open = false;
-  askVisionState.key = '';
   syncAskVisionUi();
 }
 function openAskVisionQuestion() {
   var media = state && state.currentItem;
   if (!media || !isCaptionVisionSupportedMedia(media.fileName)) throw new Error('Ask VL requires an image or video.');
-  if (askVisionState.pending) cancelAskVisionJob();
+  var mediaKey = String(media.key);
+  var folder = String(state.folder || '');
+  if (askVisionState.key !== mediaKey || askVisionState.folder !== folder) {
+    if (askVisionState.pending) cancelAskVisionJob();
+    askVisionState.key = mediaKey;
+    askVisionState.folder = folder;
+    askVisionEl('question').value = '';
+    askVisionEl('answer').textContent = '';
+    askVisionEl('answer').classList.add('hidden');
+    askVisionEl('error').textContent = '';
+    askVisionEl('error').classList.add('hidden');
+    askVisionEl('timing').textContent = '';
+    askVisionEl('model').textContent = '';
+  }
   askVisionState.open = true;
-  askVisionState.key = String(media.key);
-  askVisionEl('answer').textContent = '';
-  askVisionEl('answer').classList.add('hidden');
-  askVisionEl('error').textContent = '';
-  askVisionEl('error').classList.add('hidden');
-  askVisionEl('timing').textContent = '';
-  askVisionEl('model').textContent = '';
   syncAskVisionUi();
   loadCaptionVisionCapabilities().then(function () {
-    if (!askVisionState.open) return;
+    if (!askVisionState.open || askVisionState.key !== mediaKey || askVisionState.folder !== folder) return;
     askVisionEl('model').textContent = 'Vision model · ' + getCaptionVisionModelId();
   }).catch(function (err) {
-    if (!askVisionState.open) return;
+    if (!askVisionState.open || askVisionState.key !== mediaKey || askVisionState.folder !== folder) return;
     askVisionEl('error').textContent = String(err && err.message ? err.message : err);
     askVisionEl('error').classList.remove('hidden');
     reportConsoleError('Ask VL', err);
@@ -1025,7 +1031,9 @@ function sendAskVisionQuestion() {
   var question = askVisionEl('question').value.trim();
   if (!question) { askVisionEl('question').focus(); return Promise.resolve(false); }
   var item = state.currentItem;
-  if (!item || String(item.key) !== askVisionState.key) throw new Error('Ask VL media selection changed.');
+  if (!item || String(item.key) !== askVisionState.key || String(state.folder || '') !== askVisionState.folder) {
+    throw new Error('Ask VL media selection changed.');
+  }
   var token = ++askVisionState.token;
   askVisionState.pending = true;
   askVisionState.startedAt = Date.now();
@@ -1036,7 +1044,7 @@ function sendAskVisionQuestion() {
   askVisionEl('timing').textContent = '';
   syncAskVisionUi();
   return loadCaptionVisionCapabilities().then(function () {
-    if (token !== askVisionState.token || !askVisionState.open) return null;
+    if (token !== askVisionState.token) return null;
     var model = getCaptionVisionModelId();
     if (!model) throw new Error('Select an available Vision model.');
     return captionAssistRequestJson('/caption/vision-question', {
@@ -1048,20 +1056,20 @@ function sendAskVisionQuestion() {
     if (!payload) return null;
     if (!payload.job || !payload.job.jobId) throw new Error('Ask VL did not return a job.');
     trackTransientLlmJob(payload.job);
-    if (token !== askVisionState.token || !askVisionState.open) {
+    if (token !== askVisionState.token) {
       return cancelCaptionAssistJob(payload.job.jobId).then(function () { return null; });
     }
     askVisionState.jobId = String(payload.job.jobId);
     return waitForCaptionAssistJob(payload.job);
   }).then(function (job) {
-    if (!job || token !== askVisionState.token || !askVisionState.open) return false;
+    if (!job || token !== askVisionState.token) return false;
     var result = job.result || {};
     askVisionEl('answer').textContent = String(result.text || '').trim() || '(empty response)';
     askVisionEl('answer').classList.remove('hidden');
     askVisionEl('timing').textContent = ((Date.now() - askVisionState.startedAt) / 1000).toFixed(1) + 's';
     return true;
   }).catch(function (err) {
-    if (token !== askVisionState.token || !askVisionState.open) return false;
+    if (token !== askVisionState.token) return false;
     askVisionEl('error').textContent = String(err && err.message ? err.message : err);
     askVisionEl('error').classList.remove('hidden');
     reportConsoleError('Ask VL', err);

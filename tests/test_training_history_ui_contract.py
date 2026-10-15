@@ -208,3 +208,16 @@ def test_training_history_identifies_custom_named_runs_and_recorded_h3_variant()
     assert 'bool(model.get("merge_adapters"))' in history
     assert 'model_source == merged_source' in history
     assert '"trainingVariant" not in item["runSummary"]' in history
+
+
+def test_image_adapted_indicator_is_visible_in_history_queue_and_active_run():
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "function trainingH3ImageModelIconHtml()" in runner
+    assert 'class="training-image-adapter-icon"' in runner
+    assert "trainingH3ImageModelIconHtml() + escapeHtml(imageModelLabel)" in runner
+    assert "trainingVariant === 'Image Adapter' ? trainingH3ImageModelIconHtml()" in history
+    assert "trainingH3ImageModelIconHtml() + escapeHtml(imageModelLabel)" in history
+    assert ".training-image-adapter-icon" in css

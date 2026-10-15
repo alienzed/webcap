@@ -236,7 +236,7 @@ def test_h3_variant_classifies_only_recognized_image_adapter(tmp_path, monkeypat
         lines = ['[model]', 'diffusion_model = "' + checkpoint + '"']
         if adapters is not None:
             lines.append('merge_adapters = [' + ', '.join('"' + value + '"' for value in adapters) + ']')
-        (capture / "config.h3.toml").write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+        (capture / "config.h3.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
         return training_history.run_summary_from_capture(capture, "h3")["trainingVariant"]
 
     regular = "/models/standard_h3.safetensors"

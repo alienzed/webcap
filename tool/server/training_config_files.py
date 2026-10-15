@@ -352,11 +352,15 @@ def apply_review_config_settings(config_text, settings):
     return source
 
 
-def apply_h3_premerged_image_model(config_text):
-    """Select the premerged H3 image checkpoint in this captured run only."""
-    model_path = app_config.fill_template_placeholders(
+def h3_premerged_image_model_path():
+    return app_config.fill_template_placeholders(
         "{MODELS_ROOT}/Stable-diffusion/mh3/minimax_h3_fl2va_pruned_int8_convrot_image_adapter_fused.safetensors", ""
     )
+
+
+def apply_h3_premerged_image_model(config_text):
+    """Select the premerged H3 image checkpoint in this captured run only."""
+    model_path = h3_premerged_image_model_path()
     source = rewrite_toml_assignment(config_text, "diffusion_model", json.dumps(model_path), "model")
     source = rewrite_toml_assignment(source, "merge_adapters", section="model")
     return rewrite_toml_assignment(source, "cfg", section="model")

@@ -2113,3 +2113,44 @@ def test_cancel_paused_run_does_not_retire_when_history_write_fails(tmp_path, mo
     assert status == 500
     assert "disk full" in payload["error"]
     assert training_runner._read_state()["jobs"][0]["id"] == "paused"
+
+
+def test_unlaunched_history_continuation_failure_restores_original(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    previous = {
+        "id": "prior", "folder": "sets/subject", "stages": "h3",
+        "status": "finished_early", "progress": {"epoch": 12},
+    }
+    training_runner._write_state({
+        "version": 3, "activeJobId": "", "queuePaused": True,
+        "queuePauseReason": "", "jobs": [{
+            "id": "next", "folder": "sets/subject", "stages": "h3",
+            "status": "failed", "stage": "launch",
+            "continuedHistoryJobId": "prior", "continuedHistoryRecord": previous,
+        }],
+    })
+    state = training_runner._read_state()
+    training_runner._persist_reconciled_state(state)
+    assert training_runner._read_state()["jobs"] == []
+    history = training_history.read_history(folder)["jobs"]
+    assert len(history) == 1
+    assert history[0]["id"] == "prior"
+    assert history[0]["progress"]["epoch"] == 12
+
+
+def test_history_sync_failure_keeps_terminal_continuation_in_queue(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    training_runner._write_state({
+        "version": 3, "activeJobId": "", "queuePaused": True,
+        "queuePauseReason": "", "jobs": [{
+            "id": "next", "folder": "sets/subject", "stages": "h3",
+            "status": "finished_early", "continuedHistoryJobId": "prior",
+            "continuedHistoryRecord": {"id": "prior", "status": "finished_early"},
+        }],
+    })
+    monkeypatch.setattr(training_runner, "record_job",
+                        lambda *_args: (_ for _ in ()).throw(OSError("disk full")))
+    training_runner._persist_reconciled_state(training_runner._read_state())
+    assert training_runner._read_state()["jobs"][0]["id"] == "next"

@@ -3452,6 +3452,13 @@
   min-width: 0;
 }
 
+.storyboard-scenes-heading-actions > #storyboard-story-toggle {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
 .storyboard-scenes-heading .storyboard-director-header {
   margin-left: 0;
   justify-self: auto;

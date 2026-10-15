@@ -751,10 +751,12 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
 
     assert 'class="storyboard-story-panel-heading"' in html
     assert "<strong>Story Overview</strong>" in html
-    assert ">Hide Overview</button>" in html
-    assert ">Show Overview</button>" in html
-    assert 'id="storyboard-story-expand-toggle"' in html
+    assert ">Hide Story</button>" in html
+    assert "storyState.storyCollapsed ? 'Show Story' : 'Hide Story'" in storyboard
     scenes_heading = html.split('class="storyboard-scenes-heading"', 1)[1].split('</div>\n                            <div id="storyboard-scene-progression"', 1)[0]
+    assert 'id="storyboard-story-toggle"' in scenes_heading
+    assert 'aria-controls="storyboard-story-authoring"' in scenes_heading
+    assert 'id="app-header-workspace-actions"' not in html
     assert 'id="storyboard-director-model"' in scenes_heading
     assert 'id="storyboard-scenes-overview-btn"' in scenes_heading
     assert 'id="storyboard-scenes-focus-btn"' in scenes_heading

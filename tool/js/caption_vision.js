@@ -740,7 +740,10 @@ function closeVisionImageCaption() {
 
 function syncVisionImageCaptionSelection(mediaKey) {
   var key = String(mediaKey || '').trim();
-  if (askVisionState.open && askVisionState.key !== key) closeAskVisionQuestion();
+  if (askVisionState.key && askVisionState.key !== key) {
+    if (askVisionState.pending) cancelAskVisionJob();
+    if (askVisionState.open) closeAskVisionQuestion();
+  }
   if (!visionImageCaptionState.open || !visionImageCaptionState.mediaKey) return;
   if (key === visionImageCaptionState.mediaKey) return;
   closeVisionImageCaption();

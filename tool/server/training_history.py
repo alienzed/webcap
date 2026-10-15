@@ -361,6 +361,10 @@ def discover_runs(folder_path, stage=""):
                 if not entry.is_dir() or entry.is_symlink() or not _resume_artifacts(entry):
                     continue
                 saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, wanted_identity)
+                if saved_config is None and stage == "h3":
+                    image_identity = dict(wanted_identity)
+                    image_identity["diffusion_model"] = h3_premerged_image_model_path()
+                    saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, image_identity)
                 if saved_config is None:
                     app_config.debug_print("[training_history] Skipping", entry, ": no matching", stage, "model config.")
                     continue

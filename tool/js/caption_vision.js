@@ -1036,6 +1036,7 @@ function sendAskVisionQuestion() {
   askVisionEl('timing').textContent = '';
   syncAskVisionUi();
   return loadCaptionVisionCapabilities().then(function () {
+    if (token !== askVisionState.token || !askVisionState.open) return null;
     var model = getCaptionVisionModelId();
     if (!model) throw new Error('Select an available Vision model.');
     return captionAssistRequestJson('/caption/vision-question', {
@@ -1044,6 +1045,7 @@ function sendAskVisionQuestion() {
       body: JSON.stringify({ model: model, folder: state.folder, media: item.fileName, question: question })
     });
   }).then(function (payload) {
+    if (!payload) return null;
     if (!payload.job || !payload.job.jobId) throw new Error('Ask VL did not return a job.');
     trackTransientLlmJob(payload.job);
     if (token !== askVisionState.token || !askVisionState.open) {

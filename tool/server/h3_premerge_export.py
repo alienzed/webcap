@@ -127,12 +127,41 @@ def verify(export_file, manifest_file, publish_to=None):
     loaded = model.model.diffusion_model.state_dict()
     if set(loaded) != set(expected):
         raise RuntimeError("Reloaded model lost or added tensors")
-    for key, tensor in loaded.items():
-        if list(tensor.shape) != expected[key]["shape"] or str(tensor.dtype) != expected[key]["dtype"]:
-            raise RuntimeError("Reloaded H3 tensor structure mismatch: " + key)
-    for name, digest in manifest["digests"].items():
-        if digest_tensor(loaded[name]) != digest:
-            raise RuntimeError("Reloaded H3 tensor digest mismatch: " + name)
+    converted_biases = []
+    with safe_open(export_file, framework="pt", device="cpu") as reader:
+        for key, tensor in loaded.items():
+            details = expected[key]
+            if list(tensor.shape) != details["shape"]:
+                raise RuntimeError(
+                    "Reloaded H3 tensor shape mismatch: {} (saved {}, loaded {})".format(
+                        key, details["shape"], list(tensor.shape)))
+            if str(tensor.dtype) != details["dtype"]:
+                # ComfyUI mixed_precision_ops.Linear initializes bias parameters
+                # at compute_dtype even for some fp32-on-disk biases. This is a
+                # legitimate loader cast only if the resulting values match
+                # the saved tensor converted to that exact destination dtype.
+                saved = reader.get_tensor(key)
+                if not (key.endswith(".bias") and saved.is_floating_point()
+                        and tensor.is_floating_point()
+                        and torch.equal(saved.to(dtype=tensor.dtype), tensor)):
+                    raise RuntimeError(
+                        "Reloaded H3 tensor dtype/value mismatch: {} (saved {}, loaded {})".format(
+                            key, details["dtype"], str(tensor.dtype)))
+                converted_biases.append((key, details["dtype"], str(tensor.dtype)))
+        for name, digest in manifest["digests"].items():
+            tensor = loaded[name]
+            if digest_tensor(tensor) != digest:
+                # A sampled floating-point bias may undergo the same verified
+                # loader cast, changing its byte hash but not its loaded value.
+                if not (any(key == name for key, _, _ in converted_biases)
+                        and torch.equal(reader.get_tensor(name).to(dtype=tensor.dtype), tensor)):
+                    raise RuntimeError("Reloaded H3 tensor digest mismatch: " + name)
+    if converted_biases:
+        print("[verify] ComfyUI normalized {} floating-point bias dtypes on reload".format(
+            len(converted_biases)), flush=True)
+        for key, before, after in converted_biases:
+            print("[verify]   {}: {} -> {} (values verified after cast)".format(
+                key, before, after), flush=True)
     if quantized_layers(loaded) != manifest["quant"]:
         raise RuntimeError("Reloaded H3 lost ConvRot quantization")
     print("[verify] ComfyUI CPU reload passed ({} tensors, {} quantized layers)".format(

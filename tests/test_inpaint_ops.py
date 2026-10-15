@@ -29,6 +29,7 @@ def test_inpaint_preserves_original_and_other_pixels(tmp_path):
         assert edited.size == (80, 60)
         assert edited.getpixel((38, 27)) != (0, 0, 0)
         assert edited.getpixel((5, 5)) == (212, 178, 45)
+        assert edited.getpixel((33, 19)) == (212, 178, 45)
     inpaint_image_in_place(tmp_path, "sample.png", mask_data_url((80, 60), (32, 20, 45, 34)))
     assert (tmp_path / "originals" / "sample.png").read_bytes() == original_bytes
 
@@ -47,3 +48,16 @@ def test_rejects_video(tmp_path):
     (tmp_path / "clip.mp4").write_bytes(b"not an image")
     with pytest.raises(ValueError, match="still images"):
         inpaint_image_in_place(tmp_path, "clip.mp4", mask_data_url((80, 60)))
+
+
+def test_inpaint_preserves_rgba_alpha(tmp_path):
+    path = tmp_path / "alpha.png"
+    image = Image.new("RGBA", (40, 32), (200, 160, 40, 255))
+    image.putpixel((5, 5), (30, 90, 120, 0))
+    ImageDraw.Draw(image).rectangle((18, 12, 22, 18), fill=(0, 0, 0, 255))
+    image.save(path)
+    inpaint_image_in_place(tmp_path, "alpha.png", mask_data_url((40, 32), (17, 11, 23, 19)))
+    with Image.open(path) as edited:
+        assert edited.mode == "RGBA"
+        assert edited.getpixel((5, 5))[3] == 0
+        assert edited.getpixel((20, 15))[:3] != (0, 0, 0)

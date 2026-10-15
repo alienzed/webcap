@@ -33,8 +33,8 @@ function removeObjectPaint(event) {
   };
   var ctx = canvas.getContext('2d');
   var size = Number(removeObjectEl('remove-object-brush').value);
-  ctx.strokeStyle = '#fff';
-  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#ff4b99';
+  ctx.fillStyle = '#ff4b99';
   ctx.lineWidth = size;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -58,8 +58,7 @@ function openRemoveObjectModal(mediaItem) {
   var modal = removeObjectEl('remove-object-modal');
   var img = removeObjectEl('remove-object-image');
   var mask = removeObjectEl('remove-object-mask');
-  var visual = removeObjectEl('remove-object-visual');
-  var brush = removeObjectEl('remove-object-brush');
+    var brush = removeObjectEl('remove-object-brush');
   var brushLabel = removeObjectEl('remove-object-brush-value');
   removeObjectEl('remove-object-title').textContent = 'Remove Object: ' + mediaItem.fileName;
   brush.value = '16';
@@ -106,7 +105,7 @@ function openRemoveObjectModal(mediaItem) {
       if (alpha[i]) { filled = true; break; }
     }
     if (!filled) { removeObjectStatus('Paint a mask first.', true); return; }
-    // Draw the painted mask onto an opaque black-and-white mask for OpenCV.
+    // Any nonzero mask value is selected by OpenCV; the visible pink strokes stay visible over white fabric.
     var binary = document.createElement('canvas');
     binary.width = mask.width;
     binary.height = mask.height;

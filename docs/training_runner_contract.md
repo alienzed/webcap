@@ -19,11 +19,11 @@ The queue is globally running or paused. Only its first item is actionable.
 - `Pause` interrupts the active run, keeps that work first, and holds the queue.
 - `Resume` runs the first item again, using its recorded checkpoint when one exists.
 - `Finish` intentionally ends the active run and lets the next item start. For a queued resume with an already-validated saved checkpoint, `Finish` may finalize that existing checkpoint directly into Training History without restarting training.
-- `Cancel` removes queued intent only. It does not delete trainer output.
+- `Cancel` discards never-started queued intent. A previously launched, checkpointed/paused job is first recorded as stopped in Training History, then retired from the queue; trainer output is never deleted. A History continuation cancelled before its first launch restores the previous history record.
 
 There is no independently paused item elsewhere in the queue and no user-facing action that merely disables a later handoff while the current run continues.
 
-## Resume Run Identity
+A **Continue captured run** action transfers an existing historical run into the queue. Its prior history record is removed only after the new queue record is durable. Ordinary Run Setup Resume still creates a distinct run. Completed and stopped continuations return to History; their job artifacts remain intact. History-write errors retain terminal queue evidence for later reconciliation instead of dropping the run.\n\n## Resume Run Identity
 
 WebCap passes checkpoint Resume paths to Diffusion-Pipe as absolute paths. Under the current trainer behavior, resumed training continues in that same trainer-run directory.
 

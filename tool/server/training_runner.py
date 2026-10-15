@@ -443,7 +443,13 @@ def _sync_job_history(job):
         return "Training outcome has no set folder."
     try:
         folder_path = app_config.safe_join_fs_root(folder)
-        record_job(folder_path, job)
+        previous = job.get("continuedHistoryRecord")
+        if (job.get("status") == "failed" and isinstance(previous, dict)
+                and not job.get("logPath") and not job.get("activeTrainingSessionStartedAt")):
+            # A failed launch did not continue training; restore the prior outcome.
+            record_job(folder_path, previous)
+        else:
+            record_job(folder_path, job)
     except Exception as exc:
         return "Could not persist Training History: " + str(exc)
     return ""
@@ -489,6 +495,9 @@ def _persist_reconciled_state(state):
         if not previous_id or job.get("status") == "cancelled":
             continue
         if str(job.get("id") or "") in failed_history_ids:
+            continue
+        if (job.get("status") == "failed" and isinstance(job.get("continuedHistoryRecord"), dict)
+                and not job.get("logPath") and not job.get("activeTrainingSessionStartedAt")):
             continue
         try:
             folder = app_config.safe_join_fs_root(str(job.get("folder") or ""))

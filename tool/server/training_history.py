@@ -45,6 +45,12 @@ def run_summary_from_capture(record_path, stage, captured_items=0):
     if isinstance(epochs, int) and epochs > 0:
         summary["epochs"] = epochs
     model = parsed.get("model") if isinstance(parsed.get("model"), dict) else {}
+    if selected_stage == "h3":
+        model_source = Path(str(model.get("diffusion_model") or "").replace("\\", "/")).name
+        merged_source = Path(h3_premerged_image_model_path().replace("\\", "/")).name
+        summary["trainingVariant"] = "Image Adapter" if (
+            model_source == merged_source or bool(model.get("merge_adapters"))
+        ) else "Standard"
     shift = model.get("shift")
     if isinstance(shift, (int, float)):
         summary["shift"] = shift
@@ -573,6 +579,13 @@ def _history_job_view(job):
             item.get("stages"),
             item.get("capturedItemCount"),
         )
+    # Existing history entries predate the variant summary; read their captured config.
+    if item.get("stages") == "h3" and "trainingVariant" not in item["runSummary"]:
+        captured_summary = run_summary_from_capture(
+            item.get("recordPath") or item.get("inputPath"), "h3", item.get("capturedItemCount")
+        )
+        if "trainingVariant" in captured_summary:
+            item["runSummary"] = {**item["runSummary"], "trainingVariant": captured_summary["trainingVariant"]}
     raw_output = str(item.get("outputRunPath") or item.get("effectiveOutputDir") or item.get("outputRoot") or "").strip()
     raw_candidate = str(item.get("outputRunPath") or item.get("resumeFromCheckpoint") or "").strip()
     try:

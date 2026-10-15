@@ -7,7 +7,6 @@ import hashlib
 import shlex
 import shutil
 import threading
-import tomllib
 import time
 import uuid
 from datetime import datetime
@@ -2836,10 +2835,9 @@ def start_response(
         if resume_path and stages == "h3" and not reuse_capture:
             # A checkpoint resume must retain the original model variant,
             # regardless of the new-run checkbox's current default.
-            saved_config = host_path_for_training_path(resume_path) / "config.h3.toml"
-            saved_model = tomllib.loads(saved_config.read_text(encoding="utf-8")).get("model", {})
+            validated_model = validate_resumable_run_for_path(folder_path, stages, resume_path)
             effective_config_settings["h3ImageTrainingAdapter"] = (
-                saved_model.get("diffusion_model") == h3_premerged_image_model_path()
+                validated_model["modelSource"] == h3_premerged_image_model_path()
             )
         if (resume_path or initializer) and effective_config_settings.get("optimizerLr") not in (None, ""):
             # diffusion-pipe restores scheduler state on resume unless

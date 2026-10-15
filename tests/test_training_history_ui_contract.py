@@ -195,3 +195,55 @@ def test_h3_image_checkpoint_marker_uses_recorded_model_identity():
     assert "trainingH3ImageModelLabel(job)" in history
     assert "Premerged H3 image-training checkpoint" in history
     assert '"source": source' in backend
+
+
+def test_training_history_identifies_custom_named_runs_and_recorded_h3_variant():
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+
+    assert 'var runIdentity = String(job.actionId || job.id || "").trim();' in script
+    assert "escapeHtml(runIdentityLabel)" in script
+    assert "runConfig.trainingVariant" in script
+    assert '"trainingVariant"' in history
+    assert '"minimax_h3_image_training_adapter.safetensors"' in history
+    assert 'isinstance(merged_adapters, list)' in history
+    assert 'model_source == merged_source' in history
+    assert '"trainingVariant" not in item["runSummary"]' in history
+
+
+def test_image_adapted_indicator_is_visible_in_history_queue_and_active_run():
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "function trainingH3ImageModelIconHtml()" in runner
+    assert 'class="training-image-adapter-icon"' in runner
+    assert "trainingH3ImageModelIconHtml() + escapeHtml(imageModelLabel)" in runner
+    assert "trainingVariant === 'Image Adapter' ? trainingH3ImageModelIconHtml()" in history
+    assert "trainingH3ImageModelIconHtml() + escapeHtml(imageModelLabel)" in history
+    assert ".training-image-adapter-icon" in css
+
+
+def test_h3_variant_classifies_only_recognized_image_adapter(tmp_path, monkeypatch):
+    from tool.server import training_history
+
+    monkeypatch.setattr(training_history, "h3_premerged_image_model_path",
+                        lambda: "/models/minimax_h3_fl2va_pruned_int8_convrot_image_adapter_fused.safetensors")
+    capture = tmp_path / "capture"
+    capture.mkdir()
+
+    def variant(checkpoint, adapters=None):
+        lines = ['[model]', 'diffusion_model = "' + checkpoint + '"']
+        if adapters is not None:
+            lines.append('merge_adapters = [' + ', '.join('"' + value + '"' for value in adapters) + ']')
+        (capture / "config.h3.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return training_history.run_summary_from_capture(capture, "h3")["trainingVariant"]
+
+    regular = "/models/standard_h3.safetensors"
+    fused = "/models/minimax_h3_fl2va_pruned_int8_convrot_image_adapter_fused.safetensors"
+    image_adapter = "/models/adapters/minimax_h3_image_training_adapter.safetensors"
+    assert variant(regular) == "Standard"
+    assert variant(fused) == "Image Adapter"
+    assert variant(regular, [image_adapter]) == "Image Adapter"
+    assert variant(regular, ["/models/adapters/unrelated.safetensors"]) == "Standard"
+    assert variant(regular, []) == "Standard"

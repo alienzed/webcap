@@ -444,6 +444,14 @@ function trainingH3ImageModelLabel(job) {
     : '';
 }
 
+function trainingH3ImageModelIconHtml() {
+  return '<svg class="training-image-adapter-icon" viewBox="0 0 16 16" aria-hidden="true">' +
+    '<rect x="1.75" y="2" width="12.5" height="12" rx="2"></rect>' +
+    '<circle cx="5.3" cy="5.5" r="1"></circle>' +
+    '<path d="m3.25 11 3.2-3 2.4 2 2-1.5 1.9 2"></path>' +
+    '</svg>';
+}
+
 function trainingJobLabel(job) {
   var runName = String(job && job.runName || '').trim();
   if (runName) return runName;
@@ -802,7 +810,7 @@ function buildTrainingQueueHtml(queuedJobs) {
         '<div class="training-runner-queue-spine" aria-hidden="true"><span>' + (index + 1) + '</span></div>' +
         '<div class="training-runner-queue-copy">' +
           '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(stage) + '</strong>' +
-          (imageModelLabel ? '<span class="training-runner-queue-workload">· ' + escapeHtml(imageModelLabel) + '</span>' : '') + workload + '</div>' +
+          (imageModelLabel ? '<span class="training-runner-queue-workload">· ' + trainingH3ImageModelIconHtml() + escapeHtml(imageModelLabel) + '</span>' : '') + workload + '</div>' +
           '<button type="button" class="training-runner-queue-folder" data-training-open-folder="' + escapeHtml(queuedJob.folder || '') + '" title="Open set: ' + escapeHtml(queuedJob.folder || '') + '">' + escapeHtml(queuedJob.folder || '') + '</button>' +
           buildQueuedResumePointHtml(queuedJob) + output + captured + sourceUnavailable + error +
         '</div>' +
@@ -1038,7 +1046,7 @@ function renderTrainingRunner() {
   els.runnerSummary.innerHTML = '<div class="training-runner-active-row">' +
     '<div class="training-runner-state" title="Active model and elapsed run time.">' +
       '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '" title="' + escapeHtml(statusTitle) + '">' + escapeHtml(statusLabel) + '</span>' +
-      '<span>' + escapeHtml(trainingJobLabel(job)) + (imageModelLabel ? ' · ' + escapeHtml(imageModelLabel) : '') + (activeSettings ? ' · ' + escapeHtml(activeSettings) : '') + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span>' +
+      '<span>' + escapeHtml(trainingJobLabel(job)) + (imageModelLabel ? ' · ' + trainingH3ImageModelIconHtml() + escapeHtml(imageModelLabel) : '') + (activeSettings ? ' · ' + escapeHtml(activeSettings) : '') + (elapsed ? ' · ' + escapeHtml(elapsed) : '') + '</span>' +
     '</div>' +
     '<button type="button" class="training-runner-folder" data-training-open-folder="' + escapeHtml(job.folder || '') + '" title="Open set: ' + escapeHtml(job.folder || '') + '">' + escapeHtml(job.folder || '') + '</button>' +
     queuePosition +

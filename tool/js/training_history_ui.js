@@ -256,7 +256,7 @@ function renderTrainingHistory() {
             '<strong class="training-history-run-name">' + escapeHtml(runDisplayName) + '</strong>' +
             '<span class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>' +
             '<span class="training-history-stage"' + (modelTitle ? ' title="' + escapeHtml(modelTitle) + '"' : '') + '>' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span>' +
-            (imageModelLabel ? '<span class="training-history-stage" title="Premerged H3 image-training checkpoint">· ' + escapeHtml(imageModelLabel) + '</span>' : '') +
+            (imageModelLabel ? '<span class="training-history-stage" title="Premerged H3 image-training checkpoint">' + escapeHtml(imageModelLabel) + '</span>' : '') +
           '</div>' +
           '<div class="training-history-meta">' +
             (timingLabel ? '<span class="training-history-timing"' + (timingTitle ? ' title="' + escapeHtml(timingTitle) + '"' : '') + '>' + escapeHtml(timingLabel) + '</span>' : '') +

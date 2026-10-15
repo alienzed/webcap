@@ -147,7 +147,7 @@ function renderTrainingHistory() {
     var model = job.model && typeof job.model === 'object' ? job.model : {};
     var haystack = [
       job.folder, job.profileId, job.stages, job.status, job.modelLabel, model.label, model.source,
-      job.runName, trainingHistoryRunSummary(job)
+      job.runName, trainingHistoryRunSummary(job), trainingH3ImageModelLabel(job)
     ].join(' ').toLowerCase();
     return haystack.indexOf(searchText) !== -1;
   }).sort(function (a, b) {
@@ -200,6 +200,7 @@ function renderTrainingHistory() {
     var stageLabel = trainingStageLabel(job.stages || '');
     var profileLabel = modelLabel + (stageLabel && stageLabel.toLowerCase() !== modelLabel.toLowerCase() ? ' · ' + stageLabel : '');
     var runDisplayName = trainingHistoryRunDisplayName(job, profileLabel);
+    var imageModelLabel = trainingH3ImageModelLabel(job);
     var selectedEpoch = job.selectedEpoch && typeof job.selectedEpoch === 'object' ? job.selectedEpoch : null;
     var selectedEpochNumber = selectedEpoch ? Number(selectedEpoch.epoch) : NaN;
     var selectedEpochLabel = isFinite(selectedEpochNumber) && selectedEpochNumber > 0 ? 'Selected Epoch ' + Math.round(selectedEpochNumber).toLocaleString() : '';
@@ -255,6 +256,7 @@ function renderTrainingHistory() {
             '<strong class="training-history-run-name">' + escapeHtml(runDisplayName) + '</strong>' +
             '<span class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>' +
             '<span class="training-history-stage"' + (modelTitle ? ' title="' + escapeHtml(modelTitle) + '"' : '') + '>' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span>' +
+            (imageModelLabel ? '<span class="training-history-stage" title="Premerged H3 image-training checkpoint">' + escapeHtml(imageModelLabel) + '</span>' : '') +
           '</div>' +
           '<div class="training-history-meta">' +
             (timingLabel ? '<span class="training-history-timing"' + (timingTitle ? ' title="' + escapeHtml(timingTitle) + '"' : '') + '>' + escapeHtml(timingLabel) + '</span>' : '') +

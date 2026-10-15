@@ -1629,6 +1629,7 @@ def _build_runner_script(job, settings, artifacts, job_dir):
         build_training_launcher(settings),
         resume_path if resume_stage == "h3" else "",
         reset_dataloader=bool(resume_path and not job.get("resumeOutputId")),
+        train_entrypoint=_to_wsl_path(artifacts["h3FusionLauncher"], distribution) if "h3FusionLauncher" in artifacts else "train.py",
     ) if stages == "h3" else None
     result_wsl = _to_wsl_path(job_dir / "result.json", distribution)
     pid_wsl = _to_wsl_path(job_dir / "pid", distribution)
@@ -2647,6 +2648,9 @@ def _bundle_from_action(action_id, profile_id, stages):
         item = next(item for item in selected["configs"] if item["id"] == stage)
         artifacts[stage + "Config"] = record_root / "configs" / item["file"]
         artifacts[stage + "Dataset"] = record_root / "configs" / item["dataset"]
+    fusion_launcher = record_root / "configs" / "h3_force_fusion_launcher.py"
+    if fusion_launcher.is_file() and stages == "h3":
+        artifacts["h3FusionLauncher"] = fusion_launcher
     missing = [str(value) for value in artifacts.values() if not Path(value).is_file()]
     if missing:
         raise FileNotFoundError("Captured training files are missing: " + ", ".join(missing))
@@ -2690,6 +2694,9 @@ def _bundle_from_recorded_capture(action_id, capture_path, folder_path, profile_
         artifacts[stage + "Config"] = capture / item["file"]
         artifacts[stage + "Dataset"] = capture / item["dataset"]
     summary_path = capture / "summary.json"
+    fusion_launcher = capture / "h3_force_fusion_launcher.py"
+    if fusion_launcher.is_file() and stages == "h3":
+        artifacts["h3FusionLauncher"] = fusion_launcher
     missing = [str(path) for path in list(artifacts.values()) + [summary_path] if not path.is_file()]
     if missing:
         raise FileNotFoundError("Recorded training capture is missing required files: " + ", ".join(missing))

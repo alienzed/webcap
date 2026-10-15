@@ -450,7 +450,9 @@ def validate_resumable_run_for_path(folder_path, stage, run_path, reference_conf
         raise ValueError("Resume directory has no readable compatible saved config: " + raw_path)
     point = resume_point_from_directory(folder_path, stage, raw_path)
     return {"path": raw_path, "runPath": raw_path, "stage": stage,
-            "matchType": "exact" if config_sha256(saved_config) == config_sha256(source_config) else "compatible", **point}
+            "matchType": "exact" if config_sha256(saved_config) == config_sha256(source_config) else "compatible",
+            "modelSource": parsed_saved["model"].get("diffusion_model", ""),
+            **point}
 
 
 def discovered_run_output_path(folder_path, stage, run_path):

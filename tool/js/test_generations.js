@@ -1545,15 +1545,22 @@
         selectedMark.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="3.5"></circle><path d="M5.5 9l-1 5 3.5-2 3.5 2-1-5"></path></svg>';
         name.appendChild(selectedMark);
       }
+      if (metadata && metadata.trainingVariant === 'Image Adapter') {
+        var imageMark = document.createElement('span');
+        imageMark.className = 'test-generations-image-adapter-mark';
+        imageMark.title = 'Image Adapter training';
+        imageMark.setAttribute('role', 'img');
+        imageMark.setAttribute('aria-label', 'Image Adapter training');
+        imageMark.innerHTML = trainingH3ImageModelIconHtml();
+        name.appendChild(imageMark);
+      }
       var detail = document.createElement('span');
       detail.dataset.candidateDetail = '1';
       var score = scores[String(fileName || '')];
       var scoreText = score && Number(score.count || 0)
         ? ('★ ' + Number(score.average || 0).toFixed(1) + ' (' + Number(score.count || 0) + ')')
         : '';
-      var trainingVariant = metadata && (metadata.trainingVariant === 'Image Adapter' || metadata.trainingVariant === 'Standard')
-        ? metadata.trainingVariant : '';
-      detail.textContent = [parts.detail, trainingVariant, scoreText].filter(Boolean).join(' · ');
+      detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
       copy.appendChild(name);
       detail.classList.toggle('hidden', !detail.textContent);
       copy.appendChild(detail);

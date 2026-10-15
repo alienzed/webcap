@@ -70,14 +70,16 @@
   }
 
   function testVlQuestion(status) {
-    // The actual wildcard choices remain hidden from VL to avoid leading its observations.
-    // The source template supplies the attributes, surrounding nouns and their relationships.
-    var source = String(status.sourcePrompt || '').replace(/\\{[^{}]*\\|[^{}]*\\}/g, '[attribute]');
-    source = source.replace(/^\\s*#[^\\n]*/gm, '').trim();
+    // Ask about every wildcard dimension without disclosing its resolved choice.
+    var source = String(status.sourcePrompt || '').replace(/\{[^{}]*\|[^{}]*\}/g, '[attribute]');
+    source = source.replace(/^\s*#[^\n]*/gm, '').trim();
+    if (!source.includes('[attribute]')) {
+      return 'Describe this image in detail, including visible subject attributes, distinctive details and setting. Say unclear for anything not visible.';
+    }
     return 'Describe what is visibly present for every attribute marked [attribute] in this template. ' +
       'Use the surrounding nouns and relationships to identify each attribute. ' +
       'If not visible, say unclear. Do not infer an attribute from the template. ' +
-      'Also mention other distinctive visible details.\\n\\n' + (source || 'Describe the visible subject, details, and setting.');
+      'Also mention other distinctive visible details.\n\n' + source;
   }
 
   function syncTestVlControls() {

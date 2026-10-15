@@ -23,7 +23,9 @@ The queue is globally running or paused. Only its first item is actionable.
 
 There is no independently paused item elsewhere in the queue and no user-facing action that merely disables a later handoff while the current run continues.
 
-A **Continue captured run** action transfers an existing historical run into the queue. Its prior history record is removed only after the new queue record is durable. Ordinary Run Setup Resume still creates a distinct run. Completed and stopped continuations return to History; their job artifacts remain intact. History-write errors retain terminal queue evidence for later reconciliation instead of dropping the run.\n\n## Resume Run Identity
+A **Continue captured run** action transfers an existing historical run into the queue. Its prior history record is removed only after the new queue record is durable. Ordinary Run Setup Resume still creates a distinct run. Completed and stopped continuations return to History; their job artifacts remain intact. History-write errors retain terminal queue evidence for later reconciliation instead of dropping the run.
+
+## Resume Run Identity
 
 WebCap passes checkpoint Resume paths to Diffusion-Pipe as absolute paths. Under the current trainer behavior, resumed training continues in that same trainer-run directory.
 

@@ -72,7 +72,7 @@ function openRemoveObjectModal(mediaItem) {
   var img = removeObjectEl('remove-object-image');
   var mask = removeObjectEl('remove-object-mask');
   var visual = removeObjectEl('remove-object-visual');
-    var brush = removeObjectEl('remove-object-brush');
+  var brush = removeObjectEl('remove-object-brush');
   var brushLabel = removeObjectEl('remove-object-brush-value');
   removeObjectEl('remove-object-title').textContent = 'Remove Object: ' + mediaItem.fileName;
   brush.value = '16';

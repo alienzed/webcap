@@ -3772,6 +3772,20 @@ iframe {
   align-items: center;
   gap: 5px;
 }
+.test-generations-image-adapter-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+.test-generations-image-adapter-mark .training-image-adapter-icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .test-generations-selected-mark {
   display: inline-flex;
   flex: 0 0 auto;

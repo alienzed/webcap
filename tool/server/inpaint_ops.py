@@ -48,7 +48,11 @@ def inpaint_image_in_place(folder_path, file_name, mask_data_url):
         raise ValueError("Paint over an object before applying")
 
     pixels = np.asarray(work_image.convert("RGB"), dtype=np.uint8)
-    repaired = Image.fromarray(cv2.inpaint(pixels, mask, 3, cv2.INPAINT_TELEA), "RGB")
+    inpainted = cv2.inpaint(pixels, mask, 3, cv2.INPAINT_TELEA)
+    # Keep pixels outside the painted area identical before format encoding.
+    result_pixels = pixels.copy()
+    result_pixels[mask != 0] = inpainted[mask != 0]
+    repaired = Image.fromarray(result_pixels, "RGB")
     if "A" in work_image.getbands():
         repaired = repaired.convert("RGBA")
         repaired.putalpha(work_image.getchannel("A"))

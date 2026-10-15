@@ -147,7 +147,8 @@ function renderTrainingHistory() {
     var model = job.model && typeof job.model === 'object' ? job.model : {};
     var haystack = [
       job.folder, job.profileId, job.stages, job.status, job.modelLabel, model.label, model.source,
-      job.runName, trainingHistoryRunSummary(job), trainingH3ImageModelLabel(job)
+      job.runName, job.id, job.actionId, job.sequence, trainingHistoryRunSummary(job), trainingH3ImageModelLabel(job),
+      job.runSummary && job.runSummary.trainingVariant
     ].join(' ').toLowerCase();
     return haystack.indexOf(searchText) !== -1;
   }).sort(function (a, b) {
@@ -200,6 +201,10 @@ function renderTrainingHistory() {
     var stageLabel = trainingStageLabel(job.stages || '');
     var profileLabel = modelLabel + (stageLabel && stageLabel.toLowerCase() !== modelLabel.toLowerCase() ? ' · ' + stageLabel : '');
     var runDisplayName = trainingHistoryRunDisplayName(job, profileLabel);
+    var runIdentity = String(job.actionId || job.id || "").trim();
+    var runSequence = String(job.sequence || "").replace(/^0+(?=\d)/, "");
+    var runIdentityLabel = (runSequence ? "Run " + runSequence + " · " : "") + (job.id || runIdentity);
+    var trainingVariant = String(runConfig.trainingVariant || "").trim();
     var imageModelLabel = trainingH3ImageModelLabel(job);
     var selectedEpoch = job.selectedEpoch && typeof job.selectedEpoch === 'object' ? job.selectedEpoch : null;
     var selectedEpochNumber = selectedEpoch ? Number(selectedEpoch.epoch) : NaN;
@@ -254,9 +259,11 @@ function renderTrainingHistory() {
           '<div class="training-history-title">' +
             (selectedEpochLabel ? '<span class="training-history-selected-mark" title="' + escapeHtml(selectedEpochLabel) + '" aria-label="' + escapeHtml(selectedEpochLabel) + '"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="6" r="3.5"></circle><path d="M5.5 9l-1 5 3.5-2 3.5 2-1-5"></path></svg></span>' : '') +
             '<strong class="training-history-run-name">' + escapeHtml(runDisplayName) + '</strong>' +
+            (runIdentityLabel ? '<span class="training-history-stage" title="Run: ' + escapeHtml(runIdentity) + '">' + escapeHtml(runIdentityLabel) + '</span>' : '') +
+            (trainingVariant ? '<span class="training-history-stage">' + escapeHtml(trainingVariant) + '</span>' : '') +
             '<span class="training-history-status training-history-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>' +
             '<span class="training-history-stage"' + (modelTitle ? ' title="' + escapeHtml(modelTitle) + '"' : '') + '>' + escapeHtml(trainingStageLabel(job.stages || '')) + '</span>' +
-            (imageModelLabel ? '<span class="training-history-stage" title="Premerged H3 image-training checkpoint">' + escapeHtml(imageModelLabel) + '</span>' : '') +
+            (imageModelLabel && !trainingVariant ? '<span class="training-history-stage" title="Premerged H3 image-training checkpoint">' + escapeHtml(imageModelLabel) + '</span>' : '') +
           '</div>' +
           '<div class="training-history-meta">' +
             (timingLabel ? '<span class="training-history-timing"' + (timingTitle ? ' title="' + escapeHtml(timingTitle) + '"' : '') + '>' + escapeHtml(timingLabel) + '</span>' : '') +

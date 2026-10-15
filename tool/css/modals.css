@@ -3660,3 +3660,25 @@ html[data-theme="dark"] .app-settings-environment-check {
     grid-template-columns: 1fr;
   }
 }
+
+/* Minimal, transient Ask VL experiment. */
+.ask-vision-question-wrap {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+.ask-vision-question-wrap textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  min-height: 64px;
+  font: inherit;
+}
+.ask-vision-question-wrap button {
+  justify-self: end;
+  padding: 6px 16px;
+}
+#ask-vision-timing {
+  color: var(--muted);
+  font-size: 12px;
+}

@@ -365,10 +365,6 @@ def _session_root(folder_path):
     return _owning_set_directory(folder_path) / TEST_RESULTS_DIR
 
 
-def _legacy_central_session_root():
-    return Path(app_config.FS_ROOT) / ".webcap" / TEST_RESULTS_DIR
-
-
 def _central_session_root():
     root = app_config.output_root() / TEST_RESULTS_DIR
     if root.is_symlink():
@@ -471,7 +467,7 @@ def save_workspace_prompt(folder_path, model_id, prompt):
 
 
 def _recent_session_roots():
-    roots = [_central_session_root(), _legacy_central_session_root()]
+    roots = [_central_session_root()]
     sets_root = _workspace_sets_root()
     if sets_root.is_dir():
         for workspace in sets_root.iterdir():
@@ -489,7 +485,6 @@ def _session_roots(folder_path):
     roots = [
         _workspace_sessions_root(folder_path),
         _central_session_root(),
-        _legacy_central_session_root(),
         _session_root(folder_path),
     ]
     unique = []
@@ -519,7 +514,6 @@ def _session_belongs_to_folder(folder_path, session_directory, payload=None):
 
     central_roots = {
         _central_session_root().resolve(),
-        _legacy_central_session_root().resolve(),
     }
     if session.parent not in central_roots:
         return False

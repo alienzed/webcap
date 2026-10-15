@@ -13,8 +13,8 @@ def test_caption_wildcard_contract_reports_stable_and_variable_content():
     assert request["response_schema"]["required"] == ["wildcard", "stableTerms", "variationGroups"]
     assert "[count=2] mikeperson standing in a kitchen" in request["prompt"]
     assert "frequency metadata" in request["prompt"]
-    assert "Use only information present in the supplied captions" in request["prompt"]
-    assert "Do not create a wildcard for something that is effectively constant" in request["prompt"]
+    assert "black hair can be tested even when the captions mention only brown and blonde hair" in request["prompt"]
+    assert "Each wildcard group must vary exactly one attribute" in request["prompt"]
 
 
 def test_caption_wildcard_contract_requires_real_captions():
@@ -87,3 +87,19 @@ def test_caption_wildcard_result_allows_optional_empty_alternative():
     })
 
     assert result["variationGroups"][1]["options"] == ["ruched", ""]
+
+
+def test_wildcard_vocabulary_supplies_independent_dimensions_without_closing_options():
+    request = build_request(
+        ["A person with brown wavy hair in a red bikini."],
+        vocabulary=[
+            {"group": "Hair", "alias": "Hair colour and style", "terms": ["brown", "wavy"]},
+            {"group": "BT Shape", "alias": "Bikini top shape", "terms": ["triangle", "teardrop"]},
+        ],
+    )
+    prompt = request["prompt"]
+    assert '"group": "BT Shape"' in prompt
+    assert '"alias": "Bikini top shape"' in prompt
+    assert '"terms": ["triangle", "teardrop"]' in prompt
+    assert "not a closed list of test values" in prompt
+    assert "{brown|black|blonde|ginger} hair" in prompt

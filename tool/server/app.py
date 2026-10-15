@@ -2025,7 +2025,9 @@ def test_generations_wildcard_route():
         captions = [caption for caption in captions if caption]
         focus = str(data.get("focus") or "").strip()
         set_name = Path(folder.rstrip("/\\")).name or folder
-        contract = test_wildcard_build_request(captions, set_name=set_name, focus=focus)
+        contract = test_wildcard_build_request(
+            captions, set_name=set_name, focus=focus, vocabulary=data.get("vocabulary")
+        )
         job = enqueue_llm(
             "test",
             str(data.get("directorModel") or "").strip(),

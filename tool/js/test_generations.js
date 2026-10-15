@@ -823,7 +823,14 @@
     return wildcardPostJson('/fs/test_generations/wildcard', {
       folder: requestFolder,
       directorModel: wildcardDirector.modelId,
-      focus: focus
+      focus: focus,
+      vocabulary: checklistItems.map(function (group) {
+        return {
+          group: String(group || ''),
+          alias: getRequirementGroupAlias(group),
+          terms: getChecklistKeywordTermsForRequirement(group)
+        };
+      }).filter(function (entry) { return !!entry.group; })
     }).then(function (payload) {
       wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
       wildcardDirector.requestDiagnostic = payload.job && payload.job.request || null;

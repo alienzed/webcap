@@ -32,6 +32,7 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
         "folder": "set",
         "directorModel": "director.gguf",
         "focus": "shirt",
+        "vocabulary": [{"group": "Clothing", "alias": "Garment type", "terms": ["shirt", "jacket"]}],
     })
 
     assert response.status_code == 202
@@ -42,6 +43,7 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     assert "subject standing in a kitchen" in seen["contract"]["prompt"]
     assert "subject sitting on a couch" in seen["contract"]["prompt"]
     assert "Explicit focus: shirt" in seen["contract"]["prompt"]
+    assert '"terms": ["shirt", "jacket"]' in seen["contract"]["prompt"]
     assert "Set name: set" in seen["contract"]["prompt"]
     assert response.get_json()["focus"] == "shirt"
     assert response.get_json()["setName"] == "set"

@@ -4,6 +4,7 @@ Pillow>=10,<12
 deface
 imageio
 mediapipe==0.10.35
+opencv-contrib-python>=4.11,<5
 rembg
 onnxruntime
 tensorboard>=2.21,<3

@@ -14,6 +14,7 @@ from PIL import Image, ImageOps
 
 from . import config as app_config
 from .crop_ops import crop_image_data_url_in_place, crop_image_in_place, transform_image_in_place
+from .inpaint_ops import inpaint_image_in_place
 from .file_ops import _rename_media_key_in_folder_state
 from .folder_state_store import folder_state_exists, read_folder_state, write_folder_state_atomic
 from .color_suggestions import COLOR_SUGGESTIONS_VERSION, analyze_image_color_suggestions, is_color_suggestion_image
@@ -789,6 +790,26 @@ def media_crop_response(data):
         app_config.debug_print("[media_crop] ERROR:", e)
         app_config.debug_traceback()
         return jsonify({"error": str(e)}), 400
+
+
+def media_inpaint_response(data):
+    data = data or {}
+    folder = str(data.get("folder") or "").strip()
+    file_name = str(data.get("fileName") or "").strip()
+    if not file_name:
+        return jsonify({"error": "Missing media filename"}), 400
+    try:
+        folder_path = safe_join_fs_root(folder)
+        result = inpaint_image_in_place(folder_path, file_name, data.get("maskDataUrl"))
+        update_media_metadata(folder_path, scoped_filenames=[file_name])
+        return jsonify({"ok": True, **result})
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("REMOVE OBJECT FAILED for %r / %r: %s", folder, file_name, exc)
+        return jsonify({"error": str(exc)}), 500
 
 
 def media_image_transform_response(data):

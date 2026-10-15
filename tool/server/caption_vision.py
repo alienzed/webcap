@@ -156,6 +156,21 @@ def build_vision_image_caption_messages(media_relative_path):
     ]
 
 
+def build_vision_question_messages(question, media_relative_path):
+    question = str(question or "").strip()
+    if not question:
+        raise ValueError("Ask VL requires a question.")
+    return [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": question},
+                {"type": "image_url", "image_url": {"url": _vision_media_url(media_relative_path)}},
+            ],
+        },
+    ]
+
+
 CAPTION_VISION_SYSTEM_PROMPT = (
     "You verify a training caption against one image and return only exact, actionable caption edits. "
     "Report a finding only when the image provides clear visual evidence and the current caption is meaningfully missing "

@@ -12,7 +12,7 @@ import sys
 
 from . import config as app_config
 from .caption_ops import _resolve_folder, build_caption_assist_messages, build_caption_template_assist_messages, list_media_files, load_caption_text, save_caption_text, serve_media_file
-from .caption_vision import build_caption_vision_messages, build_vision_caption_extras_messages, build_vision_image_caption_messages, build_vision_question_messages, resolve_caption_vision_media
+from .caption_vision import build_caption_vision_messages, build_vision_caption_extras_messages, build_vision_image_caption_messages, build_vision_question_messages, resolve_caption_vision_media, vision_media_data_url
 from .vision_schema_assist import (
     build_vision_schema_sight_messages,
     build_vision_vocabulary_sight_messages,
@@ -2102,6 +2102,36 @@ def test_generations_media_route():
     except FileNotFoundError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/test_generations/vision-question", methods=["POST"])
+def test_generations_vision_question_route():
+    """Ask VL about one saved Test result without storing analysis metadata."""
+    data = request.get_json(silent=True) or {}
+    try:
+        model = str(data.get("model") or "").strip()
+        vision_ids = {str(item.get("id") or "") for item in list_vision_models()}
+        if not model or model not in vision_ids:
+            raise ValueError("Select an available Vision model.")
+        folder_path = safe_join_fs_root(str(data.get("folder") or "").strip())
+        media_path = test_generations_resolve_result_media(
+            folder_path,
+            str(data.get("session") or "").strip(),
+            str(data.get("media") or "").strip(),
+        )
+        messages = build_vision_question_messages(
+            data.get("question"), vision_media_data_url(media_path)
+        )
+        job = enqueue_llm(
+            "caption", model,
+            {"operation": "vision_question", "messages": messages},
+            context={},
+            label="Test Generations Ask VL",
+        )
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("TEST GENERATIONS ASK VL FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

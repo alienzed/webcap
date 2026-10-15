@@ -23,6 +23,19 @@ function closeRemoveObjectModal() {
   removeObjectEl('remove-object-image').removeAttribute('src');
 }
 
+// Size the image frame explicitly so the displayed image and mask share
+// exactly the same rectangle, even for tall/wide images and resized windows.
+function layoutRemoveObjectImage() {
+  if (removeObjectEl('remove-object-modal').classList.contains('hidden')) return;
+  var img = removeObjectEl('remove-object-image');
+  if (!img.naturalWidth || !img.naturalHeight) return;
+  var stage = removeObjectEl('remove-object-stage');
+  var scale = Math.min(1, stage.clientWidth / img.naturalWidth, stage.clientHeight / img.naturalHeight);
+  var visual = removeObjectEl('remove-object-visual');
+  visual.style.width = Math.max(1, Math.floor(img.naturalWidth * scale)) + 'px';
+  visual.style.height = Math.max(1, Math.floor(img.naturalHeight * scale)) + 'px';
+}
+
 function removeObjectPaint(event) {
   if (!removeObjectPainting || removeObjectBusy) return;
   var canvas = removeObjectEl('remove-object-mask');
@@ -58,6 +71,7 @@ function openRemoveObjectModal(mediaItem) {
   var modal = removeObjectEl('remove-object-modal');
   var img = removeObjectEl('remove-object-image');
   var mask = removeObjectEl('remove-object-mask');
+  var visual = removeObjectEl('remove-object-visual');
     var brush = removeObjectEl('remove-object-brush');
   var brushLabel = removeObjectEl('remove-object-brush-value');
   removeObjectEl('remove-object-title').textContent = 'Remove Object: ' + mediaItem.fileName;
@@ -65,12 +79,18 @@ function openRemoveObjectModal(mediaItem) {
   brushLabel.textContent = brush.value + ' px';
   brush.oninput = function () { brushLabel.textContent = brush.value + ' px'; };
   removeObjectStatus('Loading image...');
+  // Do not leave the previous image's paint surface active during a new load.
+  mask.width = 0;
+  mask.height = 0;
+  visual.style.width = '0px';
+  visual.style.height = '0px';
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
   img.onload = function () {
     mask.width = img.naturalWidth;
     mask.height = img.naturalHeight;
     mask.getContext('2d').clearRect(0, 0, mask.width, mask.height);
+    layoutRemoveObjectImage();
     removeObjectStatus('Brush over the object, then Apply. Reset restores the original later.');
   };
   img.onerror = function () {
@@ -149,6 +169,7 @@ function openRemoveObjectModal(mediaItem) {
     });
   };
 }
+window.addEventListener('resize', layoutRemoveObjectImage);
 document.addEventListener('keydown', function (event) {
   var modal = removeObjectEl('remove-object-modal');
   if (event.key === 'Escape' && modal && !modal.classList.contains('hidden') && !removeObjectBusy) {

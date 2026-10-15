@@ -327,3 +327,7 @@ def test_image_adapter_shares_starting_point_heading_without_duplicate_controls(
     assert 'for="training-run-starting-point-select"' in heading
     assert ".training-run-h3-adapter-option.hidden" in css
     assert "white-space: nowrap;" in css
+    checkbox_rule = css.split(".training-run-h3-adapter-option input {", 1)[1].split("}", 1)[0]
+    assert "width: 14px;" in checkbox_rule
+    assert "height: 14px;" in checkbox_rule
+    assert "padding: 0;" in checkbox_rule

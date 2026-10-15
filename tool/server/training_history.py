@@ -48,8 +48,13 @@ def run_summary_from_capture(record_path, stage, captured_items=0):
     if selected_stage == "h3":
         model_source = Path(str(model.get("diffusion_model") or "").replace("\\", "/")).name
         merged_source = Path(h3_premerged_image_model_path().replace("\\", "/")).name
+        merged_adapters = model.get("merge_adapters")
+        has_image_adapter = isinstance(merged_adapters, list) and any(
+            Path(str(adapter).replace("\\", "/")).name == "minimax_h3_image_training_adapter.safetensors"
+            for adapter in merged_adapters
+        )
         summary["trainingVariant"] = "Image Adapter" if (
-            model_source == merged_source or bool(model.get("merge_adapters"))
+            model_source == merged_source or has_image_adapter
         ) else "Standard"
     shift = model.get("shift")
     if isinstance(shift, (int, float)):

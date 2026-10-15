@@ -551,7 +551,7 @@ def materialize_training_bundle(
         if isinstance(stage_config_settings, dict):
             config_text = apply_review_config_settings(config_text, stage_config_settings)
             if stage == "h3" and stage_config_settings.get("h3ImageTrainingAdapter"):
-                config_text = apply_h3_image_training_adapter(config_text)
+                config_text = apply_h3_premerged_image_model(config_text)
         if captured_initializer and str(initializer.get("stage") or "") == stage:
             config_text = apply_captured_initializer(
                 config_text,

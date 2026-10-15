@@ -180,3 +180,18 @@ def test_checkpoint_picker_groups_previous_saved_resume_points():
     assert 'Previous saved resumable points' in script
     assert 'data-checkpoint-tag=' in script
     assert "resumeCheckpointTag" in runner
+
+
+def test_h3_image_checkpoint_marker_uses_recorded_model_identity():
+    runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
+
+    assert "function trainingH3ImageModelLabel(job)" in runner
+    assert "job.stages !== 'h3'" in runner
+    assert "minimax_h3_fl2va_pruned_int8_convrot_image_adapter_fused.safetensors" in runner
+    assert "trainingH3ImageModelLabel(queuedJob)" in runner
+    assert "trainingH3ImageModelLabel(job)" in runner
+    assert "trainingH3ImageModelLabel(job)" in history
+    assert "Premerged H3 image-training checkpoint" in history
+    assert '"source": source' in backend

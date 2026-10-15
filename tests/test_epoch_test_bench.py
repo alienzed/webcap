@@ -449,7 +449,7 @@ def test_staged_candidates_include_manual_loras_without_provenance(tmp_path, mon
 def test_recent_test_set_reports_owner_availability_from_set_identity(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
-    session = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR / "session"
+    session = tmp_path / "output" / bench.TEST_RESULTS_DIR / "session"
     session.mkdir(parents=True)
     bench._atomic_write_json(session / "test.json", {
         "status": "complete",
@@ -1892,7 +1892,7 @@ def test_new_test_sessions_freeze_candidate_strength_for_result_cards(tmp_path, 
     assert payload["candidates"][0]["strength"] == 0.85
 
 
-def test_new_output_test_root_wins_same_name_collision_with_legacy_central(tmp_path, monkeypatch):
+def test_output_test_root_ignores_obsolete_central_name_collision(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench.app_config, "output_root", lambda: tmp_path / "creative")
     set_folder = tmp_path / "sets" / "demo"
@@ -1925,7 +1925,7 @@ def test_new_output_test_root_wins_same_name_collision_with_legacy_central(tmp_p
     assert [item["session"] for item in bench.list_sessions(set_folder)] == ["same-session"]
 
 
-def test_legacy_central_test_sessions_remain_readable_after_output_alignment(tmp_path, monkeypatch):
+def test_obsolete_central_test_sessions_are_not_discovered(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench.app_config, "output_root", lambda: tmp_path / "creative")
     set_folder = tmp_path / "sets" / "demo"
@@ -1940,7 +1940,9 @@ def test_legacy_central_test_sessions_remain_readable_after_output_alignment(tmp
         "results": [],
     })
 
-    assert bench.open_session(set_folder, "legacy-session")["session"] == "legacy-session"
+    assert bench.list_sessions(set_folder) == []
+    with pytest.raises(FileNotFoundError, match="this Set"):
+        bench.open_session(set_folder, "legacy-session")
 
 
 def test_output_root_session_media_and_rating_work_outside_fs_root(tmp_path, monkeypatch):
@@ -2025,7 +2027,7 @@ def test_central_test_sessions_are_scoped_to_their_owning_set(tmp_path, monkeypa
     first_set.mkdir(parents=True)
     second_set.mkdir(parents=True)
 
-    root = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR
+    root = tmp_path / "output" / bench.TEST_RESULTS_DIR
     first_session = root / "first-session"
     second_session = root / "second-session"
     first_session.mkdir(parents=True)
@@ -2056,7 +2058,7 @@ def test_central_test_sessions_are_scoped_to_their_owning_set(tmp_path, monkeypa
 def test_recent_test_sets_keep_same_historical_source_separate_by_owner(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
-    root = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR
+    root = tmp_path / "output" / bench.TEST_RESULTS_DIR
     for name, owner in (("first-session", "sets/first"), ("second-session", "sets/second")):
         session = root / name
         session.mkdir(parents=True)
@@ -2079,7 +2081,7 @@ def test_recent_test_sets_keep_same_historical_source_separate_by_owner(tmp_path
 def test_recent_test_sets_are_derived_from_central_session_owner_metadata(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench, "_recent_sets_cache", {"items": [], "expires": 0})
-    session = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR / "2026-09-23_1900-h3"
+    session = tmp_path / "output" / bench.TEST_RESULTS_DIR / "2026-09-23_1900-h3"
     session.mkdir(parents=True)
     bench._atomic_write_json(session / "test.json", {
         "status": "complete",
@@ -2105,7 +2107,7 @@ def test_historical_session_source_does_not_filter_set_history(tmp_path, monkeyp
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     folder = tmp_path / "sets" / "demo"
     folder.mkdir(parents=True)
-    root = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR
+    root = tmp_path / "output" / bench.TEST_RESULTS_DIR
     for name, source in (("old-a", "demo"), ("old-b", "archive/demo")):
         session = root / name
         session.mkdir(parents=True)
@@ -2122,7 +2124,7 @@ def test_historical_session_source_does_not_filter_set_history(tmp_path, monkeyp
 def test_recent_test_prompts_are_distinct_and_newest_first(tmp_path, monkeypatch):
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(bench, "_recent_prompts_cache", {"expires": 0.0, "items": [], "root": None})
-    root = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR
+    root = tmp_path / "output" / bench.TEST_RESULTS_DIR
     rows = (
         ("older-session", "sets/first", "portrait prompt", 100),
         ("newer-session", "sets/second", "portrait prompt", 300),
@@ -2170,7 +2172,7 @@ def test_session_history_is_scoped_by_set_and_model_not_historical_source(tmp_pa
     monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
     folder = tmp_path / "sets" / "demo"
     folder.mkdir(parents=True)
-    root = tmp_path / ".webcap" / bench.TEST_RESULTS_DIR
+    root = tmp_path / "output" / bench.TEST_RESULTS_DIR
     for name, model_id, source in (
         ("h3-session", "minimax_h3", "old/source-a"),
         ("krea-session", "krea2_raw", "old/source-b"),

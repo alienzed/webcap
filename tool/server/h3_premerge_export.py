@@ -11,7 +11,6 @@ import json
 import os
 from pathlib import Path
 import resource
-import subprocess
 import sys
 import time
 
@@ -93,7 +92,7 @@ def prepare_runtime(repo):
     return torch, mp, comfy.sd, comfy.utils, DTYPE_MAP
 
 
-def verify(export_file, manifest_file):
+def verify(export_file, manifest_file, publish_to=None):
     from safetensors import safe_open
 
     manifest = json.loads(Path(manifest_file).read_text(encoding="utf-8"))
@@ -138,6 +137,13 @@ def verify(export_file, manifest_file):
         raise RuntimeError("Reloaded H3 lost ConvRot quantization")
     print("[verify] ComfyUI CPU reload passed ({} tensors, {} quantized layers)".format(
         len(loaded), len(manifest["quant"])), flush=True)
+    if publish_to is not None:
+        target = Path(publish_to)
+        if target.exists():
+            raise FileExistsError("Output already exists: " + str(target))
+        os.replace(export_file, target)
+        Path(manifest_file).unlink(missing_ok=True)
+        print("[export] PASS: " + str(target), flush=True)
 
 
 def export(config_path, output_arg):
@@ -220,19 +226,15 @@ def export(config_path, output_arg):
                   metadata={"format": "pt", "export": "h3_eager_image_adapter_fusion"})
         print("[export] Saved {:.2f} GiB. Checking in a fresh process...".format(
             partial.stat().st_size / 1024**3), flush=True)
-        completed = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--verify",
-                                    str(partial), "--manifest", str(manifest_path)],
-                                   cwd=str(Path.cwd()), check=False)
-        if completed.returncode:
-            raise RuntimeError("Independent ComfyUI reload verification failed (exit {})".format(
-                completed.returncode))
-        os.replace(partial, target)
-        print("[export] PASS: " + str(target), flush=True)
         print("[export] Peak process RAM: {:.1f} GiB".format(
             resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024**2), flush=True)
-    finally:
-        manifest_path.unlink(missing_ok=True)
-        partial.unlink(missing_ok=True)
+        # Replace the exporter so only one giant H3 model exists at a time.
+        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve()),
+                                 "--verify", str(partial), "--manifest", str(manifest_path),
+                                 "--publish", str(target)])
+    except Exception:
+        # Retain an incomplete checkpoint for diagnosis, never publish it.
+        raise
 
 
 def main():
@@ -241,11 +243,12 @@ def main():
     parser.add_argument("--output", help="New .safetensors path (default: beside original)")
     parser.add_argument("--verify", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--manifest", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--publish", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.verify:
         if not args.manifest:
             parser.error("--verify requires --manifest")
-        verify(args.verify, args.manifest)
+        verify(args.verify, args.manifest, args.publish)
     else:
         if not args.config:
             parser.error("--config is required")

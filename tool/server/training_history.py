@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 import tomllib
 
 from . import config as app_config
-from .training_config_files import output_dir_from_config, training_config_path
+from .training_config_files import output_dir_from_config, training_config_path, h3_premerged_image_model_path
 from .training_action import managed_actions_for_folder, read_action
 from .training_profiles import config_for_id, config_for_stage
 from .training_run_manifest import selected_epoch as selected_run_epoch
@@ -361,6 +361,10 @@ def discover_runs(folder_path, stage=""):
                 if not entry.is_dir() or entry.is_symlink() or not _resume_artifacts(entry):
                     continue
                 saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, wanted_identity)
+                if saved_config is None and stage == "h3":
+                    image_identity = dict(wanted_identity)
+                    image_identity["diffusion_model"] = h3_premerged_image_model_path()
+                    saved_config, parsed_saved = _saved_config_for_candidate(entry, config_meta, image_identity)
                 if saved_config is None:
                     app_config.debug_print("[training_history] Skipping", entry, ": no matching", stage, "model config.")
                     continue
@@ -414,7 +418,7 @@ def resolve_managed_resume(folder_path, action_id, output_id, stage):
     return {"actionRoot": root, "action": action, "runPath": Path(validated["runPath"]), "stage": selected_stage, "point": validated}
 
 
-def validate_resumable_run_for_path(folder_path, stage, run_path):
+def validate_resumable_run_for_path(folder_path, stage, run_path, reference_config_path=None):
     """Validate one explicit trainer-run directory without managed discovery."""
     raw_path = str(run_path or "").strip()
     if not raw_path:
@@ -425,7 +429,7 @@ def validate_resumable_run_for_path(folder_path, stage, run_path):
     resume_artifacts = _resume_artifacts(directory)
     if not resume_artifacts:
         raise ValueError("Recorded resume directory has no valid latest DeepSpeed checkpoint: " + raw_path)
-    source_config = training_config_path(folder_path, stage)
+    source_config = Path(reference_config_path) if reference_config_path is not None else training_config_path(folder_path, stage)
     parsed_source = _parsed_config(source_config)
     if parsed_source is None:
         raise ValueError("Current training config is unreadable: " + str(source_config))
@@ -434,11 +438,21 @@ def validate_resumable_run_for_path(folder_path, stage, run_path):
     if wanted_identity is None:
         raise ValueError("Current training config has no valid model identity.")
     saved_config, parsed_saved = _saved_config_for_candidate(directory, config_meta, wanted_identity)
+    if saved_config is None and reference_config_path is None and stage == "h3":
+        # The optional image-training checkbox substitutes this known model
+        # only in the captured config, leaving the set's template unchanged.
+        # Managed checkpoint identity is verified against its saved config;
+        # do not treat other unrelated model files as interchangeable.
+        image_identity = dict(wanted_identity)
+        image_identity["diffusion_model"] = h3_premerged_image_model_path()
+        saved_config, parsed_saved = _saved_config_for_candidate(directory, config_meta, image_identity)
     if saved_config is None:
         raise ValueError("Resume directory has no readable compatible saved config: " + raw_path)
     point = resume_point_from_directory(folder_path, stage, raw_path)
     return {"path": raw_path, "runPath": raw_path, "stage": stage,
-            "matchType": "exact" if config_sha256(saved_config) == config_sha256(source_config) else "compatible", **point}
+            "matchType": "exact" if config_sha256(saved_config) == config_sha256(source_config) else "compatible",
+            "modelSource": parsed_saved["model"].get("diffusion_model", ""),
+            **point}
 
 
 def discovered_run_output_path(folder_path, stage, run_path):

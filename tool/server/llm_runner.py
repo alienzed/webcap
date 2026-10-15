@@ -553,7 +553,7 @@ def _execute_claimed(job_id, gpu_reserved):
                 chat_kwargs["context_size"] = overrides["contextSize"]
             messages = contract.get("messages")
             caption_operation = str(contract.get("operation") or "").strip()
-            if client == "caption" and caption_operation in {"caption_vision_validate", "vision_image_caption", "vision_caption_extras", "vision_schema_sight", "vision_vocabulary_sight"}:
+            if client == "caption" and caption_operation in {"caption_vision_validate", "vision_image_caption", "vision_caption_extras", "vision_question", "vision_schema_sight", "vision_vocabulary_sight"}:
                 from .storyboard_llm_runtime import prepare_caption_vision_messages
                 chat_kwargs["allow_image_data_urls"] = True
                 messages = prepare_caption_vision_messages(model_id, messages)

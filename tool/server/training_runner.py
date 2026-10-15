@@ -2806,7 +2806,7 @@ def start_response(
                 raise ValueError("The run is no longer in Training History.")
             if (str(continued_history.get("actionId") or "") != str(reuse_capture_action_id)
                     or str(continued_history.get("inputPath") or "") != str(reuse_capture_path)
-                    or str(continued_history.get("outputRunPath") or "") != str(resume_from_checkpoint)):
+                    or str(continued_history.get("resumeFromCheckpoint") or continued_history.get("outputRunPath") or "") != str(resume_from_checkpoint)):
                 raise ValueError("The requested continuation no longer matches its historical run.")
         if reuse_capture and (not str(reuse_capture_action_id or "").strip() or not str(reuse_capture_path or "").strip()):
             raise ValueError("Recent Run resume requires its recorded action and capture path.")

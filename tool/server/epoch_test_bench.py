@@ -900,6 +900,7 @@ def _staged_candidate_catalog(lora_files, model):
             "epoch": epoch,
             "stage": stage,
             "sourceFileName": str(provenance.get("sourceFileName") or "").strip(),
+            "trainingVariant": str(run_summary.get("trainingVariant") or "") if stage == "h3" else "",
             "selected": bool(selected and int(selected.get("epoch") or 0) == epoch),
             "selectedEpoch": selected,
         }

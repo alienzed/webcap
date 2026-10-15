@@ -1420,3 +1420,13 @@ def test_test_generations_sweep_is_opt_in_and_avoids_destructive_result_actions(
     assert "identity.primary += ' · Weight ' + String(result.strength);" in script
     assert "defaultStrength: defaultCandidateStrength" in script
     assert ".test-generations-sweep-setup" in css
+
+
+def test_staged_candidates_show_recorded_h3_variant_without_guessing():
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert '"trainingVariant": str(run_summary.get("trainingVariant") or "") if stage == "h3" else ""' in backend
+    assert "metadata.trainingVariant === 'Image Adapter'" in script
+    assert "imageMark.innerHTML = trainingH3ImageModelIconHtml();" in script
+    assert "[parts.detail, scoreText].filter(Boolean).join(' · ')" in script

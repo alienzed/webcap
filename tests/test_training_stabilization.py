@@ -1720,24 +1720,27 @@ def test_h3_image_adapter_checkbox_only_rewrites_captured_config(tmp_path, monke
     )
     parsed = tomllib.loads(Path(bundle["artifacts"]["h3Config"]).read_text(encoding="utf-8"))
     assert "cfg" not in parsed["model"]
-    assert parsed["model"]["merge_adapters"] == [
-        str(models / "adapters" / "minimax_h3_image_training_adapter.safetensors")
-    ]
+    assert parsed["model"]["diffusion_model"] == str(
+        models / "Stable-diffusion" / "mh3" / "minimax_h3_fl2va_pruned_int8_convrot_image_adapter_fused.safetensors"
+    )
+    assert "merge_adapters" not in parsed["model"]
+    assert "h3FusionLauncher" not in bundle["artifacts"]
     assert (folder / "config.h3.toml").read_text(encoding="utf-8") == original
 
 
 def test_h3_adapter_rewrite_removes_cfg_and_keeps_other_model_settings(tmp_path, monkeypatch):
     from tool.server import config as app_config
-    from tool.server.training_config_files import apply_h3_image_training_adapter
+    from tool.server.training_config_files import apply_h3_premerged_image_model
 
     monkeypatch.setitem(app_config.config["filesystem"], "models", str(tmp_path / "models"))
-    source = "[model]\ncfg = 4\nshift = 8\n"
-    parsed = tomllib.loads(apply_h3_image_training_adapter(source))
+    source = "[model]\ncfg = 4\nshift = 8\nmerge_adapters = [\"old.safetensors\"]\ndiffusion_model = \"old_model.safetensors\"\n"
+    parsed = tomllib.loads(apply_h3_premerged_image_model(source))
     assert "cfg" not in parsed["model"]
     assert parsed["model"]["shift"] == 8
-    assert parsed["model"]["merge_adapters"] == [
-        str(tmp_path / "models" / "adapters" / "minimax_h3_image_training_adapter.safetensors")
-    ]
+    assert parsed["model"]["diffusion_model"] == str(
+        tmp_path / "models" / "Stable-diffusion" / "mh3" / "minimax_h3_fl2va_pruned_int8_convrot_image_adapter_fused.safetensors"
+    )
+    assert "merge_adapters" not in parsed["model"]
     assert tomllib.loads(source)["model"]["cfg"] == 4
 
 

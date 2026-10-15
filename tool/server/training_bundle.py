@@ -558,6 +558,10 @@ def materialize_training_bundle(
                 to_wsl_path(captured_initializer["path"], distribution),
                 initializer.get("forceConstantLr"),
             )
+        if stage == "h3" and isinstance(stage_config_settings, dict) and stage_config_settings.get("h3ImageTrainingAdapter"):
+            fusion_launcher = configs_root / "h3_force_fusion_launcher.py"
+            shutil.copy2(Path(__file__).with_name("h3_force_fusion_launcher.py"), fusion_launcher)
+            bundle_artifacts["h3FusionLauncher"] = fusion_launcher
         config_target = configs_root / item["file"]
         config_target.write_text(config_text, encoding="utf-8")
         bundle_artifacts[stage + "Config"] = config_target

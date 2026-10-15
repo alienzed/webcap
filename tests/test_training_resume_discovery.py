@@ -83,3 +83,42 @@ def test_discovery_exposes_only_previous_direct_child_resume_points(tmp_path, mo
     points = training_history.discover_runs(folder, "h3")[0]["resumePoints"]
     assert points == [{"tag": "global_step20", "step": 20}, {"tag": "global_step10", "step": 10}]
     assert training_history.discover_runs(folder, "h3")[0]["resumeOutputId"] == "output/managed-run"
+
+
+
+def test_h3_premerged_checkpoint_can_resume_without_rewriting_set_model(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    from tool.server.training_config_files import h3_premerged_image_model_path
+    monkeypatch.setitem(app_config.config["filesystem"], "models", str(tmp_path / "models"))
+    folder = _set(tmp_path)
+    action, action_data = _action(folder)
+    source = folder / "config.h3.toml"
+    _write_h3_config(source, action / "output", model="standard-h3")
+    fused = h3_premerged_image_model_path()
+    recorded = source.read_text(encoding="utf-8").replace("standard-h3", fused)
+    run = _checkpoint(action / "output", "fused-run", recorded)
+    resolved = training_history.validate_resumable_run_for_path(folder, "h3", str(run))
+    assert resolved["checkpointAvailable"] is True
+    assert resolved["matchType"] == "compatible"
+    managed = training_history.resolve_managed_resume(folder, action_data["actionId"], "output/fused-run", "h3")
+    assert managed["runPath"] == run
+    assert [item["path"] for item in training_history.discover_runs(folder, "h3")] == [str(run)]
+    assert "standard-h3" in source.read_text(encoding="utf-8")
+
+
+def test_checkpoint_resume_verifies_against_captured_model_and_rejects_mismatch(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    source = folder / "config.h3.toml"
+    _write_h3_config(source, tmp_path / "output", model="standard-h3")
+    captured = tmp_path / "captured.toml"
+    captured.write_text(source.read_text(encoding="utf-8").replace("standard-h3", "special-h3"), encoding="utf-8")
+    recorded = _checkpoint(tmp_path / "output", "run", captured.read_text(encoding="utf-8"))
+    assert training_history.validate_resumable_run_for_path(
+        folder, "h3", str(recorded), reference_config_path=captured
+    )["checkpointAvailable"] is True
+    captured.write_text(source.read_text(encoding="utf-8").replace("standard-h3", "different-h3"), encoding="utf-8")
+    with pytest.raises(ValueError, match="no readable compatible saved config"):
+        training_history.validate_resumable_run_for_path(
+            folder, "h3", str(recorded), reference_config_path=captured
+        )

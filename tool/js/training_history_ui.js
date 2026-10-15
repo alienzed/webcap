@@ -709,6 +709,7 @@ function resumeTrainingHistoryJob(jobId) {
     body: JSON.stringify({
       folder: job.folder,
       queue: true,
+      parentJobId: job.id,
       stages: resumeStage,
       resumeStage: resumeStage,
       resumeFromCheckpoint: resumePath,

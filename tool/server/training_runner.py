@@ -443,7 +443,13 @@ def _sync_job_history(job):
         return "Training outcome has no set folder."
     try:
         folder_path = app_config.safe_join_fs_root(folder)
-        record_job(folder_path, job)
+        previous = job.get("continuedHistoryRecord")
+        if (job.get("status") == "failed" and isinstance(previous, dict)
+                and not job.get("logPath") and not job.get("activeTrainingSessionStartedAt")):
+            # A failed launch did not continue training; restore the prior outcome.
+            record_job(folder_path, previous)
+        else:
+            record_job(folder_path, job)
     except Exception as exc:
         return "Could not persist Training History: " + str(exc)
     return ""
@@ -451,20 +457,25 @@ def _sync_job_history(job):
 
 def _sync_histories(state):
     errors = []
+    failed_ids = set()
     for job in state.get("jobs", []):
         error = _sync_job_history(job)
         if error:
             errors.append(error)
-    return errors
+            failed_ids.add(str(job.get("id") or ""))
+    return errors, failed_ids
 
 
-def _retire_terminal_jobs(state):
+def _retire_terminal_jobs(state, failed_history_ids=()):
     """Keep only scheduler work; Training History never gates queue retirement."""
     retained = []
     retired_job_ids = set()
     for job in state.get("jobs", []):
         status = str(job.get("status") or "")
         job_id = str(job.get("id") or "")
+        if status in HISTORY_STATUSES and job_id in failed_history_ids:
+            retained.append(job)
+            continue
         if status == "cancelled" or status in HISTORY_STATUSES:
             retired_job_ids.add(job_id)
             continue
@@ -474,10 +485,28 @@ def _retire_terminal_jobs(state):
 
 
 def _persist_reconciled_state(state):
-    history_errors = _sync_histories(state) or []
+    history_errors, failed_history_ids = _sync_histories(state)
     for error in history_errors:
         _logger.error(error)
-    retired_job_ids = _retire_terminal_jobs(state)
+    # A queued History continuation is already durable in the queue. If a prior
+    # history-index removal was interrupted, finish that transfer on refresh.
+    for job in state.get("jobs", []):
+        previous_id = str(job.get("continuedHistoryJobId") or "").strip()
+        if not previous_id or job.get("status") == "cancelled":
+            continue
+        if str(job.get("id") or "") in failed_history_ids:
+            continue
+        if (job.get("status") == "failed" and isinstance(job.get("continuedHistoryRecord"), dict)
+                and not job.get("logPath") and not job.get("activeTrainingSessionStartedAt")):
+            continue
+        try:
+            folder = app_config.safe_join_fs_root(str(job.get("folder") or ""))
+            clear_history_job(folder, previous_id)
+        except (OSError, ValueError) as exc:
+            _logger.error("Could not reconcile continued Training History %s: %s", previous_id, exc)
+            if job.get("status") in HISTORY_STATUSES:
+                failed_history_ids.add(str(job.get("id") or ""))
+    retired_job_ids = _retire_terminal_jobs(state, failed_history_ids)
     if retired_job_ids:
         _write_state(state, retired_job_ids=retired_job_ids)
     else:
@@ -2141,6 +2170,8 @@ def _populate_queued_resume_point(job, folder_path=None):
 
 def _queue_paused_job(job):
     """Return paused work to the front as ordinary queued resume intent."""
+    if job.get("startedAt") and not job.get("firstStartedAt"):
+        job["firstStartedAt"] = job["startedAt"]
     resume_path = str(job.get("outputRunPath") or job.get("resumeFromCheckpoint") or "").strip()
     if resume_path:
         job["resumeFromCheckpoint"] = resume_path
@@ -2763,6 +2794,20 @@ def start_response(
                     " free; at least " + _format_gib(_LOW_DISK_THRESHOLD_BYTES) + " required.",
             }, 409
         reuse_capture = bool(str(reuse_capture_action_id or "").strip() or str(reuse_capture_path or "").strip())
+        continued_history = None
+        if parent_job_id:
+            if not reuse_capture:
+                raise ValueError("Continuing a historical run requires its recorded capture.")
+            continued_history = next(
+                (item for item in read_history(folder_path)["jobs"] if str(item.get("id") or "") == str(parent_job_id)),
+                None,
+            )
+            if not continued_history:
+                raise ValueError("The run is no longer in Training History.")
+            if (str(continued_history.get("actionId") or "") != str(reuse_capture_action_id)
+                    or str(continued_history.get("inputPath") or "") != str(reuse_capture_path)
+                    or str(continued_history.get("resumeFromCheckpoint") or continued_history.get("outputRunPath") or "") != str(resume_from_checkpoint)):
+                raise ValueError("The requested continuation no longer matches its historical run.")
         if reuse_capture and (not str(reuse_capture_action_id or "").strip() or not str(reuse_capture_path or "").strip()):
             raise ValueError("Recent Run resume requires its recorded action and capture path.")
         review = None if reuse_capture else prepare_training_review(
@@ -2878,10 +2923,18 @@ def start_response(
         preflight = {"checks": [], "summary": {"blockers": 0, "warnings": 0}}
         job = _new_job(
             str(folder).strip(), preflight, stages, bundle, output_root, output_dir,
-            resume_path, resume_stage, "", selected_profile["id"], selected_run["id"],
-            action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id, 0,
+            resume_path, resume_stage, parent_job_id if continued_history else "", selected_profile["id"], selected_run["id"],
+            action_root, str(action.get("runName") or run_name), resume_action_id, resume_output_id,
+            continued_history.get("activeTrainingSeconds") if continued_history else 0,
             resume_checkpoint_tag=resume_checkpoint_tag,
         )
+        if continued_history:
+            if any(str(item.get("continuedHistoryJobId") or "") == str(parent_job_id) for item in state["jobs"]):
+                return {"ok": False, "error": "This historical run is already continuing in the queue."}, 409
+            if not any(str(item.get("id") or "") == str(parent_job_id) for item in read_history(folder_path)["jobs"]):
+                return {"ok": False, "error": "This run has already left Training History."}, 409
+            job["continuedHistoryJobId"] = str(parent_job_id)
+            job["continuedHistoryRecord"] = continued_history
         job["resumePoint"] = resume_point
         job["trainingSettings"] = dict(effective_config_settings)
         def record_capture(data):
@@ -2905,6 +2958,18 @@ def start_response(
             [item for item in state["jobs"] if item.get("status") in ACTIVE_STATUSES],
             [item for item in state["jobs"] if item.get("status") in QUEUE_STATUSES],
         )
+        if continued_history:
+            # Persist the new owner before removing the old History entry.
+            # A crash between writes leaves a duplicate, never a lost run.
+            _write_state(state)
+            try:
+                clear_history_job(folder_path, parent_job_id)
+            except (OSError, ValueError) as exc:
+                return {
+                    "ok": False,
+                    "error": "The continuation is queued, but removing its old History entry failed: " + str(exc),
+                    "job": _public_job(job),
+                }, 500
         if not active and not state.get("queuePaused"):
             _launch_next_queued_job(state)
         _write_state(state)
@@ -3092,6 +3157,8 @@ def _finish_queued_resume(job):
         job["progress"] = progress
 
     job["outputRunPath"] = str(run_path)
+    if job.get("firstStartedAt") and not job.get("startedAt"):
+        job["startedAt"] = job["firstStartedAt"]
     job["status"] = "finished_early"
     job["stage"] = "finished_early"
     job["finishedAt"] = now
@@ -3104,6 +3171,40 @@ def _finish_queued_resume(job):
     job.pop("finishScheduledAt", None)
     job.pop("finishTriggeredEpoch", None)
     _annotate_finished_early_job(job)
+
+
+def _return_queued_job_to_history(job):
+    """Make a previously executed run historical before removing queued intent."""
+    folder = app_config.safe_join_fs_root(str(job.get("folder") or ""))
+    previous = job.get("continuedHistoryRecord")
+    was_launched = bool(job.get("logPath") or job.get("firstStartedAt") or job.get("startedAt"))
+    if not was_launched:
+        if isinstance(previous, dict):
+            # Continuing was requested but never actually restarted.
+            record_job(folder, previous)
+        return False
+
+    now = time.time()
+    job["status"] = "stopped"
+    job["stage"] = "stopped"
+    job["finishedAt"] = now
+    job["updatedAt"] = now
+    job.pop("error", None)
+    original_start = job.get("firstStartedAt") or job.get("startedAt")
+    if original_start:
+        job["startedAt"] = original_start
+    resume_point = job.get("resumePoint") if isinstance(job.get("resumePoint"), dict) else {}
+    progress = dict(job.get("progress") or {})
+    for field, point_field in (("epoch", "epoch"), ("epochs", "expectedEpochs"), ("step", "step")):
+        if resume_point.get(point_field) is not None:
+            progress[field] = resume_point[point_field]
+    if progress:
+        progress.setdefault("stage", str(job.get("resumeStage") or job.get("stages") or ""))
+        job["progress"] = progress
+    # The ordinary reconciliation path clears the preceding History row only
+    # after this new outcome is recorded, and retains the queue row on error.
+    record_job(folder, job)
+    return True
 
 
 def stop_response(job_id, cancel=False, pause=False, finish=False):
@@ -3123,12 +3224,17 @@ def stop_response(job_id, cancel=False, pause=False, finish=False):
                 _persist_reconciled_state(state)
                 return {"ok": True, "job": _public_job(job)}, 200
             if job.get("status") in QUEUE_STATUSES and cancel:
-                job["status"] = "cancelled"
-                job["stage"] = "cancelled"
-                job["finishedAt"] = time.time()
-                job["updatedAt"] = time.time()
+                try:
+                    moved_to_history = _return_queued_job_to_history(job)
+                except (OSError, RuntimeError, ValueError) as exc:
+                    return {"ok": False, "error": "Could not preserve the run in Training History: " + str(exc)}, 500
+                if not moved_to_history:
+                    job["status"] = "cancelled"
+                    job["stage"] = "cancelled"
+                    job["finishedAt"] = time.time()
+                    job["updatedAt"] = time.time()
                 _persist_reconciled_state(state)
-                return {"ok": True, "job": _public_job(job)}, 200
+                return {"ok": True, "job": _public_job(job), "movedToHistory": moved_to_history or bool(job.get("continuedHistoryRecord"))}, 200
 
         _refresh_state(state)
         job = _find_job(state, job_id)

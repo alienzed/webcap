@@ -1636,7 +1636,9 @@ def test_terminal_training_job_retires_even_if_history_write_fails(tmp_path, mon
 
     training_runner._persist_reconciled_state(state)
 
-    assert state["jobs"] == []
+    # Never discard the sole record of completed work when History cannot save.
+    assert [job["id"] for job in state["jobs"]] == ["terminal"]
+    assert training_runner._read_state()["jobs"][0]["status"] == "completed"
 
 
 def test_training_run_settings_are_bounded_and_dropout_zero_is_omitted():
@@ -2032,3 +2034,123 @@ def test_training_mode_retirement_keeps_only_legacy_read_compatibility():
     visible_current = training_runner._public_job(current)
     assert "mode" not in visible_current
     assert "datasetTarget" not in visible_current
+
+
+def test_cancel_paused_training_moves_checkpointed_run_to_history(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    checkpoint = tmp_path / "output" / "existing-run"
+    checkpoint.mkdir(parents=True)
+    (checkpoint / "latest").write_text("global_step700\\n", encoding="utf-8")
+    (checkpoint / "global_step700").mkdir()
+    job = {
+        "id": "paused-run", "folder": "sets/subject", "status": "queued",
+        "stage": "queued", "stages": "h3", "outputRunPath": str(checkpoint),
+        "resumeFromCheckpoint": str(checkpoint),
+        "firstStartedAt": 100.0, "logPath": str(tmp_path / "run.log"),
+        "resumePoint": {"epoch": 7, "step": 700, "expectedEpochs": 90},
+    }
+    training_runner._write_state({
+        "version": 3, "activeJobId": "", "queuePaused": True,
+        "queuePauseReason": "paused", "jobs": [job],
+    })
+    monkeypatch.setattr(training_runner, "_recover_queued_live_runner", lambda _job: False)
+
+    payload, status = training_runner.stop_response("paused-run", cancel=True)
+    assert status == 200 and payload["movedToHistory"] is True
+    assert training_runner._read_state()["jobs"] == []
+    history = training_history.read_history(folder)["jobs"]
+    assert [item["id"] for item in history] == ["paused-run"]
+    assert history[0]["status"] == "stopped"
+    assert history[0]["progress"]["epoch"] == 7
+    assert (checkpoint / "global_step700").is_dir()
+
+
+def test_cancel_unstarted_history_continuation_restores_previous_record(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    original = {
+        "id": "original", "folder": "sets/subject", "stages": "h3",
+        "status": "finished_early", "progress": {"epoch": 10},
+        "outputRunPath": "/runs/original",
+    }
+    training_history.record_job(folder, original)
+    assert training_history.clear_history_job(folder, "original")
+    job = {
+        "id": "continuation", "folder": "sets/subject", "stages": "h3",
+        "status": "queued", "stage": "queued",
+        "continuedHistoryJobId": "original",
+        "continuedHistoryRecord": original,
+    }
+    training_runner._write_state({
+        "version": 3, "activeJobId": "", "queuePaused": True,
+        "queuePauseReason": "", "jobs": [job],
+    })
+    monkeypatch.setattr(training_runner, "_recover_queued_live_runner", lambda _job: False)
+    payload, status = training_runner.stop_response("continuation", cancel=True)
+    assert status == 200 and payload["movedToHistory"] is True
+    assert training_runner._read_state()["jobs"] == []
+    history = training_history.read_history(folder)["jobs"]
+    assert len(history) == 1
+    assert history[0]["id"] == "original"
+    assert history[0]["progress"]["epoch"] == 10
+
+
+def test_cancel_paused_run_does_not_retire_when_history_write_fails(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    training_runner._write_state({
+        "version": 3, "activeJobId": "", "queuePaused": True,
+        "queuePauseReason": "", "jobs": [{
+            "id": "paused", "folder": "sets/subject", "stages": "h3",
+            "status": "queued", "firstStartedAt": 100.0,
+        }],
+    })
+    monkeypatch.setattr(training_runner, "_recover_queued_live_runner", lambda _job: False)
+    monkeypatch.setattr(training_runner, "record_job",
+                        lambda *_args: (_ for _ in ()).throw(OSError("disk full")))
+    payload, status = training_runner.stop_response("paused", cancel=True)
+    assert status == 500
+    assert "disk full" in payload["error"]
+    assert training_runner._read_state()["jobs"][0]["id"] == "paused"
+
+
+def test_unlaunched_history_continuation_failure_restores_original(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    folder = _set(tmp_path)
+    previous = {
+        "id": "prior", "folder": "sets/subject", "stages": "h3",
+        "status": "finished_early", "progress": {"epoch": 12},
+    }
+    training_runner._write_state({
+        "version": 3, "activeJobId": "", "queuePaused": True,
+        "queuePauseReason": "", "jobs": [{
+            "id": "next", "folder": "sets/subject", "stages": "h3",
+            "status": "failed", "stage": "launch",
+            "continuedHistoryJobId": "prior", "continuedHistoryRecord": previous,
+        }],
+    })
+    state = training_runner._read_state()
+    training_runner._persist_reconciled_state(state)
+    assert training_runner._read_state()["jobs"] == []
+    history = training_history.read_history(folder)["jobs"]
+    assert len(history) == 1
+    assert history[0]["id"] == "prior"
+    assert history[0]["progress"]["epoch"] == 12
+
+
+def test_history_sync_failure_keeps_terminal_continuation_in_queue(tmp_path, monkeypatch):
+    _configure_root(monkeypatch, tmp_path)
+    _set(tmp_path)
+    training_runner._write_state({
+        "version": 3, "activeJobId": "", "queuePaused": True,
+        "queuePauseReason": "", "jobs": [{
+            "id": "next", "folder": "sets/subject", "stages": "h3",
+            "status": "finished_early", "continuedHistoryJobId": "prior",
+            "continuedHistoryRecord": {"id": "prior", "status": "finished_early"},
+        }],
+    })
+    monkeypatch.setattr(training_runner, "record_job",
+                        lambda *_args: (_ for _ in ()).throw(OSError("disk full")))
+    training_runner._persist_reconciled_state(training_runner._read_state())
+    assert training_runner._read_state()["jobs"][0]["id"] == "next"

@@ -200,6 +200,7 @@ function renderTrainingHistory() {
     var modelSource = modelSourcePath.split(/[\\/]/).pop();
     var stageLabel = trainingStageLabel(job.stages || '');
     var profileLabel = modelLabel + (stageLabel && stageLabel.toLowerCase() !== modelLabel.toLowerCase() ? ' · ' + stageLabel : '');
+    var runConfig = job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
     var runDisplayName = trainingHistoryRunDisplayName(job, profileLabel);
     var runIdentity = String(job.actionId || job.id || "").trim();
     var runSequence = String(job.sequence || "").replace(/^0+(?=\d)/, "");
@@ -213,7 +214,6 @@ function renderTrainingHistory() {
     var checkpointStage = String(job.stage || job.stages || '').toLowerCase();
     var canOpenCheckpointRun = !!(checkpointLabel && job.folder && job.outputRunPath && ['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(checkpointStage) !== -1);
     var runDirectory = String(job.outputRunPath || '').trim();
-    var runConfig = job.runSummary && typeof job.runSummary === 'object' ? job.runSummary : {};
     var capturedItems = Number(job.capturedItemCount || runConfig.capturedItems || 0);
     var startedAt = Number(job.startedAt || 0);
     var finishedAt = Number(job.finishedAt || 0);

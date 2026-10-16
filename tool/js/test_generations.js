@@ -51,6 +51,172 @@
     activityLoadModelId: ''
   };
 
+  // Ephemeral Test VL batch; observations never enter session files or Set metadata.
+  var testVl = { scope: '', entries: Object.create(null), running: false, token: 0, jobId: '', done: 0, total: 0, question: '' };
+
+  function testVlScope(status) {
+    return String(launchFolder || '') + '|' + String(status && status.session || '');
+  }
+
+  function stopTestVl() {
+    if (!testVl.running) return;
+    var jobId = testVl.jobId;
+    testVl.token += 1;
+    testVl.running = false;
+    testVl.jobId = '';
+    Object.keys(testVl.entries).forEach(function (file) {
+      var entry = testVl.entries[file];
+      if (entry.status === 'pending' || entry.status === 'running') entry.status = 'stopped';
+    });
+    if (jobId) cancelCaptionAssistJob(jobId).catch(function (err) {
+      reportConsoleError('Test VL cancellation', err);
+    });
+    syncTestVlCards();
+  }
+
+  function testVlQuestion(status) {
+    // Ask about every wildcard dimension without disclosing its resolved choice.
+    var source = String(status.sourcePrompt || '').replace(/\{[^{}]*\|[^{}]*\}/g, '[attribute]');
+    source = source.replace(/^\s*#[^\n]*/gm, '').trim();
+    if (!source.includes('[attribute]')) {
+      return 'Describe this image in detail, including visible subject attributes, distinctive details and setting. Say unclear for anything not visible.';
+    }
+    return 'Describe what is visibly present for every attribute marked [attribute] in this template. ' +
+      'Use the surrounding nouns and relationships to identify each attribute. ' +
+      'If not visible, say unclear. Do not infer an attribute from the template. ' +
+      'Also mention other distinctive visible details.\n\n' + source;
+  }
+
+  function syncTestVlControls() {
+    var button = el('test-generations-ask-vl');
+    var progress = el('test-generations-vl-progress');
+    if (!button || !progress) throw new Error('Test VL controls are missing.');
+    var results = currentStatus && Array.isArray(currentStatus.results) ? currentStatus.results : [];
+    button.disabled = !testVl.running && (!currentSession || !results.some(function (r) { return !!resultMediaFile(r); }));
+    button.textContent = testVl.running ? 'Stop VL' : 'Ask VL';
+    var sameScope = testVl.scope === testVlScope(currentStatus);
+    progress.textContent = !sameScope ? '' : testVl.running ? (testVl.done + ' / ' + testVl.total) :
+      (testVl.total ? (testVl.done + ' / ' + testVl.total + ' processed') : '');
+  }
+
+  function renderTestVlCard(card, result) {
+    var file = resultMediaFile(result);
+    if (!file) return;
+    var item = testVl.scope === testVlScope(currentStatus) ? testVl.entries[file] : null;
+    var footer = card.querySelector('.test-generations-result-footer');
+    if (!footer) return;
+    var button = footer.querySelector('[data-test-vl-result]');
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'review-captions-btn test-generations-vl-result';
+      button.dataset.testVlResult = file;
+      footer.appendChild(button);
+    }
+    button.textContent = item ? ({pending:'Queued',running:'Analyzing…',done:'VL ✓',error:'VL error',stopped:'VL stopped'}[item.status] || 'VL') : '';
+    button.classList.toggle('hidden', !item);
+    if (!item) return;
+    button.title = item.status === 'done' ? 'Open VL description' : item.status === 'error' ? 'Open VL error' : item.status;
+  }
+
+  function syncTestVlCards() {
+    var results = currentStatus && Array.isArray(currentStatus.results) ? currentStatus.results : [];
+    ['test-generations-results','test-generations-compare'].forEach(function (id) {
+      var host = el(id);
+      if (!host) return;
+      Array.prototype.forEach.call(host.querySelectorAll('.test-generations-result-card, .test-generations-compare-item'), function (card) {
+        var file = String(card.dataset.testVlFile || '');
+        if (!file) return;
+        var result = results.find(function (r) { return resultMediaFile(r) === file; });
+        if (result) renderTestVlCard(card, result);
+      });
+    });
+    syncTestVlControls();
+  }
+
+  function showTestVlResult(file) {
+    if (testVl.scope !== testVlScope(currentStatus)) return;
+    var entry = testVl.entries[file];
+    if (!entry) return;
+    var panel = el('test-generations-vl-detail');
+    el('test-generations-vl-detail-title').textContent = file + ' · ' + (entry.status === 'done' ? 'VL description' : entry.status);
+    el('test-generations-vl-expected').textContent = String(currentStatus.resolvedPrompt || currentStatus.prompt || '');
+    el('test-generations-vl-question').textContent = entry.question || '';
+    el('test-generations-vl-answer').textContent = entry.text || (entry.status === 'error' ? entry.error : 'Not completed.');
+    panel.classList.remove('hidden');
+  }
+
+  function runTestVlBatch() {
+    if (testVl.running) { stopTestVl(); return; }
+    var status = currentStatus;
+    var session = String(status.session || '');
+    var folder = String(launchFolder || '');
+    var results = (Array.isArray(status.results) ? status.results : []).filter(function (r) { return !!resultMediaFile(r); });
+    if (!session || !results.length) return;
+    var token = ++testVl.token;
+    testVl.scope = testVlScope(status);
+    testVl.entries = Object.create(null);
+    testVl.running = true;
+    testVl.jobId = '';
+    testVl.done = 0;
+    testVl.total = results.length;
+    testVl.question = testVlQuestion(status);
+    el('test-generations-vl-detail').classList.add('hidden');
+    results.forEach(function (r) { testVl.entries[resultMediaFile(r)] = { status: 'pending', question: testVl.question }; });
+    syncTestVlCards();
+    loadCaptionVisionCapabilities().then(function () {
+      var model = getCaptionVisionModelId();
+      if (!model) throw new Error('Select an available Vision model.');
+      return results.reduce(function (chain, result) {
+        return chain.then(function () {
+          if (token !== testVl.token) return;
+          var file = resultMediaFile(result);
+          var entry = testVl.entries[file];
+          entry.status = 'running';
+          syncTestVlCards();
+          return captionAssistRequestJson('/fs/test_generations/vision-question', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder: folder, session: session, media: file, model: model, question: testVl.question })
+          }).then(function (payload) {
+            if (!payload.job || !payload.job.jobId) throw new Error('Test VL did not return a job.');
+            trackTransientLlmJob(payload.job);
+            if (token !== testVl.token) return cancelCaptionAssistJob(payload.job.jobId);
+            testVl.jobId = String(payload.job.jobId);
+            return waitForCaptionAssistJob(payload.job);
+          }).then(function (job) {
+            if (token !== testVl.token) return;
+            entry.text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
+            entry.status = 'done';
+          }).catch(function (err) {
+            if (token !== testVl.token) return;
+            entry.status = 'error';
+            entry.error = String(err && err.message ? err.message : err);
+            reportConsoleError('Test Generations Ask VL: ' + file, err);
+          }).finally(function () {
+            if (token !== testVl.token) return;
+            testVl.jobId = '';
+            testVl.done += 1;
+            syncTestVlCards();
+          });
+        });
+      }, Promise.resolve());
+    }).catch(function (err) {
+      if (token !== testVl.token) return;
+      reportConsoleError('Test Generations Ask VL', err);
+      Object.keys(testVl.entries).forEach(function (file) {
+        var entry = testVl.entries[file];
+        if (entry.status !== 'pending') return;
+        entry.status = 'error';
+        entry.error = String(err && err.message ? err.message : err);
+      });
+    }).finally(function () {
+      if (token !== testVl.token) return;
+      testVl.running = false;
+      syncTestVlCards();
+    });
+  }
+
   function el(id) { return document.getElementById(id); }
 
   function owningSetFolder(folder) {
@@ -2568,6 +2734,7 @@
     pair.forEach(function (result) {
       var item = document.createElement('article');
       item.className = 'test-generations-compare-item';
+      item.dataset.testVlFile = resultMediaFile(result);
 
       var preview = appendTestPreview(item, sessionName, result, { muted: true });
       if (preview && preview.tagName === 'VIDEO') videos.push(preview);
@@ -2575,6 +2742,7 @@
       var remove = buildResultRemoveButton(result);
       if (remove) item.appendChild(remove);
       item.appendChild(buildResultFooter(result, { sessionName: sessionName, status: status }));
+      renderTestVlCard(item, result);
       stage.appendChild(item);
     });
 
@@ -2618,6 +2786,7 @@
     var live = status && (status.status === 'running' || status.status === 'stopping');
     var resultScope = sessionName + '|' + resultFolder;
     var priorScope = String(host.dataset.resultScope || '');
+    if (testVl.scope && testVl.scope !== testVlScope(status) && testVl.running) stopTestVl();
 
     if (priorScope !== resultScope) {
       host.innerHTML = '';
@@ -2649,12 +2818,14 @@
       );
       if (existing) {
         syncResultElapsed(existing, result, false);
+        renderTestVlCard(existing, result);
         return;
       }
 
       var card = document.createElement('article');
       card.className = 'test-generations-result-card';
       card.dataset.resultKey = resultKey;
+      card.dataset.testVlFile = mediaFile;
 
       if (sessionName && mediaFile) {
         appendTestPreview(card, sessionName, result);
@@ -2668,6 +2839,7 @@
       var remove = buildResultRemoveButton(result);
       if (remove) card.appendChild(remove);
       card.appendChild(buildResultFooter(result, { sessionName: sessionName, status: status }));
+      renderTestVlCard(card, result);
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);
@@ -2744,6 +2916,7 @@
       pending.remove();
     }
     syncPendingElapsed(status);
+    syncTestVlControls();
 
     if (!results.length && !failures.length && !live && !host.querySelector('.test-generations-result-card')) {
       host.innerHTML = '<div class="test-generations-empty">Generated previews will appear here.</div>';
@@ -3239,7 +3412,9 @@
   }
 
   function renderStatus(status) {
+    var previousScope = testVlScope(currentStatus);
     currentStatus = status || {};
+    if (previousScope !== testVlScope(currentStatus)) el('test-generations-vl-detail').classList.add('hidden');
     syncActiveRunControls(status || {});
     syncSessionSelection();
     var statusEl = el('test-generations-status');
@@ -3253,6 +3428,7 @@
     renderSessionMeta(status || {});
     syncVisibleSessionProgress(status || {});
     renderResults(status || {});
+    syncTestVlCards();
   }
 
   function testStatusHasPendingWork(status) {
@@ -3356,6 +3532,7 @@
       clearTimeout(pollTimer);
       pollTimer = null;
     }
+    stopTestVl();
     refreshActivityButton();
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
@@ -3418,6 +3595,7 @@
     if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
     var node = pane();
     var frame = el('app-frame');
+    stopTestVl();
     var summary = el('test-generations-summary');
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
@@ -3729,6 +3907,8 @@
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
+    el('test-generations-ask-vl').onclick = runTestVlBatch;
+    el('test-generations-vl-detail-close').onclick = function () { el('test-generations-vl-detail').classList.add('hidden'); };
     el('test-generations-wildcard-btn').onclick = function () {
       try {
         openWildcardBuilder();
@@ -3941,6 +4121,8 @@
       if (row) openSession(row.dataset.sessionName);
     };
     el('test-generations-results').onclick = function (event) {
+      var vl = event.target.closest('[data-test-vl-result]');
+      if (vl) { showTestVlResult(vl.dataset.testVlResult); return; }
       var rating = event.target.closest('[data-test-rating]');
       if (rating) {
         rateTestResult(rating);
@@ -3953,6 +4135,8 @@
       }
     };
     el('test-generations-compare').onclick = function (event) {
+      var vl = event.target.closest('[data-test-vl-result]');
+      if (vl) { showTestVlResult(vl.dataset.testVlResult); return; }
       var rating = event.target.closest('[data-test-rating]');
       if (rating) {
         rateTestResult(rating);

@@ -1230,12 +1230,19 @@
                                     <span id="test-generations-wildcard-tagline" class="test-generations-wildcard-tagline hidden"></span>
                                     <button id="test-generations-session-info-btn" type="button" class="test-generations-session-info-btn hidden" title="View frozen session settings and resolved prompt" aria-label="View frozen session settings and resolved prompt" aria-expanded="false">Details</button>
                                 </div>
+                                <div class="test-generations-vl-toolbar"><button id="test-generations-ask-vl" class="review-captions-btn" type="button" disabled>Ask VL</button><span id="test-generations-vl-progress" class="small" aria-live="polite"></span></div>
                                 <div class="test-generations-view-tabs" role="tablist" aria-label="Results view">
                                     <button id="test-generations-view-grid-btn" type="button" class="test-generations-view-tab active" role="tab" aria-selected="true">Grid</button>
                                     <button id="test-generations-view-compare-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Compare</button>
                                 </div>
                             </div>
                             <div id="test-generations-session-details" class="test-generations-session-details hidden"></div>
+                            <section id="test-generations-vl-detail" class="test-generations-vl-detail hidden" aria-label="Test VL result">
+                                <div class="test-generations-vl-detail-heading"><strong id="test-generations-vl-detail-title"></strong><button id="test-generations-vl-detail-close" type="button" class="review-captions-btn">Close</button></div>
+                                <strong>Expected resolved prompt</strong><pre id="test-generations-vl-expected"></pre>
+                                <strong>VL question</strong><pre id="test-generations-vl-question"></pre>
+                                <strong>VL observation</strong><pre id="test-generations-vl-answer"></pre>
+                            </section>
                             <div id="test-generations-results" class="test-generations-results"></div>
                             <div id="test-generations-compare" class="test-generations-compare hidden"></div>
                         </section>

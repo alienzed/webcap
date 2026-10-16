@@ -292,13 +292,17 @@
         label = document.createElement('span');
         label.dataset.testVlCandidateScore = '1';
         label.className = 'test-generations-vl-candidate-score';
-        var copy = row.querySelector('.test-generations-staged-copy');
-        if (!copy) throw new Error('Test candidate copy is missing.');
-        copy.appendChild(label);
+        var metrics = row.querySelector('.test-generations-staged-metrics');
+        if (!metrics) throw new Error('Test candidate metrics are missing.');
+        metrics.appendChild(label);
       }
-      label.textContent = score && score.count ? testVlScoreText('VL', score) : '';
+      label.textContent = score && score.count
+        ? 'VL ' + Math.round(100 * score.matches / score.count) + '%'
+        : '';
       label.classList.toggle('hidden', !label.textContent);
-      label.title = score && score.count ? score.previews + ' preview(s), ' + score.count + ' counted attributes' : '';
+      label.title = score && score.count
+        ? score.matches + '/' + score.count + ' counted attributes matched across ' + score.previews + ' preview(s)'
+        : '';
     });
   }
 
@@ -1755,13 +1759,12 @@
     Array.prototype.forEach.call(host.querySelectorAll('[data-staged-file]'), function (row) {
       var fileName = String(row.dataset.stagedFile || '');
       var score = scores && scores[fileName];
-      var scoreText = score && Number(score.count || 0)
-        ? ('★ ' + Number(score.average || 0).toFixed(1) + ' (' + Number(score.count || 0) + ')')
-        : '';
+      var count = Number(score && score.count || 0);
       var detail = row.querySelector('[data-candidate-detail]');
       if (!detail) throw new Error('Test candidate detail is missing.');
-      detail.textContent = [stagedFileParts(fileName).detail, scoreText].filter(Boolean).join(' · ');
-      detail.classList.toggle('hidden', !detail.textContent);
+      detail.textContent = count ? '★ ' + Number(score.average || 0).toFixed(1) : '';
+      detail.title = count ? count + ' rating' + (count === 1 ? '' : 's') : '';
+      detail.classList.toggle('hidden', !count);
     });
   }
 
@@ -1959,16 +1962,28 @@
         imageMark.innerHTML = trainingH3ImageModelIconHtml();
         name.appendChild(imageMark);
       }
+      var heading = document.createElement('div');
+      heading.className = 'test-generations-staged-heading';
+      heading.appendChild(name);
+      if (parts.detail) {
+        var runName = document.createElement('span');
+        runName.className = 'test-generations-staged-run';
+        runName.textContent = parts.detail;
+        runName.title = parts.detail;
+        heading.appendChild(runName);
+      }
+      var metrics = document.createElement('div');
+      metrics.className = 'test-generations-staged-metrics';
       var detail = document.createElement('span');
       detail.dataset.candidateDetail = '1';
       var score = scores[String(fileName || '')];
-      var scoreText = score && Number(score.count || 0)
-        ? ('★ ' + Number(score.average || 0).toFixed(1) + ' (' + Number(score.count || 0) + ')')
-        : '';
-      detail.textContent = [parts.detail, scoreText].filter(Boolean).join(' · ');
-      copy.appendChild(name);
-      detail.classList.toggle('hidden', !detail.textContent);
-      copy.appendChild(detail);
+      var scoreCount = Number(score && score.count || 0);
+      detail.textContent = scoreCount ? '★ ' + Number(score.average || 0).toFixed(1) : '';
+      detail.title = scoreCount ? scoreCount + ' rating' + (scoreCount === 1 ? '' : 's') : '';
+      detail.classList.toggle('hidden', !scoreCount);
+      metrics.appendChild(detail);
+      copy.appendChild(heading);
+      copy.appendChild(metrics);
 
       var strength = document.createElement('input');
       strength.type = 'number';
@@ -1982,7 +1997,7 @@
       strength.placeholder = String(defaultCandidateStrength);
       strength.value = Object.prototype.hasOwnProperty.call(candidateStrengths, fileName)
         ? String(candidateStrengths[fileName])
-        : '';
+        : String(defaultCandidateStrength);
 
       var actions = document.createElement('div');
       actions.className = 'test-generations-staged-actions';
@@ -4247,6 +4262,9 @@
         defaultCandidateStrength = defaultValue;
         Array.prototype.forEach.call(el('test-generations-files').querySelectorAll('[data-candidate-strength]'), function (input) {
           input.placeholder = String(defaultCandidateStrength);
+          if (!Object.prototype.hasOwnProperty.call(candidateStrengths, String(input.dataset.candidateStrength || ''))) {
+            input.value = String(defaultCandidateStrength);
+          }
         });
         saveTestBenchState();
         return;
@@ -4257,6 +4275,7 @@
         var strengthText = String(strengthInput.value || '').trim();
         if (!strengthText) {
           delete candidateStrengths[strengthFile];
+          strengthInput.value = String(defaultCandidateStrength);
           saveTestBenchState();
           return;
         }
@@ -4266,7 +4285,8 @@
           renderStagedFiles(prepared || { files: [], count: 0, candidateScores: {} });
           return;
         }
-        candidateStrengths[strengthFile] = strengthValue;
+        if (strengthValue === defaultCandidateStrength) delete candidateStrengths[strengthFile];
+        else candidateStrengths[strengthFile] = strengthValue;
         saveTestBenchState();
         return;
       }

@@ -529,6 +529,8 @@
     }).finally(function () {
       if (token !== testVl.token) return;
       testVl.running = false;
+      // If a different session is displayed, restore its saved VL presentation now.
+      restoreTestVl(currentStatus);
       syncTestVlCards();
     });
   }
@@ -3254,7 +3256,6 @@
     var live = status && (status.status === 'running' || status.status === 'stopping');
     var resultScope = sessionName + '|' + resultFolder;
     var priorScope = String(host.dataset.resultScope || '');
-    if (testVl.scope && testVl.scope !== testVlScope(status) && testVl.running) stopTestVl();
 
     if (priorScope !== resultScope) {
       host.innerHTML = '';
@@ -3885,7 +3886,6 @@
     currentStatus = status || {};
     if (previousScope !== testVlScope(currentStatus)) {
       el('test-generations-vl-detail').classList.add('hidden');
-      if (testVl.running) stopTestVl();
     }
     restoreTestVl(currentStatus);
     syncActiveRunControls(status || {});

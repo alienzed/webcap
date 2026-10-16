@@ -578,10 +578,6 @@ def execution_queue_state_path():
     return app_state_root() / "execution_queue.json"
 
 
-def training_runtime_root():
-    return Path(FS_ROOT) / ".webcap_training"
-
-
 def training_queue_state_path():
     return app_state_root() / "training_queue.json"
 

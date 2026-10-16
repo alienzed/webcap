@@ -202,15 +202,13 @@ Migration is incremental and must preserve working behavior.
 7. Do not copy stale runtime ownership into the new location.
 8. Storage Manager must consume centralized path helpers rather than reconstruct feature-private paths.
 
-## 9. Current legacy roots
+## 9. Retired global hidden roots
 
-The only remaining active global transitional root beneath `FS_ROOT` is `.webcap_training/`, retained temporarily for Training-specific fallback/diagnostic behavior that may still intersect historical Training evidence.
+No global app-private `.webcap*` root beneath `FS_ROOT` is active. WebCap does not create or discover Training state, Test sessions, or other application state there.
 
-Global `.webcap/` and `.webcap_runtime/` are no longer active state homes. Storage discovery may still ignore those names so stale leftovers are not mistaken for user Sets, but WebCap does not read them as compatibility sources. In particular, legacy global `.webcap/test-generations/` sessions are no longer discovered.
+Training queue and Recent Runs state live under app-data `state/training_queue.json` and `state/recent_runs.json`. New Training jobs keep their scripts, logs, and results within their owning Training action. Missing recorded job artifact paths are errors, not invitations to reconstruct an obsolete hidden path.
 
-Training queue state and Recent Runs metadata no longer belong under `.webcap_training/`; they live in app-data `state/training_queue.json` and `state/recent_runs.json`.
-
-Do not add new uses of these roots. The remaining `.webcap_training/` dependency should be removed only when its Training-history-sensitive fallback surface can be retired safely.
+Storage/Set enumeration may continue to **exclude** old hidden-root names so an accidental leftover is not mistaken for a Set. Exclusion is not a compatibility reader and does not create any directory.
 
 ## 10. Review rule for future work
 

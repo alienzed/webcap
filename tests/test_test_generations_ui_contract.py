@@ -846,7 +846,7 @@ def test_recent_test_sets_are_cached_during_active_test_polling():
 def test_saved_test_history_is_central_and_set_scoped():
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
 
-    assert 'Path(app_config.FS_ROOT) / ".webcap" / TEST_RESULTS_DIR' in backend
+    assert 'root = app_config.output_root() / TEST_RESULTS_DIR' in backend
     assert "def _session_directories(folder_path):" in backend
     assert "def _session_belongs_to_folder(folder_path, session_directory, payload=None):" in backend
     assert "def list_sessions(folder_path, model_id=None):" in backend

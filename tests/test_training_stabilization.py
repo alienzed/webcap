@@ -1011,6 +1011,7 @@ def test_training_startup_reconciliation_establishes_live_owner_synchronously(tm
             "pid": 4242,
             "runnerScriptWsl": "/runs/runner.sh",
             "outputRunPath": "/runs/original",
+                "artifactDir": str(tmp_path / "output/runs/subject/jobs/active"),
         }],
     })
 
@@ -1036,6 +1037,7 @@ def test_training_startup_reconciliation_failure_does_not_create_owner(tmp_path,
             "pid": 4242,
             "runnerScriptWsl": "/runs/runner.sh",
             "outputRunPath": "/runs/original",
+                "artifactDir": str(tmp_path / "output/runs/subject/jobs/active"),
         }],
     })
     monkeypatch.setattr(training_runner, "_run_wsl", lambda *_args, **_kwargs: (1, "", "WSL is unavailable"))
@@ -1059,6 +1061,7 @@ def test_restart_keeps_verified_live_runner_active(tmp_path, monkeypatch):
             {
                 "id": "active", "status": "running", "stages": "h3", "pid": 4242,
                 "runnerScriptWsl": "/runs/runner.sh", "outputRunPath": "/runs/original",
+                "artifactDir": str(tmp_path / "output/runs/subject/jobs/active"),
             },
         ],
     }
@@ -1133,6 +1136,7 @@ def test_restart_recovers_definitely_missing_runner_as_paused_resume(tmp_path, m
             {
                 "id": "active", "status": "running", "stages": "h3", "pid": 4242,
                 "runnerScriptWsl": "/runs/runner.sh", "outputRunPath": "/runs/original",
+                "artifactDir": str(tmp_path / "output/runs/subject/jobs/active"),
             },
         ],
     }
@@ -1163,7 +1167,8 @@ def test_runner_inspection_failure_is_an_error_not_a_coordination_state(tmp_path
         "jobs": [
             {
                 "id": "active", "status": "running", "stages": "h3", "pid": 4242,
-                "runnerScriptWsl": "/runs/runner.sh", "outputRunPath": "/runs/original", "runnerVerified": True,
+                "runnerScriptWsl": "/runs/runner.sh", "outputRunPath": "/runs/original",
+                "artifactDir": str(tmp_path / "output/runs/subject/jobs/active"), "runnerVerified": True,
             },
             {"id": "later", "status": "queued", "stages": "h3"},
         ],
@@ -1195,7 +1200,7 @@ def test_result_evidence_still_applies_terminal_status(tmp_path, monkeypatch):
     _configure_root(monkeypatch, tmp_path)
     state = {
         "version": 3, "activeJobId": "active", "queuePaused": False, "queuePauseReason": "",
-        "jobs": [{"id": "active", "status": "running", "stages": "h3", "pid": 4242}],
+        "jobs": [{"id": "active", "status": "running", "stages": "h3", "pid": 4242, "artifactDir": str(tmp_path / "output/runs/subject/jobs/active")}],
     }
     job_dir = training_runner._job_dir(state["jobs"][0])
     job_dir.mkdir(parents=True)

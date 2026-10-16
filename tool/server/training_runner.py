@@ -51,7 +51,6 @@ from .training_run_manifest import clear_selected_epoch as _clear_selected_epoch
 from .execution_queue import reserve_resource as reserve_execution_resource, release_resource as release_execution_resource, resource_owner as execution_resource_owner
 
 
-JOB_DIR_NAME = "jobs"
 ACTIVE_STATUSES = {"starting", "running", "stopping"}
 QUEUE_STATUSES = {"queued"}
 HISTORY_STATUSES = {"completed", "finished_early", "failed", "stopped", "interrupted"}
@@ -80,16 +79,8 @@ _DISK_INSPECTION_NOTICE_PREFIX = "Training disk-space protection could not inspe
 
 
 
-def _runtime_root():
-    return app_config.training_runtime_root()
-
-
 def _state_path():
     return app_config.training_queue_state_path()
-
-
-def _jobs_root():
-    return _runtime_root() / JOB_DIR_NAME
 
 
 def _active_h3_training_runtime():
@@ -539,20 +530,17 @@ def relocate_folder_jobs(old_folder, new_folder):
 
 
 def _job_dir(job):
-    """Job-owned artifacts live beside trainer output, not in the queue state area."""
-    if isinstance(job, dict) and (job.get("artifactPath") or job.get("artifactDir")):
-        return Path(job.get("artifactPath") or job.get("artifactDir"))
-    job_id = job.get("id") if isinstance(job, dict) else job
-    return _jobs_root() / str(job_id)
+    """Job artifacts belong to the recorded Training action."""
+    if not isinstance(job, dict):
+        raise ValueError("A recorded Training job is required to locate its artifacts.")
+    recorded = str(job.get("artifactPath") or job.get("artifactDir") or "").strip()
+    if not recorded:
+        raise RuntimeError("Training job " + str(job.get("id") or "(unknown)") + " has no recorded artifact directory.")
+    return Path(recorded)
 
 
 def _job_action_path(job):
     return _job_dir(job) / "action"
-
-
-def _artifact_root(folder_path, stage):
-    root = output_root_for_folder(folder_path, stage if stage in ("hi", "lo", "krea2", "wan21", "h3") else "hi")
-    return root / ".webcap" / "jobs"
 
 
 def _find_job(state, job_id):
@@ -2548,7 +2536,7 @@ def validate_response(folder, stages="", resume_from_checkpoint="", resume_stage
             "resumeStage": resume_stage,
         }
         try:
-            script, resolved = _build_runner_script(diagnostic_job, settings, artifacts, _runtime_root() / "diagnostic")
+            script, resolved = _build_runner_script(diagnostic_job, settings, artifacts, app_config.app_diagnostics_root() / "training-preflight")
             payload["runnerScript"] = script
             payload["resolvedConfigs"] = resolved
             code, stdout, stderr = _run_wsl(

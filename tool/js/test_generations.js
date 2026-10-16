@@ -133,7 +133,7 @@
 
   function testVlCandidateScores(results) {
     var totals = Object.create(null);
-    if (testVl.scope !== testVlScope(currentStatus)) return totals;
+    if (testVl.scope !== testVlScope(currentStatus) || currentStatus.sweepWeights) return totals;
     (results || []).forEach(function (result) {
       if (!result || result.kind === 'base') return;
       var candidate = String(result.candidateFile || result.sourceLoRA || '').trim();
@@ -198,12 +198,11 @@
       (testVl.total ? (testVl.done + ' / ' + testVl.total + ' processed') : '');
   }
 
-  function renderTestVlCard(card, result) {
+  function renderTestVlCard(card, result, candidateScores) {
     var file = resultMediaFile(result);
     if (!file) return;
     var item = testVl.scope === testVlScope(currentStatus) ? testVl.entries[file] : null;
     var footer = card.querySelector('.test-generations-result-footer');
-    var candidateScores = testVlCandidateScores(currentStatus && currentStatus.results);
     var candidate = String(result.candidateFile || result.sourceLoRA || '').trim();
     var epochScore = candidateScores[candidate];
     var epochLabel = footer && footer.querySelector('[data-test-vl-epoch-score]');
@@ -216,6 +215,7 @@
     if (epochLabel) {
       epochLabel.textContent = epochScore && epochScore.count ? testVlScoreText('Epoch VL', epochScore) : '';
       epochLabel.classList.toggle('hidden', !epochLabel.textContent);
+      epochLabel.title = epochScore && epochScore.count ? epochScore.previews + ' preview(s), ' + epochScore.count + ' counted attributes' : '';
     }
     if (!footer) return;
     var button = footer.querySelector('[data-test-vl-result]');
@@ -238,14 +238,17 @@
 
   function syncTestVlCards() {
     var results = currentStatus && Array.isArray(currentStatus.results) ? currentStatus.results : [];
+    var candidateScores = testVlCandidateScores(results);
+    var byMedia = Object.create(null);
+    results.forEach(function (result) { byMedia[resultMediaFile(result)] = result; });
     ['test-generations-results','test-generations-compare'].forEach(function (id) {
       var host = el(id);
       if (!host) return;
       Array.prototype.forEach.call(host.querySelectorAll('.test-generations-result-card, .test-generations-compare-item'), function (card) {
         var file = String(card.dataset.testVlFile || '');
         if (!file) return;
-        var result = results.find(function (r) { return resultMediaFile(r) === file; });
-        if (result) renderTestVlCard(card, result);
+        var result = byMedia[file];
+        if (result) renderTestVlCard(card, result, candidateScores);
       });
     });
     syncTestVlControls();
@@ -295,6 +298,7 @@
       }
       label.textContent = score && score.count ? testVlScoreText('VL', score) : '';
       label.classList.toggle('hidden', !label.textContent);
+      label.title = score && score.count ? score.previews + ' preview(s), ' + score.count + ' counted attributes' : '';
     });
   }
 
@@ -376,9 +380,10 @@
     var results = (Array.isArray(status.results) ? status.results : []).filter(function (r) { return !!resultMediaFile(r); });
     if (!session || !results.length) return;
     var token = ++testVl.token;
-    testVl.scope = testVlScope(status);
+    var nextScope = testVlScope(status);
+    if (testVl.scope !== nextScope) testVl.disabledGroups = new Set();
+    testVl.scope = nextScope;
     testVl.entries = Object.create(null);
-    testVl.disabledGroups = new Set();
     el('test-generations-vl-filter-options').dataset.groupKey = '';
     testVl.running = true;
     testVl.jobId = '';
@@ -413,6 +418,8 @@
             entry.text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
             entry.comparison = testVlCompare(entry.text, Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : []);
             entry.status = 'done';
+            var detail = el('test-generations-vl-detail');
+            if (!detail.classList.contains('hidden') && detail.dataset.testVlFile === file) showTestVlResult(file, true);
           }).catch(function (err) {
             if (token !== testVl.token) return;
             entry.status = 'error';
@@ -2927,6 +2934,7 @@
     var results = status && Array.isArray(status.results) ? status.results : [];
     var resultFolder = String(status && status.resultFolder || '');
     var sessionName = String(status && status.session || '');
+    var candidateScores = testVlCandidateScores(results);
 
     if (results.length < 2) {
       if (host.dataset.compareKey !== 'empty') {
@@ -2968,7 +2976,7 @@
       var remove = buildResultRemoveButton(result);
       if (remove) item.appendChild(remove);
       item.appendChild(buildResultFooter(result, { sessionName: sessionName, status: status }));
-      renderTestVlCard(item, result);
+      renderTestVlCard(item, result, candidateScores);
       stage.appendChild(item);
     });
 
@@ -3005,6 +3013,7 @@
     var host = el('test-generations-results');
     if (!host) return;
     var results = status && Array.isArray(status.results) ? status.results : [];
+    var candidateScores = testVlCandidateScores(results);
     var failures = status && Array.isArray(status.failures) ? status.failures : [];
     var total = Number(status && status.total || (prepared && prepared.count) || 0);
     var resultFolder = String(status && status.resultFolder || '');
@@ -3044,7 +3053,7 @@
       );
       if (existing) {
         syncResultElapsed(existing, result, false);
-        renderTestVlCard(existing, result);
+        renderTestVlCard(existing, result, candidateScores);
         return;
       }
 
@@ -3065,7 +3074,7 @@
       var remove = buildResultRemoveButton(result);
       if (remove) card.appendChild(remove);
       card.appendChild(buildResultFooter(result, { sessionName: sessionName, status: status }));
-      renderTestVlCard(card, result);
+      renderTestVlCard(card, result, candidateScores);
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);

@@ -97,7 +97,7 @@
 
   function jobStatusLabel(job) {
     var status = String(job && job.status || '');
-    if (status === 'queued') return job.queuePosition ? 'Queue #' + String(job.queuePosition) : 'Queued';
+    if (status === 'queued') return job.queuePosition ? '#' + String(job.queuePosition) : 'Queued';
     if (status === 'backlog') return 'Backlog';
     if (status === 'starting') return 'Starting';
     if (status === 'running') return 'Running';
@@ -206,7 +206,9 @@
 
     if (position) {
       position.textContent = jobStatusLabel(job);
-      position.title = position.textContent;
+      position.title = status === 'queued' && job.queuePosition
+        ? 'Queued · position #' + String(job.queuePosition)
+        : position.textContent;
     }
     if (title) title.textContent = job.client === 'test' ? testCandidateTitle(job) : jobClientLabel(job);
     if (context) {

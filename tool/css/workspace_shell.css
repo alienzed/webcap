@@ -2033,6 +2033,8 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .inference-queue-list {
   padding: 12px;
   gap: 8px;
+  /* Rows must grow to their content instead of sharing the drawer's height. */
+  grid-auto-rows: max-content;
 }
 
 .inference-queue-row {
@@ -2088,9 +2090,14 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 /* Test jobs prioritize checkpoint identity over the repeated client label. */
 .inference-queue-row.client-test {
-  min-height: 0;
+  min-height: 52px;
   padding-top: 8px;
   padding-bottom: 8px;
+}
+
+.inference-queue-row.client-test.status-running,
+.inference-queue-row.client-test.status-starting {
+  min-height: 68px;
 }
 
 .inference-queue-row.client-test .inference-queue-copy strong {

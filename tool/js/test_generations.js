@@ -22,6 +22,7 @@
   var candidateStrengths = null;
   var defaultCandidateStrength = null;
   var sweepMode = false;
+  var candidateSort = 'rating';
   var sweepWeights = '0.6, 0.8, 1.0, 1.2';
   var pendingActivitySession = '';
   var queuedTestJobs = [];
@@ -347,6 +348,7 @@
         ? score.matches + '/' + score.count + ' matched · ' + score.previews + ' preview(s), ' + score.count + ' counted attributes'
         : '';
     });
+    sortStagedCandidateRows();
   }
 
   function testVlComparisonTable(groups, all, entry) {
@@ -1714,7 +1716,7 @@
       ? payload.candidateRuns.filter(function (run) { return run && run.jobId && run.folder; })
       : [];
     button.classList.toggle('hidden', !runs.length);
-    button.textContent = 'Candidates';
+    button.textContent = 'Runs';
     button.title = runs.length > 1
       ? 'Choose which training run to open'
       : 'Open the training candidates for this Set';
@@ -1812,6 +1814,52 @@
     if (countEl) countEl.textContent = String(count);
   }
 
+  // Sort existing candidate rows only; their checkboxes, weight inputs, and actions stay alive.
+  // Original order is always the server's staged file order, not the current DOM order.
+  function sortStagedCandidateRows() {
+    if (!prepared) return;
+    var host = el('test-generations-files');
+    var rows = Array.prototype.slice.call(host.querySelectorAll('[data-staged-file]'));
+    if (rows.length < 2) return;
+    var original = new Map(prepared.files.map(function (file, index) { return [file, index]; }));
+    var scores = candidateSort === 'rating' ? (prepared.candidateScores || {})
+      : candidateSort === 'vl' ? testVlCandidateScores(currentStatus && currentStatus.results) : {};
+    var ordered = rows.slice().sort(function (a, b) {
+      var fileA = String(a.dataset.stagedFile || '');
+      var fileB = String(b.dataset.stagedFile || '');
+      var scoreA = scores[fileA];
+      var scoreB = scores[fileB];
+      if (candidateSort === 'rating') {
+        var countA = Number(scoreA && scoreA.count || 0);
+        var countB = Number(scoreB && scoreB.count || 0);
+        if (!countA || !countB) {
+          if (countA !== countB) return countB - countA;
+        } else {
+          var ratingDifference = Number(scoreB.average) - Number(scoreA.average);
+          if (ratingDifference) return ratingDifference;
+          if (countA !== countB) return countB - countA;
+        }
+      } else if (candidateSort === 'vl') {
+        var totalA = Number(scoreA && scoreA.count || 0);
+        var totalB = Number(scoreB && scoreB.count || 0);
+        if (!totalA || !totalB) {
+          if (totalA !== totalB) return totalB - totalA;
+        } else {
+          var agreementDifference = scoreB.matches / totalB - scoreA.matches / totalA;
+          if (agreementDifference) return agreementDifference;
+          if (totalA !== totalB) return totalB - totalA;
+        }
+      }
+      return original.get(fileA) - original.get(fileB);
+    });
+    if (rows.every(function (row, index) { return row === ordered[index]; })) return;
+    var next = null;
+    for (var i = ordered.length - 1; i >= 0; i -= 1) {
+      if (ordered[i].nextSibling !== next) host.insertBefore(ordered[i], next);
+      next = ordered[i];
+    }
+  }
+
   function syncStagedCandidateScores(scores) {
     var host = el('test-generations-files');
     if (!host) return;
@@ -1825,6 +1873,7 @@
       detail.title = count ? count + ' rating' + (count === 1 ? '' : 's') : '';
       detail.classList.toggle('hidden', !count);
     });
+    sortStagedCandidateRows();
   }
 
   function parseSweepWeights(value) {
@@ -3961,6 +4010,8 @@
     candidateStrengths = null;
     defaultCandidateStrength = null;
     sweepMode = false;
+    candidateSort = 'rating';
+    el('test-generations-candidate-sort').value = candidateSort;
     sweepWeights = '0.6, 0.8, 1.0, 1.2';
     syncSweepControls();
     currentStatus = {};
@@ -4232,6 +4283,10 @@
     button.onclick = openPane;
     el('test-generations-normal-mode').onclick = function () { sweepMode = false; syncSweepControls(); };
     el('test-generations-sweep-mode').onclick = function () { sweepMode = true; syncSweepControls(); };
+    el('test-generations-candidate-sort').onchange = function () {
+      candidateSort = this.value;
+      sortStagedCandidateRows();
+    };
     el('test-generations-sweep-weights').addEventListener('input', function () {
       sweepWeights = this.value;
       syncSweepControls();

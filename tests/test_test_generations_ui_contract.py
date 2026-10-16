@@ -1571,3 +1571,35 @@ def test_test_result_compact_three_rows_and_vl_model_provenance():
     assert "Unknown (previous assessment)" in script
     assert 'id="test-generations-vl-model"' in html
     assert ".test-generations-result-evaluation" in css
+
+
+def test_candidate_sorting_reuses_existing_scores_and_preserves_rows():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-candidate-sort"' in html
+    assert '<option value="original">' in html
+    assert '<option value="rating" selected>' in html
+    assert '<option value="vl">' in html
+    assert ".test-generations-candidate-toolbar" in css
+    assert "button.textContent = 'Runs';" in script
+
+    sorter = script.split("function sortStagedCandidateRows()", 1)[1].split("function syncStagedCandidateScores", 1)[0]
+    assert "prepared.files.map" in sorter
+    assert "prepared.candidateScores || {}" in sorter
+    assert "testVlCandidateScores(currentStatus && currentStatus.results)" in sorter
+    assert "scoreB.matches / totalB - scoreA.matches / totalA" in sorter
+    assert "if (countA !== countB) return countB - countA;" in sorter
+    assert "if (totalA !== totalB) return totalB - totalA;" in sorter
+    assert "return original.get(fileA) - original.get(fileB);" in sorter
+    assert "rows.every(function (row, index) { return row === ordered[index]; })" in sorter
+    assert "host.insertBefore(ordered[i], next);" in sorter
+    assert "innerHTML" not in sorter
+    assert "row.appendChild(strength);" in script
+    assert "row.appendChild(actions);" in script
+
+    assert "sortStagedCandidateRows();" in script.split("function syncStagedCandidateScores", 1)[1].split("function parseSweepWeights", 1)[0]
+    assert "sortStagedCandidateRows();" in script.split("function syncTestVlCandidateRows", 1)[1].split("function testVlComparisonTable", 1)[0]
+    assert "candidateSort = this.value;" in script
+    assert "candidateSort = 'rating';" in script

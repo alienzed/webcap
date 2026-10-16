@@ -2688,6 +2688,7 @@
       if (prepared && payload && payload.candidateScores) {
         prepared.candidateScores = payload.candidateScores;
         syncStagedCandidateScores(prepared.candidateScores);
+        syncTestVlCards();
       }
       if (payload && payload.sessions) renderSessions(payload.sessions, queuedTestJobs);
     }).catch(function (err) {
@@ -3702,7 +3703,10 @@
   function renderStatus(status) {
     var previousScope = testVlScope(currentStatus);
     currentStatus = status || {};
-    if (previousScope !== testVlScope(currentStatus)) el('test-generations-vl-detail').classList.add('hidden');
+    if (previousScope !== testVlScope(currentStatus)) {
+      el('test-generations-vl-detail').classList.add('hidden');
+      if (testVl.running) stopTestVl();
+    }
     restoreTestVl(currentStatus);
     syncActiveRunControls(status || {});
     syncSessionSelection();

@@ -80,7 +80,8 @@
     return 'Inspect the image and choose the best visible option for EVERY numbered attribute below. ' +
       'Respond with exactly one line per group, e.g. G1: 2. Use only the option number, ' +
       'or "unclear" if you cannot see it, or "none" if no option fits. ' +
-      'Do not assume any option is present; do not use prompt text as visual evidence.\n\n' +
+      'If "(absent)" is an option, select its number when that attribute is absent. ' +
+      'Do not assume any option is present; use only visible evidence.\n\n' +
       groups.map(function (g) {
         return g.id + ' (' + g.label + '): ' + g.options.map(function (option, index) {
           return (index + 1) + '=' + (option || '(absent)');
@@ -100,7 +101,9 @@
         id: g.id, label: g.label, expected: g.expected, selected: selected,
         expectedText: g.expected == null ? 'unresolved' : (g.options[g.expected - 1] || '(absent)'),
         selectedText: selected == null ? (answer || 'unclear') : (g.options[selected - 1] || '(absent)'),
-        result: g.expected == null || selected == null ? 'unclear' : (selected === g.expected ? 'match' : 'mismatch')
+        result: g.expected == null ? 'unclear' :
+          selected != null ? (selected === g.expected ? 'match' : 'mismatch') :
+          (/^none(?: of these)?$/i.test(answer) ? 'mismatch' : 'unclear')
       };
     });
   }
@@ -135,7 +138,8 @@
     if (item && item.status === 'done' && item.comparison && item.comparison.length) {
       var matches = item.comparison.filter(function (g) { return g.result === 'match'; }).length;
       var mismatches = item.comparison.filter(function (g) { return g.result === 'mismatch'; }).length;
-      button.textContent = matches + '/' + item.comparison.length + (mismatches ? ' · ' + mismatches + ' mismatch' : ' · VL');
+      var unclear = item.comparison.filter(function (g) { return g.result === 'unclear'; }).length;
+      button.textContent = matches + '/' + (matches + mismatches) + ' checked' + (unclear ? ' · ' + unclear + ' unclear' : '');
     }
     button.classList.toggle('hidden', !item);
     if (!item) return;

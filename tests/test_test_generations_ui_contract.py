@@ -1520,3 +1520,12 @@ def test_session_vision_assessments_restore_and_preview_both_epoch_metrics():
     assert 'if operation == "test_vision_update":' in backend
     assert 'visible["testVision"] = _session_vision_state(session_directory)' in backend
     assert 'state["test_vision"] = vision' in state
+
+
+def test_test_vision_save_order_and_inference_success_survives_persistence_error():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    assert "var testVlSaveQueue = Promise.resolve();" in script
+    assert "testVlSaveQueue = save.catch(function () {});" in script
+    assert "entry.saveError = String(err && err.message ? err.message : err);" in script
+    assert "if (item.saveError) button.textContent += ' · not saved';" in script
+    assert "if (entry.saveError) summary.textContent += ' · not saved: '" in script

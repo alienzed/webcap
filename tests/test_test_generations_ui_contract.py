@@ -1548,7 +1548,7 @@ def test_test_vision_save_order_and_inference_success_survives_persistence_error
     assert "var testVlSaveQueue = Promise.resolve();" in script
     assert "testVlSaveQueue = save.catch(function () {});" in script
     assert "entry.saveError = String(err && err.message ? err.message : err);" in script
-    assert "if (item.saveError) button.textContent += ' · not saved';" in script
+    assert "if (item.saveError) button.textContent += ' !';" in script
     assert "if (entry.saveError) summary.textContent += ' · not saved: '" in script
 
 

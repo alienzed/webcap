@@ -24,3 +24,19 @@ def test_inference_progress_formatter_has_elapsed_fallback_without_eta():
 
     assert "formatInferenceElapsedMs(Date.now() - (startedAt * 1000))" in common
     assert "ETA" not in common
+
+
+
+def test_queued_inference_position_is_compact_without_changing_active_status():
+    queue = (ROOT / "tool" / "js" / "inference_queue.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+
+    assert "job.queuePosition ? '#' + String(job.queuePosition) : 'Queued'" in queue
+    assert "'Queued · position #' + String(job.queuePosition)" in queue
+    assert "if (status === 'running') return 'Running';" in queue
+    assert "if (status === 'backlog') return 'Backlog';" in queue
+    assert "grid-template-columns: max-content minmax(0, 1fr) auto;" in css
+    style = css.split(".inference-queue-row.status-queued .inference-queue-position {", 1)[1].split("}", 1)[0]
+    assert "padding: 0;" in style
+    assert "border: 0;" in style
+    assert "background: transparent;" in style

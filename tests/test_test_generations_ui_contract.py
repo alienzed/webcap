@@ -1450,3 +1450,21 @@ def test_test_vl_batch_is_ephemeral_and_session_scoped():
     assert "testVl.entries = Object.create(null)" in script
     assert "entry.status = 'stopped'" in script
     assert "saveFolderStateForCurrentRoot()" not in script.split('function runTestVlBatch()', 1)[1].split('function el(id)', 1)[0]
+
+
+def test_test_vl_results_are_comparison_first_with_collapsed_diagnostics():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="test-generations-vl-comparison"' in html
+    assert '<details id="test-generations-vl-technical">' in html
+    assert '<details id="test-generations-vl-agreements">' in html
+    assert "testVlComparisonTable(mismatches, groups)" in script
+    assert "testVlComparisonTable(unclear, groups)" in script
+    assert "testVlComparisonTable(matches, groups)" in script
+    assert "el('test-generations-vl-technical').open = false;" in script
+    assert "escapeHtml(g.expectedText)" not in script
+    assert "escapeHtml(expected)" in script
+    assert "escapeHtml(observed)" in script
+    assert ".test-generations-vl-table" in css

@@ -4154,7 +4154,7 @@ iframe {
 .test-generations-results-heading {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 18px;
   margin-bottom: 12px;

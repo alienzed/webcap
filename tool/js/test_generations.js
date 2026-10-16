@@ -59,14 +59,19 @@
   }
 
   function stopTestVl() {
+    if (!testVl.running) return;
     var jobId = testVl.jobId;
     testVl.token += 1;
     testVl.running = false;
     testVl.jobId = '';
+    Object.keys(testVl.entries).forEach(function (file) {
+      var entry = testVl.entries[file];
+      if (entry.status === 'pending' || entry.status === 'running') entry.status = 'stopped';
+    });
     if (jobId) cancelCaptionAssistJob(jobId).catch(function (err) {
       reportConsoleError('Test VL cancellation', err);
     });
-    syncTestVlControls();
+    syncTestVlCards();
   }
 
   function testVlQuestion(status) {
@@ -108,7 +113,7 @@
       button.dataset.testVlResult = file;
       footer.appendChild(button);
     }
-    button.textContent = item ? ({pending:'Queued',running:'Analyzing…',done:'VL ✓',error:'VL error'}[item.status] || 'VL') : '';
+    button.textContent = item ? ({pending:'Queued',running:'Analyzing…',done:'VL ✓',error:'VL error',stopped:'VL stopped'}[item.status] || 'VL') : '';
     button.classList.toggle('hidden', !item);
     if (!item) return;
     button.title = item.status === 'done' ? 'Open VL description' : item.status === 'error' ? 'Open VL error' : item.status;
@@ -130,6 +135,7 @@
   }
 
   function showTestVlResult(file) {
+    if (testVl.scope !== testVlScope(currentStatus)) return;
     var entry = testVl.entries[file];
     if (!entry) return;
     var panel = el('test-generations-vl-detail');
@@ -155,6 +161,7 @@
     testVl.done = 0;
     testVl.total = results.length;
     testVl.question = testVlQuestion(status);
+    el('test-generations-vl-detail').classList.add('hidden');
     results.forEach(function (r) { testVl.entries[resultMediaFile(r)] = { status: 'pending', question: testVl.question }; });
     syncTestVlCards();
     loadCaptionVisionCapabilities().then(function () {
@@ -3405,7 +3412,9 @@
   }
 
   function renderStatus(status) {
+    var previousScope = testVlScope(currentStatus);
     currentStatus = status || {};
+    if (previousScope !== testVlScope(currentStatus)) el('test-generations-vl-detail').classList.add('hidden');
     syncActiveRunControls(status || {});
     syncSessionSelection();
     var statusEl = el('test-generations-status');

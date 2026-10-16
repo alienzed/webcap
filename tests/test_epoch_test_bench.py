@@ -2498,7 +2498,7 @@ def test_test_session_vision_assessment_is_patched_beside_manual_rating(tmp_path
     from tool.server.folder_state_store import set_media_rating, read_folder_state
 
     set_media_rating(session / ".webcap_state.json", "preview.png", 4)
-    assessment = {"text": "G1: 2", "question": "Select color", "comparison": [
+    assessment = {"text": "G1: 2", "question": "Select color", "modelId": "vl-test-model", "comparison": [
         {"id": "G1", "result": "match", "expectedText": "blue", "selectedText": "blue"}
     ]}
     bench.update_vision(tmp_path, session.name, {"mediaFile": "preview.png", "assessment": assessment})
@@ -2511,6 +2511,7 @@ def test_test_session_vision_assessment_is_patched_beside_manual_rating(tmp_path
     assert state["test_vision"]["byMedia"]["preview.png"]["comparison"] == assessment["comparison"]
     reopened = bench.open_session(tmp_path, session.name)
     assert reopened["testVision"] == state["test_vision"]
+    assert reopened["testVision"]["byMedia"]["preview.png"]["modelId"] == "vl-test-model"
     assert reopened["results"][0]["rating"] == 4
     with pytest.raises((FileNotFoundError, ValueError)):
         bench.update_vision(tmp_path, session.name, {"mediaFile": "missing.png", "assessment": assessment})

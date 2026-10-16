@@ -7209,3 +7209,14 @@ html[data-theme="dark"] iframe {
 .test-generations-vl-table tr.is-excluded { opacity:.55; }
 .test-generations-vl-candidate-score { display:block; color:var(--muted); font-size:12px; }
 .test-generations-vl-epoch-score { display:block; margin-top:4px; font-size:12px; color:var(--muted); }
+
+/* Three-line Test result footer; shared by Grid and Compare. */
+.test-generations-result-name { display:block; }
+.test-generations-result-name .test-generations-result-source { font-weight:400; }
+.test-generations-result-secondary { min-height:20px; }
+.test-generations-result-metadata { min-width:0; }
+.test-generations-result-evaluation { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
+.test-generations-result-epoch-metrics { display:flex; align-items:center; gap:10px; min-width:0; overflow:hidden; }
+.test-generations-result-epoch-metrics .test-generations-vl-epoch-score { display:inline; margin:0; color:var(--muted); font-size:12px; white-space:nowrap; }
+.test-generations-result-evaluation .test-generations-vl-result { flex:0 0 auto; margin:0; align-self:center; white-space:nowrap; }
+.test-generations-vl-model-line { color:var(--muted); font-size:12px; margin-bottom:10px; overflow-wrap:anywhere; }

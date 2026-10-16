@@ -80,9 +80,9 @@
     el('test-generations-vl-filter-options').dataset.groupKey = '';
   }
 
-  function saveTestVl(changes) {
+  function saveTestVl(changes, sessionName) {
     var scope = testVl.scope;
-    var session = String(currentStatus && currentStatus.session || '');
+    var session = String(sessionName || (currentStatus && currentStatus.session) || '');
     return request('test_vision_update', Object.assign({ session: session }, changes)).then(function () {
       if (scope !== testVl.scope) return;
     }).catch(function (err) {
@@ -469,7 +469,7 @@
             entry.status = 'done';
             return saveTestVl({ mediaFile: file, assessment: {
               text: entry.text, question: entry.question, comparison: entry.comparison
-            }, ignoredGroups: Array.from(entry.ignoredGroups || []) }).then(function () {
+            }, ignoredGroups: Array.from(entry.ignoredGroups || []) }, session).then(function () {
               var detail = el('test-generations-vl-detail');
               if (!detail.classList.contains('hidden') && detail.dataset.testVlFile === file) showTestVlResult(file, true);
             });

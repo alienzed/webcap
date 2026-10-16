@@ -2016,6 +2016,7 @@
     });
     syncCandidateMasterSelect(files);
     syncSweepControls();
+    syncTestVlCandidateRows();
   }
 
   function sessionStatusText(session) {
@@ -4133,6 +4134,24 @@
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
     el('test-generations-ask-vl').onclick = runTestVlBatch;
+    el('test-generations-vl-filter-options').onchange = function (event) {
+      var input = event.target.closest('[data-test-vl-group]');
+      if (!input) return;
+      if (input.checked) testVl.disabledGroups.delete(input.dataset.testVlGroup);
+      else testVl.disabledGroups.add(input.dataset.testVlGroup);
+      refreshTestVlScores();
+    };
+    el('test-generations-vl-detail').onchange = function (event) {
+      var input = event.target.closest('[data-test-vl-count]');
+      if (!input) return;
+      var file = this.dataset.testVlFile;
+      var entry = testVl.entries[file];
+      if (!entry) throw new Error('Test VL result is missing.');
+      if (!entry.ignoredGroups) entry.ignoredGroups = new Set();
+      if (input.checked) entry.ignoredGroups.delete(input.dataset.testVlCount);
+      else entry.ignoredGroups.add(input.dataset.testVlCount);
+      refreshTestVlScores();
+    };
     el('test-generations-vl-detail-close').onclick = function () { el('test-generations-vl-detail').classList.add('hidden'); };
     el('test-generations-wildcard-btn').onclick = function () {
       try {

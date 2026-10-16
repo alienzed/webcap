@@ -1603,3 +1603,31 @@ def test_candidate_sorting_reuses_existing_scores_and_preserves_rows():
     assert "sortStagedCandidateRows();" in script.split("function syncTestVlCandidateRows", 1)[1].split("function testVlComparisonTable", 1)[0]
     assert "candidateSort = this.value;" in script
     assert "candidateSort = 'rating';" in script
+
+
+def test_browser_test_batch_is_navigation_independent_and_uses_existing_queues():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    assert "function runTestBatch(count)" in script
+    assert "function testBatchPoll(batch)" in script
+    assert "function testBatchEvaluate(batch)" in script
+    assert "function stopTestBatch()" in script
+    assert "requestForFolder(batch.folder, 'test_enqueue', sessionCriteria)" in script
+    assert "requestForFolder(batch.folder, 'test_open_session', { session: session })" in script
+    assert "requestForFolder(batch.folder, 'test_vision_update'" in script
+    assert "askVlForTestPreview(batch.folder, session, file, batch.vlModel, question" in script
+    assert "askVlForTestPreview(folder, session, file, model, testVl.question" in script
+    assert "new Set()" in script
+    assert "settings: requestSettings" in script
+    assert "testBatchRecalculate(batch);" in script
+    assert "testBatchSort = sort.dataset.testBatchSort" in script
+    assert "batch.active = false;" in script
+    assert "if (testBatchTimer) clearTimeout(testBatchTimer);" in script
+    assert "stopTestBatch();" not in script.split("function closePane()", 1)[1].split("function populateControls", 1)[0]
+    assert "stopTestBatch();" not in script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
+    assert "test-generations-batch-divider" in html
+    assert 'id="test-generations-batch-modal"' in html
+    assert 'id="test-generations-batch-card"' in html
+    assert ".test-generations-batch-card" in css
+    assert "window.localStorage" not in script

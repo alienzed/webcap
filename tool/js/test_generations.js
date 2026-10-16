@@ -4124,7 +4124,6 @@
   var testBatchTimer = 0;
   var testBatchSort = 'vl';
   var testBatchSequence = 0;
-  var testBatchActivityId = '';
 
   function renderTestBatch() {
     var card = el('test-generations-batch-summary');
@@ -4154,7 +4153,7 @@
       if (!batch.activityFinished) {
         batch.activityFinished = true;
         window.recordActivityCompletion({ id: batch.activityId, kind: 'test-batch', lane: 'background',
-          title: 'Batch Test + VL', status: batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'complete',
+          title: 'Batch Test + VL', status: batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'completed',
           folder: batch.folder, modelId: batch.criteria.modelId, detail: batch.detail, finishedAt: Date.now() / 1000 });
       }
     }

@@ -4053,6 +4053,7 @@
     el('test-generations-wildcard-modal-status').textContent = '';
     setResultsView('grid');
     renderStatus({ status: 'idle' });
+    renderTestBatch();
     refreshActivityButton();
     if (!isTestModelSupported()) {
       if (summary) summary.textContent = 'Testing unavailable for selected Base Model.';
@@ -4122,10 +4123,12 @@
   var testBatch = null;
   var testBatchTimer = 0;
   var testBatchSort = 'vl';
+  var testBatchSequence = 0;
+  var testBatchActivityId = '';
 
   function renderTestBatch() {
-    var card = el('test-generations-batch-card');
-    card.classList.toggle('hidden', !testBatch || testBatch.dismissed);
+    var card = el('test-generations-batch-summary');
+    card.classList.toggle('hidden', !testBatch || testBatch.dismissed || String(launchFolder) !== testBatch.folder);
     if (!testBatch) return;
     var batch = testBatch;
     el('test-generations-batch-heading').textContent = 'Batch Test + VL · ' + batch.folder;
@@ -4136,6 +4139,25 @@
     if (batch.detail) lines.push(batch.detail);
     if (batch.errors.length) lines.push(batch.errors.length + ' error(s); see Console.');
     el('test-generations-batch-progress').textContent = lines.join(' · ');
+    if (batch.active) {
+      var completed = batch.phase === 'Evaluating' ? batch.evaluated : batch.phase === 'Generating' ? batch.finished : batch.sessions.length;
+      var total = batch.phase === 'Evaluating' ? batch.previews : batch.phase === 'Generating' ? batch.sessions.length : batch.count;
+      window.publishActivityProgress({
+        id: batch.activityId, kind: 'test-batch', lane: 'background', title: 'Batch Test + VL',
+        status: 'running', phase: batch.phase, detail: batch.folder + (batch.detail ? ' · ' + batch.detail : ''),
+        progress: total > 0 ? { completed: completed, total: total } : null,
+        progressLabel: total > 0 ? completed + ' / ' + total + (batch.phase === 'Evaluating' ? ' previews' : ' sessions') : '',
+        startedAt: batch.startedAt, folder: batch.folder, modelId: batch.criteria.modelId
+      });
+    } else {
+      window.finishActivityProgress(batch.activityId, batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'completed');
+      if (!batch.activityFinished) {
+        batch.activityFinished = true;
+        window.recordActivityCompletion({ id: batch.activityId, kind: 'test-batch', lane: 'background',
+          title: 'Batch Test + VL', status: batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'complete',
+          folder: batch.folder, modelId: batch.criteria.modelId, detail: batch.detail, finishedAt: Date.now() / 1000 });
+      }
+    }
     el('test-generations-batch-stop').classList.toggle('hidden', !batch.active);
     el('test-generations-batch-dismiss').classList.toggle('hidden', batch.active);
     var resultHost = el('test-generations-batch-results');
@@ -4382,7 +4404,8 @@
     };
     if (sweepMode) criteria.sweepWeights = parseSweepWeights(sweepWeights);
     var batch = {
-      active: true, dismissed: false, folder: String(launchFolder), count: count,
+      active: true, dismissed: false, activityId: 'test-batch:' + (++testBatchSequence),
+      startedAt: Date.now() / 1000, activityFinished: false, folder: String(launchFolder), count: count,
       criteria: criteria, vlModel: '', sessions: [], statuses: Object.create(null),
       finished: 0, previews: 0, evaluated: 0, errors: [], scores: [],
       phase: 'Preparing', detail: '', vlJobId: ''
@@ -4455,8 +4478,7 @@
 
   function openTestBatchDialog() {
     if (testBatch && testBatch.active) {
-      testBatch.dismissed = false;
-      renderTestBatch();
+      openTestBenchForSetFolder(testBatch.folder);
       return;
     }
     var modal = el('test-generations-batch-modal');
@@ -4699,9 +4721,6 @@
     };
     el('test-generations-batch-stop').onclick = stopTestBatch;
     el('test-generations-batch-dismiss').onclick = function () { if (testBatch) { testBatch.dismissed = true; renderTestBatch(); } };
-    el('test-generations-batch-open').onclick = function () {
-      if (testBatch) openTestBenchForSetFolder(testBatch.folder);
-    };
     el('test-generations-batch-results').onclick = function (event) {
       var sort = event.target.closest('[data-test-batch-sort]');
       if (sort) { testBatchSort = sort.dataset.testBatchSort; renderTestBatch(); return; }

@@ -203,6 +203,20 @@
     if (!file) return;
     var item = testVl.scope === testVlScope(currentStatus) ? testVl.entries[file] : null;
     var footer = card.querySelector('.test-generations-result-footer');
+    var candidateScores = testVlCandidateScores(currentStatus && currentStatus.results);
+    var candidate = String(result.candidateFile || result.sourceLoRA || '').trim();
+    var epochScore = candidateScores[candidate];
+    var epochLabel = footer && footer.querySelector('[data-test-vl-epoch-score]');
+    if (footer && !epochLabel) {
+      epochLabel = document.createElement('span');
+      epochLabel.dataset.testVlEpochScore = '1';
+      epochLabel.className = 'test-generations-vl-epoch-score';
+      footer.appendChild(epochLabel);
+    }
+    if (epochLabel) {
+      epochLabel.textContent = epochScore && epochScore.count ? testVlScoreText('Epoch VL', epochScore) : '';
+      epochLabel.classList.toggle('hidden', !epochLabel.textContent);
+    }
     if (!footer) return;
     var button = footer.querySelector('[data-test-vl-result]');
     if (!button) {
@@ -214,10 +228,8 @@
     }
     button.textContent = item ? ({pending:'Queued',running:'Analyzing…',done:'VL ✓',error:'VL error',stopped:'VL stopped'}[item.status] || 'VL') : '';
     if (item && item.status === 'done' && item.comparison && item.comparison.length) {
-      var matches = item.comparison.filter(function (g) { return g.result === 'match'; }).length;
-      var mismatches = item.comparison.filter(function (g) { return g.result === 'mismatch'; }).length;
-      var unclear = item.comparison.filter(function (g) { return g.result === 'unclear'; }).length;
-      button.textContent = matches + ' agree · ' + mismatches + ' differ' + (unclear ? ' · ' + unclear + ' unclear' : '');
+      var score = testVlScore(item.comparison, item.ignoredGroups);
+      button.textContent = testVlScoreText('VL', score) + (score.unclear ? ' · ' + score.unclear + ' unclear' : '');
     }
     button.classList.toggle('hidden', !item);
     if (!item) return;
@@ -237,6 +249,8 @@
       });
     });
     syncTestVlControls();
+    syncTestVlFilters();
+    syncTestVlCandidateRows();
   }
 
   function testVlReadableLabel(group, groups) {
@@ -264,12 +278,34 @@
     return label.charAt(0).toUpperCase() + label.slice(1) + ' · ' + qualifier;
   }
 
-  function testVlComparisonTable(groups, all) {
+  function syncTestVlCandidateRows() {
+    var scores = testVlCandidateScores(currentStatus && currentStatus.results);
+    var host = el('test-generations-files');
+    if (!host) return;
+    Array.prototype.forEach.call(host.querySelectorAll('[data-staged-file]'), function (row) {
+      var score = scores[String(row.dataset.stagedFile || '')];
+      var label = row.querySelector('[data-test-vl-candidate-score]');
+      if (!label) {
+        label = document.createElement('span');
+        label.dataset.testVlCandidateScore = '1';
+        label.className = 'test-generations-vl-candidate-score';
+        var copy = row.querySelector('.test-generations-staged-copy');
+        if (!copy) throw new Error('Test candidate copy is missing.');
+        copy.appendChild(label);
+      }
+      label.textContent = score && score.count ? testVlScoreText('VL', score) : '';
+      label.classList.toggle('hidden', !label.textContent);
+    });
+  }
+
+  function testVlComparisonTable(groups, all, entry) {
     if (!groups.length) return '';
     var rows = groups.map(function (g) {
       var expected = g.expectedText === '(absent)' ? 'Absent' : g.expectedText;
       var observed = g.selectedText === '(absent)' ? 'Absent' : g.selectedText;
-      return '<tr class="test-generations-vl-' + g.result + '">' +
+      var counted = !testVl.disabledGroups.has(g.id) && !(entry.ignoredGroups && entry.ignoredGroups.has(g.id));
+      return '<tr class="test-generations-vl-' + g.result + (counted ? '' : ' is-excluded') + '">' +
+        '<td><label class="test-generations-vl-row-count"><input type="checkbox" data-test-vl-count="' + escapeHtml(g.id) + '"' + (counted && !testVl.disabledGroups.has(g.id) ? ' checked' : '') + (testVl.disabledGroups.has(g.id) ? ' disabled title="Excluded session-wide"' : '') + '>Count</label></td>' +
         '<th scope="row"><small>' + escapeHtml(g.id) + '</small>' +
         escapeHtml(testVlReadableLabel(g, all)) + '</th>' +
         '<td>' + escapeHtml(expected) + '</td>' +
@@ -277,15 +313,18 @@
         '</tr>';
     }).join('');
     return '<div class="test-generations-vl-table-wrap"><table class="test-generations-vl-table">' +
-      '<thead><tr><th>Attribute</th><th>Expected</th><th>VL observed</th></tr></thead>' +
+      '<thead><tr><th>Count</th><th>Attribute</th><th>Expected</th><th>VL observed</th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div>';
   }
 
-  function showTestVlResult(file) {
+  function showTestVlResult(file, preserveOpen) {
     if (testVl.scope !== testVlScope(currentStatus)) return;
     var entry = testVl.entries[file];
     if (!entry) return;
     var panel = el('test-generations-vl-detail');
+    panel.dataset.testVlFile = file;
+    var keepAgreements = !!preserveOpen && el('test-generations-vl-agreements').open;
+    var keepTechnical = !!preserveOpen && el('test-generations-vl-technical').open;
     el('test-generations-vl-detail-title').textContent = file + ' · Ask VL';
     var summary = el('test-generations-vl-summary');
     var comparison = el('test-generations-vl-comparison');
@@ -299,32 +338,33 @@
       var definition = definitions.find(function (candidate) { return candidate.id === group.id; });
       return Object.assign({}, group, { options: definition ? definition.options : [] });
     });
+    var entryScore = testVlScore(groups, entry.ignoredGroups);
     var matches = groups.filter(function (g) { return g.result === 'match'; });
     var mismatches = groups.filter(function (g) { return g.result === 'mismatch'; });
     var unclear = groups.filter(function (g) { return g.result === 'unclear'; });
 
     summary.textContent = groups.length
-      ? matches.length + ' agree · ' + mismatches.length + ' differ' + (unclear.length ? ' · ' + unclear.length + ' unclear' : '')
+      ? testVlScoreText('VL agreement', entryScore) + (entryScore.excluded ? ' · ' + entryScore.excluded + ' excluded' : '') + (entryScore.unclear ? ' · ' + entryScore.unclear + ' unclear' : '')
       : (entry.status === 'error' ? 'VL error' : entry.status === 'done' ? 'VL observation' : entry.status);
 
     // Only differences and unresolved observations demand immediate attention.
     var visible = '';
-    if (mismatches.length) visible += '<strong>Differences</strong>' + testVlComparisonTable(mismatches, groups);
-    if (unclear.length) visible += '<strong>Unclear</strong>' + testVlComparisonTable(unclear, groups);
+    if (mismatches.length) visible += '<strong>Differences</strong>' + testVlComparisonTable(mismatches, groups, entry);
+    if (unclear.length) visible += '<strong>Unclear</strong>' + testVlComparisonTable(unclear, groups, entry);
     if (groups.length && !mismatches.length && !unclear.length) visible = '<p>No differences reported.</p>';
     comparison.innerHTML = visible;
     comparison.classList.toggle('hidden', !groups.length);
     el('test-generations-vl-agreements-label').textContent = 'Show ' + matches.length + ' agreeing attribute' + (matches.length === 1 ? '' : 's');
-    agreementRows.innerHTML = testVlComparisonTable(matches, groups);
+    agreementRows.innerHTML = testVlComparisonTable(matches, groups, entry);
     agreements.classList.toggle('hidden', !matches.length);
-    agreements.open = false;
+    agreements.open = keepAgreements;
 
     freeform.textContent = groups.length ? '' : (entry.text || entry.error || 'No VL observation yet.');
     freeform.classList.toggle('hidden', !!groups.length);
     el('test-generations-vl-expected').textContent = String(currentStatus.resolvedPrompt || currentStatus.prompt || '');
     el('test-generations-vl-question').textContent = entry.question || '';
     el('test-generations-vl-answer').textContent = entry.text || (entry.status === 'error' ? entry.error : 'Not completed.');
-    el('test-generations-vl-technical').open = false;
+    el('test-generations-vl-technical').open = keepTechnical;
     panel.classList.remove('hidden');
   }
 
@@ -338,6 +378,8 @@
     var token = ++testVl.token;
     testVl.scope = testVlScope(status);
     testVl.entries = Object.create(null);
+    testVl.disabledGroups = new Set();
+    el('test-generations-vl-filter-options').dataset.groupKey = '';
     testVl.running = true;
     testVl.jobId = '';
     testVl.done = 0;

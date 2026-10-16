@@ -1841,7 +1841,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .inference-queue-row {
   min-width: 0;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding: 8px;
@@ -1859,7 +1859,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   overflow: hidden;
   color: var(--muted);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 650;
   text-transform: capitalize;
   text-overflow: ellipsis;
 }
@@ -1868,6 +1868,25 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   min-width: 0;
   display: grid;
   gap: 1px;
+}
+
+.inference-queue-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.inference-queue-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inference-queue-copy .inference-queue-position {
+  flex: none;
+  color: var(--muted);
 }
 
 .inference-queue-link {
@@ -2038,7 +2057,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .inference-queue-row {
-  grid-template-columns: 76px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 64px;
   padding: 10px 11px;
   gap: 12px;
@@ -2049,6 +2068,14 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 .inference-queue-row.status-queued {
   background: color-mix(in srgb, var(--panel-soft) 62%, transparent);
+}
+
+.inference-queue-row.status-queued .inference-queue-position {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+  text-align: left;
 }
 
 .inference-queue-row.status-running,

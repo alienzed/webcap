@@ -3736,9 +3736,33 @@ iframe {
   gap: 6px;
   padding: 7px 9px 0;
 }
+.test-generations-candidate-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 133px;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
 .test-generations-sweep-modes {
   display: flex;
+  min-width: 0;
   gap: 5px;
+}
+.test-generations-sweep-modes > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-inline: 4px;
+}
+.test-generations-candidate-sort {
+  width: 100%;
+  min-width: 0;
+  height: 27px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  background: var(--panel);
+  font-size: 12px;
 }
 .test-generations-sweep-modes .active {
   border-color: var(--accent);

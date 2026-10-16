@@ -4100,7 +4100,8 @@
       syncActiveRunControls(status);
       refreshActivityButton();
       reportConsoleInfo('Test Generations', 'Run submitted' + (startedStatus && startedStatus.session ? ': ' + startedStatus.session : '.') );
-      if (startedStatus && startedStatus.session) {
+      // Enqueueing another Test must not switch away from a running Ask VL batch.
+      if (startedStatus && startedStatus.session && !testVl.running) {
         showSessionError = true;
         selectSessionStatus(startedStatus);
       }

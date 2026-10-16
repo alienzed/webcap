@@ -35,7 +35,14 @@ def test_queued_inference_position_is_compact_without_changing_active_status():
     assert "'Queued · position #' + String(job.queuePosition)" in queue
     assert "if (status === 'running') return 'Running';" in queue
     assert "if (status === 'backlog') return 'Backlog';" in queue
-    assert "grid-template-columns: max-content minmax(0, 1fr) auto;" in css
+    assert "row.appendChild(position);" not in queue
+    assert "heading.appendChild(position);" in queue
+    assert "heading.appendChild(title);" in queue
+    assert "copy.appendChild(heading);" in queue
+    assert "grid-template-columns: 76px minmax(0, 1fr) auto;" not in css
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in css
+    assert ".inference-queue-heading {" in css
+    assert ".inference-queue-heading strong {" in css
     style = css.split(".inference-queue-row.status-queued .inference-queue-position {", 1)[1].split("}", 1)[0]
     assert "padding: 0;" in style
     assert "border: 0;" in style

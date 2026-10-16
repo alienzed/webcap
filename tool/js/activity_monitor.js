@@ -71,7 +71,7 @@
       state.progressChildIds[String(snapshot.childJobId)] = { owner: String(snapshot.id), expiresAt: 0 };
     }
     if (state.open) render();
-    else maybeAutoOpen();
+    else { maybeAutoOpen(); render(); }
   }
 
   function finishProgress(id, status) {
@@ -87,7 +87,7 @@
     if (status === 'failed') {
       window.reportConsoleError('Activity', item.title + ' failed. See Diagnostics and Console.');
     }
-    if (state.open) render();
+    render();
   }
 
   function localItems() {
@@ -148,6 +148,7 @@
 
   function itemOpen(item) {
     if (item.original) return openItem(item.original);
+    if (item.kind === 'test-batch') return openItem(item);
     if (item.kind === 'director-diagnostics') return window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
     if (item.kind === 'set-intelligence') return window.openSetIntelligence();
     if (item.kind === 'deep-qa' || item.kind === 'qa-concept-check') {
@@ -289,6 +290,7 @@
   }
 
   function kindLabel(item) {
+    if (item.kind === 'test-batch') return 'Batch Test + VL';
     if (item.kind === 'storyboard') return 'Storyboard';
     if (item.kind === 'test') return 'Test';
     if (item.kind === 'generate') return 'Generate';
@@ -300,6 +302,7 @@
 
   function activityTitle(item) {
     var kind = kindLabel(item);
+    if (item.kind === 'test-batch') return 'Batch Test + VL';
     if (item.kind === 'director') {
       var client = item.client === 'generate' ? 'Generate'
         : item.client === 'storyboard' ? 'Storyboard'
@@ -423,6 +426,10 @@
       source: String(item.source || ''),
       modelId: String(item.modelId || '')
     };
+    if (item.kind === 'test-batch') {
+      window.openTestBenchActivity({ folder: item.folder, modelId: item.modelId });
+      return;
+    }
     if (item.kind === 'storyboard' && typeof window.openStoryboardActivity === 'function') {
       window.openStoryboardActivity(target);
       return;

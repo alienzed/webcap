@@ -306,6 +306,7 @@ function shellManagedActivityLabel(item) {
   var client = String(item.client || '');
   if (kind === 'training') return 'Training';
   if (kind === 'test') return 'Testing';
+  if (kind === 'test-batch') return 'Batch Test';
   if (kind === 'storage') return 'Storage';
   if (kind === 'director') {
     if (operation === 'caption_vision_validate') return 'Vision QA';

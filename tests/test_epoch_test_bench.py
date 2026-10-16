@@ -2467,3 +2467,21 @@ def test_sweep_ratings_do_not_pollute_normal_candidate_average(tmp_path, monkeyp
     scores = bench._candidate_rating_scores(tmp_path, model.PROFILE_ID, session_snapshot=[(session, normal), (session, sweep)])
     assert scores["epoch10.safetensors"]["average"] == 5
     assert scores["epoch10.safetensors"]["count"] == 1
+
+
+def test_vl_wildcard_groups_preserve_choices_without_exposing_expected_in_question():
+    source = "wearing {black|red} top, {thong|micro} bottom, {front|rear} view"
+    groups = bench._wildcard_evaluation_groups(source, "wearing red top, micro bottom, rear view")
+    assert [g["options"] for g in groups] == [
+        ["black", "red"], ["thong", "micro"], ["front", "rear"]
+    ]
+    assert [g["expected"] for g in groups] == [2, 2, 2]
+
+
+def test_vl_wildcard_groups_support_nested_and_optional_choices():
+    source = "wearing {with {blue|pink} trim|} and {striped|} top"
+    groups = bench._wildcard_evaluation_groups(source, "wearing with pink trim and striped top")
+    assert groups[0]["options"] == ["with blue trim", "with pink trim", ""]
+    assert groups[0]["expected"] == 2
+    assert groups[1]["options"] == ["striped", ""]
+    assert groups[1]["expected"] == 1

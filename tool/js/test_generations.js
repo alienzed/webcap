@@ -75,16 +75,37 @@
   }
 
   function testVlQuestion(status) {
-    // Ask about every wildcard dimension without disclosing its resolved choice.
-    var source = String(status.sourcePrompt || '').replace(/\{[^{}]*\|[^{}]*\}/g, '[attribute]');
-    source = source.replace(/^\s*#[^\n]*/gm, '').trim();
-    if (!source.includes('[attribute]')) {
-      return 'Describe this image in detail, including visible subject attributes, distinctive details and setting. Say unclear for anything not visible.';
-    }
-    return 'Describe what is visibly present for every attribute marked [attribute] in this template. ' +
-      'Use the surrounding nouns and relationships to identify each attribute. ' +
-      'If not visible, say unclear. Do not infer an attribute from the template. ' +
-      'Also mention other distinctive visible details.\n\n' + source;
+    var groups = Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : [];
+    if (!groups.length) return 'Describe this image using only visible evidence, including distinctive details.';
+    return 'Inspect the image and choose the best visible option for EVERY numbered attribute below. ' +
+      'Respond with exactly one line per group, e.g. G1: 2. Use only the option number, ' +
+      'or "unclear" if you cannot see it, or "none" if no option fits. ' +
+      'If "(absent)" is an option, select its number when that attribute is absent. ' +
+      'Do not assume any option is present; use only visible evidence.\n\n' +
+      groups.map(function (g) {
+        return g.id + ' (' + g.label + '): ' + g.options.map(function (option, index) {
+          return (index + 1) + '=' + (option || '(absent)');
+        }).join('; ');
+      }).join('\n');
+  }
+
+  function testVlCompare(text, groups) {
+    var lines = String(text || '').split(/\r?\n/);
+    return groups.map(function (g) {
+      var pattern = new RegExp('^\\s*' + g.id + '\\s*[:=-]\\s*', 'i');
+      var matching = lines.filter(function (line) { return pattern.test(line); });
+      var answer = matching.length === 1 ? matching[0].replace(pattern, '').trim() : '';
+      var selected = /^\d+$/.test(answer) && Number(answer) > 0 && Number(answer) <= g.options.length
+        ? Number(answer) : null;
+      return {
+        id: g.id, label: g.label, expected: g.expected, selected: selected,
+        expectedText: g.expected == null ? 'unresolved' : (g.options[g.expected - 1] || '(absent)'),
+        selectedText: selected == null ? (answer || 'unclear') : (g.options[selected - 1] || '(absent)'),
+        result: g.expected == null ? 'unclear' :
+          selected != null ? (selected === g.expected ? 'match' : 'mismatch') :
+          (/^none(?: of these)?$/i.test(answer) ? 'mismatch' : 'unclear')
+      };
+    });
   }
 
   function syncTestVlControls() {
@@ -114,6 +135,12 @@
       footer.appendChild(button);
     }
     button.textContent = item ? ({pending:'Queued',running:'Analyzing…',done:'VL ✓',error:'VL error',stopped:'VL stopped'}[item.status] || 'VL') : '';
+    if (item && item.status === 'done' && item.comparison && item.comparison.length) {
+      var matches = item.comparison.filter(function (g) { return g.result === 'match'; }).length;
+      var mismatches = item.comparison.filter(function (g) { return g.result === 'mismatch'; }).length;
+      var unclear = item.comparison.filter(function (g) { return g.result === 'unclear'; }).length;
+      button.textContent = matches + '/' + (matches + mismatches) + ' checked' + (unclear ? ' · ' + unclear + ' unclear' : '');
+    }
     button.classList.toggle('hidden', !item);
     if (!item) return;
     button.title = item.status === 'done' ? 'Open VL description' : item.status === 'error' ? 'Open VL error' : item.status;
@@ -142,6 +169,10 @@
     el('test-generations-vl-detail-title').textContent = file + ' · ' + (entry.status === 'done' ? 'VL description' : entry.status);
     el('test-generations-vl-expected').textContent = String(currentStatus.resolvedPrompt || currentStatus.prompt || '');
     el('test-generations-vl-question').textContent = entry.question || '';
+    var comparison = el('test-generations-vl-comparison');
+    comparison.textContent = entry.comparison ? entry.comparison.map(function (g) {
+      return g.id + ' ' + g.label + ': expected ' + g.expectedText + ' | VL ' + g.selectedText + ' — ' + g.result;
+    }).join('\n') : '';
     el('test-generations-vl-answer').textContent = entry.text || (entry.status === 'error' ? entry.error : 'Not completed.');
     panel.classList.remove('hidden');
   }
@@ -187,6 +218,7 @@
           }).then(function (job) {
             if (token !== testVl.token) return;
             entry.text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
+            entry.comparison = testVlCompare(entry.text, Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : []);
             entry.status = 'done';
           }).catch(function (err) {
             if (token !== testVl.token) return;

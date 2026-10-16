@@ -1603,11 +1603,68 @@ def _resolved_wildcard_summary(source_prompt, resolved_prompt, owner_folder=""):
     ]
 
 
+def _expand_wildcard_option(nodes):
+    """Expand nested alternatives into visible choices for one top-level group."""
+    phrases = [""]
+    for kind, value in nodes:
+        if kind == "literal":
+            pieces = [value]
+        else:
+            pieces = [
+                phrase
+                for option in value
+                for phrase in _expand_wildcard_option(option)
+            ]
+        phrases = [prefix + piece for prefix in phrases for piece in pieces]
+    return phrases
+
+
+def _wildcard_evaluation_groups(source_prompt, resolved_prompt):
+    """Produce all choices, with the expected selection kept separate for local comparison."""
+    source = _strip_wildcard_comments(str(source_prompt or ""))
+    resolved = _normalize_wildcard_text(str(resolved_prompt or ""))
+    if not source or "{" not in source:
+        return []
+
+    matched = _match_wildcard_source(source, resolved, _match_top_level_wildcard_selections)
+    if matched is not None:
+        source, nodes, selections = matched
+    else:
+        source, nodes, selections = _recover_wildcard_selections(source, resolved)
+
+    groups = []
+    for node_index, (kind, alternatives) in enumerate(nodes):
+        if kind != "group":
+            continue
+        options = []
+        for alternative in alternatives:
+            for text in _expand_wildcard_option(alternative):
+                choice = _normalize_wildcard_text(text)
+                if choice not in options:
+                    options.append(choice)
+        selected = selections[len(groups)] if len(selections) > len(groups) else ""
+        # The recovery matcher cannot prove that an empty alternative was chosen.
+        expected = options.index(selected) + 1 if selected in options and (selected or matched is not None) else None
+        following = _wildcard_neighbor_literal(nodes, node_index, 1)
+        label = _wildcard_summary_suffix(following)
+        if not label:
+            preceding = _wildcard_neighbor_literal(nodes, node_index, -1)
+            label = " ".join(preceding.split()[-4:]).strip(" ,.;:")
+        groups.append({
+            "id": "G" + str(len(groups) + 1),
+            "label": label or "attribute",
+            "options": options,
+            "expected": expected,
+        })
+    return groups
+
+
 def _project_wildcard_fields(payload):
     visible = payload
     source = visible.get("sourcePrompt")
     resolved = visible.get("resolvedPrompt") or visible.get("prompt")
     visible["wildcardValues"] = _resolved_wildcard_values(source, resolved)
+    visible["wildcardEvaluationGroups"] = _wildcard_evaluation_groups(source, resolved)
     visible["wildcardSummary"] = _resolved_wildcard_summary(
         source, resolved, visible.get("ownerFolder"),
     )

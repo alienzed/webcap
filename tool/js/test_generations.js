@@ -2776,6 +2776,7 @@
 
     var label = document.createElement('div');
     label.className = 'test-generations-result-name';
+    label.title = identity.secondary ? identity.primary + ' · ' + identity.secondary : identity.primary;
     label.appendChild(document.createTextNode(identity.primary));
     if (identity.secondary) {
       var source = document.createElement('span');

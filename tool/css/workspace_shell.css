@@ -2086,6 +2086,21 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   gap: 2px;
 }
 
+/* Test jobs prioritize checkpoint identity over the repeated client label. */
+.inference-queue-row.client-test {
+  min-height: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.inference-queue-row.client-test .inference-queue-copy strong {
+  font-weight: 650;
+}
+
+.inference-queue-row.client-test .inference-queue-copy span {
+  color: var(--muted);
+}
+
 .inference-queue-copy strong {
   font-size: 14px;
   line-height: 1.3;

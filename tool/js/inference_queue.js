@@ -48,6 +48,14 @@
     return 'Generate';
   }
 
+  function testCandidateTitle(job) {
+    if (job.candidateKind === 'base') return 'Base model';
+    var file = String(job.candidateFile || '').trim().replace(/\\/g, '/').split('/').pop();
+    if (!file) return String(job.label || '').trim() || 'Test Generations';
+    var match = file.match(/^(.*)__epoch(\d+)\.safetensors$/i);
+    return match ? match[1] + ' · epoch ' + match[2] : file.replace(/\.safetensors$/i, '');
+  }
+
   function testWildcardSummary(job) {
     var values = Array.isArray(job && job.wildcardValues)
       ? job.wildcardValues.map(function (value) { return String(value || '').trim(); }).filter(Boolean)
@@ -187,7 +195,8 @@
   }
 
   function syncRow(row, job, queuedCount) {
-    row.className = 'inference-queue-row status-' + String(job.status || '');
+    row.className = 'inference-queue-row status-' + String(job.status || '') +
+      (job.client === 'test' ? ' client-test' : '');
     var position = row.querySelector('[data-queue-position]');
     var title = row.querySelector('[data-queue-title]');
     var context = row.querySelector('[data-queue-context]');
@@ -199,20 +208,26 @@
       position.textContent = jobStatusLabel(job);
       position.title = position.textContent;
     }
-    if (title) title.textContent = jobClientLabel(job);
+    if (title) title.textContent = job.client === 'test' ? testCandidateTitle(job) : jobClientLabel(job);
     if (context) {
       context.textContent = jobContext(job);
       context.title = job.client === 'test' && Array.isArray(job.wildcardValues) && job.wildcardValues.length
         ? job.wildcardValues.join(' · ')
         : context.textContent;
     }
+    var active = ['starting', 'running', 'stopping'].indexOf(status) !== -1;
+    var age = formatJobAge(job);
     if (detail) {
-      var detailText = jobDetail(job);
-      var age = formatJobAge(job);
-      if (age) {
-        detailText = [detailText, (['starting', 'running', 'stopping'].indexOf(status) !== -1 ? 'Active ' : 'Waiting ') + age].filter(Boolean).join(' · ');
-      }
+      var detailText = job.client === 'test'
+        ? (active ? [
+            formatInferenceProgress(job.progress),
+            job.providerStatus && job.providerStatus !== 'in_progress'
+              ? 'Provider ' + String(job.providerStatus).replace(/_/g, ' ') : '',
+            age ? 'Active ' + age : ''
+          ].filter(Boolean).join(' · ') : '')
+        : [jobDetail(job), age ? (active ? 'Active ' : 'Waiting ') + age : ''].filter(Boolean).join(' · ');
       detail.textContent = detailText;
+      detail.classList.toggle('hidden', !detailText);
     }
     var link = row.querySelector('[data-inference-queue-open]');
     if (link) {
@@ -222,7 +237,17 @@
       link.dataset.folder = String(job.folder || '');
       link.dataset.source = String(job.source || '');
       link.dataset.sessionId = String(job.sessionId || '');
-      link.title = 'Open ' + jobClientLabel(job);
+      var tooltip = ['Open ' + jobClientLabel(job)];
+      if (job.client === 'test') {
+        if (job.candidateKind === 'base') tooltip.push('Base model');
+        else if (job.candidateFile) tooltip.push(String(job.candidateFile));
+        if (job.modelId) tooltip.push(String(job.modelId).replace(/_/g, ' '));
+        if (job.providerStatus) tooltip.push('Provider ' + String(job.providerStatus).replace(/_/g, ' '));
+        var progress = formatInferenceProgress(job.progress);
+        if (progress) tooltip.push(progress);
+        if (age) tooltip.push((active ? 'Active ' : 'Waiting ') + age);
+      }
+      link.title = tooltip.join('\n');
     }
 
     var preserveActions = row.dataset.inferenceQueueStatus === status;

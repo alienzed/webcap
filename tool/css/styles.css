@@ -7187,3 +7187,13 @@ html[data-theme="dark"] iframe {
 .test-generations-vl-detail details summary { cursor:pointer; font-weight:600; }
 .test-generations-vl-detail details > div { margin-top:8px; }
 .test-generations-vl-detail details > strong { display:block; margin-top:10px; }
+
+/* In-memory Test VL evaluation controls and live epoch scores. */
+.test-generations-vl-filters { flex:0 0 auto; margin:0 0 10px; padding:8px 10px; border:1px solid var(--border); border-radius:5px; }
+.test-generations-vl-filters summary { cursor:pointer; font-size:12px; font-weight:600; }
+.test-generations-vl-filter-options { display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:9px; }
+.test-generations-vl-filter, .test-generations-vl-row-count { display:inline-flex; align-items:center; gap:5px; font-size:12px; cursor:pointer; }
+.test-generations-vl-table .test-generations-vl-row-count { white-space:nowrap; }
+.test-generations-vl-table tr.is-excluded { opacity:.55; }
+.test-generations-vl-candidate-score { display:block; color:var(--muted); font-size:12px; }
+.test-generations-vl-epoch-score { display:block; margin-top:4px; font-size:12px; color:var(--muted); }

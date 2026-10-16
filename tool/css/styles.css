@@ -7244,3 +7244,21 @@ html[data-theme="dark"] iframe {
 .test-generations-result-epoch-metrics .test-generations-vl-epoch-score { display:inline; margin:0; color:var(--muted); font-size:12px; white-space:nowrap; }
 .test-generations-result-evaluation .test-generations-vl-result { flex:0 0 auto; margin:0; align-self:center; white-space:nowrap; }
 .test-generations-vl-model-line { color:var(--muted); font-size:12px; margin-bottom:10px; overflow-wrap:anywhere; }
+
+/* Browser-owned Test batch, independent of the Test workspace visibility. */
+.test-generations-batch-divider {height:18px; width:1px; background:var(--border); margin:0 4px;}
+.test-generations-batch-dialog {max-width:520px;}
+.test-generations-batch-count-label {display:flex; align-items:center; gap:12px; font-size:13px;}
+.test-generations-batch-count-label input {width:66px; padding:5px 7px;}
+.test-generations-batch-dialog-actions {justify-content:flex-end; border-bottom:0; border-top:1px solid var(--border);}
+.test-generations-batch-card {position:fixed; right:16px; bottom:16px; z-index:3200; width:min(430px,calc(100vw - 32px)); max-height:65vh; overflow:auto; border:1px solid var(--border); border-radius:9px; padding:12px; background:var(--panel); box-shadow:0 8px 30px #0006; display:grid; gap:8px; font-size:12px;}
+.test-generations-batch-card.hidden {display:none;}
+.test-generations-batch-card-heading {display:flex; align-items:center; gap:6px;}
+.test-generations-batch-card-heading strong {flex:1; min-width:0;}
+.test-generations-batch-progress {color:var(--muted); overflow-wrap:anywhere;}
+.test-generations-batch-card #test-generations-batch-stop {justify-self:end;}
+.test-generations-batch-results {overflow:auto;}
+.test-generations-batch-results table {width:100%; border-collapse:collapse; font-size:12px;}
+.test-generations-batch-results th,.test-generations-batch-results td {padding:5px 4px; border-bottom:1px solid var(--border); text-align:left;}
+.test-generations-batch-results th button {background:transparent; border:0; color:var(--text); cursor:pointer; font:inherit; font-weight:600;}
+.test-generations-batch-results td button {padding:0; border:0; background:transparent; color:var(--accent); cursor:pointer; text-align:left; font:inherit; max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}

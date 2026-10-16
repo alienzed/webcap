@@ -423,6 +423,24 @@
     panel.classList.remove('hidden');
   }
 
+  // Shared inference request for interactive Ask VL and browser-owned batch evaluation.
+  function askVlForTestPreview(folder, session, file, model, question, onJob) {
+    return captionAssistRequestJson('/fs/test_generations/vision-question', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: folder, session: session, media: file, model: model, question: question })
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Test VL did not return a job.');
+      trackTransientLlmJob(payload.job);
+      if (onJob && onJob(String(payload.job.jobId)) === false) {
+        return cancelCaptionAssistJob(payload.job.jobId).then(function () {
+          throw new Error('Test VL stopped.');
+        });
+      }
+      return waitForCaptionAssistJob(payload.job);
+    });
+  }
+
   function runTestVlBatch() {
     if (testVl.running) { stopTestVl(); return; }
     var status = currentStatus;
@@ -457,16 +475,9 @@
           var entry = testVl.entries[file];
           entry.status = 'running';
           syncTestVlCards();
-          return captionAssistRequestJson('/fs/test_generations/vision-question', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder: folder, session: session, media: file, model: model, question: testVl.question })
-          }).then(function (payload) {
-            if (!payload.job || !payload.job.jobId) throw new Error('Test VL did not return a job.');
-            trackTransientLlmJob(payload.job);
-            if (token !== testVl.token) return cancelCaptionAssistJob(payload.job.jobId);
-            testVl.jobId = String(payload.job.jobId);
-            return waitForCaptionAssistJob(payload.job);
+          return askVlForTestPreview(folder, session, file, model, testVl.question, function (jobId) {
+            if (token !== testVl.token) return false;
+            testVl.jobId = jobId;
           }).then(function (job) {
             if (token !== testVl.token) return;
             entry.text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
@@ -2753,6 +2764,12 @@
           if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
         });
       }
+      if (testBatch && testBatch.folder === String(launchFolder) && testBatch.statuses[sessionName]) {
+        (testBatch.statuses[sessionName].results || []).forEach(function (result) {
+          if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
+        });
+        testBatchRecalculate(testBatch);
+      }
       return request('test_rating_summary', { modelId: currentTestModelId() });
     }).then(function (payload) {
       if (prepared && payload && payload.candidateScores) {
@@ -4090,6 +4107,353 @@
     });
   }
 
+  // First Cut-style browser orchestration: accepted Test jobs and saved VL assessments
+  // outlive this controller, which deliberately does not survive a tab reload.
+  var testBatch = null;
+  var testBatchTimer = 0;
+  var testBatchSort = 'vl';
+
+  function renderTestBatch() {
+    var card = el('test-generations-batch-card');
+    card.classList.toggle('hidden', !testBatch || testBatch.dismissed);
+    if (!testBatch) return;
+    var batch = testBatch;
+    el('test-generations-batch-heading').textContent = 'Batch Test + VL · ' + batch.folder;
+    var lines = [];
+    lines.push(batch.phase + ' · ' + batch.sessions.length + '/' + batch.count + ' sessions submitted');
+    if (batch.phase === 'Generating') lines.push(batch.finished + '/' + batch.sessions.length + ' sessions finished');
+    if (batch.phase === 'Evaluating') lines.push(batch.evaluated + '/' + batch.previews + ' previews evaluated');
+    if (batch.detail) lines.push(batch.detail);
+    if (batch.errors.length) lines.push(batch.errors.length + ' error(s); see Console.');
+    el('test-generations-batch-progress').textContent = lines.join(' · ');
+    el('test-generations-batch-stop').classList.toggle('hidden', !batch.active);
+    el('test-generations-batch-dismiss').classList.toggle('hidden', batch.active);
+    var resultHost = el('test-generations-batch-results');
+    resultHost.classList.toggle('hidden', !batch.scores.length);
+    if (!batch.scores.length) { resultHost.textContent = ''; return; }
+    var rows = batch.scores.slice().sort(function (a, b) {
+      if (testBatchSort === 'stars') return (b.starCount ? b.stars : -1) - (a.starCount ? a.stars : -1) || b.vl - a.vl;
+      if (testBatchSort === 'name') return a.name.localeCompare(b.name);
+      return b.vl - a.vl;
+    });
+    resultHost.innerHTML = '';
+    var table = document.createElement('table');
+    var head = document.createElement('thead');
+    var header = document.createElement('tr');
+    [['Candidate','name'],['VL','vl'],['Stars','stars']].forEach(function (column) {
+      var th = document.createElement('th');
+      var sort = document.createElement('button');
+      sort.type = 'button';
+      sort.dataset.testBatchSort = column[1];
+      sort.textContent = column[0] + (testBatchSort === column[1] ? ' ↓' : '');
+      th.appendChild(sort);
+      header.appendChild(th);
+    });
+    head.appendChild(header);
+    table.appendChild(head);
+    var body = document.createElement('tbody');
+    rows.forEach(function (row) {
+      var tr = document.createElement('tr');
+      var nameCell = document.createElement('td');
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.dataset.testBatchSession = row.session;
+      open.title = row.name;
+      open.textContent = stagedFileParts(row.name).label;
+      nameCell.appendChild(open);
+      tr.appendChild(nameCell);
+      var vl = document.createElement('td');
+      vl.textContent = row.count ? Math.round(100 * row.matches / row.count) + '%' : '—';
+      vl.title = row.count + ' counted attributes · ' + row.previews + ' assessed previews';
+      tr.appendChild(vl);
+      var stars = document.createElement('td');
+      stars.textContent = row.starCount ? '★ ' + row.stars.toFixed(1) : '—';
+      stars.title = row.starCount + ' manual rating(s)';
+      tr.appendChild(stars);
+      body.appendChild(tr);
+    });
+    table.appendChild(body);
+    resultHost.appendChild(table);
+  }
+
+  function stopTestBatch() {
+    var batch = testBatch;
+    if (!batch || !batch.active) return;
+    batch.active = false;
+    batch.phase = 'Stopped';
+    batch.detail = 'Accepted Test sessions continue in the backend.';
+    if (testBatchTimer) clearTimeout(testBatchTimer);
+    testBatchTimer = 0;
+    if (batch.vlJobId) cancelCaptionAssistJob(batch.vlJobId).catch(function (err) {
+      reportConsoleError('Test batch VL cancellation', err);
+    });
+    renderTestBatch();
+  }
+
+  function testBatchCheck(batch) {
+    if (testBatch !== batch || !batch.active) throw new Error('Test batch stopped.');
+  }
+
+  function testBatchWait(batch) {
+    return new Promise(function (resolve) {
+      testBatchTimer = setTimeout(function () { testBatchTimer = 0; resolve(); }, 5000);
+    });
+  }
+
+  function testBatchError(batch, err, detail) {
+    var message = String(detail || '') + ': ' + String(err && err.message ? err.message : err);
+    batch.errors.push(message);
+    reportConsoleError('Test batch · ' + (detail || 'operation'), err);
+    batch.detail = message;
+    renderTestBatch();
+  }
+
+  function testBatchReadSessions(batch) {
+    return Promise.all(batch.sessions.map(function (session) {
+      return requestForFolder(batch.folder, 'test_open_session', { session: session }).then(function (status) {
+        batch.statuses[session] = status;
+      }).catch(function (err) { testBatchError(batch, err, session); throw err; });
+    }));
+  }
+
+  function testBatchPoll(batch) {
+    testBatchCheck(batch);
+    return testBatchReadSessions(batch).then(function () {
+      testBatchCheck(batch);
+      var terminal = { complete: true, stopped: true, failed: true, interrupted: true };
+      batch.finished = batch.sessions.filter(function (id) {
+        return !!terminal[String(batch.statuses[id].status || '')];
+      }).length;
+      batch.detail = '';
+      renderTestBatch();
+      if (batch.finished === batch.sessions.length) {
+        // A terminal session can be "complete" even when individual renditions failed.
+        // Keep successful previews usable, but report failed generations in Console.
+        batch.sessions.forEach(function (session) {
+          var status = batch.statuses[session];
+          var failures = Array.isArray(status.failures) ? status.failures : [];
+          var failed = Number(status.failed || 0);
+          if (!failures.length && !failed && status.status !== 'failed' && status.status !== 'interrupted') return;
+          var reason = failures.map(function (failure) {
+            return String(failure.sourceLoRA || failure.candidateFile || 'Generation') + ': ' +
+              String(failure.error || 'failed');
+          }).join('; ') || String(status.error || failed + ' failed generation(s)');
+          testBatchError(batch, new Error(reason), sessionLabel(session) + ' generation');
+        });
+        return;
+      }
+      return testBatchWait(batch).then(function () { return testBatchPoll(batch); });
+    });
+  }
+
+  function testBatchRecalculate(batch) {
+    var totals = Object.create(null);
+    batch.sessions.forEach(function (session) {
+      var status = batch.statuses[session];
+      var vision = status && status.testVision || {};
+      var byMedia = vision.byMedia || {};
+      var excluded = new Set(vision.disabledGroups || []);
+      (status && status.results || []).forEach(function (result) {
+        if (!result || result.kind === 'base') return;
+        var file = resultMediaFile(result);
+        var entry = byMedia[file];
+        var name = String(result.candidateFile || result.sourceLoRA || '');
+        if (!name) return;
+        var item = totals[name] || (totals[name] = {
+          name: name, session: session, matches: 0, count: 0, previews: 0, stars: 0, starCount: 0, vl: -1
+        });
+        var rating = Number(result.rating || 0);
+        if (rating > 0) { item.stars += rating; item.starCount += 1; }
+        if (!entry || !Array.isArray(entry.comparison)) return;
+        var ignored = new Set(entry.ignoredGroups || []);
+        var counted = false;
+        entry.comparison.forEach(function (group) {
+          if (excluded.has(group.id) || ignored.has(group.id)) return;
+          if (group.result !== 'match' && group.result !== 'mismatch') return;
+          item.count += 1;
+          if (group.result === 'match') item.matches += 1;
+          counted = true;
+        });
+        if (counted) item.previews += 1;
+      });
+    });
+    batch.scores = Object.keys(totals).map(function (name) {
+      var item = totals[name];
+      if (item.starCount) item.stars /= item.starCount;
+      item.vl = item.count ? item.matches / item.count : -1;
+      return item;
+    });
+    renderTestBatch();
+  }
+
+  function testBatchEvaluate(batch) {
+    testBatchCheck(batch);
+    batch.phase = 'Evaluating';
+    batch.previews = batch.sessions.reduce(function (sum, session) {
+      return sum + (batch.statuses[session].results || []).filter(function (r) {
+        return !!resultMediaFile(r);
+      }).length;
+    }, 0);
+    batch.evaluated = 0;
+    renderTestBatch();
+    return batch.sessions.reduce(function (previous, session) {
+      return previous.then(function () {
+        var status = batch.statuses[session];
+        var question = testVlQuestion(status);
+        var groups = Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : [];
+        var results = (status.results || []).filter(function (r) { return !!resultMediaFile(r); });
+        return results.reduce(function (chain, result) {
+          return chain.then(function () {
+            testBatchCheck(batch);
+            var file = resultMediaFile(result);
+            batch.detail = sessionLabel(session) + ' · ' + file;
+            renderTestBatch();
+            return askVlForTestPreview(batch.folder, session, file, batch.vlModel, question, function (jobId) {
+              batch.vlJobId = jobId;
+              return batch.active;
+            }).then(function (job) {
+              testBatchCheck(batch);
+              var text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
+              return requestForFolder(batch.folder, 'test_vision_update', {
+                session: session, mediaFile: file,
+                assessment: { text: text, question: question, comparison: testVlCompare(text, groups), modelId: batch.vlModel }
+              });
+            }).then(function (payload) {
+              testBatchCheck(batch);
+              var stored = batch.statuses[session].testVision || (batch.statuses[session].testVision = {});
+              stored.byMedia = payload.testVision.byMedia;
+              stored.disabledGroups = payload.testVision.disabledGroups;
+              testBatchRecalculate(batch);
+            }).catch(function (err) {
+              if (!batch.active) throw err;
+              testBatchError(batch, err, session + ' · ' + file);
+            }).then(function () {
+              batch.vlJobId = '';
+              batch.evaluated += 1;
+              renderTestBatch();
+            });
+          });
+        }, Promise.resolve());
+      });
+    }, Promise.resolve());
+  }
+
+  function runTestBatch(count) {
+    if (testBatch && testBatch.active) throw new Error('A Test batch is already active.');
+    if (!isTestModelSupported()) throw new Error('Test model is unavailable.');
+    var prompt = String(el('test-generations-prompt').value || '').trim();
+    var selectedFiles = selectedCandidateFiles();
+    if (!prompt || !selectedFiles.length) throw new Error('Choose a prompt and at least one staged candidate.');
+    var declared = prepared && Array.isArray(prepared.settings) ? prepared.settings : [];
+    var settings = {};
+    [['aspectRatio','test-generations-aspect'],['megapixels','test-generations-megapixels'],
+      ['duration','test-generations-duration'],['dimensions','test-generations-dimensions']].forEach(function (pair) {
+      if (declared.indexOf(pair[0]) !== -1) settings[pair[0]] = String(el(pair[1]).value || '');
+    });
+    if (declared.indexOf('aspectRatio') !== -1 && !settings.aspectRatio) throw new Error('An aspect ratio is required.');
+    if (declared.indexOf('dimensions') !== -1 && !settings.dimensions.trim()) throw new Error('Dimensions are required.');
+    var strengths = {};
+    var defaultStrength = Number(defaultCandidateStrength);
+    if (!isFinite(defaultStrength) || defaultStrength < -2 || defaultStrength > 2) throw new Error('Default weight must be between -2 and 2.');
+    selectedFiles.forEach(function (file) {
+      var weight = Object.prototype.hasOwnProperty.call(candidateStrengths || {}, file) ? Number(candidateStrengths[file]) : defaultStrength;
+      if (!isFinite(weight) || weight < -2 || weight > 2) throw new Error('Strength must be between -2 and 2.');
+      strengths[file] = weight;
+    });
+    var criteria = {
+      name: String(el('test-generations-session-name').value || '').trim(),
+      selectedFiles: selectedFiles, modelId: currentTestModelId(), candidateStrengths: strengths,
+      includeBase: el('test-generations-base-include').checked,
+      prompt: prompt, settings: settings
+    };
+    if (sweepMode) criteria.sweepWeights = parseSweepWeights(sweepWeights);
+    var batch = {
+      active: true, dismissed: false, folder: String(launchFolder), count: count,
+      criteria: criteria, vlModel: '', sessions: [], statuses: Object.create(null),
+      finished: 0, previews: 0, evaluated: 0, errors: [], scores: [],
+      phase: 'Preparing', detail: '', vlJobId: ''
+    };
+    testBatch = batch;
+    el('test-generations-batch-modal').classList.add('hidden');
+    el('test-generations-batch-modal').setAttribute('aria-hidden', 'true');
+    renderTestBatch();
+    loadCaptionVisionCapabilities().then(function () {
+      testBatchCheck(batch);
+      batch.vlModel = getCaptionVisionModelId();
+      if (!batch.vlModel) throw new Error('Select an available Vision model.');
+      batch.phase = 'Queuing';
+      return Array.from({ length: count }, function (_, index) { return index; }).reduce(function (chain, index) {
+        return chain.then(function () {
+          testBatchCheck(batch);
+          var seed = randomSeed();
+          while (batch.usedSeeds && batch.usedSeeds.has(seed)) seed = randomSeed();
+          if (!batch.usedSeeds) batch.usedSeeds = new Set();
+          batch.usedSeeds.add(seed);
+          var requestSettings = Object.assign({}, criteria.settings, { seed: String(seed) });
+          var suffix = count > 1 ? ' ' + (index + 1) + '/' + count : '';
+          var sessionCriteria = Object.assign({}, criteria, {
+            name: (criteria.name ? criteria.name.slice(0, 110) : 'Batch Test') + suffix, settings: requestSettings
+          });
+          return requestForFolder(batch.folder, 'test_enqueue', sessionCriteria).then(function (response) {
+            var session = response && response.job && response.job.id;
+            if (!session) throw new Error('Test enqueue returned no session ID.');
+            batch.sessions.push(String(session));
+            renderTestBatch();
+          });
+        });
+      }, Promise.resolve());
+    }).then(function () {
+      testBatchCheck(batch);
+      batch.phase = 'Generating';
+      batch.detail = 'All sessions submitted.';
+      renderTestBatch();
+      return testBatchPoll(batch);
+    }).then(function () {
+      testBatchCheck(batch);
+      return testBatchEvaluate(batch);
+    }).then(function () {
+      testBatchCheck(batch);
+      return testBatchReadSessions(batch);
+    }).then(function () {
+      testBatchCheck(batch);
+      testBatchRecalculate(batch);
+      if (String(launchFolder) === batch.folder && !testVl.running) testVl.loadedScope = '';
+      batch.phase = 'Complete';
+      batch.detail = batch.errors.length ? 'Completed with generation or assessment errors.' :
+        batch.scores.some(function (row) { return row.count > 0; }) ? 'Ready for manual review.' :
+        'No scoreable attributes. Use resolved wildcard choices to obtain VL percentages.';
+      batch.active = false;
+      renderTestBatch();
+    }).catch(function (err) {
+      if (!batch.active) return;
+      testBatchError(batch, err, batch.phase);
+      batch.active = false;
+      batch.phase = 'Failed';
+      renderTestBatch();
+    });
+  }
+
+  function openTestBatchDialog() {
+    if (testBatch && testBatch.active) {
+      testBatch.dismissed = false;
+      renderTestBatch();
+      return;
+    }
+    var modal = el('test-generations-batch-modal');
+    var count = el('test-generations-batch-count');
+    count.value = '5';
+    el('test-generations-batch-config-summary').textContent =
+      selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session · automatic Ask VL';
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeTestBatchDialog() {
+    var modal = el('test-generations-batch-modal');
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
   function startRun() {
     if (!isTestModelSupported()) {
       return showError(new Error('Test Generations is not available for the selected Base Model.'));
@@ -4296,6 +4660,31 @@
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
+    el('test-generations-batch-btn').onclick = openTestBatchDialog;
+    el('test-generations-batch-close').onclick = closeTestBatchDialog;
+    el('test-generations-batch-cancel').onclick = closeTestBatchDialog;
+    el('test-generations-batch-modal').onclick = function (event) { if (event.target === this) closeTestBatchDialog(); };
+    el('test-generations-batch-start').onclick = function () {
+      var count = Number(el('test-generations-batch-count').value);
+      if (!Number.isInteger(count) || count < 1 || count > 20) {
+        return showError(new Error('Choose 1–20 Test sessions.'));
+      }
+      try { runTestBatch(count); } catch (err) { showError(err); }
+    };
+    el('test-generations-batch-stop').onclick = stopTestBatch;
+    el('test-generations-batch-dismiss').onclick = function () { if (testBatch) { testBatch.dismissed = true; renderTestBatch(); } };
+    el('test-generations-batch-open').onclick = function () {
+      if (testBatch) openTestBenchForSetFolder(testBatch.folder);
+    };
+    el('test-generations-batch-results').onclick = function (event) {
+      var sort = event.target.closest('[data-test-batch-sort]');
+      if (sort) { testBatchSort = sort.dataset.testBatchSort; renderTestBatch(); return; }
+      var open = event.target.closest('[data-test-batch-session]');
+      if (open && testBatch) {
+        pendingActivitySession = open.dataset.testBatchSession;
+        openTestBenchForSetFolder(testBatch.folder);
+      }
+    };
     el('test-generations-ask-vl').onclick = runTestVlBatch;
     el('test-generations-vl-filter-options').onchange = function (event) {
       var input = event.target.closest('[data-test-vl-group]');

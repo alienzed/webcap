@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .folder_state_store import read_folder_state, set_media_rating
+from .folder_state_store import read_folder_state, set_media_rating, set_test_vision_assessment
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path
 from .training_runner import candidate_run_snapshot_from_provenance, candidate_selected_epoch_from_provenance
@@ -657,6 +657,53 @@ def _with_session_ratings(session_directory, payload):
     return visible
 
 
+def _session_vision_state(session_directory):
+    state = read_folder_state(Path(session_directory) / ".webcap_state.json")
+    vision = state.get("test_vision")
+    return vision if isinstance(vision, dict) else {}
+
+
+def _with_session_vision(session_directory, payload):
+    if payload is None:
+        return payload
+    visible = dict(payload)
+    visible["testVision"] = _session_vision_state(session_directory)
+    return visible
+
+
+def update_vision(folder_path, session_name, criteria):
+    session = _session_directory(folder_path, session_name)
+    media_name = criteria.get("mediaFile")
+    assessment = criteria.get("assessment")
+    ignored = criteria.get("ignoredGroups")
+    disabled = criteria.get("disabledGroups")
+    if media_name is None and disabled is None:
+        raise ValueError("Test VL update needs a preview or session attribute selection.")
+    if disabled is not None and (not isinstance(disabled, list) or any(not isinstance(v, str) for v in disabled)):
+        raise ValueError("VL disabled groups must be an array of IDs.")
+    if ignored is not None and (not isinstance(ignored, list) or any(not isinstance(v, str) for v in ignored)):
+        raise ValueError("VL ignored groups must be an array of IDs.")
+    if assessment is not None:
+        if not isinstance(assessment, dict) or not isinstance(assessment.get("text"), str) or not isinstance(assessment.get("comparison"), list):
+            raise ValueError("VL assessment requires response text and comparison rows.")
+        if any(not isinstance(row, dict) or not all(key in row for key in ("id", "result", "expectedText", "selectedText")) for row in assessment["comparison"]):
+            raise ValueError("VL comparison has invalid rows.")
+    if media_name is not None:
+        media = resolve_result_media(folder_path, session_name, media_name)
+        media_name = media.name
+        results = (_read_status(session) or {}).get("results", [])
+        if not any(_result_media_file(row) == media_name for row in results):
+            raise ValueError("VL assessment media must belong to the Test session results.")
+    if ignored is not None and assessment is None:
+        previous = _session_vision_state(session).get("byMedia", {})
+        if media_name not in previous:
+            raise ValueError("Cannot update exclusions before a VL assessment exists.")
+    vision = set_test_vision_assessment(
+        session / ".webcap_state.json", media_key=media_name,
+        assessment=assessment, ignored_groups=ignored, disabled_groups=disabled,
+    )
+    return {"operation": "test_vision_update", "session": session.name, "testVision": vision}
+
 def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None):
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
@@ -706,7 +753,7 @@ def _mark_session_interrupted(session_directory, message="Test Generations sessi
 
 def open_session(folder_path, session_name):
     session = _session_directory(folder_path, session_name)
-    return _with_session_ratings(session, _visible_session_status(folder_path, session))
+    return _with_session_vision(session, _with_session_ratings(session, _visible_session_status(folder_path, session)))
 
 
 def resolve_result_media(folder_path, session_name, media_name):
@@ -1043,6 +1090,9 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_rating_summary":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return rating_summary(folder_path, model_id=criteria.get("modelId"))
+    if operation == "test_vision_update":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return update_vision(folder_path, criteria.get("session"), criteria)
     if operation == "test_rate_result":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return rate_result(
@@ -2780,7 +2830,8 @@ def status(folder_path, model_id=None, session_snapshot=None, visible_snapshot=N
     session_name = str(payload.get("session") or "").strip() if isinstance(payload, dict) else ""
     if not session_name:
         return payload
-    return _with_session_ratings(_session_directory(folder_path, session_name), payload)
+    session = _session_directory(folder_path, session_name)
+    return _with_session_vision(session, _with_session_ratings(session, payload))
 
 
 def stop(folder_path, session_name=None):

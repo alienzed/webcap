@@ -1588,7 +1588,7 @@ def test_candidate_sorting_reuses_existing_scores_and_preserves_rows():
     sorter = script.split("function sortStagedCandidateRows()", 1)[1].split("function syncStagedCandidateScores", 1)[0]
     assert "prepared.files.map" in sorter
     assert "prepared.candidateScores || {}" in sorter
-    assert "testVlCandidateScores(currentStatus && currentStatus.results)" in sorter
+    assert "(prepared.candidateVisionScores || {})" in sorter
     assert "scoreB.matches / totalB - scoreA.matches / totalA" in sorter
     assert "if (countA !== countB) return countB - countA;" in sorter
     assert "if (totalA !== totalB) return totalB - totalA;" in sorter
@@ -1631,3 +1631,15 @@ def test_browser_test_batch_is_navigation_independent_and_uses_existing_queues()
     assert 'id="test-generations-batch-card"' in html
     assert ".test-generations-batch-card" in css
     assert "window.localStorage" not in script
+
+
+def test_candidate_vl_aggregates_use_saved_scores_not_selected_session():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+    candidate_rows = script.split("function syncTestVlCandidateRows()", 1)[1].split("function testVlComparisonTable", 1)[0]
+    assert "prepared && prepared.candidateVisionScores || {}" in candidate_rows
+    assert "testVlCandidateScores(currentStatus && currentStatus.results)" not in candidate_rows
+    assert '"candidateVisionScores": _candidate_vision_scores(' in backend
+    assert "prepared.candidateVisionScores = payload.candidateVisionScores || {};" in script
+    assert 'if payload.get("sweepWeights"):' in backend
+    assert 'if group.get("result") not in ("match", "mismatch"):' in backend

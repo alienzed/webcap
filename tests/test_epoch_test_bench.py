@@ -545,6 +545,44 @@ def test_rating_summary_reads_standard_folder_ratings(tmp_path, monkeypatch):
 
 
 
+def test_candidate_vision_scores_aggregate_saved_sessions_and_exclusions(tmp_path, monkeypatch):
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", tmp_path)
+    model = bench.get_test_model().PROFILE_ID
+    root = tmp_path / "set" / bench.TEST_RESULTS_DIR
+
+    def add_session(name, model_id, sweep, comparisons, disabled=(), ignored=()):
+        session = root / name
+        session.mkdir(parents=True)
+        bench._atomic_write_json(session / "test.json", {
+            "status": "complete", "modelId": model_id,
+            "sweepWeights": [0.8, 1.0] if sweep else None,
+            "results": [
+                {"kind": "lora", "candidateFile": "epoch.safetensors", "mediaFile": "result.mp4"},
+                {"kind": "base", "candidateFile": "Base", "mediaFile": "base.mp4"},
+            ],
+        })
+        (session / ".webcap_state.json").write_text(json.dumps({"test_vision": {
+            "disabledGroups": list(disabled),
+            "byMedia": {
+                "result.mp4": {"ignoredGroups": list(ignored), "comparison": comparisons},
+                "base.mp4": {"comparison": [{"id": "base", "result": "mismatch"}]},
+            },
+        }}), encoding="utf-8")
+
+    add_session("a", model, False, [
+        {"id": "G1", "result": "match"}, {"id": "G2", "result": "mismatch"},
+        {"id": "G3", "result": "unclear"},
+    ])
+    add_session("b", model, False, [
+        {"id": "G1", "result": "match"}, {"id": "G2", "result": "mismatch"},
+        {"id": "G3", "result": "match"},
+    ], disabled=["G2"], ignored=["G3"])
+    add_session("c", model, True, [{"id": "G1", "result": "mismatch"}])
+    add_session("d", "other-model", False, [{"id": "G1", "result": "mismatch"}])
+    scores = bench._candidate_vision_scores(tmp_path / "set", model)
+    assert scores == {"epoch.safetensors": {"matches": 2, "count": 3, "previews": 2}}
+
+
 def test_remove_candidate_deletes_only_staged_copy_and_sidecar(tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.mkdir()

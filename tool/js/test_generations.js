@@ -91,7 +91,13 @@
       return request('test_vision_update', Object.assign({ session: session }, changes));
     });
     testVlSaveQueue = save.catch(function () {}); // Keep later saves operable after a failed write.
-    return save.catch(function (err) {
+    return save.then(function (payload) {
+      if (prepared && String(prepared.modelId || '') === currentTestModelId()) {
+        prepared.candidateVisionScores = payload.candidateVisionScores || {};
+        syncTestVlCandidateRows();
+      }
+      return payload;
+    }).catch(function (err) {
       showError(err);
       throw err;
     });
@@ -326,7 +332,7 @@
   }
 
   function syncTestVlCandidateRows() {
-    var scores = testVlCandidateScores(currentStatus && currentStatus.results);
+    var scores = prepared && prepared.candidateVisionScores || {};
     var host = el('test-generations-files');
     if (!host) return;
     Array.prototype.forEach.call(host.querySelectorAll('[data-staged-file]'), function (row) {
@@ -1834,7 +1840,7 @@
     if (rows.length < 2) return;
     var original = new Map(prepared.files.map(function (file, index) { return [file, index]; }));
     var scores = candidateSort === 'rating' ? (prepared.candidateScores || {})
-      : candidateSort === 'vl' ? testVlCandidateScores(currentStatus && currentStatus.results) : {};
+      : candidateSort === 'vl' ? (prepared.candidateVisionScores || {}) : {};
     var ordered = rows.slice().sort(function (a, b) {
       var fileA = String(a.dataset.stagedFile || '');
       var fileB = String(b.dataset.stagedFile || '');
@@ -2557,6 +2563,9 @@
     }
     return request('test_clear_sessions', {}).then(function () {
       sessionsMutationVersion += 1;
+      if (prepared) { prepared.candidateScores = {}; prepared.candidateVisionScores = {}; }
+      syncStagedCandidateScores({});
+      syncTestVlCandidateRows();
       forgetTrackedTestSessions(launchFolder);
       currentSession = '';
       currentSessionFolder = '';
@@ -2774,6 +2783,7 @@
     }).then(function (payload) {
       if (prepared && payload && payload.candidateScores) {
         prepared.candidateScores = payload.candidateScores;
+        prepared.candidateVisionScores = payload.candidateVisionScores || {};
         syncStagedCandidateScores(prepared.candidateScores);
         syncTestVlCards();
       }
@@ -4418,6 +4428,12 @@
       testBatchCheck(batch);
       testBatchRecalculate(batch);
       if (String(launchFolder) === batch.folder && !testVl.running) testVl.loadedScope = '';
+      if (prepared && String(launchFolder) === batch.folder && String(prepared.modelId || '') === String(batch.criteria.modelId)) {
+        return requestForFolder(batch.folder, 'test_rating_summary', { modelId: batch.criteria.modelId }).then(function (summary) {
+          prepared.candidateVisionScores = summary.candidateVisionScores || {};
+          syncTestVlCandidateRows();
+        });
+      }
       batch.phase = 'Complete';
       batch.detail = batch.errors.length ? 'Completed with generation or assessment errors.' :
         batch.scores.some(function (row) { return row.count > 0; }) ? 'Ready for manual review.' :
@@ -4563,6 +4579,10 @@
       // The server returns the authoritative filtered session list; reconcile
       // its keyed rows without replacing unrelated sessions or results.
       renderSessions(payload.sessions, queuedTestJobs);
+      if (prepared && String(payload.modelId || '') === String(prepared.modelId || '')) {
+        prepared.candidateVisionScores = payload.candidateVisionScores || {};
+        syncTestVlCandidateRows();
+      }
       if (currentSession === deleted) {
         currentSession = '';
         currentSessionFolder = '';
@@ -4593,6 +4613,7 @@
         if (selectedCandidates instanceof Set) selectedCandidates.delete(removed);
         if (candidateStrengths) delete candidateStrengths[removed];
         if (prepared.candidateScores) delete prepared.candidateScores[removed];
+        prepared.candidateVisionScores = payload.candidateVisionScores || {};
         if (prepared.candidateMetadata) delete prepared.candidateMetadata[removed];
         if (localRemoval) {
           var host = el('test-generations-files');
@@ -4614,6 +4635,7 @@
           renderStagedFiles(prepared);
         }
         syncActiveRunControls(currentStatus);
+        syncTestVlCandidateRows();
       }
       if (payload.sessionStatus && currentSession === String(payload.sessionStatus.session || '')) {
         renderStatus(payload.sessionStatus);

@@ -1774,13 +1774,13 @@
                 <div id="test-generations-batch-results" class="test-generations-batch-results hidden"></div>
                 <button id="test-generations-batch-stop" class="review-captions-btn" type="button">Stop automation</button>
             </aside>
-            <div id="test-generations-batch-modal" class="keep-lora-modal hidden" aria-hidden="true">
+            <div id="test-generations-batch-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="test-generations-batch-close">
                 <section class="keep-lora-dialog test-generations-batch-dialog" role="dialog" aria-modal="true" aria-labelledby="test-generations-batch-title">
                     <header class="keep-lora-header"><div><h2 id="test-generations-batch-title">Batch Test + Ask VL</h2><p class="keep-lora-source">Queue sessions with fresh seeds, then evaluate all completed previews automatically.</p></div><button id="test-generations-batch-close" type="button" class="training-review-modal-close" aria-label="Close Batch dialog">&times;</button></header>
                     <div class="keep-lora-content">
                         <label class="test-generations-batch-count-label">Test sessions <input id="test-generations-batch-count" type="number" min="1" max="20" step="1" value="5"></label>
                         <div id="test-generations-batch-config-summary" class="keep-lora-source"></div>
-                        <p class="keep-lora-source">The browser must remain open. Switching to Prepare Set or Training is fine. Already-queued generation jobs continue if this automation stops.</p>
+                        <p class="keep-lora-source">The browser must remain open. Switching to Prepare Set or Training is fine. Already-queued generation jobs continue if this automation stops. Scored VL percentages require resolved wildcard attributes.</p>
                     </div>
                     <footer class="keep-lora-header test-generations-batch-dialog-actions"><button id="test-generations-batch-cancel" type="button" class="review-captions-btn">Cancel</button><button id="test-generations-batch-start" type="button" class="training-btn">Queue and Evaluate</button></footer>
                 </section>

@@ -52,7 +52,7 @@
   };
 
   // Ephemeral Test VL batch; observations never enter session files or Set metadata.
-  var testVl = { scope: '', entries: Object.create(null), running: false, token: 0, jobId: '', done: 0, total: 0, question: '' };
+  var testVl = { scope: '', entries: Object.create(null), disabledGroups: new Set(), running: false, token: 0, jobId: '', done: 0, total: 0, question: '' };
 
   function testVlScope(status) {
     return String(launchFolder || '') + '|' + String(status && status.session || '');
@@ -106,6 +106,84 @@
           (/^none(?: of these)?$/i.test(answer) ? 'mismatch' : 'unclear')
       };
     });
+  }
+
+  // Session-only scoring: neither the VL observation nor counting overrides are persisted.
+  function testVlScore(comparison, ignoredGroups) {
+    var score = { matches: 0, mismatches: 0, unclear: 0, excluded: 0, count: 0 };
+    (comparison || []).forEach(function (group) {
+      if (testVl.disabledGroups.has(group.id) || (ignoredGroups && ignoredGroups.has(group.id))) {
+        score.excluded += 1;
+      } else if (group.result === 'match') {
+        score.matches += 1;
+      } else if (group.result === 'mismatch') {
+        score.mismatches += 1;
+      } else {
+        score.unclear += 1;
+      }
+    });
+    score.count = score.matches + score.mismatches;
+    return score;
+  }
+
+  function testVlScoreText(prefix, score) {
+    return prefix + (score.count ? (' ' + Math.round(100 * score.matches / score.count) +
+      '% (' + score.matches + '/' + score.count + ')') : ' — (0 counted)');
+  }
+
+  function testVlCandidateScores(results) {
+    var totals = Object.create(null);
+    if (testVl.scope !== testVlScope(currentStatus)) return totals;
+    (results || []).forEach(function (result) {
+      if (!result || result.kind === 'base') return;
+      var candidate = String(result.candidateFile || result.sourceLoRA || '').trim();
+      var entry = testVl.entries[resultMediaFile(result)];
+      if (!candidate || !entry || entry.status !== 'done' || !entry.comparison || !entry.comparison.length) return;
+      var score = testVlScore(entry.comparison, entry.ignoredGroups);
+      var total = totals[candidate] || (totals[candidate] = { matches: 0, mismatches: 0, count: 0, previews: 0 });
+      total.matches += score.matches;
+      total.mismatches += score.mismatches;
+      total.count += score.count;
+      if (score.count) total.previews += 1;
+    });
+    return totals;
+  }
+
+  function syncTestVlFilters() {
+    var container = el('test-generations-vl-filters');
+    var host = el('test-generations-vl-filter-options');
+    var groups = currentStatus && Array.isArray(currentStatus.wildcardEvaluationGroups)
+      ? currentStatus.wildcardEvaluationGroups : [];
+    var sameScope = testVl.scope === testVlScope(currentStatus);
+    container.classList.toggle('hidden', !sameScope || !groups.length);
+    if (!sameScope || !groups.length) return;
+    var key = testVl.scope + '|' + groups.map(function (group) { return group.id; }).join('|');
+    if (host.dataset.groupKey !== key) {
+      host.dataset.groupKey = key;
+      host.innerHTML = '';
+      groups.forEach(function (group) {
+        var label = document.createElement('label');
+        label.className = 'test-generations-vl-filter';
+        var input = document.createElement('input');
+        input.type = 'checkbox';
+        input.dataset.testVlGroup = group.id;
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(group.id + ' ' + testVlReadableLabel(group, groups)));
+        host.appendChild(label);
+      });
+    }
+    Array.prototype.forEach.call(host.querySelectorAll('[data-test-vl-group]'), function (input) {
+      input.checked = !testVl.disabledGroups.has(input.dataset.testVlGroup);
+    });
+    el('test-generations-vl-filter-count').textContent = (groups.length - testVl.disabledGroups.size) + '/' + groups.length;
+  }
+
+  function refreshTestVlScores() {
+    syncTestVlCards();
+    var panel = el('test-generations-vl-detail');
+    if (!panel.classList.contains('hidden') && panel.dataset.testVlFile) {
+      showTestVlResult(panel.dataset.testVlFile, true);
+    }
   }
 
   function syncTestVlControls() {

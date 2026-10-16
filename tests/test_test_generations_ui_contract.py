@@ -1304,6 +1304,9 @@ def test_test_generation_default_weight_inherits_unless_candidate_overridden():
     assert "strength.placeholder = String(defaultCandidateStrength);" in script
     assert "delete candidateStrengths[strengthFile];" in script
     assert "input.placeholder = String(defaultCandidateStrength);" in script
+    assert "input.value = String(defaultCandidateStrength);" in script
+    assert ": String(defaultCandidateStrength);" in script
+    assert "if (strengthValue === defaultCandidateStrength) delete candidateStrengths[strengthFile];" in script
     assert "Object.prototype.hasOwnProperty.call(candidateStrengths || {}, strengthFile)" in script
     assert "selectedStrengths[strengthFile] = strengthValue;" in script
     assert "Default weight must be between -2 and 2." in script
@@ -1429,7 +1432,10 @@ def test_staged_candidates_show_recorded_h3_variant_without_guessing():
     assert '"trainingVariant": str(run_summary.get("trainingVariant") or "") if stage == "h3" else ""' in backend
     assert "metadata.trainingVariant === 'Image Adapter'" in script
     assert "imageMark.innerHTML = trainingH3ImageModelIconHtml();" in script
-    assert "[parts.detail, scoreText].filter(Boolean).join(' · ')" in script
+    assert "runName.textContent = parts.detail;" in script
+    assert "runName.title = parts.detail;" in script
+    assert "copy.appendChild(heading);" in script
+    assert "copy.appendChild(metrics);" in script
 
 
 def test_wildcard_request_includes_active_set_group_vocabulary():
@@ -1500,3 +1506,18 @@ def test_test_vl_session_scoring_audit_contract():
     assert "renderTestVlCard(card, result, candidateScores);" in script
     assert "showTestVlResult(file, true);" in script
     assert "score.previews + ' preview(s), ' + score.count + ' counted attributes'" in script
+
+def test_candidate_summary_keeps_controls_on_top_line_and_compacts_scores():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "row.appendChild(strength);" in script
+    assert "row.appendChild(actions);" in script
+    assert "copy.appendChild(heading);" in script
+    assert "copy.appendChild(metrics);" in script
+    assert "detail.title = scoreCount ? scoreCount + ' rating'" in script
+    assert "label.textContent = score && score.count" in script
+    assert "Math.round(100 * score.matches / score.count) + '%'" in script
+    assert "metrics.appendChild(label);" in script
+    assert ".test-generations-staged-heading," in css
+    assert ".test-generations-staged-metrics {" in css

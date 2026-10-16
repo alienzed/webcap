@@ -15,6 +15,7 @@
   var currentSessionModel = '';
   var currentStatus = {};
   var resultsView = 'grid';
+  var previewSort = 'original';
   var compareIndex = 0;
   var pendingActivityFolder = '';
   var testActivity = {};
@@ -304,6 +305,7 @@
     syncTestVlControls();
     syncTestVlFilters();
     syncTestVlCandidateRows();
+    if (previewSort === 'vl') refreshTestPreviewOrder();
   }
 
   function testVlReadableLabel(group, groups) {
@@ -2772,6 +2774,7 @@
         currentStatus.results.forEach(function (result) {
           if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
         });
+        if (previewSort === 'rating') refreshTestPreviewOrder();
       }
       if (testBatch && testBatch.folder === String(launchFolder) && testBatch.statuses[sessionName]) {
         (testBatch.statuses[sessionName].results || []).forEach(function (result) {
@@ -3098,10 +3101,70 @@
     });
   }
 
+  // Session-local preview ordering; keep the saved Test order as the stable tie-breaker.
+  // Candidate list sorting intentionally uses separate, cross-session aggregates.
+  function sortedTestPreviewRows(results) {
+    var rows = (results || []).map(function (result, index) {
+      return { result: result, index: index, score: null };
+    });
+    if (previewSort === 'original') return rows;
+    rows.forEach(function (row) {
+      if (previewSort === 'rating') {
+        var rating = Number(row.result && row.result.rating || 0);
+        if (rating > 0) row.score = { value: rating, count: 1 };
+        return;
+      }
+      if (testVl.scope !== testVlScope(currentStatus)) return;
+      var entry = testVl.entries[resultMediaFile(row.result)];
+      if (!entry || entry.status !== 'done' || !Array.isArray(entry.comparison)) return;
+      var score = testVlScore(entry.comparison, entry.ignoredGroups);
+      if (score.count) row.score = { value: score.matches / score.count, count: score.count };
+    });
+    rows.sort(function (a, b) {
+      if (!a.score || !b.score) {
+        if (!a.score && !b.score) return a.index - b.index;
+        return a.score ? -1 : 1;
+      }
+      return b.score.value - a.score.value ||
+        (previewSort === 'vl' ? b.score.count - a.score.count : 0) ||
+        a.index - b.index;
+    });
+    return rows;
+  }
+
+  // Reorder keyed cards rather than recreating media elements on normal refresh.
+  function sortTestPreviewCards(status) {
+    var host = el('test-generations-results');
+    var results = status && Array.isArray(status.results) ? status.results : [];
+    var failures = status && Array.isArray(status.failures) ? status.failures : [];
+    var keys = sortedTestPreviewRows(results).map(function (row) {
+      return resultMediaFile(row.result) || (String(row.result.sourceLoRA || 'result') + ':' + row.index);
+    }).concat(failures.map(function (failure, index) {
+      return 'failure:' + String(failure.sourceLoRA || 'result') + ':' + index;
+    }));
+    var byKey = Object.create(null);
+    Array.prototype.forEach.call(host.querySelectorAll('.test-generations-result-card:not(.is-pending)'), function (card) {
+      byKey[card.dataset.resultKey] = card;
+    });
+    var next = host.querySelector('.test-generations-result-card.is-pending');
+    for (var index = keys.length - 1; index >= 0; index -= 1) {
+      var card = byKey[keys[index]];
+      if (!card) throw new Error('Test preview card is missing during sorting: ' + keys[index]);
+      if (card.nextSibling !== next) host.insertBefore(card, next);
+      next = card;
+    }
+  }
+
+  function refreshTestPreviewOrder() {
+    sortTestPreviewCards(currentStatus);
+    if (resultsView === 'compare') renderCompare(currentStatus);
+  }
+
   function renderCompare(status) {
     var host = el('test-generations-compare');
     if (!host) return;
-    var results = status && Array.isArray(status.results) ? status.results : [];
+    var results = sortedTestPreviewRows(status && Array.isArray(status.results) ? status.results : [])
+      .map(function (row) { return row.result; });
     var resultFolder = String(status && status.resultFolder || '');
     var sessionName = String(status && status.session || '');
     var candidateScores = testVlCandidateScores(results);
@@ -3320,6 +3383,7 @@
     } else if (pending) {
       pending.remove();
     }
+    sortTestPreviewCards(status);
     syncPendingElapsed(status);
     syncTestVlControls();
 
@@ -4039,6 +4103,8 @@
     sweepMode = false;
     candidateSort = 'rating';
     el('test-generations-candidate-sort').value = candidateSort;
+    previewSort = 'original';
+    el('test-generations-preview-sort').value = previewSort;
     sweepWeights = '0.6, 0.8, 1.0, 1.2';
     syncSweepControls();
     currentStatus = {};
@@ -4790,6 +4856,11 @@
       var button = this;
       button.disabled = true;
       clearTestSessions().catch(showError).then(function () { button.disabled = false; });
+    };
+    el('test-generations-preview-sort').onchange = function () {
+      previewSort = this.value;
+      compareIndex = 0;
+      refreshTestPreviewOrder();
     };
     el('test-generations-view-grid-btn').onclick = function () {
       setResultsView('grid');

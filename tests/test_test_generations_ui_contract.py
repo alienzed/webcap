@@ -1643,3 +1643,27 @@ def test_candidate_vl_aggregates_use_saved_scores_not_selected_session():
     assert "prepared.candidateVisionScores = payload.candidateVisionScores || {};" in script
     assert 'if payload.get("sweepWeights"):' in backend
     assert 'if group.get("result") not in ("match", "mismatch"):' in backend
+
+
+def test_preview_sort_is_session_local_and_preserves_keyed_cards():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+    assert 'id="test-generations-preview-sort"' in html
+    assert 'aria-label="Sort Test previews"' in html
+    assert ".test-generations-preview-tools" in css
+    assert "var previewSort = 'original';" in script
+    assert "function sortedTestPreviewRows(results)" in script
+    assert "function sortTestPreviewCards(status)" in script
+    assert "function refreshTestPreviewOrder()" in script
+    assert "testVlScore(entry.comparison, entry.ignoredGroups)" in script
+    assert "if (previewSort === 'rating') refreshTestPreviewOrder();" in script
+    assert "if (previewSort === 'vl') refreshTestPreviewOrder();" in script
+    assert "el('test-generations-preview-sort').onchange" in script
+    assert "previewSort = 'original';" in script.split("function openPane()", 1)[1].split("function populateControls", 1)[0]
+    sorter = script.split("function sortTestPreviewCards(status)", 1)[1].split("function refreshTestPreviewOrder()", 1)[0]
+    assert "if (card.nextSibling !== next) host.insertBefore(card, next);" in sorter
+    assert "host.innerHTML" not in sorter
+    compare = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
+    assert "sortedTestPreviewRows(" in compare
+    assert "sortTestPreviewCards(status);" in script.split("function renderResults(status)", 1)[1].split("function syncActiveRunControls", 1)[0]

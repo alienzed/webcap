@@ -4195,6 +4195,16 @@ iframe {
   gap: 18px;
   margin-bottom: 12px;
 }
+.test-generations-preview-tools {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 12px;
+}
+.test-generations-preview-tools .test-generations-candidate-sort {
+  width: auto;
+  min-width: 125px;
+}
 .test-generations-view-tabs {
   display: flex;
   justify-self: end;

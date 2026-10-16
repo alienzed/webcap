@@ -601,7 +601,7 @@ def test_test_result_stars_are_shared_by_grid_and_compare():
     assert "if (!opts.failed)" in script
 
     footer_block = script.split("function buildResultFooter(result, options)", 1)[1].split("function formatTestVideoTime", 1)[0]
-    assert "copy.appendChild(rating);" in footer_block
+    assert "secondaryRow.appendChild(rating);" in footer_block
 
     grid_handler = script.split("el('test-generations-results').onclick", 1)[1].split("el('test-generations-compare').onclick", 1)[0]
     compare_handler = script.split("el('test-generations-compare').onclick", 1)[1].split("el('test-generations-prompt').addEventListener", 1)[0]
@@ -1536,8 +1536,8 @@ def test_session_vision_assessments_restore_and_preview_both_epoch_metrics():
     assert "saveTestVl({ disabledGroups: Array.from(testVl.disabledGroups) })" in script
     assert "saveTestVl({ mediaFile: file, ignoredGroups:" in script
     assert "data-test-manual-epoch-score" in script
-    assert "Epoch ★ " in script
-    assert "Epoch VL" in script
+    assert "Math.round(100 * epochScore.matches / epochScore.count)" in script
+    assert "Epoch VL agreement" in script
     assert 'if operation == "test_vision_update":' in backend
     assert 'visible["testVision"] = _session_vision_state(session_directory)' in backend
     assert 'state["test_vision"] = vision' in state
@@ -1548,5 +1548,26 @@ def test_test_vision_save_order_and_inference_success_survives_persistence_error
     assert "var testVlSaveQueue = Promise.resolve();" in script
     assert "testVlSaveQueue = save.catch(function () {});" in script
     assert "entry.saveError = String(err && err.message ? err.message : err);" in script
-    assert "if (item.saveError) button.textContent += ' · not saved';" in script
+    assert "if (item.saveError) button.textContent += ' !';" in script
     assert "if (entry.saveError) summary.textContent += ' · not saved: '" in script
+
+
+def test_test_result_compact_three_rows_and_vl_model_provenance():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "label.appendChild(source);" in script
+    assert "primaryRow.appendChild(label);" in script
+    assert "secondaryRow.appendChild(metadataRow);" in script
+    assert "secondaryRow.appendChild(rating);" in script
+    assert "copy.appendChild(evaluation);" in script
+    assert "evaluation.appendChild(vlButton);" in script
+    assert "manualScore.dataset.testManualEpochScore = '1';" in script
+    assert "vlScore.dataset.testVlEpochScore = '1';" in script
+    assert "entry.modelId = model;" in script
+    assert "modelId: entry.modelId" in script
+    assert "modelId: savedEntry.modelId || ''" in script
+    assert "Unknown (previous assessment)" in script
+    assert 'id="test-generations-vl-model"' in html
+    assert ".test-generations-result-evaluation" in css

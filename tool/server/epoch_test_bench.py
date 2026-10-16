@@ -686,6 +686,8 @@ def update_vision(folder_path, session_name, criteria):
     if assessment is not None:
         if not isinstance(assessment, dict) or not isinstance(assessment.get("text"), str) or not isinstance(assessment.get("comparison"), list):
             raise ValueError("VL assessment requires response text and comparison rows.")
+        if "modelId" in assessment and not isinstance(assessment["modelId"], str):
+            raise ValueError("VL model ID must be text.")
         if any(not isinstance(row, dict) or not all(key in row for key in ("id", "result", "expectedText", "selectedText")) for row in assessment["comparison"]):
             raise ValueError("VL comparison has invalid rows.")
     if media_name is not None:

@@ -72,7 +72,8 @@
       var savedEntry = byMedia[file];
       testVl.entries[file] = {
         status: 'done', text: savedEntry.text, question: savedEntry.question,
-        comparison: savedEntry.comparison, ignoredGroups: new Set(savedEntry.ignoredGroups || [])
+        modelId: savedEntry.modelId || '', comparison: savedEntry.comparison,
+        ignoredGroups: new Set(savedEntry.ignoredGroups || [])
       };
     });
     testVl.done = Object.keys(byMedia).length;
@@ -239,52 +240,43 @@
     var file = resultMediaFile(result);
     if (!file) return;
     var item = testVl.scope === testVlScope(currentStatus) ? testVl.entries[file] : null;
-    var footer = card.querySelector('.test-generations-result-footer');
+    var row = card.querySelector('.test-generations-result-evaluation');
+    if (!row) throw new Error('Test result evaluation row is missing.');
     var candidate = String(result.candidateFile || result.sourceLoRA || '').trim();
-    var epochScore = candidateScores[candidate];
-    var epochLabel = footer && footer.querySelector('[data-test-vl-epoch-score]');
     var manual = prepared && prepared.candidateScores && prepared.candidateScores[candidate];
-    var manualLabel = footer && footer.querySelector('[data-test-manual-epoch-score]');
-    if (footer && !manualLabel) {
-      manualLabel = document.createElement('span');
-      manualLabel.dataset.testManualEpochScore = '1';
-      manualLabel.className = 'test-generations-vl-epoch-score';
-      footer.appendChild(manualLabel);
-    }
-    if (manualLabel) {
-      manualLabel.textContent = manual && Number(manual.count) ? 'Epoch ★ ' + Number(manual.average).toFixed(1) + ' (' + manual.count + ')' : '';
-      manualLabel.classList.toggle('hidden', !manualLabel.textContent);
-    }
-    if (footer && !epochLabel) {
-      epochLabel = document.createElement('span');
-      epochLabel.dataset.testVlEpochScore = '1';
-      epochLabel.className = 'test-generations-vl-epoch-score';
-      footer.appendChild(epochLabel);
-    }
-    if (epochLabel) {
-      epochLabel.textContent = epochScore && epochScore.count ? testVlScoreText('Epoch VL', epochScore) : '';
-      epochLabel.classList.toggle('hidden', !epochLabel.textContent);
-      epochLabel.title = epochScore && epochScore.count ? epochScore.previews + ' preview(s), ' + epochScore.count + ' counted attributes' : '';
-    }
-    if (!footer) return;
-    var button = footer.querySelector('[data-test-vl-result]');
-    if (!button) {
-      button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'review-captions-btn test-generations-vl-result';
-      button.dataset.testVlResult = file;
-      footer.appendChild(button);
-    }
-    button.textContent = item ? ({pending:'Queued',running:'Analyzing…',done:'VL ✓',error:'VL error',stopped:'VL stopped'}[item.status] || 'VL') : '';
+    var epochScore = candidateScores[candidate];
+    var manualLabel = row.querySelector('[data-test-manual-epoch-score]');
+    var epochLabel = row.querySelector('[data-test-vl-epoch-score]');
+    var button = row.querySelector('[data-test-vl-result]');
+    if (!manualLabel || !epochLabel || !button) throw new Error('Test result evaluation controls are missing.');
+
+    manualLabel.textContent = manual && Number(manual.count) ? '★ ' + Number(manual.average).toFixed(1) : '';
+    manualLabel.title = manualLabel.textContent ? 'Epoch manual average · ' + manual.count + ' rated preview(s)' : '';
+    manualLabel.classList.toggle('hidden', !manualLabel.textContent);
+
+    epochLabel.textContent = epochScore && epochScore.count ?
+      ('VL ' + Math.round(100 * epochScore.matches / epochScore.count) + '%') : '';
+    epochLabel.title = epochLabel.textContent ?
+      'Epoch VL agreement · ' + epochScore.previews + ' preview(s), ' + epochScore.count + ' counted attributes' : '';
+    epochLabel.classList.toggle('hidden', !epochLabel.textContent);
+
+    button.textContent = item ?
+      ({pending:'Queued',running:'Analyzing…',done:'VL ✓',error:'VL error',stopped:'VL stopped'}[item.status] || 'VL') : '';
     if (item && item.status === 'done' && item.comparison && item.comparison.length) {
       var score = testVlScore(item.comparison, item.ignoredGroups);
-      button.textContent = testVlScoreText('VL', score) + (score.unclear ? ' · ' + score.unclear + ' unclear' : '');
-      if (item.saveError) button.textContent += ' · not saved';
+      button.textContent = score.count ? 'VL ' + Math.round(100 * score.matches / score.count) + '%' : 'VL —';
+      if (item.saveError) button.textContent += ' !';
+      button.title = (score.count ? (score.matches + '/' + score.count + ' counted attributes agree') : 'No counted attributes') +
+        (score.unclear ? ' · ' + score.unclear + ' unclear' : '') +
+        (item.modelId ? ' · Model: ' + item.modelId : '') +
+        (item.saveError ? ' · Not saved: ' + item.saveError : '') + ' · Open VL assessment';
+    } else {
+      button.title = item && item.saveError ? 'VL result not saved: ' + item.saveError :
+        (item && item.modelId ? 'Model: ' + item.modelId + ' · ' : '') +
+        (item && item.status === 'error' ? 'Open VL error' : 'Open VL assessment');
     }
     button.classList.toggle('hidden', !item);
-    if (!item) return;
-    button.title = item.saveError ? 'VL result not saved: ' + item.saveError :
-      (item.status === 'done' ? 'Open VL assessment' : item.status === 'error' ? 'Open VL error' : item.status);
+    row.classList.toggle('hidden', !manualLabel.textContent && !epochLabel.textContent && !item);
   }
 
   function syncTestVlCards() {
@@ -386,6 +378,7 @@
     var keepTechnical = !!preserveOpen && el('test-generations-vl-technical').open;
     el('test-generations-vl-detail-title').textContent = file + ' · Ask VL';
     var summary = el('test-generations-vl-summary');
+    el('test-generations-vl-model').textContent = entry.modelId || 'Unknown (previous assessment)';
     var comparison = el('test-generations-vl-comparison');
     var agreements = el('test-generations-vl-agreements');
     var agreementRows = el('test-generations-vl-agreement-rows');
@@ -475,10 +468,11 @@
           }).then(function (job) {
             if (token !== testVl.token) return;
             entry.text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
+            entry.modelId = model;
             entry.comparison = testVlCompare(entry.text, Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : []);
             entry.status = 'done';
             return saveTestVl({ mediaFile: file, assessment: {
-              text: entry.text, question: entry.question, comparison: entry.comparison
+              text: entry.text, question: entry.question, comparison: entry.comparison, modelId: entry.modelId
             }, ignoredGroups: Array.from(entry.ignoredGroups || []) }, session).then(function () {
               entry.saveError = '';
             }, function (err) {
@@ -2782,7 +2776,15 @@
 
     var label = document.createElement('div');
     label.className = 'test-generations-result-name';
-    label.textContent = identity.primary;
+    label.title = identity.secondary ? identity.primary + ' · ' + identity.secondary : identity.primary;
+    label.appendChild(document.createTextNode(identity.primary));
+    if (identity.secondary) {
+      var source = document.createElement('span');
+      source.className = 'test-generations-result-source';
+      source.textContent = ' · ' + (stagedFileParts(identity.secondary).detail || identity.secondary.replace(/\.safetensors$/i, ''));
+      source.title = identity.secondary;
+      label.appendChild(source);
+    }
     primaryRow.appendChild(label);
 
     var elapsed = result && result.elapsedMs != null ? formatCandidateElapsed(result.elapsedMs) : '';
@@ -2794,6 +2796,8 @@
     }
     copy.appendChild(primaryRow);
 
+    var secondaryRow = document.createElement('div');
+    secondaryRow.className = 'test-generations-result-secondary';
     var metadata = [];
     var megapixels = testResultMegapixels(opts.status);
     var strength = testResultStrength(opts.status, result);
@@ -2803,25 +2807,13 @@
       var metadataRow = document.createElement('div');
       metadataRow.className = 'test-generations-result-metadata';
       metadataRow.textContent = metadata.join(' · ');
-      copy.appendChild(metadataRow);
-    }
-
-    var secondaryRow = document.createElement('div');
-    secondaryRow.className = 'test-generations-result-secondary';
-
-    if (identity.secondary) {
-      var source = document.createElement('div');
-      source.className = 'test-generations-result-source';
-      source.textContent = identity.secondary;
-      source.title = identity.secondary;
-      secondaryRow.appendChild(source);
+      secondaryRow.appendChild(metadataRow);
     }
 
     if (!opts.failed) {
       var rating = buildResultRating(result, opts.sessionName);
       if (rating) secondaryRow.appendChild(rating);
     }
-
     if (secondaryRow.childNodes.length) copy.appendChild(secondaryRow);
 
     if (opts.failed) {
@@ -2829,6 +2821,27 @@
       detail.className = 'test-generations-result-error';
       detail.textContent = String(result && result.error || 'Generation failed.');
       copy.appendChild(detail);
+    } else {
+      // Third line: source epoch averages on the left, this preview's VL action on the right.
+      var evaluation = document.createElement('div');
+      evaluation.className = 'test-generations-result-evaluation hidden';
+      var metrics = document.createElement('div');
+      metrics.className = 'test-generations-result-epoch-metrics';
+      var manualScore = document.createElement('span');
+      manualScore.dataset.testManualEpochScore = '1';
+      manualScore.className = 'test-generations-vl-epoch-score hidden';
+      var vlScore = document.createElement('span');
+      vlScore.dataset.testVlEpochScore = '1';
+      vlScore.className = 'test-generations-vl-epoch-score hidden';
+      metrics.appendChild(manualScore);
+      metrics.appendChild(vlScore);
+      evaluation.appendChild(metrics);
+      var vlButton = document.createElement('button');
+      vlButton.type = 'button';
+      vlButton.className = 'review-captions-btn test-generations-vl-result hidden';
+      vlButton.dataset.testVlResult = resultMediaFile(result);
+      evaluation.appendChild(vlButton);
+      copy.appendChild(evaluation);
     }
 
     footer.appendChild(copy);

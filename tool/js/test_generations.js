@@ -214,7 +214,13 @@
     var agreements = el('test-generations-vl-agreements');
     var agreementRows = el('test-generations-vl-agreement-rows');
     var freeform = el('test-generations-vl-freeform');
-    var groups = entry.comparison || [];
+    var definitions = Array.isArray(currentStatus.wildcardEvaluationGroups) ? currentStatus.wildcardEvaluationGroups : [];
+    // The comparison stores only selected answers; enrich presentation copies with
+    // the original alternatives so repeated labels can be distinguished.
+    var groups = (entry.comparison || []).map(function (group) {
+      var definition = definitions.find(function (candidate) { return candidate.id === group.id; });
+      return Object.assign({}, group, { options: definition ? definition.options : [] });
+    });
     var matches = groups.filter(function (g) { return g.result === 'match'; });
     var mismatches = groups.filter(function (g) { return g.result === 'mismatch'; });
     var unclear = groups.filter(function (g) { return g.result === 'unclear'; });

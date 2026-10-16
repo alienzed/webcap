@@ -2764,6 +2764,12 @@
           if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
         });
       }
+      if (testBatch && testBatch.folder === String(launchFolder) && testBatch.statuses[sessionName]) {
+        (testBatch.statuses[sessionName].results || []).forEach(function (result) {
+          if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
+        });
+        testBatchRecalculate(testBatch);
+      }
       return request('test_rating_summary', { modelId: currentTestModelId() });
     }).then(function (payload) {
       if (prepared && payload && payload.candidateScores) {
@@ -4396,6 +4402,7 @@
     }).then(function () {
       testBatchCheck(batch);
       testBatchRecalculate(batch);
+      if (String(launchFolder) === batch.folder && !testVl.running) testVl.loadedScope = '';
       batch.phase = 'Complete';
       batch.detail = batch.errors.length ? 'Completed with assessment errors.' :
         batch.scores.some(function (row) { return row.count > 0; }) ? 'Ready for manual review.' :

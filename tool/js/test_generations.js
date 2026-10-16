@@ -80,27 +80,22 @@
     return 'Inspect the image and choose the best visible option for EVERY numbered attribute below. ' +
       'Respond with exactly one line per group, e.g. G1: 2. Use only the option number, ' +
       'or "unclear" if you cannot see it, or "none" if no option fits. ' +
-      'Do not assume any option is present; do not use prompt text as visual evidence.\\n\\n' +
+      'Do not assume any option is present; do not use prompt text as visual evidence.\n\n' +
       groups.map(function (g) {
         return g.id + ' (' + g.label + '): ' + g.options.map(function (option, index) {
           return (index + 1) + '=' + (option || '(absent)');
         }).join('; ');
-      }).join('\\n');
+      }).join('\n');
   }
 
   function testVlCompare(text, groups) {
-    var lines = String(text || '').split(/\\r?\\n/);
+    var lines = String(text || '').split(/\r?\n/);
     return groups.map(function (g) {
-      var matching = lines.filter(function (line) {
-        return new RegExp('^\\\\s*' + g.id + '\\\\s*[:=-]\\\\s*', 'i').test(line);
-      });
-      var selected = null;
-      var answer = matching.length === 1
-        ? matching[0].replace(new RegExp('^\\\\s*' + g.id + '\\\\s*[:=-]\\\\s*', 'i'), '').trim()
-        : '';
-      if (/^\\d+$/.test(answer) && Number(answer) > 0 && Number(answer) <= g.options.length) {
-        selected = Number(answer);
-      }
+      var pattern = new RegExp('^\\s*' + g.id + '\\s*[:=-]\\s*', 'i');
+      var matching = lines.filter(function (line) { return pattern.test(line); });
+      var answer = matching.length === 1 ? matching[0].replace(pattern, '').trim() : '';
+      var selected = /^\d+$/.test(answer) && Number(answer) > 0 && Number(answer) <= g.options.length
+        ? Number(answer) : null;
       return {
         id: g.id, label: g.label, expected: g.expected, selected: selected,
         expectedText: g.expected == null ? 'unresolved' : (g.options[g.expected - 1] || '(absent)'),
@@ -173,7 +168,7 @@
     var comparison = el('test-generations-vl-comparison');
     comparison.textContent = entry.comparison ? entry.comparison.map(function (g) {
       return g.id + ' ' + g.label + ': expected ' + g.expectedText + ' | VL ' + g.selectedText + ' — ' + g.result;
-    }).join('\\n') : '';
+    }).join('\n') : '';
     el('test-generations-vl-answer').textContent = entry.text || (entry.status === 'error' ? entry.error : 'Not completed.');
     panel.classList.remove('hidden');
   }

@@ -423,6 +423,24 @@
     panel.classList.remove('hidden');
   }
 
+  // Shared inference request for interactive Ask VL and browser-owned batch evaluation.
+  function askVlForTestPreview(folder, session, file, model, question, onJob) {
+    return captionAssistRequestJson('/fs/test_generations/vision-question', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: folder, session: session, media: file, model: model, question: question })
+    }).then(function (payload) {
+      if (!payload.job || !payload.job.jobId) throw new Error('Test VL did not return a job.');
+      trackTransientLlmJob(payload.job);
+      if (onJob && onJob(String(payload.job.jobId)) === false) {
+        return cancelCaptionAssistJob(payload.job.jobId).then(function () {
+          throw new Error('Test VL stopped.');
+        });
+      }
+      return waitForCaptionAssistJob(payload.job);
+    });
+  }
+
   function runTestVlBatch() {
     if (testVl.running) { stopTestVl(); return; }
     var status = currentStatus;
@@ -457,16 +475,9 @@
           var entry = testVl.entries[file];
           entry.status = 'running';
           syncTestVlCards();
-          return captionAssistRequestJson('/fs/test_generations/vision-question', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder: folder, session: session, media: file, model: model, question: testVl.question })
-          }).then(function (payload) {
-            if (!payload.job || !payload.job.jobId) throw new Error('Test VL did not return a job.');
-            trackTransientLlmJob(payload.job);
-            if (token !== testVl.token) return cancelCaptionAssistJob(payload.job.jobId);
-            testVl.jobId = String(payload.job.jobId);
-            return waitForCaptionAssistJob(payload.job);
+          return askVlForTestPreview(folder, session, file, model, testVl.question, function (jobId) {
+            if (token !== testVl.token) return false;
+            testVl.jobId = jobId;
           }).then(function (job) {
             if (token !== testVl.token) return;
             entry.text = String(job && job.result && job.result.text || '').trim() || '(empty response)';

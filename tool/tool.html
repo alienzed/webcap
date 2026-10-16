@@ -1187,6 +1187,15 @@
                                         </div>
                                     </div>
                                 </section>
+                                <details id="test-generations-batch-summary" class="test-generations-batch-summary hidden" open>
+                                    <summary><strong id="test-generations-batch-heading">Batch Test + VL</strong></summary>
+                                    <div id="test-generations-batch-progress" class="test-generations-batch-progress" aria-live="polite"></div>
+                                    <div class="test-generations-batch-actions">
+                                        <button id="test-generations-batch-stop" class="review-captions-btn" type="button">Stop automation</button>
+                                        <button id="test-generations-batch-dismiss" class="review-captions-btn hidden" type="button">Dismiss</button>
+                                    </div>
+                                    <div id="test-generations-batch-results" class="test-generations-batch-results hidden"></div>
+                                </details>
                                 <div id="test-generations-status" class="training-command-status" aria-live="polite"></div>
                                 <div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>
                                 <section class="test-generations-library">
@@ -1767,12 +1776,6 @@
                 <div id="activity-monitor-details" class="activity-monitor-details hidden">
                     <div id="activity-monitor-list" class="activity-monitor-list"></div>
                 </div>
-            </aside>
-            <aside id="test-generations-batch-card" class="test-generations-batch-card hidden" aria-live="polite">
-                <div class="test-generations-batch-card-heading"><strong id="test-generations-batch-heading">Test batch</strong><button id="test-generations-batch-open" type="button" class="review-captions-btn">Open Tests</button><button id="test-generations-batch-dismiss" type="button" class="review-captions-btn">Dismiss</button></div>
-                <div id="test-generations-batch-progress" class="test-generations-batch-progress"></div>
-                <div id="test-generations-batch-results" class="test-generations-batch-results hidden"></div>
-                <button id="test-generations-batch-stop" class="review-captions-btn" type="button">Stop automation</button>
             </aside>
             <div id="test-generations-batch-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="test-generations-batch-close">
                 <section class="keep-lora-dialog test-generations-batch-dialog" role="dialog" aria-modal="true" aria-labelledby="test-generations-batch-title">

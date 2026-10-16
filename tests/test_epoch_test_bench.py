@@ -2485,3 +2485,48 @@ def test_vl_wildcard_groups_support_nested_and_optional_choices():
     assert groups[0]["expected"] == 2
     assert groups[1]["options"] == ["striped", ""]
     assert groups[1]["expected"] == 1
+
+
+def test_test_session_vision_assessment_is_patched_beside_manual_rating(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    session = tmp_path / bench.TEST_RESULTS_DIR / "test-one"
+    session.mkdir(parents=True)
+    (session / "preview.png").write_bytes(b"image")
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete", "results": [{"mediaFile": "preview.png", "candidateFile": "epoch1.safetensors"}]
+    })
+    from tool.server.folder_state_store import set_media_rating, read_folder_state
+
+    set_media_rating(session / ".webcap_state.json", "preview.png", 4)
+    assessment = {"text": "G1: 2", "question": "Select color", "comparison": [
+        {"id": "G1", "result": "match", "expectedText": "blue", "selectedText": "blue"}
+    ]}
+    bench.update_vision(tmp_path, session.name, {"mediaFile": "preview.png", "assessment": assessment})
+    bench.update_vision(tmp_path, session.name, {"disabledGroups": ["G2"]})
+    bench.update_vision(tmp_path, session.name, {"mediaFile": "preview.png", "ignoredGroups": ["G1"]})
+    state = read_folder_state(session / ".webcap_state.json")
+    assert state["ratings_by_media"] == {"preview.png": 4}
+    assert state["test_vision"]["disabledGroups"] == ["G2"]
+    assert state["test_vision"]["byMedia"]["preview.png"]["ignoredGroups"] == ["G1"]
+    assert state["test_vision"]["byMedia"]["preview.png"]["comparison"] == assessment["comparison"]
+    reopened = bench.open_session(tmp_path, session.name)
+    assert reopened["testVision"] == state["test_vision"]
+    assert reopened["results"][0]["rating"] == 4
+    with pytest.raises((FileNotFoundError, ValueError)):
+        bench.update_vision(tmp_path, session.name, {"mediaFile": "missing.png", "assessment": assessment})
+    assert read_folder_state(session / ".webcap_state.json") == state
+
+
+def test_test_vision_save_rejects_invalid_comparison_before_write(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    session = tmp_path / bench.TEST_RESULTS_DIR / "test-one"
+    session.mkdir(parents=True)
+    (session / "preview.png").write_bytes(b"image")
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete", "results": [{"mediaFile": "preview.png"}]
+    })
+    with pytest.raises(ValueError, match="VL comparison"):
+        bench.update_vision(tmp_path, session.name, {
+            "mediaFile": "preview.png", "assessment": {"text": "G1: 1", "comparison": [{"garbled": 1}]}
+        })
+    assert not (session / ".webcap_state.json").exists()

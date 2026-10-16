@@ -1521,3 +1521,32 @@ def test_candidate_summary_keeps_controls_on_top_line_and_compacts_scores():
     assert "metrics.appendChild(label);" in script
     assert ".test-generations-staged-heading," in css
     assert ".test-generations-staged-metrics {" in css
+
+
+def test_session_vision_assessments_restore_and_preview_both_epoch_metrics():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+    state = (ROOT / "tool" / "server" / "folder_state_store.py").read_text(encoding="utf-8")
+
+    assert "function restoreTestVl(status)" in script
+    assert "status && status.testVision" in script
+    assert "function saveTestVl(changes, sessionName)" in script
+    assert "saveTestVl({ mediaFile: file, assessment:" in script
+    assert "}, session).then(function () {" in script
+    assert "saveTestVl({ disabledGroups: Array.from(testVl.disabledGroups) })" in script
+    assert "saveTestVl({ mediaFile: file, ignoredGroups:" in script
+    assert "data-test-manual-epoch-score" in script
+    assert "Epoch ★ " in script
+    assert "Epoch VL" in script
+    assert 'if operation == "test_vision_update":' in backend
+    assert 'visible["testVision"] = _session_vision_state(session_directory)' in backend
+    assert 'state["test_vision"] = vision' in state
+
+
+def test_test_vision_save_order_and_inference_success_survives_persistence_error():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    assert "var testVlSaveQueue = Promise.resolve();" in script
+    assert "testVlSaveQueue = save.catch(function () {});" in script
+    assert "entry.saveError = String(err && err.message ? err.message : err);" in script
+    assert "if (item.saveError) button.textContent += ' · not saved';" in script
+    assert "if (entry.saveError) summary.textContent += ' · not saved: '" in script

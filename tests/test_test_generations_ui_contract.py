@@ -1460,11 +1460,43 @@ def test_test_vl_results_are_comparison_first_with_collapsed_diagnostics():
     assert 'id="test-generations-vl-comparison"' in html
     assert '<details id="test-generations-vl-technical">' in html
     assert '<details id="test-generations-vl-agreements">' in html
-    assert "testVlComparisonTable(mismatches, groups)" in script
-    assert "testVlComparisonTable(unclear, groups)" in script
-    assert "testVlComparisonTable(matches, groups)" in script
-    assert "el('test-generations-vl-technical').open = false;" in script
+    assert "testVlComparisonTable(mismatches, groups, entry)" in script
+    assert "testVlComparisonTable(unclear, groups, entry)" in script
+    assert "testVlComparisonTable(matches, groups, entry)" in script
+    assert "el('test-generations-vl-technical').open = keepTechnical;" in script
     assert "escapeHtml(g.expectedText)" not in script
     assert "escapeHtml(expected)" in script
     assert "escapeHtml(observed)" in script
     assert ".test-generations-vl-table" in css
+
+
+def test_test_vl_counting_overrides_remain_browser_memory_only():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
+
+    assert "disabledGroups: new Set()" in script
+    assert "testVl.disabledGroups = new Set();" in script
+    assert "function testVlScore(comparison, ignoredGroups)" in script
+    assert "function testVlCandidateScores(results)" in script
+    assert "entry.ignoredGroups = new Set();" in script
+    assert "testVlScore(entry.comparison, entry.ignoredGroups)" in script
+    assert "syncTestVlCandidateRows();" in script
+    assert "function refreshTestVlScores()" in script
+    assert 'id="test-generations-vl-filters"' in html
+    assert 'id="test-generations-vl-filter-options"' in html
+    assert "data-test-vl-count=" in script
+    assert ".test-generations-vl-row-count" in css
+    assert "test_store_vision_result" not in script
+
+
+def test_test_vl_session_scoring_audit_contract():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+
+    assert "if (testVl.scope !== nextScope) testVl.disabledGroups = new Set();" in script
+    assert "currentStatus.sweepWeights) return totals;" in script
+    assert "function renderTestVlCard(card, result, candidateScores)" in script
+    assert "var candidateScores = testVlCandidateScores(results);" in script
+    assert "renderTestVlCard(card, result, candidateScores);" in script
+    assert "showTestVlResult(file, true);" in script
+    assert "score.previews + ' preview(s), ' + score.count + ' counted attributes'" in script

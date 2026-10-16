@@ -166,7 +166,7 @@
     row.className = 'inference-queue-row';
     row.dataset.inferenceJobId = String(job.jobId || '');
 
-    var position = document.createElement('div');
+    var position = document.createElement('span');
     position.className = 'inference-queue-position';
     position.dataset.queuePosition = '1';
 
@@ -175,20 +175,23 @@
     copy.className = 'inference-queue-copy inference-queue-link';
     copy.dataset.inferenceQueueOpen = '1';
     copy.title = 'Open this job\'s screen';
+    var heading = document.createElement('span');
+    heading.className = 'inference-queue-heading';
     var title = document.createElement('strong');
     title.dataset.queueTitle = '1';
+    heading.appendChild(position);
+    heading.appendChild(title);
     var context = document.createElement('span');
     context.dataset.queueContext = '1';
     var detail = document.createElement('small');
     detail.dataset.queueDetail = '1';
-    copy.appendChild(title);
+    copy.appendChild(heading);
     copy.appendChild(context);
     copy.appendChild(detail);
 
     var actions = document.createElement('div');
     actions.className = 'inference-queue-actions';
 
-    row.appendChild(position);
     row.appendChild(copy);
     row.appendChild(actions);
     return row;

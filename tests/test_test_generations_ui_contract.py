@@ -1463,7 +1463,7 @@ def test_test_vl_results_are_comparison_first_with_collapsed_diagnostics():
     assert "testVlComparisonTable(mismatches, groups)" in script
     assert "testVlComparisonTable(unclear, groups)" in script
     assert "testVlComparisonTable(matches, groups)" in script
-    assert "el('test-generations-vl-technical').open = false;" in script
+    assert "el('test-generations-vl-technical').open = keepTechnical;" in script
     assert "escapeHtml(g.expectedText)" not in script
     assert "escapeHtml(expected)" in script
     assert "escapeHtml(observed)" in script

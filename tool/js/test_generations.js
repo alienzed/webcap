@@ -4397,7 +4397,9 @@
       testBatchCheck(batch);
       testBatchRecalculate(batch);
       batch.phase = 'Complete';
-      batch.detail = batch.errors.length ? 'Completed with assessment errors.' : 'Ready for manual review.';
+      batch.detail = batch.errors.length ? 'Completed with assessment errors.' :
+        batch.scores.some(function (row) { return row.count > 0; }) ? 'Ready for manual review.' :
+        'No scoreable attributes. Use resolved wildcard choices to obtain VL percentages.';
       batch.active = false;
       renderTestBatch();
     }).catch(function (err) {

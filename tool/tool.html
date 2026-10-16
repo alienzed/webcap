@@ -1195,14 +1195,21 @@
                                                 <strong>Candidates</strong>
                                             </div>
                                             <div class="test-generations-library-heading-tools">
-                                                <button id="test-generations-candidates-btn" type="button" class="review-captions-btn hidden" title="Open training candidates for this Set">Candidates</button>
+                                                <button id="test-generations-candidates-btn" type="button" class="review-captions-btn hidden" title="Open training candidates for this Set">Runs</button>
                                                 <span id="test-generations-files-count">0</span>
                                             </div>
                                         </div>
                                         <div class="test-generations-sweep-setup">
-                                            <div class="test-generations-sweep-modes" role="group" aria-label="Test mode">
-                                                <button id="test-generations-normal-mode" type="button" class="review-captions-btn active" aria-pressed="true">Normal</button>
-                                                <button id="test-generations-sweep-mode" type="button" class="review-captions-btn" aria-pressed="false">Weight Sweep</button>
+                                            <div class="test-generations-candidate-toolbar">
+                                                <div class="test-generations-sweep-modes" role="group" aria-label="Test mode">
+                                                    <button id="test-generations-normal-mode" type="button" class="review-captions-btn active" aria-pressed="true">Normal</button>
+                                                    <button id="test-generations-sweep-mode" type="button" class="review-captions-btn" aria-pressed="false">Weight Sweep</button>
+                                                </div>
+                                                <select id="test-generations-candidate-sort" class="test-generations-candidate-sort" aria-label="Sort Test candidates" title="Sort candidate rows; VL uses the selected Test session">
+                                                    <option value="original">Original order</option>
+                                                    <option value="rating" selected>★ Rating ↓</option>
+                                                    <option value="vl">VL match ↓</option>
+                                                </select>
                                             </div>
                                             <label id="test-generations-sweep-field" class="test-generations-sweep-field hidden"><span>Weights</span><input id="test-generations-sweep-weights" type="text" value="0.6, 0.8, 1.0, 1.2" aria-label="Sweep weights, comma separated"></label>
                                             <span id="test-generations-sweep-count" class="test-generations-sweep-count hidden"></span>

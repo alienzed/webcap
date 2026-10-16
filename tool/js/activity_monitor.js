@@ -71,7 +71,7 @@
       state.progressChildIds[String(snapshot.childJobId)] = { owner: String(snapshot.id), expiresAt: 0 };
     }
     if (state.open) render();
-    else maybeAutoOpen();
+    else { maybeAutoOpen(); render(); }
   }
 
   function finishProgress(id, status) {
@@ -87,7 +87,7 @@
     if (status === 'failed') {
       window.reportConsoleError('Activity', item.title + ' failed. See Diagnostics and Console.');
     }
-    if (state.open) render();
+    render();
   }
 
   function localItems() {

@@ -4333,6 +4333,10 @@
               var stored = batch.statuses[session].testVision || (batch.statuses[session].testVision = {});
               stored.byMedia = payload.testVision.byMedia;
               stored.disabledGroups = payload.testVision.disabledGroups;
+              if (prepared && String(launchFolder) === batch.folder && String(prepared.modelId || '') === String(batch.criteria.modelId)) {
+                prepared.candidateVisionScores = payload.candidateVisionScores || {};
+                syncTestVlCandidateRows();
+              }
               testBatchRecalculate(batch);
             }).catch(function (err) {
               if (!batch.active) throw err;

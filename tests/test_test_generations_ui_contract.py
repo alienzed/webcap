@@ -82,7 +82,7 @@ def test_test_results_header_promotes_view_tabs_without_legacy_rate_action():
     assert 'id="test-generations-view-grid-btn"' in html
     assert 'id="test-generations-view-compare-btn"' in html
     assert 'class="test-generations-results-actions"' not in html
-    assert "grid-template-columns: minmax(0, 1fr) auto;" in css
+    assert "grid-template-columns: minmax(0, 1fr) auto auto;" in css
     assert ".test-generations-view-tab.active" in css
     assert "border-bottom-color: var(--accent);" in css
     assert "setAttribute('aria-selected'" in script
@@ -1438,3 +1438,15 @@ def test_wildcard_request_includes_active_set_group_vocabulary():
     assert "vocabulary: checklistItems.map" in generator
     assert "getRequirementGroupAlias(group)" in generator
     assert "getChecklistKeywordTermsForRequirement(group)" in generator
+
+
+def test_test_vl_batch_is_ephemeral_and_session_scoped():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    assert 'id="test-generations-ask-vl"' in html
+    assert 'id="test-generations-vl-detail"' in html
+    assert "captionAssistRequestJson('/fs/test_generations/vision-question'" in script
+    assert "testVl.scope !== testVlScope(currentStatus)" in script
+    assert "testVl.entries = Object.create(null)" in script
+    assert "entry.status = 'stopped'" in script
+    assert "saveFolderStateForCurrentRoot()" not in script.split('function runTestVlBatch()', 1)[1].split('function el(id)', 1)[0]

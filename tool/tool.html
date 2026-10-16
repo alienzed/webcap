@@ -1240,9 +1240,16 @@
                                     <button id="test-generations-session-info-btn" type="button" class="test-generations-session-info-btn hidden" title="View frozen session settings and resolved prompt" aria-label="View frozen session settings and resolved prompt" aria-expanded="false">Details</button>
                                 </div>
                                 <div class="test-generations-vl-toolbar"><button id="test-generations-ask-vl" class="review-captions-btn" type="button" disabled>Ask VL</button><span id="test-generations-vl-progress" class="small" aria-live="polite"></span></div>
+                                <div class="test-generations-preview-tools">
+                                    <select id="test-generations-preview-sort" class="test-generations-candidate-sort" aria-label="Sort Test previews" title="Sort previews in this session">
+                                        <option value="original">Original order</option>
+                                        <option value="rating">★ Rating ↓</option>
+                                        <option value="vl">VL match ↓</option>
+                                    </select>
                                 <div class="test-generations-view-tabs" role="tablist" aria-label="Results view">
                                     <button id="test-generations-view-grid-btn" type="button" class="test-generations-view-tab active" role="tab" aria-selected="true">Grid</button>
                                     <button id="test-generations-view-compare-btn" type="button" class="test-generations-view-tab" role="tab" aria-selected="false">Compare</button>
+                                </div>
                                 </div>
                             </div>
                             <details id="test-generations-vl-filters" class="test-generations-vl-filters hidden">

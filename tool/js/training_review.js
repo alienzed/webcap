@@ -1180,6 +1180,7 @@ function renderTrainingReview() {
   if (!els.review || !els.reviewModalContent) return;
   var canonicalPayload = trainingWorkspaceState.review;
   if (!canonicalPayload) {
+    if (els.queueJobBtn) els.queueJobBtn.disabled = true;
     var message = trainingWorkspaceState.reviewError ? '<section class="training-review-error">' + escapeHtml(trainingWorkspaceState.reviewError) + '<button type="button" class="review-captions-btn" data-review-retry>Retry</button></section>' : 'Preparing bucket plan…';
     els.review.innerHTML = message;
     els.reviewModalContent.innerHTML = message;
@@ -1213,6 +1214,13 @@ function refreshTrainingReview() {
   var folder = state.folder;
   var requestId = Number(trainingWorkspaceState.reviewRequestId || 0) + 1;
   trainingWorkspaceState.reviewRequestId = requestId;
+  if (!getVisibleMediaSelectionForTraining().length) {
+    trainingWorkspaceState.reviewPending = false;
+    trainingWorkspaceState.review = null;
+    trainingWorkspaceState.reviewError = 'No visible media items are selected for training.';
+    renderTrainingReview();
+    return Promise.resolve(null);
+  }
   trainingWorkspaceState.reviewPending = true;
   trainingWorkspaceState.reviewError = '';
   renderTrainingReview();

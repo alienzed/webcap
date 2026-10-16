@@ -7174,3 +7174,16 @@ html[data-theme="dark"] iframe {
 .test-generations-vl-detail { border:1px solid var(--border); border-radius:5px; padding:12px; margin:10px 0; max-height:45vh; overflow:auto; }
 .test-generations-vl-detail-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
 .test-generations-vl-detail pre { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; margin:4px 0 12px; }
+
+.test-generations-vl-summary { color:var(--muted); font-weight:600; margin-bottom:12px; }
+.test-generations-vl-comparison > strong { display:block; margin:10px 0 5px; }
+.test-generations-vl-table-wrap { overflow-x:auto; }
+.test-generations-vl-table { width:100%; border-collapse:collapse; text-align:left; font-size:13px; }
+.test-generations-vl-table th, .test-generations-vl-table td { padding:7px 9px; border-bottom:1px solid var(--border); vertical-align:top; overflow-wrap:anywhere; }
+.test-generations-vl-table thead th { color:var(--muted); font-weight:600; }
+.test-generations-vl-table tbody th { font-weight:500; }
+.test-generations-vl-table tbody th small { display:inline-block; margin-right:8px; color:var(--muted); font-weight:400; }
+.test-generations-vl-detail details { margin-top:12px; }
+.test-generations-vl-detail details summary { cursor:pointer; font-weight:600; }
+.test-generations-vl-detail details > div { margin-top:8px; }
+.test-generations-vl-detail details > strong { display:block; margin-top:10px; }

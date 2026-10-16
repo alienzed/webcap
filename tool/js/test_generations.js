@@ -139,7 +139,7 @@
       var matches = item.comparison.filter(function (g) { return g.result === 'match'; }).length;
       var mismatches = item.comparison.filter(function (g) { return g.result === 'mismatch'; }).length;
       var unclear = item.comparison.filter(function (g) { return g.result === 'unclear'; }).length;
-      button.textContent = matches + '/' + (matches + mismatches) + ' checked' + (unclear ? ' · ' + unclear + ' unclear' : '');
+      button.textContent = matches + ' agree · ' + mismatches + ' differ' + (unclear ? ' · ' + unclear + ' unclear' : '');
     }
     button.classList.toggle('hidden', !item);
     if (!item) return;
@@ -161,19 +161,92 @@
     syncTestVlControls();
   }
 
+  function testVlReadableLabel(group, groups) {
+    var label = String(group.label || 'Attribute').trim();
+    var repeated = groups.some(function (other) {
+      return other !== group && String(other.label || '').toLowerCase() === label.toLowerCase();
+    });
+    if (!repeated) return label.charAt(0).toUpperCase() + label.slice(1);
+
+    // Presentation-only qualifiers from the available alternatives. Never alter
+    // the wildcard choices, expected selection, or VL's answer.
+    var alternatives = (group.options || []).map(function (value) { return String(value || '').toLowerCase(); }).filter(Boolean);
+    var choices = alternatives.join(' ');
+    var qualifier = '';
+    if (/\btrim\b/.test(choices)) qualifier = 'trim';
+    else if (alternatives.length === 1 && /\bstraps?\b/.test(choices)) qualifier = 'straps';
+    else if (alternatives.length === 1 && /\bfront\b/.test(choices)) qualifier = 'front';
+    else if (alternatives.length > 1 && alternatives.every(function (v) {
+      return /^(?:braided|wavy|straight|curly|coily|buzzed|shaved)(?:\b|$)/.test(v);
+    })) qualifier = 'texture';
+    else if (alternatives.length && alternatives.filter(function (v) {
+      return /\b(?:black|white|blue|red|green|yellow|pink|purple|orange|brown|blonde|gray|grey|silver|gold|cyan|teal|coral|peach|mauve|burgundy|leopard|zebra)\b/.test(v);
+    }).length * 2 >= alternatives.length) qualifier = 'color / pattern';
+    else qualifier = 'style';
+    return label.charAt(0).toUpperCase() + label.slice(1) + ' · ' + qualifier;
+  }
+
+  function testVlComparisonTable(groups, all) {
+    if (!groups.length) return '';
+    var rows = groups.map(function (g) {
+      var expected = g.expectedText === '(absent)' ? 'Absent' : g.expectedText;
+      var observed = g.selectedText === '(absent)' ? 'Absent' : g.selectedText;
+      return '<tr class="test-generations-vl-' + g.result + '">' +
+        '<th scope="row"><small>' + escapeHtml(g.id) + '</small>' +
+        escapeHtml(testVlReadableLabel(g, all)) + '</th>' +
+        '<td>' + escapeHtml(expected) + '</td>' +
+        '<td>' + escapeHtml(observed) + '</td>' +
+        '</tr>';
+    }).join('');
+    return '<div class="test-generations-vl-table-wrap"><table class="test-generations-vl-table">' +
+      '<thead><tr><th>Attribute</th><th>Expected</th><th>VL observed</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div>';
+  }
+
   function showTestVlResult(file) {
     if (testVl.scope !== testVlScope(currentStatus)) return;
     var entry = testVl.entries[file];
     if (!entry) return;
     var panel = el('test-generations-vl-detail');
-    el('test-generations-vl-detail-title').textContent = file + ' · ' + (entry.status === 'done' ? 'VL description' : entry.status);
+    el('test-generations-vl-detail-title').textContent = file + ' · Ask VL';
+    var summary = el('test-generations-vl-summary');
+    var comparison = el('test-generations-vl-comparison');
+    var agreements = el('test-generations-vl-agreements');
+    var agreementRows = el('test-generations-vl-agreement-rows');
+    var freeform = el('test-generations-vl-freeform');
+    var definitions = Array.isArray(currentStatus.wildcardEvaluationGroups) ? currentStatus.wildcardEvaluationGroups : [];
+    // The comparison stores only selected answers; enrich presentation copies with
+    // the original alternatives so repeated labels can be distinguished.
+    var groups = (entry.comparison || []).map(function (group) {
+      var definition = definitions.find(function (candidate) { return candidate.id === group.id; });
+      return Object.assign({}, group, { options: definition ? definition.options : [] });
+    });
+    var matches = groups.filter(function (g) { return g.result === 'match'; });
+    var mismatches = groups.filter(function (g) { return g.result === 'mismatch'; });
+    var unclear = groups.filter(function (g) { return g.result === 'unclear'; });
+
+    summary.textContent = groups.length
+      ? matches.length + ' agree · ' + mismatches.length + ' differ' + (unclear.length ? ' · ' + unclear.length + ' unclear' : '')
+      : (entry.status === 'error' ? 'VL error' : entry.status === 'done' ? 'VL observation' : entry.status);
+
+    // Only differences and unresolved observations demand immediate attention.
+    var visible = '';
+    if (mismatches.length) visible += '<strong>Differences</strong>' + testVlComparisonTable(mismatches, groups);
+    if (unclear.length) visible += '<strong>Unclear</strong>' + testVlComparisonTable(unclear, groups);
+    if (groups.length && !mismatches.length && !unclear.length) visible = '<p>No differences reported.</p>';
+    comparison.innerHTML = visible;
+    comparison.classList.toggle('hidden', !groups.length);
+    el('test-generations-vl-agreements-label').textContent = 'Show ' + matches.length + ' agreeing attribute' + (matches.length === 1 ? '' : 's');
+    agreementRows.innerHTML = testVlComparisonTable(matches, groups);
+    agreements.classList.toggle('hidden', !matches.length);
+    agreements.open = false;
+
+    freeform.textContent = groups.length ? '' : (entry.text || entry.error || 'No VL observation yet.');
+    freeform.classList.toggle('hidden', !!groups.length);
     el('test-generations-vl-expected').textContent = String(currentStatus.resolvedPrompt || currentStatus.prompt || '');
     el('test-generations-vl-question').textContent = entry.question || '';
-    var comparison = el('test-generations-vl-comparison');
-    comparison.textContent = entry.comparison ? entry.comparison.map(function (g) {
-      return g.id + ' ' + g.label + ': expected ' + g.expectedText + ' | VL ' + g.selectedText + ' — ' + g.result;
-    }).join('\n') : '';
     el('test-generations-vl-answer').textContent = entry.text || (entry.status === 'error' ? entry.error : 'Not completed.');
+    el('test-generations-vl-technical').open = false;
     panel.classList.remove('hidden');
   }
 

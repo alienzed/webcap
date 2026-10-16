@@ -1239,10 +1239,15 @@
                             <div id="test-generations-session-details" class="test-generations-session-details hidden"></div>
                             <section id="test-generations-vl-detail" class="test-generations-vl-detail hidden" aria-label="Test VL result">
                                 <div class="test-generations-vl-detail-heading"><strong id="test-generations-vl-detail-title"></strong><button id="test-generations-vl-detail-close" type="button" class="review-captions-btn">Close</button></div>
-                                <strong>Expected resolved prompt</strong><pre id="test-generations-vl-expected"></pre>
-                                <strong>VL question</strong><pre id="test-generations-vl-question"></pre>
-                                <strong>Wildcard comparison</strong><pre id="test-generations-vl-comparison"></pre>
-                                <strong>VL observation</strong><pre id="test-generations-vl-answer"></pre>
+                                <div id="test-generations-vl-summary" class="test-generations-vl-summary"></div>
+                                <div id="test-generations-vl-comparison" class="test-generations-vl-comparison"></div>
+                                <details id="test-generations-vl-agreements"><summary id="test-generations-vl-agreements-label">Show agreeing attributes</summary><div id="test-generations-vl-agreement-rows"></div></details>
+                                <pre id="test-generations-vl-freeform" class="hidden"></pre>
+                                <details id="test-generations-vl-technical"><summary>Technical details</summary>
+                                    <strong>Resolved prompt</strong><pre id="test-generations-vl-expected"></pre>
+                                    <strong>VL question</strong><pre id="test-generations-vl-question"></pre>
+                                    <strong>Raw VL response</strong><pre id="test-generations-vl-answer"></pre>
+                                </details>
                             </section>
                             <div id="test-generations-results" class="test-generations-results"></div>
                             <div id="test-generations-compare" class="test-generations-compare hidden"></div>

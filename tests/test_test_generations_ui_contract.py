@@ -1460,9 +1460,9 @@ def test_test_vl_results_are_comparison_first_with_collapsed_diagnostics():
     assert 'id="test-generations-vl-comparison"' in html
     assert '<details id="test-generations-vl-technical">' in html
     assert '<details id="test-generations-vl-agreements">' in html
-    assert "testVlComparisonTable(mismatches, groups)" in script
-    assert "testVlComparisonTable(unclear, groups)" in script
-    assert "testVlComparisonTable(matches, groups)" in script
+    assert "testVlComparisonTable(mismatches, groups, entry)" in script
+    assert "testVlComparisonTable(unclear, groups, entry)" in script
+    assert "testVlComparisonTable(matches, groups, entry)" in script
     assert "el('test-generations-vl-technical').open = keepTechnical;" in script
     assert "escapeHtml(g.expectedText)" not in script
     assert "escapeHtml(expected)" in script

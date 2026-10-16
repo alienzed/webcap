@@ -1647,6 +1647,9 @@ def _wildcard_evaluation_groups(source_prompt, resolved_prompt):
         expected = options.index(selected) + 1 if selected in options and (selected or matched is not None) else None
         following = _wildcard_neighbor_literal(nodes, node_index, 1)
         label = _wildcard_summary_suffix(following)
+        if not label:
+            preceding = _wildcard_neighbor_literal(nodes, node_index, -1)
+            label = " ".join(preceding.split()[-4:]).strip(" ,.;:")
         groups.append({
             "id": "G" + str(len(groups) + 1),
             "label": label or "attribute",

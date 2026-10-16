@@ -275,6 +275,7 @@ def remove_candidate(folder_path, file_name, session_name=None, model_id=None):
         "count": len(remaining),
         "files": [path.name for path in remaining],
         "sessionStatus": session_status,
+        "candidateVisionScores": _candidate_vision_scores(folder_path, model.PROFILE_ID),
     }
 
 def _safe_output_component(value):
@@ -704,7 +705,14 @@ def update_vision(folder_path, session_name, criteria):
         session / ".webcap_state.json", media_key=media_name,
         assessment=assessment, ignored_groups=ignored, disabled_groups=disabled,
     )
-    return {"operation": "test_vision_update", "session": session.name, "testVision": vision}
+    stored = _read_status(session) or {}
+    model_id = str(stored.get("modelId") or stored.get("model") or get_test_model().PROFILE_ID)
+    return {
+        "operation": "test_vision_update",
+        "session": session.name,
+        "testVision": vision,
+        "candidateVisionScores": _candidate_vision_scores(folder_path, model_id),
+    }
 
 def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None):
     selected_model_id = str(model_id or "").strip()
@@ -741,6 +749,55 @@ def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None):
         for name, values in totals.items()
         if values["count"]
     }
+
+def _candidate_vision_scores(folder_path, model_id=None, session_snapshot=None):
+    """Aggregate saved VL agreements across sessions, like manual candidate ratings."""
+    selected_model_id = str(model_id or "").strip()
+    default_model_id = get_test_model().PROFILE_ID
+    totals = {}
+    snapshots = session_snapshot if session_snapshot is not None else (
+        (session, _read_status(session) or {}) for session in _session_directories(folder_path)
+    )
+    for session, payload in snapshots:
+        session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
+        if selected_model_id and session_model_id != selected_model_id:
+            continue
+        # A weight sweep measures individual LoRA/weight renditions, not the staged candidate.
+        if payload.get("sweepWeights"):
+            continue
+        vision = _session_vision_state(session)
+        by_media = vision.get("byMedia") if isinstance(vision.get("byMedia"), dict) else {}
+        disabled = set(vision.get("disabledGroups") or [])
+        results = payload.get("results") if isinstance(payload.get("results"), list) else []
+        for result in results:
+            if not isinstance(result, dict) or str(result.get("kind") or "") == "base":
+                continue
+            candidate = str(result.get("candidateFile") or result.get("sourceLoRA") or "").strip()
+            entry = by_media.get(_result_media_file(result))
+            if not candidate or not isinstance(entry, dict):
+                continue
+            comparison = entry.get("comparison")
+            if not isinstance(comparison, list):
+                continue
+            ignored = set(entry.get("ignoredGroups") or [])
+            matches = 0
+            counted = 0
+            for group in comparison:
+                if not isinstance(group, dict) or group.get("id") in disabled or group.get("id") in ignored:
+                    continue
+                if group.get("result") not in ("match", "mismatch"):
+                    continue
+                counted += 1
+                if group["result"] == "match":
+                    matches += 1
+            if not counted:
+                continue
+            total = totals.setdefault(candidate, {"matches": 0, "count": 0, "previews": 0})
+            total["matches"] += matches
+            total["count"] += counted
+            total["previews"] += 1
+    return totals
+
 
 def _mark_session_interrupted(session_directory, message="Test Generations session was interrupted by a WebCap restart."):
     status = _read_status(session_directory) or {}
@@ -786,6 +843,7 @@ def rating_summary(folder_path, model_id=None):
     return {
         "operation": "test_rating_summary",
         "candidateScores": _candidate_rating_scores(folder_path, model_id),
+        "candidateVisionScores": _candidate_vision_scores(folder_path, model_id),
         "sessions": list_sessions(folder_path, model_id=model_id),
     }
 
@@ -1044,6 +1102,7 @@ def prepare(folder_path, model_id=None):
         "candidateRuns": candidate_runs,
         "candidateMetadata": candidate_metadata,
         "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot),
+        "candidateVisionScores": _candidate_vision_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot),
         "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID, visible_snapshot=visible_sessions),
         "latest": status(folder_path, model_id=model.PROFILE_ID, visible_snapshot=visible_sessions),
     }
@@ -2945,6 +3004,7 @@ def delete_session(folder_path, session_name):
         "operation": "test_delete_session",
         "deleted": Path(session_name).name,
         "modelId": model_id,
+        "candidateVisionScores": _candidate_vision_scores(folder_path, model_id),
         "sessions": list_sessions(folder_path, model_id=model_id),
         "latest": _latest_status(folder_path, model_id=model_id),
     }

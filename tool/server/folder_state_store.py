@@ -107,6 +107,40 @@ def set_media_rating(state_path, media_key, rating):
     return normalized
 
 
+
+def set_test_vision_assessment(
+    state_path, *, media_key=None, assessment=None, ignored_groups=None, disabled_groups=None
+):
+    """Patch one Test session's VL state without clobbering ratings or other results."""
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        vision = state.get("test_vision")
+        vision = dict(vision) if isinstance(vision, dict) else {}
+        by_media = vision.get("byMedia")
+        by_media = dict(by_media) if isinstance(by_media, dict) else {}
+
+        if disabled_groups is not None:
+            vision["disabledGroups"] = list(disabled_groups)
+        if media_key is not None:
+            key = str(media_key).strip()
+            if not key:
+                raise ValueError("Test VL update requires a media filename.")
+            entry = by_media.get(key)
+            entry = dict(entry) if isinstance(entry, dict) else {}
+            if assessment is not None:
+                entry.update(assessment)
+            if ignored_groups is not None:
+                entry["ignoredGroups"] = list(ignored_groups)
+            if not entry:
+                raise ValueError("Cannot update VL exclusions before a result exists.")
+            by_media[key] = entry
+        vision["byMedia"] = by_media
+        state["test_vision"] = vision
+        write_folder_state_atomic(path, state)
+    return vision
+
+
 def set_last_training_archive(state_path, archive_fact):
     if not isinstance(archive_fact, dict) or not archive_fact:
         raise ValueError("Training archive marker must be a non-empty object.")

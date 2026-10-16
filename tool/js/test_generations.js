@@ -51,11 +51,48 @@
     activityLoadModelId: ''
   };
 
-  // Ephemeral Test VL batch; observations never enter session files or Set metadata.
-  var testVl = { scope: '', entries: Object.create(null), disabledGroups: new Set(), running: false, token: 0, jobId: '', done: 0, total: 0, question: '' };
+  // VL assessments belong to Test sessions; scoring remains derived in the UI.
+  var testVl = { scope: '', entries: Object.create(null), disabledGroups: new Set(), running: false, token: 0, jobId: '', done: 0, total: 0, question: '', loadedScope: '' };
 
   function testVlScope(status) {
     return String(launchFolder || '') + '|' + String(status && status.session || '');
+  }
+
+  function restoreTestVl(status) {
+    var scope = testVlScope(status);
+    if (testVl.running || testVl.loadedScope === scope) return;
+    testVl.loadedScope = scope;
+    testVl.scope = scope;
+    testVl.entries = Object.create(null);
+    testVl.disabledGroups = new Set();
+    var saved = status && status.testVision || {};
+    testVl.disabledGroups = new Set(saved.disabledGroups || []);
+    var byMedia = saved.byMedia || {};
+    Object.keys(byMedia).forEach(function (file) {
+      var savedEntry = byMedia[file];
+      testVl.entries[file] = {
+        status: 'done', text: savedEntry.text, question: savedEntry.question,
+        comparison: savedEntry.comparison, ignoredGroups: new Set(savedEntry.ignoredGroups || [])
+      };
+    });
+    testVl.done = Object.keys(byMedia).length;
+    testVl.total = testVl.done;
+    el('test-generations-vl-filter-options').dataset.groupKey = '';
+  }
+
+  // Serialize independent checkbox/assessment writes so the last user edit wins.
+  var testVlSaveQueue = Promise.resolve();
+
+  function saveTestVl(changes, sessionName) {
+    var session = String(sessionName || (currentStatus && currentStatus.session) || '');
+    var save = testVlSaveQueue.then(function () {
+      return request('test_vision_update', Object.assign({ session: session }, changes));
+    });
+    testVlSaveQueue = save.catch(function () {}); // Keep later saves operable after a failed write.
+    return save.catch(function (err) {
+      showError(err);
+      throw err;
+    });
   }
 
   function stopTestVl() {
@@ -206,6 +243,18 @@
     var candidate = String(result.candidateFile || result.sourceLoRA || '').trim();
     var epochScore = candidateScores[candidate];
     var epochLabel = footer && footer.querySelector('[data-test-vl-epoch-score]');
+    var manual = prepared && prepared.candidateScores && prepared.candidateScores[candidate];
+    var manualLabel = footer && footer.querySelector('[data-test-manual-epoch-score]');
+    if (footer && !manualLabel) {
+      manualLabel = document.createElement('span');
+      manualLabel.dataset.testManualEpochScore = '1';
+      manualLabel.className = 'test-generations-vl-epoch-score';
+      footer.appendChild(manualLabel);
+    }
+    if (manualLabel) {
+      manualLabel.textContent = manual && Number(manual.count) ? 'Epoch ★ ' + Number(manual.average).toFixed(1) + ' (' + manual.count + ')' : '';
+      manualLabel.classList.toggle('hidden', !manualLabel.textContent);
+    }
     if (footer && !epochLabel) {
       epochLabel = document.createElement('span');
       epochLabel.dataset.testVlEpochScore = '1';
@@ -230,10 +279,12 @@
     if (item && item.status === 'done' && item.comparison && item.comparison.length) {
       var score = testVlScore(item.comparison, item.ignoredGroups);
       button.textContent = testVlScoreText('VL', score) + (score.unclear ? ' · ' + score.unclear + ' unclear' : '');
+      if (item.saveError) button.textContent += ' · not saved';
     }
     button.classList.toggle('hidden', !item);
     if (!item) return;
-    button.title = item.status === 'done' ? 'Open VL description' : item.status === 'error' ? 'Open VL error' : item.status;
+    button.title = item.saveError ? 'VL result not saved: ' + item.saveError :
+      (item.status === 'done' ? 'Open VL assessment' : item.status === 'error' ? 'Open VL error' : item.status);
   }
 
   function syncTestVlCards() {
@@ -350,6 +401,7 @@
     summary.textContent = groups.length
       ? testVlScoreText('VL agreement', entryScore) + (entryScore.excluded ? ' · ' + entryScore.excluded + ' excluded' : '') + (entryScore.unclear ? ' · ' + entryScore.unclear + ' unclear' : '')
       : (entry.status === 'error' ? 'VL error' : entry.status === 'done' ? 'VL observation' : entry.status);
+    if (entry.saveError) summary.textContent += ' · not saved: ' + entry.saveError;
 
     // Only differences and unresolved observations demand immediate attention.
     var visible = '';
@@ -383,7 +435,7 @@
     var nextScope = testVlScope(status);
     if (testVl.scope !== nextScope) testVl.disabledGroups = new Set();
     testVl.scope = nextScope;
-    testVl.entries = Object.create(null);
+    // Keep saved assessments visible until each preview has a replacement.
     el('test-generations-vl-filter-options').dataset.groupKey = '';
     testVl.running = true;
     testVl.jobId = '';
@@ -391,7 +443,10 @@
     testVl.total = results.length;
     testVl.question = testVlQuestion(status);
     el('test-generations-vl-detail').classList.add('hidden');
-    results.forEach(function (r) { testVl.entries[resultMediaFile(r)] = { status: 'pending', question: testVl.question }; });
+    results.forEach(function (r) {
+      var file = resultMediaFile(r);
+      if (!testVl.entries[file]) testVl.entries[file] = { status: 'pending', question: testVl.question };
+    });
     syncTestVlCards();
     loadCaptionVisionCapabilities().then(function () {
       var model = getCaptionVisionModelId();
@@ -418,8 +473,18 @@
             entry.text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
             entry.comparison = testVlCompare(entry.text, Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : []);
             entry.status = 'done';
-            var detail = el('test-generations-vl-detail');
-            if (!detail.classList.contains('hidden') && detail.dataset.testVlFile === file) showTestVlResult(file, true);
+            return saveTestVl({ mediaFile: file, assessment: {
+              text: entry.text, question: entry.question, comparison: entry.comparison
+            }, ignoredGroups: Array.from(entry.ignoredGroups || []) }, session).then(function () {
+              entry.saveError = '';
+            }, function (err) {
+              // Inference succeeded: keep the observation usable but flag failed persistence.
+              entry.saveError = String(err && err.message ? err.message : err);
+            }).then(function () {
+              if (token !== testVl.token) return;
+              var detail = el('test-generations-vl-detail');
+              if (!detail.classList.contains('hidden') && detail.dataset.testVlFile === file) showTestVlResult(file, true);
+            });
           }).catch(function (err) {
             if (token !== testVl.token) return;
             entry.status = 'error';
@@ -2635,6 +2700,7 @@
       if (prepared && payload && payload.candidateScores) {
         prepared.candidateScores = payload.candidateScores;
         syncStagedCandidateScores(prepared.candidateScores);
+        syncTestVlCards();
       }
       if (payload && payload.sessions) renderSessions(payload.sessions, queuedTestJobs);
     }).catch(function (err) {
@@ -3649,7 +3715,11 @@
   function renderStatus(status) {
     var previousScope = testVlScope(currentStatus);
     currentStatus = status || {};
-    if (previousScope !== testVlScope(currentStatus)) el('test-generations-vl-detail').classList.add('hidden');
+    if (previousScope !== testVlScope(currentStatus)) {
+      el('test-generations-vl-detail').classList.add('hidden');
+      if (testVl.running) stopTestVl();
+    }
+    restoreTestVl(currentStatus);
     syncActiveRunControls(status || {});
     syncSessionSelection();
     var statusEl = el('test-generations-status');
@@ -4149,6 +4219,7 @@
       if (input.checked) testVl.disabledGroups.delete(input.dataset.testVlGroup);
       else testVl.disabledGroups.add(input.dataset.testVlGroup);
       refreshTestVlScores();
+      saveTestVl({ disabledGroups: Array.from(testVl.disabledGroups) }).catch(function () {});
     };
     el('test-generations-vl-detail').onchange = function (event) {
       var input = event.target.closest('[data-test-vl-count]');
@@ -4160,6 +4231,7 @@
       if (input.checked) entry.ignoredGroups.delete(input.dataset.testVlCount);
       else entry.ignoredGroups.add(input.dataset.testVlCount);
       refreshTestVlScores();
+      saveTestVl({ mediaFile: file, ignoredGroups: Array.from(entry.ignoredGroups) }).catch(function () {});
     };
     el('test-generations-vl-detail-close').onclick = function () { el('test-generations-vl-detail').classList.add('hidden'); };
     el('test-generations-wildcard-btn').onclick = function () {

@@ -4226,7 +4226,22 @@
       }).length;
       batch.detail = '';
       renderTestBatch();
-      if (batch.finished === batch.sessions.length) return;
+      if (batch.finished === batch.sessions.length) {
+        // A terminal session can be "complete" even when individual renditions failed.
+        // Keep successful previews usable, but report failed generations in Console.
+        batch.sessions.forEach(function (session) {
+          var status = batch.statuses[session];
+          var failures = Array.isArray(status.failures) ? status.failures : [];
+          var failed = Number(status.failed || 0);
+          if (!failures.length && !failed && status.status !== 'failed' && status.status !== 'interrupted') return;
+          var reason = failures.map(function (failure) {
+            return String(failure.sourceLoRA || failure.candidateFile || 'Generation') + ': ' +
+              String(failure.error || 'failed');
+          }).join('; ') || String(status.error || failed + ' failed generation(s)');
+          testBatchError(batch, new Error(reason), sessionLabel(session) + ' generation');
+        });
+        return;
+      }
       return testBatchWait(batch).then(function () { return testBatchPoll(batch); });
     });
   }
@@ -4404,7 +4419,7 @@
       testBatchRecalculate(batch);
       if (String(launchFolder) === batch.folder && !testVl.running) testVl.loadedScope = '';
       batch.phase = 'Complete';
-      batch.detail = batch.errors.length ? 'Completed with assessment errors.' :
+      batch.detail = batch.errors.length ? 'Completed with generation or assessment errors.' :
         batch.scores.some(function (row) { return row.count > 0; }) ? 'Ready for manual review.' :
         'No scoreable attributes. Use resolved wildcard choices to obtain VL percentages.';
       batch.active = false;

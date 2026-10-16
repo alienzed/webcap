@@ -3782,6 +3782,15 @@ iframe {
   min-width: 0;
   gap: 1px;
 }
+.test-generations-staged-heading,
+.test-generations-staged-metrics {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 7px;
+}
+.test-generations-staged-run { min-width: 0; flex: 1; }
+.test-generations-staged-metrics { gap: 10px; }
 .test-generations-staged-copy strong,
 .test-generations-staged-copy span {
   overflow: hidden;
@@ -3794,6 +3803,9 @@ iframe {
   display: flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
 }
 .test-generations-image-adapter-mark {
   display: inline-flex;

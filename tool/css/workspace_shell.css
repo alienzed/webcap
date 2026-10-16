@@ -2048,7 +2048,17 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 
 .inference-queue-row.status-queued {
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  gap: 8px;
   background: color-mix(in srgb, var(--panel-soft) 62%, transparent);
+}
+
+.inference-queue-row.status-queued .inference-queue-position {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+  text-align: left;
 }
 
 .inference-queue-row.status-running,

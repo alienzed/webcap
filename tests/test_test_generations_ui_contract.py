@@ -1500,3 +1500,23 @@ def test_test_vl_session_scoring_audit_contract():
     assert "renderTestVlCard(card, result, candidateScores);" in script
     assert "showTestVlResult(file, true);" in script
     assert "score.previews + ' preview(s), ' + score.count + ' counted attributes'" in script
+
+
+def test_session_vision_assessments_restore_and_preview_both_epoch_metrics():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
+    state = (ROOT / "tool" / "server" / "folder_state_store.py").read_text(encoding="utf-8")
+
+    assert "function restoreTestVl(status)" in script
+    assert "status && status.testVision" in script
+    assert "function saveTestVl(changes, sessionName)" in script
+    assert "saveTestVl({ mediaFile: file, assessment:" in script
+    assert "}, session).then(function () {" in script
+    assert "saveTestVl({ disabledGroups: Array.from(testVl.disabledGroups) })" in script
+    assert "saveTestVl({ mediaFile: file, ignoredGroups:" in script
+    assert "data-test-manual-epoch-score" in script
+    assert "Epoch ★ " in script
+    assert "Epoch VL" in script
+    assert 'if operation == "test_vision_update":' in backend
+    assert 'visible["testVision"] = _session_vision_state(session_directory)' in backend
+    assert 'state["test_vision"] = vision' in state

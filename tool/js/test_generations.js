@@ -80,13 +80,16 @@
     el('test-generations-vl-filter-options').dataset.groupKey = '';
   }
 
+  // Serialize independent checkbox/assessment writes so the last user edit wins.
+  var testVlSaveQueue = Promise.resolve();
+
   function saveTestVl(changes, sessionName) {
-    var scope = testVl.scope;
     var session = String(sessionName || (currentStatus && currentStatus.session) || '');
-    return request('test_vision_update', Object.assign({ session: session }, changes)).then(function () {
-      if (scope !== testVl.scope) return;
-    }).catch(function (err) {
-      reportConsoleError('Test VL session save', err);
+    var save = testVlSaveQueue.then(function () {
+      return request('test_vision_update', Object.assign({ session: session }, changes));
+    });
+    testVlSaveQueue = save.catch(function () {}); // Keep later saves operable after a failed write.
+    return save.catch(function (err) {
       showError(err);
       throw err;
     });
@@ -276,10 +279,12 @@
     if (item && item.status === 'done' && item.comparison && item.comparison.length) {
       var score = testVlScore(item.comparison, item.ignoredGroups);
       button.textContent = testVlScoreText('VL', score) + (score.unclear ? ' · ' + score.unclear + ' unclear' : '');
+      if (item.saveError) button.textContent += ' · not saved';
     }
     button.classList.toggle('hidden', !item);
     if (!item) return;
-    button.title = item.status === 'done' ? 'Open VL description' : item.status === 'error' ? 'Open VL error' : item.status;
+    button.title = item.saveError ? 'VL result not saved: ' + item.saveError :
+      (item.status === 'done' ? 'Open VL assessment' : item.status === 'error' ? 'Open VL error' : item.status);
   }
 
   function syncTestVlCards() {
@@ -396,6 +401,7 @@
     summary.textContent = groups.length
       ? testVlScoreText('VL agreement', entryScore) + (entryScore.excluded ? ' · ' + entryScore.excluded + ' excluded' : '') + (entryScore.unclear ? ' · ' + entryScore.unclear + ' unclear' : '')
       : (entry.status === 'error' ? 'VL error' : entry.status === 'done' ? 'VL observation' : entry.status);
+    if (entry.saveError) summary.textContent += ' · not saved: ' + entry.saveError;
 
     // Only differences and unresolved observations demand immediate attention.
     var visible = '';
@@ -470,6 +476,12 @@
             return saveTestVl({ mediaFile: file, assessment: {
               text: entry.text, question: entry.question, comparison: entry.comparison
             }, ignoredGroups: Array.from(entry.ignoredGroups || []) }, session).then(function () {
+              entry.saveError = '';
+            }, function (err) {
+              // Inference succeeded: keep the observation usable but flag failed persistence.
+              entry.saveError = String(err && err.message ? err.message : err);
+            }).then(function () {
+              if (token !== testVl.token) return;
               var detail = el('test-generations-vl-detail');
               if (!detail.classList.contains('hidden') && detail.dataset.testVlFile === file) showTestVlResult(file, true);
             });

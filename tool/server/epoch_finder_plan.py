@@ -70,7 +70,7 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_v
     group["properties"]["referenceTags"] = {"type": "array", "items": {"type": "object", "required": ["group", "tag"], "properties": {"group": {"type": "string"}, "tag": {"type": "string"}}}}
     group["properties"]["role"] = {"type": "string", "enum": ["primary", "leakage", "vary"]}
     import json
-    contract["prompt"] += "\\n[ACTUAL SET REFERENCE TAGS]\\n" + json.dumps(reference_vocabulary or [], ensure_ascii=False) + "\\n"
+    contract["prompt"] += "\n[ACTUAL SET REFERENCE TAGS]\n" + json.dumps(reference_vocabulary or [], ensure_ascii=False) + "\\n"
     contract["prompt"] += (
         "\n\n[EPOCH FINDER ADDITION]\n"
         "You are proposing a *reviewable test plan*, not launching a campaign. "
@@ -90,7 +90,7 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_v
     return contract
 
 
-def normalize_proposal(data):
+def normalize_proposal(data, reference_vocabulary=None):
     proposal = normalize_result(data)
     concept = str(data.get("concept") or "").strip() if isinstance(data, dict) else ""
     if not concept:
@@ -100,9 +100,16 @@ def normalize_proposal(data):
         proposal["wildcard"], data.get("variationGroups"),
     )
     raw_groups = data.get("variationGroups") if isinstance(data, dict) else []
+    valid = {(item["group"], term["term"]) for item in (reference_vocabulary or []) for term in item["terms"]}
     for normalized, raw in zip(proposal["variationGroups"], raw_groups):
         tags = raw.get("referenceTags") if isinstance(raw, dict) else None
         if not isinstance(tags, list) or (normalized["role"] == "primary" and len(tags) != len(normalized["options"])):
             raise ValueError("Primary test options require aligned structured reference tags.")
+        if normalized["role"] == "primary":
+            for entry in tags:
+                if not isinstance(entry, dict) or not isinstance(entry.get("group"), str) or not isinstance(entry.get("tag"), str):
+                    raise ValueError("Invalid Primary reference tag identity.")
+                if entry["group"] and (entry["group"], entry["tag"]) not in valid:
+                    raise ValueError("Director proposed a reference tag not present in the Set.")
         normalized["referenceTags"] = tags if normalized["role"] == "primary" else []
     return proposal

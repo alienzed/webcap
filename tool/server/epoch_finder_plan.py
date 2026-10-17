@@ -81,7 +81,8 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_v
         "'leakage' for secondary traits that should vary independently of the learned concept; "
         "'vary' for prompts' incidental variety (background, lighting, etc.) not worth scoring. "
         "Prefer precise independent construction/color/shape attributes to whole-product alternatives. "
-         "For each Primary variationGroup, include referenceTags aligned one-to-one with options, using ONLY exact group/tag pairs from ACTUAL SET REFERENCE TAGS. " 
+          "For each Primary variationGroup, use options that are the exact saved tag terms of ONE annotation group, not multi-feature descriptions. " 
+        "Put additional natural-language description outside the wildcard. Include referenceTags aligned one-to-one with options, using ONLY exact group/tag pairs from ACTUAL SET REFERENCE TAGS. "  
         "For Leakage/Vary use an empty referenceTags array. If no exact tag backs an option, use empty strings for its pair, never invent. " 
         "Offer concrete values consistent with the Set vocabulary. "
         "Never invent observed frequencies or conflate a term with its negation. "
@@ -106,10 +107,17 @@ def normalize_proposal(data, reference_vocabulary=None):
         if not isinstance(tags, list) or (normalized["role"] == "primary" and len(tags) != len(normalized["options"])):
             raise ValueError("Primary test options require aligned structured reference tags.")
         if normalized["role"] == "primary":
-            for entry in tags:
+            groups = set()
+            for option, entry in zip(normalized["options"], tags):
                 if not isinstance(entry, dict) or not isinstance(entry.get("group"), str) or not isinstance(entry.get("tag"), str):
                     raise ValueError("Invalid Primary reference tag identity.")
+                if entry["group"] and (entry["tag"] != option):
+                    raise ValueError("Primary wildcard value must equal its reference tag.")
+                if entry["group"]:
+                    groups.add(entry["group"])
                 if reference_vocabulary is not None and entry["group"] and (entry["group"], entry["tag"]) not in valid:
                     raise ValueError("Director proposed a reference tag not present in the Set.")
+            if len(groups) > 1:
+                raise ValueError("Each Primary wildcard group must use one annotation group.")
         normalized["referenceTags"] = tags if normalized["role"] == "primary" else []
     return proposal

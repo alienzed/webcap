@@ -13,7 +13,7 @@ from tool.server.epoch_test_bench import _test_vl_partial_credit
     ("green", "gray-green", 0.5),
     ("triangle ring connectors", "square ring connectors", 0),
     ("black", "white", 0),
-    ("ring connectors", "no ring connectors", 2 / 3),
+    ("ring connectors", "no ring connectors", 0),
     ("(absent)", "ring connectors", 0),
     ("red", "red", 0),
     ("micro triangle", "triangle micro", 0),

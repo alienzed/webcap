@@ -454,7 +454,8 @@ def _prune_screening_frames(folder_path, campaign):
     """Keep final field frames and all unscored failure evidence."""
     finalists = set(campaign["rounds"][-1]["epochs"])
     for unit in campaign["units"]:
-        if unit["epoch"] in finalists or unit.get("assessment") is None or not unit.get("frame"):
+        if (unit["epoch"] in finalists or unit.get("assessment") is None or not unit.get("frame")
+                or unit.get("referenceError") or unit.get("dinoError")):
             continue
         frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
         if frame.is_symlink():
@@ -498,15 +499,18 @@ def _evaluate_unit(folder_path, campaign, unit):
 
 def _evaluate_reference_unit(folder_path, campaign, unit):
     """Add paired VL evidence without altering original attribute judgments."""
-    if not campaign.get("referenceEvaluation", {}).get("rvn") or "referenceAssessments" in unit:
+    if not campaign.get("referenceEvaluation", {}).get("rvn") or unit.get("referenceComplete"):
         return
     frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
     if not frame.is_file():
         raise FileNotFoundError("Generated comparison frame is unavailable.")
     from .epoch_reference import verified_reference
     references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
-    outcomes = []
+    outcomes = list(unit.get("referenceAssessments") or [])
+    completed_groups = {row["groupId"] for row in outcomes}
     for group in unit.get("groups", []):
+        if group["id"] in completed_groups:
+            continue
         if group.get("role") == "vary" or group.get("expected") is None:
             continue
         expected = group["options"][group["expected"] - 1]
@@ -555,11 +559,12 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
                 break
             time.sleep(1)
     unit["referenceAssessments"] = outcomes
+    unit["referenceComplete"] = True
     _save(folder_path, campaign)
 
 
 def _evaluate_dino_unit(folder_path, campaign, unit):
-    if not campaign.get("referenceEvaluation", {}).get("dino") or "dinoAssessments" in unit:
+    if not campaign.get("referenceEvaluation", {}).get("dino") or unit.get("dinoComplete"):
         return
     from .epoch_dino import compare_images
     from .epoch_reference import verified_reference
@@ -589,6 +594,7 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
         unit["dinoAssessments"] = results
         _save(folder_path, campaign)
     unit["dinoAssessments"] = results
+    unit["dinoComplete"] = True
     _save(folder_path, campaign)
 
 
@@ -708,8 +714,8 @@ def _run(folder_path, campaign_id, control):
                 if unit["round"] != number:
                     continue
                 needs_vl = unit.get("assessment") is None
-                needs_rvn = campaign.get("referenceEvaluation", {}).get("rvn") and "referenceAssessments" not in unit and "referenceError" not in unit
-                needs_dino = campaign.get("referenceEvaluation", {}).get("dino") and "dinoAssessments" not in unit and "dinoError" not in unit
+                needs_rvn = campaign.get("referenceEvaluation", {}).get("rvn") and not unit.get("referenceComplete") and "referenceError" not in unit
+                needs_dino = campaign.get("referenceEvaluation", {}).get("dino") and not unit.get("dinoComplete") and "dinoError" not in unit
                 if not (needs_vl or needs_rvn or needs_dino):
                     continue
                 if not _check_signal(folder_path, campaign, control):

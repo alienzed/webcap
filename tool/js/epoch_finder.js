@@ -10,6 +10,9 @@
   var wizardStep = 1;
   var dimensions = [];
   var inspectedEpoch = null;
+  var checkpointEvidence = null;
+  var checkpointEvidenceKey = '';
+  var evidenceRequestVersion = 0;
   var inspectedFrame = 0;
   var campaignState = null;
   var referenceSelections = {};
@@ -642,6 +645,41 @@
           '</div></figcaption></figure>';
       }).join('');
   }
+  function crossCampaignEvidence(campaign) {
+    if (inspectedEpoch == null) return '';
+    var key = currentFolder + '|' + campaign.jobId + '|' + inspectedEpoch;
+    var entry = checkpointEvidenceKey === key && checkpointEvidence;
+    var html = '<details class="epoch-finder-cross-evidence"><summary>Evidence from other campaigns</summary>' +
+      '<button type="button" data-load-checkpoint-evidence>Load checkpoint evidence</button>';
+    if (entry) {
+      html += entry.length ? entry.map(function (row) {
+        var rvn = row.rvnVerdicts || {};
+        return '<p><strong>' + escape(row.campaignName || row.campaignId) + '</strong>' +
+          ' · Concept ' + (row.score == null ? 'not scored' : Math.round(row.score * 100) + '%') +
+          ' · ' + row.evaluatedRenders + ' rendered tests' +
+          ' · ' + row.weightedObservations + ' weighted observations' +
+          ' · RVN ' + (rvn.MATCH || 0) + ' match / ' + (rvn.PARTIAL || 0) + ' partial / ' +
+          (rvn.MISMATCH || 0) + ' mismatch / ' + (rvn.UNCLEAR || 0) + ' unclear' +
+          ' · DINO ' + row.dinoComparisons + ' comparisons' +
+          (row.failedRenders ? ' · ' + row.failedRenders + ' failed units' : '') +
+          (row.campaignId === campaign.id ? ' · current campaign' : '') + '</p>';
+      }).join('') : '<p>No saved evidence for this checkpoint.</p>';
+    }
+    return html + '<small>Campaign scores are independent; missing assessments do not count as failures.</small></details>';
+  }
+  function loadCheckpointEvidence() {
+    if (!campaignState || inspectedEpoch == null) return;
+    var folder = currentFolder, run = campaignState.jobId, epoch = inspectedEpoch;
+    var version = ++evidenceRequestVersion;
+    api('checkpoint_evidence', {jobId: run}).then(function (response) {
+      if (version !== evidenceRequestVersion || currentFolder !== folder ||
+          !campaignState || campaignState.jobId !== run || inspectedEpoch !== epoch) return;
+      var found = (response.checkpoints || []).find(function (item) { return item.epoch === epoch; });
+      checkpointEvidenceKey = folder + '|' + run + '|' + epoch;
+      checkpointEvidence = found ? found.campaigns : [];
+      inspectFrame(campaignState);
+    }).catch(error);
+  }
   function inspectFrame(campaign) {
     var node = els('inspector');
     var units = campaign.units.filter(function (u) { return inspectedEpoch != null && u.epoch === inspectedEpoch; })
@@ -702,7 +740,8 @@
         }).join('') + '</details>' : '') +
       (unit.referenceError ? '<p class="epoch-finder-error">Reference VL: ' + escape(unit.referenceError) + '</p>' : '') +
       (unit.dinoError ? '<p class="epoch-finder-error">DINOv2: ' + escape(unit.dinoError) + '</p>' : '') +
-      (unit.error ? '<p class="epoch-finder-error">' + escape(unit.error) + '</p>' : '');
+      (unit.error ? '<p class="epoch-finder-error">' + escape(unit.error) + '</p>' : '') +
+      crossCampaignEvidence(campaign);
   }
   function render(campaign) {
     campaignState = campaign;
@@ -803,7 +842,7 @@
     var changed = currentFolder !== folder;
     if (changed) listRequestVersion++;
     currentFolder = folder;
-    if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { evidenceRequestVersion++; checkpointEvidence = null; checkpointEvidenceKey = ''; activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;
@@ -880,12 +919,16 @@
     var row = event.target.closest('[data-inspect-epoch]');
     if (!row) return;
     inspectedEpoch = Number(row.dataset.inspectEpoch);
+    evidenceRequestVersion++;
     inspectedFrame = 0;
     lastFrameKey = null;
     refreshStatus().catch(error);
   };
   els('inspector').onclick = function (event) {
     if (!campaignState || inspectedEpoch == null) return;
+    if (event.target.closest('[data-load-checkpoint-evidence]')) {
+      loadCheckpointEvidence(); return;
+    }
     if (event.target.closest('[data-copy-epoch-to-test]')) {
       var button = event.target.closest('[data-copy-epoch-to-test]');
       var folder = currentFolder, campaignId = campaignState.id, epoch = inspectedEpoch;

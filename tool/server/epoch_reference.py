@@ -26,14 +26,13 @@ def training_image_members(folder, job_id):
     root, action = read_action(action_id)
     if str(action.get("folder") or "").strip().replace(chr(92), "/").strip("/") != folder:
         raise ValueError("Training action belongs to another Set.")
-    captures = [item for item in (action.get("captures") or [])
-                if isinstance(item, dict) and str(item.get("jobId") or "") == job_id]
-    if len(captures) != 1:
-        raise ValueError("Cannot establish the selected run's exact training capture.")
-    capture = (root / str(captures[0].get("path") or "")).resolve()
+    input_path = str(run.get("inputPath") or "").strip()
+    if not input_path:
+        raise ValueError("This run has no recorded training input capture.")
     capture_base = (root / "captures").resolve()
+    capture = Path(input_path).resolve()
     if not capture.is_relative_to(capture_base) or not capture.is_dir() or capture.is_symlink():
-        raise ValueError("Training capture path is invalid or missing.")
+        raise ValueError("Recorded training capture is invalid or missing.")
     dataset = capture / ("dataset." + stage + ".toml")
     if not dataset.is_file() or dataset.is_symlink():
         raise FileNotFoundError("The captured dataset TOML is unavailable: " + str(dataset))

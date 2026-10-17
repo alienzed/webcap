@@ -291,6 +291,7 @@
       }) : [];
     });
     referenceIndex = 0;
+    els('start').disabled = true;
     els('reference-options').innerHTML = '<p class="epoch-finder-muted">Finding tagged reference candidates…</p>';
     return Promise.all(referenceItems.map(function (item) {
       return (!item.referenceTag?.group || !item.referenceTag?.tag ? Promise.resolve({references:[]}) : api('reference_suggestions', {group:item.referenceTag.group, tag:item.referenceTag.tag})).then(function (response) {
@@ -305,8 +306,14 @@
         var valid = item.candidates.some(function (candidate) {
           return saved && candidate.media === saved.media && candidate.group === saved.group && candidate.tag === saved.tag;
         });
-        if (!valid) delete referenceSelections[item.key];
-        referenceDraftChoices[item.key] = valid ? item.candidates.findIndex(function (candidate) { return saved.media === candidate.media; }) : 0;
+        var selectedIndex = valid ? item.candidates.findIndex(function (candidate) { return saved.media === candidate.media; }) : 0;
+        var candidate = item.candidates[selectedIndex];
+        // Deterministic default: explicit user selection wins; otherwise first exact-tag match.
+        referenceSelections[item.key] = valid ? saved : {
+          attribute:item.attribute, option:item.option,
+          group:candidate.group, tag:candidate.tag, media:candidate.media
+        };
+        referenceDraftChoices[item.key] = selectedIndex;
       });
       renderReferenceStep();
     }).catch(error);
@@ -324,7 +331,7 @@
     host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' +
       escape(item.attribute) + ' · ' + escape(item.option) + '</strong><span>' +
       (referenceIndex+1) + ' / ' + referenceItems.length + '</span></div>' +
-      '<p class="epoch-finder-muted">Suggested using Set tags. Select the image that visibly demonstrates this option.</p>' +
+      '<p class="epoch-finder-muted">Automatically selected from matching Set tags. Review or change only if needed.</p>' +
       '<div class="epoch-finder-reference-gallery">' + item.candidates.map(function (candidate,i) {
         var active = selected === i;
         return '<button type="button" class="epoch-finder-reference-tile' + (active ? ' selected' : '') +
@@ -339,7 +346,7 @@
   }
   function updateReferenceStatus() {
     var chosen = referenceItems.filter(function (item) { return !!referenceSelections[item.key]; }).length;
-    els('reference-choices').textContent = chosen + ' / ' + referenceItems.length + ' references selected';
+    els('reference-choices').textContent = chosen + ' / ' + referenceItems.length + ' auto-selected · optional review';
     els('start').disabled = referenceItems.length > 0 && chosen !== referenceItems.length;
   }
   function approvedReferences() {
@@ -836,7 +843,8 @@
       var item = referenceItems[referenceIndex];
       var candidate = item.candidates[Number(pick.dataset.referencePick)];
       referenceDraftChoices[item.key] = Number(pick.dataset.referencePick);
-      delete referenceSelections[item.key];
+      referenceSelections[item.key] = {attribute:item.attribute, option:item.option,
+        group:candidate.group, tag:candidate.tag, media:candidate.media};
       renderReferenceStep();
       return;
     }

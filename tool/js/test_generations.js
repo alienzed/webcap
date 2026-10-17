@@ -57,6 +57,7 @@
   var testVl = { scope: '', entries: Object.create(null), disabledGroups: new Set(), running: false, token: 0, jobId: '', done: 0, total: 0, question: '', loadedScope: '' };
   // Session-scoped browser controllers. Every request uses the existing LLM queue.
   var testVlRuns = Object.create(null);
+  var testVlElapsedTimer = setInterval(refreshTestVlElapsedButtons, 1000);
 
   function testVlScope(status) {
     return String(launchFolder || '') + '|' + String(status && status.session || '');
@@ -301,6 +302,32 @@
       (testVl.total ? (testVl.done + ' / ' + testVl.total + ' processed') : '');
   }
 
+  function testVlElapsedText(entry) {
+    if (!entry) return '';
+    var milliseconds = entry.status === 'running' && entry.startedAt
+      ? Date.now() - entry.startedAt : entry.elapsedMs;
+    return milliseconds == null ? '' : formatCandidateElapsed(milliseconds);
+  }
+
+  function updateTestVlElapsedButton(button, entry) {
+    var elapsed = testVlElapsedText(entry);
+    button.textContent = button.dataset.testVlLabel + (elapsed ? ' · ' + elapsed : '');
+    button.title = button.dataset.testVlTitle + (elapsed ? ' · Ask VL elapsed: ' + elapsed : '');
+  }
+
+  // Update only the timer label; leave the preview cards and their media nodes intact.
+  function refreshTestVlElapsedButtons() {
+    if (!isOpen() || testVl.scope !== testVlScope(currentStatus)) return;
+    ['test-generations-results', 'test-generations-compare'].forEach(function (id) {
+      var host = el(id);
+      if (!host) return;
+      Array.prototype.forEach.call(host.querySelectorAll('[data-test-vl-result]'), function (button) {
+        var entry = testVl.entries[String(button.dataset.testVlResult || '')];
+        if (entry && entry.status === 'running') updateTestVlElapsedButton(button, entry);
+      });
+    });
+  }
+
   function renderTestVlCard(card, result, candidateScores) {
     var file = resultMediaFile(result);
     if (!file) return;
@@ -340,6 +367,9 @@
         (item && item.modelId ? 'Model: ' + item.modelId + ' · ' : '') +
         (item && item.status === 'error' ? 'Open VL error' : 'Open VL assessment');
     }
+    button.dataset.testVlLabel = button.textContent;
+    button.dataset.testVlTitle = button.title;
+    updateTestVlElapsedButton(button, item);
     button.classList.toggle('hidden', !item);
     row.classList.toggle('hidden', !manualLabel.textContent && !epochLabel.textContent && !item);
   }
@@ -4525,6 +4555,7 @@
         var file = resultMediaFile(result);
         batch.detail = sessionLabel(session) + ' · ' + file;
         renderTestBatch();
+        var vlStartedAt = Date.now();
         return askVlForTestPreview(batch.folder, session, file, batch.vlModel, question, function (jobId) {
           batch.vlJobId = jobId;
           return batch.active;
@@ -4533,7 +4564,8 @@
           var text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
           return requestForFolder(batch.folder, 'test_vision_update', {
             session: session, mediaFile: file,
-            assessment: { text: text, question: question, comparison: testVlCompare(text, groups), modelId: batch.vlModel }
+            assessment: { text: text, question: question, comparison: testVlCompare(text, groups),
+              modelId: batch.vlModel, elapsedMs: Math.max(0, Date.now() - vlStartedAt) }
           });
         }).then(function (payload) {
           testBatchCheck(batch);

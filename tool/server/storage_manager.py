@@ -485,6 +485,22 @@ def _discovered_set_folders(cache, current_folder=""):
     return folders
 
 
+def _test_campaign_owner(session):
+    """Return the existing campaign ID protecting a retained Test session."""
+    staging = str(session.get("campaignStaging") or "")
+    match = re.fullmatch(r"epoch-finder-([a-f0-9]{12})", staging)
+    if not match:
+        return ""
+    owner_folder = str(session.get("ownerFolder") or "").strip()
+    if not owner_folder:
+        return ""
+    try:
+        epoch_finder.storage_campaign_path(owner_folder, match.group(1))
+    except FileNotFoundError:
+        return ""  # Abandoned session from an already-deleted campaign.
+    return match.group(1)
+
+
 def _test_items_for_folder(cache, folder, qualify_label=False):
     set_path = app_config.safe_join_fs_root(folder)
     if not set_path.is_dir():
@@ -503,6 +519,7 @@ def _test_items_for_folder(cache, folder, qualify_label=False):
         session_id = path.name
         status = str(session.get("status") or "")
         active = status in ACTIVE_TEST_STATUSES
+        campaign_id = _test_campaign_owner(session)
         label = str(session.get("name") or session_id)
         if qualify_label:
             label += " · " + folder
@@ -514,8 +531,8 @@ def _test_items_for_folder(cache, folder, qualify_label=False):
             folder=folder,
             kind=session.get("modelId") or session.get("model") or "Test Session",
             status=status,
-            purgeable=not active,
-            protected_reason=("Active Test Session; stop it before deletion." if active else ""),
+            purgeable=not active and not campaign_id,
+            protected_reason=("Epoch Finder campaign " + campaign_id + " owns this session; delete the campaign instead." if campaign_id else "Active Test Session; stop it before deletion." if active else ""),
             meta={
                 "set": folder,
                 "completed": int(session.get("completed") or 0),
@@ -544,6 +561,7 @@ def _central_test_items(cache):
             session_id = path.name
             status = str(session.get("status") or "")
             active = status in ACTIVE_TEST_STATUSES
+            campaign_id = _test_campaign_owner(session)
             source = str(session.get("source") or "")
             owner_folder = str(session.get("ownerFolder") or "")
             label = str(session.get("name") or "").strip() or session_id
@@ -557,8 +575,8 @@ def _central_test_items(cache):
                 folder="",
                 kind=session.get("modelId") or session.get("model") or "Test Session",
                 status=status,
-                purgeable=not active,
-                protected_reason=("Active Test Session; stop it before deletion." if active else ""),
+                purgeable=not active and not campaign_id,
+                protected_reason=("Epoch Finder campaign " + campaign_id + " owns this session; delete the campaign instead." if campaign_id else "Active Test Session; stop it before deletion." if active else ""),
                 meta={
                     "source": source,
                     "ownerFolder": owner_folder,
@@ -1901,6 +1919,9 @@ def purge(area, item_id, folder=""):
         session = _resolve_test(folder, item_id)
         session_payload = _read_test_session_manifest(session)
         status = str(session_payload.get("status") or "").strip().lower()
+        campaign_id = _test_campaign_owner(session_payload)
+        if campaign_id:
+            raise RuntimeError("Test Session belongs to Epoch Finder campaign " + campaign_id + "; delete the campaign instead.")
         if status in ACTIVE_TEST_STATUSES:
             raise RuntimeError("Active Test Session; stop it before deletion.")
         owner_folder = str(session_payload.get("ownerFolder") or folder or "").strip()

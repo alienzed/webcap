@@ -151,8 +151,10 @@ def test_wizard_rejects_misaligned_prompt_or_unscored_only():
         normalize_dimensions("A {red|blue} hat", [
             {"label": "Colour", "options": ["red", "blue"], "role": "vary"}
         ])
-    with pytest.raises(ValueError, match="flat"):
-        normalize_dimensions("A {red|{blue|green}} hat")
+    # Nested wildcards are intentionally supported by Test Generations and
+    # Epoch Finder uses the same expanded, top-level vocabulary.
+    expanded = normalize_dimensions("A {red|{blue|green}} hat")
+    assert expanded[0]["options"] == ["red", "blue", "green"]
 
 
 def test_wizard_proposal_contract_reuses_captions_with_role_schema():

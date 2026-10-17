@@ -1,4 +1,5 @@
 """Backend-owned, disposable Epoch Finder campaigns using existing Test and VL queues."""
+import io
 import json
 import math
 import os
@@ -302,8 +303,13 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
         pixels = extract_boundary_frame_png(media, "first")
     elif media.suffix.lower() == ".png":
         pixels = media.read_bytes()
+    elif media.suffix.lower() in {".jpg", ".jpeg", ".webp", ".bmp"}:
+        from PIL import Image
+        with Image.open(media) as image, io.BytesIO() as buffer:
+            image.save(buffer, format="PNG")
+            pixels = buffer.getvalue()
     else:
-        raise ValueError("Epoch Finder expected a video or PNG Test result.")
+        raise ValueError("Epoch Finder expected supported Test video or image output.")
     temp = frame.with_suffix(".tmp")
     try:
         temp.write_bytes(pixels)

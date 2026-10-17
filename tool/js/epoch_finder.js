@@ -346,9 +346,9 @@
       var estimateText = minutes ? minutes + 'm' + (seconds ? ' ' + seconds + 's' : '') :
         seconds + 's';
       els('estimate').textContent = renders + ' projected renders · ~' + estimateText +
-        (seededRenders ? ' (3s H3: 0.3 MP ≈ 10s, 0.4 MP ≈ 15s)' : '') +
+        (seededRenders ? ' (observed samples or H3 seeds)' : '') +
         (seededRenders < renders ? ' · unmeasured: 30s/render' : '') +
-        '. Excludes VL, queue time and possible cutoff ties.';
+        '. Observed capture estimates include queue waiting; seed estimates exclude it. VL overhead and cutoff ties are extra.';
     }
     host.oninput = estimate;
     estimate();
@@ -493,9 +493,9 @@
     var captures = campaign.units.filter(function (u) { return Number(u.captureWallSeconds) > 0; });
     var recent = captures.slice(-8);
     var typical = recent.length ? recent.map(function (u) { return u.captureWallSeconds; }).sort(function (a,b) { return a-b; })[Math.floor(recent.length/2)] : null;
-    var totalPlanned = campaign.rounds.reduce(function (sum, round) { return sum + round.epochs.length * round.seeds.length; }, 0);
+    var totalPlanned = campaign.rounds.reduce(function (sum, round) { return sum + (round.epochs.length || 0) * round.seeds.length; }, 0);
     var remaining = Math.max(0, totalPlanned - captures.length);
-    els('timing').textContent = typical == null ? 'No captured timing yet' :
+    els('timing').textContent = campaign.status === 'complete' ? 'Campaign complete' : typical == null ? 'No captured timing yet' :
       'Recent capture: ~' + Math.round(typical) + 's · ~' + Math.ceil(remaining * typical / 60) + 'm remaining (includes queue wait; excludes VL)';
     els('empty').classList.add('hidden');
     els('active').classList.remove('hidden');

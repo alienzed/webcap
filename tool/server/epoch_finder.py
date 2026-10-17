@@ -84,17 +84,6 @@ def _runs(folder_path):
     return result
 
 
-def _timing_path(folder_path):
-    return _root(folder_path) / "timing_profiles.json"
-
-
-def _timing_profiles(folder_path):
-    path = _timing_path(folder_path)
-    if not path.is_file():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def _timing_key(campaign, plan):
     settings = plan["settings"]
     return "|".join((
@@ -104,18 +93,36 @@ def _timing_key(campaign, plan):
     ))
 
 
-def _record_timing(folder_path, campaign, plan, unit, elapsed):
-    """Record successful enqueue-to-frame wall time; queue waiting is included."""
-    unit["captureWallSeconds"] = round(elapsed, 2)
-    key = _timing_key(campaign, plan)
-    profiles = _timing_profiles(folder_path)
-    entry = profiles.setdefault(key, {"seconds": [], "samples": 0})
-    entry["samples"] += 1
-    # Exclude the first sample, which may include model loading.
-    if entry["samples"] > 1:
-        entry["seconds"] = (entry["seconds"] + [round(elapsed, 2)])[-20:]
-    _timing_path(folder_path).parent.mkdir(parents=True, exist_ok=True)
-    test_bench._atomic_write_json(_timing_path(folder_path), profiles)
+def _timing_profiles(folder_path):
+    """Derive observed timings from durable campaign evidence, no separate cache."""
+    profiles = {}
+    root = _root(folder_path)
+    if not root.is_dir():
+        return profiles
+    for directory in root.iterdir():
+        if not directory.is_dir() or directory.is_symlink() or not _ID.fullmatch(directory.name):
+            continue
+        try:
+            campaign = _load(folder_path, directory.name)
+        except (OSError, ValueError, json.JSONDecodeError, FileNotFoundError):
+            continue
+        rounds = {plan["number"]: plan for plan in campaign["rounds"]}
+        seen = set()
+        for unit in campaign["units"]:
+            seconds = unit.get("captureWallSeconds")
+            plan = rounds.get(unit.get("round"))
+            if not isinstance(seconds, (int, float)) or seconds <= 0 or plan is None:
+                continue
+            key = _timing_key(campaign, plan)
+            # First completed capture per campaign/settings may include model warm-up.
+            if key not in seen:
+                seen.add(key)
+                continue
+            entry = profiles.setdefault(key, {"seconds": []})
+            entry["seconds"].append(round(seconds, 2))
+    for entry in profiles.values():
+        entry["seconds"] = entry["seconds"][-20:]
+    return profiles
 
 
 def list_campaigns(folder_path):
@@ -377,7 +384,7 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     unit["frame"] = file_name
     unit["captured"] = True
     if unit.get("queuedAt"):
-        _record_timing(folder_path, campaign, plan, unit, time.time() - unit["queuedAt"])
+        unit["captureWallSeconds"] = round(time.time() - unit["queuedAt"], 2)
     unit["groups"] = status.get("wildcardEvaluationGroups") or []
     if len(unit["groups"]) != len(campaign["dimensions"]):
         raise RuntimeError("Resolved wildcard group count differs from the approved plan.")

@@ -1,5 +1,9 @@
 """Read-only exact scoped-tag reference candidate lookup for dataset-aware evaluation."""
 from pathlib import Path
+import tomllib
+
+from .training_action import read_action
+from .training_runner import _candidate_run_snapshot
 
 SUPPORTED_REFERENCE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 
@@ -7,12 +11,62 @@ from .caption_ops import _resolve_folder, list_media_files
 from .folder_state_store import read_folder_state
 
 
-def reference_vocabulary(folder):
+
+def training_image_members(folder, job_id):
+    """Only images used by the selected run's effective captured dataset."""
+    folder = str(folder or "").strip().replace(chr(92), "/").strip("/")
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        raise ValueError("Select a training run before choosing references.")
+    _path, run = _candidate_run_snapshot(folder, job_id)
+    action_id = str(run.get("actionId") or "").strip()
+    stage = str(run.get("stages") or "").strip().lower()
+    if not action_id or stage not in {"hi", "lo", "krea2", "wan21", "h3"}:
+        raise ValueError("Training reference membership is unavailable for this run.")
+    root, action = read_action(action_id)
+    if str(action.get("folder") or "").strip().replace(chr(92), "/").strip("/") != folder:
+        raise ValueError("Training action belongs to another Set.")
+    captures = [item for item in (action.get("captures") or [])
+                if isinstance(item, dict) and str(item.get("jobId") or "") == job_id]
+    if len(captures) != 1:
+        raise ValueError("Cannot establish the selected run's exact training capture.")
+    capture = (root / str(captures[0].get("path") or "")).resolve()
+    capture_base = (root / "captures").resolve()
+    if not capture.is_relative_to(capture_base) or not capture.is_dir() or capture.is_symlink():
+        raise ValueError("Training capture path is invalid or missing.")
+    dataset = capture / ("dataset." + stage + ".toml")
+    if not dataset.is_file() or dataset.is_symlink():
+        raise FileNotFoundError("The captured dataset TOML is unavailable: " + str(dataset))
+    config = tomllib.loads(dataset.read_text(encoding="utf-8"))
+    directories = config.get("directory") or []
+    if not isinstance(directories, list) or not directories:
+        raise ValueError("Captured training dataset has no directory entries.")
+    media_root = (capture / "media").resolve()
+    members = set()
+    for entry in directories:
+        if not isinstance(entry, dict) or str(entry.get("group") or "").lower() != "images":
+            continue
+        raw = str(entry.get("path") or "").replace(chr(92), "/").rstrip("/")
+        if "/media/" not in raw:
+            raise ValueError("Captured image dataset path cannot be resolved: " + raw)
+        subpath = raw.rsplit("/media/", 1)[1]
+        directory = (media_root / subpath).resolve()
+        if not directory.is_relative_to(media_root) or not directory.is_dir():
+            raise ValueError("Captured image dataset directory is unavailable: " + raw)
+        for file in directory.iterdir():
+            if file.is_file() and file.suffix.lower() in SUPPORTED_REFERENCE_EXTENSIONS:
+                members.add(file.name)
+    if not members:
+        raise ValueError("This training run has no verifiable trained images for references.")
+    return members
+
+
+def reference_vocabulary(folder, job_id):
     root = _resolve_folder(folder)
     by_media = read_folder_state(root / ".webcap_state.json").get("caption_group_tags_by_media") or {}
     if not isinstance(by_media, dict):
         raise ValueError("Scoped tag map is invalid.")
-    allowed = set(list_media_files(folder))
+    allowed = set(list_media_files(folder)) & training_image_members(folder, job_id)
     vocabulary = {}
     for name, annotations in by_media.items():
         if name not in allowed or Path(name).suffix.lower() not in SUPPORTED_REFERENCE_EXTENSIONS:
@@ -29,15 +83,15 @@ def reference_vocabulary(folder):
             for g, terms in sorted(vocabulary.items())]
 
 
-def verified_reference(folder, group, term, media):
-    matches = find_reference_candidates(folder, group, term)
+def verified_reference(folder, group, term, media, job_id):
+    matches = find_reference_candidates(folder, group, term, job_id)
     reference = next((entry for entry in matches if entry["media"] == media), None)
     if reference is None:
         raise ValueError("Approved reference does not match this dataset tag: " + group + " / " + term)
     return reference
 
 
-def find_reference_candidates(folder, group, term):
+def find_reference_candidates(folder, group, term, job_id):
     """Return deterministically sorted media annotated with exact group and term.
 
     Unsupported annotation shapes fail explicitly rather than silently matching text.
@@ -53,7 +107,10 @@ def find_reference_candidates(folder, group, term):
     if not isinstance(by_media, dict):
         raise ValueError("Scoped tag map is invalid.")
     results = []
+    allowed = training_image_members(folder, job_id)
     for name in list_media_files(folder):
+        if name not in allowed:
+            continue
         if Path(name).suffix.lower() not in SUPPORTED_REFERENCE_EXTENSIONS:
             continue
         annotations = by_media.get(name, {})

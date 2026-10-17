@@ -13,7 +13,7 @@ from pathlib import Path
 from . import config as app_config
 from . import epoch_test_bench as test_bench
 from .epoch_finder_plan import normalize_dimensions
-from .caption_vision import build_vision_question_messages, vision_resized_image_data_url
+from .caption_vision import build_vision_question_messages, build_reference_comparison_messages, vision_resized_image_data_url
 from .llm_runner import enqueue as enqueue_llm, job_status as llm_job_status
 from .test_models import get_test_model_for_staging_key
 from .training_history import all_history_payload
@@ -27,6 +27,7 @@ from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
 
 _workers = {}
 _controls = {}
+_pending_campaigns = []  # FIFO of (validated folder, campaign id); no new execution lane.
 _worker_lock = threading.Lock()
 _ID = re.compile(r"^[a-f0-9]{12}$")
 _FRAME = re.compile(r"^r[0-9]+-e[0-9]+-c[0-9]+\.png$")
@@ -223,6 +224,34 @@ def create_campaign(folder_path, criteria):
     plans = _create_plan(selected_epochs, prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans"))
     for round_plan in plans:
         model.normalize_settings(template, lambda: 1, dict(round_plan["settings"], seed=1))
+    from .epoch_reference import verified_reference
+    reference_choices = criteria.get("referencePlan")
+    if not isinstance(reference_choices, list):
+        raise ValueError("Approve a training reference for every scored wildcard option.")
+    approved = {}
+    for entry in reference_choices:
+        if not isinstance(entry, dict):
+            raise ValueError("Invalid reference selection.")
+        key = (str(entry.get("attribute") or ""), str(entry.get("option") or ""))
+        if key in approved:
+            raise ValueError("Duplicate approved reference.")
+        approved[key] = entry
+    required = {(dimension["label"], option) for dimension in dimensions
+                if dimension["role"] != "vary" for option in dimension["options"]}
+    if set(approved) != required:
+        raise ValueError("Every scored wildcard choice must have exactly one approved training reference.")
+    references = []
+    for (attribute, option), entry in sorted(approved.items()):
+        group = str(entry.get("group") or "")
+        media = str(entry.get("media") or "")
+        reference = verified_reference(folder, group, option, media)
+        references.append({"attribute": attribute, "option": option, "group": group, **reference})
+    evaluation = criteria.get("referenceEvaluation")
+    if not isinstance(evaluation, dict) or any(type(evaluation.get(k)) is not bool for k in ("rvn", "dino")):
+        raise ValueError("Select reference evaluation mechanisms explicitly.")
+    if evaluation["dino"]:
+        from .epoch_dino import preflight as dino_preflight
+        dino_preflight()
     campaign_id = secrets.token_hex(6)
     directory = _directory(folder_path, campaign_id)
     directory.mkdir(parents=True, exist_ok=False)
@@ -233,7 +262,8 @@ def create_campaign(folder_path, criteria):
         "name": str(criteria.get("name") or run["runName"]).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
         "round": 1, "rounds": plans,
-        "visionModel": vision_model, "vlImageMP": vl_image_mp, "dimensions": dimensions, "concept": str(criteria.get("concept") or "").strip(),
+        "visionModel": vision_model, "vlImageMP": vl_image_mp, "dimensions": dimensions,
+        "referencePlan": references, "referenceEvaluation": {"rvn": evaluation["rvn"], "dino": evaluation["dino"]}, "concept": str(criteria.get("concept") or "").strip(),
         "units": [], "scores": [], "startedAt": time.time(),
         "finishedAt": None,
     }
@@ -436,7 +466,8 @@ def _prune_screening_frames(folder_path, campaign):
     """Keep final field frames and all unscored failure evidence."""
     finalists = set(campaign["rounds"][-1]["epochs"])
     for unit in campaign["units"]:
-        if unit["epoch"] in finalists or unit.get("assessment") is None or not unit.get("frame"):
+        if (unit["epoch"] in finalists or unit.get("assessment") is None or not unit.get("frame")
+                or unit.get("referenceError") or unit.get("dinoError")):
             continue
         frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
         if frame.is_symlink():
@@ -476,6 +507,107 @@ def _evaluate_unit(folder_path, campaign, unit):
             llm_job_status(job_id, consume=True)
             return
         time.sleep(1)
+
+
+def _evaluate_reference_unit(folder_path, campaign, unit):
+    """Add paired VL evidence without altering original attribute judgments."""
+    if not campaign.get("referenceEvaluation", {}).get("rvn") or unit.get("referenceComplete"):
+        return
+    frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
+    if not frame.is_file():
+        raise FileNotFoundError("Generated comparison frame is unavailable.")
+    from .epoch_reference import verified_reference
+    references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
+    outcomes = list(unit.get("referenceAssessments") or [])
+    completed_groups = {row["groupId"] for row in outcomes}
+    for group in unit.get("groups", []):
+        if group["id"] in completed_groups:
+            continue
+        if group.get("role") == "vary" or group.get("expected") is None:
+            continue
+        expected = group["options"][group["expected"] - 1]
+        assigned = references.get((group["label"], expected))
+        if assigned is None:
+            raise ValueError("Scored wildcard option lacks an approved training reference.")
+        verified = verified_reference(_folder_key(folder_path), assigned["group"], expected, assigned["media"])
+        if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
+            raise ValueError("Training reference changed after campaign approval.")
+        reference = folder_path / assigned["media"]
+        question = (group["label"] + " — training reference demonstrates " + expected + ". "
+                    "Select the visible option in B from: " +
+                    "; ".join(str(index + 1) + "=" + option for index, option in enumerate(group["options"])))
+        messages = build_reference_comparison_messages(
+            question,
+            vision_resized_image_data_url(reference, int(campaign.get("vlImageMP", .45) * 1000000)),
+            vision_resized_image_data_url(frame, int(campaign.get("vlImageMP", .45) * 1000000)))
+        started = time.monotonic()
+        job = enqueue_llm("caption", campaign["visionModel"], {"operation": "vision_question", "messages": messages},
+                          label="Epoch Finder Reference VL")
+        job_id = str(job.get("jobId") or job.get("id") or "")
+        if not job_id:
+            raise RuntimeError("Reference VL request did not return a job ID.")
+        while True:
+            result = llm_job_status(job_id, consume=False)
+            if not result:
+                raise RuntimeError("Reference VL request lost.")
+            if result["status"] in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
+                if result["status"] != "completed":
+                    raise RuntimeError("Reference VL failed: " + str(result.get("error") or result["status"]))
+                answer = str((result.get("result") or {}).get("text") or "").strip()
+                option_line = next((line for line in answer.splitlines() if re.match(r"^OPTION\s*:", line, re.I)), "")
+                verdict_line = next((line for line in answer.splitlines() if re.match(r"^VERDICT\s*:", line, re.I)), "")
+                option_value = option_line.partition(":")[2].strip()
+                selected = int(option_value) if option_value.isdigit() and 1 <= int(option_value) <= len(group["options"]) else None
+                verdict = verdict_line.partition(":")[2].strip().upper()
+                if verdict not in {"MATCH", "PARTIAL", "MISMATCH", "UNCLEAR"}:
+                    verdict = "UNCLEAR"
+                outcomes.append({"groupId": group["id"], "label": group["label"], "option": expected,
+                                 "reference": assigned["media"], "selected": selected, "verdict": verdict,
+                                 "response": answer, "modelId": campaign["visionModel"],
+                                 "elapsedSeconds": round(time.monotonic() - started, 2)})
+                unit["referenceAssessments"] = outcomes
+                _save(folder_path, campaign)
+                llm_job_status(job_id, consume=True)
+                break
+            time.sleep(1)
+    unit["referenceAssessments"] = outcomes
+    unit["referenceComplete"] = True
+    _save(folder_path, campaign)
+
+
+def _evaluate_dino_unit(folder_path, campaign, unit):
+    if not campaign.get("referenceEvaluation", {}).get("dino") or unit.get("dinoComplete"):
+        return
+    from .epoch_dino import compare_images
+    from .epoch_reference import verified_reference
+    frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
+    if not frame.is_file():
+        raise FileNotFoundError("Generated DINO comparison frame is unavailable.")
+    references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
+    unique = {}
+    for group in unit.get("groups", []):
+        if group.get("role") == "vary" or group.get("expected") is None:
+            continue
+        option = group["options"][group["expected"] - 1]
+        entry = references[(group["label"], option)]
+        actual = verified_reference(_folder_key(folder_path), entry["group"], option, entry["media"])
+        if actual["size"] != entry["size"] or actual["mtimeNs"] != entry["mtimeNs"]:
+            raise ValueError("Training reference changed since approval.")
+        unique.setdefault(entry["media"], []).append(group["label"] + ": " + option)
+    results = unit.get("dinoAssessments", [])
+    completed = {item["reference"] for item in results}
+    for name, attributes in unique.items():
+        if name in completed:
+            continue
+        started = time.monotonic()
+        score = compare_images(folder_path / name, frame, _directory(folder_path, campaign["id"]) / "embedding-cache")
+        results.append({"reference": name, "attributes": attributes,
+                        "similarity": score, "elapsedSeconds": round(time.monotonic() - started, 2)})
+        unit["dinoAssessments"] = results
+        _save(folder_path, campaign)
+    unit["dinoAssessments"] = results
+    unit["dinoComplete"] = True
+    _save(folder_path, campaign)
 
 
 def _mark_unit_error(folder_path, campaign, unit, stage, exc):
@@ -544,7 +676,15 @@ def _select_next_epochs(ranking, active_epochs, keep_percent):
 
 def _run(folder_path, campaign_id, control):
     campaign = _load(folder_path, campaign_id)
+    from . import workflow_gate
+    admitted = False
     try:
+        _update(folder_path, campaign, status="running", phase="Queued",
+                detail="Waiting for workflow FIFO turn.")
+        if not workflow_gate.wait_for_epoch(campaign_id, control):
+            _check_signal(folder_path, campaign, control)
+            return
+        admitted = True
         for unit in campaign["units"]:
             if unit.get("assessment") is not None and unit.get("session"):
                 _retire_scored_session(folder_path, campaign, unit)
@@ -591,7 +731,12 @@ def _run(folder_path, campaign_id, control):
                     _clean_staging(folder_path, campaign)
             _update(folder_path, campaign, phase="Evaluating", detail="All round frames captured.")
             for unit in campaign["units"]:
-                if unit["round"] != number or unit["assessment"] is not None:
+                if unit["round"] != number:
+                    continue
+                needs_vl = unit.get("assessment") is None
+                needs_rvn = campaign.get("referenceEvaluation", {}).get("rvn") and not unit.get("referenceComplete") and "referenceError" not in unit
+                needs_dino = campaign.get("referenceEvaluation", {}).get("dino") and not unit.get("dinoComplete") and "dinoError" not in unit
+                if not (needs_vl or needs_rvn or needs_dino):
                     continue
                 if not _check_signal(folder_path, campaign, control):
                     return
@@ -603,6 +748,20 @@ def _run(folder_path, campaign_id, control):
                     _evaluate_unit(folder_path, campaign, unit)
                 except Exception as exc:
                     _mark_unit_error(folder_path, campaign, unit, "vision", exc)
+                if unit.get("assessment") is not None and needs_rvn:
+                    try:
+                        _evaluate_reference_unit(folder_path, campaign, unit)
+                    except Exception as exc:
+                        unit["referenceError"] = str(exc)
+                        _save(folder_path, campaign)
+                if unit.get("assessment") is not None and needs_dino:
+                    try:
+                        _update(folder_path, campaign, detail="DINOv2 · epoch " + str(unit["epoch"]) +
+                                " · frame " + str(unit["case"] + 1))
+                        _evaluate_dino_unit(folder_path, campaign, unit)
+                    except Exception as exc:
+                        unit["dinoError"] = str(exc)
+                        _save(folder_path, campaign)
                 if unit.get("assessment") is not None:
                     _retire_scored_session(folder_path, campaign, unit)
             ranking = _rank(campaign, number)
@@ -635,6 +794,8 @@ def _run(folder_path, campaign_id, control):
         _update(folder_path, campaign, status="failed", phase="Failed", detail=str(exc))
         raise
     finally:
+        if admitted:
+            workflow_gate.release("epoch", campaign_id)
         # The coordinator queues only one Test session at a time. A failed or
         # interrupted active session retains its checkpoint until its queue
         # reference is resolved; otherwise release the staging directory.
@@ -645,6 +806,17 @@ def _run(folder_path, campaign_id, control):
             with _worker_lock:
                 _workers.pop(campaign_id, None)
                 _controls.pop(campaign_id, None)
+                while _pending_campaigns:
+                    next_folder, next_id = _pending_campaigns.pop(0)
+                    try:
+                        next_campaign = _load(next_folder, next_id)
+                        if next_campaign.get("status") != "queued":
+                            continue
+                        _start_campaign_worker_locked(next_folder, next_id)
+                        break
+                    except Exception:
+                        import logging
+                        logging.getLogger(__name__).exception("Could not dispatch next queued Epoch Finder campaign")
 
 
 def _campaign_has_active_sessions(folder_path, campaign):
@@ -691,28 +863,41 @@ def _resume_saved_work(folder_path, campaign):
         start_observer()
 
 
+def _start_campaign_worker_locked(folder_path, campaign_id):
+    """Caller holds _worker_lock; only one active Epoch Finder coordinator."""
+    control = {"pause": threading.Event(), "stop": threading.Event()}
+    thread = threading.Thread(
+        target=_run, args=(folder_path, campaign_id, control), daemon=True,
+        name="webcap-epoch-finder",
+    )
+    _workers[campaign_id] = thread
+    _controls[campaign_id] = control
+    thread.start()
+
+
 def _launch(folder_path, campaign_id):
     with _worker_lock:
         if any(thread.is_alive() for thread in _workers.values()):
-            raise RuntimeError("An Epoch Finder campaign is already running.")
-        control = {"pause": threading.Event(), "stop": threading.Event()}
-        thread = threading.Thread(
-            target=_run, args=(folder_path, campaign_id, control), daemon=True,
-            name="webcap-epoch-finder",
-        )
-        _workers[campaign_id] = thread
-        _controls[campaign_id] = control
-        thread.start()
+            campaign = _load(folder_path, campaign_id)
+            _update(folder_path, campaign, status="queued", phase="Queued",
+                    detail="Waiting for earlier Epoch Finder campaign.")
+            if not any(id_ == campaign_id for _, id_ in _pending_campaigns):
+                _pending_campaigns.append((folder_path, campaign_id))
+            return
+        _start_campaign_worker_locked(folder_path, campaign_id)
 
 
 def status(folder_path, campaign_id):
     campaign = _load(folder_path, campaign_id)
     with _worker_lock:
         thread = _workers.get(campaign_id)
-    if campaign.get("status") == "running" and (thread is None or not thread.is_alive()):
-        campaign["status"] = "interrupted"
-        campaign["phase"] = "Interrupted"
-        campaign["detail"] = "WebCap restarted. Resume explicitly to continue."
+    if campaign.get("status") in {"running", "queued"} and (thread is None or not thread.is_alive()):
+        with _worker_lock:
+            waiting = any(id_ == campaign_id for _, id_ in _pending_campaigns)
+        if campaign["status"] == "running" or not waiting:
+            campaign["status"] = "interrupted"
+            campaign["phase"] = "Interrupted"
+            campaign["detail"] = "WebCap restarted. Resume explicitly to continue."
     return campaign
 
 
@@ -720,12 +905,26 @@ def command(folder_path, operation, criteria=None):
     criteria = criteria if isinstance(criteria, dict) else {}
     if operation == "list":
         return list_campaigns(folder_path)
+    if operation == "reference_vocabulary":
+        from .epoch_reference import reference_vocabulary
+        return {"vocabulary": reference_vocabulary(_folder_key(folder_path))}
+    if operation == "reference_candidates":
+        from .epoch_reference import find_reference_candidates
+        return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("term"))}
     if operation == "start":
         return {"campaign": create_campaign(folder_path, criteria)}
     campaign_id = str(criteria.get("campaignId") or "")
     if operation == "status":
         return {"campaign": status(folder_path, campaign_id)}
     if operation in {"pause", "stop"}:
+        campaign = status(folder_path, campaign_id)
+        if campaign.get("status") == "queued":
+            with _worker_lock:
+                _pending_campaigns[:] = [(folder, id_) for folder, id_ in _pending_campaigns if id_ != campaign_id]
+                _update(folder_path, campaign, status="paused" if operation == "pause" else "stopped",
+                        phase="Paused" if operation == "pause" else "Stopped",
+                        detail="Removed from the campaign queue before starting.")
+            return {"campaign": status(folder_path, campaign_id)}
         with _worker_lock:
             control = _controls.get(campaign_id)
         if not control:
@@ -742,6 +941,7 @@ def command(folder_path, operation, criteria=None):
     if operation == "delete":
         campaign = status(folder_path, campaign_id)
         with _worker_lock:
+            _pending_campaigns[:] = [(folder, id_) for folder, id_ in _pending_campaigns if id_ != campaign_id]
             worker = _workers.get(campaign_id)
         if worker is not None and worker.is_alive():
             raise ValueError("Wait for the campaign worker to finish before deleting it.")

@@ -88,3 +88,10 @@ Once there is sufficient repeated, comparable evidence, Run Analytics may relate
 - How to share the durable evaluation coordinator with today's Batch Test with minimal architectural disruption.
 
 **Guiding principle:** Make a useful, reproducible experiment easy to configure, run, inspect, and refine. Keep the first implementation small; let real campaign results decide what sophistication is warranted.
+## October 17 direction: training-aware evaluation (additive)
+
+The existing Ask VL prompt-compliance scoring, ranking, retention and historical scores remain functional and unchanged. In addition, new campaigns may collect two independent forms of dataset-reference evidence: **paired-image RVN** for specific approved wildcard attributes, and **DINOv2** for full-image visual similarity. Both are selected by default as separately switchable campaign options. SigLIP2 is deferred. No new metric is automatically fed into existing ranking/elimination until validated against human judgments.
+
+Campaign setup must select a user-approved, full-image training reference for **every scored wildcard option** using exact scoped Set-tag candidates. Missing references block launch until the choice is fixed or removed; vary-only dimensions are exempt. No cropping or category-specific detector is required. RVN retains the available-option vocabulary and records feature-specific comparison separately; DINO similarity is a distinct whole-image signal. Results must be browsable with actual references, renders, prompts, per-attribute verdicts, evidence counts and manual selection affordances.
+
+Implementation contract and phased dependencies: [epoch_finder_reference_evaluation.md](epoch_finder_reference_evaluation.md). This new section supersedes earlier v1-only statements **only regarding the scope of evaluation methods**, not the established scheduling, persistence or legacy scoring behavior.

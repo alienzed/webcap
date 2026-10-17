@@ -366,7 +366,7 @@
       // The Training runner remains "starting" until its first step/epoch.
       // Before that, preserve an indeterminate bar rather than stale epoch data.
       if (item.status === 'starting') {
-        var launching = !stage || stage === 'launch' || stage === 'starting';
+        var launching = stage === 'launch';
         snapshot.phase = (launching ? 'Starting' : 'Loading model') +
           (stage ? ' · ' + stage : '');
         if (!launching) snapshot.progressLabel = 'Waiting for first training step';

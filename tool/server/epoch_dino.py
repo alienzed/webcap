@@ -75,13 +75,13 @@ def _fingerprint(path, directory):
         separators=(",", ":")).encode()).hexdigest()
 
 
-def _vector(path, cache_dir):
+def _vector(path, cache_dir, *, cache_result=True):
     import torch
     from PIL import Image, ImageOps
     processor, model, directory = _encoder()
     key = _fingerprint(path, directory)
     cache = cache_dir / (key + ".json")
-    if cache.is_file():
+    if cache_result and cache.is_file():
         data = json.loads(cache.read_text(encoding="utf-8"))
         if data.get("version") == 1 and isinstance(data.get("embedding"), list):
             return torch.tensor(data["embedding"], dtype=torch.float32)
@@ -91,9 +91,10 @@ def _vector(path, cache_dir):
     with torch.inference_mode():
         output = model(**inputs)
         vector = torch.nn.functional.normalize(output.last_hidden_state[:, 0, :].float(), dim=-1)[0].cpu()
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    from .epoch_test_bench import _atomic_write_json
-    _atomic_write_json(cache, {"version": 1, "embedding": vector.tolist()})
+    if cache_result:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        from .epoch_test_bench import _atomic_write_json
+        _atomic_write_json(cache, {"version": 1, "embedding": vector.tolist()})
     return vector
 
 
@@ -105,5 +106,5 @@ def compare_images(reference_path, generated_path, cache_dir):
         if path.is_symlink() or not path.is_file():
             raise ValueError("DINOv2 source must be an existing regular image.")
     a = _vector(reference, Path(cache_dir))
-    b = _vector(generated, Path(cache_dir))
+    b = _vector(generated, Path(cache_dir), cache_result=False)
     return round(float(torch.dot(a, b)), 6)

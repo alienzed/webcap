@@ -710,7 +710,9 @@ def storage_campaigns():
             with _worker_lock:
                 thread = _workers.get(directory.name)
             active = bool(thread and thread.is_alive()) or _campaign_has_active_sessions(owner, payload)
+            staged = _staging(owner, payload)
             records.append({
+                "stagingPath": staged if staged.is_dir() and not staged.is_symlink() else None,
                 "id": directory.name, "folder": folder, "path": directory,
                 "name": payload.get("name") or directory.name,
                 "status": ("interrupted" if payload.get("status") == "running" and not active else payload.get("status") or ""),
@@ -719,6 +721,15 @@ def storage_campaigns():
                 "retainedSessions": sum(bool(unit.get("session")) for unit in payload.get("units") or []),
             })
     return records
+
+
+def storage_staging_path(folder, campaign_id):
+    owner = app_config.safe_join_fs_root(folder)
+    payload = _load(owner, campaign_id)
+    staging = _staging(owner, payload)
+    if staging.is_symlink() or not staging.is_dir():
+        raise FileNotFoundError("Epoch Finder temporary checkpoint storage is unavailable.")
+    return staging
 
 
 def storage_campaign_path(folder, campaign_id):

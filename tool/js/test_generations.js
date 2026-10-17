@@ -4338,7 +4338,19 @@
     return Promise.all(batch.sessions.map(function (session) {
       return requestForFolder(batch.folder, 'test_open_session', { session: session }).then(function (status) {
         batch.statuses[session] = status;
-      }).catch(function (err) { testBatchError(batch, err, session); throw err; });
+      }).catch(function (err) {
+        // A user can delete a pending session while a batch is running.
+        // Preserve earlier VL results and continue with other sessions.
+        if (/404|does not exist|not found|no such session/i.test(String(err && err.message || err))) {
+          if (!batch.statuses[session] || batch.statuses[session].status !== 'missing') {
+            testBatchError(batch, err, session + ' removed');
+          }
+          batch.statuses[session] = { status: 'missing', results: [], testVision: {} };
+          return;
+        }
+        testBatchError(batch, err, session);
+        throw err;
+      });
     }));
   }
 
@@ -4346,7 +4358,7 @@
     testBatchCheck(batch);
     return testBatchReadSessions(batch).then(function () {
       testBatchCheck(batch);
-      var terminal = { complete: true, stopped: true, failed: true, interrupted: true };
+      var terminal = { complete: true, stopped: true, failed: true, interrupted: true, missing: true };
       batch.finished = batch.sessions.filter(function (id) {
         return !!terminal[String(batch.statuses[id].status || '')];
       }).length;

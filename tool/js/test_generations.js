@@ -141,6 +141,10 @@
     var run = testVlRuns[testVlScope(currentStatus)];
     if (!run) return;
     run.stopped = true;
+    run.queue.forEach(function (task) {
+      run.entries[task.file].status = 'stopped';
+      run.pending.delete(task.file);
+    });
     run.queue.length = 0;
     var jobId = run.jobId;
     if (jobId) cancelCaptionAssistJob(jobId).catch(function (err) {
@@ -486,6 +490,7 @@
     if (!results.length) throw new Error('No generated previews are available for VL.');
     var scope = folder + '|' + session;
     var run = testVlRuns[scope];
+    if (run && run.stopped) throw new Error('This session VL run is stopping; retry once it finishes.');
     if (!run) {
       var saved = status.testVision || {};
       var entries = Object.create(null);

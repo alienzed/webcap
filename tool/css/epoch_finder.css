@@ -78,3 +78,10 @@
 .epoch-finder-review{line-height:1.5;font-size:12px;overflow-wrap:anywhere}
 .epoch-finder-review p{margin:10px 0}
 .epoch-finder-panel [data-epoch-wizard-step].hidden{display:none}
+
+/* Epoch inspection reuses the campaign's existing ranked rows and evidence gallery. */
+button.epoch-finder-ranking-row{width:100%;color:inherit;font:inherit;text-align:left;cursor:pointer}
+button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visible{border-color:var(--accent-color,#79a9d7);outline-offset:2px}
+.epoch-finder-gallery-heading{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.epoch-finder-frame figcaption div{margin-top:5px;overflow-wrap:anywhere}
+.epoch-finder-attribute input[readonly]{opacity:.75}

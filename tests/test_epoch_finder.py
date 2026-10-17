@@ -127,3 +127,79 @@ def test_failed_observation_remains_unscored_and_saved(tmp_path, monkeypatch):
     assert saved and saved[0]["error"] == "server offline"
     assert unit["assessment"] is None
     assert unit["errorStage"] == "vision"
+
+
+def test_wizard_dimensions_freeze_scoring_roles_and_values():
+    from tool.server.epoch_finder_plan import normalize_dimensions
+    prompt = "A {red|blue} garment with {ring|plain} sides, {garden|studio} background"
+    result = normalize_dimensions(prompt, [
+        {"label": "Colour", "options": ["red", "blue"], "role": "primary"},
+        {"label": "Hardware", "options": ["ring", "plain"], "role": "leakage"},
+        {"label": "Background", "options": ["garden", "studio"], "role": "vary"},
+    ])
+    assert [row["weight"] for row in result] == [2.0, 1.0, 0.0]
+    assert [row["id"] for row in result] == ["G1", "G2", "G3"]
+
+
+def test_wizard_rejects_misaligned_prompt_or_unscored_only():
+    from tool.server.epoch_finder_plan import normalize_dimensions
+    with pytest.raises(ValueError, match="match"):
+        normalize_dimensions("A {red|blue} hat", [
+            {"label": "Colour", "options": ["black", "blue"], "role": "primary"}
+        ])
+    with pytest.raises(ValueError, match="at least one"):
+        normalize_dimensions("A {red|blue} hat", [
+            {"label": "Colour", "options": ["red", "blue"], "role": "vary"}
+        ])
+    with pytest.raises(ValueError, match="flat"):
+        normalize_dimensions("A {red|{blue|green}} hat")
+
+
+def test_wizard_proposal_contract_reuses_captions_with_role_schema():
+    from tool.server.epoch_finder_plan import build_proposal
+    contract = build_proposal(
+        ["person wearing a blue triangle bikini"],
+        set_name="Bikini",
+        focus="bikini construction",
+        vocabulary=[{"group": "Bikini top", "terms": ["triangle", "micro triangle"]}],
+    )
+    assert contract["operation"] == "propose_epoch_finder_plan"
+    assert contract["response_schema"]["properties"]["variationGroups"]["items"]["properties"]["role"]["enum"] == ["primary", "leakage", "vary"]
+    assert "micro triangle" in contract["prompt"]
+
+
+def test_wizard_proposal_normalization_enforces_alignment():
+    from tool.server.epoch_finder_plan import normalize_proposal
+    result = normalize_proposal({
+        "concept": "Swimwear construction",
+        "wildcard": "a {triangle|micro triangle} top",
+        "stableTerms": ["top"],
+        "variationGroups": [{"label": "Top shape",
+                             "options": ["triangle", "micro triangle"], "role": "primary"}],
+    })
+    assert result["variationGroups"][0]["role"] == "primary"
+    with pytest.raises(ValueError, match="match"):
+        normalize_proposal({
+            "concept": "Swimwear",
+            "wildcard": "a {triangle|micro triangle} top",
+            "stableTerms": [],
+            "variationGroups": [{"label": "Shape", "options": ["micro triangle", "triangle"], "role": "primary"}],
+        })
+
+
+def test_wizard_cumulative_score_uses_primary_and_leakage_weights():
+    campaign = {
+        "rounds": [{"epochs": [1, 2]}],
+        "units": [
+            {"round": 1, "epoch": 1, "assessment": {"comparison": [
+                {"result": "match", "weight": 2}, {"result": "mismatch", "weight": 1},
+                {"result": "mismatch", "weight": 0},
+            ]}},
+            {"round": 1, "epoch": 2, "assessment": {"comparison": [
+                {"result": "mismatch", "weight": 2}, {"result": "match", "weight": 1},
+            ]}},
+        ],
+    }
+    ranked = epoch_finder._rank(campaign, 1)
+    assert ranked[0]["score"] == pytest.approx(2 / 3)
+    assert ranked[1]["score"] == pytest.approx(1 / 3)

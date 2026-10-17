@@ -58,3 +58,10 @@
 .epoch-finder-frame figcaption small{display:block;opacity:.7}
 .epoch-finder-error{margin-top:12px;color:var(--danger-color,#e99);white-space:pre-wrap}
 @media(max-width:850px){.epoch-finder-layout{grid-template-columns:1fr}.epoch-finder-fields{grid-template-columns:repeat(3,1fr)}.epoch-finder-screen{padding:13px}.epoch-finder-heading{align-items:flex-start;flex-direction:column}}
+.epoch-finder-round-plan{margin-top:15px}
+.epoch-finder-round-plan>strong{font-size:12px}
+.epoch-finder-round-row{display:grid;grid-template-columns:minmax(72px,1.2fr) repeat(3,minmax(53px,1fr));gap:7px;align-items:end;margin-top:8px;border-top:1px solid var(--border-color,#384653);padding-top:9px}
+.epoch-finder-round-row>span{font-size:11px;font-weight:700;align-self:center}
+.epoch-finder-panel .epoch-finder-round-row label{margin:0;font-size:10px}
+.epoch-finder-panel .epoch-finder-round-row label input{padding:6px;font-size:11px}
+.epoch-finder-round-row label.hidden{display:none}

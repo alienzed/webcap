@@ -76,3 +76,15 @@ Epoch Finder is a separate tab *inside Test Generations*, not a new GPU executio
 - Test failure and restart scenarios, especially around already-enqueued Test work and stale runtime evidence.
 - Migrate browser-owned Batch Test coordination separately only after its existing semantics can be preserved with tests. Epoch Finder itself is already backend-coordinated; this migration is not required for Epoch Finder's first real run.
 - No archive changes, LLM test-plan wizard, multi-run pooling, or Run Analytics in this PR.
+
+
+## Wizard implementation — staged behind explicit Launch
+
+1. **Run**: choose an available saved training run. Epoch Finder does not pre-stage checkpoints here.
+2. **Tests**: optional "Suggest tests from Set" submits the existing Test/Director job client using the existing caption wildcard corpus and shared Set vocabulary/aliases. The dedicated `epoch_finder_plan.py` contract adds a concept description and primary/leakage/vary-only roles. The response is validated before becoming an editable proposal; the user may also author the prompt without an LLM.
+3. **Rounds**: reuse the per-round tests, retention and resolution table and measured H3 timing seeds (30s fallback) to present a visible cost projection.
+4. **Review and Launch**: freeze the exact prompt, validated ordered wildcard groups, roles, options, model, and round settings. Only clicking Launch starts generation.
+
+**Scoring:** Primary=2, Leakage=1, Vary-only=0. The existing VL question requests the visible choice for every attribute, but score aggregation weights primary/leakage only. Uncertain judgments remain unscored. The mapping is by wildcard group ID and approved *ordered option vocabulary*, never loose word matching. Changing the wildcard text after proposal invalidates/synchronizes the editor and is checked again server-side.
+
+**Safety boundaries:** No new queue, new GPU arbitration, automatic LLM calls, background scans, or changes to the original Wildcard Builder's analysis contract. Draft PR remains unmerged pending tests and real-machine campaigns.

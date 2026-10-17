@@ -102,19 +102,33 @@ def list_campaigns(folder_path):
     return {"runs": _runs(folder_path), "campaigns": campaigns}
 
 
-def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings):
+def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings, round_options=None):
     plan = []
-    current = list(epochs)
+    options_by_round = round_options if round_options is not None else []
+    if options_by_round and len(options_by_round) != rounds:
+        raise ValueError("Provide settings for every planned round.")
     for index in range(rounds):
-        # Cases are frozen per round and shared unchanged by every candidate.
-        seeds = [secrets.randbelow(2 ** 32) for _ in range(cases)]
-        options = dict(settings)
-        if "megapixels" in options:
-            options["megapixels"] = min(0.4, round(0.2 + index * 0.1, 2))
-        plan.append({"number": index + 1, "epochs": current if index == 0 else [],
-                     "seeds": seeds, "settings": options,
-                     "keepPercent": keep_percent, "prompt": prompt})
+        edits = options_by_round[index] if options_by_round else {}
+        if not isinstance(edits, dict):
+            raise ValueError("Each Epoch Finder round must be an object.")
+        case_count = int(edits.get("cases", cases))
+        retention = int(edits.get("keepPercent", keep_percent))
+        if not 1 <= case_count <= 6 or not 10 <= retention <= 90:
+            raise ValueError("Each round needs 1-6 tests and 10-90% retention.")
+        seeds = [secrets.randbelow(2 ** 32) for _ in range(case_count)]
+        selected = dict(settings)
+        if "megapixels" in selected:
+            resolution = float(edits.get("megapixels", min(0.4, round(0.2 + index * 0.1, 2))))
+            if not 0.1 <= resolution <= 0.4 or not math.isfinite(resolution):
+                raise ValueError("Epoch Finder round resolution must be 0.1-0.4 MP.")
+            selected["megapixels"] = resolution
+        elif "megapixels" in edits:
+            raise ValueError("Selected Test model does not support resolution in megapixels.")
+        plan.append({"number": index + 1, "epochs": list(epochs) if index == 0 else [],
+                     "seeds": seeds, "settings": selected,
+                     "keepPercent": retention, "prompt": prompt})
     return plan
+
 
 
 def create_campaign(folder_path, criteria):
@@ -152,7 +166,7 @@ def create_campaign(folder_path, criteria):
         "runName": run["runName"], "modelId": model.PROFILE_ID, "stage": run["stage"],
         "name": str(criteria.get("name") or run["runName"]).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
-        "round": 1, "rounds": _create_plan(run["epochs"], prompt, rounds, cases, keep_percent, settings),
+        "round": 1, "rounds": _create_plan(run["epochs"], prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans")),
         "visionModel": vision_model, "units": [], "scores": [], "startedAt": time.time(),
         "finishedAt": None,
     }

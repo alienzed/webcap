@@ -289,8 +289,10 @@
   var referenceItems = [];
   var referenceIndex = 0;
   var referenceDraftChoices = {};
+  var referencePlanSignature = '';
   function prepareReferences() {
     var version = ++referenceGeneration;
+    referencePlanSignature = JSON.stringify(dimensions.map(function (d) { return [d.label,d.role,d.options,d.referenceTags]; }));
     referenceItems = dimensions.flatMap(function (d) {
       return d.role === 'primary' ? d.options.map(function (option) {
         return {attribute:d.label, option:option, referenceTag:(d.referenceTags || [])[d.options.indexOf(option)], key:JSON.stringify([d.label,option]), candidates:[]};
@@ -370,7 +372,7 @@
     els('next').classList.toggle('hidden', value === 4);
     els('start').classList.toggle('hidden', value !== 4);
     if (value === 3) roundPlan();
-    if (value === 4) { reviewWizard(); if (!referenceItems.length || referenceItems.some(function (item) { return !item.candidates.length; })) prepareReferences(); else renderReferenceStep(); }
+    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify(dimensions.map(function (d) { return [d.label,d.role,d.options,d.referenceTags]; }))) prepareReferences(); else renderReferenceStep(); }
   }
   function advance() {
     try {
@@ -803,7 +805,7 @@
     var changed = currentFolder !== folder;
     if (changed) listRequestVersion++;
     currentFolder = folder;
-    if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceGeneration++; }
+    if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;

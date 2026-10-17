@@ -12,6 +12,8 @@
   var inspectedEpoch = null;
   var inspectedFrame = 0;
   var campaignState = null;
+  var referenceSelections = {};
+  var referenceGeneration = 0;
   var listRequestVersion = 0;
   var selectedEpochs = new Set();
   var selectedRunId = "";
@@ -264,6 +266,63 @@
       '<p>' + escape(els('estimate').textContent) + '</p>' +
       '<p class="epoch-finder-muted">Only Launch starts inference. Your approved prompt, roles, rounds, model and seeds are frozen for this campaign.</p>';
   }
+  function prepareReferences() {
+    var version = ++referenceGeneration;
+    var required = dimensions.flatMap(function (d) { return d.role === 'vary' ? [] : d.options.map(function (v) { return {attribute:d.label,option:v,key:JSON.stringify([d.label,v])}; }); });
+    els('reference-options').innerHTML = '<p class="epoch-finder-muted">Finding exact tagged references…</p>';
+    els('reference-choices').textContent = required.length + ' required choices';
+    return api('reference_vocabulary').then(function (result) {
+      if (version !== referenceGeneration) return;
+      var vocabulary = result.vocabulary || [];
+      els('reference-options').innerHTML = required.map(function (entry,i) {
+        var groups = vocabulary.filter(function (v) { return v.terms.some(function (t) { return t.term === entry.option; }); });
+        var selected = referenceSelections[entry.key] || {};
+        return '<div class="epoch-finder-reference-choice" data-reference-index="' + i + '"><strong>' + escape(entry.attribute) + ' · ' + escape(entry.option) +
+          '</strong><select data-reference-group><option value="">Select annotation group…</option>' +
+          groups.map(function (g) { return '<option value="' + escape(g.group) + '"' + (g.group===selected.group?' selected':'') + '>' + escape(g.group) + '</option>'; }).join('') +
+          '</select><select data-reference-media><option value="">Choose full-image reference…</option></select><div data-reference-preview></div></div>';
+      }).join('');
+      required.forEach(function (entry,i) {
+        var row = els('reference-options').querySelector('[data-reference-index="'+i+'"]');
+        row.dataset.referenceKey = entry.key;
+        row.dataset.referenceOption = entry.option;
+        if (referenceSelections[entry.key]?.group) loadReferenceMedia(row, referenceSelections[entry.key].group, entry.option, version);
+      });
+      updateReferenceStatus();
+    }).catch(error);
+  }
+  function updateReferenceStatus() {
+    var rows = Array.from(els('reference-options').querySelectorAll('[data-reference-index]'));
+    var ready = rows.filter(function (r) { return (referenceSelections[r.dataset.referenceKey] || {}).media; }).length;
+    els('reference-choices').textContent = ready + ' / ' + rows.length + ' approved';
+    els('start').disabled = rows.length === 0 || ready !== rows.length;
+  }
+  function loadReferenceMedia(row, group, term, version) {
+    var selector = row.querySelector('[data-reference-media]');
+    selector.innerHTML = '<option value="">Loading references…</option>';
+    api('reference_candidates', {group:group,term:term}).then(function (result) {
+      if (version !== referenceGeneration || row.querySelector('[data-reference-group]').value !== group) return;
+      var selected = referenceSelections[row.dataset.referenceKey] || {};
+      var candidates = result.references || [];
+      selector.innerHTML = '<option value="">Choose full-image reference…</option>' + candidates.map(function (c) {
+        return '<option value="' + escape(c.media) + '"' + (c.media===selected.media?' selected':'') + '>' + escape(c.media) + '</option>';
+      }).join('');
+      selector.onchange = function () {
+        if (selector.value) referenceSelections[row.dataset.referenceKey] = {group:group,media:selector.value,attribute:JSON.parse(row.dataset.referenceKey)[0],option:term};
+        else delete referenceSelections[row.dataset.referenceKey];
+        row.querySelector('[data-reference-preview]').innerHTML = selector.value ?
+          '<img loading="lazy" alt="Selected training reference" src="/caption/media?folder=' + encodeURIComponent(currentFolder) + '&media=' + encodeURIComponent(selector.value) + '">' : '';
+        updateReferenceStatus();
+      };
+      selector.onchange();
+    }).catch(error);
+  }
+  function approvedReferences() {
+    var rows = Array.from(els('reference-options').querySelectorAll('[data-reference-index]'));
+    if (!rows.length || rows.some(function (r) { return !referenceSelections[r.dataset.referenceKey]?.media; }))
+      throw new Error('Choose a training reference for every scored wildcard choice.');
+    return rows.map(function (r) { return referenceSelections[r.dataset.referenceKey]; });
+  }
   function showStep(value) {
     wizardStep = value;
     document.querySelectorAll('[data-epoch-wizard-step]').forEach(function (element) {
@@ -276,7 +335,7 @@
     els('next').classList.toggle('hidden', value === 4);
     els('start').classList.toggle('hidden', value !== 4);
     if (value === 3) roundPlan();
-    if (value === 4) reviewWizard();
+    if (value === 4) { reviewWizard(); prepareReferences(); }
   }
   function advance() {
     try {
@@ -616,7 +675,8 @@
       cases: Number(els('cases').value), keepPercent: Number(els('retention').value),
       roundPlans: getRoundPlans(), concept: els("concept").value.trim(), dimensions: recordDimensions(),
       vlImageMP: Number(els('vl-image-mp').value),
-      epochs: chosenEpochs()};
+      epochs: chosenEpochs(), referencePlan: approvedReferences(),
+      referenceEvaluation: {rvn: els('enable-rvn').checked, dino: els('enable-dino').checked}};
     els('start').disabled = true;
     api('start', criteria).then(function (response) {
       activeCampaign = response.campaign.id; inspectedEpoch = null; lastFrameKey = ''; refresh();
@@ -665,6 +725,15 @@
     }
     drawEpochPicker();
     roundPlan();
+  });
+  els('reference-options').addEventListener('change', function (event) {
+    var group = event.target.closest('[data-reference-group]');
+    if (!group) return;
+    var row = group.closest('[data-reference-index]');
+    delete referenceSelections[row.dataset.referenceKey];
+    row.querySelector('[data-reference-preview]').innerHTML = '';
+    updateReferenceStatus();
+    if (group.value) loadReferenceMedia(row, group.value, row.dataset.referenceOption, referenceGeneration);
   });
   els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });
   showStep(1);

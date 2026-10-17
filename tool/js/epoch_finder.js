@@ -283,7 +283,8 @@
     var required = dimensions.flatMap(function (d) { return d.role !== 'primary' ? [] : d.options.map(function (v) { return {attribute:d.label,option:v,key:JSON.stringify([d.label,v])}; }); });
     els('reference-options').innerHTML = '<p class="epoch-finder-muted">Finding exact tagged references…</p>';
     els('reference-choices').textContent = required.length + ' required choices';
-    return api('reference_vocabulary').then(function (result) {
+    var jobId = els('run').value;
+    return api('reference_vocabulary', {jobId:jobId}).then(function (result) {
       if (version !== referenceGeneration) return;
       var vocabulary = result.vocabulary || [];
       els('reference-options').innerHTML = required.map(function (entry,i) {
@@ -302,7 +303,7 @@
         populateReferenceTags(row);
       });
       updateReferenceStatus();
-    }).catch(error);
+    }).catch(function (exc) { els('reference-options').innerHTML = ''; els('start').disabled = true; error(exc); });
   }
   function updateReferenceStatus() {
     var rows = Array.from(els('reference-options').querySelectorAll('[data-reference-index]'));
@@ -328,7 +329,7 @@
   function loadReferenceMedia(row, group, term, version) {
     var selector = row.querySelector('[data-reference-media]');
     selector.innerHTML = '<option value="">Loading references…</option>';
-    api('reference_candidates', {group:group,term:term}).then(function (result) {
+    api('reference_candidates', {jobId:els('run').value,group:group,term:term}).then(function (result) {
       if (version !== referenceGeneration || row.querySelector('[data-reference-group]').value !== group || row.querySelector('[data-reference-tag]').value !== term) return;
       var selected = referenceSelections[row.dataset.referenceKey] || {};
       var candidates = result.references || [];

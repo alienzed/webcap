@@ -345,8 +345,12 @@
         var comparison = campaign.units.filter(function (u) {
           return u.round <= round && u.epoch === epoch && u.assessment;
         }).flatMap(function (unit) { return unit.assessment.comparison || []; });
-        var matches = comparison.filter(function (g) { return g.result === 'match'; }).length;
-        var mismatches = comparison.filter(function (g) { return g.result === 'mismatch'; }).length;
+        var matches = comparison.reduce(function (n, g) {
+          return n + (g.result === 'match' ? Number(g.weight == null ? 1 : g.weight) : 0);
+        }, 0);
+        var mismatches = comparison.reduce(function (n, g) {
+          return n + (g.result === 'mismatch' ? Number(g.weight == null ? 1 : g.weight) : 0);
+        }, 0);
         return {epoch: epoch, matches: matches, mismatches: mismatches,
           active: plan.epochs.indexOf(epoch) !== -1,
           count: matches + mismatches, score: matches + mismatches ? matches / (matches + mismatches) : null};

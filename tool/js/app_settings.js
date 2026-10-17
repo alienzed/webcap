@@ -53,6 +53,7 @@ function normalizeAppConfigShape(cfg) {
   out.director_model = String(out.director_model || '').trim();
   out.vision_model = String(out.vision_model || '').trim();
   out.generate_model = String(out.generate_model || '').trim();
+  out.working_model_profile = String(out.working_model_profile || '').trim();
   if (!out.filesystem.root) out.filesystem.root = '';
   if (!out.filesystem.output_root) out.filesystem.output_root = '';
   if (!out.filesystem.models) out.filesystem.models = '';

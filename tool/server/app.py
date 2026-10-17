@@ -573,6 +573,31 @@ def app_vision_model_save():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/app/config/working_model_profile", methods=["POST"])
+def app_working_model_profile_save():
+    data = request.get_json(silent=True)
+    try:
+        if not isinstance(data, dict):
+            raise ValueError("Base Model preference requires a JSON object.")
+        selected = data.get("profileId", "")
+        if not isinstance(selected, str):
+            raise ValueError("Base Model preference must be a string.")
+        selected = selected.strip()
+        from .training_profiles import PROFILE_IDS
+        if selected not in PROFILE_IDS:
+            raise ValueError("Unknown Base Model profile.")
+        current = app_config.load_config_from_disk()
+        current["working_model_profile"] = selected
+        saved = app_config.save_config_to_disk(current)
+        return jsonify({"ok": True, "config": saved})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        if app_config.FS_DEBUG:
+            app_config.debug_traceback()
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/app/config/generate_model", methods=["POST"])
 def app_generate_model_save():
     data = request.get_json(silent=True)

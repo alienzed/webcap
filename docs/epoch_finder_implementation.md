@@ -45,3 +45,34 @@ Epoch Finder is a separate tab *inside Test Generations*, not a new GPU executio
 - Restart during VL: completed persisted judgments are retained; incomplete requests are reissued only on explicit Resume.
 - Aborted campaigns preserve failed media evidence rather than silently losing it.
 - Completed campaigns leave no staged checkpoint directory, and ordinary Test media is never deleted by Epoch Finder.
+
+
+## Follow-up implementation (PR #364)
+
+**Phase A — cumulative scoring and automatic re-entry (implemented)**
+
+- Rank the original epoch universe from all completed judgments through the current round.
+- Cut the *active* field by relative retention; advance all candidates at or above the cutoff, including ties.
+- Previously sidelined epochs re-enter when their saved cumulative score clears the new cutoff. They are never forced to catch up on missed rounds.
+- Persist per-round ranking, cutoff, and re-entry evidence; the current-round leaderboard recalculates cumulatively.
+
+**Phase B — isolated errors and staged checkpoint lifecycle (implemented)**
+
+- Capture individual generation/VL errors per unit with stage, actionable message, and Console logging; failed units never contribute positive or negative score.
+- Continue other cases/epochs when an isolated operation fails. No changes to the shared inference/LLM lanes.
+- Do not remove campaign staging while *any* campaign-owned Test request is active. Expose failed observations in the dashboard.
+- An entire campaign can still fail if the current field has no scoreable evidence or an invariant fails. This remains a visible failure, not a fabricated ranking.
+
+**Phase C — per-round controls and workload visibility (implemented)**
+
+- Per-round configurable tests per epoch, relative retention, and MP where supported.
+- Freeze these options in the campaign record before any render.
+- Show approximate per-round field sizes and total render count using a conservative 60-second/render estimate, excluding VL and queue waiting.
+- Actual timing profiles (second-render warm-up exclusion, environment-specific calibration), optional LLM wizard and differentiated concept/leakage/vary-only scoring remain unimplemented.
+
+**Phase D — verification / separately scoped coordination (pending)**
+
+- Run tests and representative H3/Krea2 and VL campaigns on the training machine; verify the actual checkpoint loader, checkpoint cleanup, restart, and manual testing interoperability.
+- Test failure and restart scenarios, especially around already-enqueued Test work and stale runtime evidence.
+- Migrate browser-owned Batch Test coordination separately only after its existing semantics can be preserved with tests. Epoch Finder itself is already backend-coordinated; this migration is not required for Epoch Finder's first real run.
+- No archive changes, LLM test-plan wizard, multi-run pooling, or Run Analytics in this PR.

@@ -601,10 +601,8 @@ def _resume_saved_work(folder_path, campaign):
         session = test_bench.open_session(folder_path, session_name)
         if session.get("campaignStaging") != owned_staging:
             raise RuntimeError("Epoch Finder session ownership mismatch.")
-        if unit.get("frame") and not _session_still_active(folder_path, session_name):
-            test_bench.delete_session(folder_path, session_name)
-            unit["session"] = ""
-            _save(folder_path, campaign)
+        if unit.get("assessment") is not None and not _session_still_active(folder_path, session_name):
+            _retire_scored_session(folder_path, campaign, unit)
             continue
         for job_id in session.get("inferenceJobs") or []:
             try:

@@ -75,3 +75,11 @@ def test_invalid_annotation_shape_fails_explicitly(tmp_path, monkeypatch):
     _dataset(tmp_path, monkeypatch, {"a.png": {"BB Shape": "v-front"}})
     with pytest.raises(ValueError, match="Invalid scoped tag"):
         epoch_reference.find_reference_candidates("set", "BB Shape", "v-front")
+
+
+def test_reference_eligibility_only_primary_not_leakage_or_vary():
+    from tool.server.epoch_finder import _requires_reference
+    assert _requires_reference("primary")
+    assert not _requires_reference("leakage")
+    assert not _requires_reference("vary")
+    assert not _requires_reference(None)

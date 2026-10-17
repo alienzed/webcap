@@ -65,6 +65,11 @@ def _save(folder_path, campaign):
     test_bench._atomic_write_json(_directory(folder_path, campaign["id"]) / "campaign.json", campaign)
 
 
+def _requires_reference(role):
+    """Only Primary attributes need training references; legacy VL still scores Leakage."""
+    return role == "primary"
+
+
 def _runs(folder_path):
     folder = _folder_key(folder_path)
     result = []
@@ -240,7 +245,7 @@ def create_campaign(folder_path, criteria):
     from .epoch_reference import verified_reference
     reference_choices = criteria.get("referencePlan")
     if not isinstance(reference_choices, list):
-        raise ValueError("Approve a training reference for every scored wildcard option.")
+        raise ValueError("Approve a training reference for every Primary wildcard option.")
     approved = {}
     for entry in reference_choices:
         if not isinstance(entry, dict):
@@ -250,9 +255,9 @@ def create_campaign(folder_path, criteria):
             raise ValueError("Duplicate approved reference.")
         approved[key] = entry
     required = {(dimension["label"], option) for dimension in dimensions
-                if dimension["role"] != "vary" for option in dimension["options"]}
+                if _requires_reference(dimension["role"]) for option in dimension["options"]}
     if set(approved) != required:
-        raise ValueError("Every scored wildcard choice must have exactly one approved training reference.")
+        raise ValueError("Every Primary wildcard choice must have exactly one approved training reference.")
     references = []
     for (attribute, option), entry in sorted(approved.items()):
         group = str(entry.get("group") or "")
@@ -536,12 +541,12 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
     for group in unit.get("groups", []):
         if group["id"] in completed_groups:
             continue
-        if group.get("role") == "vary" or group.get("expected") is None:
+        if not _requires_reference(group.get("role")) or group.get("expected") is None:
             continue
         expected = group["options"][group["expected"] - 1]
         assigned = references.get((group["label"], expected))
         if assigned is None:
-            raise ValueError("Scored wildcard option lacks an approved training reference.")
+            raise ValueError("Primary wildcard option lacks an approved training reference.")
         verified = verified_reference(_folder_key(folder_path), assigned["group"], expected, assigned["media"])
         if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
             raise ValueError("Training reference changed after campaign approval.")
@@ -599,7 +604,7 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
     references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
     unique = {}
     for group in unit.get("groups", []):
-        if group.get("role") == "vary" or group.get("expected") is None:
+        if not _requires_reference(group.get("role")) or group.get("expected") is None:
             continue
         option = group["options"][group["expected"] - 1]
         entry = references[(group["label"], option)]

@@ -4821,6 +4821,12 @@
     window.webcapWorkflowGate.acquire('batch', gateKey, function () { return batch.active; },
       function (message) {
         if (batch.active) { batch.phase = 'Queued'; batch.detail = message; renderTestBatch(); }
+      }, function (message) {
+        if (!batch.active || testBatch !== batch) return;
+        stopTestBatch();
+        batch.detail = message;
+        reportConsoleError('Batch lost workflow admission', new Error(message));
+        renderTestBatch();
       }).then(function (lease) {
         batch.workflowLease = lease;
         return loadCaptionVisionCapabilities();

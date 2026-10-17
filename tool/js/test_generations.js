@@ -789,9 +789,11 @@
     button.disabled = true;
     try {
       for (var i=0; i<previews.length; i++) {
+        if (referenceCompare.folder !== folder || referenceCompare.session !== session)
+          throw new Error('Session changed; stopped further comparisons.');
         status.textContent = method.toUpperCase() + ' · ' + (i+1) + ' / ' + previews.length;
         var payload = await testReferenceRequest({
-          action:'evaluate', method:method, media:previews[i], group:group,
+          folder:folder, session:session, action:'evaluate', method:method, media:previews[i], group:group,
           option:option, reference:reference, choices:attribute.options,
           model: method === 'rvn' ? getCaptionVisionModelId() : ''
         });
@@ -804,7 +806,7 @@
           var verdictMatch = raw.match(/^VERDICT\s*:\s*(MATCH|PARTIAL|MISMATCH|UNCLEAR)/im);
           var selected = optionMatch ? Number(optionMatch[1]) : null;
           if (selected && selected > attribute.options.length) selected = null;
-          await testReferenceRequest({action:'save',media:previews[i],assessment:{
+          await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:{
             method:'rvn',group:group,option:option,reference:reference,
             attribute:attribute.label || attribute.id,
             selected:selected,verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',

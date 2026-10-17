@@ -169,6 +169,25 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .test-reference-result span,.test-reference-result small{grid-column:1/-1;overflow-wrap:anywhere}
 @media(max-width:650px){.test-generations-vl-toolbar #test-generations-evaluator{max-width:160px}}
 
+/* Image-first Epoch Finder evidence cards: prioritize inspection over density. */
+.epoch-finder-live-layout{grid-template-columns:minmax(0,1fr)}
+.epoch-finder-live-ranks{order:2}
+.epoch-finder-live-media{order:1}
+.epoch-finder-leaderboard{max-height:260px}
+.epoch-finder-frames{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.epoch-finder-frame{margin:0;min-width:0}
+.epoch-finder-frame img{width:100%;aspect-ratio:1/1;object-fit:contain;background:#111}
+.epoch-finder-frame-empty{display:grid;place-items:center;aspect-ratio:1/1;padding:12px;color:var(--text-muted,#aeb8c4);background:#111}
+.epoch-finder-frame figcaption{padding:9px 10px;font-size:12px}
+.epoch-finder-frame-heading,.epoch-finder-frame-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.epoch-finder-frame-heading span,.epoch-finder-frame-footer small{font-size:11px;opacity:.75}
+.epoch-finder-frame-choices{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.epoch-finder-frame-choices span{padding:3px 6px;border-radius:5px;background:var(--background-secondary,#344251);font-size:11px;overflow-wrap:anywhere}
+.epoch-finder-frame-footer{margin-top:8px}
+.epoch-finder-frame-footer a{font-size:11px;color:var(--accent-color,#79a9d7)}
+@media(max-width:1250px){.epoch-finder-frames{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.epoch-finder-frames{grid-template-columns:minmax(0,1fr)}}
+
 .epoch-finder-reference-step{display:flex;justify-content:space-between;gap:8px;align-items:start;font-size:13px;margin:12px 0}
 .epoch-finder-reference-step span{white-space:nowrap;color:var(--muted-text,#93a5b6);font-size:11px}
 .epoch-finder-reference-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:7px;max-width:100%;margin:10px 0}

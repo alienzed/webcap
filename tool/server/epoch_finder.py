@@ -142,7 +142,7 @@ def list_campaigns(folder_path):
                 continue
             campaigns.append({
                 key: campaign.get(key) for key in
-                ("id", "name", "status", "phase", "round", "startedAt", "detail")
+                ("id", "name", "status", "phase", "round", "startedAt", "detail", "modelId", "runName")
             })
     campaigns.sort(key=lambda row: row.get("startedAt") or 0, reverse=True)
     return {"runs": _runs(folder_path), "campaigns": campaigns, "timings": _timing_profiles(folder_path)}

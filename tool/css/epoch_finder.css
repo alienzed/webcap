@@ -86,13 +86,19 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-frame figcaption div{margin-top:5px;overflow-wrap:anywhere}
 .epoch-finder-attribute input[readonly]{opacity:.75}
 
-.epoch-finder-epoch-picker{margin:10px 0 14px}
-.epoch-finder-epoch-tools{display:flex;align-items:center;flex-wrap:wrap;gap:7px;font-size:11px;margin-bottom:8px}
-.epoch-finder-epoch-tools label{display:flex;align-items:center;gap:4px;margin:0}
-.epoch-finder-epoch-tools input{width:60px;padding:4px}
-.epoch-finder-epoch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:5px;max-height:190px;overflow:auto}
-.epoch-finder-epoch-grid label{display:flex;align-items:center;gap:5px;padding:4px 6px;border:1px solid var(--border-color,#384653);border-radius:5px;font-size:11px;margin:0}
-
+.epoch-finder-epoch-picker{margin:10px 0 14px;min-width:0}
+.epoch-finder-epoch-summary{display:flex;align-items:baseline;justify-content:space-between;gap:5px;flex-wrap:wrap;margin-bottom:9px;font-size:12px}
+.epoch-finder-epoch-summary span{font-size:11px;color:var(--muted-text,#98a5b2)}
+.epoch-finder-epoch-timeline{display:grid;grid-template-columns:repeat(auto-fit,minmax(23px,1fr));gap:3px;max-width:100%;margin-bottom:10px}
+.epoch-finder-epoch-tick{appearance:none;min-width:0;min-height:25px;padding:3px 0;border:1px solid var(--border-color,#384653);border-radius:4px;background:transparent;color:inherit;font-size:10px;font-weight:500;cursor:pointer}
+.epoch-finder-epoch-tick.is-selected{background:var(--accent-color,#ed980a);border-color:var(--accent-color,#ed980a);color:#101923}
+.epoch-finder-epoch-tick:hover{border-color:var(--accent-color,#ed980a)}
+.epoch-finder-epoch-tick:focus-visible{outline:2px solid var(--accent-color,#ed980a);outline-offset:2px;position:relative;z-index:1}
+.epoch-finder-epoch-tools{display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:11px;margin-bottom:8px}
+.epoch-finder-epoch-tools>button,.epoch-finder-epoch-range button{font-size:11px;padding:5px 7px}
+.epoch-finder-epoch-range{display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex:1 1 100%;margin-top:3px}
+.epoch-finder-epoch-range label{display:flex;align-items:center;gap:4px;margin:0}
+.epoch-finder-epoch-range input{width:58px;min-width:0;padding:4px;font-size:11px}
 /* Compact game-like live results cockpit below the campaign progress header. */
 .epoch-finder-live-layout{display:grid;grid-template-columns:minmax(220px,32%) minmax(0,1fr);gap:14px;align-items:start}
 .epoch-finder-live-ranks,.epoch-finder-live-media{min-width:0;border:1px solid var(--border-color,#384653);border-radius:10px;background:var(--panel-bg,#1b2530);padding:12px}

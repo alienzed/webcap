@@ -2107,6 +2107,27 @@ def test_generations_media_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/workflow_gate", methods=["POST"])
+def workflow_gate_route():
+    """Admission for known high-level workflows; underlying execution queues unchanged."""
+    data = request.get_json(silent=True) or {}
+    try:
+        from . import workflow_gate
+        kind, key = str(data.get("kind") or ""), str(data.get("key") or "")
+        action = str(data.get("action") or "")
+        if action == "register":
+            result = workflow_gate.register(kind, key)
+        elif action == "heartbeat":
+            result = workflow_gate.heartbeat(kind, key)
+        elif action == "release":
+            result = workflow_gate.release(kind, key)
+        else:
+            raise ValueError("Unknown workflow admission operation.")
+        return jsonify({"ok": True, **result})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/test_generations/reference", methods=["POST"])
 def test_generations_reference_route():
     """Optional on-demand comparisons, independent of original Ask VL."""

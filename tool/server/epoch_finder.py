@@ -326,7 +326,7 @@ def create_campaign(folder_path, criteria):
         parent = _load(folder_path, parent_id)
         if parent.get("jobId") != job_id:
             raise ValueError("Follow-up must use the same source training run.")
-        campaign_id = secrets.token_hex(6)
+    campaign_id = secrets.token_hex(6)
     directory = _directory(folder_path, campaign_id)
     directory.mkdir(parents=True, exist_ok=False)
     (directory / "frames").mkdir()

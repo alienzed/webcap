@@ -132,7 +132,8 @@
     fetch('/fs/epoch_finder/propose', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({folder: folder, directorModel: directorModel,
-        focus: els('concept').value.trim()})
+        focus: els('concept').value.trim(),
+        vocabulary: window.getTestGenerationPlanningVocabulary()})
     }).then(function (response) { return response.json().then(function (body) {
       if (!response.ok || !body.ok) throw new Error(body.error || 'Could not propose tests.');
       return body.job;

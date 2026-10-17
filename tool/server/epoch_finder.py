@@ -84,6 +84,40 @@ def _runs(folder_path):
     return result
 
 
+def _timing_path(folder_path):
+    return _root(folder_path) / "timing_profiles.json"
+
+
+def _timing_profiles(folder_path):
+    path = _timing_path(folder_path)
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _timing_key(campaign, plan):
+    settings = plan["settings"]
+    return "|".join((
+        str(campaign["modelId"]),
+        str(settings.get("megapixels", settings.get("dimensions", ""))),
+        str(settings.get("duration", "")),
+    ))
+
+
+def _record_timing(folder_path, campaign, plan, unit, elapsed):
+    """Record successful enqueue-to-frame wall time; queue waiting is included."""
+    unit["captureWallSeconds"] = round(elapsed, 2)
+    key = _timing_key(campaign, plan)
+    profiles = _timing_profiles(folder_path)
+    entry = profiles.setdefault(key, {"seconds": [], "samples": 0})
+    entry["samples"] += 1
+    # Exclude the first sample, which may include model loading.
+    if entry["samples"] > 1:
+        entry["seconds"] = (entry["seconds"] + [round(elapsed, 2)])[-20:]
+    _timing_path(folder_path).parent.mkdir(parents=True, exist_ok=True)
+    test_bench._atomic_write_json(_timing_path(folder_path), profiles)
+
+
 def list_campaigns(folder_path):
     root = _root(folder_path)
     campaigns = []
@@ -100,7 +134,7 @@ def list_campaigns(folder_path):
                 ("id", "name", "status", "phase", "round", "startedAt", "detail")
             })
     campaigns.sort(key=lambda row: row.get("startedAt") or 0, reverse=True)
-    return {"runs": _runs(folder_path), "campaigns": campaigns}
+    return {"runs": _runs(folder_path), "campaigns": campaigns, "timings": _timing_profiles(folder_path)}
 
 
 def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings, round_options=None):
@@ -248,7 +282,8 @@ def _unit(campaign, round_number, epoch, case):
             return existing
     value = {"round": round_number, "epoch": epoch, "case": case, "session": "",
              "frame": "", "question": "", "groups": [], "assessment": None,
-             "error": "", "errorStage": "", "captured": False, "framePruned": False}
+             "error": "", "errorStage": "", "captured": False, "framePruned": False,
+             "queuedAt": None, "captureWallSeconds": None}
     campaign["units"].append(value)
     return value
 
@@ -313,6 +348,7 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
             campaign_staging="epoch-finder-" + campaign["id"],
         )
         unit["session"] = answer["job"]["id"]
+        unit["queuedAt"] = time.time()
         _save(folder_path, campaign)
     if enqueue_only:
         return
@@ -340,6 +376,8 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
         temp.unlink(missing_ok=True)
     unit["frame"] = file_name
     unit["captured"] = True
+    if unit.get("queuedAt"):
+        _record_timing(folder_path, campaign, plan, unit, time.time() - unit["queuedAt"])
     unit["groups"] = status.get("wildcardEvaluationGroups") or []
     if len(unit["groups"]) != len(campaign["dimensions"]):
         raise RuntimeError("Resolved wildcard group count differs from the approved plan.")

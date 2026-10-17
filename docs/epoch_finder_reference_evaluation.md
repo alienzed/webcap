@@ -119,3 +119,13 @@ DINOv2 model and dependency presence is checked **before launch**. Reference-emb
 - Confirm DINO model snapshot, compatible dependency versions, measured CPU throughput and cache reuse.
 - Run repository Python tests and live browser/mobile-width smoke, including empty/ambiguous references, changed source files, changing Sets, interrupted/resumed campaigns and zero new assessment on legacy campaigns.
 - Recalculate runtime projections once RVN/DINO timings exist. Do not introduce unvalidated rank changes.
+
+
+## Next integration scope (October 17)
+
+- **DINO install:** User has placed `config.json`, `preprocessor_config.json`, and `model.safetensors` together in `W:/models/text_encoders/dinov2-base`. Model snapshot layout now matches the loader. Verify configured filesystem models path and optional Python packages in the actual WebCap environment.
+- **Campaign FIFO:** Epoch Finder now accepts multiple campaigns; the active coordinator dispatches the next waiting campaign when finished. Existing Test/inference/LLM lanes are unchanged. Waiting queue is process-memory only; after server restart, interrupted campaigns need explicit Resume and must not auto-launch.
+- **Test Generations menu (next phase):** Retain original Ask VL behavior and make the toolbar action selectable among original VL, paired RVN, and DINO. Before implementation, trace the current Test Generations VL batch/result ownership and ensure new methods use the same persisted reference evidence and existing queue APIs. Do not add nonfunctional menu choices.
+- **Cross-workflow coordinator (separate bounded phase):** Inspect Batch and First Cut lifecycle and evidence persistence. Add workflow-level FIFO coordination only after proving existing per-surface ordering/ownership, while preserving low-level inference/LLM FIFO and cancellation semantics. Avoid opportunistic multi-lane scheduler rewrites.
+
+**Unverified:** No live WebCap Python imports/model loading, test suite execution, or UI browser validation have run on the user's machine. Do not merge until these and restart/queue integration tests pass.

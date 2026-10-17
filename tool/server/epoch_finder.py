@@ -13,7 +13,7 @@ from pathlib import Path
 from . import config as app_config
 from . import epoch_test_bench as test_bench
 from .epoch_finder_plan import normalize_dimensions
-from .caption_vision import build_vision_question_messages, vision_resized_image_data_url
+from .caption_vision import build_vision_question_messages, build_reference_comparison_messages, vision_resized_image_data_url
 from .llm_runner import enqueue as enqueue_llm, job_status as llm_job_status
 from .test_models import get_test_model_for_staging_key
 from .training_history import all_history_payload
@@ -493,6 +493,62 @@ def _evaluate_unit(folder_path, campaign, unit):
         time.sleep(1)
 
 
+def _evaluate_reference_unit(folder_path, campaign, unit):
+    """Add paired VL evidence without altering original attribute judgments."""
+    if not campaign.get("referenceEvaluation", {}).get("rvn") or "referenceAssessments" in unit:
+        return
+    frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
+    if not frame.is_file():
+        raise FileNotFoundError("Generated comparison frame is unavailable.")
+    from .epoch_reference import verified_reference
+    references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
+    outcomes = []
+    for group in unit.get("groups", []):
+        if group.get("role") == "vary" or group.get("expected") is None:
+            continue
+        expected = group["options"][group["expected"] - 1]
+        assigned = references.get((group["label"], expected))
+        if assigned is None:
+            raise ValueError("Scored wildcard option lacks an approved training reference.")
+        verified = verified_reference(_folder_key(folder_path), assigned["group"], expected, assigned["media"])
+        if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
+            raise ValueError("Training reference changed after campaign approval.")
+        reference = folder_path / assigned["media"]
+        question = group["label"] + " — expected " + expected + ". Available choices: " + ", ".join(group["options"])
+        messages = build_reference_comparison_messages(
+            question,
+            vision_resized_image_data_url(reference, int(campaign.get("vlImageMP", .45) * 1000000)),
+            vision_resized_image_data_url(frame, int(campaign.get("vlImageMP", .45) * 1000000)))
+        started = time.monotonic()
+        job = enqueue_llm("caption", campaign["visionModel"], {"operation": "vision_question", "messages": messages},
+                          label="Epoch Finder Reference VL")
+        job_id = str(job.get("jobId") or job.get("id") or "")
+        if not job_id:
+            raise RuntimeError("Reference VL request did not return a job ID.")
+        while True:
+            result = llm_job_status(job_id, consume=False)
+            if not result:
+                raise RuntimeError("Reference VL request lost.")
+            if result["status"] in {"completed", "failed", "cancelled", "stopped", "interrupted"}:
+                if result["status"] != "completed":
+                    raise RuntimeError("Reference VL failed: " + str(result.get("error") or result["status"]))
+                answer = str((result.get("result") or {}).get("text") or "").strip()
+                verdict = answer.splitlines()[0].strip().upper() if answer else ""
+                if verdict not in {"MATCH", "PARTIAL", "MISMATCH", "UNCLEAR"}:
+                    verdict = "UNCLEAR"
+                outcomes.append({"groupId": group["id"], "label": group["label"], "option": expected,
+                                 "reference": assigned["media"], "verdict": verdict,
+                                 "response": answer, "modelId": campaign["visionModel"],
+                                 "elapsedSeconds": round(time.monotonic() - started, 2)})
+                unit["referenceAssessments"] = outcomes
+                _save(folder_path, campaign)
+                llm_job_status(job_id, consume=True)
+                break
+            time.sleep(1)
+    unit["referenceAssessments"] = outcomes
+    _save(folder_path, campaign)
+
+
 def _mark_unit_error(folder_path, campaign, unit, stage, exc):
     """Retain actionable failure evidence without scoring a failed observation."""
     import logging
@@ -606,7 +662,8 @@ def _run(folder_path, campaign_id, control):
                     _clean_staging(folder_path, campaign)
             _update(folder_path, campaign, phase="Evaluating", detail="All round frames captured.")
             for unit in campaign["units"]:
-                if unit["round"] != number or unit["assessment"] is not None:
+                if unit["round"] != number or (unit["assessment"] is not None and
+                        (not campaign.get("referenceEvaluation", {}).get("rvn") or "referenceAssessments" in unit)):
                     continue
                 if not _check_signal(folder_path, campaign, control):
                     return
@@ -618,6 +675,11 @@ def _run(folder_path, campaign_id, control):
                     _evaluate_unit(folder_path, campaign, unit)
                 except Exception as exc:
                     _mark_unit_error(folder_path, campaign, unit, "vision", exc)
+                if unit.get("assessment") is not None and campaign.get("referenceEvaluation", {}).get("rvn") and "referenceAssessments" not in unit:
+                    try:
+                        _evaluate_reference_unit(folder_path, campaign, unit)
+                    except Exception as exc:
+                        _mark_unit_error(folder_path, campaign, unit, "reference", exc)
                 if unit.get("assessment") is not None:
                     _retire_scored_session(folder_path, campaign, unit)
             ranking = _rank(campaign, number)

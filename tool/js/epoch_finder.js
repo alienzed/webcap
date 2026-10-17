@@ -40,6 +40,15 @@
     document.getElementById('test-generations-body').classList.toggle('hidden', finder);
     if (finder) refresh();
   }
+  function renderSecondsEstimate(modelId, durationSeconds, megapixels) {
+    // First real-machine seed measurements; not a formula or a claim about
+    // other models, durations or resolutions.
+    if (modelId === 'minimax_h3' && Number(durationSeconds) === 3) {
+      if (Math.abs(megapixels - 0.3) < 0.0001) return { seconds: 10, seeded: true };
+      if (Math.abs(megapixels - 0.4) < 0.0001) return { seconds: 15, seeded: true };
+    }
+    return { seconds: 60, seeded: false };
+  }
   function roundPlan() {
     var host = els('round-plan');
     var count = Number(els('rounds').value);
@@ -71,17 +80,35 @@
       input.closest('label').classList.toggle('hidden', !hasMp);
     });
     function estimate() {
-      var remaining = baseCount, renders = 0;
+      var remaining = baseCount, renders = 0, estimatedSeconds = 0;
+      var seededRenders = 0;
+      var durationInput = document.getElementById('test-generations-duration');
+      var duration = durationInput ? Number(durationInput.value) : NaN;
+      var modelId = typeof window.getWorkingModelProfileId === 'function' ?
+        String(window.getWorkingModelProfileId() || '') : '';
       Array.from(host.querySelectorAll('[data-epoch-round]')).forEach(function (row, index) {
         var tests = Number(row.querySelector('[data-case]').value);
         var keepPct = Number(row.querySelector('[data-keep]').value);
+        var mpInput = row.querySelector('[data-mp]');
+        var mp = mpInput && !mpInput.closest('label').classList.contains('hidden') ?
+          Number(mpInput.value) : NaN;
         var projection = row.querySelector('span');
         projection.textContent = 'R' + (index + 1) + ' · ~' + remaining + ' epochs';
-        if (tests > 0) renders += remaining * tests;
+        var count = Number.isFinite(tests) && tests > 0 ? remaining * tests : 0;
+        var time = renderSecondsEstimate(modelId, duration, mp);
+        renders += count;
+        estimatedSeconds += count * time.seconds;
+        if (time.seeded) seededRenders += count;
         remaining = Math.max(1, Math.ceil(remaining * keepPct / 100));
       });
-      els('estimate').textContent = renders + ' projected renders · ~' + Math.ceil(renders * 60 / 60) +
-        ' min at 60s/render, excluding VL and queue time. Ties may increase the workload.';
+      var minutes = Math.floor(estimatedSeconds / 60);
+      var seconds = estimatedSeconds % 60;
+      var estimateText = minutes ? minutes + 'm' + (seconds ? ' ' + seconds + 's' : '') :
+        seconds + 's';
+      els('estimate').textContent = renders + ' projected renders · ~' + estimateText +
+        (seededRenders ? ' (3s H3: 0.3 MP ≈ 10s, 0.4 MP ≈ 15s)' : '') +
+        (seededRenders < renders ? ' · unmeasured: 60s/render' : '') +
+        '. Excludes VL, queue time and possible cutoff ties.';
     }
     host.oninput = estimate;
     estimate();
@@ -260,6 +287,10 @@
   els('mode-finder').onclick = function () { showMode('finder'); };
   els('refresh').onclick = refresh;
   els('start').onclick = start;
+  var testDuration = document.getElementById('test-generations-duration');
+  if (testDuration) testDuration.addEventListener('input', function () {
+    if (mode === 'finder') roundPlan();
+  });
   els('rounds').onchange = roundPlan;
   els('cases').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
   els('retention').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };

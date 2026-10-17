@@ -37,9 +37,9 @@ def _encode(kind, processor, model, paths, device):
                     vector = out.last_hidden_state[:, 0, :]
                 else:
                     inputs = processor(images=rgb, return_tensors="pt")
-                    pixels = inputs["pixel_values"].to(device)
-                    # SigLIP2 full model provides projected vision embeddings.
-                    vector = model.get_image_features(pixel_values=pixels)
+                    prepared = {k: v.to(device) for k, v in inputs.items() if hasattr(v, "to")}
+                    # SigLIP2 may require spatial_shapes and pixel_attention_mask.
+                    vector = model.get_image_features(**prepared)
                     if not isinstance(vector, torch.Tensor):
                         vector = vector.pooler_output
                 vectors.append(F.normalize(vector.float(), dim=-1).cpu()[0])

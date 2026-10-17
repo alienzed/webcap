@@ -128,7 +128,8 @@
       var oldValues = (prev.options || []).join('|');
       return {label: String(prev.label || ('Attribute ' + (index + 1))),
         options: g.options.slice(),
-        role: oldValues && oldValues !== g.options.join('|') ? 'primary' : (prev.role || 'primary'), nested: g.nested};
+        role: oldValues && oldValues !== g.options.join('|') ? 'primary' : (prev.role || 'primary'), nested: g.nested,
+        referenceTags: oldValues === g.options.join('|') ? (prev.referenceTags || []) : []};
     });
     renderDimensions();
   }
@@ -157,7 +158,8 @@
           values.some(function (x) { return /[{}|]/.test(x); })) throw new Error('Attribute ' + (index + 1) + ' has invalid values.');
       var label = row.querySelector('[data-attr-name]').value.trim();
       if (!label) throw new Error('Every attribute needs a name.');
-      return {label: label, role: row.querySelector('[data-attr-role]').value, options: values};
+      return {label: label, role: row.querySelector('[data-attr-role]').value, options: values,
+        referenceTags: values.join('|') === (dimensions[index]?.options || []).join('|') ? (dimensions[index]?.referenceTags || []) : []};
     });
     if (!edits.some(function (entry) { return entry.role !== 'vary'; })) {
       throw new Error('Mark at least one concept or leakage attribute for scoring.');
@@ -218,7 +220,7 @@
       els('concept').value = analysis.concept || els('concept').value;
       els('prompt').value = analysis.wildcard;
       dimensions = analysis.variationGroups.map(function (g) {
-        return {label: g.label, options: g.options, role: g.role};
+        return {label: g.label, options: g.options, role: g.role, referenceTags: g.referenceTags || []};
       });
       renderDimensions();
       els('proposal-status').textContent = 'Proposed tests ready. Edit values and scoring roles freely.';
@@ -285,13 +287,13 @@
     var version = ++referenceGeneration;
     referenceItems = dimensions.flatMap(function (d) {
       return d.role === 'primary' ? d.options.map(function (option) {
-        return {attribute:d.label, option:option, key:JSON.stringify([d.label,option]), candidates:[]};
+        return {attribute:d.label, option:option, referenceTag:(d.referenceTags || [])[d.options.indexOf(option)], key:JSON.stringify([d.label,option]), candidates:[]};
       }) : [];
     });
     referenceIndex = 0;
     els('reference-options').innerHTML = '<p class="epoch-finder-muted">Finding tagged reference candidates…</p>';
     return Promise.all(referenceItems.map(function (item) {
-      return api('reference_suggestions', {option:item.option}).then(function (response) {
+      return api('reference_suggestions', {group:item.referenceTag?.group, tag:item.referenceTag?.tag}).then(function (response) {
         item.candidates = response.references || [];
       });
     })).then(function () {

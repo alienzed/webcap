@@ -70,3 +70,46 @@ def find_reference_candidates(folder, group, term):
             results.append({"media": name, "group": group, "term": term,
                             "size": stat.st_size, "mtimeNs": stat.st_mtime_ns})
     return results
+
+
+def suggest_reference_options(folder, option, limit=10):
+    """Deterministically suggest tagged full images; never claim semantic certainty.
+
+    Matching is word-bounded tag phrase inclusion only. No fuzzy inference or
+    silent mapping of an unrelated image to a requested prompt option.
+    """
+    import re
+    wanted = str(option or "").strip()
+    if not wanted:
+        return []
+    words = re.findall(r"[a-z0-9]+", wanted.casefold())
+    if not words:
+        return []
+    phrase = " " + " ".join(words) + " "
+    vocab = reference_vocabulary(folder)
+    matching = []
+    for group in vocab:
+        for term in group["terms"]:
+            tokens = re.findall(r"[a-z0-9]+", term["term"].casefold())
+            if not tokens or not all(token in words for token in tokens):
+                continue
+            # Minimum specificity for multiword prompt fragments.
+            if len(tokens) == 1 and len(words) > 1:
+                continue
+            matches = find_reference_candidates(folder, group["group"], term["term"])
+            specificity = len(tokens)
+            for record in matches:
+                matching.append(((-specificity, -len(term["term"]), group["group"], term["term"], record["media"]), {
+                    "group": group["group"], "tag": term["term"], **record
+                }))
+    matching.sort(key=lambda row: row[0])
+    seen = set()
+    result = []
+    for _order, record in matching:
+        if record["media"] in seen:
+            continue
+        seen.add(record["media"])
+        result.append(record)
+        if len(result) >= min(10, max(1, int(limit))):
+            break
+    return result

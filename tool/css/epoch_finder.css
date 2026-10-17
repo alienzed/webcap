@@ -117,3 +117,7 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-inspect-nav{margin-top:10px}
 .epoch-finder-inspector details{margin:10px 0;font-size:12px}
 .epoch-finder-inspector details p{overflow-wrap:anywhere;white-space:pre-wrap;margin:7px 0}
+
+.epoch-finder-ranking-controls{display:flex;gap:6px;margin:0 0 10px}
+.epoch-finder-ranking-controls select{min-width:0;flex:1;background:var(--input-bg,#131d27);border:1px solid var(--border-color,#405064);border-radius:6px;color:inherit;padding:6px;font-size:11px}
+.epoch-finder-ranking-row small{grid-column:1/-1;opacity:.65;font-size:10px}

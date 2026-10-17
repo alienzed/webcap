@@ -96,7 +96,7 @@ Epoch Finder is a separate tab *inside Test Generations*, not a new GPU executio
 - If capture or VL fails, preserve available Test media, PNG and error evidence. Interrupted/paused campaigns also keep unfinished media. Deleting a campaign explicitly removes its remaining owned sessions when no active work references them.
 - On campaign completion, keep PNGs of all final-round epochs across tested rounds, along with any unscored/failed frames. Prune scored PNGs belonging to nonfinal epochs after preserving scores, prompts, and provenance in campaign JSON.
 - Store campaign JSON and retained frames in the central Test Set workspace. Storage Manager exposes Epoch Finder campaigns as measurable, user-purgeable records (unless active). Staged checkpoint subdirectories have a distinct measurable, non-purgeable inventory entry.
-- Storage Manager campaign deletion delegates to the campaign owner rather than deleting arbitrary files. Ordinary Test sessions and manually staged candidates are never removed by campaign cleanup.
+- Storage Manager campaign deletion delegates to the campaign owner rather than deleting arbitrary files. Retained campaign Test sessions remain measurable in the Tests category but cannot be purged independently while their campaign exists. Ordinary Test sessions and manually staged candidates are never removed by campaign cleanup.
 - Cleanup is lifecycle-driven, not startup- or timeout-driven. Startup interruption does not trigger automatic resume.
 
 Real-machine confirmation of media accounting, VL completion, restart and purge remains required before merging.

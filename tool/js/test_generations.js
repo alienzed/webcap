@@ -161,6 +161,8 @@
     var a = String(expected || '').toLowerCase().match(/[a-z0-9]+/g) || [];
     var b = String(observed || '').toLowerCase().match(/[a-z0-9]+/g) || [];
     if (!a.length || !b.length || a.join(' ') === 'absent' || b.join(' ') === 'absent') return 0;
+    if (a.some(function (word) { return word === 'no' || word === 'not' || word === 'without'; }) ||
+        b.some(function (word) { return word === 'no' || word === 'not' || word === 'without'; })) return 0;
     var shorter = a.length < b.length ? a : b;
     var longer = a.length < b.length ? b : a;
     if (shorter.length === longer.length) return 0;

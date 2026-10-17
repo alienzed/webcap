@@ -94,7 +94,7 @@ def _timing_key(campaign, plan):
 
 
 def _timing_profiles(folder_path):
-    """Derive observed timings from durable campaign evidence, no separate cache."""
+    """Read measured render and VL durations from existing campaign records."""
     profiles = {}
     root = _root(folder_path)
     if not root.is_dir():
@@ -104,24 +104,28 @@ def _timing_profiles(folder_path):
             continue
         try:
             campaign = _load(folder_path, directory.name)
-        except (OSError, ValueError, json.JSONDecodeError, FileNotFoundError):
+        except (OSError, ValueError, json.JSONDecodeError):
             continue
         rounds = {plan["number"]: plan for plan in campaign["rounds"]}
         seen = set()
         for unit in campaign["units"]:
-            seconds = unit.get("captureWallSeconds")
             plan = rounds.get(unit.get("round"))
-            if not isinstance(seconds, (int, float)) or seconds <= 0 or plan is None:
+            if plan is None:
                 continue
             key = _timing_key(campaign, plan)
-            # First completed capture per campaign/settings may include model warm-up.
-            if key not in seen:
+            render = unit.get("renderSeconds")
+            vision = unit.get("visionWallSeconds")
+            if key not in seen and isinstance(render, (int, float)) and render > 0:
                 seen.add(key)
-                continue
-            entry = profiles.setdefault(key, {"seconds": []})
-            entry["seconds"].append(round(seconds, 2))
+                render = None  # First completed render may include model loading.
+            entry = profiles.setdefault(key, {"seconds": [], "visionSeconds": []})
+            if isinstance(render, (int, float)) and render > 0:
+                entry["seconds"].append(round(render, 2))
+            if isinstance(vision, (int, float)) and vision > 0:
+                entry["visionSeconds"].append(round(vision, 2))
     for entry in profiles.values():
         entry["seconds"] = entry["seconds"][-20:]
+        entry["visionSeconds"] = entry["visionSeconds"][-20:]
     return profiles
 
 
@@ -385,6 +389,9 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     unit["captured"] = True
     if unit.get("queuedAt"):
         unit["captureWallSeconds"] = round(time.time() - unit["queuedAt"], 2)
+    elapsed_ms = result.get("elapsedMs")
+    if isinstance(elapsed_ms, (int, float)) and elapsed_ms > 0:
+        unit["renderSeconds"] = round(elapsed_ms / 1000, 2)
     unit["groups"] = status.get("wildcardEvaluationGroups") or []
     if len(unit["groups"]) != len(campaign["dimensions"]):
         raise RuntimeError("Resolved wildcard group count differs from the approved plan.")
@@ -430,6 +437,7 @@ def _evaluate_unit(folder_path, campaign, unit):
     if unit["assessment"] is not None:
         return
     frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
+    vision_started = time.monotonic()
     job = enqueue_llm("caption", campaign["visionModel"], {
         "operation": "vision_question",
         "messages": build_vision_question_messages(unit["question"], vision_media_data_url(frame))
@@ -445,6 +453,7 @@ def _evaluate_unit(folder_path, campaign, unit):
             if result["status"] != "completed":
                 raise RuntimeError("VL request " + result["status"] + ": " + str(result.get("error") or ""))
             answer = str((result.get("result") or {}).get("text") or "").strip()
+            unit["visionWallSeconds"] = round(time.monotonic() - vision_started, 2)
             unit["assessment"] = {
                 "modelId": campaign["visionModel"], "text": answer,
                 "comparison": _compare(answer, unit["groups"]),

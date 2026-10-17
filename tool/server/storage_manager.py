@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .epoch_test_bench import delete_session
+from . import epoch_finder
 from .director_model_assessment_store import assessment_root as director_assessment_root, delete_assessment as delete_director_assessment, list_assessments as list_director_assessments
 from .generate_store import MANIFEST_NAME
 from .execution_queue import ExecutionQueueStateError, get_job as execution_get_job, lane_snapshot as execution_lane_snapshot
@@ -22,8 +23,8 @@ from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
-MEASURABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy", "director_assessment"}
-PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy", "director_assessment"}
+MEASURABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy", "director_assessment", "epoch_finder", "epoch_finder_staging"}
+PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy", "director_assessment", "epoch_finder"}
 ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
 ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
 GENERATE_REFERENCE_TOKEN_RE = re.compile(r"^[0-9]+-[0-9a-f]{12}$")
@@ -484,6 +485,22 @@ def _discovered_set_folders(cache, current_folder=""):
     return folders
 
 
+def _test_campaign_owner(session):
+    """Return the existing campaign ID protecting a retained Test session."""
+    staging = str(session.get("campaignStaging") or "")
+    match = re.fullmatch(r"epoch-finder-([a-f0-9]{12})", staging)
+    if not match:
+        return ""
+    owner_folder = str(session.get("ownerFolder") or "").strip()
+    if not owner_folder:
+        return ""
+    try:
+        epoch_finder.storage_campaign_path(owner_folder, match.group(1))
+    except FileNotFoundError:
+        return ""  # Abandoned session from an already-deleted campaign.
+    return match.group(1)
+
+
 def _test_items_for_folder(cache, folder, qualify_label=False):
     set_path = app_config.safe_join_fs_root(folder)
     if not set_path.is_dir():
@@ -502,6 +519,7 @@ def _test_items_for_folder(cache, folder, qualify_label=False):
         session_id = path.name
         status = str(session.get("status") or "")
         active = status in ACTIVE_TEST_STATUSES
+        campaign_id = _test_campaign_owner(session)
         label = str(session.get("name") or session_id)
         if qualify_label:
             label += " · " + folder
@@ -513,8 +531,8 @@ def _test_items_for_folder(cache, folder, qualify_label=False):
             folder=folder,
             kind=session.get("modelId") or session.get("model") or "Test Session",
             status=status,
-            purgeable=not active,
-            protected_reason=("Active Test Session; stop it before deletion." if active else ""),
+            purgeable=not active and not campaign_id,
+            protected_reason=("Epoch Finder campaign " + campaign_id + " owns this session; delete the campaign instead." if campaign_id else "Active Test Session; stop it before deletion." if active else ""),
             meta={
                 "set": folder,
                 "completed": int(session.get("completed") or 0),
@@ -543,6 +561,7 @@ def _central_test_items(cache):
             session_id = path.name
             status = str(session.get("status") or "")
             active = status in ACTIVE_TEST_STATUSES
+            campaign_id = _test_campaign_owner(session)
             source = str(session.get("source") or "")
             owner_folder = str(session.get("ownerFolder") or "")
             label = str(session.get("name") or "").strip() or session_id
@@ -556,8 +575,8 @@ def _central_test_items(cache):
                 folder="",
                 kind=session.get("modelId") or session.get("model") or "Test Session",
                 status=status,
-                purgeable=not active,
-                protected_reason=("Active Test Session; stop it before deletion." if active else ""),
+                purgeable=not active and not campaign_id,
+                protected_reason=("Epoch Finder campaign " + campaign_id + " owns this session; delete the campaign instead." if campaign_id else "Active Test Session; stop it before deletion." if active else ""),
                 meta={
                     "source": source,
                     "ownerFolder": owner_folder,
@@ -569,6 +588,29 @@ def _central_test_items(cache):
                 cache=cache,
             ))
     return rows
+
+def _epoch_finder_items(cache):
+    items = []
+    for record in epoch_finder.storage_campaigns():
+        active = record["active"]
+        items.append(_item(
+            "epoch_finder", record["id"], record["name"], record["path"],
+            folder=record["folder"], kind="Epoch Finder campaign",
+            status=record["status"], purgeable=not active,
+            protected_reason="Campaign has active Test work." if active else "",
+            meta={"frames": record["frames"], "retainedSessions": record["retainedSessions"]},
+            cache=cache,
+        ))
+        if record["stagingPath"] is not None:
+            items.append(_item(
+                "epoch_finder_staging", record["id"], record["name"] + " · temporary checkpoints",
+                record["stagingPath"], folder=record["folder"], kind="Campaign Test checkpoint copies",
+                status="temporary", purgeable=False,
+                protected_reason="Managed by Epoch Finder lifecycle; delete the campaign instead.",
+                cache=cache,
+            ))
+    return items
+
 
 def _test_items(cache, folder):
     folders = _discovered_set_folders(cache, folder)
@@ -1058,11 +1100,14 @@ def overview(folder=""):
             unavailable[area] = str(exc)
             return []
 
+    epoch_items = _epoch_finder_items(cache)
     groups = {
         "training": collect("training", lambda: _training_items(cache)),
         "archive": _archive_items(cache),
         "director_assessment": _director_assessment_items(cache),
         "tests": _test_items(cache, folder),
+        "epoch_finder": [item for item in epoch_items if item["area"] == "epoch_finder"],
+        "epoch_finder_staging": [item for item in epoch_items if item["area"] == "epoch_finder_staging"],
         "staged": collect("staged", lambda: _staged_items(cache, folder)),
         "generate": collect("generate", lambda: _generate_items(cache)),
         "storyboard": _storyboard_items(cache),
@@ -1076,6 +1121,8 @@ def overview(folder=""):
             note=("Training queue state is unavailable; inventory is hidden until it can be read." if "training" in unavailable else "")
         ),
         _category("archive", "Training Archives", groups["archive"]),
+        _category("epoch_finder", "Epoch Finder Campaigns", groups["epoch_finder"]),
+        _category("epoch_finder_staging", "Epoch Finder Temporary Checkpoints", groups["epoch_finder_staging"]),
         _category("director_assessment", "Director Assessments", groups["director_assessment"], note="Raw diagnostic evidence only; learned Director model results are preserved when this is deleted."),
         _category(
             "tests", "Tests", groups["tests"], complete=scan_complete,
@@ -1419,6 +1466,10 @@ def resolve_item(area, item_id, folder=""):
         return path
     if area == "tests":
         return _resolve_test(folder, item_id)
+    if area == "epoch_finder":
+        return epoch_finder.storage_campaign_path(folder, item_id)
+    if area == "epoch_finder_staging":
+        return epoch_finder.storage_staging_path(folder, item_id)
     if area == "staged":
         return _resolve_staged(folder, item_id)[0]
     if area == "generate":
@@ -1862,10 +1913,15 @@ def purge(area, item_id, folder=""):
     elif area == "archive":
         path = resolve_item("archive", item_id)
         shutil.rmtree(path)
+    elif area == "epoch_finder":
+        epoch_finder.command(app_config.safe_join_fs_root(folder), "delete", {"campaignId": item_id})
     elif area == "tests":
         session = _resolve_test(folder, item_id)
         session_payload = _read_test_session_manifest(session)
         status = str(session_payload.get("status") or "").strip().lower()
+        campaign_id = _test_campaign_owner(session_payload)
+        if campaign_id:
+            raise RuntimeError("Test Session belongs to Epoch Finder campaign " + campaign_id + "; delete the campaign instead.")
         if status in ACTIVE_TEST_STATUSES:
             raise RuntimeError("Active Test Session; stop it before deletion.")
         owner_folder = str(session_payload.get("ownerFolder") or folder or "").strip()

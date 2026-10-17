@@ -566,6 +566,9 @@ def test_storage_ui_is_isolated_global_activity():
     assert "storageState.activeArea" in storage_js
     assert "storage-overview-back" in storage_js
     assert "Delete Take" in storage_js
+    assert "epoch_finder" in storage_js
+    assert "epoch_finder_staging" in storage_js
+    assert "Delete Campaign" in storage_js
     assert "storage-clear-sight-btn" in storage_js
     assert "/fs/storage/set-sight/clear" in storage_js
     assert "typeof window.reportConsoleError" not in storage_js
@@ -574,7 +577,9 @@ def test_storage_ui_is_isolated_global_activity():
     assert "workspace === 'storage'" in shell
     assert "activity === 'storage'" in shell
     assert "os.walk" not in backend
-    assert 'PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy"}' in backend
+    assert '"epoch_finder"' in backend
+    assert '"epoch_finder_staging"' in backend
+    assert 'epoch_finder.command(' in backend
     assert '"set": _set_items(cache, folder)' in backend
     assert '"staged": _staged_items(cache, folder)' in backend
     assert '"comfy": _comfy_items(cache)' in backend
@@ -1322,3 +1327,41 @@ def test_storage_manager_lists_and_purges_director_assessment_evidence(monkeypat
 
     assert not evidence.exists()
     assert learned.is_file()
+
+
+def test_epoch_finder_storage_items_and_temporary_copies(monkeypatch, tmp_path):
+    root = tmp_path / "campaign"
+    staging = tmp_path / "staged"
+    root.mkdir()
+    staging.mkdir()
+    (root / "campaign.json").write_text("{}", encoding="utf-8")
+    (staging / "epoch10.safetensors").write_bytes(b"checkpoint-copy")
+    monkeypatch.setattr(storage_manager.epoch_finder, "storage_campaigns", lambda: [{
+        "id": "abcdef123456", "folder": "sets/demo", "path": root,
+        "stagingPath": staging, "name": "Test run",
+        "status": "paused", "active": False, "frames": 1, "retainedSessions": 1,
+    }])
+    items = storage_manager._epoch_finder_items({})
+    assert len(items) == 2
+    assert items[0]["area"] == "epoch_finder" and items[0]["purgeable"]
+    assert items[1]["area"] == "epoch_finder_staging" and not items[1]["purgeable"]
+    assert items[0]["meta"]["frames"] == 1
+
+
+def test_epoch_finder_session_ownership_protects_independent_test_deletion(monkeypatch):
+    monkeypatch.setattr(storage_manager.epoch_finder, "storage_campaign_path",
+                        lambda folder, campaign_id: "/owned/campaign")
+    payload = {"campaignStaging": "epoch-finder-abcdef123456", "ownerFolder": "sets/demo"}
+    assert storage_manager._test_campaign_owner(payload) == "abcdef123456"
+    assert storage_manager._test_campaign_owner({"ownerFolder": "sets/demo"}) == ""
+
+
+def test_epoch_finder_storage_purge_delegates_to_campaign_owner(monkeypatch):
+    calls = []
+    monkeypatch.setattr(storage_manager.app_config, "safe_join_fs_root", lambda value: value)
+    monkeypatch.setattr(storage_manager.epoch_finder, "command",
+                        lambda folder, operation, criteria: calls.append((folder, operation, criteria)))
+    monkeypatch.setattr(storage_manager, "_read_cache", lambda: {"items": {}})
+    monkeypatch.setattr(storage_manager, "_write_cache", lambda payload: None)
+    storage_manager.purge("epoch_finder", "abcdef123456", "sets/demo")
+    assert calls == [("sets/demo", "delete", {"campaignId": "abcdef123456"})]

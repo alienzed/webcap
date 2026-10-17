@@ -53,6 +53,8 @@ from .epoch_test_bench import (
     supported_models as test_generations_supported_models,
     browse_keep_lora_destination as test_generations_browse_keep_lora_destination,
 )
+from .epoch_finder import command as epoch_finder_command, frame_path as epoch_finder_frame_path
+from .epoch_finder_plan import build_proposal as epoch_finder_build_proposal
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
@@ -2143,6 +2145,57 @@ def test_generations_activity_route():
         return jsonify({"ok": True, **test_generations_activity_snapshot(folder_path)})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/epoch_finder/propose", methods=["POST"])
+def epoch_finder_propose_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        folder = str(data.get("folder") or "").strip()
+        safe_join_fs_root(folder)
+        captions = [
+            str(load_caption_text(folder, name).get("caption") or "").strip()
+            for name in list_media_files(folder)
+        ]
+        contract = epoch_finder_build_proposal(
+            captions, set_name=Path(folder).name,
+            focus=data.get("focus"), vocabulary=data.get("vocabulary"),
+        )
+        job = enqueue_llm(
+            "test", str(data.get("directorModel") or "").strip(), contract,
+            context={}, label="Epoch Finder: design concept tests",
+        )
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("EPOCH FINDER PROPOSAL FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/epoch_finder", methods=["POST"])
+def epoch_finder_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        folder_path = safe_join_fs_root(str(data.get("folder") or "").strip())
+        operation = str(data.get("operation") or "").strip()
+        return jsonify({"ok": True, **epoch_finder_command(folder_path, operation, data.get("criteria"))})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("EPOCH FINDER FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/epoch_finder/frame", methods=["GET"])
+def epoch_finder_frame_route():
+    try:
+        folder_path = safe_join_fs_root(str(request.args.get("folder") or "").strip())
+        media_path = epoch_finder_frame_path(
+            folder_path, str(request.args.get("campaign") or ""),
+            str(request.args.get("frame") or ""),
+        )
+        return send_from_directory(str(media_path.parent), media_path.name)
+    except (ValueError, FileNotFoundError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
 
 
 @app.route("/fs/test_generations", methods=["POST"])

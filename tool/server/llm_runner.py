@@ -312,11 +312,16 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
 
     if client == "test":
         operation = str((frozen_contract or {}).get("operation") or "").strip()
-        if operation != "analyze_caption_wildcard":
+        if operation == "propose_epoch_finder_plan":
+            from .epoch_finder_plan import normalize_proposal
+            analysis = normalize_proposal(llm_result.get("data"))
+        elif operation == "analyze_caption_wildcard":
+            from .test_wildcard_contract import normalize_result
+            analysis = normalize_result(llm_result.get("data"))
+        else:
             raise RuntimeError("Unsupported Test Generations LLM operation: " + (operation or "empty"))
-        from .test_wildcard_contract import normalize_result
         return {
-            "analysis": normalize_result(llm_result.get("data")),
+            "analysis": analysis,
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),

@@ -140,6 +140,13 @@ def create_campaign(folder_path, criteria):
     if job_id not in runs:
         raise ValueError("Select a training run with available saved epochs.")
     run = runs[job_id]
+    available = set(run["epochs"])
+    selected_epochs = criteria.get("epochs", run["epochs"])
+    if (not isinstance(selected_epochs, list) or not selected_epochs or
+            any(type(epoch) is not int or epoch not in available for epoch in selected_epochs) or
+            len(selected_epochs) != len(set(selected_epochs))):
+        raise ValueError("Select one or more distinct available epochs from this training run.")
+    selected_epochs = sorted(selected_epochs)
     model = get_test_model_for_staging_key(run["stage"])
     model.load_template()
     prompt = str(criteria.get("prompt") or "").strip()
@@ -166,7 +173,7 @@ def create_campaign(folder_path, criteria):
         "runName": run["runName"], "modelId": model.PROFILE_ID, "stage": run["stage"],
         "name": str(criteria.get("name") or run["runName"]).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
-        "round": 1, "rounds": _create_plan(run["epochs"], prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans")),
+        "round": 1, "rounds": _create_plan(selected_epochs, prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans")),
         "visionModel": vision_model, "dimensions": dimensions, "concept": str(criteria.get("concept") or "").strip(),
         "units": [], "scores": [], "startedAt": time.time(),
         "finishedAt": None,

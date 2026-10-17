@@ -363,21 +363,34 @@
     if (item.kind === 'training') {
       var source = item.progress && typeof item.progress === 'object' ? item.progress : {};
       var stage = String(source.stage || item.stage || '').replace(/_/g, ' ');
-      snapshot.phase = (item.status === 'stopping' ? 'Stopping' : 'Training') +
-        (stage ? ' · ' + stage : '');
-      var epoch = Number(source.epoch);
-      var epochs = Number(source.epochs);
-      var hasEpoch = source.epoch != null && source.epochs != null &&
-        isFinite(epoch) && epoch >= 0 && isFinite(epochs) && epochs > 0;
-      if (hasEpoch) snapshot.progressLabel = 'Epoch ' + Math.round(epoch) + ' / ' + Math.round(epochs);
-      var overall = Number(source.overallPercent);
-      if (source.overallPercent != null && isFinite(overall) && overall >= 0 && overall <= 100) {
-        snapshot.progress = { completed: overall, total: 100 };
-        snapshot.progressLabel += (snapshot.progressLabel ? ' · ' : '') +
-          (source.source === 'steps' ? '~' : '') + Math.round(overall) + '% overall';
-      } else if (hasEpoch) {
-        snapshot.progress = { completed: epoch, total: epochs };
-        snapshot.progressLabel += ' · current stage';
+      // The Training runner remains "starting" until its first step/epoch.
+      // Before that, preserve an indeterminate bar rather than stale epoch data.
+      if (item.status === 'starting') {
+        if (stage === 'launch') {
+          snapshot.phase = 'Starting';
+        } else if (stage === 'caching') {
+          snapshot.phase = 'Caching';
+        } else {
+          snapshot.phase = 'Loading model' + (stage && stage !== 'starting' ? ' · ' + stage : '');
+          snapshot.progressLabel = 'Waiting for first training step';
+        }
+      } else {
+        snapshot.phase = (item.status === 'stopping' ? 'Stopping' : 'Training') +
+          (stage ? ' · ' + stage : '');
+        var epoch = Number(source.epoch);
+        var epochs = Number(source.epochs);
+        var hasEpoch = source.epoch != null && source.epochs != null &&
+          isFinite(epoch) && epoch >= 0 && isFinite(epochs) && epochs > 0;
+        if (hasEpoch) snapshot.progressLabel = 'Epoch ' + Math.round(epoch) + ' / ' + Math.round(epochs);
+        var overall = Number(source.overallPercent);
+        if (source.overallPercent != null && isFinite(overall) && overall >= 0 && overall <= 100) {
+          snapshot.progress = { completed: overall, total: 100 };
+          snapshot.progressLabel += (snapshot.progressLabel ? ' · ' : '') +
+            (source.source === 'steps' ? '~' : '') + Math.round(overall) + '% overall';
+        } else if (hasEpoch) {
+          snapshot.progress = { completed: epoch, total: epochs };
+          snapshot.progressLabel += ' · current stage';
+        }
       }
     } else if (item.kind === 'storage') {
       snapshot.phase = (item.status === 'cancelling' ? 'Cancelling' :

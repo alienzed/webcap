@@ -454,6 +454,37 @@ def _session_still_active(folder_path, session_name):
     return status.get("status") not in {"complete", "failed", "stopped", "interrupted"}
 
 
+def _resume_saved_work(folder_path, campaign):
+    """Promote only this campaign's parked Test requests on explicit Resume."""
+    from .execution_queue import get_job as execution_get_job, promote_backlog
+    from .inference_runner import start_observer
+
+    owned_staging = "epoch-finder-" + campaign["id"]
+    promoted = False
+    for unit in campaign["units"]:
+        session_name = unit.get("session")
+        if not session_name:
+            continue
+        session = test_bench.open_session(folder_path, session_name)
+        if session.get("campaignStaging") != owned_staging:
+            raise RuntimeError("Epoch Finder session ownership mismatch.")
+        if unit.get("frame") and not _session_still_active(folder_path, session_name):
+            test_bench.delete_session(folder_path, session_name)
+            unit["session"] = ""
+            _save(folder_path, campaign)
+            continue
+        for job_id in session.get("inferenceJobs") or []:
+            try:
+                job = execution_get_job(str(job_id))
+            except FileNotFoundError:
+                continue
+            if job.get("status") == "backlog":
+                promote_backlog(str(job_id))
+                promoted = True
+    if promoted:
+        start_observer()
+
+
 def _launch(folder_path, campaign_id):
     with _worker_lock:
         if any(thread.is_alive() for thread in _workers.values()):
@@ -499,6 +530,7 @@ def command(folder_path, operation, criteria=None):
         campaign = status(folder_path, campaign_id)
         if campaign["status"] not in {"paused", "interrupted", "failed"}:
             raise ValueError("Only a paused or interrupted campaign can resume.")
+        _resume_saved_work(folder_path, campaign)
         _launch(folder_path, campaign_id)
         return {"campaign": status(folder_path, campaign_id)}
     if operation == "delete":

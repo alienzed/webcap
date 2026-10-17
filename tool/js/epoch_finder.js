@@ -598,6 +598,59 @@
         (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span><small>' + (entry.count || 0) + ' weighted observations' + escape(evidence) + '</small></button>';
     }).join('') : '<p class="epoch-finder-muted">Waiting for VL judgments.</p>';
   }
+  function campaignSummary(campaign) {
+    // Read-only: use the same cumulative weighted VL comparisons as the leaderboard.
+    var epochs = (campaign.rounds[0] || {epochs: []}).epochs;
+    var rows = epochs.map(function (epoch) {
+      var units = (campaign.units || []).filter(function (u) { return u.epoch === epoch; });
+      var comparisons = units.filter(function (u) { return !!u.assessment; })
+        .flatMap(function (u) { return u.assessment.comparison || []; });
+      var matches = comparisons.reduce(function (n, g) {
+        return n + (g.result === 'match' ? Number(g.weight == null ? 1 : g.weight) : 0);
+      }, 0);
+      var mismatches = comparisons.reduce(function (n, g) {
+        return n + (g.result === 'mismatch' ? Number(g.weight == null ? 1 : g.weight) : 0);
+      }, 0);
+      return {epoch: epoch, score: matches + mismatches ? matches / (matches + mismatches) : null,
+        frames: units.filter(function (u) { return !!u.assessment; }).length};
+    }).filter(function (row) { return row.score != null; })
+      .sort(function (a, b) { return b.score - a.score || a.epoch - b.epoch; });
+    var host = els('summary');
+    if (!rows.length) {
+      host.innerHTML = '<p class="epoch-finder-muted">Awaiting scoreable VL judgments. No leader yet.</p>';
+      return;
+    }
+    var first = rows[0], second = rows[1];
+    var pending = (campaign.units || []).filter(function (u) { return !u.assessment && !u.error; }).length;
+    var failed = (campaign.units || []).filter(function (u) { return !!u.error; }).length;
+    var observations = (campaign.units || []).filter(function (u) { return !!u.assessment; }).length;
+    var note = !second ? 'Only one epoch has scored evidence' :
+      Math.abs(first.score - second.score) < 0.0000001 ? 'Tied on weighted VL fidelity' :
+      'Lead: ' + ((first.score - second.score) * 100).toFixed(1) + ' percentage points';
+    var caveats = [];
+    if (campaign.status !== 'complete') caveats.push('Provisional');
+    if (second && first.frames !== second.frames) caveats.push('Unequal scored-frame coverage');
+    if (pending) caveats.push(pending + ' pending frame(s)');
+    if (failed) caveats.push(failed + ' failed frame(s)');
+    ['rvn', 'dino'].forEach(function (kind) {
+      if (!(campaign.referenceEvaluation || {})[kind]) return;
+      var key = kind === 'rvn' ? 'referenceComplete' : 'dinoComplete';
+      var errorKey = kind === 'rvn' ? 'referenceError' : 'dinoError';
+      var assessed = (campaign.units || []).filter(function (u) { return !!u.assessment; });
+      var complete = assessed.filter(function (u) { return !!u[key]; }).length;
+      var errors = assessed.filter(function (u) { return !!u[errorKey]; }).length;
+      caveats.push((kind === 'rvn' ? 'RVN' : 'DINO') + ' ' + complete + '/' + assessed.length +
+        (errors ? ' (' + errors + ' failed)' : '') + ' · separate evidence');
+    });
+    host.innerHTML = '<div class="epoch-finder-summary-stats">' +
+      '<div><small>Leading epoch</small><strong>' + escape(first.epoch) + '</strong><span>' +
+      Math.round(first.score * 100) + '% · ' + first.frames + ' scored frames</span></div>' +
+      '<div><small>Runner-up</small><strong>' + (second ? escape(second.epoch) : '—') +
+      '</strong><span>' + (second ? Math.round(second.score * 100) + '% · ' + second.frames + ' scored frames' : 'No other scored epoch') +
+      '</span></div></div><p class="epoch-finder-summary-takeaway">' + escape(note) +
+      ' · ' + observations + ' VL-evaluated frames</p>' +
+      (caveats.length ? '<p class="epoch-finder-muted">' + caveats.map(escape).join(' · ') + '</p>' : '');
+  }
   function gallery(campaign) {
     var units = campaign.units.filter(function (u) {
       return inspectedEpoch == null || u.epoch === inspectedEpoch;
@@ -744,6 +797,7 @@
     els('delete').classList.toggle('hidden', running);
     progress(campaign);
     ranking(campaign);
+    campaignSummary(campaign);
     gallery(campaign);
     inspectFrame(campaign);
   }

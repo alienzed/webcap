@@ -121,6 +121,12 @@
     if (!groups.length) throw new Error('Add at least one wildcard group.');
     return groups;
   }
+  function suggestedRole(label, options) {
+    var text = String(label || '').toLowerCase();
+    if (/background|setting|lighting|surface|camera|viewpoint|environment|scenery|location/.test(text)) return 'vary';
+    if (/hair|skin|eye|face|expression|pose|position|body|age|ethnicity/.test(text)) return 'leakage';
+    return 'primary';
+  }
   function updateDimensions() {
     var groups = wildcardParts(els('prompt').value);
     dimensions = groups.map(function (g, index) {
@@ -128,7 +134,7 @@
       var oldValues = (prev.options || []).join('|');
       return {label: String(prev.label || ('Attribute ' + (index + 1))),
         options: g.options.slice(),
-        role: oldValues && oldValues !== g.options.join('|') ? 'primary' : (prev.role || 'primary'), nested: g.nested,
+        role: oldValues && oldValues !== g.options.join('|') ? suggestedRole(prev.label, g.options) : (prev.role || suggestedRole(prev.label, g.options)), nested: g.nested,
         referenceTags: oldValues === g.options.join('|') ? (prev.referenceTags || []) : []};
     });
     renderDimensions();
@@ -220,7 +226,7 @@
       els('concept').value = analysis.concept || els('concept').value;
       els('prompt').value = analysis.wildcard;
       dimensions = analysis.variationGroups.map(function (g) {
-        return {label: g.label, options: g.options, role: g.role, referenceTags: g.referenceTags || []};
+        return {label: g.label, options: g.options, role: g.role || suggestedRole(g.label, g.options), referenceTags: g.referenceTags || []};
       });
       renderDimensions();
       els('proposal-status').textContent = 'Proposed tests ready. Edit values and scoring roles freely.';
@@ -364,7 +370,7 @@
     els('next').classList.toggle('hidden', value === 4);
     els('start').classList.toggle('hidden', value !== 4);
     if (value === 3) roundPlan();
-    if (value === 4) { reviewWizard(); prepareReferences(); }
+    if (value === 4) { reviewWizard(); if (!referenceItems.length || referenceItems.some(function (item) { return !item.candidates.length; })) prepareReferences(); else renderReferenceStep(); }
   }
   function advance() {
     try {

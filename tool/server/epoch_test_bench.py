@@ -758,6 +758,8 @@ def _test_vl_partial_credit(expected, observed):
     b = re.findall(r"[a-z0-9]+", str(observed or "").lower())
     if not a or not b or a == ["absent"] or b == ["absent"]:
         return 0.0
+    if {"no", "not", "without"}.intersection(a + b):
+        return 0.0
     shorter, longer = (a, b) if len(a) < len(b) else (b, a)
     if len(shorter) == len(longer):
         return 0.0

@@ -898,8 +898,15 @@ def _staged_loras_for_set(folder_path, model):
     return _lora_files(directory)
 
 
-def _selected_lora_files_for_set(folder_path, model, selected_files=None):
+def _selected_lora_files_for_set(folder_path, model, selected_files=None, campaign_staging=""):
     available = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
+    if campaign_staging:
+        if not re.fullmatch(r"epoch-finder-[a-f0-9]{12}", campaign_staging):
+            raise ValueError("Invalid campaign staging directory.")
+        directory = _test_directory(folder_path, model) / campaign_staging
+        if directory.is_symlink() or not directory.is_dir():
+            raise FileNotFoundError("Campaign staging directory is unavailable.")
+        available = {campaign_staging + "/" + path.name: path for path in _lora_files(directory)}
     if selected_files is None:
         return sorted(available.values(), key=lambda path: path.name.lower())
     if not isinstance(selected_files, (list, tuple)):
@@ -912,8 +919,8 @@ def _selected_lora_files_for_set(folder_path, model, selected_files=None):
         if (
             not name
             or name in (".", "..")
-            or "/" in name
-            or "\\" in name
+            or ("\\" in name)
+            or ("/" in name and (not campaign_staging or not name.startswith(campaign_staging + "/") or name.count("/") != 1))
             or not name.lower().endswith(".safetensors")
         ):
             raise ValueError("Selected Test candidates must be staged .safetensors filenames.")
@@ -1784,14 +1791,14 @@ def _project_wildcard_fields(payload):
 
 def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=None,
                            selected_files=None, candidate_strengths=None, include_base=True, model_id=None,
-                           aspect_ratio=None, megapixels=None, duration=None, sweep_weights=None):
+                           aspect_ratio=None, megapixels=None, duration=None, sweep_weights=None, campaign_staging=""):
     from . import inference_runtime
 
     model = get_test_model(model_id)
     prompt = str(prompt or "").strip()
     if not prompt:
         raise ValueError("A test prompt is required.")
-    loras = _selected_lora_files_for_set(folder_path, model, selected_files=selected_files)
+    loras = _selected_lora_files_for_set(folder_path, model, selected_files=selected_files, campaign_staging=campaign_staging)
     strength_by_file = {}
     if candidate_strengths is not None:
         if not isinstance(candidate_strengths, dict):
@@ -1862,6 +1869,7 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
         "settings": dict(normalized_settings),
         "workflow": copy.deepcopy(template),
         "candidateStrengths": strength_by_file,
+        "campaignStaging": campaign_staging,
     }
     if weights is not None:
         request["sweepWeights"] = weights
@@ -2239,8 +2247,13 @@ def execute_inference(job_id, request, context):
     model = get_test_model(request.get("modelId"))
     lora_file = None
     if candidate_kind == "lora":
-        available = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
-        lora_file = available.get(candidate_file)
+        staging = str(context.get("campaignStaging") or "")
+        if staging:
+            files = _selected_lora_files_for_set(folder_path, model, selected_files=[candidate_file], campaign_staging=staging)
+            lora_file = files[0]
+        else:
+            available = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
+            lora_file = available.get(candidate_file)
         if lora_file is None or not lora_file.is_file():
             _logger.warning("Queued Test skipped removed staged LoRA: %s", candidate_file)
             _record_skipped_inference(session_directory, str(job_id))
@@ -2440,7 +2453,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
             {
                 "kind": "lora",
                 "label": path.name,
-                "file": path.name,
+                "file": (str(request.get("campaignStaging") or "") + "/" + path.name) if request.get("campaignStaging") else path.name,
                 "provenance": _staged_lora_provenance(path),
                 "strength": float((request.get("candidateStrengths") or {}).get(path.name, (request.get("settings") or {}).get("strength", 1))),
             }
@@ -2507,6 +2520,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 "candidateIndex": index,
                 "candidateProvenance": dict(candidate.get("provenance") or {}),
                 "candidateStrength": candidate.get("strength"),
+                "campaignStaging": str(request.get("campaignStaging") or ""),
             }
             job = enqueue_test(request, context, label=label, deferred=True)
             queued_ids.append(job["jobId"])
@@ -2699,7 +2713,7 @@ def reconcile_startup():
 
 def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
             candidate_strengths=None, include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None,
-            sweep_weights=None):
+            sweep_weights=None, campaign_staging=""):
     reconcile_startup()
     request, loras, include_base = _new_inference_request(
         folder_path,
@@ -2715,6 +2729,7 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
         aspect_ratio=aspect_ratio,
         megapixels=megapixels,
         duration=duration,
+        campaign_staging=campaign_staging,
     )
     latest = _enqueue_frozen_test_request(folder_path, request, loras, include_base)
     return {

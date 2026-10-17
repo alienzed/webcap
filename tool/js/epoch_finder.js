@@ -287,18 +287,19 @@
       if (version !== referenceGeneration) return;
       var vocabulary = result.vocabulary || [];
       els('reference-options').innerHTML = required.map(function (entry,i) {
-        var groups = vocabulary.filter(function (v) { return v.terms.some(function (t) { return t.term === entry.option; }); });
+        var groups = vocabulary;
         var selected = referenceSelections[entry.key] || {};
         return '<div class="epoch-finder-reference-choice" data-reference-index="' + i + '"><strong>' + escape(entry.attribute) + ' · ' + escape(entry.option) +
           '</strong><select data-reference-group><option value="">Select annotation group…</option>' +
           groups.map(function (g) { return '<option value="' + escape(g.group) + '"' + (g.group===selected.group?' selected':'') + '>' + escape(g.group) + '</option>'; }).join('') +
-          '</select><select data-reference-media><option value="">Choose full-image reference…</option></select><div data-reference-preview></div></div>';
+          '</select><select data-reference-tag><option value="">Choose Set tag…</option></select><select data-reference-media><option value="">Choose full-image reference…</option></select><div data-reference-preview></div></div>';
       }).join('');
       required.forEach(function (entry,i) {
         var row = els('reference-options').querySelector('[data-reference-index="'+i+'"]');
         row.dataset.referenceKey = entry.key;
         row.dataset.referenceOption = entry.option;
-        if (referenceSelections[entry.key]?.group) loadReferenceMedia(row, referenceSelections[entry.key].group, entry.option, version);
+        row.dataset.referenceVocabulary = JSON.stringify(vocabulary);
+        populateReferenceTags(row);
       });
       updateReferenceStatus();
     }).catch(error);
@@ -309,18 +310,33 @@
     els('reference-choices').textContent = ready + ' / ' + rows.length + ' approved';
     els('start').disabled = rows.length === 0 || ready !== rows.length;
   }
+  function populateReferenceTags(row) {
+    var group = row.querySelector('[data-reference-group]').value;
+    var selected = referenceSelections[row.dataset.referenceKey] || {};
+    var vocabulary = JSON.parse(row.dataset.referenceVocabulary || '[]');
+    var found = vocabulary.find(function (item) { return item.group === group; });
+    var picker = row.querySelector('[data-reference-tag]');
+    row.querySelector('[data-reference-media]').innerHTML = '<option value="">Choose full-image reference…</option>';
+    picker.innerHTML = '<option value="">Choose actual Set tag…</option>' +
+      (found ? found.terms : []).map(function (term) {
+        return '<option value="' + escape(term.term) + '"' +
+          (selected.group === group && (selected.tag || selected.option) === term.term ? ' selected' : '') +
+          '>' + escape(term.term) + ' (' + term.count + ')</option>';
+      }).join('');
+    if (picker.value) loadReferenceMedia(row, group, picker.value, referenceGeneration);
+  }
   function loadReferenceMedia(row, group, term, version) {
     var selector = row.querySelector('[data-reference-media]');
     selector.innerHTML = '<option value="">Loading references…</option>';
     api('reference_candidates', {group:group,term:term}).then(function (result) {
-      if (version !== referenceGeneration || row.querySelector('[data-reference-group]').value !== group) return;
+      if (version !== referenceGeneration || row.querySelector('[data-reference-group]').value !== group || row.querySelector('[data-reference-tag]').value !== term) return;
       var selected = referenceSelections[row.dataset.referenceKey] || {};
       var candidates = result.references || [];
       selector.innerHTML = '<option value="">Choose full-image reference…</option>' + candidates.map(function (c) {
         return '<option value="' + escape(c.media) + '"' + (c.media===selected.media?' selected':'') + '>' + escape(c.media) + '</option>';
       }).join('');
       selector.onchange = function () {
-        if (selector.value) referenceSelections[row.dataset.referenceKey] = {group:group,media:selector.value,attribute:JSON.parse(row.dataset.referenceKey)[0],option:term};
+        if (selector.value) referenceSelections[row.dataset.referenceKey] = {group:group,tag:term,media:selector.value,attribute:JSON.parse(row.dataset.referenceKey)[0],option:row.dataset.referenceOption};
         else delete referenceSelections[row.dataset.referenceKey];
         row.querySelector('[data-reference-preview]').innerHTML = selector.value ?
           '<img loading="lazy" alt="Selected training reference" src="/caption/media?folder=' + encodeURIComponent(currentFolder) + '&media=' + encodeURIComponent(selector.value) + '">' : '';
@@ -815,13 +831,23 @@
     roundPlan();
   });
   els('reference-options').addEventListener('change', function (event) {
+    var tag = event.target.closest('[data-reference-tag]');
+    if (tag) {
+      var row = tag.closest('[data-reference-index]');
+      delete referenceSelections[row.dataset.referenceKey];
+      row.querySelector('[data-reference-preview]').innerHTML = '';
+      row.querySelector('[data-reference-media]').innerHTML = '<option value="">Choose full-image reference…</option>';
+      if (tag.value) loadReferenceMedia(row, row.querySelector('[data-reference-group]').value, tag.value, referenceGeneration);
+      updateReferenceStatus();
+      return;
+    }
     var group = event.target.closest('[data-reference-group]');
     if (!group) return;
     var row = group.closest('[data-reference-index]');
     delete referenceSelections[row.dataset.referenceKey];
     row.querySelector('[data-reference-preview]').innerHTML = '';
     updateReferenceStatus();
-    if (group.value) loadReferenceMedia(row, group.value, row.dataset.referenceOption, referenceGeneration);
+    populateReferenceTags(row);
   });
   els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });
   showStep(1);

@@ -188,6 +188,23 @@
   }
 
   // Session-only scoring: neither the VL observation nor counting overrides are persisted.
+  function testVlPartialCredit(expected, observed) {
+    var a = String(expected || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+    var b = String(observed || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+    if (!a.length || !b.length || a.join(' ') === 'absent' || b.join(' ') === 'absent') return 0;
+    if (a.some(function (word) { return word === 'no' || word === 'not' || word === 'without'; }) ||
+        b.some(function (word) { return word === 'no' || word === 'not' || word === 'without'; })) return 0;
+    var shorter = a.length < b.length ? a : b;
+    var longer = a.length < b.length ? b : a;
+    if (shorter.length === longer.length) return 0;
+    for (var i = 0; i <= longer.length - shorter.length; i++) {
+      if (shorter.every(function (word, j) { return longer[i + j] === word; })) {
+        return shorter.length / longer.length;
+      }
+    }
+    return 0;
+  }
+
   function testVlScore(comparison, ignoredGroups) {
     var score = { matches: 0, mismatches: 0, unclear: 0, excluded: 0, count: 0 };
     (comparison || []).forEach(function (group) {
@@ -195,19 +212,26 @@
         score.excluded += 1;
       } else if (group.result === 'match') {
         score.matches += 1;
+        score.count += 1;
       } else if (group.result === 'mismatch') {
-        score.mismatches += 1;
+        var partial = testVlPartialCredit(group.expectedText, group.selectedText);
+        score.matches += partial;
+        score.mismatches += 1 - partial;
+        score.count += 1;
       } else {
         score.unclear += 1;
       }
     });
-    score.count = score.matches + score.mismatches;
     return score;
+  }
+
+  function testVlCreditText(value) {
+    return String(Math.round(value * 100) / 100);
   }
 
   function testVlScoreText(prefix, score) {
     return prefix + (score.count ? (' ' + Math.round(100 * score.matches / score.count) +
-      '% (' + score.matches + '/' + score.count + ')') : ' — (0 counted)');
+      '% (' + testVlCreditText(score.matches) + '/' + score.count + ')') : ' — (0 counted)');
   }
 
   function testVlCandidateScores(results) {

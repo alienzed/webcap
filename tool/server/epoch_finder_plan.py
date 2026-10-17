@@ -59,15 +59,18 @@ def normalize_dimensions(prompt, dimensions=None):
     return normalized
 
 
-def build_proposal(captions, set_name="", focus="", vocabulary=None):
+def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_vocabulary=None):
     contract = build_wildcard_request(captions, set_name=set_name, focus=focus, vocabulary=vocabulary)
     contract["operation"] = "propose_epoch_finder_plan"
     schema = contract["response_schema"]
     schema["required"] = ["wildcard", "stableTerms", "variationGroups", "concept"]
     schema["properties"]["concept"] = {"type": "string", "minLength": 1}
     group = schema["properties"]["variationGroups"]["items"]
-    group["required"] = ["label", "options", "role"]
+    group["required"] = ["label", "options", "role", "referenceTags"]
+    group["properties"]["referenceTags"] = {"type": "array", "items": {"type": "object", "required": ["group", "tag"], "properties": {"group": {"type": "string"}, "tag": {"type": "string"}}}}
     group["properties"]["role"] = {"type": "string", "enum": ["primary", "leakage", "vary"]}
+    import json
+    contract["prompt"] += "\\n[ACTUAL SET REFERENCE TAGS]\\n" + json.dumps(reference_vocabulary or [], ensure_ascii=False) + "\\n"
     contract["prompt"] += (
         "\n\n[EPOCH FINDER ADDITION]\n"
         "You are proposing a *reviewable test plan*, not launching a campaign. "
@@ -78,6 +81,8 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None):
         "'leakage' for secondary traits that should vary independently of the learned concept; "
         "'vary' for prompts' incidental variety (background, lighting, etc.) not worth scoring. "
         "Prefer precise independent construction/color/shape attributes to whole-product alternatives. "
+         "For each Primary variationGroup, include referenceTags aligned one-to-one with options, using ONLY exact group/tag pairs from ACTUAL SET REFERENCE TAGS. " 
+        "For Leakage/Vary use an empty referenceTags array. If no exact tag backs an option, use empty strings for its pair, never invent. " 
         "Offer concrete values consistent with the Set vocabulary. "
         "Never invent observed frequencies or conflate a term with its negation. "
         "At least one primary group is required. No new inference work should start."
@@ -94,4 +99,10 @@ def normalize_proposal(data):
     proposal["variationGroups"] = normalize_dimensions(
         proposal["wildcard"], data.get("variationGroups"),
     )
+    raw_groups = data.get("variationGroups") if isinstance(data, dict) else []
+    for normalized, raw in zip(proposal["variationGroups"], raw_groups):
+        tags = raw.get("referenceTags") if isinstance(raw, dict) else None
+        if not isinstance(tags, list) or (normalized["role"] == "primary" and len(tags) != len(normalized["options"])):
+            raise ValueError("Primary test options require aligned structured reference tags.")
+        normalized["referenceTags"] = tags if normalized["role"] == "primary" else []
     return proposal

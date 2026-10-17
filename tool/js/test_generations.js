@@ -4120,6 +4120,7 @@
     setResultsView('grid');
     renderStatus({ status: 'idle' });
     renderTestBatch();
+    window.epochFinderPrepare(launchFolder);
     refreshActivityButton();
     if (!isTestModelSupported()) {
       if (summary) summary.textContent = 'Testing unavailable for selected Base Model.';

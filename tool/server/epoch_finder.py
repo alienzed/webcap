@@ -676,7 +676,14 @@ def _select_next_epochs(ranking, active_epochs, keep_percent):
 
 def _run(folder_path, campaign_id, control):
     campaign = _load(folder_path, campaign_id)
+    from . import workflow_gate
+    admitted = False
     try:
+        _update(folder_path, campaign, phase="Queued", detail="Waiting for workflow FIFO turn.")
+        if not workflow_gate.wait_for_epoch(campaign_id, control):
+            _check_signal(folder_path, campaign, control)
+            return
+        admitted = True
         for unit in campaign["units"]:
             if unit.get("assessment") is not None and unit.get("session"):
                 _retire_scored_session(folder_path, campaign, unit)
@@ -786,6 +793,8 @@ def _run(folder_path, campaign_id, control):
         _update(folder_path, campaign, status="failed", phase="Failed", detail=str(exc))
         raise
     finally:
+        if admitted:
+            workflow_gate.release("epoch", campaign_id)
         # The coordinator queues only one Test session at a time. A failed or
         # interrupted active session retains its checkpoint until its queue
         # reference is resolved; otherwise release the staging directory.

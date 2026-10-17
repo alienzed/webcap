@@ -237,6 +237,9 @@ def create_campaign(folder_path, criteria):
     evaluation = criteria.get("referenceEvaluation")
     if not isinstance(evaluation, dict) or any(type(evaluation.get(k)) is not bool for k in ("rvn", "dino")):
         raise ValueError("Select reference evaluation mechanisms explicitly.")
+    if evaluation["dino"]:
+        from .epoch_dino import preflight as dino_preflight
+        dino_preflight()
     campaign_id = secrets.token_hex(6)
     directory = _directory(folder_path, campaign_id)
     directory.mkdir(parents=True, exist_ok=False)

@@ -562,7 +562,9 @@
             ' · observed ' + escape(g.selected == null ? 'unclear' :
               (unit.groups || []).find(function (v) { return v.id === g.id; })?.options?.[g.selected - 1] || '?') + '</div>';
         }).join('');
-        return '<figure class="epoch-finder-frame">' +
+        return '<figure class="epoch-finder-frame" role="button" tabindex="0" aria-label="Inspect epoch ' + unit.epoch +
+          ', round ' + unit.round + ', test ' + (unit.case + 1) + '" data-gallery-epoch="' + unit.epoch +
+          '" data-gallery-round="' + unit.round + '" data-gallery-case="' + unit.case + '">' +
           (src ? '<img loading="lazy" src="' + escape(src) + '" alt="Epoch ' + unit.epoch + ' test frame">' :
             '<div class="epoch-finder-muted">Frame pruned or unavailable</div>') +
           '<figcaption>Epoch ' + unit.epoch + ' · Round ' + unit.round + ' · Test ' + (unit.case + 1) +
@@ -582,7 +584,11 @@
     var src = unit.frame && !unit.framePruned ? '/fs/epoch_finder/frame?folder=' +
       encodeURIComponent(currentFolder) + '&campaign=' + encodeURIComponent(campaign.id) +
       '&frame=' + encodeURIComponent(unit.frame) : '';
-    var referenceNames = Array.from(new Set((unit.referenceAssessments || []).map(function (v) { return v.reference; })
+    var plannedReferences = (unit.groups || []).filter(function (g) { return g.role !== 'vary' && g.expected != null; })
+      .map(function (g) { return (campaign.referencePlan || []).find(function (r) {
+        return r.attribute === g.label && r.option === g.options[g.expected - 1];
+      }); }).filter(Boolean).map(function (r) { return r.media; });
+    var referenceNames = Array.from(new Set(plannedReferences.concat((unit.referenceAssessments || []).map(function (v) { return v.reference; })
       .concat((unit.dinoAssessments || []).map(function (v) { return v.reference; }))));
     var referenceThumbnails = referenceNames.map(function (name) {
       var href = '/caption/media?folder=' + encodeURIComponent(currentFolder) + '&media=' + encodeURIComponent(name);
@@ -822,12 +828,30 @@
     } else return;
     inspectFrame(campaignState);
   };
-  els('frames').onclick = function (event) {
-    if (!event.target.closest('[data-inspect-reset]')) return;
-    inspectedEpoch = null;
-    inspectedFrame = 0;
+  function selectGalleryFrame(element) {
+    inspectedEpoch = Number(element.dataset.galleryEpoch);
+    var found = (campaignState?.units || []).filter(function (u) { return u.epoch === inspectedEpoch; })
+      .sort(function (a,b) { return a.round-b.round || a.case-b.case; });
+    inspectedFrame = Math.max(0, found.findIndex(function (u) {
+      return u.round === Number(element.dataset.galleryRound) && u.case === Number(element.dataset.galleryCase);
+    }));
     lastFrameKey = null;
     refreshStatus().catch(error);
+  }
+  els('frames').onclick = function (event) {
+    if (event.target.closest('[data-inspect-reset]')) {
+      inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = null; refreshStatus().catch(error);
+      return;
+    }
+    var frame = event.target.closest('[data-gallery-epoch]');
+    if (frame) selectGalleryFrame(frame);
+  };
+  els('frames').onkeydown = function (event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    var frame = event.target.closest('[data-gallery-epoch]');
+    if (!frame) return;
+    event.preventDefault();
+    selectGalleryFrame(frame);
   };
   els('pause').onclick = function () { send('pause'); };
   els('resume').onclick = function () { send('resume'); };

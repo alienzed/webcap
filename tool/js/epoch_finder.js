@@ -236,18 +236,29 @@
     var host = els('epoch-picker');
     if (!run) { host.classList.add('hidden'); host.innerHTML = ''; return; }
     host.classList.remove('hidden');
+    var epochs = run.epochs.slice().sort(function (a,b) { return a-b; });
     var chosen = chosenEpochs();
-    host.innerHTML = '<div class="epoch-finder-epoch-tools"><strong>' + chosen.length + ' / ' +
-      run.epochs.length + ' epochs selected</strong>' +
+    var last = epochs[epochs.length - 1];
+    host.innerHTML = '<div class="epoch-finder-epoch-summary"><strong>' +
+      chosen.length + ' of ' + epochs.length + ' selected</strong>' +
+      '<span>Saved checkpoints · ' + epochs[0] + '–' + last + '</span></div>' +
+      '<div class="epoch-finder-epoch-timeline" role="group" aria-label="Select saved epochs">' +
+      epochs.map(function (epoch) {
+        var selected = selectedEpochs.has(epoch);
+        return '<button type="button" class="epoch-finder-epoch-tick' +
+          (selected ? ' is-selected' : '') + '" data-epoch-choice="' + epoch +
+          '" aria-pressed="' + selected + '" aria-label="Epoch ' + epoch +
+          (selected ? ', selected' : ', not selected') + '" title="Epoch ' + epoch +
+          (selected ? ' · selected' : '') + '">' + epoch + '</button>';
+      }).join('') + '</div>' +
+      '<div class="epoch-finder-epoch-tools">' +
       '<button type="button" data-epoch-action="all">All</button>' +
+      '<button type="button" data-epoch-action="every5">Every 5</button>' +
+      '<button type="button" data-epoch-action="last10">Last 10</button>' +
       '<button type="button" data-epoch-action="none">Clear</button>' +
-      '<label>From <input type="number" data-epoch-min placeholder="Min"></label>' +
-      '<label>To <input type="number" data-epoch-max placeholder="Max"></label>' +
-      '<button type="button" data-epoch-action="range">Select range</button></div>' +
-      '<div class="epoch-finder-epoch-grid">' + run.epochs.map(function (epoch) {
-        return '<label><input type="checkbox" data-epoch-choice="' + epoch + '"' +
-          (selectedEpochs.has(epoch) ? ' checked' : '') + '> ' + epoch + '</label>';
-      }).join('') + '</div>';
+      '<div class="epoch-finder-epoch-range"><label>From <input type="number" data-epoch-min placeholder="' + epochs[0] + '" min="' + epochs[0] + '" max="' + last + '"></label>' +
+      '<label>To <input type="number" data-epoch-max placeholder="' + last + '" min="' + epochs[0] + '" max="' + last + '"></label>' +
+      '<button type="button" data-epoch-action="range">Select range</button></div></div>';
   }
   function reviewWizard() {
     var parts = recordDimensions();
@@ -761,11 +772,11 @@
   els('suggest').onclick = propose;
   els('next').onclick = advance;
   els('back').onclick = function () { clearError(); showStep(Math.max(1, wizardStep - 1)); };
-  els('epoch-picker').addEventListener('change', function (event) {
+  els('epoch-picker').addEventListener('click', function (event) {
     var choice = event.target.closest('[data-epoch-choice]');
     if (!choice) return;
     var epoch = Number(choice.dataset.epochChoice);
-    if (choice.checked) selectedEpochs.add(epoch); else selectedEpochs.delete(epoch);
+    if (selectedEpochs.has(epoch)) selectedEpochs.delete(epoch); else selectedEpochs.add(epoch);
     drawEpochPicker();
     roundPlan();
   });
@@ -776,6 +787,8 @@
     if (!run) return;
     if (action.dataset.epochAction === 'all') selectedEpochs = new Set(run.epochs);
     if (action.dataset.epochAction === 'none') selectedEpochs.clear();
+    if (action.dataset.epochAction === 'every5') selectedEpochs = new Set(run.epochs.filter(function (epoch) { return epoch % 5 === 0; }));
+    if (action.dataset.epochAction === 'last10') selectedEpochs = new Set(run.epochs.slice(-10));
     if (action.dataset.epochAction === 'range') {
       var minField = els('epoch-picker').querySelector('[data-epoch-min]');
       var maxField = els('epoch-picker').querySelector('[data-epoch-max]');

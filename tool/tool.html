@@ -1157,9 +1157,24 @@
                             <aside class="epoch-finder-sidebar">
                                 <section class="epoch-finder-panel">
                                     <h3>New campaign</h3>
+                                    <nav class="epoch-finder-wizard-progress" aria-label="Campaign setup">
+                                        <span data-epoch-step-label="1">1 · Run</span>
+                                        <span data-epoch-step-label="2">2 · Tests</span>
+                                        <span data-epoch-step-label="3">3 · Rounds</span>
+                                        <span data-epoch-step-label="4">4 · Launch</span>
+                                    </nav>
+                                    <div data-epoch-wizard-step="1">
                                     <label>Training run<select id="epoch-finder-run"><option value="">Loading saved runs…</option></select></label>
                                     <p id="epoch-finder-run-detail" class="epoch-finder-muted"></p>
-                                    <label>Test prompt<textarea id="epoch-finder-prompt" rows="6" placeholder="Use {option|option} wildcards for testable attributes."></textarea></label>
+                                    </div>
+                                    <div data-epoch-wizard-step="2" class="hidden">
+                                        <label>Training concept<input id="epoch-finder-concept" type="text" placeholder="What should this LoRA learn?"></label>
+                                        <button id="epoch-finder-suggest" type="button" class="review-captions-btn">Suggest tests from Set</button>
+                                        <p id="epoch-finder-proposal-status" class="epoch-finder-muted" aria-live="polite">Review and edit proposed attributes before continuing.</p>
+                                        <label>Test prompt<textarea id="epoch-finder-prompt" rows="6" placeholder="Use {option|option} wildcards for testable attributes."></textarea></label>
+                                        <div id="epoch-finder-attributes" class="epoch-finder-attributes"></div>
+                                    </div>
+                                    <div data-epoch-wizard-step="3" class="hidden">
                                     <div class="epoch-finder-fields">
                                         <label>Rounds<input id="epoch-finder-rounds" type="number" min="1" max="4" value="3"></label>
                                         <label>Tests / epoch<input id="epoch-finder-cases" type="number" min="1" max="6" value="2"></label>
@@ -1168,7 +1183,16 @@
                                     <div id="epoch-finder-round-plan" class="epoch-finder-round-plan" aria-label="Round plan"></div>
                                     <p id="epoch-finder-estimate" class="epoch-finder-muted"></p>
                                     <p class="epoch-finder-muted">Model settings come from Test Generations. Vision uses the selected model in the global header.</p>
-                                    <button id="epoch-finder-start" type="button" class="training-btn training-launch-btn">Start Epoch Finder</button>
+                                    </div>
+                                    <div data-epoch-wizard-step="4" class="hidden">
+                                        <strong>Review your campaign</strong>
+                                        <div id="epoch-finder-review" class="epoch-finder-review"></div>
+                                    </div>
+                                    <div class="epoch-finder-wizard-actions">
+                                        <button id="epoch-finder-back" type="button" class="review-captions-btn hidden">Back</button>
+                                        <button id="epoch-finder-next" type="button" class="training-btn training-launch-btn">Next</button>
+                                        <button id="epoch-finder-start" type="button" class="training-btn training-launch-btn hidden">Launch campaign</button>
+                                    </div>
                                 </section>
                                 <section class="epoch-finder-panel">
                                     <div class="epoch-finder-panel-heading"><h3>Campaigns</h3><span id="epoch-finder-count"></span></div>

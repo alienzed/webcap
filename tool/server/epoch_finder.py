@@ -170,6 +170,13 @@ def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings, round_op
             selected["megapixels"] = resolution
         elif "megapixels" in edits:
             raise ValueError("Selected Test model does not support resolution in megapixels.")
+        if "dimensions" in selected:
+            resolution = str(edits.get("dimensions", selected["dimensions"])).strip()
+            if not resolution:
+                raise ValueError("Select a Krea resolution preset for every round.")
+            selected["dimensions"] = resolution
+        elif "dimensions" in edits:
+            raise ValueError("Selected Test model does not support dimension presets.")
         plan.append({"number": index + 1, "epochs": list(epochs) if index == 0 else [],
                      "seeds": seeds, "settings": selected,
                      "keepPercent": retention, "prompt": prompt})
@@ -211,7 +218,11 @@ def create_campaign(folder_path, criteria):
     settings = criteria.get("settings") if isinstance(criteria.get("settings"), dict) else {}
     settings = {key: value for key, value in settings.items() if key in model.settings}
     # Existing Test model owns actual setting normalization and validation.
-    model.normalize_settings(model.load_template(), lambda: 1, dict(settings, seed=1))
+    template = model.load_template()
+    model.normalize_settings(template, lambda: 1, dict(settings, seed=1))
+    plans = _create_plan(selected_epochs, prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans"))
+    for round_plan in plans:
+        model.normalize_settings(template, lambda: 1, dict(round_plan["settings"], seed=1))
     campaign_id = secrets.token_hex(6)
     directory = _directory(folder_path, campaign_id)
     directory.mkdir(parents=True, exist_ok=False)
@@ -221,7 +232,7 @@ def create_campaign(folder_path, criteria):
         "runName": run["runName"], "modelId": model.PROFILE_ID, "stage": run["stage"],
         "name": str(criteria.get("name") or run["runName"]).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
-        "round": 1, "rounds": _create_plan(selected_epochs, prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans")),
+        "round": 1, "rounds": plans,
         "visionModel": vision_model, "vlImageMP": vl_image_mp, "dimensions": dimensions, "concept": str(criteria.get("concept") or "").strip(),
         "units": [], "scores": [], "startedAt": time.time(),
         "finishedAt": None,

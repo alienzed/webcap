@@ -189,7 +189,7 @@ def _staging(folder_path, campaign):
 
 def _stage_epoch(folder_path, campaign, epoch):
     directory = _staging(folder_path, campaign)
-    directory.mkdir(exist_ok=True)
+    directory.mkdir(parents=True, exist_ok=True)
     source = _candidate_safetensors_path(_folder_key(folder_path), campaign["jobId"], epoch)
     target = directory / ("epoch" + str(epoch) + ".safetensors")
     if target.exists():

@@ -197,6 +197,7 @@ function trainingCandidatesComparisonState() {
       pending: {},
       errors: {},
       colors: {},
+      visitedRuns: {},
       nextColor: 1,
       open: false,
       archiveListPending: false,
@@ -250,6 +251,11 @@ function trainingCandidatesComparisonSources() {
       folder: String(job.folder || ''),
       jobId: String(job.id || '')
     };
+  });
+  var visited = trainingCandidatesComparisonState().visitedRuns;
+  Object.keys(visited).forEach(function (key) {
+    var source = visited[key];
+    if (source.jobId !== currentJobId && !runs.some(function (run) { return run.key === key; })) runs.push(source);
   });
   var archives = (Array.isArray(trainingWorkspaceState.archives) ? trainingWorkspaceState.archives : []).filter(function (archive) {
     return archive && !archive.invalid && String(archive.name || '').trim();
@@ -542,7 +548,13 @@ function trainingCandidatesComparisonHtml(payload) {
   }
 
   var legend = curves.map(function (curve) {
-    return '<span><i class="training-candidates-compare-swatch is-active" style="--curve-color:' + escapeHtml(curve.color) + '"></i>' + escapeHtml(curve.label) + '</span>';
+    var source = curve.primary ? null : trainingCandidatesComparisonSourceByKey(curve.key);
+    var label = source && source.type === 'run'
+      ? '<button type="button" class="training-candidates-compare-run-link" data-training-candidate-open-run="' +
+        escapeHtml(source.key) + '" title="View candidates for ' + escapeHtml(source.label) + '">' + escapeHtml(curve.label) + '</button>'
+      : escapeHtml(curve.label);
+    return '<span><i class="training-candidates-compare-swatch is-active" style="--curve-color:' +
+      escapeHtml(curve.color) + '"></i>' + label + '</span>';
   }).join('');
 
   return '<div class="training-candidates-chart-wrap training-candidates-comparison-wrap">' +
@@ -558,6 +570,42 @@ function trainingCandidatesComparisonHtml(payload) {
     '</div></div>';
 }
 
+function trainingCandidatesOpenComparisonRun(key) {
+  var source = trainingCandidatesComparisonSourceByKey(key);
+  if (!source || source.type !== 'run') throw new Error('Comparison target is not a training run: ' + String(key));
+  if (!trainingWorkspaceState.candidatePayload) throw new Error('Current candidate analysis is not loaded.');
+  var comparison = trainingCandidatesComparisonState();
+  var previousId = String(trainingWorkspaceState.candidateJobId || '');
+  var previousKey = 'run:' + previousId;
+  var previousRun = trainingWorkspaceState.candidatePayload.run || {};
+  comparison.visitedRuns[previousKey] = {
+    key: previousKey,
+    type: 'run',
+    label: String(previousRun.runName || previousRun.folder || trainingWorkspaceState.candidateFolder),
+    folder: String(trainingWorkspaceState.candidateFolder || ''),
+    jobId: previousId
+  };
+  var previousLabel = String(previousRun.runName || previousRun.folder ||
+    trainingWorkspaceState.candidateFolder || 'Current run');
+  if (!comparison.curves[previousKey]) {
+    comparison.curves[previousKey] = {
+      label: previousLabel,
+      points: trainingCandidatesComparisonPoints(trainingWorkspaceState.candidatePayload.analysis.epochLossPoints)
+    };
+  }
+  if (comparison.selected.indexOf(previousKey) === -1) comparison.selected.push(previousKey);
+  if (!Object.prototype.hasOwnProperty.call(comparison.colors, previousKey)) {
+    comparison.colors[previousKey] = comparison.nextColor++;
+  }
+  comparison.selected = comparison.selected.filter(function (value) { return value !== source.key; });
+  trainingWorkspaceState.candidateJobId = source.jobId;
+  trainingWorkspaceState.candidateFolder = source.folder;
+  trainingCandidatesClearPinnedDetails();
+  refreshTrainingCandidates().catch(function (err) {
+    reportConsoleError('Training Candidates', 'Could not open comparison run: ' + String(err.message || err));
+  });
+}
+
 function wireTrainingCandidatesComparison() {
   var wrap = document.querySelector('.training-candidates-comparison-wrap');
   if (!wrap) throw new Error('Candidate comparison chart is missing.');
@@ -566,6 +614,12 @@ function wireTrainingCandidatesComparison() {
   trainingCandidatesWireCompareControl(wrap);
   wrap.addEventListener('click', function (event) {
     if (event.target.closest && event.target.closest('.training-candidates-compare-control')) return;
+    var openRun = event.target.closest ? event.target.closest('[data-training-candidate-open-run]') : null;
+    if (openRun) {
+      event.stopPropagation();
+      trainingCandidatesOpenComparisonRun(openRun.getAttribute('data-training-candidate-open-run'));
+      return;
+    }
     var openGenerations = event.target.closest ? event.target.closest('[data-training-candidates-open-generations]') : null;
     if (!openGenerations) return;
     event.stopPropagation();
@@ -1330,8 +1384,8 @@ function syncTrainingCandidatesDisplayControls() {
   var autoRange = trainingWorkspaceState.candidateAutoYRange || {};
   var comparing = trainingCandidatesComparisonActive();
   if (els.algorithm) els.algorithm.disabled = comparing;
-  if (els.smoothing) { els.smoothing.value = String(display.smoothing); els.smoothing.disabled = comparing; }
-  if (els.smoothingNumber) { els.smoothingNumber.value = Number(display.smoothing).toFixed(3); els.smoothingNumber.disabled = comparing; }
+  if (els.smoothing) { els.smoothing.value = String(display.smoothing); els.smoothing.disabled = false; }
+  if (els.smoothingNumber) { els.smoothingNumber.value = Number(display.smoothing).toFixed(3); els.smoothingNumber.disabled = false; }
   if (els.yMin) els.yMin.value = display.yMin === null ? trainingCandidatesRangeInputValue(autoRange.min) : String(display.yMin);
   if (els.yMax) els.yMax.value = display.yMax === null ? trainingCandidatesRangeInputValue(autoRange.max) : String(display.yMax);
 }

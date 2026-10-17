@@ -280,6 +280,7 @@
   }
   var referenceItems = [];
   var referenceIndex = 0;
+  var referenceDraftChoices = {};
   function prepareReferences() {
     var version = ++referenceGeneration;
     referenceItems = dimensions.flatMap(function (d) {
@@ -296,12 +297,14 @@
     })).then(function () {
       if (version !== referenceGeneration) return;
       referenceItems = referenceItems.filter(function (item) { return item.candidates.length; });
+      referenceDraftChoices = {};
       referenceItems.forEach(function (item) {
         var saved = referenceSelections[item.key];
         var valid = item.candidates.some(function (candidate) {
           return saved && candidate.media === saved.media && candidate.group === saved.group && candidate.tag === saved.tag;
         });
         if (!valid) delete referenceSelections[item.key];
+        referenceDraftChoices[item.key] = valid ? item.candidates.findIndex(function (candidate) { return saved.media === candidate.media; }) : 0;
       });
       renderReferenceStep();
     }).catch(error);
@@ -315,13 +318,13 @@
       els('start').disabled = false;
       return;
     }
-    var selected = referenceSelections[item.key];
+    var selected = referenceDraftChoices[item.key] == null ? 0 : referenceDraftChoices[item.key];
     host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' +
       escape(item.attribute) + ' · ' + escape(item.option) + '</strong><span>' +
       (referenceIndex+1) + ' / ' + referenceItems.length + '</span></div>' +
       '<p class="epoch-finder-muted">Suggested using Set tags. Select the image that visibly demonstrates this option.</p>' +
       '<div class="epoch-finder-reference-gallery">' + item.candidates.map(function (candidate,i) {
-        var active = selected && selected.media === candidate.media;
+        var active = selected === i;
         return '<button type="button" class="epoch-finder-reference-tile' + (active ? ' selected' : '') +
           '" data-reference-pick="' + i + '" aria-pressed="' + !!active + '" title="' + escape(candidate.media) +
           ' · ' + escape(candidate.group + ': ' + candidate.tag) + '"><img loading="lazy" src="/caption/media?folder=' +
@@ -335,7 +338,7 @@
   function updateReferenceStatus() {
     var chosen = referenceItems.filter(function (item) { return !!referenceSelections[item.key]; }).length;
     els('reference-choices').textContent = chosen + ' / ' + referenceItems.length + ' references selected';
-    els('start').disabled = false;
+    els('start').disabled = referenceItems.length > 0 && chosen !== referenceItems.length;
   }
   function approvedReferences() {
     return referenceItems.map(function (item) { return referenceSelections[item.key]; }).filter(Boolean);
@@ -824,16 +827,20 @@
     if (pick) {
       var item = referenceItems[referenceIndex];
       var candidate = item.candidates[Number(pick.dataset.referencePick)];
-      referenceSelections[item.key] = {attribute:item.attribute,option:item.option,
-        group:candidate.group,tag:candidate.tag,media:candidate.media};
+      referenceDraftChoices[item.key] = Number(pick.dataset.referencePick);
       renderReferenceStep();
       return;
     }
     var nav = event.target.closest('[data-reference-nav]');
     if (!nav) return;
     if (nav.dataset.referenceNav === 'prev') referenceIndex = Math.max(0,referenceIndex-1);
-    else if (referenceIndex < referenceItems.length-1) referenceIndex++;
-    else return;
+    else {
+      var item = referenceItems[referenceIndex];
+      var candidate = item.candidates[referenceDraftChoices[item.key] == null ? 0 : referenceDraftChoices[item.key]];
+      referenceSelections[item.key] = {attribute:item.attribute,option:item.option,
+        group:candidate.group,tag:candidate.tag,media:candidate.media};
+      if (referenceIndex < referenceItems.length-1) referenceIndex++;
+    }
     renderReferenceStep();
   });
   els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });

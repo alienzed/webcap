@@ -46,3 +46,11 @@ def test_stale_tickets_are_removed_without_restarting_work(monkeypatch):
 def test_invalid_ticket_identity(kind, key):
     with pytest.raises(ValueError):
         workflow_gate.register(kind, key)
+
+
+def test_overnight_epoch_owner_cannot_expire_mid_run():
+    workflow_gate.register("epoch", "overnight")
+    with workflow_gate._LOCK:
+        workflow_gate._TICKETS[0]["touched"] -= workflow_gate._STALE_SECONDS + 3600
+    assert workflow_gate.register("batch", "later")["position"] == 2
+    assert workflow_gate.heartbeat("epoch", "overnight")["state"] == "active"

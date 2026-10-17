@@ -4195,6 +4195,13 @@
     }
   }
 
+  // Stable interface for other Test workflows; presets remain owned by Test Generations.
+  window.getTestGenerationDimensionPresets = function () {
+    var select = el('test-generations-dimensions');
+    if (!select) throw new Error('Test Generations dimension control is unavailable.');
+    return {selected: select.value, options: Array.from(select.options).map(function (option) { return option.value; })};
+  };
+
   function openPane() {
     if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
     var node = pane();

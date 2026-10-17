@@ -55,6 +55,8 @@
 
   // VL assessments belong to Test sessions; scoring remains derived in the UI.
   var testVl = { scope: '', entries: Object.create(null), disabledGroups: new Set(), running: false, token: 0, jobId: '', done: 0, total: 0, question: '', loadedScope: '' };
+  // Session-scoped browser controllers. Every request uses the existing LLM queue.
+  var testVlRuns = Object.create(null);
 
   function testVlScope(status) {
     return String(launchFolder || '') + '|' + String(status && status.session || '');
@@ -62,9 +64,24 @@
 
   function restoreTestVl(status) {
     var scope = testVlScope(status);
-    if (testVl.running || testVl.loadedScope === scope) return;
+    var running = testVlRuns[scope];
+    if (running) {
+      testVl.scope = scope;
+      testVl.loadedScope = scope;
+      testVl.entries = running.entries;
+      testVl.disabledGroups = running.disabledGroups;
+      testVl.running = true;
+      testVl.jobId = running.jobId;
+      testVl.done = running.done;
+      testVl.total = running.total;
+      testVl.question = running.question;
+      return;
+    }
+    if (testVl.loadedScope === scope && !testVl.running) return;
     testVl.loadedScope = scope;
     testVl.scope = scope;
+    testVl.running = false;
+    testVl.jobId = '';
     testVl.entries = Object.create(null);
     testVl.disabledGroups = new Set();
     var saved = status && status.testVision || {};
@@ -75,6 +92,7 @@
       testVl.entries[file] = {
         status: 'done', text: savedEntry.text, question: savedEntry.question,
         modelId: savedEntry.modelId || '', comparison: savedEntry.comparison,
+        elapsedMs: savedEntry.elapsedMs == null ? null : Number(savedEntry.elapsedMs),
         ignoredGroups: new Set(savedEntry.ignoredGroups || [])
       };
     });
@@ -83,41 +101,52 @@
     el('test-generations-vl-filter-options').dataset.groupKey = '';
   }
 
+  function syncVisibleTestVlRun(run) {
+    if (testVlScope(currentStatus) !== run.scope) return;
+    restoreTestVl(currentStatus);
+    syncTestVlCards();
+    var detail = el('test-generations-vl-detail');
+    if (!detail.classList.contains('hidden') && detail.dataset.testVlFile) {
+      showTestVlResult(detail.dataset.testVlFile, true);
+    }
+  }
+
   // Serialize independent checkbox/assessment writes so the last user edit wins.
   var testVlSaveQueue = Promise.resolve();
 
-  function saveTestVl(changes, sessionName) {
+  function saveTestVl(changes, sessionName, folderName) {
     var session = String(sessionName || (currentStatus && currentStatus.session) || '');
+    var folder = String(folderName || launchFolder);
     var save = testVlSaveQueue.then(function () {
-      return request('test_vision_update', Object.assign({ session: session }, changes));
+      return requestForFolder(folder, 'test_vision_update', Object.assign({ session: session }, changes));
     });
     testVlSaveQueue = save.catch(function () {}); // Keep later saves operable after a failed write.
     return save.then(function (payload) {
-      if (prepared && String(prepared.modelId || '') === currentTestModelId()) {
+      if (String(launchFolder) === folder && prepared &&
+          String(prepared.modelId || '') === currentTestModelId()) {
         prepared.candidateVisionScores = payload.candidateVisionScores || {};
         syncTestVlCandidateRows();
       }
+      if (String(launchFolder) === folder && currentSession === session && currentStatus) {
+        currentStatus.testVision = payload.testVision;
+      }
       return payload;
     }).catch(function (err) {
-      showError(err);
+      reportConsoleError('Save Test VL assessment', err);
       throw err;
     });
   }
 
   function stopTestVl() {
-    if (!testVl.running) return;
-    var jobId = testVl.jobId;
-    testVl.token += 1;
-    testVl.running = false;
-    testVl.jobId = '';
-    Object.keys(testVl.entries).forEach(function (file) {
-      var entry = testVl.entries[file];
-      if (entry.status === 'pending' || entry.status === 'running') entry.status = 'stopped';
-    });
+    var run = testVlRuns[testVlScope(currentStatus)];
+    if (!run) return;
+    run.stopped = true;
+    run.queue.length = 0;
+    var jobId = run.jobId;
     if (jobId) cancelCaptionAssistJob(jobId).catch(function (err) {
       reportConsoleError('Test VL cancellation', err);
     });
-    syncTestVlCards();
+    syncVisibleTestVlRun(run);
   }
 
   function testVlQuestion(status) {
@@ -449,90 +478,130 @@
     });
   }
 
-  function runTestVlBatch() {
-    if (testVl.running) { stopTestVl(); return; }
-    var status = currentStatus;
-    var session = String(status.session || '');
+  function queueTestVlForSession(status, selectedResults) {
     var folder = String(launchFolder || '');
-    var results = (Array.isArray(status.results) ? status.results : []).filter(function (r) { return !!resultMediaFile(r); });
-    if (!session || !results.length) return;
-    var token = ++testVl.token;
-    var nextScope = testVlScope(status);
-    if (testVl.scope !== nextScope) testVl.disabledGroups = new Set();
-    testVl.scope = nextScope;
-    // Keep saved assessments visible until each preview has a replacement.
-    el('test-generations-vl-filter-options').dataset.groupKey = '';
-    testVl.running = true;
-    testVl.jobId = '';
-    testVl.done = 0;
-    testVl.total = results.length;
-    testVl.question = testVlQuestion(status);
-    el('test-generations-vl-detail').classList.add('hidden');
-    results.forEach(function (r) {
-      var file = resultMediaFile(r);
-      if (!testVl.entries[file]) testVl.entries[file] = { status: 'pending', question: testVl.question };
-    });
-    syncTestVlCards();
-    loadCaptionVisionCapabilities().then(function () {
-      var model = getCaptionVisionModelId();
-      if (!model) throw new Error('Select an available Vision model.');
-      return results.reduce(function (chain, result) {
-        return chain.then(function () {
-          if (token !== testVl.token) return;
-          var file = resultMediaFile(result);
-          var entry = testVl.entries[file];
-          entry.status = 'running';
-          syncTestVlCards();
-          return askVlForTestPreview(folder, session, file, model, testVl.question, function (jobId) {
-            if (token !== testVl.token) return false;
-            testVl.jobId = jobId;
-          }).then(function (job) {
-            if (token !== testVl.token) return;
-            entry.text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
-            entry.modelId = model;
-            entry.comparison = testVlCompare(entry.text, Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : []);
-            entry.status = 'done';
-            return saveTestVl({ mediaFile: file, assessment: {
-              text: entry.text, question: entry.question, comparison: entry.comparison, modelId: entry.modelId
-            }, ignoredGroups: Array.from(entry.ignoredGroups || []) }, session).then(function () {
-              entry.saveError = '';
-            }, function (err) {
-              // Inference succeeded: keep the observation usable but flag failed persistence.
-              entry.saveError = String(err && err.message ? err.message : err);
-            }).then(function () {
-              if (token !== testVl.token) return;
-              var detail = el('test-generations-vl-detail');
-              if (!detail.classList.contains('hidden') && detail.dataset.testVlFile === file) showTestVlResult(file, true);
-            });
-          }).catch(function (err) {
-            if (token !== testVl.token) return;
-            entry.status = 'error';
-            entry.error = String(err && err.message ? err.message : err);
-            reportConsoleError('Test Generations Ask VL: ' + file, err);
-          }).finally(function () {
-            if (token !== testVl.token) return;
-            testVl.jobId = '';
-            testVl.done += 1;
-            syncTestVlCards();
-          });
-        });
-      }, Promise.resolve());
-    }).catch(function (err) {
-      if (token !== testVl.token) return;
-      reportConsoleError('Test Generations Ask VL', err);
-      Object.keys(testVl.entries).forEach(function (file) {
-        var entry = testVl.entries[file];
-        if (entry.status !== 'pending') return;
-        entry.status = 'error';
-        entry.error = String(err && err.message ? err.message : err);
+    var session = String(status && status.session || '');
+    if (!folder || !session) throw new Error('Choose a Test session to evaluate.');
+    var results = selectedResults.filter(function (item) { return !!resultMediaFile(item); });
+    if (!results.length) throw new Error('No generated previews are available for VL.');
+    var scope = folder + '|' + session;
+    var run = testVlRuns[scope];
+    if (!run) {
+      var saved = status.testVision || {};
+      var entries = Object.create(null);
+      Object.keys(saved.byMedia || {}).forEach(function (file) {
+        var e = saved.byMedia[file];
+        entries[file] = { status: 'done', text: e.text, question: e.question,
+          modelId: e.modelId || '', comparison: e.comparison,
+          elapsedMs: e.elapsedMs == null ? null : Number(e.elapsedMs),
+          ignoredGroups: new Set(e.ignoredGroups || []) };
       });
-    }).finally(function () {
-      if (token !== testVl.token) return;
-      testVl.running = false;
-      // If a different session is displayed, restore its saved VL presentation now.
-      restoreTestVl(currentStatus);
-      syncTestVlCards();
+      run = { folder: folder, session: session, scope: scope, entries: entries,
+        disabledGroups: new Set(saved.disabledGroups || []), queue: [], pending: new Set(),
+        question: testVlQuestion(status), groups: (status.wildcardEvaluationGroups || []).map(function (g) {
+          return Object.assign({}, g, { options: (g.options || []).slice() });
+        }), model: '', jobId: '', done: 0, total: 0, stopped: false };
+      testVlRuns[scope] = run;
+      loadCaptionVisionCapabilities().then(function () {
+        run.model = getCaptionVisionModelId();
+        if (!run.model) throw new Error('Select an available Vision model.');
+        return processTestVlSession(run);
+      }).catch(function (err) {
+        reportConsoleError('Test Generations Ask VL · ' + run.session, err);
+        run.queue.forEach(function (task) {
+          run.entries[task.file].status = 'error';
+          run.entries[task.file].error = String(err.message || err);
+        });
+      }).finally(function () {
+        delete testVlRuns[scope];
+        if (testVl.scope === scope) {
+          testVl.loadedScope = '';
+          restoreTestVl(currentStatus);
+          syncTestVlCards();
+        }
+      });
+    }
+    results.forEach(function (result) {
+      var file = resultMediaFile(result);
+      if (run.pending.has(file)) return;
+      run.pending.add(file);
+      var previous = run.entries[file];
+      run.entries[file] = Object.assign({}, previous || {}, {
+        status: 'pending', question: run.question,
+        ignoredGroups: new Set(previous && previous.ignoredGroups || [])
+      });
+      run.queue.push({ file: file, previous: previous });
+      run.total += 1;
     });
+    if (testVlScope(currentStatus) === scope) el('test-generations-vl-detail').classList.add('hidden');
+    syncVisibleTestVlRun(run);
+  }
+
+  function processTestVlSession(run) {
+    function next() {
+      if (run.stopped || !run.queue.length) return Promise.resolve();
+      var task = run.queue.shift();
+      var file = task.file;
+      var entry = run.entries[file];
+      entry.startedAt = Date.now();
+      entry.elapsedMs = null;
+      entry.status = 'running';
+      syncVisibleTestVlRun(run);
+      return askVlForTestPreview(run.folder, run.session, file, run.model, run.question, function (jobId) {
+        run.jobId = jobId;
+        return !run.stopped;
+      }).then(function (job) {
+        if (run.stopped) return;
+        var elapsed = Date.now() - entry.startedAt;
+        var answer = String(job && job.result && job.result.text || '').trim() || '(empty response)';
+        var comparison = testVlCompare(answer, run.groups);
+        return saveTestVl({ mediaFile: file, assessment: {
+          text: answer, question: run.question, comparison: comparison,
+          modelId: run.model, elapsedMs: elapsed
+        }, ignoredGroups: Array.from(entry.ignoredGroups) }, run.session, run.folder).then(function () {
+          entry.text = answer;
+          entry.modelId = run.model;
+          entry.comparison = comparison;
+          entry.elapsedMs = elapsed;
+          entry.status = 'done';
+          entry.saveError = '';
+        });
+      }).catch(function (err) {
+        if (!run.stopped) {
+          reportConsoleError('Test Generations Ask VL · ' + run.session + ' · ' + file, err);
+          if (task.previous && task.previous.status === 'done') {
+            run.entries[file] = Object.assign({}, task.previous, { saveError: String(err.message || err) });
+          } else {
+            entry.status = 'error';
+            entry.error = String(err.message || err);
+            entry.elapsedMs = Date.now() - entry.startedAt;
+          }
+        }
+      }).finally(function () {
+        run.pending.delete(file);
+        run.jobId = '';
+        run.done += 1;
+        syncVisibleTestVlRun(run);
+      }).then(next);
+    }
+    return next();
+  }
+
+  function runTestVlBatch() {
+    if (testVlRuns[testVlScope(currentStatus)]) { stopTestVl(); return; }
+    var status = currentStatus;
+    var results = (Array.isArray(status.results) ? status.results : []).filter(function (r) {
+      return !!resultMediaFile(r);
+    });
+    if (!results.length) throw new Error('No Test previews available for Ask VL.');
+    queueTestVlForSession(status, results);
+  }
+
+  function recheckTestVlItem() {
+    var file = String(el('test-generations-vl-detail').dataset.testVlFile || '');
+    var result = (currentStatus.results || []).find(function (item) { return resultMediaFile(item) === file; });
+    if (!result) throw new Error('The selected Test preview is no longer available.');
+    queueTestVlForSession(currentStatus, [result]);
   }
 
   function el(id) { return document.getElementById(id); }
@@ -4009,7 +4078,6 @@
       clearTimeout(pollTimer);
       pollTimer = null;
     }
-    stopTestVl();
     refreshActivityButton();
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
@@ -4072,7 +4140,6 @@
     if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
     var node = pane();
     var frame = el('app-frame');
-    stopTestVl();
     var summary = el('test-generations-summary');
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
@@ -4800,7 +4867,8 @@
         openTestBenchForSetFolder(testBatch.folder);
       }
     };
-    el('test-generations-ask-vl').onclick = runTestVlBatch;
+    el('test-generations-ask-vl').onclick = function () { try { runTestVlBatch(); } catch (err) { showError(err); } };
+    el('test-generations-vl-recheck').onclick = function () { try { recheckTestVlItem(); } catch (err) { showError(err); } };
     el('test-generations-vl-filter-options').onchange = function (event) {
       var input = event.target.closest('[data-test-vl-group]');
       if (!input) return;

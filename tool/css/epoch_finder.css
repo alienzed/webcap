@@ -92,3 +92,17 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-epoch-tools input{width:60px;padding:4px}
 .epoch-finder-epoch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:5px;max-height:190px;overflow:auto}
 .epoch-finder-epoch-grid label{display:flex;align-items:center;gap:5px;padding:4px 6px;border:1px solid var(--border-color,#384653);border-radius:5px;font-size:11px;margin:0}
+
+/* Compact game-like live results cockpit below the campaign progress header. */
+.epoch-finder-live-layout{display:grid;grid-template-columns:minmax(220px,32%) minmax(0,1fr);gap:14px;align-items:start}
+.epoch-finder-live-ranks,.epoch-finder-live-media{min-width:0;border:1px solid var(--border-color,#384653);border-radius:10px;background:var(--panel-bg,#1b2530);padding:12px}
+.epoch-finder-live-ranks .epoch-finder-panel-heading,.epoch-finder-live-media .epoch-finder-panel-heading{margin:0 0 12px}
+.epoch-finder-live-ranks .epoch-finder-panel-heading{align-items:flex-start;flex-direction:column;gap:3px}
+.epoch-finder-leaderboard{max-height:550px;overflow:auto;align-content:start}
+.epoch-finder-ranking-row{grid-template-columns:27px minmax(55px,1fr) 54px;gap:7px;padding:8px}
+.epoch-finder-ranking-row .epoch-finder-score-track{grid-column:1/-1;grid-row:2}
+.epoch-finder-ranking-row .rank{font-size:12px}
+.epoch-finder-ranking-row .percent{font-size:12px}
+.epoch-finder-frames{grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px;align-content:start}
+.epoch-finder-frame img{aspect-ratio:4/3}
+@media(max-width:1050px){.epoch-finder-live-layout{grid-template-columns:1fr}.epoch-finder-leaderboard{max-height:240px}.epoch-finder-frames{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}}

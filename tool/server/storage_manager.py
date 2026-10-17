@@ -23,7 +23,7 @@ from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
-MEASURABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy", "director_assessment", "epoch_finder"}
+MEASURABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy", "director_assessment", "epoch_finder", "epoch_finder_staging"}
 PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy", "director_assessment", "epoch_finder"}
 ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
 ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
@@ -583,6 +583,14 @@ def _epoch_finder_items(cache):
             meta={"frames": record["frames"], "retainedSessions": record["retainedSessions"]},
             cache=cache,
         ))
+        if record["stagingPath"] is not None:
+            items.append(_item(
+                "epoch_finder_staging", record["id"], record["name"] + " · temporary checkpoints",
+                record["stagingPath"], folder=record["folder"], kind="Campaign Test checkpoint copies",
+                status="temporary", purgeable=False,
+                protected_reason="Managed by Epoch Finder lifecycle; delete the campaign instead.",
+                cache=cache,
+            ))
     return items
 
 
@@ -1079,7 +1087,8 @@ def overview(folder=""):
         "archive": _archive_items(cache),
         "director_assessment": _director_assessment_items(cache),
         "tests": _test_items(cache, folder),
-        "epoch_finder": _epoch_finder_items(cache),
+        "epoch_finder": [item for item in _epoch_finder_items(cache) if item["area"] == "epoch_finder"],
+        "epoch_finder_staging": [item for item in _epoch_finder_items(cache) if item["area"] == "epoch_finder_staging"],
         "staged": collect("staged", lambda: _staged_items(cache, folder)),
         "generate": collect("generate", lambda: _generate_items(cache)),
         "storyboard": _storyboard_items(cache),
@@ -1094,6 +1103,7 @@ def overview(folder=""):
         ),
         _category("archive", "Training Archives", groups["archive"]),
         _category("epoch_finder", "Epoch Finder Campaigns", groups["epoch_finder"]),
+        _category("epoch_finder_staging", "Epoch Finder Temporary Checkpoints", groups["epoch_finder_staging"]),
         _category("director_assessment", "Director Assessments", groups["director_assessment"], note="Raw diagnostic evidence only; learned Director model results are preserved when this is deleted."),
         _category(
             "tests", "Tests", groups["tests"], complete=scan_complete,
@@ -1439,6 +1449,8 @@ def resolve_item(area, item_id, folder=""):
         return _resolve_test(folder, item_id)
     if area == "epoch_finder":
         return epoch_finder.storage_campaign_path(folder, item_id)
+    if area == "epoch_finder_staging":
+        return epoch_finder.storage_staging_path(folder, item_id)
     if area == "staged":
         return _resolve_staged(folder, item_id)[0]
     if area == "generate":

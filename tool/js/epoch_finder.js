@@ -473,6 +473,16 @@
     var evaluated = units.filter(function (u) { return u.assessment !== null; }).length;
     els('render-count').textContent = frames + ' / ' + total;
     els('vl-count').textContent = evaluated + ' / ' + total;
+    ['rvn','dino'].forEach(function (kind) {
+      var enabled = (campaign.referenceEvaluation || {})[kind];
+      els(kind + '-progress').classList.toggle('hidden', !enabled);
+      if (!enabled) return;
+      var key = kind === 'rvn' ? 'referenceComplete' : 'dinoComplete';
+      var errorKey = kind === 'rvn' ? 'referenceError' : 'dinoError';
+      var completed = units.filter(function (u) { return u[key]; }).length;
+      var errors = units.filter(function (u) { return u[errorKey]; }).length;
+      els(kind + '-count').textContent = completed + ' / ' + total + (errors ? ' · ' + errors + ' failed' : '');
+    });
     els('field-count').textContent = plan.epochs.length + ' epochs';
     els('render-bar').style.width = (total ? frames / total * 100 : 0) + '%';
     els('vl-bar').style.width = (total ? evaluated / total * 100 : 0) + '%';

@@ -595,9 +595,9 @@
       });
     }).finally(function () {
       if (token !== testVl.token) return;
-      testVl.running = false;
       clearInterval(testVlElapsedTimer);
       testVlElapsedTimer = null;
+      testVl.running = false;
       // If a different session is displayed, restore its saved VL presentation now.
       restoreTestVl(currentStatus);
       syncTestVlCards();

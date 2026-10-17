@@ -13,6 +13,8 @@
   var selectedEpochs = new Set();
   var selectedRunId = "";
   var proposalBusy = false;
+  var copyingEpoch = false;
+  var currentCampaign = null;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -457,6 +459,7 @@
     lastFrameKey = key;
     var heading = inspectedEpoch == null ? '<strong>Recent retained frames</strong>' :
       '<strong>Epoch ' + inspectedEpoch + ' · All recorded tests</strong> ' +
+      '<button type="button" data-copy-to-test' + (copyingEpoch ? ' disabled' : '') + '>Copy to Test</button> ' +
       '<button type="button" data-inspect-reset>Show all epochs</button>';
     var shown = inspectedEpoch == null ? units.filter(function (u) { return !!u.frame; }).slice(-40).reverse() :
       units.slice().sort(function (a,b) { return a.round - b.round || a.case - b.case; });
@@ -483,6 +486,7 @@
       }).join('');
   }
   function render(campaign) {
+    currentCampaign = campaign;
     els('empty').classList.add('hidden');
     els('active').classList.remove('hidden');
     els('phase').textContent = String(campaign.phase || campaign.status).toUpperCase();
@@ -599,7 +603,39 @@
     lastFrameKey = null;
     refreshStatus().catch(error);
   };
+  function copyInspectedEpoch() {
+    if (copyingEpoch || !currentCampaign || inspectedEpoch == null) return;
+    var campaign = currentCampaign;
+    var epoch = inspectedEpoch;
+    if (!campaign.rounds[0].epochs.includes(epoch)) throw new Error('Epoch is not part of this campaign.');
+    copyingEpoch = true;
+    clearError();
+    lastFrameKey = null;
+    gallery(campaign);
+    fetch('/fs/training_candidates/copy_to_test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({folder: currentFolder, jobId: campaign.jobId, epoch: epoch})
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload.ok) throw new Error(payload.error || 'Copy to Test failed.');
+        return payload;
+      });
+    }).then(function () {
+      if (activeCampaign !== campaign.id) return;
+      // Reopen the ordinary Test surface to refresh its staged-candidate inventory.
+      showMode('tests');
+      if (typeof window.openTestBenchForCurrentFolder !== 'function') {
+        throw new Error('Test Generations navigation is unavailable.');
+      }
+      window.openTestBenchForCurrentFolder();
+    }).catch(error).finally(function () {
+      copyingEpoch = false;
+      lastFrameKey = null;
+      if (currentCampaign) gallery(currentCampaign);
+    });
+  }
   els('frames').onclick = function (event) {
+    if (event.target.closest('[data-copy-to-test]')) { copyInspectedEpoch(); return; }
     if (!event.target.closest('[data-inspect-reset]')) return;
     inspectedEpoch = null;
     lastFrameKey = null;

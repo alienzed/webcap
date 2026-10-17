@@ -257,7 +257,8 @@
       '</p><p>' + parts.map(function (item) {
         return escape(item.label) + ' (' + escape(item.role) + ': ' + item.options.length + ' values)';
       }).join(' · ') + '</p><p>' + roundSummary.map(escape).join('<br>') +
-      '</p><p>' + escape(els('estimate').textContent) + '</p>' +
+      '</p><p>VL inference image: ' + escape(els('vl-image-mp').value) + ' MP (original evidence retained)</p>' +
+      '<p>' + escape(els('estimate').textContent) + '</p>' +
       '<p class="epoch-finder-muted">Only Launch starts inference. Your approved prompt, roles, rounds, model and seeds are frozen for this campaign.</p>';
   }
   function showStep(value) {
@@ -569,6 +570,7 @@
       visionModel: window.getCaptionVisionModelId(), rounds: Number(els('rounds').value),
       cases: Number(els('cases').value), keepPercent: Number(els('retention').value),
       roundPlans: getRoundPlans(), concept: els("concept").value.trim(), dimensions: recordDimensions(),
+      vlImageMP: Number(els('vl-image-mp').value),
       epochs: chosenEpochs()};
     els('start').disabled = true;
     api('start', criteria).then(function (response) {

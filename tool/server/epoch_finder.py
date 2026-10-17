@@ -679,7 +679,8 @@ def _run(folder_path, campaign_id, control):
     from . import workflow_gate
     admitted = False
     try:
-        _update(folder_path, campaign, phase="Queued", detail="Waiting for workflow FIFO turn.")
+        _update(folder_path, campaign, status="running", phase="Queued",
+                detail="Waiting for workflow FIFO turn.")
         if not workflow_gate.wait_for_epoch(campaign_id, control):
             _check_signal(folder_path, campaign, control)
             return

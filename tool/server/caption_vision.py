@@ -253,6 +253,29 @@ def vision_media_data_url(media_path):
     return "data:" + mime_by_suffix[suffix] + ";base64," + base64.b64encode(media_path.read_bytes()).decode("ascii")
 
 
+def vision_resized_image_data_url(media_path, max_pixels=450000):
+    """Encode a resized JPEG for VL without modifying the original evidence frame."""
+    import io
+    import math
+    from PIL import Image, ImageOps
+
+    pixels = int(max_pixels)
+    if not 100000 <= pixels <= 1600000:
+        raise ValueError("VL image pixel budget must be between 0.1 and 1.6 MP.")
+    with Image.open(media_path) as image:
+        image = ImageOps.exif_transpose(image)
+        width, height = image.size
+        if width * height > pixels:
+            scale = math.sqrt(pixels / (width * height))
+            image = image.resize((max(1, int(width * scale)), max(1, int(height * scale))), Image.Resampling.LANCZOS)
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        with io.BytesIO() as stream:
+            image.save(stream, format="JPEG", quality=85, optimize=True)
+            encoded = base64.b64encode(stream.getvalue()).decode("ascii")
+    return "data:image/jpeg;base64," + encoded
+
+
 def build_caption_vision_messages(caption, groups, media_relative_path):
     normalized_groups = _normalize_groups(groups)
     payload = {

@@ -83,3 +83,13 @@ def test_reference_eligibility_only_primary_not_leakage_or_vary():
     assert not _requires_reference("leakage")
     assert not _requires_reference("vary")
     assert not _requires_reference(None)
+
+
+def test_exact_tag_can_differ_from_descriptive_prompt_option(tmp_path, monkeypatch):
+    _dataset(tmp_path, monkeypatch, {"a.png": {"BT Shape": ["micro triangle"]}})
+    # "micro triangle simple string straps" is a prompt phrase, not a saved tag.
+    assert epoch_reference.find_reference_candidates(
+        "set", "BT Shape", "micro triangle simple string straps") == []
+    reference = epoch_reference.verified_reference("set", "BT Shape", "micro triangle", "a.png")
+    assert reference["term"] == "micro triangle"
+    assert reference["media"] == "a.png"

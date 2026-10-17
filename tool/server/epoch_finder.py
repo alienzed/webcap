@@ -356,21 +356,53 @@ def _evaluate_unit(folder_path, campaign, unit):
 
 
 def _rank(campaign, round_number):
-    rows = []
-    for epoch in campaign["rounds"][round_number - 1]["epochs"]:
+    """Rank *every* source epoch using durable evidence through this round."""
+    initial = campaign["rounds"][0]["epochs"]
+    by_epoch = {}
+    for epoch in initial:
         comparisons = [
             group for unit in campaign["units"]
-            if unit["round"] == round_number and unit["epoch"] == epoch and unit["assessment"]
-            for group in unit["assessment"]["comparison"]
+            if unit["round"] <= round_number and unit["epoch"] == epoch
+            and unit.get("assessment")
+            for group in unit["assessment"].get("comparison", [])
         ]
-        matches = sum(group["result"] == "match" for group in comparisons)
-        mismatches = sum(group["result"] == "mismatch" for group in comparisons)
+        matches = sum(group.get("result") == "match" for group in comparisons)
+        mismatches = sum(group.get("result") == "mismatch" for group in comparisons)
         total = matches + mismatches
-        rows.append({"epoch": epoch, "matches": matches, "mismatches": mismatches,
-                     "unclear": len(comparisons) - total,
-                     "count": total, "score": matches / total if total else None})
-    rows.sort(key=lambda item: (item["score"] is None, -(item["score"] or 0), -item["count"], item["epoch"]))
+        rounds_tested = sorted({
+            unit["round"] for unit in campaign["units"]
+            if unit["round"] <= round_number and unit["epoch"] == epoch and unit.get("assessment")
+        })
+        by_epoch[epoch] = {
+            "epoch": epoch, "matches": matches, "mismatches": mismatches,
+            "unclear": len(comparisons) - total, "count": total,
+            "score": matches / total if total else None,
+            "roundsTested": rounds_tested,
+            "active": epoch in campaign["rounds"][round_number - 1]["epochs"],
+        }
+    rows = list(by_epoch.values())
+    rows.sort(key=lambda item: (item["score"] is None, -(item["score"] or 0), item["epoch"]))
     return rows
+
+
+def _select_next_epochs(ranking, active_epochs, keep_percent):
+    """Cut the current field by relative rank, then allow historical re-entry.
+
+    Earlier sidelined epochs have no new tests, but can clear a cutoff that
+    shifted downward as the active field gathered more evidence.
+    """
+    active = [row for row in ranking if row["epoch"] in active_epochs and row["score"] is not None]
+    active.sort(key=lambda row: (-row["score"], row["epoch"]))
+    if not active:
+        raise RuntimeError("No scoreable wildcard attributes in the active field.")
+    retain = max(1, math.ceil(len(active) * keep_percent / 100))
+    boundary = active[retain - 1]["score"]
+    next_epochs = sorted(
+        row["epoch"] for row in ranking
+        if row["score"] is not None and row["score"] >= boundary
+    )
+    reentered = sorted(set(next_epochs) - set(active_epochs))
+    return next_epochs, reentered, boundary
 
 
 def _run(folder_path, campaign_id, control):
@@ -418,16 +450,20 @@ def _run(folder_path, campaign_id, control):
                 _evaluate_unit(folder_path, campaign, unit)
             ranking = _rank(campaign, number)
             campaign["scores"] = ranking
+            plan["ranking"] = ranking
             _update(folder_path, campaign, phase="Ranking", detail="Round " + str(number) + " ranked.")
             if number < len(campaign["rounds"]):
-                scored = [row for row in ranking if row["score"] is not None]
-                if not scored:
-                    raise RuntimeError("No scoreable wildcard attributes. Use a prompt with testable wildcard choices.")
-                retain = max(1, math.ceil(len(scored) * plan["keepPercent"] / 100))
-                boundary = scored[retain - 1]["score"]
-                survivors = [row["epoch"] for row in scored if row["score"] >= boundary]
+                survivors, reentered, boundary = _select_next_epochs(
+                    ranking, epochs, plan["keepPercent"],
+                )
+                plan["cutoff"] = boundary
+                plan["reentered"] = reentered
                 campaign["rounds"][number]["epochs"] = survivors
-                _update(folder_path, campaign, detail=str(len(survivors)) + " epochs advance to round " + str(number + 1) + ".")
+                _update(
+                    folder_path, campaign,
+                    detail=str(len(survivors)) + " epochs advance to round " + str(number + 1) +
+                    (" · " + str(len(reentered)) + " re-entered" if reentered else "") + ".",
+                )
             campaign["round"] = number + 1
             _save(folder_path, campaign)
             if not _check_signal(folder_path, campaign, control):

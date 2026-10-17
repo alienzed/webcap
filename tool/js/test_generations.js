@@ -155,6 +155,23 @@
   }
 
   // Session-only scoring: neither the VL observation nor counting overrides are persisted.
+  // A distinct VL option can earn partial credit only when it adds/removes
+  // whole words from the other option. Shared stray words never earn credit.
+  function testVlPartialCredit(expected, observed) {
+    var a = String(expected || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+    var b = String(observed || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+    if (!a.length || !b.length || a.join(' ') === 'absent' || b.join(' ') === 'absent') return 0;
+    var shorter = a.length < b.length ? a : b;
+    var longer = a.length < b.length ? b : a;
+    if (shorter.length === longer.length) return 0;
+    for (var i = 0; i <= longer.length - shorter.length; i++) {
+      if (shorter.every(function (word, j) { return longer[i + j] === word; })) {
+        return shorter.length / longer.length;
+      }
+    }
+    return 0;
+  }
+
   function testVlScore(comparison, ignoredGroups) {
     var score = { matches: 0, mismatches: 0, unclear: 0, excluded: 0, count: 0 };
     (comparison || []).forEach(function (group) {
@@ -162,19 +179,26 @@
         score.excluded += 1;
       } else if (group.result === 'match') {
         score.matches += 1;
+        score.count += 1;
       } else if (group.result === 'mismatch') {
-        score.mismatches += 1;
+        var partial = testVlPartialCredit(group.expectedText, group.selectedText);
+        score.matches += partial;
+        score.mismatches += 1 - partial;
+        score.count += 1;
       } else {
         score.unclear += 1;
       }
     });
-    score.count = score.matches + score.mismatches;
     return score;
   }
 
-  function testVlScoreText(prefix, score) {
+  function testVlCreditText(value) {
+    return String(Math.round(value * 100) / 100);
+  }
+
+    function testVlScoreText(prefix, score) {
     return prefix + (score.count ? (' ' + Math.round(100 * score.matches / score.count) +
-      '% (' + score.matches + '/' + score.count + ')') : ' — (0 counted)');
+      '% (' + testVlCreditText(score.matches) + '/' + score.count + ')) : ' — (0 counted)');
   }
 
   function testVlCandidateScores(results) {
@@ -274,7 +298,7 @@
       var score = testVlScore(item.comparison, item.ignoredGroups);
       button.textContent = score.count ? 'VL ' + Math.round(100 * score.matches / score.count) + '%' : 'VL —';
       if (item.saveError) button.textContent += ' !';
-      button.title = (score.count ? (score.matches + '/' + score.count + ' counted attributes agree') : 'No counted attributes') +
+      button.title = (score.count ? (testVlCreditText(score.matches) + '/' + score.count + ' credit across counted attributes') : 'No counted attributes') +
         (score.unclear ? ' · ' + score.unclear + ' unclear' : '') +
         (item.modelId ? ' · Model: ' + item.modelId : '') +
         (item.saveError ? ' · Not saved: ' + item.saveError : '') + ' · Open VL assessment';
@@ -353,7 +377,7 @@
         : '';
       label.classList.toggle('hidden', !label.textContent);
       label.title = score && score.count
-        ? score.matches + '/' + score.count + ' matched · ' + score.previews + ' preview(s), ' + score.count + ' counted attributes'
+        ? testVlCreditText(score.matches) + '/' + score.count + ' credit ·  + score.previews + ' preview(s), ' + score.count + ' counted attributes'
         : '';
     });
     sortStagedCandidateRows();

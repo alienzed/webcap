@@ -4817,7 +4817,14 @@
     el('test-generations-batch-modal').classList.add('hidden');
     el('test-generations-batch-modal').setAttribute('aria-hidden', 'true');
     renderTestBatch();
-    loadCaptionVisionCapabilities().then(function () {
+    var gateKey = batch.activityId + ':' + Date.now() + ':' + Math.random().toString(36).slice(2);
+    window.webcapWorkflowGate.acquire('batch', gateKey, function () { return batch.active; },
+      function (message) {
+        if (batch.active) { batch.phase = 'Queued'; batch.detail = message; renderTestBatch(); }
+      }).then(function (lease) {
+        batch.workflowLease = lease;
+        return loadCaptionVisionCapabilities();
+      }).then(function () {
       testBatchCheck(batch);
       batch.vlModel = getCaptionVisionModelId();
       if (!batch.vlModel) throw new Error('Select an available Vision model.');
@@ -4873,6 +4880,10 @@
       batch.active = false;
       batch.phase = 'Failed';
       renderTestBatch();
+    }).finally(function () {
+      if (batch.workflowLease) batch.workflowLease.release().catch(function (err) {
+        reportConsoleError('Batch workflow admission release', err);
+      });
     });
   }
 

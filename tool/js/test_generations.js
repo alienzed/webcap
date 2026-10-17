@@ -667,12 +667,14 @@
         Object.keys(saved[file] || {}).sort().forEach(function (key) {
           var value = saved[file][key];
           if (value.method !== el('test-generations-evaluator').value) return;
-          var verdict = value.method === 'dino' ? Number(value.similarity).toFixed(3) :
-            (value.verdict || 'UNCLEAR') + (value.selected == null ? '' : ' · choice ' + value.selected);
+          var verdict = value.method === 'dino' ? 'DINO cosine ' + Number(value.similarity).toFixed(3) :
+            (value.verdict || 'UNCLEAR') + (value.selectedText ? ' · ' + value.selectedText : '');
           rows.push('<div class="test-reference-result"><strong>' + escapeHtml(file) +
             '</strong><span>' + escapeHtml(value.group + ' · ' + value.option) +
             '</span><b>' + escapeHtml(verdict) + '</b><small>' +
-            escapeHtml(value.reference) + '</small></div>');
+            escapeHtml(value.reference) + '</small>' +
+            (value.response ? '<small>' + escapeHtml(value.response).slice(0, 600) + '</small>' : '') +
+            '</div>');
         });
       });
       host.innerHTML = rows.length ? '<h4>Saved comparisons</h4>' + rows.join('') :
@@ -787,6 +789,7 @@
     var button = el('test-generations-reference-run'), status = el('test-generations-reference-status');
     referenceCompare.busy = true;
     button.disabled = true;
+    el('test-generations-evaluator').disabled = true;
     try {
       for (var i=0; i<previews.length; i++) {
         if (referenceCompare.folder !== folder || referenceCompare.session !== session)
@@ -809,7 +812,8 @@
           await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:{
             method:'rvn',group:group,option:option,reference:reference,
             attribute:attribute.label || attribute.id,
-            selected:selected,verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',
+            selected:selected,selectedText:selected == null ? '' : attribute.options[selected - 1],
+            verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',
             response:raw,modelId:getCaptionVisionModelId(),at:Date.now()/1000
           }});
         }
@@ -822,6 +826,7 @@
     } finally {
       referenceCompare.busy = false;
       button.disabled = false;
+      el('test-generations-evaluator').disabled = false;
       if (referenceCompare.folder !== folder || referenceCompare.session !== session)
         status.textContent += ' (original session)';
     }

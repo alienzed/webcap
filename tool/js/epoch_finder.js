@@ -12,6 +12,7 @@
   var inspectedEpoch = null;
   var inspectedFrame = 0;
   var campaignState = null;
+  var listRequestVersion = 0;
   var selectedEpochs = new Set();
   var selectedRunId = "";
   var proposalBusy = false;
@@ -582,7 +583,11 @@
   }
   function refresh() {
     if (!currentFolder || mode !== 'finder') return;
+    var folderAtRequest = currentFolder, modelAtRequest = String(window.getWorkingModelProfileId() || '');
+    var requestVersion = ++listRequestVersion;
     api('list').then(function (response) {
+      if (requestVersion !== listRequestVersion || folderAtRequest !== currentFolder ||
+          modelAtRequest !== String(window.getWorkingModelProfileId() || '') || mode !== 'finder') return;
       runs = response.runs || [];
       campaigns = response.campaigns || [];
       timingProfiles = response.timings || {};
@@ -621,6 +626,7 @@
     inspectedEpoch = null;
     lastFrameKey = null;
     var changed = currentFolder !== folder;
+    if (changed) listRequestVersion++;
     currentFolder = folder;
     if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); }
     if (mode === 'finder') refresh();
@@ -711,7 +717,12 @@
     var button = event.target.closest('[data-id]');
     if (button) { activeCampaign = button.dataset.id; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; list(); refreshStatus().catch(error); }
   };
-  window.addEventListener('webcap:working-model-changed', function () { if (mode === 'finder') { activeCampaign = ''; inspectedEpoch = null; refresh(); } });
+  window.addEventListener('webcap:working-model-changed', function () {
+    listRequestVersion++;
+    activeCampaign = ''; inspectedEpoch = null; campaignState = null;
+    els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
+    if (mode === 'finder') refresh();
+  });
   timer = setInterval(function () {
     if (mode === 'finder' && activeCampaign && !els('screen').classList.contains('hidden')) refreshStatus().catch(error);
   }, 2500);

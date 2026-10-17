@@ -280,7 +280,7 @@
   }
   function prepareReferences() {
     var version = ++referenceGeneration;
-    var required = dimensions.flatMap(function (d) { return d.role === 'vary' ? [] : d.options.map(function (v) { return {attribute:d.label,option:v,key:JSON.stringify([d.label,v])}; }); });
+    var required = dimensions.flatMap(function (d) { return d.role !== 'primary' ? [] : d.options.map(function (v) { return {attribute:d.label,option:v,key:JSON.stringify([d.label,v])}; }); });
     els('reference-options').innerHTML = '<p class="epoch-finder-muted">Finding exact tagged references…</p>';
     els('reference-choices').textContent = required.length + ' required choices';
     return api('reference_vocabulary').then(function (result) {
@@ -332,7 +332,7 @@
   function approvedReferences() {
     var rows = Array.from(els('reference-options').querySelectorAll('[data-reference-index]'));
     if (!rows.length || rows.some(function (r) { return !referenceSelections[r.dataset.referenceKey]?.media; }))
-      throw new Error('Choose a training reference for every scored wildcard choice.');
+      throw new Error('Choose a training reference for every Primary wildcard choice.');
     return rows.map(function (r) { return referenceSelections[r.dataset.referenceKey]; });
   }
   function showStep(value) {
@@ -610,7 +610,7 @@
     var src = unit.frame && !unit.framePruned ? '/fs/epoch_finder/frame?folder=' +
       encodeURIComponent(currentFolder) + '&campaign=' + encodeURIComponent(campaign.id) +
       '&frame=' + encodeURIComponent(unit.frame) : '';
-    var plannedReferences = (unit.groups || []).filter(function (g) { return g.role !== 'vary' && g.expected != null; })
+    var plannedReferences = (unit.groups || []).filter(function (g) { return g.role === 'primary' && g.expected != null; })
       .map(function (g) { return (campaign.referencePlan || []).find(function (r) {
         return r.attribute === g.label && r.option === g.options[g.expected - 1];
       }); }).filter(Boolean).map(function (r) { return r.media; });

@@ -121,11 +121,45 @@ DINOv2 model and dependency presence is checked **before launch**. Reference-emb
 - Recalculate runtime projections once RVN/DINO timings exist. Do not introduce unvalidated rank changes.
 
 
-## Next integration scope (October 17)
 
-- **DINO install:** User has placed `config.json`, `preprocessor_config.json`, and `model.safetensors` together in `W:/models/text_encoders/dinov2-base`. Model snapshot layout now matches the loader. Verify configured filesystem models path and optional Python packages in the actual WebCap environment.
-- **Campaign FIFO:** Epoch Finder now accepts multiple campaigns; the active coordinator dispatches the next waiting campaign when finished. Existing Test/inference/LLM lanes are unchanged. Waiting queue is process-memory only; after server restart, interrupted campaigns need explicit Resume and must not auto-launch.
-- **Test Generations menu (next phase):** Retain original Ask VL behavior and make the toolbar action selectable among original VL, paired RVN, and DINO. Before implementation, trace the current Test Generations VL batch/result ownership and ensure new methods use the same persisted reference evidence and existing queue APIs. Do not add nonfunctional menu choices.
-- **Cross-workflow coordinator (separate bounded phase):** Inspect Batch and First Cut lifecycle and evidence persistence. Add workflow-level FIFO coordination only after proving existing per-surface ordering/ownership, while preserving low-level inference/LLM FIFO and cancellation semantics. Avoid opportunistic multi-lane scheduler rewrites.
+## October 17 extensions: on-demand Test comparisons and workflow FIFO
 
-**Unverified:** No live WebCap Python imports/model loading, test suite execution, or UI browser validation have run on the user's machine. Do not merge until these and restart/queue integration tests pass.
+**Implemented on the draft branch; live runtime/visual tests remain required.**
+
+### Test Generations evaluator dropdown
+
+- The existing **Ask VL — Original** action and its `test_vision` scoring record remain unchanged.
+- **VL Compare — Training Reference** and **DINOv2 Compare — Training Reference** are selectable methods beside the original action.
+- A modal selects one wildcard attribute, its exact-tag Set group, its expected option, and a **user-approved full-image** training reference. It compares the selected feature against every saved preview in the current Test session.
+- Videos are represented by their first extracted frame; image media use the full image. No implicit rerender or user-independent automatic scan.
+- RVN uses existing asynchronous caption/vision LLM queue, keeps controlled option selection and fidelity verdict, and stores the raw response. DINO uses the local optional CPU encoder and reports cosine similarity, not a fidelity percentage.
+- Results are durable per Test session in a **separate `test_reference.json`**, under the existing Test session owner; its `reference-embeddings` subfolder caches reference embeddings. Neither alters legacy `test_vision` scoring or candidate ranks.
+- Browser-run on-demand comparison sequences may stop on tab refresh; each **completed comparison** is already saved and available after reopening. The original Ask VL/Batch controller is not replaced.
+
+### Shared, high-level workflow admission (without low-level queue changes)
+
+- `tool/server/workflow_gate.py` grants **FIFO admission** to Epoch Finder, Batch and First Cut; it does not own GPU operations, execute tasks, override ComfyUI, or change any existing inference or LLM queue ordering.
+- `tool/js/workflow_gate.js` allows the **existing browser-owned** Batch and First Cut controllers to wait for admission and release when their coordinated work ends. Existing First Cut/Batch internal sequencing remains intact.
+- Epoch Finder obtains a gate ticket in the server worker before queuing any generated tests; server-owned Epoch tickets never expire during long campaigns and are released in a `finally` block.
+- Browser workflow tickets heartbeat and are removed if abandoned after 180 seconds. Losing a ticket stops further workflow submission rather than silently running out of order. Cancelling a **queued** First Cut does not reset the unrelated LLM queue.
+- Epoch Finder's own multiple-campaign FIFO remains in place; its waiting campaigns have explicit pause/stop/remove options, and never auto-resume after process restart. The admission gate is **process-local**, not a new durable execution queue; on server restart all affected workflow owners must reconcile/explicitly resume.
+- The FIFO ordering is of **workflow admission**, not every GPU operation or user action. Independently initiated LLM/inference jobs still obey the established lower-level queue rules. Second and subsequent browser-local First Cuts are registered with the shared gate when their own local First Cut turn begins, not when first queued in the Storyboard UI.
+
+### Safety/UX audit of added scope
+
+1. **Choose run/evaluator:** Original Ask VL works unchanged; new menu methods visibly require a reference.
+2. **Choose reference:** Display exact eligible scoped tags and their image candidates; show a full-image preview, avoid fabricating missing mappings, require explicit launch.
+3. **Queue:** Batch, First Cut, Epoch Finder all enter one admission gate; while waiting they show queued state. Submission begins only when admitted.
+4. **Execute:** Existing lower-level queues still serialize inference and LLM requests. The new reference VL enters the existing LLM queue with the original Test session context.
+5. **Review:** Reference evidence never overwrites legacy VL percentages; show RVN feature verdict/options/reason or raw DINO cosine separately.
+6. **Cancel/interruption:** Queued workflows can be stopped without cancelling another workflow's LLM request. Stop submitting upon lost admission; completed Test comparisons and accepted Test sessions remain saved.
+7. **Restart:** Never silently resume. Backend Epoch campaigns become explicitly resumable after restart; browser Batch/First Cut coordination is not durable and must be reinitiated.
+
+### Required machine-side gate before merging
+
+- Run `pytest tests/test_epoch_reference.py tests/test_test_reference.py tests/test_workflow_gate.py tests/test_epoch_finder_queue.py tests/test_epoch_finder.py` in **WebCap's venv**, alongside repo's normal JS tests.
+- Verify normal original Ask VL scoring/rerun, then RVN and DINO on one real tagged Test session with both image and video previews.
+- Run at least two Epoch campaigns and a Batch + First Cut admission scenario, including cancellation during waiting, browser refresh, server restart and visible progress. Validate there is no surprise model/inference job preemption.
+- Verify DINOv2 Base from the real local snapshot and installed torch/transformers dependencies; measure its CPU throughput.
+- Check developer console, global Console, and storage audit, and confirm no new hidden Set-root state or localStorage.
+- No merge before those runtime checks pass. Repository JavaScript syntax checks were performed using JS parsing; Python tests and live UI runs have **not** been executed in this tool environment.

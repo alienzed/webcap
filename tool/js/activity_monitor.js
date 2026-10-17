@@ -366,10 +366,14 @@
       // The Training runner remains "starting" until its first step/epoch.
       // Before that, preserve an indeterminate bar rather than stale epoch data.
       if (item.status === 'starting') {
-        var launching = stage === 'launch';
-        snapshot.phase = (launching ? 'Starting' : 'Loading model') +
-          (stage ? ' · ' + stage : '');
-        if (!launching) snapshot.progressLabel = 'Waiting for first training step';
+        if (stage === 'launch') {
+          snapshot.phase = 'Starting';
+        } else if (stage === 'caching') {
+          snapshot.phase = 'Caching';
+        } else {
+          snapshot.phase = 'Loading model' + (stage && stage !== 'starting' ? ' · ' + stage : '');
+          snapshot.progressLabel = 'Waiting for first training step';
+        }
       } else {
         snapshot.phase = (item.status === 'stopping' ? 'Stopping' : 'Training') +
           (stage ? ' · ' + stage : '');

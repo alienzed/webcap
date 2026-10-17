@@ -275,6 +275,10 @@ def _wait_for_session(folder_path, campaign, unit):
 
 def _render_unit(folder_path, campaign, plan, unit, staged):
     if unit["frame"]:
+        if unit["session"] and not _session_still_active(folder_path, unit["session"]):
+            test_bench.delete_session(folder_path, unit["session"])
+            unit["session"] = ""
+            _save(folder_path, campaign)
         return
     if not unit["session"]:
         settings = dict(plan["settings"], seed=plan["seeds"][unit["case"]])
@@ -283,6 +287,7 @@ def _render_unit(folder_path, campaign, plan, unit, staged):
             name="Epoch Finder " + str(unit["epoch"]) + " / " + str(unit["case"] + 1),
             selected_files=[staged], candidate_strengths={Path(staged).name: 1.0},
             include_base=False, model_id=campaign["modelId"],
+            campaign_staging="epoch-finder-" + campaign["id"],
         )
         unit["session"] = answer["job"]["id"]
         _save(folder_path, campaign)

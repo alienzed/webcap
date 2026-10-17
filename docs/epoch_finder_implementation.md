@@ -88,3 +88,15 @@ Epoch Finder is a separate tab *inside Test Generations*, not a new GPU executio
 **Scoring:** Primary=2, Leakage=1, Vary-only=0. The existing VL question requests the visible choice for every attribute, but score aggregation weights primary/leakage only. Uncertain judgments remain unscored. The mapping is by wildcard group ID and approved *ordered option vocabulary*, never loose word matching. Changing the wildcard text after proposal invalidates/synchronizes the editor and is checked again server-side.
 
 **Safety boundaries:** No new queue, new GPU arbitration, automatic LLM calls, background scans, or changes to the original Wildcard Builder's analysis contract. Draft PR remains unmerged pending tests and real-machine campaigns.
+
+## Locked cleanup and Storage Manager policy
+
+- Original training checkpoints are never modified. Campaigns use temporary copies in the configured Test staging location.
+- Video and source Test sessions remain until their corresponding VL judgment has been durably written. After that, the campaign deletes only its own completed Test session and original media.
+- If capture or VL fails, preserve available Test media, PNG and error evidence. Interrupted/paused campaigns also keep unfinished media. Deleting a campaign explicitly removes its remaining owned sessions when no active work references them.
+- On campaign completion, keep PNGs of all final-round epochs across tested rounds, along with any unscored/failed frames. Prune scored PNGs belonging to nonfinal epochs after preserving scores, prompts, and provenance in campaign JSON.
+- Store campaign JSON and retained frames in the central Test Set workspace. Storage Manager exposes Epoch Finder campaigns as measurable, user-purgeable records (unless active). Staged checkpoint subdirectories have a distinct measurable, non-purgeable inventory entry.
+- Storage Manager campaign deletion delegates to the campaign owner rather than deleting arbitrary files. Ordinary Test sessions and manually staged candidates are never removed by campaign cleanup.
+- Cleanup is lifecycle-driven, not startup- or timeout-driven. Startup interruption does not trigger automatic resume.
+
+Real-machine confirmation of media accounting, VL completion, restart and purge remains required before merging.

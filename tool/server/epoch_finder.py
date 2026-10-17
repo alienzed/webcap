@@ -931,8 +931,8 @@ def command(folder_path, operation, criteria=None):
         from .epoch_reference import reference_vocabulary
         return {"vocabulary": reference_vocabulary(_folder_key(folder_path))}
     if operation == "reference_suggestions":
-        from .epoch_reference import suggest_reference_options
-        return {"references": suggest_reference_options(_folder_key(folder_path), criteria.get("option"))}
+        from .epoch_reference import find_reference_candidates
+        return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("tag"))}
     if operation == "reference_candidates":
         from .epoch_reference import find_reference_candidates
         return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("term"))}

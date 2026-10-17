@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import config as app_config
 from . import epoch_test_bench as test_bench
+from .epoch_finder_plan import normalize_dimensions
 from .caption_vision import build_vision_question_messages, vision_media_data_url
 from .llm_runner import enqueue as enqueue_llm, job_status as llm_job_status
 from .test_models import get_test_model_for_staging_key
@@ -142,8 +143,7 @@ def create_campaign(folder_path, criteria):
     model = get_test_model_for_staging_key(run["stage"])
     model.load_template()
     prompt = str(criteria.get("prompt") or "").strip()
-    if not prompt:
-        raise ValueError("Epoch Finder requires a test prompt.")
+    dimensions = normalize_dimensions(prompt, criteria.get("dimensions"))
     vision_model = str(criteria.get("visionModel") or "").strip()
     from .storyboard_llm_runtime import list_vision_models
     if vision_model not in {str(item.get("id") or "") for item in list_vision_models()}:
@@ -167,7 +167,8 @@ def create_campaign(folder_path, criteria):
         "name": str(criteria.get("name") or run["runName"]).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
         "round": 1, "rounds": _create_plan(run["epochs"], prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans")),
-        "visionModel": vision_model, "units": [], "scores": [], "startedAt": time.time(),
+        "visionModel": vision_model, "dimensions": dimensions, "concept": str(criteria.get("concept") or "").strip(),
+        "units": [], "scores": [], "startedAt": time.time(),
         "finishedAt": None,
     }
     _save(folder_path, campaign)
@@ -272,6 +273,7 @@ def _compare(answer, groups):
                   "mismatch" if selected is not None or re.fullmatch(r"none(?: of these)?", value, re.I) else
                   "unclear")
         comparison.append({"id": group["id"], "label": group["label"],
+                           "weight": float(group.get("weight", 1)),
                            "expected": expected, "selected": selected, "result": result})
     return comparison
 
@@ -333,6 +335,10 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
         temp.unlink(missing_ok=True)
     unit["frame"] = file_name
     unit["groups"] = status.get("wildcardEvaluationGroups") or []
+    for group, dimension in zip(unit["groups"], campaign["dimensions"]):
+        if group.get("options") != dimension["options"]:
+            raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
+        group.update({"label": dimension["label"], "role": dimension["role"], "weight": dimension["weight"]})
     unit["question"] = _question(unit["groups"])
     unit["prompt"] = status.get("resolvedPrompt") or status.get("prompt") or ""
     _save(folder_path, campaign)
@@ -397,8 +403,8 @@ def _rank(campaign, round_number):
             and unit.get("assessment")
             for group in unit["assessment"].get("comparison", [])
         ]
-        matches = sum(group.get("result") == "match" for group in comparisons)
-        mismatches = sum(group.get("result") == "mismatch" for group in comparisons)
+        matches = sum(float(group.get("weight", 1)) for group in comparisons if group.get("result") == "match")
+        mismatches = sum(float(group.get("weight", 1)) for group in comparisons if group.get("result") == "mismatch")
         total = matches + mismatches
         rounds_tested = sorted({
             unit["round"] for unit in campaign["units"]

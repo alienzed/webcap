@@ -2213,7 +2213,14 @@
     var gateKey = 'firstcut:' + storyId + ':' + action.startedAt + ':' + Math.random().toString(36).slice(2);
     window.webcapWorkflowGate.acquire('firstcut', gateKey,
       function () { return storyState.storyAction === action && !action.cancelled; },
-      function (message) { if (!action.cancelled) updateStoryAction(action, 'Queued', message); }
+      function (message) { if (!action.cancelled) updateStoryAction(action, 'Queued', message); },
+      function (message) {
+        if (action.cancelled || storyState.storyAction !== action) return;
+        action.cancelled = true;
+        action.detail = message;
+        reportError(new Error(message));
+        renderStoryAction();
+      }
     ).then(function (lease) {
       action.workflowLease = lease;
       requireStoryAction(action);

@@ -98,7 +98,7 @@
       var scan = parseGroup(start + 1);
       cursor = scan.end;
       var options = Array.from(new Set(node.alternatives.flatMap(expand).map(function (v) {
-        return v.trim().replace(/\\s+/g, ' ');
+        return v.trim().replace(/\s+/g, ' ');
       })));
       if (options.length < 2) throw new Error('Every wildcard needs at least two distinct resolved values.');
       groups.push({ start: start, end: cursor, options: options,

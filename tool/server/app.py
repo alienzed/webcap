@@ -53,6 +53,7 @@ from .epoch_test_bench import (
     supported_models as test_generations_supported_models,
     browse_keep_lora_destination as test_generations_browse_keep_lora_destination,
 )
+from .epoch_finder import command as epoch_finder_command, frame_path as epoch_finder_frame_path
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
@@ -2143,6 +2144,33 @@ def test_generations_activity_route():
         return jsonify({"ok": True, **test_generations_activity_snapshot(folder_path)})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/epoch_finder", methods=["POST"])
+def epoch_finder_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        folder_path = safe_join_fs_root(str(data.get("folder") or "").strip())
+        operation = str(data.get("operation") or "").strip()
+        return jsonify({"ok": True, **epoch_finder_command(folder_path, operation, data.get("criteria"))})
+    except FileNotFoundError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except Exception as exc:
+        app.logger.exception("EPOCH FINDER FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/epoch_finder/frame", methods=["GET"])
+def epoch_finder_frame_route():
+    try:
+        folder_path = safe_join_fs_root(str(request.args.get("folder") or "").strip())
+        media_path = epoch_finder_frame_path(
+            folder_path, str(request.args.get("campaign") or ""),
+            str(request.args.get("frame") or ""),
+        )
+        return send_from_directory(str(media_path.parent), media_path.name)
+    except (ValueError, FileNotFoundError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
 
 
 @app.route("/fs/test_generations", methods=["POST"])

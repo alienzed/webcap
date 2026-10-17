@@ -528,11 +528,15 @@
     if (sort === 'epoch') ranking.sort(function (a,b) { return a.epoch-b.epoch; });
     if (sort === 'count') ranking.sort(function (a,b) { return (b.count || 0)-(a.count || 0) || (b.score || 0)-(a.score || 0); });
     els('ranking').innerHTML = ranking.length ? ranking.map(function (entry, index) {
+      var observed = (campaign.units || []).filter(function (u) { return u.epoch === entry.epoch && u.assessment; });
+      var extra = (campaign.referenceEvaluation || {});
+      var evidence = (extra.rvn ? ' · RVN ' + observed.filter(function (u) { return u.referenceComplete; }).length + '/' + observed.length : '') +
+        (extra.dino ? ' · DINO ' + observed.filter(function (u) { return u.dinoComplete; }).length + '/' + observed.length : '');
       return '<button type="button" class="epoch-finder-ranking-row" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch"><span class="rank">#' + (index + 1) +
         '</span><span class="epoch">Epoch ' + entry.epoch + (entry.active === false ? ' · sidelined' : '') +
         '</span><span class="epoch-finder-score-track"><i style="width:' +
         Math.round((entry.score || 0) * 100) + '%"></i></span><span class="percent">' +
-        (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span><small>' + (entry.count || 0) + ' weighted observations</small></button>';
+        (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span><small>' + (entry.count || 0) + ' weighted observations' + escape(evidence) + '</small></button>';
     }).join('') : '<p class="epoch-finder-muted">Waiting for VL judgments.</p>';
   }
   function gallery(campaign) {

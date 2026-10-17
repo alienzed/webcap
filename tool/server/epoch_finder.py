@@ -212,6 +212,31 @@ def create_campaign(folder_path, criteria):
     settings = {key: value for key, value in settings.items() if key in model.settings}
     # Existing Test model owns actual setting normalization and validation.
     model.normalize_settings(model.load_template(), lambda: 1, dict(settings, seed=1))
+    from .epoch_reference import verified_reference
+    reference_choices = criteria.get("referencePlan")
+    if not isinstance(reference_choices, list):
+        raise ValueError("Approve a training reference for every scored wildcard option.")
+    approved = {}
+    for entry in reference_choices:
+        if not isinstance(entry, dict):
+            raise ValueError("Invalid reference selection.")
+        key = (str(entry.get("attribute") or ""), str(entry.get("option") or ""))
+        if key in approved:
+            raise ValueError("Duplicate approved reference.")
+        approved[key] = entry
+    required = {(dimension["label"], option) for dimension in dimensions
+                if dimension["role"] != "vary" for option in dimension["options"]}
+    if set(approved) != required:
+        raise ValueError("Every scored wildcard choice must have exactly one approved training reference.")
+    references = []
+    for (attribute, option), entry in sorted(approved.items()):
+        group = str(entry.get("group") or "")
+        media = str(entry.get("media") or "")
+        reference = verified_reference(folder, group, option, media)
+        references.append({"attribute": attribute, "option": option, "group": group, **reference})
+    evaluation = criteria.get("referenceEvaluation")
+    if not isinstance(evaluation, dict) or any(type(evaluation.get(k)) is not bool for k in ("rvn", "dino")):
+        raise ValueError("Select reference evaluation mechanisms explicitly.")
     campaign_id = secrets.token_hex(6)
     directory = _directory(folder_path, campaign_id)
     directory.mkdir(parents=True, exist_ok=False)
@@ -222,7 +247,8 @@ def create_campaign(folder_path, criteria):
         "name": str(criteria.get("name") or run["runName"]).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
         "round": 1, "rounds": _create_plan(selected_epochs, prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans")),
-        "visionModel": vision_model, "vlImageMP": vl_image_mp, "dimensions": dimensions, "concept": str(criteria.get("concept") or "").strip(),
+        "visionModel": vision_model, "vlImageMP": vl_image_mp, "dimensions": dimensions,
+        "referencePlan": references, "referenceEvaluation": {"rvn": evaluation["rvn"], "dino": evaluation["dino"]}, "concept": str(criteria.get("concept") or "").strip(),
         "units": [], "scores": [], "startedAt": time.time(),
         "finishedAt": None,
     }
@@ -709,6 +735,9 @@ def command(folder_path, operation, criteria=None):
     criteria = criteria if isinstance(criteria, dict) else {}
     if operation == "list":
         return list_campaigns(folder_path)
+    if operation == "reference_vocabulary":
+        from .epoch_reference import reference_vocabulary
+        return {"vocabulary": reference_vocabulary(folder_path)}
     if operation == "reference_candidates":
         from .epoch_reference import find_reference_candidates
         return {"references": find_reference_candidates(folder_path, criteria.get("group"), criteria.get("term"))}

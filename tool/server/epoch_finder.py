@@ -13,7 +13,7 @@ from pathlib import Path
 from . import config as app_config
 from . import epoch_test_bench as test_bench
 from .epoch_finder_plan import normalize_dimensions
-from .caption_vision import build_vision_question_messages, vision_media_data_url
+from .caption_vision import build_vision_question_messages, vision_resized_image_data_url
 from .llm_runner import enqueue as enqueue_llm, job_status as llm_job_status
 from .test_models import get_test_model_for_staging_key
 from .training_history import all_history_payload
@@ -197,6 +197,9 @@ def create_campaign(folder_path, criteria):
     prompt = str(criteria.get("prompt") or "").strip()
     dimensions = normalize_dimensions(prompt, criteria.get("dimensions"))
     vision_model = str(criteria.get("visionModel") or "").strip()
+    vl_image_mp = float(criteria.get("vlImageMP", 0.45))
+    if not math.isfinite(vl_image_mp) or not 0.1 <= vl_image_mp <= 1.6:
+        raise ValueError("VL image size must be between 0.1 and 1.6 MP.")
     from .storyboard_llm_runtime import list_vision_models
     if vision_model not in {str(item.get("id") or "") for item in list_vision_models()}:
         raise ValueError("Select an available Vision model.")
@@ -219,7 +222,7 @@ def create_campaign(folder_path, criteria):
         "name": str(criteria.get("name") or run["runName"]).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
         "round": 1, "rounds": _create_plan(selected_epochs, prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans")),
-        "visionModel": vision_model, "dimensions": dimensions, "concept": str(criteria.get("concept") or "").strip(),
+        "visionModel": vision_model, "vlImageMP": vl_image_mp, "dimensions": dimensions, "concept": str(criteria.get("concept") or "").strip(),
         "units": [], "scores": [], "startedAt": time.time(),
         "finishedAt": None,
     }
@@ -440,7 +443,7 @@ def _evaluate_unit(folder_path, campaign, unit):
     vision_started = time.monotonic()
     job = enqueue_llm("caption", campaign["visionModel"], {
         "operation": "vision_question",
-        "messages": build_vision_question_messages(unit["question"], vision_media_data_url(frame))
+        "messages": build_vision_question_messages(unit["question"], vision_resized_image_data_url(frame, int(campaign.get("vlImageMP", 0.45) * 1000000)))
     }, label="Epoch Finder Ask VL")
     job_id = str(job.get("jobId") or job.get("id") or "")
     if not job_id:

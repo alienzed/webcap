@@ -36,6 +36,16 @@ def _model_directory():
     raise RuntimeError("DINOv2 full Hugging Face snapshot (config, processor and weights) not found under " + str(root))
 
 
+def preflight():
+    """Check offline model and optional dependencies without loading weights."""
+    import importlib.util
+    directory = _model_directory()
+    for dependency in ("torch", "transformers", "safetensors"):
+        if importlib.util.find_spec(dependency) is None:
+            raise RuntimeError("DINOv2 requires " + dependency + " in WebCap's Python environment.")
+    return directory
+
+
 def _encoder():
     global _MODEL, _PROCESSOR, _MODEL_DIR
     directory = _model_directory()
@@ -54,8 +64,14 @@ def _encoder():
 def _fingerprint(path, directory):
     import os
     stat = path.stat()
+    weight = directory / "model.safetensors"
+    if not weight.is_file():
+        weight = directory / "pytorch_model.bin"
+    weight_stat = weight.stat()
+    processor_stat = (directory / "preprocessor_config.json").stat()
     return hashlib.sha256(json.dumps(
-        [str(path.resolve()), stat.st_size, stat.st_mtime_ns, str(directory.resolve())],
+        [str(path.resolve()), stat.st_size, stat.st_mtime_ns, str(directory.resolve()),
+         weight_stat.st_size, weight_stat.st_mtime_ns, processor_stat.st_mtime_ns],
         separators=(",", ":")).encode()).hexdigest()
 
 

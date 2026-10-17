@@ -203,3 +203,40 @@ def test_wizard_cumulative_score_uses_primary_and_leakage_weights():
     ranked = epoch_finder._rank(campaign, 1)
     assert ranked[0]["score"] == pytest.approx(2 / 3)
     assert ranked[1]["score"] == pytest.approx(1 / 3)
+
+
+def test_retire_media_only_after_durable_vl(tmp_path, monkeypatch):
+    deleted = []
+    saves = []
+    monkeypatch.setattr(epoch_finder.test_bench, "delete_session", lambda folder, session: deleted.append(session))
+    monkeypatch.setattr(epoch_finder, "_save", lambda folder, campaign: saves.append(campaign["units"][0]["session"]))
+    unit = {"session": "source-video", "assessment": None}
+    campaign = {"units": [unit]}
+    epoch_finder._retire_scored_session(tmp_path, campaign, unit)
+    assert deleted == []
+    assert unit["session"] == "source-video"
+    unit["assessment"] = {"comparison": []}
+    epoch_finder._retire_scored_session(tmp_path, campaign, unit)
+    assert deleted == ["source-video"]
+    assert unit["session"] == "" and saves == [""]
+
+
+def test_prune_keeps_finalists_and_unscored_failure_frames(tmp_path, monkeypatch):
+    directory = tmp_path / "campaign"
+    frames = directory / "frames"
+    frames.mkdir(parents=True)
+    for name in ("a.png", "b.png", "c.png"):
+        (frames / name).write_bytes(b"frame")
+    monkeypatch.setattr(epoch_finder, "_directory", lambda folder, campaign_id: directory)
+    monkeypatch.setattr(epoch_finder, "_save", lambda folder, campaign: None)
+    units = [
+        {"epoch": 1, "frame": "a.png", "assessment": {"comparison": []}},
+        {"epoch": 2, "frame": "b.png", "assessment": {"comparison": []}},
+        {"epoch": 3, "frame": "c.png", "assessment": None, "error": "VL failed"},
+    ]
+    campaign = {"id": "abcdef123456", "rounds": [{"epochs": [1, 2, 3]}, {"epochs": [2]}], "units": units}
+    epoch_finder._prune_screening_frames(tmp_path, campaign)
+    assert not (frames / "a.png").exists()
+    assert (frames / "b.png").exists() and (frames / "c.png").exists()
+    assert units[0]["frame"] == "" and units[0]["framePruned"] is True
+    assert units[1]["frame"] == "b.png" and units[2]["frame"] == "c.png"

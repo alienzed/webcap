@@ -177,8 +177,10 @@ def create_campaign(folder_path, criteria):
 
 
 def _staging(folder_path, campaign):
-    _, run = _candidate_run_snapshot(_folder_key(folder_path), campaign["jobId"])
-    base = _candidate_test_directory_for_run(run, create_missing=True)
+    # Saved campaigns must remain manageable even after training history is
+    # cleared. Resolve the known Test model's configured staging root directly.
+    model = get_test_model_for_staging_key(campaign["stage"])
+    base = test_bench._test_directory(folder_path, model)
     directory = base / ("epoch-finder-" + campaign["id"])
     if directory.is_symlink():
         raise RuntimeError("Epoch Finder staging folder is a symlink.")
@@ -486,6 +488,7 @@ def _run(folder_path, campaign_id, control):
                     _unit(campaign, number, epoch, case)
                     for case in range(len(plan["seeds"]))
                     if not _unit(campaign, number, epoch, case)["frame"]
+                    and not _unit(campaign, number, epoch, case).get("error")
                 ]
                 if pending:
                     if not _check_signal(folder_path, campaign, control):

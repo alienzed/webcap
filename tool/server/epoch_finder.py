@@ -500,8 +500,10 @@ def _run(folder_path, campaign_id, control):
             _save(folder_path, campaign)
             if not _check_signal(folder_path, campaign, control):
                 return
+        failed = sum(bool(unit.get("error")) for unit in campaign["units"])
         _update(folder_path, campaign, status="complete", phase="Complete",
-                detail="Evaluation finished. Review the ranked epochs.", finishedAt=time.time())
+                detail="Evaluation finished." + (" " + str(failed) + " failed observations; review Console." if failed else " Review the ranked epochs."),
+                finishedAt=time.time())
     except Exception as exc:
         _update(folder_path, campaign, status="failed", phase="Failed", detail=str(exc))
         raise
@@ -513,11 +515,13 @@ def _run(folder_path, campaign_id, control):
             unit for unit in campaign["units"] if unit.get("session")
             and _session_still_active(folder_path, unit["session"])
         ]
-        if not pending:
-            _clean_staging(folder_path, campaign)
-        with _worker_lock:
-            _workers.pop(campaign_id, None)
-            _controls.pop(campaign_id, None)
+        try:
+            if not pending:
+                _clean_staging(folder_path, campaign)
+        finally:
+            with _worker_lock:
+                _workers.pop(campaign_id, None)
+                _controls.pop(campaign_id, None)
 
 
 def _session_still_active(folder_path, session_name):
@@ -609,8 +613,10 @@ def command(folder_path, operation, criteria=None):
         return {"campaign": status(folder_path, campaign_id)}
     if operation == "delete":
         campaign = status(folder_path, campaign_id)
-        if campaign["status"] == "running":
-            raise ValueError("Stop the campaign before deleting it.")
+        with _worker_lock:
+            worker = _workers.get(campaign_id)
+        if worker is not None and worker.is_alive():
+            raise ValueError("Wait for the campaign worker to finish before deleting it.")
         if any(unit.get("session") and _session_still_active(folder_path, unit["session"]) for unit in campaign["units"]):
             raise RuntimeError("Campaign still has active Test work.")
         _clean_staging(folder_path, campaign)

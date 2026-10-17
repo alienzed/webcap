@@ -154,7 +154,7 @@
     });
   }
 
-  // Session-only scoring: neither the VL observation nor counting overrides are persisted.
+  // Score existing selected VL alternatives without changing VL prompts or saved comparisons.
   // A distinct VL option can earn partial credit only when it adds/removes
   // whole words from the other option. Shared stray words never earn credit.
   function testVlPartialCredit(expected, observed) {
@@ -198,9 +198,9 @@
     return String(Math.round(value * 100) / 100);
   }
 
-    function testVlScoreText(prefix, score) {
+  function testVlScoreText(prefix, score) {
     return prefix + (score.count ? (' ' + Math.round(100 * score.matches / score.count) +
-      '% (' + testVlCreditText(score.matches) + '/' + score.count + ')) : ' — (0 counted)');
+      '% (' + testVlCreditText(score.matches) + '/' + score.count + ')') : ' — (0 counted)');
   }
 
   function testVlCandidateScores(results) {
@@ -379,7 +379,7 @@
         : '';
       label.classList.toggle('hidden', !label.textContent);
       label.title = score && score.count
-        ? testVlCreditText(score.matches) + '/' + score.count + ' credit ·  + score.previews + ' preview(s), ' + score.count + ' counted attributes'
+        ? testVlCreditText(score.matches) + '/' + score.count + ' credit · ' + score.previews + ' preview(s), ' + score.count + ' counted attributes'
         : '';
     });
     sortStagedCandidateRows();

@@ -514,7 +514,9 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
         if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
             raise ValueError("Training reference changed after campaign approval.")
         reference = folder_path / assigned["media"]
-        question = group["label"] + " — expected " + expected + ". Available choices: " + ", ".join(group["options"])
+        question = (group["label"] + " — training reference demonstrates " + expected + ". "
+                    "Select the visible option in B from: " +
+                    "; ".join(str(index + 1) + "=" + option for index, option in enumerate(group["options"])))
         messages = build_reference_comparison_messages(
             question,
             vision_resized_image_data_url(reference, int(campaign.get("vlImageMP", .45) * 1000000)),
@@ -533,11 +535,15 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
                 if result["status"] != "completed":
                     raise RuntimeError("Reference VL failed: " + str(result.get("error") or result["status"]))
                 answer = str((result.get("result") or {}).get("text") or "").strip()
-                verdict = answer.splitlines()[0].strip().upper() if answer else ""
+                option_line = next((line for line in answer.splitlines() if re.match(r"^OPTION\s*:", line, re.I)), "")
+                verdict_line = next((line for line in answer.splitlines() if re.match(r"^VERDICT\s*:", line, re.I)), "")
+                option_value = option_line.partition(":")[2].strip()
+                selected = int(option_value) if option_value.isdigit() and 1 <= int(option_value) <= len(group["options"]) else None
+                verdict = verdict_line.partition(":")[2].strip().upper()
                 if verdict not in {"MATCH", "PARTIAL", "MISMATCH", "UNCLEAR"}:
                     verdict = "UNCLEAR"
                 outcomes.append({"groupId": group["id"], "label": group["label"], "option": expected,
-                                 "reference": assigned["media"], "verdict": verdict,
+                                 "reference": assigned["media"], "selected": selected, "verdict": verdict,
                                  "response": answer, "modelId": campaign["visionModel"],
                                  "elapsedSeconds": round(time.monotonic() - started, 2)})
                 unit["referenceAssessments"] = outcomes

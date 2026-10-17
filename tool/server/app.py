@@ -2236,14 +2236,17 @@ def epoch_finder_propose_route():
         data = request.get_json(silent=True) or {}
         folder = str(data.get("folder") or "").strip()
         safe_join_fs_root(folder)
+        from .epoch_reference import training_image_members
+        job_id = str(data.get("jobId") or "").strip()
+        trained_images = training_image_members(folder, job_id)
         captions = [
             str(load_caption_text(folder, name).get("caption") or "").strip()
-            for name in list_media_files(folder)
+            for name in list_media_files(folder) if name in trained_images
         ]
         contract = epoch_finder_build_proposal(
             captions, set_name=Path(folder).name,
             focus=data.get("focus"), vocabulary=data.get("vocabulary"),
-            reference_vocabulary=epoch_reference_vocabulary(folder),
+            reference_vocabulary=epoch_reference_vocabulary(folder, job_id),
         )
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(), contract,

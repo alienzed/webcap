@@ -1,5 +1,7 @@
 var workingContextState = {
-  modelProfileId: 'wan22_t2v'
+  modelProfileId: 'wan22_t2v',
+  selectionVersion: 0,
+  saveQueue: Promise.resolve()
 };
 
 function getWorkingModelProfileId() {
@@ -36,9 +38,53 @@ function syncWorkingModelProfile(profiles) {
   return workingContextState.modelProfileId;
 }
 
+function persistWorkingModelProfile(profileId) {
+  // Serialize rapid changes; only explicit user selections write settings.
+  workingContextState.saveQueue = workingContextState.saveQueue.catch(function () {}).then(function () {
+    return fetch('/app/config/working_model_profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profileId: profileId })
+    }).then(function (response) {
+      if (!response.ok) throw new Error('Could not save Base Model preference (' + response.status + ').');
+    });
+  }).catch(function (err) {
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Base Model preference', err);
+    else console.error('[Base Model preference]', err);
+  });
+}
+
+function restoreWorkingModelProfile() {
+  var startedAtVersion = workingContextState.selectionVersion;
+  fetch('/app/config').then(function (response) {
+    if (!response.ok) throw new Error('Could not load Base Model preference.');
+    return response.json();
+  }).then(function (config) {
+    if (workingContextState.selectionVersion !== startedAtVersion) return;
+    var saved = String(config.working_model_profile || '').trim();
+    if (!saved) return;
+    var profiles = typeof trainingWorkspaceState !== 'undefined' ? trainingWorkspaceState.profiles : [];
+    if (Array.isArray(profiles) && profiles.length && !hasWorkingModelProfile(profiles, saved)) return;
+    var previousProfileId = getWorkingModelProfileId();
+    workingContextState.modelProfileId = saved;
+    notifyWorkingModelChanged(previousProfileId);
+    if (typeof window.refreshWorkingModelSelector === 'function') {
+      window.refreshWorkingModelSelector().catch(function (err) {
+        console.error('[Base Model preference] Could not refresh selector:', err);
+      });
+    }
+  }).catch(function (err) {
+    console.error('[Base Model preference]', err);
+  });
+}
+
 function setWorkingModelProfileId(profileId) {
   var previousProfileId = getWorkingModelProfileId();
   workingContextState.modelProfileId = String(profileId || 'wan22_t2v');
+  if (workingContextState.modelProfileId !== previousProfileId) {
+    workingContextState.selectionVersion += 1;
+    persistWorkingModelProfile(workingContextState.modelProfileId);
+  }
   notifyWorkingModelChanged(previousProfileId);
   return workingContextState.modelProfileId;
 }
@@ -46,3 +92,5 @@ function setWorkingModelProfileId(profileId) {
 window.getWorkingModelProfileId = getWorkingModelProfileId;
 window.setWorkingModelProfileId = setWorkingModelProfileId;
 window.syncWorkingModelProfile = syncWorkingModelProfile;
+
+restoreWorkingModelProfile();

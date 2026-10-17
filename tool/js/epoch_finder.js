@@ -12,7 +12,6 @@
   var inspectedEpoch = null;
   var inspectedFrame = 0;
   var campaignState = null;
-  var showAllModels = false;
   var selectedEpochs = new Set();
   var selectedRunId = "";
   var proposalBusy = false;
@@ -397,7 +396,7 @@
   function list() {
     els('count').textContent = String(campaigns.length);
     var model = String(window.getWorkingModelProfileId() || '');
-    var visible = campaigns.filter(function (c) { return showAllModels || c.modelId === model; });
+    var visible = campaigns.filter(function (c) { return c.modelId === model; });
     els('campaigns').innerHTML = visible.length ? visible.map(function (c) {
       return '<button type="button" class="epoch-finder-campaign ' +
         (c.id === activeCampaign ? 'active' : '') + '" data-id="' + escape(c.id) + '">' +
@@ -570,8 +569,9 @@
   }
   function refreshStatus() {
     if (!activeCampaign) return Promise.resolve();
-    return api('status', { campaignId: activeCampaign }).then(function (response) {
-      if (response.campaign) render(response.campaign);
+    var requestedId = activeCampaign, requestedFolder = currentFolder;
+    return api('status', { campaignId: requestedId }).then(function (response) {
+      if (activeCampaign === requestedId && currentFolder === requestedFolder && response.campaign) render(response.campaign);
     });
   }
   function refresh() {

@@ -881,10 +881,13 @@ def status(folder_path, campaign_id):
     campaign = _load(folder_path, campaign_id)
     with _worker_lock:
         thread = _workers.get(campaign_id)
-    if campaign.get("status") in {"running", "queued"} and (thread is None or not thread.is_alive()) and campaign["status"] == "running":
-        campaign["status"] = "interrupted"
-        campaign["phase"] = "Interrupted"
-        campaign["detail"] = "WebCap restarted. Resume explicitly to continue."
+    if campaign.get("status") in {"running", "queued"} and (thread is None or not thread.is_alive()):
+        with _worker_lock:
+            waiting = any(id_ == campaign_id for _, id_ in _pending_campaigns)
+        if campaign["status"] == "running" or not waiting:
+            campaign["status"] = "interrupted"
+            campaign["phase"] = "Interrupted"
+            campaign["detail"] = "WebCap restarted. Resume explicitly to continue."
     return campaign
 
 

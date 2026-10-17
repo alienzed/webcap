@@ -17,6 +17,7 @@ from .caption_vision import build_vision_question_messages, build_reference_comp
 from .llm_runner import enqueue as enqueue_llm, job_status as llm_job_status
 from .test_models import get_test_model_for_staging_key
 from .training_history import all_history_payload
+from .training_runner import passive_status_snapshot
 from .training_runner import (
     _candidate_run_snapshot, _candidate_safetensors_path,
     _candidate_test_directory_for_run, candidate_run_folder_path,
@@ -67,8 +68,20 @@ def _save(folder_path, campaign):
 def _runs(folder_path):
     folder = _folder_key(folder_path)
     result = []
-    for job in all_history_payload(folder=folder).get("jobs", []):
+    # Queue and history are distinct views: paused/resumable jobs leave History.
+    # The existing run snapshot resolver already supports either owner.
+    queue, code = passive_status_snapshot()
+    if code != 200 or not queue.get("ok"):
+        raise RuntimeError(str(queue.get("error") or "Training queue unavailable."))
+    seen = set()
+    jobs = list(queue.get("jobs") or []) + list(all_history_payload(folder=folder).get("jobs") or [])
+    for job in jobs:
+        if str(job.get("folder") or "").strip().replace("\\", "/").strip("/") != folder:
+            continue
         job_id = str(job.get("id") or "")
+        if not job_id or job_id in seen:
+            continue
+        seen.add(job_id)
         try:
             _path, run = _candidate_run_snapshot(folder, job_id)
             model = get_test_model_for_staging_key(str(run.get("stages") or ""))

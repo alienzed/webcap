@@ -4,28 +4,31 @@ The existing Test wildcard prompt is the generation source of truth. Dimension
 roles attach to its ordered, concrete {a|b} alternatives; never infer them from
 substring/word matching in a generated caption.
 """
-import re
-
 from .test_wildcard_contract import build_request as build_wildcard_request, normalize_result
+from .epoch_test_bench import _parse_wildcard_nodes, _expand_wildcard_option, _normalize_wildcard_text, _strip_wildcard_comments
 
 
 _ROLES = {"primary": 2.0, "leakage": 1.0, "vary": 0.0}
-_GROUP = re.compile(r"\{([^{}]*\|[^{}]*)\}")
-
-
 def prompt_options(prompt):
-    template = str(prompt or "").strip()
+    """Use the same expanded, top-level vocabulary as Test Generations VL."""
+    template = _strip_wildcard_comments(str(prompt or "").strip())
     if not template:
         raise ValueError("Provide a test prompt.")
-    matches = list(_GROUP.finditer(template))
-    if not matches or template.count("{") != len(matches) or template.count("}") != len(matches):
-        raise ValueError("Test prompt needs flat {option|option} wildcards (no nested or unmatched braces).")
+    nodes = _parse_wildcard_nodes(template)
+    groups = [value for kind, value in nodes if kind == "group"]
+    if not groups:
+        raise ValueError("Test prompt needs at least one {option|option} wildcard.")
     options = []
-    for match in matches:
-        values = [term.strip() for term in match.group(1).split("|")]
-        if len(values) < 2 or len(set(values)) != len(values):
-            raise ValueError("Each wildcard needs at least two distinct values.")
-        options.append(values)
+    for alternatives in groups:
+        choices = []
+        for alternative in alternatives:
+            for expanded in _expand_wildcard_option(alternative):
+                choice = _normalize_wildcard_text(expanded)
+                if choice not in choices:
+                    choices.append(choice)
+        if len(choices) < 2:
+            raise ValueError("Each scored wildcard needs at least two distinct resolved values.")
+        options.append(choices)
     return options
 
 

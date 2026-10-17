@@ -2107,6 +2107,42 @@ def test_generations_media_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/test_generations/reference", methods=["POST"])
+def test_generations_reference_route():
+    """Optional on-demand comparisons, independent of original Ask VL."""
+    data = request.get_json(silent=True) or {}
+    try:
+        from .test_reference import prepare, save, read
+        folder = safe_join_fs_root(str(data.get("folder") or "").strip())
+        action = str(data.get("action") or "")
+        session = str(data.get("session") or "")
+        if action == "read":
+            return jsonify({"ok": True, "references": read(folder, session)})
+        if action == "save":
+            saved = save(folder, session, data.get("media"), data.get("assessment"))
+            return jsonify({"ok": True, "assessment": saved})
+        if action != "evaluate":
+            raise ValueError("Unsupported reference comparison action.")
+        prepared = prepare(folder, data)
+        if "assessment" in prepared:
+            return jsonify({"ok": True, **prepared})
+        model = str(data.get("model") or "").strip()
+        vision_ids = {str(item.get("id") or "") for item in list_vision_models()}
+        if model not in vision_ids or not model:
+            raise ValueError("Select an available Vision model.")
+        job = enqueue_llm(
+            "caption", model,
+            {"operation": "vision_question", "messages": prepared["messages"]},
+            context={}, label="Test Generations Reference VL",
+        )
+        return jsonify({"ok": True, "job": job, "reference": prepared["reference"],
+                        "group": prepared["group"], "option": prepared["option"],
+                        "choices": prepared["choices"]}), 202
+    except Exception as exc:
+        app.logger.exception("TEST REFERENCE EVALUATION FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/test_generations/vision-question", methods=["POST"])
 def test_generations_vision_question_route():
     """Ask VL about one saved Test result without storing analysis metadata."""

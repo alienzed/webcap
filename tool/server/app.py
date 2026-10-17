@@ -2242,6 +2242,7 @@ def epoch_finder_propose_route():
         contract = epoch_finder_build_proposal(
             captions, set_name=Path(folder).name,
             focus=data.get("focus"), vocabulary=data.get("vocabulary"),
+            reference_vocabulary=__import__("tool.server.epoch_reference", fromlist=["reference_vocabulary"]).reference_vocabulary(folder),
         )
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(), contract,

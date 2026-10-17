@@ -4,6 +4,7 @@
   var testModelsLoaded = false;
   var pollTimer = null;
   var pendingElapsedTimer = null;
+  var testVlElapsedTimer = null;
   var lastActivityRefreshAt = 0;
   var lastSessionsRefreshAt = 0;
   var sessionsMutationVersion = 0;
@@ -75,6 +76,7 @@
       testVl.entries[file] = {
         status: 'done', text: savedEntry.text, question: savedEntry.question,
         modelId: savedEntry.modelId || '', comparison: savedEntry.comparison,
+        elapsedMs: savedEntry.elapsedMs == null ? null : Number(savedEntry.elapsedMs),
         ignoredGroups: new Set(savedEntry.ignoredGroups || [])
       };
     });
@@ -110,8 +112,11 @@
     testVl.token += 1;
     testVl.running = false;
     testVl.jobId = '';
+    clearInterval(testVlElapsedTimer);
+    testVlElapsedTimer = null;
     Object.keys(testVl.entries).forEach(function (file) {
       var entry = testVl.entries[file];
+      if (entry.status === 'running' && entry.startedAt) entry.elapsedMs = Date.now() - entry.startedAt;
       if (entry.status === 'pending' || entry.status === 'running') entry.status = 'stopped';
     });
     if (jobId) cancelCaptionAssistJob(jobId).catch(function (err) {
@@ -270,6 +275,32 @@
       (testVl.total ? (testVl.done + ' / ' + testVl.total + ' processed') : '');
   }
 
+  function testVlElapsedText(entry) {
+    if (!entry) return '';
+    var milliseconds = entry.status === 'running' && entry.startedAt
+      ? Date.now() - entry.startedAt : entry.elapsedMs;
+    return milliseconds == null ? '' : formatCandidateElapsed(milliseconds);
+  }
+
+  function updateTestVlElapsedButton(button, entry) {
+    var elapsed = testVlElapsedText(entry);
+    button.textContent = button.dataset.testVlLabel + (elapsed ? ' · ' + elapsed : '');
+    button.title = button.dataset.testVlTitle + (elapsed ? ' · Ask VL elapsed: ' + elapsed : '');
+  }
+
+  // Update only the timer label; leave the preview cards and their media nodes intact.
+  function refreshTestVlElapsedButtons() {
+    if (!isOpen() || testVl.scope !== testVlScope(currentStatus)) return;
+    ['test-generations-results', 'test-generations-compare'].forEach(function (id) {
+      var host = el(id);
+      if (!host) return;
+      Array.prototype.forEach.call(host.querySelectorAll('[data-test-vl-result]'), function (button) {
+        var entry = testVl.entries[String(button.dataset.testVlResult || '')];
+        if (entry && entry.status === 'running') updateTestVlElapsedButton(button, entry);
+      });
+    });
+  }
+
   function renderTestVlCard(card, result, candidateScores) {
     var file = resultMediaFile(result);
     if (!file) return;
@@ -309,6 +340,9 @@
         (item && item.modelId ? 'Model: ' + item.modelId + ' · ' : '') +
         (item && item.status === 'error' ? 'Open VL error' : 'Open VL assessment');
     }
+    button.dataset.testVlLabel = button.textContent;
+    button.dataset.testVlTitle = button.title;
+    updateTestVlElapsedButton(button, item);
     button.classList.toggle('hidden', !item);
     row.classList.toggle('hidden', !manualLabel.textContent && !epochLabel.textContent && !item);
   }
@@ -490,6 +524,8 @@
     el('test-generations-vl-filter-options').dataset.groupKey = '';
     testVl.running = true;
     testVl.jobId = '';
+    clearInterval(testVlElapsedTimer);
+    testVlElapsedTimer = setInterval(refreshTestVlElapsedButtons, 1000);
     testVl.done = 0;
     testVl.total = results.length;
     testVl.question = testVlQuestion(status);
@@ -507,6 +543,8 @@
           if (token !== testVl.token) return;
           var file = resultMediaFile(result);
           var entry = testVl.entries[file];
+          entry.startedAt = Date.now();
+          entry.elapsedMs = null;
           entry.status = 'running';
           syncTestVlCards();
           return askVlForTestPreview(folder, session, file, model, testVl.question, function (jobId) {
@@ -514,12 +552,14 @@
             testVl.jobId = jobId;
           }).then(function (job) {
             if (token !== testVl.token) return;
+            entry.elapsedMs = Date.now() - entry.startedAt;
             entry.text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
             entry.modelId = model;
             entry.comparison = testVlCompare(entry.text, Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : []);
             entry.status = 'done';
             return saveTestVl({ mediaFile: file, assessment: {
-              text: entry.text, question: entry.question, comparison: entry.comparison, modelId: entry.modelId
+              text: entry.text, question: entry.question, comparison: entry.comparison,
+              modelId: entry.modelId, elapsedMs: entry.elapsedMs
             }, ignoredGroups: Array.from(entry.ignoredGroups || []) }, session).then(function () {
               entry.saveError = '';
             }, function (err) {
@@ -532,6 +572,7 @@
             });
           }).catch(function (err) {
             if (token !== testVl.token) return;
+            entry.elapsedMs = entry.startedAt ? Date.now() - entry.startedAt : null;
             entry.status = 'error';
             entry.error = String(err && err.message ? err.message : err);
             reportConsoleError('Test Generations Ask VL: ' + file, err);
@@ -555,6 +596,8 @@
     }).finally(function () {
       if (token !== testVl.token) return;
       testVl.running = false;
+      clearInterval(testVlElapsedTimer);
+      testVlElapsedTimer = null;
       // If a different session is displayed, restore its saved VL presentation now.
       restoreTestVl(currentStatus);
       syncTestVlCards();
@@ -4431,6 +4474,7 @@
             var file = resultMediaFile(result);
             batch.detail = sessionLabel(session) + ' · ' + file;
             renderTestBatch();
+            var vlStartedAt = Date.now();
             return askVlForTestPreview(batch.folder, session, file, batch.vlModel, question, function (jobId) {
               batch.vlJobId = jobId;
               return batch.active;
@@ -4439,7 +4483,8 @@
               var text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
               return requestForFolder(batch.folder, 'test_vision_update', {
                 session: session, mediaFile: file,
-                assessment: { text: text, question: question, comparison: testVlCompare(text, groups), modelId: batch.vlModel }
+                assessment: { text: text, question: question, comparison: testVlCompare(text, groups),
+                  modelId: batch.vlModel, elapsedMs: Math.max(0, Date.now() - vlStartedAt) }
               });
             }).then(function (payload) {
               testBatchCheck(batch);

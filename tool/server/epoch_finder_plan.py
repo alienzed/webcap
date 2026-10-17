@@ -89,6 +89,6 @@ def normalize_proposal(data):
         raise ValueError("Epoch Finder proposal is missing its concept.")
     proposal["concept"] = concept
     proposal["variationGroups"] = normalize_dimensions(
-        proposal["wildcard"], proposal["variationGroups"],
+        proposal["wildcard"], data.get("variationGroups"),
     )
     return proposal

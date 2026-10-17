@@ -335,6 +335,8 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
         temp.unlink(missing_ok=True)
     unit["frame"] = file_name
     unit["groups"] = status.get("wildcardEvaluationGroups") or []
+    if len(unit["groups"]) != len(campaign["dimensions"]):
+        raise RuntimeError("Resolved wildcard group count differs from the approved plan.")
     for group, dimension in zip(unit["groups"], campaign["dimensions"]):
         if group.get("options") != dimension["options"]:
             raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
@@ -412,7 +414,7 @@ def _rank(campaign, round_number):
         })
         by_epoch[epoch] = {
             "epoch": epoch, "matches": matches, "mismatches": mismatches,
-            "unclear": len(comparisons) - total, "count": total,
+            "unclear": sum(group.get("result") == "unclear" for group in comparisons), "count": total,
             "score": matches / total if total else None,
             "roundsTested": rounds_tested,
             "active": epoch in campaign["rounds"][round_number - 1]["epochs"],

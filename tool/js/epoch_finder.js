@@ -610,23 +610,29 @@
         var src = unit.frame ? '/fs/epoch_finder/frame?folder=' + encodeURIComponent(currentFolder) +
           '&campaign=' + encodeURIComponent(campaign.id) + '&frame=' + encodeURIComponent(unit.frame) : '';
         var assessment = unit.assessment || {};
-        var checks = (assessment.comparison || []).map(function (g) {
-          return '<div>' + escape(g.label) + ': ' + escape(g.result) +
-            ' · expected ' + escape(g.expected == null ? 'unclear' : (unit.groups || []).find(function (v) {
-              return v.id === g.id;
-            })?.options?.[g.expected - 1] || '?') +
-            ' · observed ' + escape(g.selected == null ? 'unclear' :
-              (unit.groups || []).find(function (v) { return v.id === g.id; })?.options?.[g.selected - 1] || '?') + '</div>';
-        }).join('');
+        var selections = (unit.groups || []).filter(function (group) {
+          return group.expected != null && group.options && group.options[group.expected - 1];
+        }).map(function (group) {
+          return '<span title="' + escape(group.label) + '">' + escape(group.options[group.expected - 1]) + '</span>';
+        });
+        var comparisons = assessment.comparison || [];
+        var matched = comparisons.filter(function (c) { return c.result === 'match'; }).length;
+        var decided = comparisons.filter(function (c) { return c.result === 'match' || c.result === 'mismatch'; }).length;
+        var status = unit.error ? 'Error' : unit.assessment ?
+          (decided ? matched + '/' + decided + ' attributes matched' : 'VL evaluated · unclear') :
+          (src ? 'Frame ready · awaiting VL' : 'Awaiting frame');
         return '<figure class="epoch-finder-frame" role="button" tabindex="0" aria-label="Inspect epoch ' + unit.epoch +
           ', round ' + unit.round + ', test ' + (unit.case + 1) + '" data-gallery-epoch="' + unit.epoch +
           '" data-gallery-round="' + unit.round + '" data-gallery-case="' + unit.case + '">' +
           (src ? '<img loading="lazy" src="' + escape(src) + '" alt="Epoch ' + unit.epoch + ' test frame">' :
-            '<div class="epoch-finder-muted">Frame pruned or unavailable</div>') +
-          '<figcaption>Epoch ' + unit.epoch + ' · Round ' + unit.round + ' · Test ' + (unit.case + 1) +
-          '<small>' + (unit.error ? escape(unit.error) : unit.assessment ? 'VL evaluated' : 'Frame ready') +
-          '</small>' + (inspectedEpoch == null ? '' : '<div>' + escape(unit.prompt || '') + '</div>' + checks) +
-          '</figcaption></figure>';
+            '<div class="epoch-finder-frame-empty">Frame pruned or unavailable</div>') +
+          '<figcaption><div class="epoch-finder-frame-heading"><strong>Epoch ' + unit.epoch +
+          '</strong><span>Round ' + unit.round + ' · Test ' + (unit.case + 1) + '</span></div>' +
+          (selections.length ? '<div class="epoch-finder-frame-choices" aria-label="Expected wildcard choices">' +
+            selections.join('') + '</div>' : '') +
+          '<div class="epoch-finder-frame-footer"><small>' + escape(unit.error || status) + '</small>' +
+          (src ? '<a href="' + escape(src) + '" target="_blank" rel="noopener" data-frame-original title="Open original image">Open image ↗</a>' : '') +
+          '</div></figcaption></figure>';
       }).join('');
   }
   function inspectFrame(campaign) {
@@ -912,11 +918,13 @@
       inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = null; refreshStatus().catch(error);
       return;
     }
+    if (event.target.closest('[data-frame-original]')) return;
     var frame = event.target.closest('[data-gallery-epoch]');
     if (frame) selectGalleryFrame(frame);
   };
   els('frames').onkeydown = function (event) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (event.target.closest('[data-frame-original]')) return;
     var frame = event.target.closest('[data-gallery-epoch]');
     if (!frame) return;
     event.preventDefault();

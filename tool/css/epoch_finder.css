@@ -85,3 +85,10 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-gallery-heading{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .epoch-finder-frame figcaption div{margin-top:5px;overflow-wrap:anywhere}
 .epoch-finder-attribute input[readonly]{opacity:.75}
+
+.epoch-finder-epoch-picker{margin:10px 0 14px}
+.epoch-finder-epoch-tools{display:flex;align-items:center;flex-wrap:wrap;gap:7px;font-size:11px;margin-bottom:8px}
+.epoch-finder-epoch-tools label{display:flex;align-items:center;gap:4px;margin:0}
+.epoch-finder-epoch-tools input{width:60px;padding:4px}
+.epoch-finder-epoch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:5px;max-height:190px;overflow:auto}
+.epoch-finder-epoch-grid label{display:flex;align-items:center;gap:5px;padding:4px 6px;border:1px solid var(--border-color,#384653);border-radius:5px;font-size:11px;margin:0}

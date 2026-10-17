@@ -40,6 +40,61 @@
     document.getElementById('test-generations-body').classList.toggle('hidden', finder);
     if (finder) refresh();
   }
+  function roundPlan() {
+    var host = els('round-plan');
+    var count = Number(els('rounds').value);
+    if (!Number.isInteger(count) || count < 1 || count > 4) return;
+    var run = runs.find(function (item) { return item.jobId === els('run').value; });
+    var baseCount = run ? run.epochs.length : 0;
+    var current = Array.from(host.querySelectorAll('[data-epoch-round]')).map(function (row) {
+      return {
+        cases: Number(row.querySelector('[data-case]').value),
+        keepPercent: Number(row.querySelector('[data-keep]').value),
+        megapixels: Number(row.querySelector('[data-mp]').value)
+      };
+    });
+    host.innerHTML = '<strong>Round plan</strong>' + Array.from({ length: count }, function (_, index) {
+      var saved = current[index] || {};
+      var mp = saved.megapixels || Math.min(0.4, 0.2 + index * 0.1);
+      var cases = saved.cases || Number(els('cases').value) || 2;
+      var keep = saved.keepPercent || Number(els('retention').value) || 50;
+      return '<div class="epoch-finder-round-row" data-epoch-round="' + (index + 1) + '">' +
+        '<span>R' + (index + 1) + '</span>' +
+        '<label>Tests<input data-case type="number" min="1" max="6" value="' + cases + '"></label>' +
+        '<label>Keep %<input data-keep type="number" min="10" max="90" value="' + keep + '"></label>' +
+        '<label>MP<input data-mp type="number" min="0.1" max="0.4" step="0.1" value="' + mp.toFixed(1) + '"></label></div>';
+    }).join('');
+    // Krea2 resolution is specified in the selected Test dimensions, not MP.
+    var hasMp = !!document.getElementById('test-generations-megapixels') &&
+      !document.getElementById('test-generations-megapixels-field').classList.contains('hidden');
+    host.querySelectorAll('[data-mp]').forEach(function (input) {
+      input.closest('label').classList.toggle('hidden', !hasMp);
+    });
+    function estimate() {
+      var remaining = baseCount, renders = 0;
+      Array.from(host.querySelectorAll('[data-epoch-round]')).forEach(function (row, index) {
+        var tests = Number(row.querySelector('[data-case]').value);
+        var keepPct = Number(row.querySelector('[data-keep]').value);
+        var projection = row.querySelector('span');
+        projection.textContent = 'R' + (index + 1) + ' · ~' + remaining + ' epochs';
+        if (tests > 0) renders += remaining * tests;
+        remaining = Math.max(1, Math.ceil(remaining * keepPct / 100));
+      });
+      els('estimate').textContent = renders + ' projected renders · ~' + Math.ceil(renders * 60 / 60) +
+        ' min at 60s/render, excluding VL and queue time. Ties may increase the workload.';
+    }
+    host.oninput = estimate;
+    estimate();
+  }
+  function getRoundPlans() {
+    return Array.from(els('round-plan').querySelectorAll('[data-epoch-round]')).map(function (row) {
+      var plan = {cases: Number(row.querySelector('[data-case]').value),
+        keepPercent: Number(row.querySelector('[data-keep]').value)};
+      var mpField = row.querySelector('[data-mp]');
+      if (!mpField.closest('label').classList.contains('hidden')) plan.megapixels = Number(mpField.value);
+      return plan;
+    });
+  }
   function setup() {
     var current = String(window.getWorkingModelProfileId() || '');
     var options = runs.filter(function (run) { return run.modelId === current; });
@@ -54,8 +109,10 @@
       var run = options.find(function (item) { return item.jobId === select.value; });
       els('run-detail').textContent = run ? run.epochs.length + ' saved epochs · ' +
         run.epochs[0] + '–' + run.epochs[run.epochs.length - 1] : '';
+      roundPlan();
     };
     select.onchange();
+    roundPlan();
     if (!els('prompt').value) {
       els('prompt').value = String(document.getElementById('test-generations-prompt').value || '');
     }
@@ -190,7 +247,8 @@
     });
     var criteria = {jobId: jobId, prompt: els('prompt').value, settings: settings,
       visionModel: window.getCaptionVisionModelId(), rounds: Number(els('rounds').value),
-      cases: Number(els('cases').value), keepPercent: Number(els('retention').value)};
+      cases: Number(els('cases').value), keepPercent: Number(els('retention').value),
+      roundPlans: getRoundPlans()};
     els('start').disabled = true;
     api('start', criteria).then(function (response) {
       activeCampaign = response.campaign.id; lastFrameKey = ''; refresh();
@@ -207,6 +265,9 @@
   els('mode-finder').onclick = function () { showMode('finder'); };
   els('refresh').onclick = refresh;
   els('start').onclick = start;
+  els('rounds').onchange = roundPlan;
+  els('cases').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
+  els('retention').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
   els('pause').onclick = function () { send('pause'); };
   els('resume').onclick = function () { send('resume'); };
   els('stop').onclick = function () { send('stop'); };

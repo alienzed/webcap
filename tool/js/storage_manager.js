@@ -79,7 +79,7 @@
 
   function allItems() {
     var groups = storageState.payload && storageState.payload.items || {};
-    return ['training', 'archive', 'tests', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].reduce(function (rows, area) {
+    return ['training', 'archive', 'tests', 'epoch_finder', 'epoch_finder_staging', 'staged', 'generate', 'storyboard', 'set', 'runtime', 'comfy'].reduce(function (rows, area) {
       return rows.concat((groups[area] || []).map(function (item) {
         return item;
       }));
@@ -134,6 +134,7 @@
       var label = 'Delete';
       if (item.area === 'storyboard') label = 'Delete Take';
       else if (item.area === 'staged') label = 'Delete Copy';
+      else if (item.area === 'epoch_finder') label = 'Delete Campaign';
       else if (item.area === 'archive') label = 'Delete Archive';
       else if (item.area === 'director_assessment') label = 'Delete Evidence';
       else if (item.area === 'runtime' && String(item.id || '').indexOf('h3-probe/') === 0) label = 'Delete Probe';
@@ -160,6 +161,8 @@
       archive: 'Training Archives',
       tests: 'Tests',
       staged: 'Staged Test LoRAs',
+      epoch_finder: 'Epoch Finder Campaigns',
+      epoch_finder_staging: 'Epoch Finder Temporary Checkpoints',
       generate: 'Generations',
       storyboard: 'Storyboard Takes',
       set: 'Set Data (protected)',
@@ -366,6 +369,9 @@
       label = 'Storyboard Take';
       consequence = '\nThis removes only this generated Take. The Story and other Takes remain.';
       if (item.meta && item.meta.selected) consequence += '\nThis Take is currently selected for its Scene.';
+    } else if (item.area === 'epoch_finder') {
+      label = 'Epoch Finder campaign';
+      consequence = '\nThis permanently removes its recorded scores, retained frames, and any remaining campaign-owned Test media and temporary checkpoint copies. Original training checkpoints are preserved.';
     } else if (item.area === 'staged') {
       label = 'staged Test LoRA copy';
       consequence = '\nThe source training epoch is not deleted.';

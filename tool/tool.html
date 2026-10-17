@@ -23,6 +23,7 @@
         <link rel="stylesheet" href="/static/css/generate.css">
         <link rel="stylesheet" href="/static/css/storage_manager.css">
         <link rel="stylesheet" href="/static/css/workbench.css">
+        <link rel="stylesheet" href="/static/css/epoch_finder.css">
         <link rel="stylesheet" href="/static/css/ai_validation.css">
         <link rel="stylesheet" href="/static/css/qa_workbench.css">
         <link rel="stylesheet" href="/static/css/modals.css">
@@ -1141,6 +1142,66 @@
             </div>
             <section id="test-generations-workspace" class="test-generations-workspace" data-workspace-root="test" aria-label="Test workspace">
                 <section id="test-generations-pane" class="test-generations-pane hidden" aria-label="Test Generations">
+                    <nav class="epoch-finder-tabs" aria-label="Test Generations mode">
+                        <button id="epoch-finder-mode-tests" type="button" class="epoch-finder-tab active" aria-pressed="true">Test Generations</button>
+                        <button id="epoch-finder-mode-finder" type="button" class="epoch-finder-tab" aria-pressed="false">Epoch Finder</button>
+                    </nav>
+                    <section id="epoch-finder-screen" class="epoch-finder-screen hidden" aria-label="Epoch Finder">
+                        <div class="epoch-finder-intro">
+                            <div><div class="epoch-finder-eyebrow">TEST GENERATIONS / EPOCH FINDER</div>
+                            <h2>Find the strongest epoch</h2>
+                            <p>Compare saved checkpoints with matching prompts and seeds. Render, evaluate, narrow, repeat.</p></div>
+                            <button id="epoch-finder-refresh" type="button" class="review-captions-btn">Refresh</button>
+                        </div>
+                        <div class="epoch-finder-layout">
+                            <aside class="epoch-finder-sidebar">
+                                <section class="epoch-finder-panel">
+                                    <h3>New campaign</h3>
+                                    <label>Training run<select id="epoch-finder-run"><option value="">Loading saved runs…</option></select></label>
+                                    <p id="epoch-finder-run-detail" class="epoch-finder-muted"></p>
+                                    <label>Test prompt<textarea id="epoch-finder-prompt" rows="6" placeholder="Use {option|option} wildcards for testable attributes."></textarea></label>
+                                    <div class="epoch-finder-fields">
+                                        <label>Rounds<input id="epoch-finder-rounds" type="number" min="1" max="4" value="3"></label>
+                                        <label>Tests / epoch<input id="epoch-finder-cases" type="number" min="1" max="6" value="2"></label>
+                                        <label>Keep per round (%)<input id="epoch-finder-retention" type="number" min="10" max="90" value="50"></label>
+                                    </div>
+                                    <p class="epoch-finder-muted">Model settings come from the Test Generations workspace. Vision uses the selected model in the global header.</p>
+                                    <button id="epoch-finder-start" type="button" class="training-btn training-launch-btn">Start Epoch Finder</button>
+                                </section>
+                                <section class="epoch-finder-panel">
+                                    <div class="epoch-finder-panel-heading"><h3>Campaigns</h3><span id="epoch-finder-count"></span></div>
+                                    <div id="epoch-finder-campaigns" class="epoch-finder-campaigns"><span class="epoch-finder-muted">No campaigns yet.</span></div>
+                                </section>
+                            </aside>
+                            <main class="epoch-finder-dashboard">
+                                <div id="epoch-finder-empty" class="epoch-finder-empty"><strong>Ready when you are.</strong><p>Choose a saved training run and start a campaign to watch every round unfold.</p></div>
+                                <div id="epoch-finder-active" class="hidden">
+                                    <div class="epoch-finder-heading">
+                                        <div><div class="epoch-finder-eyebrow" id="epoch-finder-phase">READY</div>
+                                        <h3 id="epoch-finder-name">Campaign</h3>
+                                        <p id="epoch-finder-detail" class="epoch-finder-muted"></p></div>
+                                        <div class="epoch-finder-actions">
+                                            <button id="epoch-finder-pause" type="button" class="review-captions-btn">Pause</button>
+                                            <button id="epoch-finder-resume" type="button" class="review-captions-btn hidden">Resume</button>
+                                            <button id="epoch-finder-stop" type="button" class="review-captions-btn">Stop</button>
+                                            <button id="epoch-finder-delete" type="button" class="review-captions-btn hidden">Delete</button>
+                                        </div>
+                                    </div>
+                                    <div id="epoch-finder-timeline" class="epoch-finder-timeline"></div>
+                                    <div class="epoch-finder-metrics">
+                                        <div><span>Frames captured</span><strong id="epoch-finder-render-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-render-bar"></i></div></div>
+                                        <div><span>VL evaluations</span><strong id="epoch-finder-vl-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-vl-bar"></i></div></div>
+                                        <div><span>Current field</span><strong id="epoch-finder-field-count">—</strong></div>
+                                    </div>
+                                    <div class="epoch-finder-panel-heading"><h3>Live leaderboard</h3><span id="epoch-finder-ranking-note">Results appear as VL evaluates frames.</span></div>
+                                    <div id="epoch-finder-ranking" class="epoch-finder-leaderboard"></div>
+                                    <div class="epoch-finder-panel-heading"><h3>Evidence</h3><span>First frames, retained for review</span></div>
+                                    <div id="epoch-finder-frames" class="epoch-finder-frames"></div>
+                                </div>
+                                <p id="epoch-finder-error" class="epoch-finder-error hidden" role="alert"></p>
+                            </main>
+                        </div>
+                    </section>
                     <div id="test-generations-body" class="test-generations-body">
                         <aside class="test-generations-rail">
                             <div id="test-generations-help" class="test-generations-help hidden">
@@ -2957,6 +3018,7 @@
         <script src="/static/js/storage_manager.js"></script>
         <script src="/static/js/generate.js"></script>
         <script src="/static/js/test_generations.js"></script>
+        <script src="/static/js/epoch_finder.js"></script>
         <script src="/static/js/storyboard.js"></script>
         <script src="/static/js/main.js"></script>
     </body>

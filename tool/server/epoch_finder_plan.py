@@ -109,7 +109,7 @@ def normalize_proposal(data, reference_vocabulary=None):
             for entry in tags:
                 if not isinstance(entry, dict) or not isinstance(entry.get("group"), str) or not isinstance(entry.get("tag"), str):
                     raise ValueError("Invalid Primary reference tag identity.")
-                if entry["group"] and (entry["group"], entry["tag"]) not in valid:
+                if reference_vocabulary is not None and entry["group"] and (entry["group"], entry["tag"]) not in valid:
                     raise ValueError("Director proposed a reference tag not present in the Set.")
         normalized["referenceTags"] = tags if normalized["role"] == "primary" else []
     return proposal

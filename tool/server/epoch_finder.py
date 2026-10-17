@@ -65,6 +65,11 @@ def _save(folder_path, campaign):
     test_bench._atomic_write_json(_directory(folder_path, campaign["id"]) / "campaign.json", campaign)
 
 
+def _requires_reference(role):
+    """Only Primary attributes need training references; legacy VL still scores Leakage."""
+    return role == "primary"
+
+
 def _runs(folder_path):
     folder = _folder_key(folder_path)
     result = []
@@ -250,7 +255,7 @@ def create_campaign(folder_path, criteria):
             raise ValueError("Duplicate approved reference.")
         approved[key] = entry
     required = {(dimension["label"], option) for dimension in dimensions
-                if dimension["role"] == "primary" for option in dimension["options"]}
+                if _requires_reference(dimension["role"]) for option in dimension["options"]}
     if set(approved) != required:
         raise ValueError("Every Primary wildcard choice must have exactly one approved training reference.")
     references = []
@@ -536,7 +541,7 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
     for group in unit.get("groups", []):
         if group["id"] in completed_groups:
             continue
-        if group.get("role") != "primary" or group.get("expected") is None:
+        if not _requires_reference(group.get("role")) or group.get("expected") is None:
             continue
         expected = group["options"][group["expected"] - 1]
         assigned = references.get((group["label"], expected))

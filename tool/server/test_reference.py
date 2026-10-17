@@ -50,20 +50,31 @@ def prepare(folder_path, criteria):
         raise ValueError("Provide the available wildcard options.")
     if term not in choices:
         raise ValueError("Approved option must belong to the wildcard choices.")
-    if mode == "dino":
-        from .epoch_dino import compare_images
-        cache = _location(folder_path, session).parent / "reference-embeddings"
-        score = compare_images(reference, media, cache)
-        assessment = {"method": mode, "group": group, "option": term,
-                      "reference": ref_name, "similarity": score, "at": time.time()}
-        save(folder_path, session, media.name, assessment)
-        return {"assessment": assessment}
-    question = (group + " — reference demonstrates " + term +
-                ". Select the visible option in generated image B: " +
-                "; ".join(str(i + 1) + "=" + c for i, c in enumerate(choices)))
-    return {"messages": build_reference_comparison_messages(
-        question, vision_resized_image_data_url(reference), vision_resized_image_data_url(media)),
-        "reference": ref_name, "group": group, "option": term, "choices": choices}
+    import tempfile
+    from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
+    with tempfile.TemporaryDirectory(prefix="webcap-test-reference-") as temporary:
+        if media.suffix.lower() in VIDEO_EXTS:
+            frame = Path(temporary) / "first.png"
+            frame.write_bytes(extract_boundary_frame_png(media, "first"))
+            generated = frame
+        else:
+            generated = media
+        if mode == "dino":
+            from .epoch_dino import compare_images
+            cache = _location(folder_path, session).parent / "reference-embeddings"
+            score = compare_images(reference, generated, cache)
+            assessment = {"method": mode, "group": group, "option": term,
+                          "reference": ref_name, "similarity": score, "at": time.time()}
+            save(folder_path, session, media.name, assessment)
+            return {"assessment": assessment}
+        question = (group + " — reference demonstrates " + term +
+                    ". Select the visible option in generated image B: " +
+                    "; ".join(str(i + 1) + "=" + c for i, c in enumerate(choices)))
+        messages = build_reference_comparison_messages(
+            question, vision_resized_image_data_url(reference),
+            vision_resized_image_data_url(generated))
+    return {"messages": messages, "reference": ref_name, "group": group,
+            "option": term, "choices": choices}
 
 
 def save(folder_path, session, media_name, assessment):

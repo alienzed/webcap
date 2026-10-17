@@ -65,3 +65,16 @@
 .epoch-finder-panel .epoch-finder-round-row label{margin:0;font-size:10px}
 .epoch-finder-panel .epoch-finder-round-row label input{padding:6px;font-size:11px}
 .epoch-finder-round-row label.hidden{display:none}
+
+.epoch-finder-wizard-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:14px 0 16px}
+.epoch-finder-wizard-progress span{font-size:10px;padding:7px 4px;text-align:center;border-radius:6px;border:1px solid var(--border-color,#384653);opacity:.65;white-space:nowrap}
+.epoch-finder-wizard-progress span.active{opacity:1;font-weight:750;background:var(--background-secondary,#2a3c4d);border-color:var(--accent-color,#79a9d7)}
+.epoch-finder-wizard-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:17px}
+.epoch-finder-wizard-actions .training-launch-btn{margin-top:0;width:auto;min-width:120px}
+.epoch-finder-attributes{display:grid;gap:9px;margin-top:12px}
+.epoch-finder-attribute{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;padding:10px;border:1px solid var(--border-color,#384653);border-radius:8px}
+.epoch-finder-attribute label{margin:0;font-size:11px}
+.epoch-finder-attribute .epoch-finder-options-field{grid-column:1/-1}
+.epoch-finder-review{line-height:1.5;font-size:12px;overflow-wrap:anywhere}
+.epoch-finder-review p{margin:10px 0}
+.epoch-finder-panel [data-epoch-wizard-step].hidden{display:none}

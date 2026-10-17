@@ -1351,3 +1351,11 @@
     row-gap: 5px;
   }
 }
+
+/* Compact evaluation action menu in Test Generations. */
+.test-evaluate-control { position: relative; flex: 0 0 auto; }
+.test-evaluate-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; min-width: 230px; padding: 4px; background: var(--panel-bg, #182231); border: 1px solid var(--border-color, #465164); border-radius: 6px; box-shadow: 0 8px 18px #0005; }
+.test-evaluate-menu.hidden { display: none; }
+.test-evaluate-menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 3px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.test-evaluate-menu button:hover, .test-evaluate-menu button:focus-visible { background: var(--surface-hover, #334155); }
+#test-generations-vl-progress { white-space: nowrap; }

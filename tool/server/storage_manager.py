@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .epoch_test_bench import delete_session
+from . import epoch_finder
 from .director_model_assessment_store import assessment_root as director_assessment_root, delete_assessment as delete_director_assessment, list_assessments as list_director_assessments
 from .generate_store import MANIFEST_NAME
 from .execution_queue import ExecutionQueueStateError, get_job as execution_get_job, lane_snapshot as execution_lane_snapshot
@@ -22,8 +23,8 @@ from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
 CACHE_VERSION = 1
 CACHE_FILE = "storage_usage.json"
-MEASURABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy", "director_assessment"}
-PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy", "director_assessment"}
+MEASURABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "set", "runtime", "comfy", "director_assessment", "epoch_finder"}
+PURGEABLE_AREAS = {"training", "archive", "tests", "staged", "generate", "storyboard", "runtime", "comfy", "director_assessment", "epoch_finder"}
 ACTIVE_TEST_STATUSES = {"queued", "starting", "running", "stopping"}
 ACTIVE_H3_PROBE_STATUSES = {"running", "stopping"}
 GENERATE_REFERENCE_TOKEN_RE = re.compile(r"^[0-9]+-[0-9a-f]{12}$")
@@ -570,6 +571,21 @@ def _central_test_items(cache):
             ))
     return rows
 
+def _epoch_finder_items(cache):
+    items = []
+    for record in epoch_finder.storage_campaigns():
+        active = record["active"]
+        items.append(_item(
+            "epoch_finder", record["id"], record["name"], record["path"],
+            folder=record["folder"], kind="Epoch Finder campaign",
+            status=record["status"], purgeable=not active,
+            protected_reason="Campaign has active Test work." if active else "",
+            meta={"frames": record["frames"], "retainedSessions": record["retainedSessions"]},
+            cache=cache,
+        ))
+    return items
+
+
 def _test_items(cache, folder):
     folders = _discovered_set_folders(cache, folder)
     qualify = len(folders) > 1
@@ -1063,6 +1079,7 @@ def overview(folder=""):
         "archive": _archive_items(cache),
         "director_assessment": _director_assessment_items(cache),
         "tests": _test_items(cache, folder),
+        "epoch_finder": _epoch_finder_items(cache),
         "staged": collect("staged", lambda: _staged_items(cache, folder)),
         "generate": collect("generate", lambda: _generate_items(cache)),
         "storyboard": _storyboard_items(cache),
@@ -1076,6 +1093,7 @@ def overview(folder=""):
             note=("Training queue state is unavailable; inventory is hidden until it can be read." if "training" in unavailable else "")
         ),
         _category("archive", "Training Archives", groups["archive"]),
+        _category("epoch_finder", "Epoch Finder Campaigns", groups["epoch_finder"]),
         _category("director_assessment", "Director Assessments", groups["director_assessment"], note="Raw diagnostic evidence only; learned Director model results are preserved when this is deleted."),
         _category(
             "tests", "Tests", groups["tests"], complete=scan_complete,
@@ -1419,6 +1437,8 @@ def resolve_item(area, item_id, folder=""):
         return path
     if area == "tests":
         return _resolve_test(folder, item_id)
+    if area == "epoch_finder":
+        return epoch_finder.storage_campaign_path(folder, item_id)
     if area == "staged":
         return _resolve_staged(folder, item_id)[0]
     if area == "generate":
@@ -1862,6 +1882,8 @@ def purge(area, item_id, folder=""):
     elif area == "archive":
         path = resolve_item("archive", item_id)
         shutil.rmtree(path)
+    elif area == "epoch_finder":
+        epoch_finder.command(app_config.safe_join_fs_root(folder), "delete", {"campaignId": item_id})
     elif area == "tests":
         session = _resolve_test(folder, item_id)
         session_payload = _read_test_session_manifest(session)

@@ -293,7 +293,7 @@
     referenceIndex = 0;
     els('reference-options').innerHTML = '<p class="epoch-finder-muted">Finding tagged reference candidates…</p>';
     return Promise.all(referenceItems.map(function (item) {
-      return api('reference_suggestions', {group:item.referenceTag?.group, tag:item.referenceTag?.tag}).then(function (response) {
+      return (!item.referenceTag?.group || !item.referenceTag?.tag ? Promise.resolve({references:[]}) : api('reference_suggestions', {group:item.referenceTag.group, tag:item.referenceTag.tag})).then(function (response) {
         item.candidates = response.references || [];
       });
     })).then(function () {

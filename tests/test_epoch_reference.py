@@ -34,6 +34,7 @@ def _dataset(tmp_path, monkeypatch, annotations):
     (tmp_path / ".webcap_state.json").write_text(
         json.dumps({"caption_group_tags_by_media": annotations}), encoding="utf-8")
     monkeypatch.setattr(epoch_reference, "_resolve_folder", lambda folder: tmp_path)
+    monkeypatch.setattr(epoch_reference, "training_image_members", lambda folder, job_id: {"a.png", "b.png", "close.png"})
     monkeypatch.setattr(epoch_reference, "list_media_files", lambda folder: [
         "a.png", "b.png", "clip.mp4", "close.png"])
     return tmp_path
@@ -46,11 +47,11 @@ def test_exact_tag_lookup_ignores_unrelated_choices_and_videos(tmp_path, monkeyp
         "close.png": {"BB Shape": ["micro"]},
         "clip.mp4": {"BB Shape": ["v-front"]},
     })
-    matches = epoch_reference.find_reference_candidates("set", "BB Shape", "v-front")
+    matches = epoch_reference.find_reference_candidates("set", "BB Shape", "v-front", "job-1")
     assert [item["media"] for item in matches] == ["a.png"]
     assert matches[0]["size"] == len(b"example")
-    assert epoch_reference.find_reference_candidates("set", "BB Shape", "v") == []
-    assert epoch_reference.find_reference_candidates("set", "BT Shape", "triangle")[0]["media"] == "a.png"
+    assert epoch_reference.find_reference_candidates("set", "BB Shape", "v", "job-1") == []
+    assert epoch_reference.find_reference_candidates("set", "BT Shape", "triangle", "job-1")[0]["media"] == "a.png"
 
 
 def test_reference_vocabulary_counts_scoped_options(tmp_path, monkeypatch):
@@ -58,7 +59,7 @@ def test_reference_vocabulary_counts_scoped_options(tmp_path, monkeypatch):
         "a.png": {"BB Shape": ["v-front"]},
         "b.png": {"BB Shape": ["v-front", "micro"]},
     })
-    vocabulary = epoch_reference.reference_vocabulary("set")
+    vocabulary = epoch_reference.reference_vocabulary("set", "job-1")
     assert vocabulary == [{"group": "BB Shape", "terms": [
         {"term": "micro", "count": 1}, {"term": "v-front", "count": 2}]}]
 
@@ -66,15 +67,15 @@ def test_reference_vocabulary_counts_scoped_options(tmp_path, monkeypatch):
 def test_ambiguous_or_changed_reference_is_not_silently_accepted(tmp_path, monkeypatch):
     _dataset(tmp_path, monkeypatch, {"a.png": {"BB Shape": ["v-front"]}})
     with pytest.raises(ValueError):
-        epoch_reference.verified_reference("set", "BB Shape", "micro", "a.png")
+        epoch_reference.verified_reference("set", "BB Shape", "micro", "a.png", "job-1")
     with pytest.raises(ValueError):
-        epoch_reference.verified_reference("set", "BB Shape", "v-front", "b.png")
+        epoch_reference.verified_reference("set", "BB Shape", "v-front", "b.png", "job-1")
 
 
 def test_invalid_annotation_shape_fails_explicitly(tmp_path, monkeypatch):
     _dataset(tmp_path, monkeypatch, {"a.png": {"BB Shape": "v-front"}})
     with pytest.raises(ValueError, match="Invalid scoped tag"):
-        epoch_reference.find_reference_candidates("set", "BB Shape", "v-front")
+        epoch_reference.find_reference_candidates("set", "BB Shape", "v-front", "job-1")
 
 
 def test_reference_eligibility_only_primary_not_leakage_or_vary():
@@ -89,9 +90,21 @@ def test_exact_tag_can_differ_from_descriptive_prompt_option(tmp_path, monkeypat
     _dataset(tmp_path, monkeypatch, {"a.png": {"BT Shape": ["micro triangle"]}})
     # "micro triangle simple string straps" is a prompt phrase, not a saved tag.
     assert epoch_reference.find_reference_candidates(
-        "set", "BT Shape", "micro triangle simple string straps") == []
-    reference = epoch_reference.verified_reference("set", "BT Shape", "micro triangle", "a.png")
+        "set", "BT Shape", "micro triangle simple string straps", "job-1") == []
+    reference = epoch_reference.verified_reference("set", "BT Shape", "micro triangle", "a.png", "job-1")
     assert reference["term"] == "micro triangle"
     assert reference["media"] == "a.png"
 
 
+
+
+def test_reference_candidates_exclude_images_not_in_selected_training_run(tmp_path, monkeypatch):
+    _dataset(tmp_path, monkeypatch, {
+        "a.png": {"BT Shape": ["triangle"]},
+        "b.png": {"BT Shape": ["triangle"]},
+    })
+    monkeypatch.setattr(epoch_reference, "training_image_members", lambda folder, job_id: {"b.png"})
+    matches = epoch_reference.find_reference_candidates("set", "BT Shape", "triangle", "job-1")
+    assert [entry["media"] for entry in matches] == ["b.png"]
+    with pytest.raises(ValueError):
+        epoch_reference.verified_reference("set", "BT Shape", "triangle", "a.png", "job-1")

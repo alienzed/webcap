@@ -296,7 +296,8 @@
     if (!button || !progress) throw new Error('Test VL controls are missing.');
     var results = currentStatus && Array.isArray(currentStatus.results) ? currentStatus.results : [];
     button.disabled = !testVl.running && (!currentSession || !results.some(function (r) { return !!resultMediaFile(r); }));
-    button.textContent = testVl.running ? 'Stop VL' : 'Ask VL';
+    var method = el('test-generations-evaluator').value;
+    button.textContent = method === 'original' ? (testVl.running ? 'Stop VL' : 'Ask VL') : 'Compare';
     var sameScope = testVl.scope === testVlScope(currentStatus);
     progress.textContent = !sameScope ? '' : testVl.running ? (testVl.done + ' / ' + testVl.total) :
       (testVl.total ? (testVl.done + ' / ' + testVl.total + ' processed') : '');
@@ -644,6 +645,184 @@
       }).then(next);
     }
     return next();
+  }
+
+
+  var referenceCompare = {vocabulary: [], busy: false, session: '', folder: ''};
+
+  function testReferenceRequest(data) {
+    return captionAssistRequestJson('/fs/test_generations/reference', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(Object.assign({folder: referenceCompare.folder, session: referenceCompare.session}, data))
+    });
+  }
+
+  function drawReferenceResults() {
+    if (!referenceCompare.session) return;
+    testReferenceRequest({action:'read'}).then(function (payload) {
+      var host = el('test-generations-reference-results');
+      var saved = (payload.references || {}).byMedia || {};
+      var rows = [];
+      Object.keys(saved).sort().forEach(function (file) {
+        Object.keys(saved[file] || {}).sort().forEach(function (key) {
+          var value = saved[file][key];
+          if (value.method !== el('test-generations-evaluator').value) return;
+          var verdict = value.method === 'dino' ? Number(value.similarity).toFixed(3) :
+            (value.verdict || 'UNCLEAR') + (value.selected == null ? '' : ' · choice ' + value.selected);
+          rows.push('<div class="test-reference-result"><strong>' + escapeHtml(file) +
+            '</strong><span>' + escapeHtml(value.group + ' · ' + value.option) +
+            '</span><b>' + escapeHtml(verdict) + '</b><small>' +
+            escapeHtml(value.reference) + '</small></div>');
+        });
+      });
+      host.innerHTML = rows.length ? '<h4>Saved comparisons</h4>' + rows.join('') :
+        '<p>No saved comparisons for this method yet.</p>';
+    }).catch(showError);
+  }
+
+  function updateReferenceChoices() {
+    var attribute = el('test-generations-reference-attribute');
+    var tagGroup = el('test-generations-reference-group');
+    var option = el('test-generations-reference-option');
+    var chosen = (currentStatus.wildcardEvaluationGroups || []).find(function (row) {
+      return String(row.id) === attribute.value;
+    });
+    var options = chosen && Array.isArray(chosen.options) ? chosen.options : [];
+    var eligible = referenceCompare.vocabulary.filter(function (row) {
+      return (row.terms || []).some(function (term) { return options.includes(term.term); });
+    });
+    var previous = tagGroup.value;
+    tagGroup.innerHTML = '<option value="">Select tagged group…</option>' + eligible.map(function (g) {
+      return '<option value="' + escapeHtml(g.group) + '">' + escapeHtml(g.group) + '</option>';
+    }).join('');
+    if (eligible.some(function (g) { return g.group === previous; })) tagGroup.value = previous;
+    var target = eligible.find(function (g) { return g.group === tagGroup.value; });
+    var accepted = target ? options.filter(function (v) {
+      return target.terms.some(function (t) { return t.term === v; });
+    }) : [];
+    option.innerHTML = '<option value="">Select expected option…</option>' + accepted.map(function (x) {
+      return '<option value="' + escapeHtml(x) + '">' + escapeHtml(x) + '</option>';
+    }).join('');
+    updateReferenceImages();
+  }
+
+  function updateReferenceImages() {
+    var folder = referenceCompare.folder, session = referenceCompare.session;
+    var group = el('test-generations-reference-group').value;
+    var option = el('test-generations-reference-option').value;
+    var media = el('test-generations-reference-media');
+    var image = el('test-generations-reference-preview');
+    var selected = media.value;
+    image.classList.add('hidden');
+    media.innerHTML = '<option value="">Choose reference image…</option>';
+    if (!group || !option) return;
+    var body = {folder: folder, operation:'reference_candidates', criteria:{group:group,term:option}};
+    captionAssistRequestJson('/fs/epoch_finder', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    }).then(function (payload) {
+      if (referenceCompare.folder !== folder || referenceCompare.session !== session ||
+          el('test-generations-reference-group').value !== group ||
+          el('test-generations-reference-option').value !== option) return;
+      media.innerHTML = '<option value="">Choose reference image…</option>' +
+        (payload.references || []).map(function (entry) {
+          return '<option value="' + escapeHtml(entry.media) + '">' + escapeHtml(entry.media) + '</option>';
+        }).join('');
+      if ([].some.call(media.options, function (entry) { return entry.value === selected; })) media.value = selected;
+      drawReferenceImage();
+    }).catch(showError);
+  }
+
+  function drawReferenceImage() {
+    var name = el('test-generations-reference-media').value;
+    var image = el('test-generations-reference-preview');
+    image.classList.toggle('hidden', !name);
+    if (name) image.src = '/caption/media?folder=' + encodeURIComponent(referenceCompare.folder) +
+      '&media=' + encodeURIComponent(name);
+    else image.removeAttribute('src');
+  }
+
+  function openReferenceDialog() {
+    var status = currentStatus;
+    var results = (status.results || []).filter(function (r) { return !!resultMediaFile(r); });
+    if (!results.length) throw new Error('No Test previews are available for comparison.');
+    referenceCompare.folder = owningSetFolder(launchFolder || (state && state.folder) || '');
+    referenceCompare.session = status.session;
+    var dialog = el('test-generations-reference-dialog');
+    var method = el('test-generations-evaluator').value;
+    el('test-generations-reference-title').textContent =
+      method === 'dino' ? 'DINOv2 · Training Reference' : 'VL Compare · Training Reference';
+    var attributes = (status.wildcardEvaluationGroups || []).filter(function (g) {
+      return g.options && g.options.length;
+    });
+    var picker = el('test-generations-reference-attribute');
+    picker.innerHTML = '<option value="">Choose an attribute…</option>' + attributes.map(function (group) {
+      return '<option value="' + escapeHtml(group.id) + '">' + escapeHtml(group.label || group.id) + '</option>';
+    }).join('');
+    el('test-generations-reference-status').textContent =
+      attributes.length ? 'Select an attribute and approved training example.' :
+        'This session has no scored wildcard attributes.';
+    if (!dialog.open) dialog.showModal();
+    captionAssistRequestJson('/fs/epoch_finder', {
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:referenceCompare.folder,operation:'reference_vocabulary'})
+    }).then(function (response) {
+      referenceCompare.vocabulary = response.vocabulary || [];
+      updateReferenceChoices();
+      drawReferenceResults();
+    }).catch(showError);
+  }
+
+  async function runReferenceComparison() {
+    if (referenceCompare.busy) return;
+    var method = el('test-generations-evaluator').value;
+    var attributeId = el('test-generations-reference-attribute').value;
+    var group = el('test-generations-reference-group').value;
+    var option = el('test-generations-reference-option').value;
+    var reference = el('test-generations-reference-media').value;
+    var attribute = (currentStatus.wildcardEvaluationGroups || []).find(function (x) { return String(x.id) === attributeId; });
+    if (!attribute || !group || !option || !reference) throw new Error('Choose an attribute, option, and approved image.');
+    var previews = (currentStatus.results || []).map(resultMediaFile).filter(Boolean);
+    if (!previews.length) throw new Error('No previews are available.');
+    var folder = referenceCompare.folder, session = referenceCompare.session;
+    var button = el('test-generations-reference-run'), status = el('test-generations-reference-status');
+    referenceCompare.busy = true;
+    button.disabled = true;
+    try {
+      for (var i=0; i<previews.length; i++) {
+        status.textContent = method.toUpperCase() + ' · ' + (i+1) + ' / ' + previews.length;
+        var payload = await testReferenceRequest({
+          action:'evaluate', method:method, media:previews[i], group:group,
+          option:option, reference:reference, choices:attribute.options,
+          model: method === 'rvn' ? getCaptionVisionModelId() : ''
+        });
+        if (method === 'rvn') {
+          if (!payload.job || !payload.job.jobId) throw new Error('Reference VL did not return a job.');
+          trackTransientLlmJob(payload.job);
+          var completion = await waitForCaptionAssistJob(payload.job);
+          var raw = String(completion && completion.result && completion.result.text || '');
+          var optionMatch = raw.match(/^OPTION\s*:\s*(\d+)/im);
+          var verdictMatch = raw.match(/^VERDICT\s*:\s*(MATCH|PARTIAL|MISMATCH|UNCLEAR)/im);
+          var selected = optionMatch ? Number(optionMatch[1]) : null;
+          if (selected && selected > attribute.options.length) selected = null;
+          await testReferenceRequest({action:'save',media:previews[i],assessment:{
+            method:'rvn',group:group,option:option,reference:reference,
+            attribute:attribute.label || attribute.id,
+            selected:selected,verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',
+            response:raw,modelId:getCaptionVisionModelId(),at:Date.now()/1000
+          }});
+        }
+        drawReferenceResults();
+      }
+      status.textContent = 'Finished ' + previews.length + ' preview comparisons. Results saved.';
+    } catch (err) {
+      status.textContent = 'Comparison stopped after error: ' + String(err.message || err);
+      reportConsoleError('Test Generations reference evaluation',err);
+    } finally {
+      referenceCompare.busy = false;
+      button.disabled = false;
+      if (referenceCompare.folder !== folder || referenceCompare.session !== session)
+        status.textContent += ' (original session)';
+    }
   }
 
   function runTestVlBatch() {
@@ -4949,7 +5128,20 @@
         openTestBenchForSetFolder(testBatch.folder);
       }
     };
-    el('test-generations-ask-vl').onclick = function () { try { runTestVlBatch(); } catch (err) { showError(err); } };
+    el('test-generations-ask-vl').onclick = function () {
+      try {
+        if (el('test-generations-evaluator').value === 'original') runTestVlBatch();
+        else openReferenceDialog();
+      } catch (err) { showError(err); }
+    };
+    el('test-generations-evaluator').onchange = syncTestVlControls;
+    el('test-generations-reference-attribute').onchange = updateReferenceChoices;
+    el('test-generations-reference-group').onchange = updateReferenceChoices;
+    el('test-generations-reference-option').onchange = updateReferenceImages;
+    el('test-generations-reference-media').onchange = drawReferenceImage;
+    el('test-generations-reference-run').onclick = function () {
+      runReferenceComparison().catch(showError);
+    };
     el('test-generations-vl-recheck').onclick = function () { try { recheckTestVlItem(); } catch (err) { showError(err); } };
     el('test-generations-vl-filter-options').onchange = function (event) {
       var input = event.target.closest('[data-test-vl-group]');

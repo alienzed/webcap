@@ -828,6 +828,7 @@
       var item = referenceItems[referenceIndex];
       var candidate = item.candidates[Number(pick.dataset.referencePick)];
       referenceDraftChoices[item.key] = Number(pick.dataset.referencePick);
+      delete referenceSelections[item.key];
       renderReferenceStep();
       return;
     }

@@ -750,6 +750,22 @@ def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None):
         if values["count"]
     }
 
+def _test_vl_partial_credit(expected, observed):
+    """Only nested, contiguous word phrases earn partial credit."""
+    import re
+
+    a = re.findall(r"[a-z0-9]+", str(expected or "").lower())
+    b = re.findall(r"[a-z0-9]+", str(observed or "").lower())
+    if not a or not b or a == ["absent"] or b == ["absent"]:
+        return 0.0
+    shorter, longer = (a, b) if len(a) < len(b) else (b, a)
+    if len(shorter) == len(longer):
+        return 0.0
+    if any(longer[i:i + len(shorter)] == shorter for i in range(len(longer) - len(shorter) + 1)):
+        return len(shorter) / len(longer)
+    return 0.0
+
+
 def _candidate_vision_scores(folder_path, model_id=None, session_snapshot=None):
     """Aggregate saved VL agreements across sessions, like manual candidate ratings."""
     selected_model_id = str(model_id or "").strip()
@@ -790,6 +806,8 @@ def _candidate_vision_scores(folder_path, model_id=None, session_snapshot=None):
                 counted += 1
                 if group["result"] == "match":
                     matches += 1
+                else:
+                    matches += _test_vl_partial_credit(group.get("expectedText"), group.get("selectedText"))
             if not counted:
                 continue
             total = totals.setdefault(candidate, {"matches": 0, "count": 0, "previews": 0})

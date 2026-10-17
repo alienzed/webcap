@@ -198,3 +198,14 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-reference-tile img{width:100%;aspect-ratio:3/4;object-fit:contain;background:#1118}
 .epoch-finder-reference-tile span{font-size:10px;padding:5px 1px}
 .epoch-finder-reference-nav{display:flex;justify-content:space-between;gap:8px;margin-top:10px}
+
+/* Campaign-level interpretation from persisted VL evidence. */
+.epoch-finder-campaign-summary{padding:10px 12px;margin-bottom:13px;border:1px solid var(--border-color,#384653);border-radius:8px;background:var(--background-secondary,#263340)}
+.epoch-finder-live-media .epoch-finder-campaign-summary h3{margin:0 0 9px;font-size:13px}
+.epoch-finder-summary-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.epoch-finder-summary-stats>div{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 9px;min-width:0}
+.epoch-finder-summary-stats small{width:100%;font-size:11px;opacity:.75}
+.epoch-finder-summary-stats strong{font-size:22px}
+.epoch-finder-summary-stats span{font-size:11px;opacity:.85}
+.epoch-finder-summary-takeaway{font-size:12px;margin:9px 0 4px}
+.epoch-finder-campaign-summary .epoch-finder-muted{margin:4px 0}

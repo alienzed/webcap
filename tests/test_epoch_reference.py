@@ -108,3 +108,39 @@ def test_reference_candidates_exclude_images_not_in_selected_training_run(tmp_pa
     assert [entry["media"] for entry in matches] == ["b.png"]
     with pytest.raises(ValueError):
         epoch_reference.verified_reference("set", "BT Shape", "triangle", "a.png", "job-1")
+
+
+def test_suggest_refs_rank_combined_scoped_tags_before_partials(tmp_path, monkeypatch):
+    _dataset(tmp_path, monkeypatch, {
+        "a.png": {"BT Shape": ["micro triangle"], "BT Straps": ["simple string straps"]},
+        "b.png": {"BT Shape": ["micro triangle"]},
+        "close.png": {"BT Straps": ["simple string straps"]},
+        "clip.mp4": {"BT Shape": ["micro triangle"], "BT Straps": ["simple string straps"]},
+    })
+    suggestions = epoch_reference.suggest_references(
+        "set", "job-1", "simple string straps micro triangle")
+    assert [item["media"] for item in suggestions] == ["a.png", "close.png", "b.png"]
+    assert suggestions[0]["complete"]
+    assert suggestions[0]["matchedWords"] == suggestions[0]["totalWords"] == 5
+    assert suggestions[0]["tag"] in {"micro triangle", "simple string straps"}
+    assert not suggestions[1]["complete"]
+    assert suggestions[1]["matchedWords"] > suggestions[2]["matchedWords"]
+
+
+def test_suggest_refs_include_only_selected_run_and_allow_partial(tmp_path, monkeypatch):
+    _dataset(tmp_path, monkeypatch, {
+        "a.png": {"Shape": ["micro triangle"], "Straps": ["simple string straps"]},
+        "b.png": {"Shape": ["micro triangle"]},
+    })
+    monkeypatch.setattr(epoch_reference, "training_image_members", lambda folder, job_id: {"b.png"})
+    suggestions = epoch_reference.suggest_references(
+        "set", "job-1", "micro triangle simple string straps")
+    assert [item["media"] for item in suggestions] == ["b.png"]
+    assert suggestions[0]["complete"] is False
+    assert epoch_reference.suggest_references("set", "job-1", "unseen feature") == []
+
+
+def test_suggest_refs_fails_loudly_for_corrupt_annotations(tmp_path, monkeypatch):
+    _dataset(tmp_path, monkeypatch, {"a.png": {"BT Shape": "micro triangle"}})
+    with pytest.raises(ValueError, match="Invalid scoped tags"):
+        epoch_reference.suggest_references("set", "job-1", "micro triangle")

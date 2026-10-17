@@ -318,28 +318,14 @@ def test_discover_history_run_and_queue_only_once(tmp_path, monkeypatch):
     assert len(epoch_finder._runs(tmp_path)) == 1
 
 
-def test_wizard_primary_reference_tags_must_match_exact_option_and_group():
+def test_wizard_primary_wildcard_allows_descriptive_concatenated_tag_phrases():
     from tool.server.epoch_finder_plan import normalize_proposal
-    base = {
-        "concept": "Top shape",
-        "wildcard": "a {micro triangle|teardrop} top",
-        "stableTerms": ["top"],
-        "variationGroups": [{"label": "Top shape", "role": "primary",
-                             "options": ["micro triangle", "teardrop"],
-                             "referenceTags": [
-                                 {"group": "BT Shape", "tag": "micro triangle"},
-                                 {"group": "BT Shape", "tag": "teardrop"}]}],
-    }
-    vocabulary = [{"group": "BT Shape", "terms": [
-        {"term": "micro triangle", "count": 3},
-        {"term": "teardrop", "count": 2}]}]
-    assert normalize_proposal(base, vocabulary)["variationGroups"][0]["referenceTags"][0]["tag"] == "micro triangle"
-    import copy
-    wrong = copy.deepcopy(base)
-    wrong["variationGroups"][0]["referenceTags"][0]["tag"] = "triangle"
-    with pytest.raises(ValueError, match="must equal"):
-        normalize_proposal(wrong, vocabulary)
-    wrong = copy.deepcopy(base)
-    wrong["variationGroups"][0]["referenceTags"][0]["group"] = "invented"
-    with pytest.raises(ValueError, match="one annotation group"):
-        normalize_proposal(wrong, vocabulary)
+    proposal = normalize_proposal({
+        "concept": "Bikini top construction",
+        "wildcard": "a {micro triangle simple string straps|teardrop top} bikini",
+        "stableTerms": ["bikini"],
+        "variationGroups": [{"label": "Top construction", "role": "primary",
+                             "options": ["micro triangle simple string straps", "teardrop top"]}],
+    })
+    assert proposal["variationGroups"][0]["options"][0] == "micro triangle simple string straps"
+    assert proposal["variationGroups"][0]["role"] == "primary"

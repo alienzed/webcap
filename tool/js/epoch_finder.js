@@ -134,8 +134,7 @@
       var oldValues = (prev.options || []).join('|');
       return {label: String(prev.label || ('Attribute ' + (index + 1))),
         options: g.options.slice(),
-        role: oldValues && oldValues !== g.options.join('|') ? suggestedRole(prev.label, g.options) : (prev.role || suggestedRole(prev.label, g.options)), nested: g.nested,
-        referenceTags: oldValues === g.options.join('|') ? (prev.referenceTags || []) : []};
+        role: oldValues && oldValues !== g.options.join('|') ? suggestedRole(prev.label, g.options) : (prev.role || suggestedRole(prev.label, g.options)), nested: g.nested};
     });
     renderDimensions();
   }
@@ -164,8 +163,7 @@
           values.some(function (x) { return /[{}|]/.test(x); })) throw new Error('Attribute ' + (index + 1) + ' has invalid values.');
       var label = row.querySelector('[data-attr-name]').value.trim();
       if (!label) throw new Error('Every attribute needs a name.');
-      return {label: label, role: row.querySelector('[data-attr-role]').value, options: values,
-        referenceTags: values.join('|') === (dimensions[index]?.options || []).join('|') ? (dimensions[index]?.referenceTags || []) : []};
+      return {label: label, role: row.querySelector('[data-attr-role]').value, options: values};
     });
     if (!edits.some(function (entry) { return entry.role !== 'vary'; })) {
       throw new Error('Mark at least one concept or leakage attribute for scoring.');
@@ -197,7 +195,7 @@
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({folder: folder, directorModel: directorModel,
         focus: els('concept').value.trim(),
-        vocabulary: window.getTestGenerationPlanningVocabulary()})
+        jobId: els('run').value, vocabulary: window.getTestGenerationPlanningVocabulary()})
     }).then(function (response) { return response.json().then(function (body) {
       if (!response.ok || !body.ok) throw new Error(body.error || 'Could not propose tests.');
       return body.job;
@@ -226,7 +224,7 @@
       els('concept').value = analysis.concept || els('concept').value;
       els('prompt').value = analysis.wildcard;
       dimensions = analysis.variationGroups.map(function (g) {
-        return {label: g.label, options: g.options, role: g.role || suggestedRole(g.label, g.options), referenceTags: g.referenceTags || []};
+        return {label: g.label, options: g.options, role: g.role || suggestedRole(g.label, g.options)};
       });
       renderDimensions();
       els('proposal-status').textContent = 'Proposed tests ready. Edit values and scoring roles freely.';
@@ -292,17 +290,17 @@
   var referencePlanSignature = '';
   function prepareReferences() {
     var version = ++referenceGeneration;
-    referencePlanSignature = JSON.stringify(dimensions.map(function (d) { return [d.label,d.role,d.options,d.referenceTags]; }));
+    referencePlanSignature = JSON.stringify([els('run').value, dimensions.map(function (d) { return [d.label,d.role,d.options]; })]);
     referenceItems = dimensions.flatMap(function (d) {
       return d.role === 'primary' ? d.options.map(function (option) {
-        return {attribute:d.label, option:option, referenceTag:(d.referenceTags || [])[d.options.indexOf(option)], key:JSON.stringify([d.label,option]), candidates:[]};
+        return {attribute:d.label, option:option, key:JSON.stringify([d.label,option]), candidates:[]};
       }) : [];
     });
     referenceIndex = 0;
     els('start').disabled = true;
     els('reference-options').innerHTML = '<p class="epoch-finder-muted">Finding tagged reference candidates…</p>';
     return Promise.all(referenceItems.map(function (item) {
-      return (!item.referenceTag?.group || !item.referenceTag?.tag ? Promise.resolve({references:[]}) : api('reference_suggestions', {jobId:els('run').value, group:item.referenceTag.group, tag:item.referenceTag.tag})).then(function (response) {
+      return api('reference_suggestions', {jobId:els('run').value, option:item.option}).then(function (response) {
         item.candidates = response.references || [];
       });
     })).then(function () {
@@ -324,13 +322,13 @@
         referenceDraftChoices[item.key] = selectedIndex;
       });
       renderReferenceStep();
-    }).catch(error);
+    }).catch(function (exc) { referencePlanSignature = ''; error(exc); });
   }
   function renderReferenceStep() {
     var host = els('reference-options');
     var item = referenceItems[referenceIndex];
     if (!item) {
-      host.innerHTML = '<p class="epoch-finder-muted">No matching training references found. Original VL scoring remains available.</p>';
+      host.innerHTML = '<p class="epoch-finder-muted">No tagged training images matched these Primary options. Original VL scoring remains available; RVN/DINO will have no reference evidence.</p>';
       els('reference-choices').textContent = '0 reference comparisons';
       els('start').disabled = false;
       return;
@@ -339,7 +337,7 @@
     host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' +
       escape(item.attribute) + ' · ' + escape(item.option) + '</strong><span>' +
       (referenceIndex+1) + ' / ' + referenceItems.length + '</span></div>' +
-      '<p class="epoch-finder-muted">Automatically selected from matching Set tags. Review or change only if needed.</p>' +
+      '<p class="epoch-finder-muted">Automatically selected from matching Set tags. Partial matches are suggestions; review or change if needed.</p>' +
       '<div class="epoch-finder-reference-gallery">' + item.candidates.map(function (candidate,i) {
         var active = selected === i;
         return '<button type="button" class="epoch-finder-reference-tile' + (active ? ' selected' : '') +
@@ -372,7 +370,7 @@
     els('next').classList.toggle('hidden', value === 4);
     els('start').classList.toggle('hidden', value !== 4);
     if (value === 3) roundPlan();
-    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify(dimensions.map(function (d) { return [d.label,d.role,d.options,d.referenceTags]; }))) prepareReferences(); else renderReferenceStep(); }
+    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify([els('run').value, dimensions.map(function (d) { return [d.label,d.role,d.options]; })])) prepareReferences(); else renderReferenceStep(); }
   }
   function advance() {
     try {

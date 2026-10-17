@@ -1350,12 +1350,20 @@
                                     <button id="test-generations-session-info-btn" type="button" class="test-generations-session-info-btn hidden" title="View frozen session settings and resolved prompt" aria-label="View frozen session settings and resolved prompt" aria-expanded="false">Details</button>
                                 </div>
                                 <div class="test-generations-vl-toolbar">
-                                    <select id="test-generations-evaluator" aria-label="Test evaluation method" title="Choose which assessment to run">
+                                    <select id="test-generations-evaluator" class="hidden" aria-hidden="true" tabindex="-1">
                                         <option value="original">Ask VL — Original</option>
                                         <option value="rvn">VL Compare — Training Reference</option>
                                         <option value="dino">DINOv2 Compare — Training Reference</option>
                                     </select>
-                                    <button id="test-generations-ask-vl" class="review-captions-btn" type="button" disabled>Ask VL</button>
+                                    <div class="test-evaluate-control">
+                                        <button id="test-generations-ask-vl" class="review-captions-btn" type="button" aria-expanded="false" aria-controls="test-generations-evaluate-menu" disabled>Evaluate ▾</button>
+                                        <div id="test-generations-evaluate-menu" class="test-evaluate-menu hidden" role="menu" aria-label="Evaluation methods">
+                                            <button type="button" role="menuitem" data-test-evaluate="original">Ask VL · Original</button>
+                                            <button type="button" role="menuitem" data-test-evaluate="rvn">VL · Training Reference</button>
+                                            <button type="button" role="menuitem" data-test-evaluate="dino">DINOv2 · Training Reference</button>
+                                            <button type="button" role="menuitem" data-test-evaluate="all">Evaluate All</button>
+                                        </div>
+                                    </div>
                                     <span id="test-generations-vl-progress" class="small" aria-live="polite"></span>
                                 </div>
                                 <dialog id="test-generations-reference-dialog" class="test-reference-dialog" aria-labelledby="test-generations-reference-title">

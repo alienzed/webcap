@@ -649,7 +649,7 @@
     if (inspectedEpoch == null) return '';
     var key = currentFolder + '|' + campaign.jobId + '|' + inspectedEpoch;
     var entry = checkpointEvidenceKey === key && checkpointEvidence;
-    var html = '<details class="epoch-finder-cross-evidence"><summary>Evidence from other campaigns</summary>' +
+    var html = '<details class="epoch-finder-cross-evidence"' + (entry ? ' open' : '') + '><summary>Evidence from other campaigns</summary>' +
       '<button type="button" data-load-checkpoint-evidence>Load checkpoint evidence</button>';
     if (entry) {
       html += entry.length ? entry.map(function (row) {

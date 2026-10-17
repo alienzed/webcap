@@ -1082,13 +1082,14 @@ def overview(folder=""):
             unavailable[area] = str(exc)
             return []
 
+    epoch_items = _epoch_finder_items(cache)
     groups = {
         "training": collect("training", lambda: _training_items(cache)),
         "archive": _archive_items(cache),
         "director_assessment": _director_assessment_items(cache),
         "tests": _test_items(cache, folder),
-        "epoch_finder": [item for item in _epoch_finder_items(cache) if item["area"] == "epoch_finder"],
-        "epoch_finder_staging": [item for item in _epoch_finder_items(cache) if item["area"] == "epoch_finder_staging"],
+        "epoch_finder": [item for item in epoch_items if item["area"] == "epoch_finder"],
+        "epoch_finder_staging": [item for item in epoch_items if item["area"] == "epoch_finder_staging"],
         "staged": collect("staged", lambda: _staged_items(cache, folder)),
         "generate": collect("generate", lambda: _generate_items(cache)),
         "storyboard": _storyboard_items(cache),

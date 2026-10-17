@@ -40,3 +40,17 @@ def test_int8_convrot_quant_marker_and_sample_digests():
     digests = selected_digests(state, {"diffusion_model." + layer + ".weight"})
     assert digests
     assert all(len(value) == 64 for value in digests.values())
+
+
+def test_matching_float_cast_accepts_only_exact_loader_dtype_conversion():
+    torch = pytest.importorskip("torch")
+    from tool.server.h3_premerge_export import matching_float_cast
+
+    bf16 = torch.tensor([1.0, 1.5, -2.0], dtype=torch.bfloat16)
+    fp32 = bf16.to(torch.float32)
+    assert matching_float_cast(bf16, fp32)
+    assert matching_float_cast(fp32, bf16)
+    assert not matching_float_cast(bf16, bf16)
+    assert not matching_float_cast(bf16, fp32 + 1)
+    assert not matching_float_cast(bf16, bf16.to(torch.int8))
+    assert not matching_float_cast(bf16, fp32[:2])

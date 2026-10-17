@@ -593,6 +593,7 @@
     node.innerHTML = '<div class="epoch-finder-inspect-top"><strong>Epoch ' + unit.epoch +
       ' · Round ' + unit.round + ' / Test ' + (unit.case+1) + '</strong><span>' +
       (inspectedFrame+1) + ' / ' + units.length + '</span></div>' +
+      '<div class="epoch-finder-inspect-actions"><button type="button" data-copy-epoch-to-test>Copy epoch ' + unit.epoch + ' to Test Generations</button></div>' +
       (src ? '<button type="button" data-inspect-zoom title="Open original image"><img src="' + escape(src) +
       '" alt="Epoch ' + unit.epoch + ' enlarged preview"></button>' :
       '<p>Frame ' + (unit.framePruned ? 'pruned after scoring' : unit.error ? 'unavailable due to error' : 'not yet captured') + '</p>') +
@@ -793,6 +794,25 @@
   };
   els('inspector').onclick = function (event) {
     if (!campaignState || inspectedEpoch == null) return;
+    if (event.target.closest('[data-copy-epoch-to-test]')) {
+      var button = event.target.closest('[data-copy-epoch-to-test]');
+      var folder = currentFolder, campaignId = campaignState.id, epoch = inspectedEpoch;
+      button.disabled = true;
+      button.textContent = 'Copying epoch…';
+      fetch('/fs/training_candidates/copy_to_test', {method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({folder:folder,jobId:campaignState.jobId,epoch:epoch})})
+        .then(function (response) { return response.json().then(function (value) {
+          if (!response.ok || !value.ok) throw new Error(value.error || 'Could not copy checkpoint.');
+          return value;
+        }); }).then(function () {
+          if (currentFolder === folder && campaignState?.id === campaignId) showMode('tests');
+        }).catch(function (exc) {
+          button.disabled = false;
+          button.textContent = 'Copy epoch ' + epoch + ' to Test Generations';
+          error(exc);
+        });
+      return;
+    }
     if (event.target.closest('[data-inspect-prev]')) inspectedFrame--;
     else if (event.target.closest('[data-inspect-next]')) inspectedFrame++;
     else if (event.target.closest('[data-inspect-zoom]')) {

@@ -742,6 +742,7 @@ def _candidate_run_snapshot(folder, job_id):
             "runName": str(job.get("runName") or ""),
             "sequence": str(job.get("sequence") or ""),
             "actionId": str(job.get("actionId") or ""),
+            "inputPath": str(job.get("inputPath") or ""),
             "stage": str(job.get("stage") or job.get("stages") or ""),
             "stages": str(job.get("stages") or "").strip().lower(),
             "status": str(job.get("status") or "unknown"),

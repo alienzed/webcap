@@ -263,7 +263,7 @@ def create_campaign(folder_path, criteria):
         group = str(entry.get("group") or "")
         media = str(entry.get("media") or "")
         tag = str(entry.get("tag") or option)
-        reference = verified_reference(folder, group, tag, media)
+        reference = verified_reference(folder, group, tag, media, job_id)
         references.append({"attribute": attribute, "option": option, "group": group,
                            "tag": tag, **reference})
     evaluation = criteria.get("referenceEvaluation")
@@ -549,7 +549,7 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
         assigned = references.get((group["label"], expected))
         if assigned is None:
             continue
-        verified = verified_reference(_folder_key(folder_path), assigned["group"], assigned.get("tag") or expected, assigned["media"])
+        verified = verified_reference(_folder_key(folder_path), assigned["group"], assigned.get("tag") or expected, assigned["media"], campaign["jobId"])
         if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
             raise ValueError("Training reference changed after campaign approval.")
         reference = folder_path / assigned["media"]
@@ -612,7 +612,7 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
         entry = references.get((group["label"], option))
         if entry is None:
             continue
-        actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"])
+        actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"], campaign["jobId"])
         if actual["size"] != entry["size"] or actual["mtimeNs"] != entry["mtimeNs"]:
             raise ValueError("Training reference changed since approval.")
         unique.setdefault(entry["media"], []).append(group["label"] + ": " + option)
@@ -929,13 +929,13 @@ def command(folder_path, operation, criteria=None):
         return list_campaigns(folder_path)
     if operation == "reference_vocabulary":
         from .epoch_reference import reference_vocabulary
-        return {"vocabulary": reference_vocabulary(_folder_key(folder_path))}
+        return {"vocabulary": reference_vocabulary(_folder_key(folder_path), criteria.get("jobId"))}
     if operation == "reference_suggestions":
         from .epoch_reference import find_reference_candidates
-        return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("tag"))[:10]}
+        return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("tag"), criteria.get("jobId"))[:10]}
     if operation == "reference_candidates":
         from .epoch_reference import find_reference_candidates
-        return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("term"))}
+        return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("term"), criteria.get("jobId"))}
     if operation == "start":
         return {"campaign": create_campaign(folder_path, criteria)}
     campaign_id = str(criteria.get("campaignId") or "")

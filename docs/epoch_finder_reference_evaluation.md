@@ -69,3 +69,53 @@ Status: agreed direction, 17 October 2026. This document extends `docs/epoch_fin
 - RVN Q5 accepting and correctly comparing two simultaneous images.
 - Local DINOv2/SigLIP2 folder completeness, Python dependency compatibility, memory footprint and GPU arbitration.
 - End-to-end preview, persistence and regression tests. Phase 1 foundation alone is not a complete working campaign.
+
+
+## Implementation inventory (PR #376, not yet production-verified)
+
+- **Reference discovery:** `tool/server/epoch_reference.py`; strict scoped-tag candidate and vocabulary API, image-only references, stable ordering and freshness identities.
+- **Campaign wizard:** full-image reference selection for every scored choice with previews, approved-reference progress, and RVN/DINO opt-out checkboxes enabled by default.
+- **Launch validation:** backend demands a complete, exact-tag-approved reference set and saves frozen choices in `campaign.json`. Old campaigns without these fields continue to load.
+- **Paired RVN:** ordered A/reference and B/render with numbered wildcard choices plus MATCH/PARTIAL/MISMATCH/UNCLEAR; saved alongside existing VL judgments, not fed into legacy ranking.
+- **DINOv2:** optional local Hugging Face CPU inference; source-reference embeddings cached within the existing campaign workspace. Generated frames are not cached. The model is deliberately CPU-only for now to avoid racing GPU reservations.
+- **Evidence:** per-epoch coverage, evaluator errors, clickable thumbnails, enlarged inspector with approved reference images, VL/RVN/DINO details and Copy to Test Generations.
+- **Tests:** request-image ordering and exact scoped-tag lookup tests added, but Python tests, visual browser tests, and real hardware tests have **not** run here.
+
+### Local DINOv2 setup (required when DINO checkbox is enabled)
+
+WebCap's existing Python interpreter/virtual environment must provide optional `torch`, `transformers` and `safetensors` packages (as well as existing Pillow). Install them in that environment using its Python executable, e.g.:
+
+```sh
+python -m pip install torch transformers safetensors
+```
+
+A **complete Hugging Face DINOv2 snapshot** with `config.json`, `preprocessor_config.json`, and `model.safetensors` (or `pytorch_model.bin`) must be in a dedicated folder **directly under the configured WebCap models/text_encoders directory**. Standalone downloaded weights are not sufficient.
+
+One supported example:
+
+```sh
+hf download facebook/dinov2-base --local-dir /path/to/models/text_encoders/dinov2-base
+```
+
+`hf` is the Hugging Face Hub CLI (install via `python -m pip install huggingface_hub` if needed). The configured models root must be accessible from the Python process running WebCap. No model is downloaded or installed automatically by a campaign.
+
+DINOv2 model and dependency presence is checked **before launch**. Reference-embedding cache keys include source file size/timestamp, model weight size/timestamp and processor timestamp. Cache files live within the owning campaign and are removed with its data; no hidden dataset-root cache or unmanaged localStorage. CPU execution is a correct first integration but actual per-image timing must be measured before calling overnight performance adequate.
+
+### Screen-by-screen common-sense UX audit
+
+1. **Run:** Select saved run/epoch subset; no implicit candidate deletion; switching runs discards stale reference selections.
+2. **Tests:** Confirm wildcard labels and resolved option lists; scored options require matching training references, vary-only values do not.
+3. **Rounds:** Existing plan and ETA remain; new evaluator overhead is not yet included in ETA estimates, so don't claim ETA covers it.
+4. **Launch:** Review the campaign, choose one actual reference per scored option, see selected reference preview and a clear approved/required count, choose RVN/DINO checkboxes. Block launch when incomplete; server independently validates against actual dataset.
+5. **Running campaign:** Existing render/VL progress remains; separate RVN and DINO completed/error counts. Never automatically start an inference request from mere navigation.
+6. **Leaderboard:** Legacy VL score remains labeled as concept fidelity; adds simple RVN/DINO coverage, not unvalidated aggregate scores.
+7. **Evidence:** Click a gallery frame or epoch ranking, inspect actual render and approved training images, resolved prompt, choices, RVN reasons and DINO similarity. Copy a selected epoch to Test Generations for user-driven testing.
+8. **Recovery/failure:** Persist per-attribute RVN evidence and per-reference DINO evidence incrementally; show failed evaluators independently; retain frames with new evaluator failures. Existing pause/resume and history remain.
+
+### Remaining verification and follow-up polish
+
+- Verify on a **real tagged Set** that the saved `caption_group_tags_by_media` shapes match exact lookup; adjust only to observed persisted format.
+- Confirm selected local RVN Q5 receives both images and can reliably choose options and fidelity results; inspect failures/latency.
+- Confirm DINO model snapshot, compatible dependency versions, measured CPU throughput and cache reuse.
+- Run repository Python tests and live browser/mobile-width smoke, including empty/ambiguous references, changed source files, changing Sets, interrupted/resumed campaigns and zero new assessment on legacy campaigns.
+- Recalculate runtime projections once RVN/DINO timings exist. Do not introduce unvalidated rank changes.

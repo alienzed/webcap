@@ -348,7 +348,7 @@
       els('estimate').textContent = renders + ' projected renders · ~' + estimateText +
         (seededRenders ? ' (observed samples or H3 seeds)' : '') +
         (seededRenders < renders ? ' · unmeasured: 30s/render' : '') +
-        '. Observed capture estimates include queue waiting; seed estimates exclude it. VL overhead and cutoff ties are extra.';
+        '. Observed render measurements exclude queue wait; VL and cutoff ties are extra.';
     }
     host.oninput = estimate;
     estimate();
@@ -490,13 +490,32 @@
       }).join('');
   }
   function render(campaign) {
-    var captures = campaign.units.filter(function (u) { return Number(u.captureWallSeconds) > 0; });
-    var recent = captures.slice(-8);
-    var typical = recent.length ? recent.map(function (u) { return u.captureWallSeconds; }).sort(function (a,b) { return a-b; })[Math.floor(recent.length/2)] : null;
-    var totalPlanned = campaign.rounds.reduce(function (sum, round) { return sum + (round.epochs.length || 0) * round.seeds.length; }, 0);
-    var remaining = Math.max(0, totalPlanned - captures.length);
-    els('timing').textContent = campaign.status === 'complete' ? 'Campaign complete' : typical == null ? 'No captured timing yet' :
-      'Recent capture: ~' + Math.round(typical) + 's · ~' + Math.ceil(remaining * typical / 60) + 'm remaining (includes queue wait; excludes VL)';
+    function median(values) {
+      if (!values.length) return null;
+      var sorted = values.slice().sort(function (a,b) { return a-b; });
+      return sorted[Math.floor(sorted.length / 2)];
+    }
+    var rounds = campaign.rounds;
+    var cases = campaign.units;
+    var completedRenders = cases.filter(function (u) { return !!u.frame || !!u.error; }).length;
+    var completedVision = cases.filter(function (u) { return !!u.assessment || !!u.error; }).length;
+    var planned = rounds.reduce(function (sum, round) { return sum + round.epochs.length * round.seeds.length; }, 0);
+    var renderMeasured = cases.filter(function (u) { return Number(u.renderSeconds) > 0; }).map(function (u) { return u.renderSeconds; });
+    var vlMeasured = cases.filter(function (u) { return Number(u.visionWallSeconds) > 0; }).map(function (u) { return u.visionWallSeconds; });
+    var renderPace = median(renderMeasured.slice(-10));
+    var visionPace = median(vlMeasured.slice(-10));
+    var remainingRender = Math.max(0, planned - completedRenders);
+    var remainingVision = Math.max(0, planned - completedVision);
+    var eta = (renderPace == null ? 0 : remainingRender * renderPace) +
+      (visionPace == null ? 0 : remainingVision * visionPace);
+    var incomplete = remainingRender || remainingVision;
+    els('timing').textContent = campaign.status === 'complete' ? 'Campaign complete' :
+      !renderMeasured.length && !vlMeasured.length ? 'Awaiting measured render / VL time' :
+      (renderPace == null ? 'Render time unknown' : 'Render ~' + Math.round(renderPace) + 's') +
+      ' · ' + (visionPace == null ? 'VL time unknown' : 'VL ~' + Math.round(visionPace) + 's') +
+      (incomplete && renderPace != null && visionPace != null ?
+        ' · ~' + Math.ceil(eta / 60) + 'm remaining (render queue excluded; VL queue included; future cutoff ties uncertain)' :
+        ' · full ETA awaiting both measurements');
     els('empty').classList.add('hidden');
     els('active').classList.remove('hidden');
     els('phase').textContent = String(campaign.phase || campaign.status).toUpperCase();

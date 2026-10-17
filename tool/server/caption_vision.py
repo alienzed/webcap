@@ -171,6 +171,39 @@ def build_vision_question_messages(question, media_relative_path):
     ]
 
 
+def build_reference_comparison_messages(feature, reference_image, generated_image):
+    """Compare a named feature in two ordered images using the existing VL transport.
+
+    Inputs must be resolved, trusted image data URLs or safe media references.
+    No evaluation is run by this helper.
+    """
+    feature = str(feature or "").strip()
+    if not feature or len(feature) > 240:
+        raise ValueError("Reference comparison requires a short named feature.")
+    if not reference_image or not generated_image:
+        raise ValueError("Reference comparison requires both images.")
+    question = (
+        "You will receive two images in this order: A = an actual training reference, "
+        "B = a generated image. Compare ONLY this feature: " + feature + ". "
+        "Ignore unrelated clothing, people, camera angle, environment and lighting. "
+        "Judge visible construction and appearance, not identical image composition. "
+        "If the feature cannot be assessed in either image, answer UNCLEAR. "
+        "Return exactly two lines: first one of MATCH, PARTIAL, MISMATCH or UNCLEAR; "
+        "second a short, concrete visible reason. "
+        "Do not infer hidden details from the text alone."
+    )
+    return [{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": question},
+            {"type": "text", "text": "Image A: training reference"},
+            {"type": "image_url", "image_url": {"url": _vision_media_url(reference_image)}},
+            {"type": "text", "text": "Image B: generated image"},
+            {"type": "image_url", "image_url": {"url": _vision_media_url(generated_image)}},
+        ],
+    }]
+
+
 CAPTION_VISION_SYSTEM_PROMPT = (
     "You verify a training caption against one image and return only exact, actionable caption edits. "
     "Report a finding only when the image provides clear visual evidence and the current caption is meaningfully missing "

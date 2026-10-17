@@ -223,7 +223,8 @@ def _unit(campaign, round_number, epoch, case):
         if existing["round"] == round_number and existing["epoch"] == epoch and existing["case"] == case:
             return existing
     value = {"round": round_number, "epoch": epoch, "case": case, "session": "",
-             "frame": "", "question": "", "groups": [], "assessment": None, "error": ""}
+             "frame": "", "question": "", "groups": [], "assessment": None,
+             "error": "", "errorStage": ""}
     campaign["units"].append(value)
     return value
 
@@ -336,7 +337,9 @@ def _evaluate_unit(folder_path, campaign, unit):
         "operation": "vision_question",
         "messages": build_vision_question_messages(unit["question"], vision_media_data_url(frame))
     }, label="Epoch Finder Ask VL")
-    job_id = job["jobId"]
+    job_id = str(job.get("jobId") or job.get("id") or "")
+    if not job_id:
+        raise RuntimeError("VL request did not return an execution job ID.")
     while True:
         result = llm_job_status(job_id, consume=False)
         if not result:
@@ -353,6 +356,20 @@ def _evaluate_unit(folder_path, campaign, unit):
             llm_job_status(job_id, consume=True)
             return
         time.sleep(1)
+
+
+def _mark_unit_error(folder_path, campaign, unit, stage, exc):
+    """Retain actionable failure evidence without scoring a failed observation."""
+    import logging
+    message = str(exc)
+    unit["error"] = message
+    unit["errorStage"] = stage
+    logging.getLogger(__name__).exception(
+        "Epoch Finder %s failed: campaign %s, round %s, epoch %s, case %s",
+        stage, campaign["id"], unit["round"], unit["epoch"], unit["case"],
+    )
+    campaign["detail"] = stage.title() + " failure · epoch " + str(unit["epoch"]) + ": " + message
+    _save(folder_path, campaign)
 
 
 def _rank(campaign, round_number):
@@ -432,13 +449,23 @@ def _run(folder_path, campaign_id, control):
                     # following render while we extract and delete the previous
                     # completed clip on the CPU.
                     for unit in pending:
-                        _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=True)
+                        try:
+                            _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=True)
+                        except Exception as exc:
+                            _mark_unit_error(folder_path, campaign, unit, "render", exc)
                     for unit in pending:
                         _update(folder_path, campaign, phase="Rendering",
                                 detail="Epoch " + str(epoch) + " · capturing " +
                                 str(unit["case"] + 1) + "/" + str(len(plan["seeds"])))
-                        _render_unit(folder_path, campaign, plan, unit, staged)
-                _clean_staging(folder_path, campaign)
+                        if unit["error"]:
+                            continue
+                        try:
+                            _render_unit(folder_path, campaign, plan, unit, staged)
+                        except Exception as exc:
+                            _mark_unit_error(folder_path, campaign, unit, "render", exc)
+                if not any(unit.get("session") and _session_still_active(folder_path, unit["session"])
+                           for unit in pending):
+                    _clean_staging(folder_path, campaign)
             _update(folder_path, campaign, phase="Evaluating", detail="All round frames captured.")
             for unit in campaign["units"]:
                 if unit["round"] != number or unit["assessment"] is not None:
@@ -447,7 +474,12 @@ def _run(folder_path, campaign_id, control):
                     return
                 _update(folder_path, campaign, detail="Ask VL · epoch " + str(unit["epoch"]) +
                         " · frame " + str(unit["case"] + 1))
-                _evaluate_unit(folder_path, campaign, unit)
+                if not unit["frame"] or unit.get("error"):
+                    continue
+                try:
+                    _evaluate_unit(folder_path, campaign, unit)
+                except Exception as exc:
+                    _mark_unit_error(folder_path, campaign, unit, "vision", exc)
             ranking = _rank(campaign, number)
             campaign["scores"] = ranking
             plan["ranking"] = ranking

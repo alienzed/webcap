@@ -239,7 +239,7 @@ def _unit(campaign, round_number, epoch, case):
             return existing
     value = {"round": round_number, "epoch": epoch, "case": case, "session": "",
              "frame": "", "question": "", "groups": [], "assessment": None,
-             "error": "", "errorStage": ""}
+             "error": "", "errorStage": "", "captured": False, "framePruned": False
     campaign["units"].append(value)
     return value
 
@@ -293,10 +293,6 @@ def _wait_for_session(folder_path, campaign, unit):
 
 def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     if unit["frame"]:
-        if unit["session"] and not _session_still_active(folder_path, unit["session"]):
-            test_bench.delete_session(folder_path, unit["session"])
-            unit["session"] = ""
-            _save(folder_path, campaign)
         return
     if not unit["session"]:
         settings = dict(plan["settings"], seed=plan["seeds"][unit["case"]])
@@ -334,6 +330,7 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     finally:
         temp.unlink(missing_ok=True)
     unit["frame"] = file_name
+    unit["captured"] = True
     unit["groups"] = status.get("wildcardEvaluationGroups") or []
     if len(unit["groups"]) != len(campaign["dimensions"]):
         raise RuntimeError("Resolved wildcard group count differs from the approved plan.")
@@ -344,11 +341,7 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     unit["question"] = _question(unit["groups"])
     unit["prompt"] = status.get("resolvedPrompt") or status.get("prompt") or ""
     _save(folder_path, campaign)
-    # This Test session and video are exclusively campaign-owned; ordinary Test
-    # sessions are never modified.
-    test_bench.delete_session(folder_path, unit["session"])
-    unit["session"] = ""
-    _save(folder_path, campaign)
+    # Preserve source media until the VL assessment has been saved.
 
 
 def _evaluate_unit(folder_path, campaign, unit):

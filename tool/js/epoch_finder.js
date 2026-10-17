@@ -9,6 +9,7 @@
   var lastFrameKey = '';
   var wizardStep = 1;
   var dimensions = [];
+  var inspectedEpoch = null;
   var proposalBusy = false;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
@@ -406,26 +407,48 @@
       (errors ? ' · ' + errors + ' failed observation(s)' : '') :
       'Results appear as VL evaluates frames.';
     els('ranking').innerHTML = ranking.length ? ranking.map(function (entry, index) {
-      return '<div class="epoch-finder-ranking-row"><span class="rank">#' + (index + 1) +
+      return '<button type="button" class="epoch-finder-ranking-row" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch"><span class="rank">#' + (index + 1) +
         '</span><span class="epoch">Epoch ' + entry.epoch + (entry.active === false ? ' · sidelined' : '') +
         '</span><span class="epoch-finder-score-track"><i style="width:' +
         Math.round((entry.score || 0) * 100) + '%"></i></span><span class="percent">' +
-        (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span></div>';
+        (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span></button>';
     }).join('') : '<p class="epoch-finder-muted">Waiting for VL judgments.</p>';
   }
   function gallery(campaign) {
-    var units = campaign.units.filter(function (u) { return !!u.frame; });
-    var key = units.map(function (u) { return u.frame + ':' + (u.assessment ? '1' : '0'); }).join('|');
+    var units = campaign.units.filter(function (u) {
+      return inspectedEpoch == null || u.epoch === inspectedEpoch;
+    });
+    var key = campaign.id + ':' + inspectedEpoch + ':' + units.map(function (u) {
+      return u.frame + ':' + (u.assessment ? '1' : '0') + ':' + (u.error || '');
+    }).join('|');
     if (lastFrameKey === key) return;
     lastFrameKey = key;
-    els('frames').innerHTML = units.slice(-40).reverse().map(function (unit) {
-      var src = '/fs/epoch_finder/frame?folder=' + encodeURIComponent(currentFolder) +
-        '&campaign=' + encodeURIComponent(campaign.id) + '&frame=' + encodeURIComponent(unit.frame);
-      return '<figure class="epoch-finder-frame"><img loading="lazy" src="' + escape(src) +
-        '" alt="Epoch ' + unit.epoch + ' test frame"><figcaption>Epoch ' + unit.epoch +
-        ' · Test ' + (unit.case + 1) + '<small>' + (unit.assessment ? 'VL evaluated' : 'Frame ready') +
-        '</small></figcaption></figure>';
-    }).join('');
+    var heading = inspectedEpoch == null ? '<strong>Recent retained frames</strong>' :
+      '<strong>Epoch ' + inspectedEpoch + ' · All recorded tests</strong> ' +
+      '<button type="button" data-inspect-reset>Show all epochs</button>';
+    var shown = inspectedEpoch == null ? units.filter(function (u) { return !!u.frame; }).slice(-40).reverse() :
+      units.slice().sort(function (a,b) { return a.round - b.round || a.case - b.case; });
+    els('frames').innerHTML = '<div class="epoch-finder-gallery-heading">' + heading + '</div>' +
+      shown.map(function (unit) {
+        var src = unit.frame ? '/fs/epoch_finder/frame?folder=' + encodeURIComponent(currentFolder) +
+          '&campaign=' + encodeURIComponent(campaign.id) + '&frame=' + encodeURIComponent(unit.frame) : '';
+        var assessment = unit.assessment || {};
+        var checks = (assessment.comparison || []).map(function (g) {
+          return '<div>' + escape(g.label) + ': ' + escape(g.result) +
+            ' · expected ' + escape(g.expected == null ? 'unclear' : (unit.groups || []).find(function (v) {
+              return v.id === g.id;
+            })?.options?.[g.expected - 1] || '?') +
+            ' · observed ' + escape(g.selected == null ? 'unclear' :
+              (unit.groups || []).find(function (v) { return v.id === g.id; })?.options?.[g.selected - 1] || '?') + '</div>';
+        }).join('');
+        return '<figure class="epoch-finder-frame">' +
+          (src ? '<img loading="lazy" src="' + escape(src) + '" alt="Epoch ' + unit.epoch + ' test frame">' :
+            '<div class="epoch-finder-muted">Frame pruned or unavailable</div>') +
+          '<figcaption>Epoch ' + unit.epoch + ' · Round ' + unit.round + ' · Test ' + (unit.case + 1) +
+          '<small>' + (unit.error ? escape(unit.error) : unit.assessment ? 'VL evaluated' : 'Frame ready') +
+          '</small>' + (inspectedEpoch == null ? '' : '<div>' + escape(unit.prompt || '') + '</div>' + checks) +
+          '</figcaption></figure>';
+      }).join('');
   }
   function render(campaign) {
     els('empty').classList.add('hidden');
@@ -486,6 +509,8 @@
     }).catch(error).finally(function () { els('start').disabled = false; });
   }
   function applyFolder(folder) {
+    inspectedEpoch = null;
+    lastFrameKey = null;
     var changed = currentFolder !== folder;
     currentFolder = folder;
     if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; }
@@ -508,6 +533,19 @@
   els('rounds').onchange = roundPlan;
   els('cases').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
   els('retention').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
+  els('ranking').onclick = function (event) {
+    var row = event.target.closest('[data-inspect-epoch]');
+    if (!row) return;
+    inspectedEpoch = Number(row.dataset.inspectEpoch);
+    lastFrameKey = null;
+    refreshStatus().catch(error);
+  };
+  els('frames').onclick = function (event) {
+    if (!event.target.closest('[data-inspect-reset]')) return;
+    inspectedEpoch = null;
+    lastFrameKey = null;
+    refreshStatus().catch(error);
+  };
   els('pause').onclick = function () { send('pause'); };
   els('resume').onclick = function () { send('resume'); };
   els('stop').onclick = function () { send('stop'); };

@@ -932,7 +932,7 @@ def command(folder_path, operation, criteria=None):
         return {"vocabulary": reference_vocabulary(_folder_key(folder_path))}
     if operation == "reference_suggestions":
         from .epoch_reference import find_reference_candidates
-        return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("tag"))}
+        return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("tag"))[:10]}
     if operation == "reference_candidates":
         from .epoch_reference import find_reference_candidates
         return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("term"))}

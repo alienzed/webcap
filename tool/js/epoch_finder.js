@@ -10,6 +10,9 @@
   var wizardStep = 1;
   var dimensions = [];
   var inspectedEpoch = null;
+  var inspectedFrame = 0;
+  var campaignState = null;
+  var listRequestVersion = 0;
   var selectedEpochs = new Set();
   var selectedRunId = "";
   var proposalBusy = false;
@@ -393,12 +396,14 @@
   }
   function list() {
     els('count').textContent = String(campaigns.length);
-    els('campaigns').innerHTML = campaigns.length ? campaigns.map(function (c) {
+    var model = String(window.getWorkingModelProfileId() || '');
+    var visible = campaigns.filter(function (c) { return c.modelId === model; });
+    els('campaigns').innerHTML = visible.length ? visible.map(function (c) {
       return '<button type="button" class="epoch-finder-campaign ' +
         (c.id === activeCampaign ? 'active' : '') + '" data-id="' + escape(c.id) + '">' +
-        '<strong>' + escape(c.name || c.id) + '</strong><small>Round ' + escape(c.round) +
+        '<strong>' + escape(c.name || c.id) + '</strong><small>' + escape(c.modelId || '') + ' · Round ' + escape(c.round) +
         ' · ' + escape(c.phase || c.status) + '</small></button>';
-    }).join('') : '<span class="epoch-finder-muted">No campaigns yet.</span>';
+    }).join('') : '<span class="epoch-finder-muted">No campaigns for this model.</span>';
   }
   function progress(campaign) {
     var plan = campaign.rounds.find(function (r) { return r.number === campaign.round; }) || campaign.rounds[campaign.rounds.length - 1];
@@ -446,12 +451,18 @@
     els('ranking-note').textContent = ranking.length ? 'Cumulative concept fidelity · unclear excluded' +
       (errors ? ' · ' + errors + ' failed observation(s)' : '') :
       'Results appear as VL evaluates frames.';
+    var filter = els('rank-filter').value, sort = els('rank-sort').value;
+    ranking = ranking.filter(function (entry) {
+      return filter === 'all' || (filter === 'active' ? entry.active !== false : entry.active === false);
+    });
+    if (sort === 'epoch') ranking.sort(function (a,b) { return a.epoch-b.epoch; });
+    if (sort === 'count') ranking.sort(function (a,b) { return (b.count || 0)-(a.count || 0) || (b.score || 0)-(a.score || 0); });
     els('ranking').innerHTML = ranking.length ? ranking.map(function (entry, index) {
       return '<button type="button" class="epoch-finder-ranking-row" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch"><span class="rank">#' + (index + 1) +
         '</span><span class="epoch">Epoch ' + entry.epoch + (entry.active === false ? ' · sidelined' : '') +
         '</span><span class="epoch-finder-score-track"><i style="width:' +
         Math.round((entry.score || 0) * 100) + '%"></i></span><span class="percent">' +
-        (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span></button>';
+        (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span><small>' + (entry.count || 0) + ' weighted observations</small></button>';
     }).join('') : '<p class="epoch-finder-muted">Waiting for VL judgments.</p>';
   }
   function gallery(campaign) {
@@ -490,7 +501,38 @@
           '</figcaption></figure>';
       }).join('');
   }
+  function inspectFrame(campaign) {
+    var node = els('inspector');
+    var units = campaign.units.filter(function (u) { return inspectedEpoch != null && u.epoch === inspectedEpoch; })
+      .sort(function (a,b) { return a.round-b.round || a.case-b.case; });
+    node.classList.toggle('hidden', !units.length);
+    if (!units.length) { node.innerHTML = ''; return; }
+    inspectedFrame = Math.max(0, Math.min(inspectedFrame, units.length-1));
+    var unit = units[inspectedFrame], checks = (unit.assessment && unit.assessment.comparison) || [];
+    var src = unit.frame && !unit.framePruned ? '/fs/epoch_finder/frame?folder=' +
+      encodeURIComponent(currentFolder) + '&campaign=' + encodeURIComponent(campaign.id) +
+      '&frame=' + encodeURIComponent(unit.frame) : '';
+    node.innerHTML = '<div class="epoch-finder-inspect-top"><strong>Epoch ' + unit.epoch +
+      ' · Round ' + unit.round + ' / Test ' + (unit.case+1) + '</strong><span>' +
+      (inspectedFrame+1) + ' / ' + units.length + '</span></div>' +
+      (src ? '<button type="button" data-inspect-zoom title="Open original image"><img src="' + escape(src) +
+      '" alt="Epoch ' + unit.epoch + ' enlarged preview"></button>' :
+      '<p>Frame ' + (unit.framePruned ? 'pruned after scoring' : unit.error ? 'unavailable due to error' : 'not yet captured') + '</p>') +
+      '<div class="epoch-finder-inspect-nav"><button type="button" data-inspect-prev>← Previous</button>' +
+      '<button type="button" data-inspect-next>Next →</button></div>' +
+      '<details open><summary>VL judgments (' + checks.length + ')</summary>' +
+      checks.map(function (c) {
+        var g = (unit.groups || []).find(function (g) { return g.id === c.id; });
+        var choices = g && g.options || [];
+        return '<p>' + escape(c.label) + ': ' + escape(c.result) + ' · expected ' +
+          escape(choices[c.expected-1] || 'unknown') + ' · observed ' +
+          escape(choices[c.selected-1] || 'unclear') + '</p>';
+      }).join('') + '</details><details><summary>Resolved prompt</summary><p>' +
+      escape(unit.prompt || 'Not yet resolved') + '</p></details>' +
+      (unit.error ? '<p class="epoch-finder-error">' + escape(unit.error) + '</p>' : '');
+  }
   function render(campaign) {
+    campaignState = campaign;
     function median(values) {
       if (!values.length) return null;
       var sorted = values.slice().sort(function (a,b) { return a-b; });
@@ -530,25 +572,28 @@
     progress(campaign);
     ranking(campaign);
     gallery(campaign);
+    inspectFrame(campaign);
   }
   function refreshStatus() {
     if (!activeCampaign) return Promise.resolve();
-    return api('status', { campaignId: activeCampaign }).then(function (response) {
-      if (response.campaign) render(response.campaign);
+    var requestedId = activeCampaign, requestedFolder = currentFolder;
+    return api('status', { campaignId: requestedId }).then(function (response) {
+      if (activeCampaign === requestedId && currentFolder === requestedFolder && response.campaign) render(response.campaign);
     });
   }
   function refresh() {
     if (!currentFolder || mode !== 'finder') return;
+    var folderAtRequest = currentFolder, modelAtRequest = String(window.getWorkingModelProfileId() || '');
+    var requestVersion = ++listRequestVersion;
     api('list').then(function (response) {
+      if (requestVersion !== listRequestVersion || folderAtRequest !== currentFolder ||
+          modelAtRequest !== String(window.getWorkingModelProfileId() || '') || mode !== 'finder') return;
       runs = response.runs || [];
       campaigns = response.campaigns || [];
       timingProfiles = response.timings || {};
       setup(); list();
-      if (activeCampaign) return refreshStatus();
-      if (campaigns.length) {
-        activeCampaign = campaigns[0].id;
-        list(); return refreshStatus();
-      }
+      if (activeCampaign && campaigns.some(function (c) { return c.id === activeCampaign; })) return refreshStatus();
+      activeCampaign = '';
       els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
     }).catch(error);
   }
@@ -581,6 +626,7 @@
     inspectedEpoch = null;
     lastFrameKey = null;
     var changed = currentFolder !== folder;
+    if (changed) listRequestVersion++;
     currentFolder = folder;
     if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); }
     if (mode === 'finder') refresh();
@@ -589,6 +635,7 @@
   els('mode-tests').onclick = function () { showMode('tests'); };
   els('mode-finder').onclick = function () { showMode('finder'); };
   els('refresh').onclick = refresh;
+  els('new').onclick = function () { activeCampaign = ''; campaignState = null; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); };
   els('start').onclick = start;
   els('suggest').onclick = propose;
   els('next').onclick = advance;
@@ -628,16 +675,30 @@
   els('rounds').onchange = roundPlan;
   els('cases').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
   els('retention').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
+  ['rank-filter','rank-sort'].forEach(function (id) { els(id).onchange = function () { if (campaignState) ranking(campaignState); }; });
   els('ranking').onclick = function (event) {
     var row = event.target.closest('[data-inspect-epoch]');
     if (!row) return;
     inspectedEpoch = Number(row.dataset.inspectEpoch);
+    inspectedFrame = 0;
     lastFrameKey = null;
     refreshStatus().catch(error);
+  };
+  els('inspector').onclick = function (event) {
+    if (!campaignState || inspectedEpoch == null) return;
+    if (event.target.closest('[data-inspect-prev]')) inspectedFrame--;
+    else if (event.target.closest('[data-inspect-next]')) inspectedFrame++;
+    else if (event.target.closest('[data-inspect-zoom]')) {
+      var image = els('inspector').querySelector('img');
+      if (image) window.open(image.src, '_blank', 'noopener');
+      return;
+    } else return;
+    inspectFrame(campaignState);
   };
   els('frames').onclick = function (event) {
     if (!event.target.closest('[data-inspect-reset]')) return;
     inspectedEpoch = null;
+    inspectedFrame = 0;
     lastFrameKey = null;
     refreshStatus().catch(error);
   };
@@ -654,8 +715,14 @@
   };
   els('campaigns').onclick = function (event) {
     var button = event.target.closest('[data-id]');
-    if (button) { activeCampaign = button.dataset.id; inspectedEpoch = null; lastFrameKey = ''; list(); refreshStatus().catch(error); }
+    if (button) { activeCampaign = button.dataset.id; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; list(); refreshStatus().catch(error); }
   };
+  window.addEventListener('webcap:working-model-changed', function () {
+    listRequestVersion++;
+    activeCampaign = ''; inspectedEpoch = null; campaignState = null;
+    els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
+    if (mode === 'finder') refresh();
+  });
   timer = setInterval(function () {
     if (mode === 'finder' && activeCampaign && !els('screen').classList.contains('hidden')) refreshStatus().catch(error);
   }, 2500);

@@ -1198,6 +1198,7 @@
                                 </section>
                                 <section class="epoch-finder-panel">
                                     <div class="epoch-finder-panel-heading"><h3>Campaigns</h3><span id="epoch-finder-count"></span></div>
+                                    <button id="epoch-finder-new" type="button" class="review-captions-btn epoch-finder-new-campaign">+ New Campaign</button>
                                     <div id="epoch-finder-campaigns" class="epoch-finder-campaigns"><span class="epoch-finder-muted">No campaigns yet.</span></div>
                                 </section>
                             </aside>
@@ -1224,11 +1225,13 @@
                                     <div class="epoch-finder-live-layout">
                                         <section class="epoch-finder-live-ranks">
                                             <div class="epoch-finder-panel-heading"><h3>Leaderboard</h3><span id="epoch-finder-ranking-note">Awaiting VL</span></div>
+                                            <div class="epoch-finder-ranking-controls"><select id="epoch-finder-rank-filter" aria-label="Candidate filter"><option value="all">All candidates</option><option value="active">Active</option><option value="sidelined">Sidelined</option></select><select id="epoch-finder-rank-sort" aria-label="Candidate sort"><option value="score">Highest score</option><option value="epoch">Epoch number</option><option value="count">Most evidence</option></select></div>
                                             <div id="epoch-finder-ranking" class="epoch-finder-leaderboard"></div>
                                         </section>
                                         <section class="epoch-finder-live-media">
                                             <div class="epoch-finder-panel-heading"><h3>Evidence</h3><span id="epoch-finder-timing">Awaiting first frame</span></div>
                                             <div id="epoch-finder-frames" class="epoch-finder-frames"></div>
+                                            <div id="epoch-finder-inspector" class="epoch-finder-inspector hidden"></div>
                                         </section>
                                     </div>
                                 </div>

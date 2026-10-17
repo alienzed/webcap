@@ -1165,7 +1165,9 @@
                                         <label>Tests / epoch<input id="epoch-finder-cases" type="number" min="1" max="6" value="2"></label>
                                         <label>Keep per round (%)<input id="epoch-finder-retention" type="number" min="10" max="90" value="50"></label>
                                     </div>
-                                    <p class="epoch-finder-muted">Model settings come from the Test Generations workspace. Vision uses the selected model in the global header.</p>
+                                    <div id="epoch-finder-round-plan" class="epoch-finder-round-plan" aria-label="Round plan"></div>
+                                    <p id="epoch-finder-estimate" class="epoch-finder-muted"></p>
+                                    <p class="epoch-finder-muted">Model settings come from Test Generations. Vision uses the selected model in the global header.</p>
                                     <button id="epoch-finder-start" type="button" class="training-btn training-launch-btn">Start Epoch Finder</button>
                                 </section>
                                 <section class="epoch-finder-panel">

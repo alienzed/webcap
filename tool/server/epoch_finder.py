@@ -167,6 +167,55 @@ def list_campaigns(folder_path):
     return {"runs": _runs(folder_path), "campaigns": campaigns, "timings": _timing_profiles(folder_path)}
 
 
+
+def checkpoint_evidence(folder_path, job_id):
+    """Read-only evidence for a training run, retaining each campaign's protocol.
+
+    The identity is the saved run ID plus epoch number; no scores are
+    averaged across different prompts, seeds or evaluator configurations.
+    """
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        raise ValueError("Select a training run to inspect checkpoint evidence.")
+    checkpoints = {}
+    root = _root(folder_path)
+    if not root.is_dir():
+        return {"jobId": job_id, "checkpoints": []}
+    for directory in root.iterdir():
+        if not directory.is_dir() or directory.is_symlink() or not _ID.fullmatch(directory.name):
+            continue
+        campaign = _load(folder_path, directory.name)
+        if campaign.get("jobId") != job_id or not campaign.get("rounds"):
+            continue
+        for row in _rank(campaign, len(campaign["rounds"])):
+            epoch = row["epoch"]
+            units = [unit for unit in campaign.get("units", [])
+                     if unit.get("epoch") == epoch]
+            observations = [unit for unit in units if unit.get("assessment") is not None]
+            reference_verdicts = {"MATCH": 0, "PARTIAL": 0, "MISMATCH": 0, "UNCLEAR": 0}
+            for unit in units:
+                for assessment in unit.get("referenceAssessments") or []:
+                    verdict = assessment.get("verdict")
+                    if verdict in reference_verdicts:
+                        reference_verdicts[verdict] += 1
+            entry = {
+                "campaignId": campaign["id"], "campaignName": campaign.get("name", ""),
+                "status": campaign.get("status"), "score": row["score"],
+                "weightedObservations": row["count"], "evaluatedRenders": len(observations),
+                "failedRenders": sum(bool(unit.get("error")) for unit in units),
+                "rvnVerdicts": reference_verdicts,
+                "dinoComparisons": sum(len(unit.get("dinoAssessments") or []) for unit in units),
+                "visionModel": campaign.get("visionModel"),
+                "referenceEvaluation": campaign.get("referenceEvaluation", {}),
+            }
+            checkpoints.setdefault(epoch, []).append(entry)
+    return {"jobId": job_id, "checkpoints": [
+        {"epoch": epoch, "campaigns": sorted(entries, key=lambda entry: entry["campaignId"])}
+        for epoch, entries in sorted(checkpoints.items())
+    ]}
+
+
+
 def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings, round_options=None):
     plan = []
     options_by_round = round_options if round_options is not None else []
@@ -927,6 +976,8 @@ def command(folder_path, operation, criteria=None):
     criteria = criteria if isinstance(criteria, dict) else {}
     if operation == "list":
         return list_campaigns(folder_path)
+    if operation == "checkpoint_evidence":
+        return checkpoint_evidence(folder_path, criteria.get("jobId"))
     if operation == "reference_vocabulary":
         from .epoch_reference import reference_vocabulary
         return {"vocabulary": reference_vocabulary(_folder_key(folder_path), criteria.get("jobId"))}

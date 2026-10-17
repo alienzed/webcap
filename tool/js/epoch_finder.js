@@ -54,9 +54,9 @@
   }
   function wildcardParts(prompt) {
     var source = String(prompt || '');
-    var matches = Array.from(source.matchAll(/\\{([^{}]*\\|[^{}]*)\\}/g));
-    if (!matches.length || (source.match(/\\{/g) || []).length !== matches.length ||
-      (source.match(/\\}/g) || []).length !== matches.length) {
+    var matches = Array.from(source.matchAll(/\{([^{}]*\|[^{}]*)\}/g));
+    if (!matches.length || (source.match(/\{/g) || []).length !== matches.length ||
+      (source.match(/\}/g) || []).length !== matches.length) {
       throw new Error('Use flat {option|option} wildcard groups in the test prompt.');
     }
     return matches.map(function (m) {
@@ -202,7 +202,10 @@
   }
   function advance() {
     try {
-      if (wizardStep === 1 && !els('run').value) throw new Error('Choose a saved training run.');
+      if (wizardStep === 1) {
+        if (!els('run').value) throw new Error('Choose a saved training run.');
+        updateDimensions();
+      }
       if (wizardStep === 2) recordDimensions();
       showStep(Math.min(4, wizardStep + 1));
     } catch (exc) { error(exc); }

@@ -241,7 +241,7 @@ def _unit(campaign, round_number, epoch, case):
             return existing
     value = {"round": round_number, "epoch": epoch, "case": case, "session": "",
              "frame": "", "question": "", "groups": [], "assessment": None,
-             "error": "", "errorStage": "", "captured": False, "framePruned": False
+             "error": "", "errorStage": "", "captured": False, "framePruned": False}
     campaign["units"].append(value)
     return value
 

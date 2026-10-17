@@ -358,7 +358,7 @@
     var targets = [512, 640, 768, 768];
     var target = targets[Math.min(roundIndex, targets.length - 1)];
     var candidates = options.map(function (value) {
-      var match = String(value).match(/(\\d+)\\s*[xX×]\\s*(\\d+)/);
+      var match = String(value).match(/(\d+)\s*[xX×]\s*(\d+)/);
       return match ? {value: value, shortSide: Math.min(Number(match[1]), Number(match[2]))} : null;
     }).filter(Boolean);
     if (!candidates.length) return fallback;

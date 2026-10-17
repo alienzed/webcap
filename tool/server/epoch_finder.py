@@ -709,6 +709,9 @@ def command(folder_path, operation, criteria=None):
     criteria = criteria if isinstance(criteria, dict) else {}
     if operation == "list":
         return list_campaigns(folder_path)
+    if operation == "reference_candidates":
+        from .epoch_reference import find_reference_candidates
+        return {"references": find_reference_candidates(folder_path, criteria.get("group"), criteria.get("term"))}
     if operation == "start":
         return {"campaign": create_campaign(folder_path, criteria)}
     campaign_id = str(criteria.get("campaignId") or "")

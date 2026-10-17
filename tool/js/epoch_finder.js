@@ -514,7 +514,7 @@
       (renderPace == null ? 'Render time unknown' : 'Render ~' + Math.round(renderPace) + 's') +
       ' · ' + (visionPace == null ? 'VL time unknown' : 'VL ~' + Math.round(visionPace) + 's') +
       (incomplete && renderPace != null && visionPace != null ?
-        ' · ~' + Math.ceil(eta / 60) + 'm remaining (excludes queue waits / future cutoff ties)' :
+        ' · ~' + Math.ceil(eta / 60) + 'm remaining (render queue excluded; VL queue included; future cutoff ties uncertain)' :
         ' · full ETA awaiting both measurements');
     els('empty').classList.add('hidden');
     els('active').classList.remove('hidden');

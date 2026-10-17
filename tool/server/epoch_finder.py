@@ -273,7 +273,7 @@ def _wait_for_session(folder_path, campaign, unit):
         time.sleep(2)
 
 
-def _render_unit(folder_path, campaign, plan, unit, staged):
+def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     if unit["frame"]:
         if unit["session"] and not _session_still_active(folder_path, unit["session"]):
             test_bench.delete_session(folder_path, unit["session"])
@@ -291,6 +291,8 @@ def _render_unit(folder_path, campaign, plan, unit, staged):
         )
         unit["session"] = answer["job"]["id"]
         _save(folder_path, campaign)
+    if enqueue_only:
+        return
     status = _wait_for_session(folder_path, campaign, unit)
     result = status["results"][0]
     media = test_bench.resolve_result_media(folder_path, unit["session"], result["mediaFile"])
@@ -379,18 +381,25 @@ def _run(folder_path, campaign_id, control):
             _update(folder_path, campaign, status="running", phase="Rendering",
                     detail="Round " + str(number) + " · " + str(len(epochs)) + " epochs")
             for epoch in epochs:
-                staged = None
-                for case in range(len(plan["seeds"])):
-                    unit = _unit(campaign, number, epoch, case)
-                    if unit["frame"]:
-                        continue
+                pending = [
+                    _unit(campaign, number, epoch, case)
+                    for case in range(len(plan["seeds"]))
+                    if not _unit(campaign, number, epoch, case)["frame"]
+                ]
+                if pending:
                     if not _check_signal(folder_path, campaign, control):
                         return
-                    _update(folder_path, campaign, phase="Rendering",
-                            detail="Epoch " + str(epoch) + " · render " + str(case + 1) + "/" + str(len(plan["seeds"])))
-                    if staged is None:
-                        staged = _stage_epoch(folder_path, campaign, epoch)
-                    _render_unit(folder_path, campaign, plan, unit, staged)
+                    staged = _stage_epoch(folder_path, campaign, epoch)
+                    # Queue this epoch's renders first. ComfyUI can start the
+                    # following render while we extract and delete the previous
+                    # completed clip on the CPU.
+                    for unit in pending:
+                        _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=True)
+                    for unit in pending:
+                        _update(folder_path, campaign, phase="Rendering",
+                                detail="Epoch " + str(epoch) + " · capturing " +
+                                str(unit["case"] + 1) + "/" + str(len(plan["seeds"])))
+                        _render_unit(folder_path, campaign, plan, unit, staged)
                 _clean_staging(folder_path, campaign)
             _update(folder_path, campaign, phase="Evaluating", detail="All round frames captured.")
             for unit in campaign["units"]:

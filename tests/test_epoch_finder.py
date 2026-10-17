@@ -80,3 +80,50 @@ def test_campaign_staging_hidden_from_ordinary_test_candidates(tmp_path, monkeyp
         epoch_test_bench._selected_lora_files_for_set(
             tmp_path, object(), selected_files=["epoch-finder-abcdef123456/epoch5.safetensors"]
         )
+
+
+def test_cumulative_ranking_keeps_earlier_evidence_and_inactive_epochs():
+    campaign = {
+        "rounds": [{"epochs": [1, 2, 3]}, {"epochs": [1, 2]}],
+        "units": [
+            {"round": 1, "epoch": 1, "assessment": {"comparison": [{"result": "match"}]}},
+            {"round": 1, "epoch": 2, "assessment": {"comparison": [{"result": "match"}]}},
+            {"round": 1, "epoch": 3, "assessment": {"comparison": [{"result": "match"}, {"result": "mismatch"}]}},
+            {"round": 2, "epoch": 1, "assessment": {"comparison": [{"result": "mismatch"}]}},
+            {"round": 2, "epoch": 2, "assessment": {"comparison": [{"result": "mismatch"}, {"result": "mismatch"}]}},
+        ],
+    }
+    ranking = epoch_finder._rank(campaign, 2)
+    assert {row["epoch"] for row in ranking} == {1, 2, 3}
+    scores = {row["epoch"]: row["score"] for row in ranking}
+    assert scores[1] == 0.5
+    assert scores[2] == pytest.approx(1 / 3)
+    assert scores[3] == 0.5
+    advanced, reentered, cutoff = epoch_finder._select_next_epochs(ranking, [1, 2], 50)
+    assert advanced == [1, 3]
+    assert reentered == [3]
+    assert cutoff == 0.5
+
+
+def test_cutoff_keeps_all_ties_and_does_not_score_unclear():
+    ranking = [
+        {"epoch": 1, "score": 0.8},
+        {"epoch": 2, "score": 0.5},
+        {"epoch": 3, "score": 0.5},
+        {"epoch": 4, "score": None},
+    ]
+    advance, reenter, cutoff = epoch_finder._select_next_epochs(ranking, [1, 2, 3, 4], 50)
+    assert advance == [1, 2, 3]
+    assert reenter == []
+    assert cutoff == 0.5
+
+
+def test_failed_observation_remains_unscored_and_saved(tmp_path, monkeypatch):
+    saved = []
+    monkeypatch.setattr(epoch_finder, "_save", lambda folder, payload: saved.append(payload["units"][0].copy()))
+    unit = {"round": 1, "epoch": 5, "case": 0, "assessment": None, "error": "", "errorStage": ""}
+    campaign = {"id": "abcdef123456", "units": [unit]}
+    epoch_finder._mark_unit_error(tmp_path, campaign, unit, "vision", RuntimeError("server offline"))
+    assert saved and saved[0]["error"] == "server offline"
+    assert unit["assessment"] is None
+    assert unit["errorStage"] == "vision"

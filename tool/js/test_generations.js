@@ -1290,6 +1290,16 @@
     return poll(job);
   }
 
+  function testPlanningVocabulary() {
+    return checklistItems.map(function (group) {
+      return {
+        group: String(group || ''),
+        alias: getRequirementGroupAlias(group),
+        terms: getChecklistKeywordTermsForRequirement(group)
+      };
+    }).filter(function (entry) { return !!entry.group; });
+  }
+
   function generateWildcardFromSet() {
     if (wildcardDirector.busy) return;
     if (!wildcardDirector.modelId) throw new Error('Choose a Director model.');
@@ -1308,13 +1318,7 @@
       folder: requestFolder,
       directorModel: wildcardDirector.modelId,
       focus: focus,
-      vocabulary: checklistItems.map(function (group) {
-        return {
-          group: String(group || ''),
-          alias: getRequirementGroupAlias(group),
-          terms: getChecklistKeywordTermsForRequirement(group)
-        };
-      }).filter(function (entry) { return !!entry.group; })
+      vocabulary: testPlanningVocabulary()
     }).then(function (payload) {
       wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
       wildcardDirector.requestDiagnostic = payload.job && payload.job.request || null;
@@ -5134,6 +5138,7 @@
     refreshActivityButton();
   }
 
+  window.getTestGenerationPlanningVocabulary = testPlanningVocabulary;
   window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
   window.prepareTestBenchSetSwitch = prepareTestBenchSetSwitch;
   window.openTestBenchActivity = openTestBenchActivity;

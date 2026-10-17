@@ -255,7 +255,8 @@
     if (!run) throw new Error('Select a training run.');
     var roundSummary = getRoundPlans().map(function (round, index) {
       return 'R' + (index + 1) + ': ' + round.cases + ' tests/epoch · keep ' +
-        round.keepPercent + '%' + (round.megapixels ? ' · ' + round.megapixels + ' MP' : '');
+        round.keepPercent + '%' + (round.megapixels ? ' · ' + round.megapixels + ' MP' : '') +
+        (round.dimensions ? ' · ' + round.dimensions : '');
     });
     els('review').innerHTML = '<p><strong>' + escape(run.runName) + '</strong> · ' +
       chosenEpochs().length + ' selected of ' + run.epochs.length + ' saved epochs</p><p>' + escape(els('concept').value.trim() || 'Concept not specified') +
@@ -362,9 +363,13 @@
       return {
         cases: Number(row.querySelector('[data-case]').value),
         keepPercent: Number(row.querySelector('[data-keep]').value),
-        megapixels: Number(row.querySelector('[data-mp]').value)
+        megapixels: Number(row.querySelector('[data-mp]').value),
+        dimensions: row.querySelector('[data-dimensions]') ? row.querySelector('[data-dimensions]').value : ''
       };
     });
+    var kreaDimensions = window.getTestGenerationDimensionPresets();
+    var hasDimensions = !document.getElementById('test-generations-dimensions-field').classList.contains('hidden');
+    if (hasDimensions && !kreaDimensions.options.length) throw new Error('Krea resolution presets are unavailable in Test Generations.');
     host.innerHTML = '<strong>Round plan</strong>' + Array.from({ length: count }, function (_, index) {
       var saved = current[index] || {};
       var mp = saved.megapixels || Math.min(0.4, 0.2 + index * 0.1);
@@ -374,7 +379,11 @@
         '<span>R' + (index + 1) + '</span>' +
         '<label>Tests<input data-case type="number" min="1" max="6" value="' + cases + '"></label>' +
         '<label>Keep %<input data-keep type="number" min="10" max="90" value="' + keep + '"></label>' +
-        '<label>MP<input data-mp type="number" min="0.1" max="0.4" step="0.1" value="' + mp.toFixed(1) + '"></label></div>';
+        '<label>MP<input data-mp type="number" min="0.1" max="0.4" step="0.1" value="' + mp.toFixed(1) + '"></label>' +
+        (hasDimensions ? '<label>Resolution<select data-dimensions>' + kreaDimensions.options.map(function (value) {
+          var selected = saved.dimensions || kreaDimensions.selected;
+          return '<option value="' + escape(value) + '"' + (value === selected ? ' selected' : '') + '>' + escape(value) + '</option>';
+        }).join('') + '</select></label>' : '') + '</div>';
     }).join('');
     // Krea2 resolution is specified in the selected Test dimensions, not MP.
     var hasMp = !!document.getElementById('test-generations-megapixels') &&
@@ -422,6 +431,8 @@
         keepPercent: Number(row.querySelector('[data-keep]').value)};
       var mpField = row.querySelector('[data-mp]');
       if (!mpField.closest('label').classList.contains('hidden')) plan.megapixels = Number(mpField.value);
+      var dimensionsField = row.querySelector('[data-dimensions]');
+      if (dimensionsField) plan.dimensions = dimensionsField.value;
       return plan;
     });
   }

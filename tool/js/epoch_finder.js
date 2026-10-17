@@ -134,8 +134,7 @@
       var oldValues = (prev.options || []).join('|');
       return {label: String(prev.label || ('Attribute ' + (index + 1))),
         options: g.options.slice(),
-        role: oldValues && oldValues !== g.options.join('|') ? suggestedRole(prev.label, g.options) : (prev.role || suggestedRole(prev.label, g.options)), nested: g.nested,
-        referenceTags: oldValues === g.options.join('|') ? (prev.referenceTags || []) : []};
+        role: oldValues && oldValues !== g.options.join('|') ? suggestedRole(prev.label, g.options) : (prev.role || suggestedRole(prev.label, g.options)), nested: g.nested};
     });
     renderDimensions();
   }
@@ -164,8 +163,7 @@
           values.some(function (x) { return /[{}|]/.test(x); })) throw new Error('Attribute ' + (index + 1) + ' has invalid values.');
       var label = row.querySelector('[data-attr-name]').value.trim();
       if (!label) throw new Error('Every attribute needs a name.');
-      return {label: label, role: row.querySelector('[data-attr-role]').value, options: values,
-        referenceTags: values.join('|') === (dimensions[index]?.options || []).join('|') ? (dimensions[index]?.referenceTags || []) : []};
+      return {label: label, role: row.querySelector('[data-attr-role]').value, options: values};
     });
     if (!edits.some(function (entry) { return entry.role !== 'vary'; })) {
       throw new Error('Mark at least one concept or leakage attribute for scoring.');
@@ -330,7 +328,7 @@
     var host = els('reference-options');
     var item = referenceItems[referenceIndex];
     if (!item) {
-      host.innerHTML = '<p class="epoch-finder-muted">No matching training references found. Original VL scoring remains available.</p>';
+      host.innerHTML = '<p class="epoch-finder-muted">No tagged training images matched these Primary options. Original VL scoring remains available; RVN/DINO will have no reference evidence.</p>';
       els('reference-choices').textContent = '0 reference comparisons';
       els('start').disabled = false;
       return;
@@ -339,7 +337,7 @@
     host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' +
       escape(item.attribute) + ' · ' + escape(item.option) + '</strong><span>' +
       (referenceIndex+1) + ' / ' + referenceItems.length + '</span></div>' +
-      '<p class="epoch-finder-muted">Automatically selected from matching Set tags. Review or change only if needed.</p>' +
+      '<p class="epoch-finder-muted">Automatically selected from matching Set tags. Partial matches are suggestions; review or change if needed.</p>' +
       '<div class="epoch-finder-reference-gallery">' + item.candidates.map(function (candidate,i) {
         var active = selected === i;
         return '<button type="button" class="epoch-finder-reference-tile' + (active ? ' selected' : '') +

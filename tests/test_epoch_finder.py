@@ -177,7 +177,8 @@ def test_wizard_proposal_normalization_enforces_alignment():
         "wildcard": "a {triangle|micro triangle} top",
         "stableTerms": ["top"],
         "variationGroups": [{"label": "Top shape",
-                             "options": ["triangle", "micro triangle"], "role": "primary"}],
+                             "options": ["triangle", "micro triangle"], "role": "primary",
+                             "referenceTags": [{"group": "BT Shape", "tag": "triangle"}, {"group": "BT Shape", "tag": "micro triangle"}]}],
     })
     assert result["variationGroups"][0]["role"] == "primary"
     with pytest.raises(ValueError, match="match"):

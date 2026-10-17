@@ -276,3 +276,42 @@ def test_krea_round_rejects_mp_and_h3_rejects_dimension_presets():
     with pytest.raises(ValueError, match="dimension presets"):
         epoch_finder._create_plan([5], "a {red|blue} top", 1, 1, 50,
                                   {"megapixels": 0.2}, [{"dimensions": "512 x 512"}])
+
+
+def test_discover_queued_resume_run_with_saved_epochs(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    job = {"id": "queued-1", "folder": "set/a"}
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "passive_status_snapshot",
+                        lambda: ({"ok": True, "jobs": [job]}, 200))
+    monkeypatch.setattr(epoch_finder, "all_history_payload",
+                        lambda folder: {"jobs": [job, {"id": "other-set", "folder": "set/b"}]})
+    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot",
+                        lambda folder, job_id: (None, {"runName": "Waiting H3", "stages": "h3"}))
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key",
+                        lambda stage: SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY=stage))
+    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda *args: tmp_path)
+    monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
+                        lambda path: [{"epoch": 60, "status": "available"},
+                                      {"epoch": 65, "status": "missing"}])
+    assert epoch_finder._runs(tmp_path) == [{
+        "jobId": "queued-1", "runName": "Waiting H3", "modelId": "minimax_h3",
+        "stage": "h3", "epochs": [60],
+    }]
+
+
+def test_discover_history_run_and_queue_only_once(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "passive_status_snapshot",
+                        lambda: ({"ok": True, "jobs": [{"id": "same", "folder": "set/a"}]}, 200))
+    monkeypatch.setattr(epoch_finder, "all_history_payload",
+                        lambda folder: {"jobs": [{"id": "same", "folder": "set/a"}]})
+    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot",
+                        lambda folder, job_id: (None, {"runName": "H3", "stages": "h3"}))
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key",
+                        lambda stage: SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY=stage))
+    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda *args: tmp_path)
+    monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
+                        lambda path: [{"epoch": 60, "status": "available"}])
+    assert len(epoch_finder._runs(tmp_path)) == 1

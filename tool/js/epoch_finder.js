@@ -595,6 +595,14 @@
           '<div>' + escape(v.response) + '</div><small>Reference: ' + escape(v.reference) +
           ' · ' + escape(v.elapsedSeconds) + 's</small></div>';
         }).join('') + '</details>' : '') +
+      ((unit.dinoAssessments || []).length ? '<details open><summary>DINOv2 similarity (' +
+        unit.dinoAssessments.length + ' distinct references)</summary>' + unit.dinoAssessments.map(function (v) {
+          return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.reference) +
+            '</strong><span>' + Number(v.similarity).toFixed(3) + '</span><div>' +
+            escape((v.attributes || []).join(' · ')) + '</div></div>';
+        }).join('') + '</details>' : '') +
+      (unit.referenceError ? '<p class="epoch-finder-error">Reference VL: ' + escape(unit.referenceError) + '</p>' : '') +
+      (unit.dinoError ? '<p class="epoch-finder-error">DINOv2: ' + escape(unit.dinoError) + '</p>' : '') +
       (unit.error ? '<p class="epoch-finder-error">' + escape(unit.error) + '</p>' : '');
   }
   function render(campaign) {

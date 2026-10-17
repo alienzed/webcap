@@ -505,7 +505,7 @@
       roundPlans: getRoundPlans(), concept: els("concept").value.trim(), dimensions: recordDimensions()};
     els('start').disabled = true;
     api('start', criteria).then(function (response) {
-      activeCampaign = response.campaign.id; lastFrameKey = ''; refresh();
+      activeCampaign = response.campaign.id; inspectedEpoch = null; lastFrameKey = ''; refresh();
     }).catch(error).finally(function () { els('start').disabled = false; });
   }
   function applyFolder(folder) {
@@ -553,7 +553,7 @@
     if (window.confirm('Delete this campaign, its frames, and its scoring history?')) {
       clearError();
       api('delete', { campaignId: activeCampaign }).then(function () {
-        activeCampaign = ''; lastFrameKey = ''; refresh();
+        activeCampaign = ''; inspectedEpoch = null; lastFrameKey = ''; refresh();
       }).catch(error);
     }
   };

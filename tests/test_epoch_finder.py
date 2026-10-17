@@ -255,3 +255,22 @@ def test_resume_does_not_delete_source_session_just_because_frame_exists(monkeyp
     epoch_finder._resume_saved_work(tmp_path, campaign)
     assert removed == []
     assert campaign["units"][0]["session"] == "retained-video"
+
+
+def test_krea_round_dimensions_follow_each_selected_preset():
+    plans = epoch_finder._create_plan(
+        [5, 10], "a {red|blue} top", 2, 2, 50,
+        {"dimensions": "512 x 512"},
+        [{"dimensions": "512 x 512"}, {"dimensions": "768 x 768"}],
+    )
+    assert [row["settings"]["dimensions"] for row in plans] == ["512 x 512", "768 x 768"]
+    assert all("megapixels" not in row["settings"] for row in plans)
+
+
+def test_krea_round_rejects_mp_and_h3_rejects_dimension_presets():
+    with pytest.raises(ValueError, match="megapixels"):
+        epoch_finder._create_plan([5], "a {red|blue} top", 1, 1, 50,
+                                  {"dimensions": "512 x 512"}, [{"megapixels": 0.2}])
+    with pytest.raises(ValueError, match="dimension presets"):
+        epoch_finder._create_plan([5], "a {red|blue} top", 1, 1, 50,
+                                  {"megapixels": 0.2}, [{"dimensions": "512 x 512"}])

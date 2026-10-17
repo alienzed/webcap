@@ -830,6 +830,12 @@
     els('run').onchange();
     selectedEpochs = new Set(originalEpochs);
     drawEpochPicker();
+    var originalSettings = (source.rounds[0] && source.rounds[0].settings) || {};
+    [['aspectRatio','test-generations-aspect'], ['megapixels','test-generations-megapixels'],
+      ['duration','test-generations-duration'], ['dimensions','test-generations-dimensions']].forEach(function (setting) {
+      var input = document.getElementById(setting[1]);
+      if (input && originalSettings[setting[0]] != null) input.value = String(originalSettings[setting[0]]);
+    });
     els('concept').value = source.concept || '';
     els('prompt').value = (source.rounds[0] && source.rounds[0].prompt) || '';
     dimensions = (source.dimensions || []).map(function (d) {
@@ -896,7 +902,7 @@
     var changed = currentFolder !== folder;
     if (changed) listRequestVersion++;
     currentFolder = folder;
-    if (changed) { evidenceRequestVersion++; checkpointEvidence = null; checkpointEvidenceKey = ''; activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { followUpSource = ''; evidenceRequestVersion++; checkpointEvidence = null; checkpointEvidenceKey = ''; activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;

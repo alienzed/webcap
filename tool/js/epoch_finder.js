@@ -438,6 +438,7 @@
     select.onchange = function () {
       var run = options.find(function (item) { return item.jobId === select.value; });
       if (selectedRunId !== select.value) {
+        referenceSelections = {};
         selectedRunId = select.value;
         selectedEpochs = new Set(run ? run.epochs : []);
       }
@@ -677,6 +678,7 @@
   }
   function start() {
     clearError();
+    try { approvedReferences(); recordDimensions(); } catch (exc) { return error(exc); }
     var jobId = els('run').value;
     if (!jobId) return error(new Error('Select a saved training run.'));
     var settings = {};
@@ -703,7 +705,7 @@
     var changed = currentFolder !== folder;
     if (changed) listRequestVersion++;
     currentFolder = folder;
-    if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); }
+    if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceGeneration++; }
     if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;

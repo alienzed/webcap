@@ -7,6 +7,9 @@
   var timer = null;
   var mode = 'tests';
   var lastFrameKey = '';
+  var wizardStep = 1;
+  var dimensions = [];
+  var proposalBusy = false;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -48,6 +51,161 @@
       if (Math.abs(megapixels - 0.4) < 0.0001) return { seconds: 15, seeded: true };
     }
     return { seconds: 30, seeded: false };
+  }
+  function wildcardParts(prompt) {
+    var source = String(prompt || '');
+    var matches = Array.from(source.matchAll(/\\{([^{}]*\\|[^{}]*)\\}/g));
+    if (!matches.length || (source.match(/\\{/g) || []).length !== matches.length ||
+      (source.match(/\\}/g) || []).length !== matches.length) {
+      throw new Error('Use flat {option|option} wildcard groups in the test prompt.');
+    }
+    return matches.map(function (m) {
+      var parts = m[1].split('|').map(function (v) { return v.trim(); });
+      if (parts.length < 2 || new Set(parts).size !== parts.length) {
+        throw new Error('Every wildcard needs at least two distinct values.');
+      }
+      return {start: m.index, end: m.index + m[0].length, options: parts};
+    });
+  }
+  function updateDimensions() {
+    var groups = wildcardParts(els('prompt').value);
+    dimensions = groups.map(function (g, index) {
+      var prev = dimensions[index] || {};
+      var oldValues = (prev.options || []).join('|');
+      return {label: String(prev.label || ('Attribute ' + (index + 1))),
+        options: g.options.slice(),
+        role: oldValues && oldValues !== g.options.join('|') ? 'primary' : (prev.role || 'primary')};
+    });
+    renderDimensions();
+  }
+  function renderDimensions() {
+    els('attributes').innerHTML = dimensions.map(function (group, index) {
+      return '<div class="epoch-finder-attribute" data-index="' + index + '">' +
+        '<label>Attribute <input data-attr-name value="' + escape(group.label) + '"></label>' +
+        '<label>Role <select data-attr-role>' +
+        [['primary', 'Primary · 2×'], ['leakage', 'Leakage · 1×'], ['vary', 'Vary only · unscored']].map(function (item) {
+          return '<option value="' + item[0] + '"' + (group.role === item[0] ? ' selected' : '') +
+            '>' + item[1] + '</option>';
+        }).join('') + '</select></label>' +
+        '<label class="epoch-finder-options-field">Values (separate using |)' +
+        '<input data-attr-values value="' + escape(group.options.join(' | ')) + '"></label>' +
+        '</div>';
+    }).join('');
+  }
+  function recordDimensions() {
+    var groups = wildcardParts(els('prompt').value);
+    var rows = Array.from(els('attributes').querySelectorAll('[data-index]'));
+    if (rows.length !== groups.length) throw new Error('Update attributes to match the wildcard prompt.');
+    var edits = rows.map(function (row, index) {
+      var values = row.querySelector('[data-attr-values]').value.split('|').map(function (x) { return x.trim(); });
+      if (values.length < 2 || new Set(values).size !== values.length ||
+          values.some(function (x) { return /[{}|]/.test(x); })) throw new Error('Attribute ' + (index + 1) + ' has invalid values.');
+      var label = row.querySelector('[data-attr-name]').value.trim();
+      if (!label) throw new Error('Every attribute needs a name.');
+      return {label: label, role: row.querySelector('[data-attr-role]').value, options: values};
+    });
+    if (!edits.some(function (entry) { return entry.role !== 'vary'; })) {
+      throw new Error('Mark at least one concept or leakage attribute for scoring.');
+    }
+    // Values editor owns the concrete wildcard choices. Preserve all literal
+    // prompt text rather than reconstructing a caption from individual labels.
+    var text = els('prompt').value;
+    for (var i = groups.length - 1; i >= 0; i--) {
+      text = text.slice(0, groups[i].start) + '{' + edits[i].options.join('|') + '}' +
+        text.slice(groups[i].end);
+    }
+    els('prompt').value = text;
+    dimensions = edits;
+    return edits;
+  }
+  function propose() {
+    if (proposalBusy) return;
+    if (!els('run').value) return error(new Error('Select a training run first.'));
+    var directorModel = getDirectorModelPreference('webcap.director.model');
+    if (!directorModel) return error(new Error('Select a Director model in the app header.'));
+    clearError();
+    proposalBusy = true;
+    els('suggest').disabled = true;
+    els('proposal-status').textContent = 'Director is analyzing Set captions and vocabulary…';
+    var folder = currentFolder;
+    var currentJobId = '';
+    fetch('/fs/epoch_finder/propose', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({folder: folder, directorModel: directorModel,
+        focus: els('concept').value.trim()})
+    }).then(function (response) { return response.json().then(function (body) {
+      if (!response.ok || !body.ok) throw new Error(body.error || 'Could not propose tests.');
+      return body.job;
+    }); }).then(function (job) {
+      currentJobId = job.jobId;
+      if (!currentJobId) throw new Error('Director request did not return a job ID.');
+      if (typeof window.trackTransientLlmJob === 'function') window.trackTransientLlmJob(job);
+      function poll() {
+        return fetch('/fs/director/job?job=' + encodeURIComponent(currentJobId) + '&consume=1')
+          .then(function (response) { return response.json(); }).then(function (body) {
+            var result = body.job || {};
+            if (result.status === 'completed') return result.result;
+            if (['failed','interrupted','stopped','cancelled'].includes(result.status)) {
+              throw new Error(result.error || 'Director proposal failed: ' + result.status);
+            }
+            return new Promise(function (resolve) { setTimeout(resolve, 1600); }).then(poll);
+          });
+      }
+      return poll();
+    }).then(function (result) {
+      if (folder !== currentFolder) throw new Error('Set changed while planning. Reopen the wizard.');
+      var analysis = result && result.analysis;
+      if (!analysis || !analysis.wildcard || !Array.isArray(analysis.variationGroups)) {
+        throw new Error('Director returned an incomplete test proposal.');
+      }
+      els('concept').value = analysis.concept || els('concept').value;
+      els('prompt').value = analysis.wildcard;
+      dimensions = analysis.variationGroups.map(function (g) {
+        return {label: g.label, options: g.options, role: g.role};
+      });
+      renderDimensions();
+      els('proposal-status').textContent = 'Proposed tests ready. Edit values and scoring roles freely.';
+    }).catch(error).finally(function () {
+      proposalBusy = false;
+      els('suggest').disabled = false;
+    });
+  }
+  function reviewWizard() {
+    var parts = recordDimensions();
+    var run = runs.find(function (item) { return item.jobId === els('run').value; });
+    if (!run) throw new Error('Select a training run.');
+    var roundSummary = getRoundPlans().map(function (round, index) {
+      return 'R' + (index + 1) + ': ' + round.cases + ' tests/epoch · keep ' +
+        round.keepPercent + '%' + (round.megapixels ? ' · ' + round.megapixels + ' MP' : '');
+    });
+    els('review').innerHTML = '<p><strong>' + escape(run.runName) + '</strong> · ' +
+      run.epochs.length + ' saved epochs</p><p>' + escape(els('concept').value.trim() || 'Concept not specified') +
+      '</p><p>' + parts.map(function (item) {
+        return escape(item.label) + ' (' + escape(item.role) + ': ' + item.options.length + ' values)';
+      }).join(' · ') + '</p><p>' + roundSummary.map(escape).join('<br>') +
+      '</p><p>' + escape(els('estimate').textContent) + '</p>' +
+      '<p class="epoch-finder-muted">Only Launch starts inference. Your approved prompt, roles, rounds, model and seeds are frozen for this campaign.</p>';
+  }
+  function showStep(value) {
+    wizardStep = value;
+    document.querySelectorAll('[data-epoch-wizard-step]').forEach(function (element) {
+      element.classList.toggle('hidden', Number(element.dataset.epochWizardStep) !== value);
+    });
+    document.querySelectorAll('[data-epoch-step-label]').forEach(function (element) {
+      element.classList.toggle('active', Number(element.dataset.epochStepLabel) === value);
+    });
+    els('back').classList.toggle('hidden', value === 1);
+    els('next').classList.toggle('hidden', value === 4);
+    els('start').classList.toggle('hidden', value !== 4);
+    if (value === 3) roundPlan();
+    if (value === 4) reviewWizard();
+  }
+  function advance() {
+    try {
+      if (wizardStep === 1 && !els('run').value) throw new Error('Choose a saved training run.');
+      if (wizardStep === 2) recordDimensions();
+      showStep(Math.min(4, wizardStep + 1));
+    } catch (exc) { error(exc); }
   }
   function roundPlan() {
     var host = els('round-plan');
@@ -270,7 +428,7 @@
     var criteria = {jobId: jobId, prompt: els('prompt').value, settings: settings,
       visionModel: window.getCaptionVisionModelId(), rounds: Number(els('rounds').value),
       cases: Number(els('cases').value), keepPercent: Number(els('retention').value),
-      roundPlans: getRoundPlans()};
+      roundPlans: getRoundPlans(), concept: els("concept").value.trim(), dimensions: recordDimensions()};
     els('start').disabled = true;
     api('start', criteria).then(function (response) {
       activeCampaign = response.campaign.id; lastFrameKey = ''; refresh();
@@ -287,6 +445,11 @@
   els('mode-finder').onclick = function () { showMode('finder'); };
   els('refresh').onclick = refresh;
   els('start').onclick = start;
+  els('suggest').onclick = propose;
+  els('next').onclick = advance;
+  els('back').onclick = function () { clearError(); showStep(Math.max(1, wizardStep - 1)); };
+  els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });
+  showStep(1);
   var testDuration = document.getElementById('test-generations-duration');
   if (testDuration) testDuration.addEventListener('input', function () {
     if (mode === 'finder') roundPlan();

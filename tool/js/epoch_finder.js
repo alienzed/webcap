@@ -316,6 +316,7 @@
     var vocabulary = JSON.parse(row.dataset.referenceVocabulary || '[]');
     var found = vocabulary.find(function (item) { return item.group === group; });
     var picker = row.querySelector('[data-reference-tag]');
+    row.querySelector('[data-reference-media]').innerHTML = '<option value="">Choose full-image reference…</option>';
     picker.innerHTML = '<option value="">Choose actual Set tag…</option>' +
       (found ? found.terms : []).map(function (term) {
         return '<option value="' + escape(term.term) + '"' +

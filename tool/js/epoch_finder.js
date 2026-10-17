@@ -203,11 +203,13 @@
   }
   function advance() {
     try {
-      if (wizardStep === 1) {
-        if (!els('run').value) throw new Error('Choose a saved training run.');
-        updateDimensions();
+      if (wizardStep === 1 && !els('run').value) {
+        throw new Error('Choose a saved training run.');
       }
-      if (wizardStep === 2) recordDimensions();
+      if (wizardStep === 2) {
+        if (!dimensions.length && els('prompt').value.trim()) updateDimensions();
+        recordDimensions();
+      }
       showStep(Math.min(4, wizardStep + 1));
     } catch (exc) { error(exc); }
   }

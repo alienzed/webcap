@@ -468,6 +468,9 @@ def _select_next_epochs(ranking, active_epochs, keep_percent):
 def _run(folder_path, campaign_id, control):
     campaign = _load(folder_path, campaign_id)
     try:
+        for unit in campaign["units"]:
+            if unit.get("assessment") is not None and unit.get("session"):
+                _retire_scored_session(folder_path, campaign, unit)
         for plan in campaign["rounds"]:
             number = plan["number"]
             if number < campaign["round"]:
@@ -522,6 +525,8 @@ def _run(folder_path, campaign_id, control):
                     _evaluate_unit(folder_path, campaign, unit)
                 except Exception as exc:
                     _mark_unit_error(folder_path, campaign, unit, "vision", exc)
+                if unit.get("assessment") is not None:
+                    _retire_scored_session(folder_path, campaign, unit)
             ranking = _rank(campaign, number)
             campaign["scores"] = ranking
             plan["ranking"] = ranking
@@ -542,6 +547,8 @@ def _run(folder_path, campaign_id, control):
             _save(folder_path, campaign)
             if not _check_signal(folder_path, campaign, control):
                 return
+        _update(folder_path, campaign, phase="Finalizing", detail="Pruning assessed screening frames.")
+        _prune_screening_frames(folder_path, campaign)
         failed = sum(bool(unit.get("error")) for unit in campaign["units"])
         _update(folder_path, campaign, status="complete", phase="Complete",
                 detail="Evaluation finished." + (" " + str(failed) + " failed observations; review Console." if failed else " Review the ranked epochs."),
@@ -664,6 +671,12 @@ def command(folder_path, operation, criteria=None):
             raise ValueError("Wait for the campaign worker to finish before deleting it.")
         if any(unit.get("session") and _session_still_active(folder_path, unit["session"]) for unit in campaign["units"]):
             raise RuntimeError("Campaign still has active Test work.")
+        for unit in campaign["units"]:
+            if unit.get("session"):
+                try:
+                    test_bench.delete_session(folder_path, unit["session"])
+                except FileNotFoundError:
+                    pass
         _clean_staging(folder_path, campaign)
         shutil.rmtree(_directory(folder_path, campaign_id))
         return {"deleted": campaign_id}

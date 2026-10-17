@@ -263,7 +263,7 @@
       '</p><p>' + parts.map(function (item) {
         return escape(item.label) + ' (' + escape(item.role) + ': ' + item.options.length + ' values)';
       }).join(' · ') + '</p><p>' + roundSummary.map(escape).join('<br>') +
-      '</p><p>VL inference image: ' + escape(els('vl-image-mp').value) + ' MP (original evidence retained)</p>' +
+      '</p><p>VL image ceiling: 0.45 MP (downscale only; evidence retained)</p>' +
       '<p>' + escape(els('estimate').textContent) + '</p>' +
       '<p class="epoch-finder-muted">Only Launch starts inference. Your approved prompt, roles, rounds, model and seeds are frozen for this campaign.</p>';
   }
@@ -353,6 +353,20 @@
       showStep(Math.min(4, wizardStep + 1));
     } catch (exc) { error(exc); }
   }
+  function kreaRoundDimensions(options, roundIndex, fallback) {
+    // Choose only supported presets, near 512 / 640 / 768 short-side pixels.
+    var targets = [512, 640, 768, 768];
+    var target = targets[Math.min(roundIndex, targets.length - 1)];
+    var candidates = options.map(function (value) {
+      var match = String(value).match(/(\\d+)\\s*[xX×]\\s*(\\d+)/);
+      return match ? {value: value, shortSide: Math.min(Number(match[1]), Number(match[2]))} : null;
+    }).filter(Boolean);
+    if (!candidates.length) return fallback;
+    candidates.sort(function (a, b) {
+      return Math.abs(a.shortSide - target) - Math.abs(b.shortSide - target);
+    });
+    return candidates[0].value;
+  }
   function roundPlan() {
     var host = els('round-plan');
     var count = Number(els('rounds').value);
@@ -381,7 +395,7 @@
         '<label>Keep %<input data-keep type="number" min="10" max="90" value="' + keep + '"></label>' +
         '<label>MP<input data-mp type="number" min="0.1" max="0.4" step="0.1" value="' + mp.toFixed(1) + '"></label>' +
         (hasDimensions ? '<label>Resolution<select data-dimensions>' + kreaDimensions.options.map(function (value) {
-          var selected = saved.dimensions || kreaDimensions.selected;
+          var selected = saved.dimensions || kreaRoundDimensions(kreaDimensions.options, index, kreaDimensions.selected);
           return '<option value="' + escape(value) + '"' + (value === selected ? ' selected' : '') + '>' + escape(value) + '</option>';
         }).join('') + '</select></label>' : '') + '</div>';
     }).join('');
@@ -735,7 +749,7 @@
       visionModel: window.getCaptionVisionModelId(), rounds: Number(els('rounds').value),
       cases: Number(els('cases').value), keepPercent: Number(els('retention').value),
       roundPlans: getRoundPlans(), concept: els("concept").value.trim(), dimensions: recordDimensions(),
-      vlImageMP: Number(els('vl-image-mp').value),
+      vlImageMP: 0.45,
       epochs: chosenEpochs(), referencePlan: approvedReferences(),
       referenceEvaluation: {rvn: els('enable-rvn').checked, dino: els('enable-dino').checked}};
     els('start').disabled = true;

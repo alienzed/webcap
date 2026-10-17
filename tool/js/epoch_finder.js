@@ -104,13 +104,23 @@
         return {epoch: epoch, matches: matches, mismatches: mismatches,
           count: matches + mismatches, score: matches + mismatches ? matches / (matches + mismatches) : null};
       }).filter(function (r) { return r.count; });
-      if (live.length) ranking = live.sort(function (a,b) { return b.score - a.score || b.count - a.count; });
+      if (live.length) {
+        var earlier = (campaign.scores || []).filter(function (row) {
+          return !live.some(function (current) { return current.epoch === row.epoch; });
+        });
+        ranking = live.concat(earlier).sort(function (a,b) {
+          return (a.score == null) - (b.score == null) || (b.score || 0) - (a.score || 0) || a.epoch - b.epoch;
+        });
+      }
     }
-    els('ranking-note').textContent = ranking.length ? 'Sorted by concept fidelity · unobservable attributes excluded' :
+    var errors = (campaign.units || []).filter(function (unit) { return !!unit.error; }).length;
+    els('ranking-note').textContent = ranking.length ? 'Cumulative concept fidelity · unclear excluded' +
+      (errors ? ' · ' + errors + ' failed observation(s)' : '') :
       'Results appear as VL evaluates frames.';
     els('ranking').innerHTML = ranking.length ? ranking.map(function (entry, index) {
       return '<div class="epoch-finder-ranking-row"><span class="rank">#' + (index + 1) +
-        '</span><span class="epoch">Epoch ' + entry.epoch + '</span><span class="epoch-finder-score-track"><i style="width:' +
+        '</span><span class="epoch">Epoch ' + entry.epoch + (entry.active === false ? ' · sidelined' : '') +
+        '</span><span class="epoch-finder-score-track"><i style="width:' +
         Math.round((entry.score || 0) * 100) + '%"></i></span><span class="percent">' +
         (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span></div>';
     }).join('') : '<p class="epoch-finder-muted">Waiting for VL judgments.</p>';

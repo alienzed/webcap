@@ -610,14 +610,6 @@
         var src = unit.frame ? '/fs/epoch_finder/frame?folder=' + encodeURIComponent(currentFolder) +
           '&campaign=' + encodeURIComponent(campaign.id) + '&frame=' + encodeURIComponent(unit.frame) : '';
         var assessment = unit.assessment || {};
-        var checks = (assessment.comparison || []).map(function (g) {
-          return '<div>' + escape(g.label) + ': ' + escape(g.result) +
-            ' · expected ' + escape(g.expected == null ? 'unclear' : (unit.groups || []).find(function (v) {
-              return v.id === g.id;
-            })?.options?.[g.expected - 1] || '?') +
-            ' · observed ' + escape(g.selected == null ? 'unclear' :
-              (unit.groups || []).find(function (v) { return v.id === g.id; })?.options?.[g.selected - 1] || '?') + '</div>';
-        }).join('');
         var selections = (unit.groups || []).filter(function (group) {
           return group.expected != null && group.options && group.options[group.expected - 1];
         }).map(function (group) {
@@ -628,7 +620,7 @@
         var decided = comparisons.filter(function (c) { return c.result === 'match' || c.result === 'mismatch'; }).length;
         var status = unit.error ? 'Error' : unit.assessment ?
           (decided ? matched + '/' + decided + ' attributes matched' : 'VL evaluated · unclear') :
-          'Awaiting evaluation';
+          (src ? 'Frame ready · awaiting VL' : 'Awaiting frame');
         return '<figure class="epoch-finder-frame" role="button" tabindex="0" aria-label="Inspect epoch ' + unit.epoch +
           ', round ' + unit.round + ', test ' + (unit.case + 1) + '" data-gallery-epoch="' + unit.epoch +
           '" data-gallery-round="' + unit.round + '" data-gallery-case="' + unit.case + '">' +

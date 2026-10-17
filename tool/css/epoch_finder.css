@@ -121,3 +121,14 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-ranking-controls{display:flex;gap:6px;margin:0 0 10px}
 .epoch-finder-ranking-controls select{min-width:0;flex:1;background:var(--input-bg,#131d27);border:1px solid var(--border-color,#405064);border-radius:6px;color:inherit;padding:6px;font-size:11px}
 .epoch-finder-ranking-row small{grid-column:1/-1;opacity:.65;font-size:10px}
+
+/* Training-reference setup and inspectable per-metric evidence. */
+.epoch-finder-reference-setup{margin:12px 0;padding:12px;border:1px solid var(--border-color,#384653);border-radius:9px}
+.epoch-finder-reference-setup h4{margin:0 0 5px}
+.epoch-finder-reference-setup>label{display:block;margin-top:10px;font-size:12px}
+.epoch-finder-reference-choice{display:grid;gap:7px;padding:10px 0;border-bottom:1px solid var(--border-color,#384653);min-width:0}
+.epoch-finder-reference-choice select{width:100%;min-width:0}
+.epoch-finder-reference-choice [data-reference-preview] img{display:block;max-width:100%;max-height:180px;object-fit:contain;border-radius:7px;background:#13181d}
+.epoch-finder-reference-verdict{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;padding:8px 0;border-bottom:1px solid var(--border-color,#384653);overflow-wrap:anywhere}
+.epoch-finder-reference-verdict>div,.epoch-finder-reference-verdict>small{grid-column:1/-1}
+#epoch-finder-reference-choices{font-size:12px;margin:8px 0;font-weight:650}

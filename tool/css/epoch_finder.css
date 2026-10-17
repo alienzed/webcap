@@ -144,3 +144,21 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-inspect-actions{display:flex;justify-content:flex-end;margin-bottom:10px}
 .epoch-finder-inspect-actions button{border:1px solid var(--border-color,#384653);border-radius:6px;padding:7px 10px;background:var(--background-secondary,#263340);color:inherit;cursor:pointer}
 .epoch-finder-inspect-actions button:disabled{cursor:wait;opacity:.7}
+
+/* Shared Test Generations reference comparison selector (kept with Epoch Finder styles). */
+.test-generations-vl-toolbar #test-generations-evaluator{max-width:235px;min-width:115px;background:var(--input-bg,#131d27);border:1px solid var(--border-color,#405064);border-radius:6px;color:inherit;padding:5px}
+.test-reference-dialog{width:min(570px,calc(100vw - 24px));max-height:90vh;overflow:auto;background:var(--background-secondary,#263340);color:inherit;border:1px solid var(--border-color,#405064);border-radius:12px;padding:18px;box-shadow:0 18px 55px #0007}
+.test-reference-dialog::backdrop{background:#000a}
+.test-reference-dialog h3{font-size:17px;margin:0 26px 8px 0}
+.test-reference-dialog p{font-size:12px;line-height:1.5}
+.test-reference-dialog>label{display:grid;gap:4px;margin:12px 0;font-size:12px}
+.test-reference-dialog select{min-width:0;width:100%;padding:7px;border-radius:6px;background:var(--input-bg,#131d27);color:inherit;border:1px solid var(--border-color,#405064)}
+.test-reference-dialog>img{display:block;max-width:100%;height:auto;max-height:230px;margin:8px auto;object-fit:contain;border-radius:8px}
+.test-reference-dialog>img.hidden{display:none}
+.test-reference-close{position:absolute;top:11px;right:12px;background:transparent;border:0;color:inherit;font-size:22px;cursor:pointer}
+.test-reference-actions{display:flex;justify-content:flex-end;margin:12px 0}
+.test-reference-results{margin-top:14px;max-height:240px;overflow:auto}
+.test-reference-results h4{margin:0 0 8px}
+.test-reference-result{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px 0;border-bottom:1px solid var(--border-color,#405064);font-size:12px}
+.test-reference-result span,.test-reference-result small{grid-column:1/-1;overflow-wrap:anywhere}
+@media(max-width:650px){.test-generations-vl-toolbar #test-generations-evaluator{max-width:160px}}

@@ -126,3 +126,58 @@ def find_reference_candidates(folder, group, term, job_id):
             results.append({"media": name, "group": group, "term": term,
                             "size": stat.st_size, "mtimeNs": stat.st_mtime_ns})
     return results
+
+
+def suggest_references(folder, job_id, option, limit=10):
+    """Rank trained images by existing tag phrase coverage, order-independent.
+
+    Each candidate includes an actual scoped group/tag anchor for the existing
+    reference verifier. Partial matches remain suggestions, not proof.
+    """
+    import re
+    words = set(re.findall(r"[a-z0-9]+", str(option or "").casefold()))
+    if not words:
+        return []
+    root = _resolve_folder(folder)
+    by_media = read_folder_state(root / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+    if not isinstance(by_media, dict):
+        raise ValueError("Scoped tag map is invalid.")
+    allowed = training_image_members(folder, job_id)
+    candidates = []
+    for name in sorted(set(list_media_files(folder)) & allowed):
+        if Path(name).suffix.lower() not in SUPPORTED_REFERENCE_EXTENSIONS:
+            continue
+        annotations = by_media.get(name, {})
+        if not isinstance(annotations, dict):
+            raise ValueError("Invalid scoped tags for " + name)
+        matched = []
+        covered = set()
+        for group, terms in annotations.items():
+            if not isinstance(terms, list) or any(not isinstance(t, str) for t in terms):
+                raise ValueError("Invalid scoped tags for " + name + " / " + str(group))
+            for tag in terms:
+                tag_words = set(re.findall(r"[a-z0-9]+", tag.casefold()))
+                overlap = tag_words & words
+                if not overlap:
+                    continue
+                # An annotation contributes only when all its meaningful terms match.
+                if tag_words <= words:
+                    covered.update(tag_words)
+                    matched.append((str(group), tag, len(tag_words)))
+        if not matched:
+            continue
+        matched.sort(key=lambda entry: (-entry[2], entry[0], entry[1]))
+        group, tag, _ = matched[0]
+        path = root / name
+        if path.is_symlink():
+            raise ValueError("Reference cannot be a symlink: " + name)
+        stat = path.stat()
+        candidates.append({
+            "media": name, "group": group, "tag": tag, "term": tag,
+            "matchedTags": [{"group": g, "tag": t} for g, t, _ in matched],
+            "matchedWords": len(covered), "totalWords": len(words),
+            "complete": covered == words, "size": stat.st_size,
+            "mtimeNs": stat.st_mtime_ns,
+        })
+    candidates.sort(key=lambda entry: (-entry["matchedWords"], -len(entry["matchedTags"]), entry["media"]))
+    return candidates[:max(1, min(int(limit), 10))]

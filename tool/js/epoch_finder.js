@@ -47,7 +47,7 @@
       if (Math.abs(megapixels - 0.3) < 0.0001) return { seconds: 10, seeded: true };
       if (Math.abs(megapixels - 0.4) < 0.0001) return { seconds: 15, seeded: true };
     }
-    return { seconds: 60, seeded: false };
+    return { seconds: 30, seeded: false };
   }
   function roundPlan() {
     var host = els('round-plan');
@@ -107,7 +107,7 @@
         seconds + 's';
       els('estimate').textContent = renders + ' projected renders · ~' + estimateText +
         (seededRenders ? ' (3s H3: 0.3 MP ≈ 10s, 0.4 MP ≈ 15s)' : '') +
-        (seededRenders < renders ? ' · unmeasured: 60s/render' : '') +
+        (seededRenders < renders ? ' · unmeasured: 30s/render' : '') +
         '. Excludes VL, queue time and possible cutoff ties.';
     }
     host.oninput = estimate;

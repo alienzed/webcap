@@ -132,3 +132,15 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-reference-verdict{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;padding:8px 0;border-bottom:1px solid var(--border-color,#384653);overflow-wrap:anywhere}
 .epoch-finder-reference-verdict>div,.epoch-finder-reference-verdict>small{grid-column:1/-1}
 #epoch-finder-reference-choices{font-size:12px;margin:8px 0;font-weight:650}
+
+.epoch-finder-frame[role=button]{cursor:pointer}
+.epoch-finder-frame[role=button]:hover,.epoch-finder-frame[role=button]:focus-visible{outline:2px solid var(--accent-color,#79a9d7);outline-offset:2px}
+.epoch-finder-reference-thumbnails{margin:12px 0}
+.epoch-finder-reference-thumbnails>strong{display:block;font-size:12px;margin-bottom:8px}
+.epoch-finder-reference-thumbnails>div{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:9px}
+.epoch-finder-reference-thumbnails a{border-radius:7px;overflow:hidden;border:1px solid var(--border-color,#384653);color:inherit;text-decoration:none;min-width:0}
+.epoch-finder-reference-thumbnails img{display:block;width:100%;height:135px;object-fit:contain;background:#13181d}
+.epoch-finder-reference-thumbnails small{display:block;padding:6px;overflow-wrap:anywhere;font-size:10px}
+.epoch-finder-inspect-actions{display:flex;justify-content:flex-end;margin-bottom:10px}
+.epoch-finder-inspect-actions button{border:1px solid var(--border-color,#384653);border-radius:6px;padding:7px 10px;background:var(--background-secondary,#263340);color:inherit;cursor:pointer}
+.epoch-finder-inspect-actions button:disabled{cursor:wait;opacity:.7}

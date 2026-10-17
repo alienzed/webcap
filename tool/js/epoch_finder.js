@@ -13,6 +13,7 @@
   var selectedEpochs = new Set();
   var selectedRunId = "";
   var proposalBusy = false;
+  var timingProfiles = {};
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -47,6 +48,12 @@
     if (finder) refresh();
   }
   function renderSecondsEstimate(modelId, durationSeconds, megapixels) {
+    var key = [modelId, Number.isFinite(megapixels) ? String(megapixels) : String(document.getElementById('test-generations-dimensions')?.value || ''), String(durationSeconds)].join('|');
+    var samples = timingProfiles[key] && timingProfiles[key].seconds;
+    if (Array.isArray(samples) && samples.length) {
+      var ordered = samples.slice().sort(function (a,b) { return a-b; });
+      return { seconds: ordered[Math.floor(ordered.length/2)], seeded: true, observed: true };
+    }
     // First real-machine seed measurements; not a formula or a claim about
     // other models, durations or resolutions.
     if (modelId === 'minimax_h3' && Number(durationSeconds) === 3) {
@@ -339,9 +346,9 @@
       var estimateText = minutes ? minutes + 'm' + (seconds ? ' ' + seconds + 's' : '') :
         seconds + 's';
       els('estimate').textContent = renders + ' projected renders · ~' + estimateText +
-        (seededRenders ? ' (3s H3: 0.3 MP ≈ 10s, 0.4 MP ≈ 15s)' : '') +
+        (seededRenders ? ' (observed samples or H3 seeds)' : '') +
         (seededRenders < renders ? ' · unmeasured: 30s/render' : '') +
-        '. Excludes VL, queue time and possible cutoff ties.';
+        '. Observed capture estimates include queue waiting; seed estimates exclude it. VL overhead and cutoff ties are extra.';
     }
     host.oninput = estimate;
     estimate();
@@ -483,6 +490,13 @@
       }).join('');
   }
   function render(campaign) {
+    var captures = campaign.units.filter(function (u) { return Number(u.captureWallSeconds) > 0; });
+    var recent = captures.slice(-8);
+    var typical = recent.length ? recent.map(function (u) { return u.captureWallSeconds; }).sort(function (a,b) { return a-b; })[Math.floor(recent.length/2)] : null;
+    var totalPlanned = campaign.rounds.reduce(function (sum, round) { return sum + (round.epochs.length || 0) * round.seeds.length; }, 0);
+    var remaining = Math.max(0, totalPlanned - captures.length);
+    els('timing').textContent = campaign.status === 'complete' ? 'Campaign complete' : typical == null ? 'No captured timing yet' :
+      'Recent capture: ~' + Math.round(typical) + 's · ~' + Math.ceil(remaining * typical / 60) + 'm remaining (includes queue wait; excludes VL)';
     els('empty').classList.add('hidden');
     els('active').classList.remove('hidden');
     els('phase').textContent = String(campaign.phase || campaign.status).toUpperCase();
@@ -508,6 +522,7 @@
     api('list').then(function (response) {
       runs = response.runs || [];
       campaigns = response.campaigns || [];
+      timingProfiles = response.timings || {};
       setup(); list();
       if (activeCampaign) return refreshStatus();
       if (campaigns.length) {

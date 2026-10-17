@@ -84,6 +84,47 @@ def _runs(folder_path):
     return result
 
 
+def _timing_key(campaign, plan):
+    settings = plan["settings"]
+    return "|".join((
+        str(campaign["modelId"]),
+        str(settings.get("megapixels", settings.get("dimensions", ""))),
+        str(settings.get("duration", "")),
+    ))
+
+
+def _timing_profiles(folder_path):
+    """Derive observed timings from durable campaign evidence, no separate cache."""
+    profiles = {}
+    root = _root(folder_path)
+    if not root.is_dir():
+        return profiles
+    for directory in root.iterdir():
+        if not directory.is_dir() or directory.is_symlink() or not _ID.fullmatch(directory.name):
+            continue
+        try:
+            campaign = _load(folder_path, directory.name)
+        except (OSError, ValueError, json.JSONDecodeError, FileNotFoundError):
+            continue
+        rounds = {plan["number"]: plan for plan in campaign["rounds"]}
+        seen = set()
+        for unit in campaign["units"]:
+            seconds = unit.get("captureWallSeconds")
+            plan = rounds.get(unit.get("round"))
+            if not isinstance(seconds, (int, float)) or seconds <= 0 or plan is None:
+                continue
+            key = _timing_key(campaign, plan)
+            # First completed capture per campaign/settings may include model warm-up.
+            if key not in seen:
+                seen.add(key)
+                continue
+            entry = profiles.setdefault(key, {"seconds": []})
+            entry["seconds"].append(round(seconds, 2))
+    for entry in profiles.values():
+        entry["seconds"] = entry["seconds"][-20:]
+    return profiles
+
+
 def list_campaigns(folder_path):
     root = _root(folder_path)
     campaigns = []
@@ -100,7 +141,7 @@ def list_campaigns(folder_path):
                 ("id", "name", "status", "phase", "round", "startedAt", "detail")
             })
     campaigns.sort(key=lambda row: row.get("startedAt") or 0, reverse=True)
-    return {"runs": _runs(folder_path), "campaigns": campaigns}
+    return {"runs": _runs(folder_path), "campaigns": campaigns, "timings": _timing_profiles(folder_path)}
 
 
 def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings, round_options=None):
@@ -248,7 +289,8 @@ def _unit(campaign, round_number, epoch, case):
             return existing
     value = {"round": round_number, "epoch": epoch, "case": case, "session": "",
              "frame": "", "question": "", "groups": [], "assessment": None,
-             "error": "", "errorStage": "", "captured": False, "framePruned": False}
+             "error": "", "errorStage": "", "captured": False, "framePruned": False,
+             "queuedAt": None, "captureWallSeconds": None}
     campaign["units"].append(value)
     return value
 
@@ -313,6 +355,7 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
             campaign_staging="epoch-finder-" + campaign["id"],
         )
         unit["session"] = answer["job"]["id"]
+        unit["queuedAt"] = time.time()
         _save(folder_path, campaign)
     if enqueue_only:
         return
@@ -340,6 +383,8 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
         temp.unlink(missing_ok=True)
     unit["frame"] = file_name
     unit["captured"] = True
+    if unit.get("queuedAt"):
+        unit["captureWallSeconds"] = round(time.time() - unit["queuedAt"], 2)
     unit["groups"] = status.get("wildcardEvaluationGroups") or []
     if len(unit["groups"]) != len(campaign["dimensions"]):
         raise RuntimeError("Resolved wildcard group count differs from the approved plan.")

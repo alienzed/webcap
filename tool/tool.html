@@ -1220,10 +1220,16 @@
                                         <div><span>VL evaluations</span><strong id="epoch-finder-vl-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-vl-bar"></i></div></div>
                                         <div><span>Current field</span><strong id="epoch-finder-field-count">—</strong></div>
                                     </div>
-                                    <div class="epoch-finder-panel-heading"><h3>Live leaderboard</h3><span id="epoch-finder-ranking-note">Results appear as VL evaluates frames.</span></div>
-                                    <div id="epoch-finder-ranking" class="epoch-finder-leaderboard"></div>
-                                    <div class="epoch-finder-panel-heading"><h3>Evidence</h3><span>First frames, retained for review</span></div>
-                                    <div id="epoch-finder-frames" class="epoch-finder-frames"></div>
+                                    <div class="epoch-finder-live-layout">
+                                        <section class="epoch-finder-live-ranks">
+                                            <div class="epoch-finder-panel-heading"><h3>Leaderboard</h3><span id="epoch-finder-ranking-note">Awaiting VL</span></div>
+                                            <div id="epoch-finder-ranking" class="epoch-finder-leaderboard"></div>
+                                        </section>
+                                        <section class="epoch-finder-live-media">
+                                            <div class="epoch-finder-panel-heading"><h3>Evidence</h3><span id="epoch-finder-timing">Awaiting first frame</span></div>
+                                            <div id="epoch-finder-frames" class="epoch-finder-frames"></div>
+                                        </section>
+                                    </div>
                                 </div>
                                 <p id="epoch-finder-error" class="epoch-finder-error hidden" role="alert"></p>
                             </main>

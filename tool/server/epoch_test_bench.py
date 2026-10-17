@@ -2499,6 +2499,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "inferenceJobs": [],
         "legacyJobId": str(legacy_job_id or ""),
         "migrationComplete": False,
+        "campaignStaging": str(request.get("campaignStaging") or ""),
     }
     if sweep_weights is not None:
         payload["sweepWeights"] = list(sweep_weights)
@@ -2852,7 +2853,7 @@ def list_sessions(folder_path, model_id=None, session_snapshot=None, visible_sna
         for session, stored in snapshots
     ]
     for session, payload in sorted(visible, key=lambda item: item[0].name.lower(), reverse=True):
-        if not payload or payload.get("status") == "queued":
+        if not payload or payload.get("status") == "queued" or payload.get("campaignStaging"):
             continue
         session_model_id = str(payload.get("modelId") or payload.get("model") or default_model_id)
         if selected_model_id and session_model_id != selected_model_id:
@@ -2886,7 +2887,7 @@ def _latest_status(folder_path, model_id=None, session_snapshot=None, visible_sn
     ]
     payloads = []
     for session, payload in sorted(visible, key=lambda item: item[0].name.lower(), reverse=True):
-        if not payload:
+        if not payload or payload.get("campaignStaging"):
             continue
         if selected_model and str(payload.get("modelId") or payload.get("model") or "") != selected_model:
             continue

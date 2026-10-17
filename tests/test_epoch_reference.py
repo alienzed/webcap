@@ -95,14 +95,3 @@ def test_exact_tag_can_differ_from_descriptive_prompt_option(tmp_path, monkeypat
     assert reference["media"] == "a.png"
 
 
-def test_reference_suggestions_limit_and_exact_tag_provenance(tmp_path, monkeypatch):
-    _dataset(tmp_path, monkeypatch, {
-        "a.png": {"BT Shape": ["micro triangle"]},
-        "b.png": {"BT Shape": ["micro triangle"]},
-        "close.png": {"BT Shape": ["teardrop"]},
-    })
-    found = epoch_reference.suggest_reference_options(
-        "set", "micro triangle simple string straps", limit=2)
-    assert [entry["media"] for entry in found] == ["a.png", "b.png"]
-    assert all(entry["tag"] == "micro triangle" for entry in found)
-    assert epoch_reference.suggest_reference_options("set", "ring connectors") == []

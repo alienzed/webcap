@@ -53,19 +53,58 @@
     return { seconds: 30, seeded: false };
   }
   function wildcardParts(prompt) {
+    // Match the server's top-level groups and fully expand their nested choices.
     var source = String(prompt || '');
-    var matches = Array.from(source.matchAll(/\{([^{}]*\|[^{}]*)\}/g));
-    if (!matches.length || (source.match(/\{/g) || []).length !== matches.length ||
-      (source.match(/\}/g) || []).length !== matches.length) {
-      throw new Error('Use flat {option|option} wildcard groups in the test prompt.');
-    }
-    return matches.map(function (m) {
-      var parts = m[1].split('|').map(function (v) { return v.trim(); });
-      if (parts.length < 2 || new Set(parts).size !== parts.length) {
-        throw new Error('Every wildcard needs at least two distinct values.');
+    function parseSequence(position, stops) {
+      var nodes = [], literal = '';
+      while (position < source.length && !stops.includes(source[position])) {
+        if (source[position] !== '{') { literal += source[position++]; continue; }
+        if (literal) { nodes.push({ literal: literal }); literal = ''; }
+        var group = parseGroup(position + 1);
+        nodes.push({ alternatives: group.options });
+        position = group.end;
       }
-      return {start: m.index, end: m.index + m[0].length, options: parts};
+      if (literal) nodes.push({ literal: literal });
+      return { nodes: nodes, end: position };
+    }
+    function parseGroup(position) {
+      var options = [];
+      while (true) {
+        var parsed = parseSequence(position, '|}');
+        options.push(parsed.nodes);
+        position = parsed.end;
+        if (position >= source.length) throw new Error('Unclosed wildcard group.');
+        if (source[position++] === '}') return { options: options, end: position };
+      }
+    }
+    function expand(nodes) {
+      return nodes.reduce(function (values, node) {
+        var choices = node.literal !== undefined ? [node.literal] :
+          node.alternatives.flatMap(expand);
+        return values.flatMap(function (prefix) {
+          return choices.map(function (choice) { return prefix + choice; });
+        });
+      }, ['']);
+    }
+    var parsed = parseSequence(0, '');
+    var groups = [], cursor = 0;
+    parsed.nodes.forEach(function (node) {
+      if (!node.alternatives) {
+        cursor += node.literal.length;
+        return;
+      }
+      var start = cursor, raw = source.slice(start);
+      var scan = parseGroup(start + 1);
+      cursor = scan.end;
+      var options = Array.from(new Set(node.alternatives.flatMap(expand).map(function (v) {
+        return v.trim().replace(/\\s+/g, ' ');
+      })));
+      if (options.length < 2) throw new Error('Every wildcard needs at least two distinct resolved values.');
+      groups.push({ start: start, end: cursor, options: options,
+        nested: raw.slice(0, cursor - start).slice(1, -1).includes('{') });
     });
+    if (!groups.length) throw new Error('Add at least one wildcard group.');
+    return groups;
   }
   function updateDimensions() {
     var groups = wildcardParts(els('prompt').value);
@@ -74,7 +113,7 @@
       var oldValues = (prev.options || []).join('|');
       return {label: String(prev.label || ('Attribute ' + (index + 1))),
         options: g.options.slice(),
-        role: oldValues && oldValues !== g.options.join('|') ? 'primary' : (prev.role || 'primary')};
+        role: oldValues && oldValues !== g.options.join('|') ? 'primary' : (prev.role || 'primary'), nested: g.nested};
     });
     renderDimensions();
   }
@@ -88,7 +127,7 @@
             '>' + item[1] + '</option>';
         }).join('') + '</select></label>' +
         '<label class="epoch-finder-options-field">Values (separate using |)' +
-        '<input data-attr-values value="' + escape(group.options.join(' | ')) + '"></label>' +
+        '<input data-attr-values value="' + escape(group.options.join(' | ')) + '"' + (group.nested ? ' readonly title="Nested wildcard values are edited in the prompt"' : '') + '></label>' +
         '</div>';
     }).join('');
   }
@@ -98,6 +137,7 @@
     if (rows.length !== groups.length) throw new Error('Update attributes to match the wildcard prompt.');
     var edits = rows.map(function (row, index) {
       var values = row.querySelector('[data-attr-values]').value.split('|').map(function (x) { return x.trim(); });
+      if (groups[index].nested) values = groups[index].options.slice();
       if (values.length < 2 || new Set(values).size !== values.length ||
           values.some(function (x) { return /[{}|]/.test(x); })) throw new Error('Attribute ' + (index + 1) + ' has invalid values.');
       var label = row.querySelector('[data-attr-name]').value.trim();
@@ -111,11 +151,12 @@
     // prompt text rather than reconstructing a caption from individual labels.
     var text = els('prompt').value;
     for (var i = groups.length - 1; i >= 0; i--) {
+      if (groups[i].nested) continue;
       text = text.slice(0, groups[i].start) + '{' + edits[i].options.join('|') + '}' +
         text.slice(groups[i].end);
     }
     els('prompt').value = text;
-    dimensions = edits;
+    dimensions = edits.map(function (entry, index) { return Object.assign(entry, { nested: groups[index].nested }); });
     return edits;
   }
   function propose() {

@@ -549,6 +549,40 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
     _save(folder_path, campaign)
 
 
+def _evaluate_dino_unit(folder_path, campaign, unit):
+    if not campaign.get("referenceEvaluation", {}).get("dino") or "dinoAssessments" in unit:
+        return
+    from .epoch_dino import compare_images
+    from .epoch_reference import verified_reference
+    frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
+    if not frame.is_file():
+        raise FileNotFoundError("Generated DINO comparison frame is unavailable.")
+    references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
+    unique = {}
+    for group in unit.get("groups", []):
+        if group.get("role") == "vary" or group.get("expected") is None:
+            continue
+        option = group["options"][group["expected"] - 1]
+        entry = references[(group["label"], option)]
+        actual = verified_reference(_folder_key(folder_path), entry["group"], option, entry["media"])
+        if actual["size"] != entry["size"] or actual["mtimeNs"] != entry["mtimeNs"]:
+            raise ValueError("Training reference changed since approval.")
+        unique.setdefault(entry["media"], []).append(group["label"] + ": " + option)
+    results = unit.get("dinoAssessments", [])
+    completed = {item["reference"] for item in results}
+    for name, attributes in unique.items():
+        if name in completed:
+            continue
+        started = time.monotonic()
+        score = compare_images(folder_path / name, frame, _directory(folder_path, campaign["id"]) / "embedding-cache")
+        results.append({"reference": name, "attributes": attributes,
+                        "similarity": score, "elapsedSeconds": round(time.monotonic() - started, 2)})
+        unit["dinoAssessments"] = results
+        _save(folder_path, campaign)
+    unit["dinoAssessments"] = results
+    _save(folder_path, campaign)
+
+
 def _mark_unit_error(folder_path, campaign, unit, stage, exc):
     """Retain actionable failure evidence without scoring a failed observation."""
     import logging
@@ -662,8 +696,12 @@ def _run(folder_path, campaign_id, control):
                     _clean_staging(folder_path, campaign)
             _update(folder_path, campaign, phase="Evaluating", detail="All round frames captured.")
             for unit in campaign["units"]:
-                if unit["round"] != number or (unit["assessment"] is not None and
-                        (not campaign.get("referenceEvaluation", {}).get("rvn") or "referenceAssessments" in unit)):
+                if unit["round"] != number:
+                    continue
+                needs_vl = unit.get("assessment") is None
+                needs_rvn = campaign.get("referenceEvaluation", {}).get("rvn") and "referenceAssessments" not in unit and "referenceError" not in unit
+                needs_dino = campaign.get("referenceEvaluation", {}).get("dino") and "dinoAssessments" not in unit and "dinoError" not in unit
+                if not (needs_vl or needs_rvn or needs_dino):
                     continue
                 if not _check_signal(folder_path, campaign, control):
                     return
@@ -675,11 +713,20 @@ def _run(folder_path, campaign_id, control):
                     _evaluate_unit(folder_path, campaign, unit)
                 except Exception as exc:
                     _mark_unit_error(folder_path, campaign, unit, "vision", exc)
-                if unit.get("assessment") is not None and campaign.get("referenceEvaluation", {}).get("rvn") and "referenceAssessments" not in unit:
+                if unit.get("assessment") is not None and needs_rvn:
                     try:
                         _evaluate_reference_unit(folder_path, campaign, unit)
                     except Exception as exc:
-                        _mark_unit_error(folder_path, campaign, unit, "reference", exc)
+                        unit["referenceError"] = str(exc)
+                        _save(folder_path, campaign)
+                if unit.get("assessment") is not None and needs_dino:
+                    try:
+                        _update(folder_path, campaign, detail="DINOv2 · epoch " + str(unit["epoch"]) +
+                                " · frame " + str(unit["case"] + 1))
+                        _evaluate_dino_unit(folder_path, campaign, unit)
+                    except Exception as exc:
+                        unit["dinoError"] = str(exc)
+                        _save(folder_path, campaign)
                 if unit.get("assessment") is not None:
                     _retire_scored_session(folder_path, campaign, unit)
             ranking = _rank(campaign, number)

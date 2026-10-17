@@ -344,6 +344,34 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     # Preserve source media until the VL assessment has been saved.
 
 
+
+def _retire_scored_session(folder_path, campaign, unit):
+    """Discard campaign-owned source media only after a durable VL score."""
+    if unit.get("assessment") is None or not unit.get("session"):
+        return
+    try:
+        test_bench.delete_session(folder_path, unit["session"])
+    except FileNotFoundError:
+        pass
+    unit["session"] = ""
+    _save(folder_path, campaign)
+
+
+def _prune_screening_frames(folder_path, campaign):
+    """Keep final field frames and all unscored failure evidence."""
+    finalists = set(campaign["rounds"][-1]["epochs"])
+    for unit in campaign["units"]:
+        if unit["epoch"] in finalists or unit.get("assessment") is None or not unit.get("frame"):
+            continue
+        frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
+        if frame.is_symlink():
+            raise RuntimeError("Refusing to prune a symlinked campaign frame.")
+        frame.unlink(missing_ok=True)
+        unit["frame"] = ""
+        unit["framePruned"] = True
+        _save(folder_path, campaign)
+
+
 def _evaluate_unit(folder_path, campaign, unit):
     if unit["assessment"] is not None:
         return

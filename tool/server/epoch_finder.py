@@ -683,6 +683,50 @@ def command(folder_path, operation, criteria=None):
     raise ValueError("Unsupported Epoch Finder operation: " + operation)
 
 
+
+def storage_campaigns():
+    """Owned campaign data across all Test workspaces."""
+    workspaces = test_bench._workspace_sets_root()
+    if not workspaces.is_dir():
+        return []
+    records = []
+    for workspace in workspaces.iterdir():
+        if workspace.is_symlink() or not workspace.is_dir():
+            continue
+        root = workspace / "epoch-finder"
+        if root.is_symlink() or not root.is_dir():
+            continue
+        for directory in root.iterdir():
+            if directory.is_symlink() or not directory.is_dir() or not _ID.fullmatch(directory.name):
+                continue
+            manifest = directory / "campaign.json"
+            if manifest.is_symlink() or not manifest.is_file():
+                continue
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+            folder = str(payload.get("folder") or "")
+            owner = app_config.safe_join_fs_root(folder)
+            if _directory(owner, directory.name) != directory or payload.get("id") != directory.name:
+                raise RuntimeError("Epoch Finder storage ownership mismatch: " + str(directory))
+            with _worker_lock:
+                thread = _workers.get(directory.name)
+            active = bool(thread and thread.is_alive()) or _campaign_has_active_sessions(owner, payload)
+            records.append({
+                "id": directory.name, "folder": folder, "path": directory,
+                "name": payload.get("name") or directory.name,
+                "status": ("interrupted" if payload.get("status") == "running" and not active else payload.get("status") or ""),
+                "active": active,
+                "frames": sum(bool(unit.get("frame")) for unit in payload.get("units") or []),
+                "retainedSessions": sum(bool(unit.get("session")) for unit in payload.get("units") or []),
+            })
+    return records
+
+
+def storage_campaign_path(folder, campaign_id):
+    owner = app_config.safe_join_fs_root(folder)
+    _load(owner, campaign_id)
+    return _directory(owner, campaign_id)
+
+
 def frame_path(folder_path, campaign_id, file_name):
     if not _FRAME.fullmatch(str(file_name or "")):
         raise ValueError("Invalid Epoch Finder frame name.")

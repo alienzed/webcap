@@ -148,27 +148,22 @@
   }
   function ranking(campaign) {
     var ranking = campaign.scores || [];
-    // Live current-round preliminary scores, until the round ranking is saved.
-    var round = campaign.round;
+    // Live and completed rankings share one cumulative score definition.
+    var round = Math.min(campaign.round, campaign.rounds.length);
     var plan = campaign.rounds.find(function (r) { return r.number === round; });
-    if (campaign.phase !== 'Complete' && campaign.phase !== 'Ranking' && plan) {
-      var live = plan.epochs.map(function (epoch) {
+    if (plan && campaign.phase !== 'Complete') {
+      ranking = campaign.rounds[0].epochs.map(function (epoch) {
         var comparison = campaign.units.filter(function (u) {
-          return u.round === round && u.epoch === epoch && u.assessment;
+          return u.round <= round && u.epoch === epoch && u.assessment;
         }).flatMap(function (unit) { return unit.assessment.comparison || []; });
         var matches = comparison.filter(function (g) { return g.result === 'match'; }).length;
         var mismatches = comparison.filter(function (g) { return g.result === 'mismatch'; }).length;
         return {epoch: epoch, matches: matches, mismatches: mismatches,
+          active: plan.epochs.indexOf(epoch) !== -1,
           count: matches + mismatches, score: matches + mismatches ? matches / (matches + mismatches) : null};
-      }).filter(function (r) { return r.count; });
-      if (live.length) {
-        var earlier = (campaign.scores || []).filter(function (row) {
-          return !live.some(function (current) { return current.epoch === row.epoch; });
-        });
-        ranking = live.concat(earlier).sort(function (a,b) {
-          return (a.score == null) - (b.score == null) || (b.score || 0) - (a.score || 0) || a.epoch - b.epoch;
-        });
-      }
+      }).sort(function (a,b) {
+        return (a.score == null) - (b.score == null) || (b.score || 0) - (a.score || 0) || a.epoch - b.epoch;
+      });
     }
     var errors = (campaign.units || []).filter(function (unit) { return !!unit.error; }).length;
     els('ranking-note').textContent = ranking.length ? 'Cumulative concept fidelity · unclear excluded' +

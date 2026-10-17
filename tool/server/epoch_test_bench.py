@@ -1099,6 +1099,7 @@ def prepare(folder_path, model_id=None):
             "Could not load optional Test setting choices from ComfyUI: " + str(exc)
         )
     candidate_runs, candidate_metadata = _staged_candidate_catalog(loras, model)
+    from .checkpoint_ratings import by_checkpoint
     # One filesystem discovery/read pass serves rating scores, history and
     # latest-status selection. Live sessions still use authoritative sync.
     session_snapshot = [
@@ -1128,6 +1129,7 @@ def prepare(folder_path, model_id=None):
         "removableFiles": [path.name for path in loras],
         "candidateRuns": candidate_runs,
         "candidateMetadata": candidate_metadata,
+        "checkpointHumanRatings": by_checkpoint(candidate_metadata, _candidate_rating_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot)),
         "candidateScores": _candidate_rating_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot),
         "candidateVisionScores": _candidate_vision_scores(folder_path, model.PROFILE_ID, session_snapshot=session_snapshot),
         "sessions": list_sessions(folder_path, model_id=model.PROFILE_ID, visible_snapshot=visible_sessions),

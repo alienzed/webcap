@@ -55,6 +55,7 @@ from .epoch_test_bench import (
 )
 from .epoch_finder import command as epoch_finder_command, frame_path as epoch_finder_frame_path
 from .epoch_finder_plan import build_proposal as epoch_finder_build_proposal
+from .epoch_reference import reference_vocabulary as epoch_reference_vocabulary
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
 from .h3_probe import h3_probe_log, h3_probe_status, prepare_h3_probe, start_h3_probe, stop_h3_probe
 from .permissions import normalize_path_permissions, run_with_directory_repair
@@ -2242,7 +2243,7 @@ def epoch_finder_propose_route():
         contract = epoch_finder_build_proposal(
             captions, set_name=Path(folder).name,
             focus=data.get("focus"), vocabulary=data.get("vocabulary"),
-            reference_vocabulary=__import__("tool.server.epoch_reference", fromlist=["reference_vocabulary"]).reference_vocabulary(folder),
+            reference_vocabulary=epoch_reference_vocabulary(folder),
         )
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(), contract,

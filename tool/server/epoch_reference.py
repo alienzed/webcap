@@ -5,6 +5,36 @@ from .caption_ops import _resolve_folder, list_media_files
 from .folder_state_store import read_folder_state
 
 
+def reference_vocabulary(folder):
+    root = _resolve_folder(folder)
+    by_media = read_folder_state(root / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+    if not isinstance(by_media, dict):
+        raise ValueError("Scoped tag map is invalid.")
+    allowed = set(list_media_files(folder))
+    vocabulary = {}
+    for name, annotations in by_media.items():
+        if name not in allowed:
+            continue
+        if not isinstance(annotations, dict):
+            raise ValueError("Invalid scoped tags for " + name)
+        for group, values in annotations.items():
+            if not isinstance(values, list) or any(not isinstance(v, str) for v in values):
+                raise ValueError("Unsupported scoped tag shape for " + name + " / " + str(group))
+            for value in values:
+                vocabulary.setdefault(str(group), {}).setdefault(value, 0)
+                vocabulary[str(group)][value] += 1
+    return [{"group": g, "terms": [{"term": term, "count": count} for term, count in sorted(terms.items())]}
+            for g, terms in sorted(vocabulary.items())]
+
+
+def verified_reference(folder, group, term, media):
+    matches = find_reference_candidates(folder, group, term)
+    reference = next((entry for entry in matches if entry["media"] == media), None)
+    if reference is None:
+        raise ValueError("Approved reference does not match this dataset tag: " + group + " / " + term)
+    return reference
+
+
 def find_reference_candidates(folder, group, term):
     """Return deterministically sorted media annotated with exact group and term.
 

@@ -588,6 +588,13 @@
           escape(choices[c.selected-1] || 'unclear') + '</p>';
       }).join('') + '</details><details><summary>Resolved prompt</summary><p>' +
       escape(unit.prompt || 'Not yet resolved') + '</p></details>' +
+      ((unit.referenceAssessments || []).length ? '<details open><summary>Training-reference comparisons (' +
+        unit.referenceAssessments.length + ')</summary>' + unit.referenceAssessments.map(function (v) {
+          return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.label) +
+          ' · ' + escape(v.option) + '</strong><span>' + escape(v.verdict) + '</span>' +
+          '<div>' + escape(v.response) + '</div><small>Reference: ' + escape(v.reference) +
+          ' · ' + escape(v.elapsedSeconds) + 's</small></div>';
+        }).join('') + '</details>' : '') +
       (unit.error ? '<p class="epoch-finder-error">' + escape(unit.error) + '</p>' : '');
   }
   function render(campaign) {

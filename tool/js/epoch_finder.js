@@ -9,6 +9,7 @@
   var lastFrameKey = '';
   var wizardStep = 1;
   var dimensions = [];
+  var inspectedEpoch = null;
   var proposalBusy = false;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
@@ -53,19 +54,58 @@
     return { seconds: 30, seeded: false };
   }
   function wildcardParts(prompt) {
+    // Match the server's top-level groups and fully expand their nested choices.
     var source = String(prompt || '');
-    var matches = Array.from(source.matchAll(/\{([^{}]*\|[^{}]*)\}/g));
-    if (!matches.length || (source.match(/\{/g) || []).length !== matches.length ||
-      (source.match(/\}/g) || []).length !== matches.length) {
-      throw new Error('Use flat {option|option} wildcard groups in the test prompt.');
-    }
-    return matches.map(function (m) {
-      var parts = m[1].split('|').map(function (v) { return v.trim(); });
-      if (parts.length < 2 || new Set(parts).size !== parts.length) {
-        throw new Error('Every wildcard needs at least two distinct values.');
+    function parseSequence(position, stops) {
+      var nodes = [], literal = '';
+      while (position < source.length && !stops.includes(source[position])) {
+        if (source[position] !== '{') { literal += source[position++]; continue; }
+        if (literal) { nodes.push({ literal: literal }); literal = ''; }
+        var group = parseGroup(position + 1);
+        nodes.push({ alternatives: group.options });
+        position = group.end;
       }
-      return {start: m.index, end: m.index + m[0].length, options: parts};
+      if (literal) nodes.push({ literal: literal });
+      return { nodes: nodes, end: position };
+    }
+    function parseGroup(position) {
+      var options = [];
+      while (true) {
+        var parsed = parseSequence(position, '|}');
+        options.push(parsed.nodes);
+        position = parsed.end;
+        if (position >= source.length) throw new Error('Unclosed wildcard group.');
+        if (source[position++] === '}') return { options: options, end: position };
+      }
+    }
+    function expand(nodes) {
+      return nodes.reduce(function (values, node) {
+        var choices = node.literal !== undefined ? [node.literal] :
+          node.alternatives.flatMap(expand);
+        return values.flatMap(function (prefix) {
+          return choices.map(function (choice) { return prefix + choice; });
+        });
+      }, ['']);
+    }
+    var parsed = parseSequence(0, '');
+    var groups = [], cursor = 0;
+    parsed.nodes.forEach(function (node) {
+      if (!node.alternatives) {
+        cursor += node.literal.length;
+        return;
+      }
+      var start = cursor, raw = source.slice(start);
+      var scan = parseGroup(start + 1);
+      cursor = scan.end;
+      var options = Array.from(new Set(node.alternatives.flatMap(expand).map(function (v) {
+        return v.trim().replace(/\s+/g, ' ');
+      })));
+      if (options.length < 2) throw new Error('Every wildcard needs at least two distinct resolved values.');
+      groups.push({ start: start, end: cursor, options: options,
+        nested: raw.slice(0, cursor - start).slice(1, -1).includes('{') });
     });
+    if (!groups.length) throw new Error('Add at least one wildcard group.');
+    return groups;
   }
   function updateDimensions() {
     var groups = wildcardParts(els('prompt').value);
@@ -74,7 +114,7 @@
       var oldValues = (prev.options || []).join('|');
       return {label: String(prev.label || ('Attribute ' + (index + 1))),
         options: g.options.slice(),
-        role: oldValues && oldValues !== g.options.join('|') ? 'primary' : (prev.role || 'primary')};
+        role: oldValues && oldValues !== g.options.join('|') ? 'primary' : (prev.role || 'primary'), nested: g.nested};
     });
     renderDimensions();
   }
@@ -88,7 +128,7 @@
             '>' + item[1] + '</option>';
         }).join('') + '</select></label>' +
         '<label class="epoch-finder-options-field">Values (separate using |)' +
-        '<input data-attr-values value="' + escape(group.options.join(' | ')) + '"></label>' +
+        '<input data-attr-values value="' + escape(group.options.join(' | ')) + '"' + (group.nested ? ' readonly title="Nested wildcard values are edited in the prompt"' : '') + '></label>' +
         '</div>';
     }).join('');
   }
@@ -98,6 +138,7 @@
     if (rows.length !== groups.length) throw new Error('Update attributes to match the wildcard prompt.');
     var edits = rows.map(function (row, index) {
       var values = row.querySelector('[data-attr-values]').value.split('|').map(function (x) { return x.trim(); });
+      if (groups[index].nested) values = groups[index].options.slice();
       if (values.length < 2 || new Set(values).size !== values.length ||
           values.some(function (x) { return /[{}|]/.test(x); })) throw new Error('Attribute ' + (index + 1) + ' has invalid values.');
       var label = row.querySelector('[data-attr-name]').value.trim();
@@ -111,11 +152,12 @@
     // prompt text rather than reconstructing a caption from individual labels.
     var text = els('prompt').value;
     for (var i = groups.length - 1; i >= 0; i--) {
+      if (groups[i].nested) continue;
       text = text.slice(0, groups[i].start) + '{' + edits[i].options.join('|') + '}' +
         text.slice(groups[i].end);
     }
     els('prompt').value = text;
-    dimensions = edits;
+    dimensions = edits.map(function (entry, index) { return Object.assign(entry, { nested: groups[index].nested }); });
     return edits;
   }
   function propose() {
@@ -365,26 +407,48 @@
       (errors ? ' · ' + errors + ' failed observation(s)' : '') :
       'Results appear as VL evaluates frames.';
     els('ranking').innerHTML = ranking.length ? ranking.map(function (entry, index) {
-      return '<div class="epoch-finder-ranking-row"><span class="rank">#' + (index + 1) +
+      return '<button type="button" class="epoch-finder-ranking-row" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch"><span class="rank">#' + (index + 1) +
         '</span><span class="epoch">Epoch ' + entry.epoch + (entry.active === false ? ' · sidelined' : '') +
         '</span><span class="epoch-finder-score-track"><i style="width:' +
         Math.round((entry.score || 0) * 100) + '%"></i></span><span class="percent">' +
-        (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span></div>';
+        (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span></button>';
     }).join('') : '<p class="epoch-finder-muted">Waiting for VL judgments.</p>';
   }
   function gallery(campaign) {
-    var units = campaign.units.filter(function (u) { return !!u.frame; });
-    var key = units.map(function (u) { return u.frame + ':' + (u.assessment ? '1' : '0'); }).join('|');
+    var units = campaign.units.filter(function (u) {
+      return inspectedEpoch == null || u.epoch === inspectedEpoch;
+    });
+    var key = campaign.id + ':' + inspectedEpoch + ':' + units.map(function (u) {
+      return u.frame + ':' + (u.assessment ? '1' : '0') + ':' + (u.error || '');
+    }).join('|');
     if (lastFrameKey === key) return;
     lastFrameKey = key;
-    els('frames').innerHTML = units.slice(-40).reverse().map(function (unit) {
-      var src = '/fs/epoch_finder/frame?folder=' + encodeURIComponent(currentFolder) +
-        '&campaign=' + encodeURIComponent(campaign.id) + '&frame=' + encodeURIComponent(unit.frame);
-      return '<figure class="epoch-finder-frame"><img loading="lazy" src="' + escape(src) +
-        '" alt="Epoch ' + unit.epoch + ' test frame"><figcaption>Epoch ' + unit.epoch +
-        ' · Test ' + (unit.case + 1) + '<small>' + (unit.assessment ? 'VL evaluated' : 'Frame ready') +
-        '</small></figcaption></figure>';
-    }).join('');
+    var heading = inspectedEpoch == null ? '<strong>Recent retained frames</strong>' :
+      '<strong>Epoch ' + inspectedEpoch + ' · All recorded tests</strong> ' +
+      '<button type="button" data-inspect-reset>Show all epochs</button>';
+    var shown = inspectedEpoch == null ? units.filter(function (u) { return !!u.frame; }).slice(-40).reverse() :
+      units.slice().sort(function (a,b) { return a.round - b.round || a.case - b.case; });
+    els('frames').innerHTML = '<div class="epoch-finder-gallery-heading">' + heading + '</div>' +
+      shown.map(function (unit) {
+        var src = unit.frame ? '/fs/epoch_finder/frame?folder=' + encodeURIComponent(currentFolder) +
+          '&campaign=' + encodeURIComponent(campaign.id) + '&frame=' + encodeURIComponent(unit.frame) : '';
+        var assessment = unit.assessment || {};
+        var checks = (assessment.comparison || []).map(function (g) {
+          return '<div>' + escape(g.label) + ': ' + escape(g.result) +
+            ' · expected ' + escape(g.expected == null ? 'unclear' : (unit.groups || []).find(function (v) {
+              return v.id === g.id;
+            })?.options?.[g.expected - 1] || '?') +
+            ' · observed ' + escape(g.selected == null ? 'unclear' :
+              (unit.groups || []).find(function (v) { return v.id === g.id; })?.options?.[g.selected - 1] || '?') + '</div>';
+        }).join('');
+        return '<figure class="epoch-finder-frame">' +
+          (src ? '<img loading="lazy" src="' + escape(src) + '" alt="Epoch ' + unit.epoch + ' test frame">' :
+            '<div class="epoch-finder-muted">Frame pruned or unavailable</div>') +
+          '<figcaption>Epoch ' + unit.epoch + ' · Round ' + unit.round + ' · Test ' + (unit.case + 1) +
+          '<small>' + (unit.error ? escape(unit.error) : unit.assessment ? 'VL evaluated' : 'Frame ready') +
+          '</small>' + (inspectedEpoch == null ? '' : '<div>' + escape(unit.prompt || '') + '</div>' + checks) +
+          '</figcaption></figure>';
+      }).join('');
   }
   function render(campaign) {
     els('empty').classList.add('hidden');
@@ -441,10 +505,12 @@
       roundPlans: getRoundPlans(), concept: els("concept").value.trim(), dimensions: recordDimensions()};
     els('start').disabled = true;
     api('start', criteria).then(function (response) {
-      activeCampaign = response.campaign.id; lastFrameKey = ''; refresh();
+      activeCampaign = response.campaign.id; inspectedEpoch = null; lastFrameKey = ''; refresh();
     }).catch(error).finally(function () { els('start').disabled = false; });
   }
   function applyFolder(folder) {
+    inspectedEpoch = null;
+    lastFrameKey = null;
     var changed = currentFolder !== folder;
     currentFolder = folder;
     if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; }
@@ -467,6 +533,19 @@
   els('rounds').onchange = roundPlan;
   els('cases').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
   els('retention').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
+  els('ranking').onclick = function (event) {
+    var row = event.target.closest('[data-inspect-epoch]');
+    if (!row) return;
+    inspectedEpoch = Number(row.dataset.inspectEpoch);
+    lastFrameKey = null;
+    refreshStatus().catch(error);
+  };
+  els('frames').onclick = function (event) {
+    if (!event.target.closest('[data-inspect-reset]')) return;
+    inspectedEpoch = null;
+    lastFrameKey = null;
+    refreshStatus().catch(error);
+  };
   els('pause').onclick = function () { send('pause'); };
   els('resume').onclick = function () { send('resume'); };
   els('stop').onclick = function () { send('stop'); };
@@ -474,13 +553,13 @@
     if (window.confirm('Delete this campaign, its frames, and its scoring history?')) {
       clearError();
       api('delete', { campaignId: activeCampaign }).then(function () {
-        activeCampaign = ''; lastFrameKey = ''; refresh();
+        activeCampaign = ''; inspectedEpoch = null; lastFrameKey = ''; refresh();
       }).catch(error);
     }
   };
   els('campaigns').onclick = function (event) {
     var button = event.target.closest('[data-id]');
-    if (button) { activeCampaign = button.dataset.id; lastFrameKey = ''; list(); refreshStatus().catch(error); }
+    if (button) { activeCampaign = button.dataset.id; inspectedEpoch = null; lastFrameKey = ''; list(); refreshStatus().catch(error); }
   };
   timer = setInterval(function () {
     if (mode === 'finder' && activeCampaign && !els('screen').classList.contains('hidden')) refreshStatus().catch(error);

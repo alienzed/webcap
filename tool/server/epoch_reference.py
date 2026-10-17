@@ -70,3 +70,5 @@ def find_reference_candidates(folder, group, term):
             results.append({"media": name, "group": group, "term": term,
                             "size": stat.st_size, "mtimeNs": stat.st_mtime_ns})
     return results
+
+

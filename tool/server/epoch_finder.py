@@ -256,8 +256,8 @@ def create_campaign(folder_path, criteria):
         approved[key] = entry
     required = {(dimension["label"], option) for dimension in dimensions
                 if _requires_reference(dimension["role"]) for option in dimension["options"]}
-    if set(approved) != required:
-        raise ValueError("Every Primary wildcard choice must have exactly one approved training reference.")
+    if not set(approved).issubset(required):
+        raise ValueError("Only Primary wildcard choices may have training references.")
     references = []
     for (attribute, option), entry in sorted(approved.items()):
         group = str(entry.get("group") or "")
@@ -548,7 +548,7 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
         expected = group["options"][group["expected"] - 1]
         assigned = references.get((group["label"], expected))
         if assigned is None:
-            raise ValueError("Primary wildcard option lacks an approved training reference.")
+            continue
         verified = verified_reference(_folder_key(folder_path), assigned["group"], assigned.get("tag") or expected, assigned["media"])
         if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
             raise ValueError("Training reference changed after campaign approval.")
@@ -609,7 +609,9 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
         if not _requires_reference(group.get("role")) or group.get("expected") is None:
             continue
         option = group["options"][group["expected"] - 1]
-        entry = references[(group["label"], option)]
+        entry = references.get((group["label"], option))
+        if entry is None:
+            continue
         actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"])
         if actual["size"] != entry["size"] or actual["mtimeNs"] != entry["mtimeNs"]:
             raise ValueError("Training reference changed since approval.")
@@ -928,6 +930,9 @@ def command(folder_path, operation, criteria=None):
     if operation == "reference_vocabulary":
         from .epoch_reference import reference_vocabulary
         return {"vocabulary": reference_vocabulary(_folder_key(folder_path))}
+    if operation == "reference_suggestions":
+        from .epoch_reference import find_reference_candidates
+        return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("tag"))[:10]}
     if operation == "reference_candidates":
         from .epoch_reference import find_reference_candidates
         return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("term"))}

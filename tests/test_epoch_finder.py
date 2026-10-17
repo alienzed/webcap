@@ -177,7 +177,8 @@ def test_wizard_proposal_normalization_enforces_alignment():
         "wildcard": "a {triangle|micro triangle} top",
         "stableTerms": ["top"],
         "variationGroups": [{"label": "Top shape",
-                             "options": ["triangle", "micro triangle"], "role": "primary"}],
+                             "options": ["triangle", "micro triangle"], "role": "primary",
+                             "referenceTags": [{"group": "BT Shape", "tag": "triangle"}, {"group": "BT Shape", "tag": "micro triangle"}]}],
     })
     assert result["variationGroups"][0]["role"] == "primary"
     with pytest.raises(ValueError, match="match"):
@@ -315,3 +316,30 @@ def test_discover_history_run_and_queue_only_once(tmp_path, monkeypatch):
     monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
                         lambda path: [{"epoch": 60, "status": "available"}])
     assert len(epoch_finder._runs(tmp_path)) == 1
+
+
+def test_wizard_primary_reference_tags_must_match_exact_option_and_group():
+    from tool.server.epoch_finder_plan import normalize_proposal
+    base = {
+        "concept": "Top shape",
+        "wildcard": "a {micro triangle|teardrop} top",
+        "stableTerms": ["top"],
+        "variationGroups": [{"label": "Top shape", "role": "primary",
+                             "options": ["micro triangle", "teardrop"],
+                             "referenceTags": [
+                                 {"group": "BT Shape", "tag": "micro triangle"},
+                                 {"group": "BT Shape", "tag": "teardrop"}]}],
+    }
+    vocabulary = [{"group": "BT Shape", "terms": [
+        {"term": "micro triangle", "count": 3},
+        {"term": "teardrop", "count": 2}]}]
+    assert normalize_proposal(base, vocabulary)["variationGroups"][0]["referenceTags"][0]["tag"] == "micro triangle"
+    import copy
+    wrong = copy.deepcopy(base)
+    wrong["variationGroups"][0]["referenceTags"][0]["tag"] = "triangle"
+    with pytest.raises(ValueError, match="must equal"):
+        normalize_proposal(wrong, vocabulary)
+    wrong = copy.deepcopy(base)
+    wrong["variationGroups"][0]["referenceTags"][0]["group"] = "invented"
+    with pytest.raises(ValueError, match="one annotation group"):
+        normalize_proposal(wrong, vocabulary)

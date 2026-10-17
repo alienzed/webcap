@@ -87,8 +87,16 @@ test('training startup shows model loading without fabricated completion', () =>
   assert.equal(loading.output.progressLabel, 'Waiting for first training step');
 
   const launch = adapt('training', {}, { lane: 'training', status: 'starting', stage: 'launch' });
-  assert.equal(launch.output.phase, 'Starting · launch');
+  assert.equal(launch.output.phase, 'Starting');
   assert.equal(launch.output.progress, null);
+
+  const caching = adapt('training', {}, { lane: 'training', status: 'starting', stage: 'caching' });
+  assert.equal(caching.output.phase, 'Caching');
+  assert.equal(caching.output.progress, null);
+
+  const starting = adapt('training', {}, { lane: 'training', status: 'starting', stage: 'starting' });
+  assert.equal(starting.output.phase, 'Loading model');
+  assert.equal(starting.output.progress, null);
 
   const running = adapt('training', { step: 1, steps: 100, overallPercent: 1 }, {
     lane: 'training', status: 'running', stage: 'h3',

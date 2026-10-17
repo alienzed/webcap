@@ -67,7 +67,7 @@ Epoch Finder is a separate tab *inside Test Generations*, not a new GPU executio
 
 - Per-round configurable tests per epoch, relative retention, and MP where supported.
 - Freeze these options in the campaign record before any render.
-- Show approximate per-round field sizes and total render count using a conservative 60-second/render estimate, excluding VL and queue waiting.
+- Show approximate per-round field sizes and total render count, excluding VL and queue waiting. Seed observed MiniMax H3 3-second video timings at 0.3 MP (10s/render) and 0.4 MP (15s/render). Use 60s/render for all unmeasured combinations; do not extrapolate across duration or resolution.
 - Actual timing profiles (second-render warm-up exclusion, environment-specific calibration), optional LLM wizard and differentiated concept/leakage/vary-only scoring remain unimplemented.
 
 **Phase D — verification / separately scoped coordination (pending)**

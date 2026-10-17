@@ -80,6 +80,8 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_v
         "Assign role 'primary' for distinguishing features of the learned concept; "
         "'leakage' for secondary traits that should vary independently of the learned concept; "
         "'vary' for prompts' incidental variety (background, lighting, etc.) not worth scoring. "
+        "Treat background, setting, lighting, and camera as Vary by default; hair, pose, and general appearance as Leakage by default, unless the user focus explicitly targets those traits. " 
+        "Reserve Primary for distinctive learned construction, shape, and key subject attributes. " 
         "Prefer precise independent construction/color/shape attributes to whole-product alternatives. "
           "For each Primary variationGroup, use options that are the exact saved tag terms of ONE annotation group, not multi-feature descriptions. " 
         "Put additional natural-language description outside the wildcard. Include referenceTags aligned one-to-one with options, using ONLY exact group/tag pairs from ACTUAL SET REFERENCE TAGS. "  

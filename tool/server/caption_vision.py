@@ -188,8 +188,9 @@ def build_reference_comparison_messages(feature, reference_image, generated_imag
         "Ignore unrelated clothing, people, camera angle, environment and lighting. "
         "Judge visible construction and appearance, not identical image composition. "
         "If the feature cannot be assessed in either image, answer UNCLEAR. "
-        "Return exactly two lines: first one of MATCH, PARTIAL, MISMATCH or UNCLEAR; "
-        "second a short, concrete visible reason. "
+        "Return exactly three lines: OPTION: an option number from the listed choices, "
+        "or unclear or none; VERDICT: MATCH, PARTIAL, MISMATCH or UNCLEAR; "
+        "REASON: one short, concrete visible explanation. "
         "Do not infer hidden details from the text alone."
     )
     return [{

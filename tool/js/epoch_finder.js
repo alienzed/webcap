@@ -202,7 +202,10 @@
   els('stop').onclick = function () { send('stop'); };
   els('delete').onclick = function () {
     if (window.confirm('Delete this campaign, its frames, and its scoring history?')) {
-      send('delete').then(function () { activeCampaign = ''; lastFrameKey = ''; refresh(); });
+      clearError();
+      api('delete', { campaignId: activeCampaign }).then(function () {
+        activeCampaign = ''; lastFrameKey = ''; refresh();
+      }).catch(error);
     }
   };
   els('campaigns').onclick = function (event) {

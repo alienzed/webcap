@@ -197,7 +197,7 @@
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({folder: folder, directorModel: directorModel,
         focus: els('concept').value.trim(),
-        vocabulary: window.getTestGenerationPlanningVocabulary()})
+        jobId: els('run').value, vocabulary: window.getTestGenerationPlanningVocabulary()})
     }).then(function (response) { return response.json().then(function (body) {
       if (!response.ok || !body.ok) throw new Error(body.error || 'Could not propose tests.');
       return body.job;
@@ -226,7 +226,7 @@
       els('concept').value = analysis.concept || els('concept').value;
       els('prompt').value = analysis.wildcard;
       dimensions = analysis.variationGroups.map(function (g) {
-        return {label: g.label, options: g.options, role: g.role || suggestedRole(g.label, g.options), referenceTags: g.referenceTags || []};
+        return {label: g.label, options: g.options, role: g.role || suggestedRole(g.label, g.options)};
       });
       renderDimensions();
       els('proposal-status').textContent = 'Proposed tests ready. Edit values and scoring roles freely.';
@@ -292,17 +292,17 @@
   var referencePlanSignature = '';
   function prepareReferences() {
     var version = ++referenceGeneration;
-    referencePlanSignature = JSON.stringify(dimensions.map(function (d) { return [d.label,d.role,d.options,d.referenceTags]; }));
+    referencePlanSignature = JSON.stringify([els('run').value, dimensions.map(function (d) { return [d.label,d.role,d.options]; })]);
     referenceItems = dimensions.flatMap(function (d) {
       return d.role === 'primary' ? d.options.map(function (option) {
-        return {attribute:d.label, option:option, referenceTag:(d.referenceTags || [])[d.options.indexOf(option)], key:JSON.stringify([d.label,option]), candidates:[]};
+        return {attribute:d.label, option:option, key:JSON.stringify([d.label,option]), candidates:[]};
       }) : [];
     });
     referenceIndex = 0;
     els('start').disabled = true;
     els('reference-options').innerHTML = '<p class="epoch-finder-muted">Finding tagged reference candidates…</p>';
     return Promise.all(referenceItems.map(function (item) {
-      return (!item.referenceTag?.group || !item.referenceTag?.tag ? Promise.resolve({references:[]}) : api('reference_suggestions', {jobId:els('run').value, group:item.referenceTag.group, tag:item.referenceTag.tag})).then(function (response) {
+      return api('reference_suggestions', {jobId:els('run').value, option:item.option}).then(function (response) {
         item.candidates = response.references || [];
       });
     })).then(function () {
@@ -324,7 +324,7 @@
         referenceDraftChoices[item.key] = selectedIndex;
       });
       renderReferenceStep();
-    }).catch(error);
+    }).catch(function (exc) { referencePlanSignature = ''; error(exc); });
   }
   function renderReferenceStep() {
     var host = els('reference-options');
@@ -372,7 +372,7 @@
     els('next').classList.toggle('hidden', value === 4);
     els('start').classList.toggle('hidden', value !== 4);
     if (value === 3) roundPlan();
-    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify(dimensions.map(function (d) { return [d.label,d.role,d.options,d.referenceTags]; }))) prepareReferences(); else renderReferenceStep(); }
+    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify([els('run').value, dimensions.map(function (d) { return [d.label,d.role,d.options]; })])) prepareReferences(); else renderReferenceStep(); }
   }
   function advance() {
     try {

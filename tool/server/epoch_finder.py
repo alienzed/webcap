@@ -262,8 +262,10 @@ def create_campaign(folder_path, criteria):
     for (attribute, option), entry in sorted(approved.items()):
         group = str(entry.get("group") or "")
         media = str(entry.get("media") or "")
-        reference = verified_reference(folder, group, option, media)
-        references.append({"attribute": attribute, "option": option, "group": group, **reference})
+        tag = str(entry.get("tag") or option)
+        reference = verified_reference(folder, group, tag, media)
+        references.append({"attribute": attribute, "option": option, "group": group,
+                           "tag": tag, **reference})
     evaluation = criteria.get("referenceEvaluation")
     if not isinstance(evaluation, dict) or any(type(evaluation.get(k)) is not bool for k in ("rvn", "dino")):
         raise ValueError("Select reference evaluation mechanisms explicitly.")
@@ -547,7 +549,7 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
         assigned = references.get((group["label"], expected))
         if assigned is None:
             raise ValueError("Primary wildcard option lacks an approved training reference.")
-        verified = verified_reference(_folder_key(folder_path), assigned["group"], expected, assigned["media"])
+        verified = verified_reference(_folder_key(folder_path), assigned["group"], assigned.get("tag") or expected, assigned["media"])
         if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
             raise ValueError("Training reference changed after campaign approval.")
         reference = folder_path / assigned["media"]
@@ -608,7 +610,7 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
             continue
         option = group["options"][group["expected"] - 1]
         entry = references[(group["label"], option)]
-        actual = verified_reference(_folder_key(folder_path), entry["group"], option, entry["media"])
+        actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"])
         if actual["size"] != entry["size"] or actual["mtimeNs"] != entry["mtimeNs"]:
             raise ValueError("Training reference changed since approval.")
         unique.setdefault(entry["media"], []).append(group["label"] + ": " + option)

@@ -599,7 +599,7 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
     references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
     unique = {}
     for group in unit.get("groups", []):
-        if group.get("role") == "vary" or group.get("expected") is None:
+        if group.get("role") != "primary" or group.get("expected") is None:
             continue
         option = group["options"][group["expected"] - 1]
         entry = references[(group["label"], option)]

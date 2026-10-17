@@ -2156,7 +2156,7 @@
     clearQueuedFirstCuts();
     renderLibrary();
     renderStoryAction();
-    resetLlmExecution().catch(reportError);
+    if (action.phase !== 'Queued') resetLlmExecution().catch(reportError);
   }
 
   function requireStoryAction(action) {
@@ -2210,7 +2210,15 @@
     renderStoryAction();
 
     var replaceExisting = false;
-    flushPendingSaves().then(function () {
+    var gateKey = 'firstcut:' + storyId + ':' + action.startedAt + ':' + Math.random().toString(36).slice(2);
+    window.webcapWorkflowGate.acquire('firstcut', gateKey,
+      function () { return storyState.storyAction === action && !action.cancelled; },
+      function (message) { if (!action.cancelled) updateStoryAction(action, 'Queued', message); }
+    ).then(function (lease) {
+      action.workflowLease = lease;
+      requireStoryAction(action);
+      return flushPendingSaves();
+    }).then(function () {
       requireStoryAction(action);
       return request(null, 'story=' + encodeURIComponent(storyId));
     }).then(function (payload) {
@@ -2301,6 +2309,7 @@
       }
       renderStoryAction();
     }).finally(function () {
+      if (action.workflowLease) action.workflowLease.release().catch(reportError);
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
       renderLibrary();

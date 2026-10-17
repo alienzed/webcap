@@ -49,10 +49,10 @@ def test_temporary_checkpoint_copy_cleanup_preserves_source(tmp_path, monkeypatc
     stage = tmp_path / "staged"
     stage.mkdir()
     monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "sample/set")
-    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot", lambda *_: ("training", {"stages": "h3"}))
-    monkeypatch.setattr(epoch_finder, "_candidate_test_directory_for_run", lambda *_args, **_kw: stage)
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key", lambda stage: object())
+    monkeypatch.setattr(epoch_finder.test_bench, "_test_directory", lambda *args: stage)
     monkeypatch.setattr(epoch_finder, "_candidate_safetensors_path", lambda *_args: source)
-    campaign = {"id": "abcdef123456", "jobId": "job-1"}
+    campaign = {"id": "abcdef123456", "jobId": "job-1", "stage": "h3"}
     name = epoch_finder._stage_epoch(tmp_path, campaign, 5)
     assert name == "epoch-finder-abcdef123456/epoch5.safetensors"
     assert (stage / name).read_bytes() == source.read_bytes()
@@ -240,3 +240,18 @@ def test_prune_keeps_finalists_and_unscored_failure_frames(tmp_path, monkeypatch
     assert (frames / "b.png").exists() and (frames / "c.png").exists()
     assert units[0]["frame"] == "" and units[0]["framePruned"] is True
     assert units[1]["frame"] == "b.png" and units[2]["frame"] == "c.png"
+
+
+def test_resume_does_not_delete_source_session_just_because_frame_exists(monkeypatch, tmp_path):
+    owned = {"campaignStaging": "epoch-finder-abcdef123456", "inferenceJobs": []}
+    monkeypatch.setattr(epoch_finder.test_bench, "open_session", lambda folder, name: owned)
+    removed = []
+    monkeypatch.setattr(epoch_finder.test_bench, "delete_session",
+                        lambda folder, name: removed.append(name))
+    campaign = {
+        "id": "abcdef123456",
+        "units": [{"session": "retained-video", "frame": "first.png", "assessment": None}],
+    }
+    epoch_finder._resume_saved_work(tmp_path, campaign)
+    assert removed == []
+    assert campaign["units"][0]["session"] == "retained-video"

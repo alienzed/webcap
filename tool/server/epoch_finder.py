@@ -852,10 +852,10 @@ def command(folder_path, operation, criteria=None):
         return list_campaigns(folder_path)
     if operation == "reference_vocabulary":
         from .epoch_reference import reference_vocabulary
-        return {"vocabulary": reference_vocabulary(folder_path)}
+        return {"vocabulary": reference_vocabulary(_folder_key(folder_path))}
     if operation == "reference_candidates":
         from .epoch_reference import find_reference_candidates
-        return {"references": find_reference_candidates(folder_path, criteria.get("group"), criteria.get("term"))}
+        return {"references": find_reference_candidates(_folder_key(folder_path), criteria.get("group"), criteria.get("term"))}
     if operation == "start":
         return {"campaign": create_campaign(folder_path, criteria)}
     campaign_id = str(criteria.get("campaignId") or "")

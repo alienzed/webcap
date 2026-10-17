@@ -477,8 +477,7 @@ def _run(folder_path, campaign_id, control):
                             _render_unit(folder_path, campaign, plan, unit, staged)
                         except Exception as exc:
                             _mark_unit_error(folder_path, campaign, unit, "render", exc)
-                if not any(unit.get("session") and _session_still_active(folder_path, unit["session"])
-                           for unit in pending):
+                if not _campaign_has_active_sessions(folder_path, campaign):
                     _clean_staging(folder_path, campaign)
             _update(folder_path, campaign, phase="Evaluating", detail="All round frames captured.")
             for unit in campaign["units"]:
@@ -525,17 +524,20 @@ def _run(folder_path, campaign_id, control):
         # The coordinator queues only one Test session at a time. A failed or
         # interrupted active session retains its checkpoint until its queue
         # reference is resolved; otherwise release the staging directory.
-        pending = [
-            unit for unit in campaign["units"] if unit.get("session")
-            and _session_still_active(folder_path, unit["session"])
-        ]
         try:
-            if not pending:
+            if not _campaign_has_active_sessions(folder_path, campaign):
                 _clean_staging(folder_path, campaign)
         finally:
             with _worker_lock:
                 _workers.pop(campaign_id, None)
                 _controls.pop(campaign_id, None)
+
+
+def _campaign_has_active_sessions(folder_path, campaign):
+    return any(
+        unit.get("session") and _session_still_active(folder_path, unit["session"])
+        for unit in campaign["units"]
+    )
 
 
 def _session_still_active(folder_path, session_name):

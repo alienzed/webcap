@@ -14,7 +14,7 @@
     });
   }
 
-  function acquire(kind, key, isAlive, onWait) {
+  function acquire(kind, key, isAlive, onWait, onLost) {
     var released = false, interval = 0, owned = false;
     var lease = {
       release: function () {
@@ -32,15 +32,26 @@
         if (state.state === 'missing') throw new Error('Workflow admission expired; retry.');
         if (state.state === 'active') {
           owned = true;
+          var heartbeatFailures = 0;
+          function loseOwnership(message) {
+            if (released) return;
+            released = true;
+            clearInterval(interval);
+            interval = 0;
+            if (onLost) onLost(message);
+          }
           interval = setInterval(function () {
             if (released) return;
             request('heartbeat', kind, key).then(function (next) {
+              heartbeatFailures = 0;
               if (next.state !== 'active') {
-                // Never continue silently after loss of ownership.
-                if (onWait) onWait('Lost workflow admission. Stop and retry.');
+                loseOwnership('Lost workflow admission; stopped submitting new operations.');
               }
             }).catch(function (err) {
-              if (onWait) onWait('Workflow admission heartbeat failed: ' + String(err.message || err));
+              heartbeatFailures++;
+              if (heartbeatFailures >= 3)
+                loseOwnership('Cannot verify workflow admission; stopped submitting new operations: ' + String(err.message || err));
+              else if (onWait) onWait('Workflow admission reconnecting (' + heartbeatFailures + '/3).');
             });
           }, 30000);
           return lease;

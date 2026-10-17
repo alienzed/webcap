@@ -86,6 +86,8 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_v
         "Do not invent untrained Primary features. WebCap will match option phrases to the Set tags automatically. " 
         "Do not output reference tag mappings or ask the user to select annotation groups. " 
         "Offer concrete values consistent with the Set vocabulary. "
+        "Include meaningful independent variation in background, viewpoint, pose or appearance to probe generalization, not merely cosmetic duplicates. "
+        "Where supported by real learned tags, probe independence of Primary shapes, colors and construction using different combinations. Do not claim unobserved combinations are verified. "
         "Never invent observed frequencies or conflate a term with its negation. "
         "At least one primary group is required. No new inference work should start."
     )

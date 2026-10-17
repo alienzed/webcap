@@ -14,8 +14,10 @@ _KINDS = {"epoch", "batch", "firstcut"}
 
 
 def _prune(now):
+    # An Epoch worker owns a server thread and releases in its finally block.
+    # It must not expire during a long overnight render with no coordinator calls.
     _TICKETS[:] = [entry for entry in _TICKETS
-                  if now - entry["touched"] < _STALE_SECONDS]
+                  if entry["kind"] == "epoch" or now - entry["touched"] < _STALE_SECONDS]
 
 
 def register(kind, key):

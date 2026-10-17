@@ -559,7 +559,7 @@
   };
   els('campaigns').onclick = function (event) {
     var button = event.target.closest('[data-id]');
-    if (button) { activeCampaign = button.dataset.id; lastFrameKey = ''; list(); refreshStatus().catch(error); }
+    if (button) { activeCampaign = button.dataset.id; inspectedEpoch = null; lastFrameKey = ''; list(); refreshStatus().catch(error); }
   };
   timer = setInterval(function () {
     if (mode === 'finder' && activeCampaign && !els('screen').classList.contains('hidden')) refreshStatus().catch(error);

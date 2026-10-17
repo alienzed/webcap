@@ -27,6 +27,7 @@ from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
 
 _workers = {}
 _controls = {}
+_pending_campaigns = []  # FIFO of (validated folder, campaign id); no new execution lane.
 _worker_lock = threading.Lock()
 _ID = re.compile(r"^[a-f0-9]{12}$")
 _FRAME = re.compile(r"^r[0-9]+-e[0-9]+-c[0-9]+\.png$")
@@ -795,6 +796,17 @@ def _run(folder_path, campaign_id, control):
             with _worker_lock:
                 _workers.pop(campaign_id, None)
                 _controls.pop(campaign_id, None)
+                while _pending_campaigns:
+                    next_folder, next_id = _pending_campaigns.pop(0)
+                    try:
+                        next_campaign = _load(next_folder, next_id)
+                        if next_campaign.get("status") != "queued":
+                            continue
+                        _start_campaign_worker_locked(next_folder, next_id)
+                        break
+                    except Exception:
+                        import logging
+                        logging.getLogger(__name__).exception("Could not dispatch next queued Epoch Finder campaign")
 
 
 def _campaign_has_active_sessions(folder_path, campaign):
@@ -841,18 +853,28 @@ def _resume_saved_work(folder_path, campaign):
         start_observer()
 
 
+def _start_campaign_worker_locked(folder_path, campaign_id):
+    """Caller holds _worker_lock; only one active Epoch Finder coordinator."""
+    control = {"pause": threading.Event(), "stop": threading.Event()}
+    thread = threading.Thread(
+        target=_run, args=(folder_path, campaign_id, control), daemon=True,
+        name="webcap-epoch-finder",
+    )
+    _workers[campaign_id] = thread
+    _controls[campaign_id] = control
+    thread.start()
+
+
 def _launch(folder_path, campaign_id):
     with _worker_lock:
         if any(thread.is_alive() for thread in _workers.values()):
-            raise RuntimeError("An Epoch Finder campaign is already running.")
-        control = {"pause": threading.Event(), "stop": threading.Event()}
-        thread = threading.Thread(
-            target=_run, args=(folder_path, campaign_id, control), daemon=True,
-            name="webcap-epoch-finder",
-        )
-        _workers[campaign_id] = thread
-        _controls[campaign_id] = control
-        thread.start()
+            campaign = _load(folder_path, campaign_id)
+            _update(folder_path, campaign, status="queued", phase="Queued",
+                    detail="Waiting for earlier Epoch Finder campaign.")
+            if not any(id_ == campaign_id for _, id_ in _pending_campaigns):
+                _pending_campaigns.append((folder_path, campaign_id))
+            return
+        _start_campaign_worker_locked(folder_path, campaign_id)
 
 
 def status(folder_path, campaign_id):
@@ -882,6 +904,14 @@ def command(folder_path, operation, criteria=None):
     if operation == "status":
         return {"campaign": status(folder_path, campaign_id)}
     if operation in {"pause", "stop"}:
+        campaign = status(folder_path, campaign_id)
+        if campaign.get("status") == "queued":
+            with _worker_lock:
+                _pending_campaigns[:] = [(folder, id_) for folder, id_ in _pending_campaigns if id_ != campaign_id]
+                _update(folder_path, campaign, status="paused" if operation == "pause" else "stopped",
+                        phase="Paused" if operation == "pause" else "Stopped",
+                        detail="Removed from the campaign queue before starting.")
+            return {"campaign": status(folder_path, campaign_id)}
         with _worker_lock:
             control = _controls.get(campaign_id)
         if not control:
@@ -898,6 +928,7 @@ def command(folder_path, operation, criteria=None):
     if operation == "delete":
         campaign = status(folder_path, campaign_id)
         with _worker_lock:
+            _pending_campaigns[:] = [(folder, id_) for folder, id_ in _pending_campaigns if id_ != campaign_id]
             worker = _workers.get(campaign_id)
         if worker is not None and worker.is_alive():
             raise ValueError("Wait for the campaign worker to finish before deleting it.")

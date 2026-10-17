@@ -70,7 +70,7 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_v
     group["properties"]["referenceTags"] = {"type": "array", "items": {"type": "object", "required": ["group", "tag"], "properties": {"group": {"type": "string"}, "tag": {"type": "string"}}}}
     group["properties"]["role"] = {"type": "string", "enum": ["primary", "leakage", "vary"]}
     import json
-    contract["prompt"] += "\n[ACTUAL SET REFERENCE TAGS]\n" + json.dumps(reference_vocabulary or [], ensure_ascii=False) + "\\n"
+    contract["prompt"] += "\n[ACTUAL SET REFERENCE TAGS]\n" + json.dumps(reference_vocabulary or [], ensure_ascii=False) + "\n"
     contract["prompt"] += (
         "\n\n[EPOCH FINDER ADDITION]\n"
         "You are proposing a *reviewable test plan*, not launching a campaign. "

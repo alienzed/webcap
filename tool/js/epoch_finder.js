@@ -572,12 +572,22 @@
     var src = unit.frame && !unit.framePruned ? '/fs/epoch_finder/frame?folder=' +
       encodeURIComponent(currentFolder) + '&campaign=' + encodeURIComponent(campaign.id) +
       '&frame=' + encodeURIComponent(unit.frame) : '';
+    var referenceNames = Array.from(new Set((unit.referenceAssessments || []).map(function (v) { return v.reference; })
+      .concat((unit.dinoAssessments || []).map(function (v) { return v.reference; }))));
+    var referenceThumbnails = referenceNames.map(function (name) {
+      var href = '/caption/media?folder=' + encodeURIComponent(currentFolder) + '&media=' + encodeURIComponent(name);
+      return '<a href="' + escape(href) + '" target="_blank" rel="noopener" title="Open full training reference">' +
+        '<img loading="lazy" src="' + escape(href) + '" alt="Approved training reference: ' + escape(name) + '">' +
+        '<small>' + escape(name) + '</small></a>';
+    }).join('');
     node.innerHTML = '<div class="epoch-finder-inspect-top"><strong>Epoch ' + unit.epoch +
       ' · Round ' + unit.round + ' / Test ' + (unit.case+1) + '</strong><span>' +
       (inspectedFrame+1) + ' / ' + units.length + '</span></div>' +
       (src ? '<button type="button" data-inspect-zoom title="Open original image"><img src="' + escape(src) +
       '" alt="Epoch ' + unit.epoch + ' enlarged preview"></button>' :
       '<p>Frame ' + (unit.framePruned ? 'pruned after scoring' : unit.error ? 'unavailable due to error' : 'not yet captured') + '</p>') +
+      (referenceThumbnails ? '<div class="epoch-finder-reference-thumbnails"><strong>Approved training references</strong><div>' +
+        referenceThumbnails + '</div></div>' : '') +
       '<div class="epoch-finder-inspect-nav"><button type="button" data-inspect-prev>← Previous</button>' +
       '<button type="button" data-inspect-next>Next →</button></div>' +
       '<details open><summary>VL judgments (' + checks.length + ')</summary>' +
@@ -593,6 +603,7 @@
         unit.referenceAssessments.length + ')</summary>' + unit.referenceAssessments.map(function (v) {
           return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.label) +
           ' · ' + escape(v.option) + '</strong><span>' + escape(v.verdict) + '</span>' +
+          '<small>Selected in render: ' + escape(v.selected == null ? 'unclear' : ((unit.groups || []).find(function (g) { return g.id === v.groupId; })?.options || [])[v.selected - 1] || 'unclear') + '</small>' +
           '<div>' + escape(v.response) + '</div><small>Reference: ' + escape(v.reference) +
           ' · ' + escape(v.elapsedSeconds) + 's</small></div>';
         }).join('') + '</details>' : '') +

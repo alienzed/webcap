@@ -16,8 +16,8 @@
 - Retain current evidence gallery as a navigation overview. The original stored image is never changed.
 - Keep image and VL requests read-only, no rescans and no new persistence.
 
-## Phase 3: rankings and navigation refinement (deferred for explicit browser feedback)
-- Consider explicit round/status filters, per-epoch denominator/trend, focused grid/list toggle, prompt copy, keyboard navigation, full-screen lightbox and assessment updates without full rerender.
+## Phase 3: rankings and navigation refinement (partially applied)
+- Applied: candidate state filter, score/epoch/evidence-count sorting, and denominator visibility.\n- Deferred for browser feedback: round-specific ranking, trends, focused grid/list toggle, prompt copy, keyboard shortcuts, and a fully integrated lightbox.
 - Multi-run candidate identity is deferred; campaigns remain one saved training run each.
 - Copy to Test is already a separate PR and not automatically included here.
 

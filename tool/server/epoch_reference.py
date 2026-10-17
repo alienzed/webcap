@@ -1,6 +1,8 @@
 """Read-only exact scoped-tag reference candidate lookup for dataset-aware evaluation."""
 from pathlib import Path
 
+SUPPORTED_REFERENCE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+
 from .caption_ops import _resolve_folder, list_media_files
 from .folder_state_store import read_folder_state
 
@@ -13,7 +15,7 @@ def reference_vocabulary(folder):
     allowed = set(list_media_files(folder))
     vocabulary = {}
     for name, annotations in by_media.items():
-        if name not in allowed:
+        if name not in allowed or Path(name).suffix.lower() not in SUPPORTED_REFERENCE_EXTENSIONS:
             continue
         if not isinstance(annotations, dict):
             raise ValueError("Invalid scoped tags for " + name)
@@ -52,6 +54,8 @@ def find_reference_candidates(folder, group, term):
         raise ValueError("Scoped tag map is invalid.")
     results = []
     for name in list_media_files(folder):
+        if Path(name).suffix.lower() not in SUPPORTED_REFERENCE_EXTENSIONS:
+            continue
         annotations = by_media.get(name, {})
         if not isinstance(annotations, dict):
             raise ValueError("Invalid scoped tag annotations for " + name)

@@ -1349,7 +1349,28 @@
                                     <span id="test-generations-wildcard-tagline" class="test-generations-wildcard-tagline hidden"></span>
                                     <button id="test-generations-session-info-btn" type="button" class="test-generations-session-info-btn hidden" title="View frozen session settings and resolved prompt" aria-label="View frozen session settings and resolved prompt" aria-expanded="false">Details</button>
                                 </div>
-                                <div class="test-generations-vl-toolbar"><button id="test-generations-ask-vl" class="review-captions-btn" type="button" disabled>Ask VL</button><span id="test-generations-vl-progress" class="small" aria-live="polite"></span></div>
+                                <div class="test-generations-vl-toolbar">
+                                    <select id="test-generations-evaluator" aria-label="Test evaluation method" title="Choose which assessment to run">
+                                        <option value="original">Ask VL — Original</option>
+                                        <option value="rvn">VL Compare — Training Reference</option>
+                                        <option value="dino">DINOv2 Compare — Training Reference</option>
+                                    </select>
+                                    <button id="test-generations-ask-vl" class="review-captions-btn" type="button" disabled>Ask VL</button>
+                                    <span id="test-generations-vl-progress" class="small" aria-live="polite"></span>
+                                </div>
+                                <dialog id="test-generations-reference-dialog" class="test-reference-dialog" aria-labelledby="test-generations-reference-title">
+                                    <form method="dialog"><button type="submit" class="test-reference-close" aria-label="Close">×</button></form>
+                                    <h3 id="test-generations-reference-title">Compare with training reference</h3>
+                                    <p>Choose an attribute, its expected option and one representative full training image. Compare all available previews in this session.</p>
+                                    <label>Wildcard attribute<select id="test-generations-reference-attribute"></select></label>
+                                    <label>Scoped Set annotation group<select id="test-generations-reference-group"></select></label>
+                                    <label>Expected option<select id="test-generations-reference-option"></select></label>
+                                    <label>Training image<select id="test-generations-reference-media"></select></label>
+                                    <img id="test-generations-reference-preview" class="hidden" alt="Approved full-image training reference">
+                                    <p id="test-generations-reference-status" aria-live="polite"></p>
+                                    <div class="test-reference-actions"><button id="test-generations-reference-run" class="review-captions-btn" type="button">Run comparison</button></div>
+                                    <div id="test-generations-reference-results" class="test-reference-results"></div>
+                                </dialog>
                                 <div class="test-generations-preview-tools">
                                     <select id="test-generations-preview-sort" class="test-generations-candidate-sort" aria-label="Sort Test previews" title="Sort previews in this session">
                                         <option value="original">Original order</option>

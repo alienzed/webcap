@@ -168,3 +168,13 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .test-reference-result{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px 0;border-bottom:1px solid var(--border-color,#405064);font-size:12px}
 .test-reference-result span,.test-reference-result small{grid-column:1/-1;overflow-wrap:anywhere}
 @media(max-width:650px){.test-generations-vl-toolbar #test-generations-evaluator{max-width:160px}}
+
+.epoch-finder-reference-step{display:flex;justify-content:space-between;gap:8px;align-items:start;font-size:13px;margin:12px 0}
+.epoch-finder-reference-step span{white-space:nowrap;color:var(--muted-text,#93a5b6);font-size:11px}
+.epoch-finder-reference-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:7px;max-width:100%;margin:10px 0}
+.epoch-finder-reference-tile{display:flex;flex-direction:column;min-width:0;padding:3px;border:2px solid var(--border-color,#384653);background:var(--panel-bg,#1b2530);color:inherit;border-radius:7px;cursor:pointer;overflow:hidden}
+.epoch-finder-reference-tile.selected{border-color:var(--accent-color,#e99b16)}
+.epoch-finder-reference-tile:focus-visible{outline:2px solid var(--accent-color,#e99b16);outline-offset:2px}
+.epoch-finder-reference-tile img{width:100%;aspect-ratio:3/4;object-fit:contain;background:#1118}
+.epoch-finder-reference-tile span{font-size:10px;padding:5px 1px}
+.epoch-finder-reference-nav{display:flex;justify-content:space-between;gap:8px;margin-top:10px}

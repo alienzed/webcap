@@ -588,7 +588,8 @@
       .map(function (g) { return (campaign.referencePlan || []).find(function (r) {
         return r.attribute === g.label && r.option === g.options[g.expected - 1];
       }); }).filter(Boolean).map(function (r) { return r.media; });
-    var referenceNames = Array.from(new Set(plannedReferences.concat((unit.referenceAssessments || []).map(function (v) { return v.reference; })
+    var referenceNames = Array.from(new Set(plannedReferences
+      .concat((unit.referenceAssessments || []).map(function (v) { return v.reference; }))
       .concat((unit.dinoAssessments || []).map(function (v) { return v.reference; }))));
     var referenceThumbnails = referenceNames.map(function (name) {
       var href = '/caption/media?folder=' + encodeURIComponent(currentFolder) + '&media=' + encodeURIComponent(name);

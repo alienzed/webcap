@@ -4225,14 +4225,17 @@
     el('test-generations-batch-heading').textContent = 'Batch Test + VL · ' + batch.folder;
     var lines = [];
     lines.push(batch.phase + ' · ' + batch.sessions.length + '/' + batch.count + ' sessions submitted');
-    if (batch.phase === 'Generating') lines.push(batch.finished + '/' + batch.sessions.length + ' sessions finished');
-    if (batch.phase === 'Evaluating') lines.push(batch.evaluated + '/' + batch.previews + ' previews evaluated');
+    if (batch.phase === 'Generating + VL' || batch.phase === 'Evaluating') {
+      lines.push(batch.finished + '/' + batch.sessions.length + ' sessions finished');
+      lines.push(batch.evaluated + '/' + batch.previews + ' previews evaluated');
+    }
     if (batch.detail) lines.push(batch.detail);
     if (batch.errors.length) lines.push(batch.errors.length + ' error(s); see Console.');
     el('test-generations-batch-progress').textContent = lines.join(' · ');
     if (batch.active) {
-      var completed = batch.phase === 'Evaluating' ? batch.evaluated : batch.phase === 'Generating' ? batch.finished : batch.sessions.length;
-      var total = batch.phase === 'Evaluating' ? batch.previews : batch.phase === 'Generating' ? batch.sessions.length : batch.count;
+      var evaluatingOnly = batch.phase === 'Evaluating';
+      var completed = evaluatingOnly ? batch.evaluated : batch.phase === 'Generating + VL' ? batch.finished : batch.sessions.length;
+      var total = evaluatingOnly ? batch.previews : batch.phase === 'Generating + VL' ? batch.sessions.length : batch.count;
       window.publishActivityProgress({
         id: batch.activityId, kind: 'test-batch', lane: 'background', title: 'Batch Test + VL',
         status: 'running', phase: batch.phase, detail: batch.folder + (batch.detail ? ' · ' + batch.detail : ''),
@@ -4347,24 +4350,36 @@
       batch.finished = batch.sessions.filter(function (id) {
         return !!terminal[String(batch.statuses[id].status || '')];
       }).length;
-      batch.detail = '';
-      renderTestBatch();
-      if (batch.finished === batch.sessions.length) {
-        // A terminal session can be "complete" even when individual renditions failed.
-        // Keep successful previews usable, but report failed generations in Console.
-        batch.sessions.forEach(function (session) {
-          var status = batch.statuses[session];
-          var failures = Array.isArray(status.failures) ? status.failures : [];
-          var failed = Number(status.failed || 0);
-          if (!failures.length && !failed && status.status !== 'failed' && status.status !== 'interrupted') return;
+
+      // Each terminal session joins the serial VL chain exactly once. Polling
+      // continues while that chain works, so completed sessions are assessed
+      // without waiting for the rest of the inference queue.
+      batch.sessions.forEach(function (session) {
+        var status = batch.statuses[session];
+        if (!terminal[String(status.status || '')] || batch.scheduledSessions.has(session)) return;
+        batch.scheduledSessions.add(session);
+        batch.previews += (status.results || []).filter(function (result) {
+          return !!resultMediaFile(result);
+        }).length;
+        var failures = Array.isArray(status.failures) ? status.failures : [];
+        var failed = Number(status.failed || 0);
+        if (failures.length || failed || status.status === 'failed' || status.status === 'interrupted') {
           var reason = failures.map(function (failure) {
             return String(failure.sourceLoRA || failure.candidateFile || 'Generation') + ': ' +
               String(failure.error || 'failed');
           }).join('; ') || String(status.error || failed + ' failed generation(s)');
           testBatchError(batch, new Error(reason), sessionLabel(session) + ' generation');
+        }
+        batch.evaluationQueue = batch.evaluationQueue.then(function () {
+          return testBatchEvaluateSession(batch, session);
+        }).catch(function (err) {
+          if (batch.active) testBatchError(batch, err, sessionLabel(session) + ' evaluation');
         });
-        return;
-      }
+      });
+
+      batch.phase = batch.finished === batch.sessions.length ? 'Evaluating' : 'Generating + VL';
+      renderTestBatch();
+      if (batch.finished === batch.sessions.length) return batch.evaluationQueue;
       return testBatchWait(batch).then(function () { return testBatchPoll(batch); });
     });
   }
@@ -4409,58 +4424,48 @@
     renderTestBatch();
   }
 
-  function testBatchEvaluate(batch) {
+  function testBatchEvaluateSession(batch, session) {
     testBatchCheck(batch);
-    batch.phase = 'Evaluating';
-    batch.previews = batch.sessions.reduce(function (sum, session) {
-      return sum + (batch.statuses[session].results || []).filter(function (r) {
-        return !!resultMediaFile(r);
-      }).length;
-    }, 0);
-    batch.evaluated = 0;
-    renderTestBatch();
-    return batch.sessions.reduce(function (previous, session) {
-      return previous.then(function () {
-        var status = batch.statuses[session];
-        var question = testVlQuestion(status);
-        var groups = Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : [];
-        var results = (status.results || []).filter(function (r) { return !!resultMediaFile(r); });
-        return results.reduce(function (chain, result) {
-          return chain.then(function () {
-            testBatchCheck(batch);
-            var file = resultMediaFile(result);
-            batch.detail = sessionLabel(session) + ' · ' + file;
-            renderTestBatch();
-            return askVlForTestPreview(batch.folder, session, file, batch.vlModel, question, function (jobId) {
-              batch.vlJobId = jobId;
-              return batch.active;
-            }).then(function (job) {
-              testBatchCheck(batch);
-              var text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
-              return requestForFolder(batch.folder, 'test_vision_update', {
-                session: session, mediaFile: file,
-                assessment: { text: text, question: question, comparison: testVlCompare(text, groups), modelId: batch.vlModel }
-              });
-            }).then(function (payload) {
-              testBatchCheck(batch);
-              var stored = batch.statuses[session].testVision || (batch.statuses[session].testVision = {});
-              stored.byMedia = payload.testVision.byMedia;
-              stored.disabledGroups = payload.testVision.disabledGroups;
-              if (prepared && String(launchFolder) === batch.folder && String(prepared.modelId || '') === String(batch.criteria.modelId)) {
-                prepared.candidateVisionScores = payload.candidateVisionScores || {};
-                syncTestVlCandidateRows();
-              }
-              testBatchRecalculate(batch);
-            }).catch(function (err) {
-              if (!batch.active) throw err;
-              testBatchError(batch, err, session + ' · ' + file);
-            }).then(function () {
-              batch.vlJobId = '';
-              batch.evaluated += 1;
-              renderTestBatch();
-            });
+    var status = batch.statuses[session];
+    var question = testVlQuestion(status);
+    var groups = Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : [];
+    var results = (status.results || []).filter(function (result) {
+      return !!resultMediaFile(result);
+    });
+    return results.reduce(function (chain, result) {
+      return chain.then(function () {
+        testBatchCheck(batch);
+        var file = resultMediaFile(result);
+        batch.detail = sessionLabel(session) + ' · ' + file;
+        renderTestBatch();
+        return askVlForTestPreview(batch.folder, session, file, batch.vlModel, question, function (jobId) {
+          batch.vlJobId = jobId;
+          return batch.active;
+        }).then(function (job) {
+          testBatchCheck(batch);
+          var text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
+          return requestForFolder(batch.folder, 'test_vision_update', {
+            session: session, mediaFile: file,
+            assessment: { text: text, question: question, comparison: testVlCompare(text, groups), modelId: batch.vlModel }
           });
-        }, Promise.resolve());
+        }).then(function (payload) {
+          testBatchCheck(batch);
+          var stored = batch.statuses[session].testVision || (batch.statuses[session].testVision = {});
+          stored.byMedia = payload.testVision.byMedia;
+          stored.disabledGroups = payload.testVision.disabledGroups;
+          if (prepared && String(launchFolder) === batch.folder && String(prepared.modelId || '') === String(batch.criteria.modelId)) {
+            prepared.candidateVisionScores = payload.candidateVisionScores || {};
+            syncTestVlCandidateRows();
+          }
+          testBatchRecalculate(batch);
+        }).catch(function (err) {
+          if (!batch.active) throw err;
+          testBatchError(batch, err, session + ' · ' + file);
+        }).then(function () {
+          batch.vlJobId = '';
+          batch.evaluated += 1;
+          renderTestBatch();
+        });
       });
     }, Promise.resolve());
   }
@@ -4499,7 +4504,8 @@
       startedAt: Date.now() / 1000, activityFinished: false, folder: String(launchFolder), count: count,
       criteria: criteria, vlModel: '', sessions: [], statuses: Object.create(null),
       finished: 0, previews: 0, evaluated: 0, errors: [], scores: [],
-      phase: 'Preparing', detail: '', vlJobId: ''
+      phase: 'Preparing', detail: '', vlJobId: '',
+      scheduledSessions: new Set(), evaluationQueue: Promise.resolve()
     };
     testBatch = batch;
     el('test-generations-batch-modal').classList.add('hidden');
@@ -4532,13 +4538,10 @@
       }, Promise.resolve());
     }).then(function () {
       testBatchCheck(batch);
-      batch.phase = 'Generating';
-      batch.detail = 'All sessions submitted.';
+      batch.phase = 'Generating + VL';
+      batch.detail = 'All sessions submitted. Each completed session will be evaluated immediately.';
       renderTestBatch();
       return testBatchPoll(batch);
-    }).then(function () {
-      testBatchCheck(batch);
-      return testBatchEvaluate(batch);
     }).then(function () {
       testBatchCheck(batch);
       return testBatchReadSessions(batch);

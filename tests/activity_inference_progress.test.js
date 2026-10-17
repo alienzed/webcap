@@ -79,3 +79,21 @@ test('starting and stopping states are reflected without changing job status', (
   assert.equal(starting.input.status, 'starting');
   assert.equal(stopping.input.status, 'stopping');
 });
+
+test('training startup shows model loading without fabricated completion', () => {
+  const loading = adapt('training', {}, { lane: 'training', status: 'starting', stage: 'h3' });
+  assert.equal(loading.output.phase, 'Loading model · h3');
+  assert.equal(loading.output.progress, null);
+  assert.equal(loading.output.progressLabel, 'Waiting for first training step');
+
+  const launch = adapt('training', {}, { lane: 'training', status: 'starting', stage: 'launch' });
+  assert.equal(launch.output.phase, 'Starting · launch');
+  assert.equal(launch.output.progress, null);
+
+  const running = adapt('training', { step: 1, steps: 100, overallPercent: 1 }, {
+    lane: 'training', status: 'running', stage: 'h3',
+  });
+  assert.equal(running.output.phase, 'Training · h3');
+  assert.equal(running.output.progress.completed, 1);
+  assert.equal(running.output.progress.total, 100);
+});

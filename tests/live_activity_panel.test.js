@@ -135,3 +135,15 @@ test('First Cut completion stays in Activity while child receipts are not duplic
   assert.ok(monitor.includes('"id": "first-cut:" + str(batch["id"])'));
   assert.ok(monitor.includes('"finishedAt": finished'));
 });
+
+test('Storyboard blocking card delegates detailed LLM progress to focused Activity', () => {
+  const storyboard = fs.readFileSync(path.join(root, 'tool/js/storyboard.js'), 'utf8');
+  const monitor = fs.readFileSync(path.join(root, 'tool/js/activity_monitor.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'tool/tool.html'), 'utf8');
+  assert.ok(html.includes('id="storyboard-director-view-activity"'));
+  assert.ok(storyboard.includes('window.focusActivityJob('));
+  assert.ok(monitor.includes('window.focusActivityJob = function (jobId)'));
+  assert.ok(monitor.includes('item.runtimePhase || item.status'));
+  assert.ok(monitor.includes('directorJob.promptTokensLive || directorJob.promptTokens'));
+  assert.ok(!storyboard.includes('    updateDirectorTrend(activity, system);'));
+});

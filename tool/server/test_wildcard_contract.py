@@ -76,7 +76,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["label", "options"],
+                    "required": ["label", "options", "annotationGroup"],
                     "properties": {
                         "label": {"type": "string", "minLength": 1},
                         "annotationGroup": {"type": "string", "description": "Exact Set annotation group name when options are tags; empty for free prompt variation."},
@@ -176,10 +176,16 @@ def validate_group_compatibility(data, combinations):
     groups = data.get("variationGroups") if isinstance(data, dict) else None
     if not isinstance(groups, list):
         raise ValueError("Wildcard proposal must include variation groups.")
+    from .epoch_finder_plan import prompt_options
+    resolved = prompt_options(str(data.get("wildcard") or ""))
+    if len(resolved) != len(groups):
+        raise ValueError("Wildcard group count does not match its annotation dimensions.")
     assigned = {}
-    for item in groups:
+    for index, item in enumerate(groups):
         if not isinstance(item, dict):
             raise ValueError("Invalid wildcard dimension.")
+        if [str(option).strip() for option in (item.get("options") or [])] != resolved[index]:
+            raise ValueError("Wildcard group options do not match the generated prompt.")
         group = str(item.get("annotationGroup") or "").strip()
         if not group:
             known = {tag for combos in combinations.values() for combo in combos for tag in combo}

@@ -5041,8 +5041,22 @@
       if (!byStory[id]) byStory[id] = [];
       byStory[id].push(job);
     });
+    var previousByStory = storyState.libraryInferenceJobs;
     storyState.libraryInferenceJobs = byStory;
-    renderLibrary();
+    function counts(jobs) {
+      var queued = 0;
+      var running = 0;
+      (jobs || []).forEach(function (job) {
+        var status = String(job.status || '');
+        if (status === 'backlog' || status === 'queued') queued += 1;
+        else if (status === 'starting' || status === 'running' || status === 'stopping') running += 1;
+      });
+      return String(queued) + ':' + String(running);
+    }
+    var storyIds = Object.keys(byStory).concat(Object.keys(previousByStory));
+    if (storyIds.some(function (id) { return counts(byStory[id]) !== counts(previousByStory[id]); })) {
+      renderLibrary();
+    }
     if (!storyState.story) return;
     var storyId = String(storyState.story.id || '');
     var seenJobIds = Object.create(null);

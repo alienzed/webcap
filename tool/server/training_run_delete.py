@@ -20,8 +20,8 @@ def _existing_or_absent(path):
 
 
 def _under(path, parent):
-    path = Path(path).absolute()
-    parent = Path(parent).absolute()
+    path = Path(path).resolve(strict=False)
+    parent = Path(parent).resolve(strict=False)
     if path == parent or parent not in path.parents:
         raise ValueError("Deletion target escapes its owning directory: " + str(path))
     return path
@@ -31,7 +31,7 @@ def _physical_path(job):
     raw = str(job.get("outputRunPath") or "").strip()
     if not raw:
         raise ValueError("This historical job has no recorded physical trainer run directory.")
-    return Path(host_path_for_training_path(raw)).absolute()
+    return Path(host_path_for_training_path(raw)).resolve(strict=False)
 
 
 def _preview_locked(folder, job_id):
@@ -49,7 +49,7 @@ def _preview_locked(folder, job_id):
     if not action_id:
         raise ValueError("Historical run has no recorded managed action identity.")
     action_root, action = read_action(action_id)
-    action_root = Path(action_root).absolute()
+    action_root = Path(action_root).resolve(strict=False)
     if str(action.get("folder") or "") != folder:
         raise ValueError("Historical action belongs to a different Set.")
     _under(physical, action_root / "output")
@@ -72,7 +72,7 @@ def _preview_locked(folder, job_id):
         if queued.get("status") in protected_statuses:
             referenced = [queued.get("outputRunPath"), queued.get("resumeFromCheckpoint")]
             if any(str(value or "").strip() and
-                   (Path(host_path_for_training_path(value)).absolute() == physical or
+                   (Path(host_path_for_training_path(value)).resolve(strict=False) == physical or
                     physical in Path(host_path_for_training_path(value)).absolute().parents)
                    for value in referenced):
                 raise RuntimeError("Active or queued Training depends on this run; finish/cancel that job first.")
@@ -91,14 +91,14 @@ def _preview_locked(folder, job_id):
     for item in matching:
         owner_id = str(item.get("actionId") or "")
         owner_root, owner_action = read_action(owner_id)
-        owner_root = Path(owner_root).absolute()
+        owner_root = Path(owner_root).resolve(strict=False)
         for key, base in (("artifactDir", owner_root / "jobs"),
                           ("recordPath", owner_root / "captures"),
                           ("inputPath", owner_root / "captures")):
             raw = str(item.get(key) or "").strip()
             if not raw:
                 continue
-            target = Path(raw).absolute()
+            target = Path(raw).resolve(strict=False)
             _under(target, base)
             if key != "artifactDir" and any(
                 other.get(key) == raw or other.get("inputPath") == raw or other.get("recordPath") == raw
@@ -135,7 +135,7 @@ def _preview_locked(folder, job_id):
             if str(provenance.get("sourceFolder") or "") != folder:
                 continue
             run_path = str(provenance.get("sourceRunPath") or "")
-            if not run_path or Path(host_path_for_training_path(run_path)).absolute() != physical:
+            if not run_path or Path(host_path_for_training_path(run_path)).resolve(strict=False) != physical:
                 continue
             candidate = sidecar.with_name(sidecar.name[:-len(".webcap.json")] + ".safetensors") if sidecar.name.endswith(".webcap.json") else None
             if candidate is None:

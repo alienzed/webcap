@@ -630,7 +630,7 @@
           throw new Error((body && body.error) || 'Storyboard Director request failed.');
         }
         if (payload && body.job) {
-          if (body.job.request) storyState.director.requestByJobId[String(body.job.jobId || '')] = body.job.request;
+          storyState.director.requestByJobId[String(body.job.jobId || '')] = body.job.request || {};
           trackTransientLlmJob(body.job);
           return waitForDirectorJob(body.job).then(function (result) {
             result.jobId = body.job.jobId;

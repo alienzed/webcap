@@ -31,7 +31,10 @@ def _physical_path(job):
     raw = str(job.get("outputRunPath") or "").strip()
     if not raw:
         raise ValueError("This historical job has no recorded physical trainer run directory.")
-    return Path(host_path_for_training_path(raw)).resolve(strict=False)
+    path = Path(host_path_for_training_path(raw))
+    if path.is_symlink():
+        raise ValueError("Trainer output target is a symlink.")
+    return path.resolve(strict=False)
 
 
 def _preview_locked(folder, job_id):
@@ -108,6 +111,8 @@ def _preview_locked(folder, job_id):
             if key != "artifactDir":
                 target = target if target.parent.name == "captures" else target.parent
                 _under(target, owner_root / "captures")
+            if target.is_symlink():
+                raise ValueError("Recorded Training artifact is a symlink: " + str(target))
             if target != physical and target not in paths:
                 paths.append(target)
 

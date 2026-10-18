@@ -2948,6 +2948,18 @@ def training_candidates_profile_director_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/training_candidates/profile/embed", methods=["POST"])
+def training_candidates_profile_embed_route():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or set(data) - {"folder", "jobId", "epoch"}:
+        return jsonify({"ok": False, "error": "Embed profile accepts folder, jobId and epoch."}), 400
+    from .training_runner import embed_selected_epoch_profile_response
+    payload, status = embed_selected_epoch_profile_response(
+        data.get("folder", ""), data.get("jobId", ""), data.get("epoch", "")
+    )
+    return jsonify(payload), status
+
+
 @app.route("/fs/training_candidates/clear_selection", methods=["POST"])
 def training_candidates_clear_selection_route():
     data = request.get_json(silent=True) or {}

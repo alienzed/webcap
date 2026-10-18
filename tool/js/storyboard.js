@@ -2081,9 +2081,14 @@
         });
       });
     }).then(function (payload) {
+      var actualCount = Number(payload.sceneCount || 0);
+      var targetCount = storyState.story && storyState.story.targetSceneCount;
+      var countWarning = targetCount != null && actualCount !== Number(targetCount)
+        ? ' Warning: requested ' + String(targetCount) + ' Scenes; Director returned ' + String(actualCount) + '. The result was kept.'
+        : '';
       setDevelopStatus(
-        'Developed ' + String(payload.sceneCount || 0) + ' Scenes with ' + String(payload.model || modelId) +
-        (individual ? ' · one at a time.' : '.')
+        'Developed ' + String(actualCount) + ' Scenes with ' + String(payload.model || modelId) +
+        (individual ? ' · one at a time.' : '.') + countWarning
       );
     }).catch(function (err) {
       if (directorWasStopped(err)) setDevelopStatus('Story development stopped. Existing Scenes were left unchanged.');

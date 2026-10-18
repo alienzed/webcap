@@ -33,6 +33,25 @@ function setDiagnosticsTab(tabName, focusTab) {
   if (focusTab && selectedButton) selectedButton.focus();
 }
 
+function selectUnifiedAssessmentModels(select) {
+  var selected = diagnosticsAssessmentSelected;
+  ['director', 'vision'].forEach(function (kind) {
+    selected[kind].clear();
+    if (select) {
+      var models = diagnosticsAssessmentCatalog[kind === 'director' ? 'directors' : 'visions'] || [];
+      models.forEach(function (model) {
+        var ref = String(kind === 'director' ? model.id || '' : model.modelRef || '');
+        if (ref) selected[kind].add(ref);
+      });
+    }
+  });
+  document.querySelectorAll('#diagnostics-assessment-results .model-assessment-row-head input').forEach(function (input) {
+    input.checked = select;
+  });
+  diagnosticsEl('diagnostics-assessment-selection').textContent =
+    (selected.director.size + selected.vision.size) + ' model(s) selected · Run Selected Tests starts the server-owned suite.';
+}
+
 function refreshUnifiedModelAssessment() {
   var summary = diagnosticsEl('diagnostics-assessment-summary');
   var results = diagnosticsEl('diagnostics-assessment-results');
@@ -535,6 +554,8 @@ function wireDiagnosticsUi() {
   diagnosticsEl('h3-calibration-stop-btn').onclick = stopH3Calibration;
   diagnosticsEl('h3-calibration-reset-btn').onclick = resetH3CalibrationSettings;
   diagnosticsEl('h3-calibration-console-btn').onclick = showConsolePanel;
+  diagnosticsEl('diagnostics-assessment-all').onclick = function () { selectUnifiedAssessmentModels(true); };
+  diagnosticsEl('diagnostics-assessment-none').onclick = function () { selectUnifiedAssessmentModels(false); };
   diagnosticsEl('diagnostics-assessment-run').onclick = function () { runUnifiedModelAssessment().catch(function (error) { reportConsoleError('Model Assessment', error); }); };
   diagnosticsEl('diagnostics-assessment-refresh').onclick = function () { refreshUnifiedModelAssessment().catch(function () {}); };
   diagnosticsEl('diagnostics-assessment-director').onclick = function () { setDiagnosticsTab('models', true); };

@@ -2244,7 +2244,91 @@
     renderDirector();
   }
 
-  function runDirector(operation) {
+  function stageForGenerateModel(modelId) {
+    if (modelId === 'minimax_h3') return 'h3';
+    if (modelId === 'krea2_raw') return 'krea2';
+    return '';
+  }
+
+  function planGenerateLoras(operation) {
+    var stage = stageForGenerateModel(generateState.modelId);
+    if (!stage) throw new Error('LoRA planning is not configured for this generation model.');
+    var originalModelId = generateState.modelId;
+    var originalPrompt = el('generate-prompt').value;
+    var originalInstruction = el('generate-director-instruction').value;
+    generateState.director.busy = true;
+    setDirectorStatus('Finding relevant enriched LoRAs…');
+    renderDirector();
+    startDirectorActivity();
+    return postJson('/fs/lora_library/plan', {
+      stage: stage,
+      intent: [originalPrompt, operation === 'refine_prompt' ? originalInstruction : ''].filter(Boolean).join('\\n'),
+      existing: {storyWide: selectedLoras(originalModelId).map(function (item) {
+        return {name: item.name, strength: item.strength};
+      })},
+      directorModel: generateState.director.modelId
+    }).then(function (response) {
+      if (response.empty) return {proposal: {storyWide: []}, empty: true};
+      trackTransientLlmJob(response.job);
+      generateState.director.jobId = String(response.job && response.job.jobId || '');
+      return waitForDirectorJob(response.job);
+    }).then(function (result) {
+      if (generateState.modelId !== originalModelId ||
+          el('generate-prompt').value !== originalPrompt ||
+          el('generate-director-instruction').value !== originalInstruction) {
+        throw new Error('Generate inputs changed during LoRA planning. Review was discarded.');
+      }
+      if (result.empty) {
+        setDirectorStatus('No enriched LoRA suggestions; continuing prompt authoring.');
+        return runDirector(operation, true);
+      }
+      return requestJson('/fs/lora_library').then(function (library) {
+        var options = (library.items || []).filter(function (item) {
+          return item.stage === stage && item.enriched;
+        }).map(function (item) {
+          return Object.assign({name:item.name}, item.enrichment || {});
+        });
+        var selected = (result.proposal || {}).storyWide || [];
+        window.openDirectorLoraReview({items:selected, catalogue:options, apply:function (choices) {
+          if (generateState.modelId !== originalModelId || el('generate-prompt').value !== originalPrompt) {
+            throw new Error('Generation context changed; request new suggestions.');
+          }
+          var available = (currentModel() && currentModel().loras) || [];
+          choices.forEach(function (item) {
+            if (available.indexOf(item.name) === -1) {
+              throw new Error('LoRA is not loadable in the selected ComfyUI workflow: ' + item.name);
+            }
+          });
+          var selectedLoraList = selectedLoras(originalModelId);
+          choices.forEach(function (item) {
+            var found = selectedLoraList.find(function (current) { return current.name === item.name; });
+            if (found) found.strength = item.strength;
+            else selectedLoraList.push({name:item.name, strength:item.strength});
+          });
+          var phrases = choices.reduce(function (all, item) { return all.concat(item.phrases || []); }, []);
+          var missing = phrases.filter(function (phrase) {
+            return originalPrompt.toLowerCase().indexOf(phrase.toLowerCase()) === -1;
+          });
+          if (missing.length) el('generate-prompt').value = originalPrompt +
+            (originalPrompt.trim() ? ', ' : '') + missing.join(', ');
+          renderLoras();
+          runDirector(operation, true);
+        }});
+        setDirectorStatus('Review LoRA suggestions before applying.');
+      });
+    }).catch(function (error) {
+      setDirectorStatus('LoRA planning failed; current prompt and selections are unchanged.');
+      reportError(error, 'Director LoRA planning failed');
+    }).then(function () {
+      generateState.director.busy = false;
+      generateState.director.jobId = '';
+      renderDirector();
+      finishDirectorActivity();
+    });
+  }
+
+  function runDirector(operation, skipPlanning) {
+    if (!skipPlanning && el('generate-director-lora-enable').checked) return planGenerateLoras(operation);
     if (generateState.director.busy) return;
     if (!generateState.director.modelId) throw new Error('Choose a Prompt Assistant model.');
     var promptNode = el('generate-prompt');

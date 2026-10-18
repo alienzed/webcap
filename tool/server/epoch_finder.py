@@ -272,12 +272,18 @@ def create_campaign(folder_path, criteria):
     if evaluation["dino"]:
         from .epoch_dino import preflight as dino_preflight
         dino_preflight()
+    parent_id = str(criteria.get("parentCampaignId") or "")
+    if parent_id:
+        parent = _load(folder_path, parent_id)
+        if parent.get("jobId") != job_id:
+            raise ValueError("Follow-up campaign must use the original training run.")
     campaign_id = secrets.token_hex(6)
     directory = _directory(folder_path, campaign_id)
     directory.mkdir(parents=True, exist_ok=False)
     (directory / "frames").mkdir()
     campaign = {
         "version": 1, "id": campaign_id, "folder": folder, "jobId": job_id,
+        "parentCampaignId": parent_id or None,
         "runName": run["runName"], "modelId": model.PROFILE_ID, "stage": run["stage"],
         "name": str(criteria.get("name") or run["runName"]).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",

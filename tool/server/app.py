@@ -2127,6 +2127,7 @@ def test_generations_wildcard_route():
         set_name = Path(folder.rstrip("/\\")).name or folder
         from .test_wildcard_contract import observed_group_combinations
         from .folder_state_store import read_folder_state
+        from .caption_ops import _resolve_folder
         scoped = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
         combinations = observed_group_combinations(scoped, list_media_files(folder))
         contract = test_wildcard_build_request(

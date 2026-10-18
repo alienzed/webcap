@@ -1251,6 +1251,14 @@ def copy_candidate_epoch_to_test(folder, job_id, epoch):
         with source.open("rb") as source_file, destination.open("xb") as destination_file:
             created_destination = True
             shutil.copyfileobj(source_file, destination_file)
+        # Carry user-authored checkpoint guidance into the staged copy. The source
+        # remains authoritative; do not import its run-local assessment state.
+        from .model_epoch_profile import _read_object
+        source_profile = _read_object(source.with_suffix(".webcap.json")).get("modelProfile")
+        if source_profile is not None:
+            if not isinstance(source_profile, dict):
+                raise ValueError("Source modelProfile is invalid.")
+            provenance["modelProfile"] = source_profile
         sidecar.write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     except Exception:
         if created_destination:

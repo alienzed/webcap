@@ -74,11 +74,14 @@ function refreshUnifiedModelAssessment() {
     }
     function addRow(title, kind, ref, report) {
       var row = document.createElement('div');
-      row.className = 'app-settings-environment-result';
+      row.className = 'model-assessment-row';
       var heading = document.createElement('strong');
       heading.textContent = title;
-      row.appendChild(heading);
-      addChoice(row, kind, ref);
+      var head = document.createElement('div');
+      head.className = 'model-assessment-row-head';
+      head.appendChild(heading);
+      row.appendChild(head);
+      addChoice(head, kind, ref);
       var findings = [];
       var relevant = capabilityRuns.filter(function (run) { return run.models && run.models[ref]; });
       var latest = relevant[0];

@@ -52,6 +52,17 @@
       });
       host.appendChild(back);
     }
+    if (item.source === 'storyboard' && item.storageId) {
+      var storyBtn = document.createElement('button');
+      storyBtn.type = 'button'; storyBtn.className = 'review-captions-btn';
+      text(storyBtn, 'Open Storyboard');
+      storyBtn.addEventListener('click', function () {
+        if (typeof window.openStoryboardActivity !== 'function') throw new Error('Storyboard navigation unavailable.');
+        var scene = item.uses && item.uses[0] && item.uses[0].storageId || '';
+        window.openStoryboardActivity({storyId: item.storageId, sceneId: scene});
+      });
+      host.appendChild(storyBtn);
+    }
     var open = document.createElement('button'); open.type = 'button';
     open.className = 'review-captions-btn'; text(open, 'View full size');
     open.addEventListener('click', openLoupe); host.appendChild(open);
@@ -117,7 +128,7 @@
       });
       offset += incoming.length;
       count();
-      text(el('media-explorer-status'), incoming.length ? '' : (items.length ? '' : 'No matching media found in the discovered Generate outputs.'));
+      text(el('media-explorer-status'), incoming.length ? '' : (items.length ? '' : 'No matching media found in this source.'));
     }).catch(function (err) { if (request === serial && err.name !== 'AbortError') report(err); })
       .finally(function () { if (request === serial) { loading = false; activeRequest = null; el('media-explorer-scan-all').disabled = false; } });
   }

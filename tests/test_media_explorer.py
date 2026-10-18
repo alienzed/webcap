@@ -94,3 +94,27 @@ def test_test_session_discovery_uses_owner_media_route(monkeypatch, tmp_path):
     assert item["rating"] == 5
     assert "/fs/test_generations/media?" in item["mediaUrl"]
     assert "folder=sets%2Fdemo" in item["mediaUrl"]
+
+
+def test_legacy_session_discovered_for_known_owner(monkeypatch, tmp_path):
+    import json
+    output = tmp_path / "output"
+    central = output / "test-generations" / "central"
+    legacy = tmp_path / "sets" / "demo" / "test-generations" / "legacy"
+    for session in (central, legacy):
+        session.mkdir(parents=True)
+        (session / "result.png").write_bytes(b"x")
+        (session / "test.json").write_text(json.dumps({
+            "ownerFolder": "sets/demo", "startedAt": 100,
+            "results": [{"mediaFile": "result.png"}],
+        }))
+    monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: output)
+    monkeypatch.setattr(media_explorer.app_config, "FS_ROOT", tmp_path)
+    from tool.server import epoch_test_bench
+    monkeypatch.setattr(epoch_test_bench, "_session_directory",
+                        lambda owner, name: central if name == "central" else legacy)
+    monkeypatch.setattr(epoch_test_bench, "_session_rating_map", lambda path: {})
+    found = media_explorer.list_media(source="test")
+    assert found["total"] == 2
+    assert any("sets/demo/test-generations/legacy/result.png" in item["id"]
+               for item in found["items"])

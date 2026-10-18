@@ -571,6 +571,8 @@
 
   function watchRecoveredDirectorJob(job) {
     if (!job || !job.jobId || storyState.director.recoveryJobs[job.jobId]) return;
+    // The foreground Director request owns its receipt; recovery must not consume it.
+    if (Object.prototype.hasOwnProperty.call(storyState.director.requestByJobId, String(job.jobId))) return;
     var target = directorTargetFromJob(job);
     if (!target) return;
 

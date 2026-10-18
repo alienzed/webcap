@@ -1894,3 +1894,26 @@ def test_llm_qa_client_rejects_unowned_operations(llm_root, monkeypatch):
     finished = llm_runner.job_status(job["jobId"])
     assert finished["status"] == "failed"
     assert "Unsupported QA LLM operation" in finished["error"]
+
+
+def test_llm_ingest_failure_does_not_log_private_content(llm_root, monkeypatch, caplog):
+    secret = "PRIVATE_LLM_PROMPT_DO_NOT_LOG"
+    response_secret = "PRIVATE_LLM_RESPONSE_DO_NOT_LOG"
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime, "run_contract",
+        lambda *_args, **_kwargs: {
+            "text": response_secret, "data": {}, "model": "qwen",
+            "usage": None, "timings": None,
+        },
+    )
+    job = llm_runner.enqueue(
+        "storyboard", "qwen",
+        {"operation": "develop_story_outline", "prompt": secret, "output": "json"},
+        context={"storyId": "story-not-found", "operation": "develop_story_outline"},
+    )
+    with caplog.at_level("ERROR", logger="tool.server.llm_runner"):
+        llm_runner._advance_queue()
+    assert llm_runner.job_status(job["jobId"])["status"] == "failed"
+    assert secret not in caplog.text
+    assert response_secret not in caplog.text

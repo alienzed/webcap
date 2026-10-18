@@ -478,7 +478,6 @@
     }
     if (target) {
       source = target.source; role = ''; artifact = target.id; owner = ''; full = true; needsLoad = true;
-      owner = ''; artifact = '';
     el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
       facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
       sourceButtons.forEach(function (button, index) {
@@ -661,6 +660,7 @@
     if (role) params.set('role', role);
     if (source) params.set('source', source);
     if (artifact) params.set('artifact', artifact);
+    if (owner) params.set('owner', owner);
     if (full) params.set('full', '1');
     if (el('media-explorer-search').value.trim()) params.set('q', el('media-explorer-search').value.trim());
     if (el('media-explorer-kind').value) params.set('kind', el('media-explorer-kind').value);

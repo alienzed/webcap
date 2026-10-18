@@ -1935,6 +1935,7 @@ def media_explorer_route():
             search=request.args.get("search", ""),
             sort=request.args.get("sort", "newest"),
             full=request.args.get("full", ""),
+            source=request.args.get("source", ""),
         ))
     except Exception as exc:
         app.logger.exception("MEDIA EXPLORER DISCOVERY FAILED: %s", exc)

@@ -2255,6 +2255,7 @@
     var candidateMetadata = payload && payload.candidateMetadata && typeof payload.candidateMetadata === 'object'
       ? payload.candidateMetadata
       : {};
+    var checkpointRatings = payload && Array.isArray(payload.checkpointHumanRatings) ? payload.checkpointHumanRatings : [];
     if (!(selectedCandidates instanceof Set)) {
       var savedSettings = savedTestModelState().settings;
       var savedSelection = state
@@ -2429,6 +2430,20 @@
       detail.title = scoreCount ? scoreCount + ' rating' + (scoreCount === 1 ? '' : 's') : '';
       detail.classList.toggle('hidden', !scoreCount);
       metrics.appendChild(detail);
+      // The pooled checkpoint rating is read-only; individual candidate ratings remain authoritative.
+      var checkpointRating = checkpointRatings.find(function (item) {
+        return metadata && item.folder === metadata.folder &&
+          item.sourceJobId === metadata.sourceJobId &&
+          item.stage === metadata.stage && item.epoch === metadata.epoch;
+      });
+      if (checkpointRating && checkpointRating.candidates.length > 1) {
+        var combined = document.createElement('span');
+        combined.textContent = 'Checkpoint ★ ' + Number(checkpointRating.average).toFixed(1) +
+          ' (' + checkpointRating.ratingCount + ')';
+        combined.title = 'Human ratings across ' + checkpointRating.candidates.length +
+          ' staged copies of the same source run and epoch; not an automated score.';
+        metrics.appendChild(combined);
+      }
       copy.appendChild(heading);
       copy.appendChild(metrics);
 

@@ -125,7 +125,11 @@
       promptTokensLive: item.promptTokensLive,
       promptProcessed: item.promptProcessed,
       contextSize: item.contextSize,
-      outputLimit: item.outputLimit
+      outputLimit: item.outputLimit,
+      promptTokens: item.promptTokens,
+      outputTokens: item.outputTokens,
+      queuePosition: item.queuePosition,
+      finishReason: item.finishReason
     };
   }
 
@@ -964,6 +968,15 @@
       var existingStats = primaryCard.querySelector('[data-director-live-stats]');
       var directorJob = (snapshot.kind === 'director' || snapshot.kind === 'first-cut') && snapshot.original;
       var generated = directorJob && directorJob.liveTokens != null ? Number(directorJob.liveTokens) : NaN;
+      if (directorJob) {
+        var labels = [];
+        if (Number(directorJob.queuePosition) > 0 && snapshot.status === 'queued') labels.push('Queue #' + directorJob.queuePosition);
+        if (Number(directorJob.promptTokensLive || directorJob.promptTokens) > 0) labels.push('Prompt ' + Number(directorJob.promptTokensLive || directorJob.promptTokens).toLocaleString() + ' tokens');
+        if (Number(directorJob.outputTokens) > 0) labels.push('Output ' + Number(directorJob.outputTokens).toLocaleString() + ' tokens');
+        if (directorJob.finishReason) labels.push('Finish: ' + directorJob.finishReason);
+        snapshot.progressLabel = labels.join(' · ');
+        ProgressCard.update(primaryCard, snapshot, { onOpen: function () { itemOpen(snapshot); } });
+      }
       if (directorJob && Number.isFinite(generated) && generated >= 0) {
         if (!existingStats) {
           existingStats = document.createElement('div');
@@ -1255,6 +1268,12 @@
   window.publishActivityProgress = publishProgress;
   window.finishActivityProgress = finishProgress;
   window.recordActivityCompletion = rememberRecentCompletion;
+  window.focusActivityJob = function (jobId) {
+    var matching = currentActivityItems().find(function (item) { return item.kind === 'director' && String(item.id) === String(jobId); });
+    if (matching) state.selectedJobKey = activityJobKey(matching);
+    else state.selectedJobKey = 'llm:' + String(jobId || '');
+    setOpen(true);
+  };
   window.setActivityDrawerOpen = setOpen;
   window.refreshActivityMonitor = wake;
   bind();

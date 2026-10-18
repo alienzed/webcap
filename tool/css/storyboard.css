@@ -3790,3 +3790,20 @@
   color: var(--text);
   cursor: pointer;
 }
+/* Storyboard overlays explain a blocking operation; Activity owns detailed telemetry. */
+#storyboard-director-activity-trend,
+#storyboard-director-model-load,
+#storyboard-director-prompt-copy { display: none !important; }
+
+/* The compact blocker has one column; no empty telemetry column. */
+.storyboard-director-activity,
+.storyboard-director-activity.is-workspace-overlay,
+.storyboard-director-activity.is-structure-overlay {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "label" "phase" "detail" "activity" "stop";
+  row-gap: 8px;
+  align-items: start;
+  min-height: 0;
+}
+#storyboard-director-view-activity { grid-area: activity; pointer-events: auto; justify-self: start; }
+#storyboard-director-stop { grid-area: stop; pointer-events: auto; justify-self: start; }

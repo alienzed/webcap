@@ -1957,7 +1957,7 @@
     });
   }
 
-  function reviseScenes(instruction, modelId) {
+  function reviseScenes(instruction, modelId, generateFreshTakes) {
     if (!storyState.story) return Promise.reject(new Error('Choose a Story first.'));
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'repair', storyId: storyId };
@@ -1986,7 +1986,8 @@
         storyId: storyId,
         operation: 'revise_scenes_sequence',
         instruction: instruction,
-        model: modelId
+        model: modelId,
+        generateFreshTakes: generateFreshTakes === true
       }).then(function (payload) {
         return flushPendingSaves().then(function () { return request(null, 'story=' + encodeURIComponent(storyId)); }).then(function (fresh) {
           if (storyState.story && storyState.story.id === storyId) {
@@ -5468,23 +5469,12 @@
     status.textContent = 'Starting revision…';
     var storyId = storyState.story && storyState.story.id;
     var target = { kind: 'repair', storyId: storyId };
-    var sceneIds = storyState.story.sceneOrder.slice();
-    var revision = reviseScenes(instruction, storyState.director.modelId);
+    var revision = reviseScenes(instruction, storyState.director.modelId, generateFreshTakes);
     // The target is registered synchronously once the operation has started.
     // Dismiss the input modal now so its activity card is not obscured.
     var started = directorTargetPending(target);
     if (started) closeDirectorTools();
-    revision.then(function () {
-      if (!generateFreshTakes) return;
-      // The Director revision has completed successfully and committed the revised Scenes.
-      // Take requests resolve their settings from the server-side Story at enqueue time.
-      // Reuse the existing inference lane, without depending on which Story is now visible.
-      return sceneIds.reduce(function (pending, sceneId) {
-        return pending.then(function () {
-          return enqueueSceneGeneration(storyId, sceneId);
-        });
-      }, Promise.resolve());
-    }).catch(function (err) {
+    revision.catch(function (err) {
       if (!started) status.textContent = String(err && err.message ? err.message : err);
       reportError(err);
     }).finally(function () {

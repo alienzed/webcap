@@ -220,9 +220,7 @@ function runUnifiedModelAssessment() {
   var directorRefs = diagnosticsAssessmentSelected.director;
   var visionRefs = diagnosticsAssessmentSelected.vision;
   if (!directorRefs.size && !visionRefs.size) throw new Error('Choose at least one model.');
-  if (diagnosticsEl('diagnostics-assessment-deep').checked) {
-    throw new Error('Deep Assessment is not available yet. Uncheck it to run the standard suite.');
-  }
+  var deep = diagnosticsEl('diagnostics-assessment-deep').checked;
 
   var catalog = diagnosticsAssessmentCatalog;
   var visions = (catalog.visions || []).filter(function (model) { return visionRefs.has(String(model.modelRef || '')); });
@@ -235,7 +233,7 @@ function runUnifiedModelAssessment() {
   var canLab = !!sourceFolder && files.length >= 2;
   var status = diagnosticsEl('diagnostics-assessment-selection');
   if (!canLab) throw new Error('Open a Set with at least two media items to run the assessment.');
-  status.textContent = 'Starting standard assessment…';
+  status.textContent = 'Starting ' + (deep ? 'deep' : 'quick') + ' assessment…';
   var runButton = diagnosticsEl('diagnostics-assessment-run');
   runButton.disabled = true;
   return Promise.resolve().then(function () {
@@ -244,7 +242,8 @@ function runUnifiedModelAssessment() {
     return modelLabPost({
       action: 'start',
       config: {
-        folder: sourceFolder, files: files, groups: modelLabGroups(), sampleCount: 8,
+        folder: sourceFolder, files: files, groups: modelLabGroups(),
+        depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
         visionModels: visions, directorModels: directors,
         referenceVisionRef: visions.length ? String(visions[0].modelRef) : '',
         referenceDirectorRef: directors.length ? String(directors[0].modelRef) : '',
@@ -257,7 +256,7 @@ function runUnifiedModelAssessment() {
       modelLabRender();
       modelLabSchedulePoll();
       diagnosticsEl('diagnostics-assessment-summary').textContent = 'Running assessment ' + payload.run.id + ' · refresh for progress';
-      reportConsoleInfo('Model Assessment', 'Started persistent Model Lab run ' + payload.run.id + '.');
+      reportConsoleInfo('Model Assessment', 'Started persistent ' + (deep ? 'deep' : 'quick') + ' Model Lab run ' + payload.run.id + '.');
       return payload.run;
     });
   }).then(function (labRun) {

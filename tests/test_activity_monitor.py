@@ -189,3 +189,34 @@ def test_inference_activity_projects_provider_progress_without_changing_job():
     assert result["progress"] == {"step": 3, "steps": 12}
     assert job["progress"] == {"step": 3, "steps": 12}
     assert activity_monitor._execution_item("llm", job)["progress"] == {}
+
+
+def test_first_cut_projects_parent_and_suppresses_active_child(monkeypatch):
+    monkeypatch.setattr(activity_monitor, "inference_snapshot", lambda include_terminal=False: {"jobs": []})
+    monkeypatch.setattr(activity_monitor, "llm_snapshot", lambda include_terminal=False: {
+        "activeJobId": "child-job",
+        "jobs": [{"jobId": "child-job", "status": "running", "client": "storyboard",
+                  "modelId": "local::model", "startedAt": 100.0}],
+    })
+    monkeypatch.setattr(activity_monitor, "first_cut_snapshot", lambda: {"batches": [{
+        "id": "batch-1", "storyId": "story-1", "modelId": "local::model",
+        "status": "running", "phase": "Refining Scenes", "detail": "3 / 8",
+        "sceneCount": 8, "llmJobId": "child-job", "startedAt": 100.0,
+    }]})
+    from tool.server import storyboard_llm_runtime
+    monkeypatch.setattr(storyboard_llm_runtime, "activity_status", lambda: {
+        "active": True, "startedAt": 101.0, "model": "local::model",
+        "phase": "generating", "slot": {"generatedTokens": 400},
+    })
+    monkeypatch.setattr(activity_monitor, "_training_active_and_queue", lambda: ([], {}))
+    monkeypatch.setattr(activity_monitor, "model_lab_runs", lambda: [])
+    monkeypatch.setattr(activity_monitor, "storage_scan_status", lambda: {})
+    monkeypatch.setattr(activity_monitor, "llm_recent_snapshot", lambda limit=20: [])
+    monkeypatch.setattr(activity_monitor, "execution_recent_snapshot", lambda lane, limit=20: [])
+    monkeypatch.setattr(activity_monitor, "training_recent_jobs", lambda: [])
+    result = activity_monitor.activity_snapshot()
+    parents = [item for item in result["active"] if item["kind"] == "first-cut"]
+    assert len(parents) == 1
+    assert parents[0]["sceneCompleted"] == 2
+    assert parents[0]["liveTokens"] == 400
+    assert not any(item["id"] == "child-job" for item in result["active"])

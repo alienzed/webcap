@@ -127,3 +127,11 @@ test('First Cut is a parent Activity card with live operation controls', () => {
   assert.ok(source.includes("operation: 'cancel', batchId: item.batchId"));
   assert.ok(source.includes("operation: 'cancel_job', jobId: item.id"));
 });
+
+
+test('First Cut completion stays in Activity while child receipts are not duplicated', () => {
+  assert.ok(monitor.includes('all_cut_children'));
+  assert.ok(monitor.includes('item["id"] not in all_cut_children'));
+  assert.ok(monitor.includes('"id": "first-cut:" + str(batch["id"])'));
+  assert.ok(monitor.includes('"finishedAt": finished'));
+});

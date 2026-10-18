@@ -649,7 +649,7 @@ function openLoraLibraryProfile(item) {
     document.getElementById('lora-library-profile-heading').textContent =
       item.stage.toUpperCase() + ' / ' + item.path;
     document.getElementById('lora-library-description').value = enrichment.description || '';
-    document.getElementById('lora-library-words').value = (enrichment.trainedWords || []).join('\\n');
+    document.getElementById('lora-library-words').value = (enrichment.trainedWords || []).join('\n');
     document.getElementById('lora-library-options').value = JSON.stringify(enrichment.promptOptions || {}, null, 2);
     document.getElementById('lora-library-guidance').value = enrichment.guidance || '';
     document.getElementById('lora-library-editor').classList.remove('hidden');
@@ -667,7 +667,7 @@ function saveLoraLibraryProfile() {
       stage: loraLibrarySelected.stage, path: loraLibrarySelected.path,
       enrichment: {
         description: document.getElementById('lora-library-description').value.trim(),
-        trainedWords: document.getElementById('lora-library-words').value.split(/\\r?\\n/).map(function (x) { return x.trim(); }).filter(Boolean),
+        trainedWords: document.getElementById('lora-library-words').value.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean),
         promptOptions: JSON.parse(document.getElementById('lora-library-options').value || '{}'),
         guidance: document.getElementById('lora-library-guidance').value.trim()
       }

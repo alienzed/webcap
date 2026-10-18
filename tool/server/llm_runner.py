@@ -591,6 +591,9 @@ def _execute_claimed(job_id, gpu_reserved):
         except Exception as exc:
             raise RuntimeError("Revise Scenes failed after " + str(completed) +
                 " of " + str(len(scene_ids)) + " Scenes: " + str(exc)) from exc
+        finally:
+            with _revision_progress_lock:
+                _revision_progress.pop(job_id, None)
         return execution_finish_job_transient(job_id, status="completed", result={
             "storyId": context["storyId"], "revisedSceneCount": completed,
         })

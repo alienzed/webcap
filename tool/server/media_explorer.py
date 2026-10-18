@@ -29,6 +29,11 @@ def _item(path, role, storage_id, created_at, rating=0, model="", uses=None):
         candidate.relative_to(root)
     except ValueError:
         return None
+    generation_root = (root / 'generations').resolve()
+    try:
+        candidate.relative_to(generation_root)
+    except ValueError:
+        return None
     if not candidate.is_file():
         return None
     kind = _kind(candidate)
@@ -151,6 +156,8 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
+    if source not in ('', 'generate', 'test'):
+        raise ValueError('Unknown Media Explorer source.')
     results = ([] if source == 'test' else discover_generate(limit=None if full else 500))
     if source in ('', 'test'):
         results.extend(discover_tests())

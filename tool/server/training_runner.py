@@ -1396,9 +1396,14 @@ def candidate_epoch_profile(folder, job_id, epoch):
     checkpoint = _candidate_safetensors_path(folder, job_id, epoch)
     from .model_epoch_profile import training_suggestions
     sources = read_sources(checkpoint)
-    suggestions = training_suggestions(folder, job_id)
+    try:
+        suggestions = training_suggestions(folder, job_id)
+        warning = None
+    except (FileNotFoundError, LookupError, ValueError, RuntimeError, OSError) as exc:
+        suggestions = None
+        warning = "Captured training vocabulary is unavailable: " + str(exc)
     return {"epoch": int(epoch), "checkpoint": checkpoint.name,
-            "sources": sources, "suggestions": suggestions}
+            "sources": sources, "suggestions": suggestions, "vocabularyWarning": warning}
 
 
 def save_candidate_epoch_profile(folder, job_id, epoch, enrichment):

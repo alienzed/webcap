@@ -2125,8 +2125,13 @@ def test_generations_wildcard_route():
         captions = [caption for caption in captions if caption]
         focus = str(data.get("focus") or "").strip()
         set_name = Path(folder.rstrip("/\\")).name or folder
+        from .test_wildcard_contract import observed_group_combinations
+        from .folder_state_store import read_folder_state
+        scoped = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+        combinations = observed_group_combinations(scoped, list_media_files(folder))
         contract = test_wildcard_build_request(
-            captions, set_name=set_name, focus=focus, vocabulary=data.get("vocabulary")
+            captions, set_name=set_name, focus=focus, vocabulary=data.get("vocabulary"),
+            group_combinations=combinations,
         )
         job = enqueue_llm(
             "test",

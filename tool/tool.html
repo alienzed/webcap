@@ -1187,7 +1187,7 @@
                                     <p class="epoch-finder-muted">Model settings come from Test Generations. Vision uses the selected model in the global header.</p>
                                     </div>
                                     <div data-epoch-wizard-step="4" class="hidden">
-                                        <section class="epoch-finder-reference-setup"><h4>Training references</h4><p class="epoch-finder-muted">Review suggested training images for Primary options with matching Set tags. Options without candidates are skipped for reference comparisons; original VL is unchanged.</p><div id="epoch-finder-reference-options"></div><p class="epoch-finder-muted">Images are shown in the right-hand gallery during this step.</p><div id="epoch-finder-reference-choices"></div><label><input type="checkbox" id="epoch-finder-enable-rvn" checked> RVN reference comparisons</label><label><input type="checkbox" id="epoch-finder-enable-dino" checked> DINOv2 visual similarity</label></section>
+                                        <section class="epoch-finder-reference-setup"><h4>Training references</h4><p class="epoch-finder-muted">Review suggested training images for Primary options with matching Set tags. Options without candidates are skipped for reference comparisons; original VL is unchanged.</p><div id="epoch-finder-reference-options"></div><p class="epoch-finder-muted">Images are shown in the right-hand gallery during this step.</p><div id="epoch-finder-reference-choices"></div><label><input type="checkbox" id="epoch-finder-enable-rvn" checked> Compare with training references</label><label><input type="checkbox" id="epoch-finder-enable-dino" checked> DINOv2 visual similarity</label></section>
                                         <strong>Review your campaign</strong>
                                         <div id="epoch-finder-review" class="epoch-finder-review"></div>
                                     </div>
@@ -1224,7 +1224,7 @@
                                     <div class="epoch-finder-metrics">
                                         <div><span>Frames captured</span><strong id="epoch-finder-render-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-render-bar"></i></div></div>
                                         <div><span>VL evaluations</span><strong id="epoch-finder-vl-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-vl-bar"></i></div></div>
-                                        <div id="epoch-finder-rvn-progress" class="hidden"><span>Reference RVN</span><strong id="epoch-finder-rvn-count">0 / 0</strong></div>
+                                        <div id="epoch-finder-rvn-progress" class="hidden"><span>Reference Compare</span><strong id="epoch-finder-rvn-count">0 / 0</strong><small id="epoch-finder-reference-compare-error" class="epoch-finder-error hidden" role="alert"></small></div>
                                         <div id="epoch-finder-dino-progress" class="hidden"><span>DINOv2</span><strong id="epoch-finder-dino-count">0 / 0</strong></div>
                                         <div><span>Current field</span><strong id="epoch-finder-field-count">—</strong></div>
                                     </div>

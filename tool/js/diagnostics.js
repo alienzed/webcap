@@ -1,6 +1,7 @@
 var diagnosticsActiveTab = 'health';
 var diagnosticsLoadedConfig = null;
 var diagnosticsAssessmentSelected = { director: new Set(), vision: new Set() };
+var diagnosticsAssessmentCatalog = { directors: [], visions: [] };
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
@@ -47,6 +48,7 @@ function refreshUnifiedModelAssessment() {
     var labRuns = values[2].runs || [];
     var labModels = values[2].models || {};
     var vision = labModels.visions || [];
+    diagnosticsAssessmentCatalog = { directors: directors, visions: vision };
     summary.textContent = directors.length + ' Director models · ' + vision.length + ' Vision models · ' + labRuns.length + ' Model Lab runs';
     results.replaceChildren();
     var selectedBefore = diagnosticsAssessmentSelected;
@@ -114,7 +116,7 @@ function refreshUnifiedModelAssessment() {
 }
 
 function runUnifiedModelAssessment() {
-  var selectedDirectors = directorModelTestState.models.filter(function (model) {
+  var selectedDirectors = diagnosticsAssessmentCatalog.directors.filter(function (model) {
     return diagnosticsAssessmentSelected.director.has(String(model.id || ''));
   }).map(function (model) {
     return {
@@ -133,9 +135,9 @@ function runUnifiedModelAssessment() {
     throw new Error('Deep Assessment is not available yet. Uncheck it to run the standard suite.');
   }
   if (directorModelTestState.running) throw new Error('Director assessment or benchmark is already running.');
-  var catalog = modelLabState.models || {};
+  var catalog = diagnosticsAssessmentCatalog;
   var visions = (catalog.visions || []).filter(function (model) { return visionRefs.has(String(model.modelRef || '')); });
-  var directors = (catalog.directors || []).filter(function (model) { return directorRefs.has(String(model.modelRef || '')); });
+  var directors = selectedDirectors;
   if (selectedDirectors.length !== directorRefs.size || visions.length !== visionRefs.size || directors.length !== directorRefs.size) {
     throw new Error('Model selections are stale; refresh assessment findings and retry.');
   }
@@ -149,6 +151,7 @@ function runUnifiedModelAssessment() {
   runButton.disabled = true;
   return Promise.resolve().then(function () {
     if (!canLab) return null;
+    if (modelLabState.run && modelLabState.run.status === 'running') throw new Error('Model Lab is already running. Stop or complete that run first.');
     return modelLabPost({
       action: 'start',
       config: {

@@ -139,7 +139,7 @@
   .media-explorer-workspace { --explorer-gutter: 12px; }
   .media-explorer-header { flex-wrap: wrap; }
   .media-explorer-header-actions { margin-left: auto; }
-  .media-explorer-facets select { flex: 1; max-width: 100%; }
+  .media-explorer-facets select { flex: 1 1 calc(50% - 7px); max-width: 100%; }
   .media-explorer-searchbar select { width: 112px; }
   .media-explorer-view-controls { margin-left: auto; }
   .media-explorer-size-label input { width: 58px; }

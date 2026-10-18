@@ -96,8 +96,8 @@ def _runs(folder_path):
             continue
         if epochs:
             result.append({
-                "jobId": job_id, "runName": run.get("runName") or "",
-                "runSequence": run.get("runSequence") or "",
+                "jobId": job_id, "runName": run.get("runName") or job.get("runName") or "",
+                "runSequence": run.get("runSequence") or job.get("runSequence") or run.get("runId") or job.get("runId") or "",
                 "setName": Path(folder).name,
                 "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
                 "epochs": epochs,

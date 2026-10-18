@@ -281,10 +281,30 @@ def discover_epoch_frames():
 def discover_storyboards():
     """Story-owned takes and references, served only by Storyboard's media route."""
     from .storyboard_store import list_stories, load_story, resolve_story_media
+    from .storyboard_assembly import current_export
     found = {}
     for summary in list_stories():
         story_id = str(summary.get("id") or "")
         story = load_story(story_id)
+        exported = current_export(story_id)
+        if exported:
+            path = exported["mediaPath"]
+            file = resolve_story_media(story_id, path)
+            found["storyboard:" + story_id + ":" + path] = {
+                "id": "storyboard:" + story_id + ":" + path,
+                "source": "storyboard", "storageId": story_id,
+                "ownerFolder": "", "role": "export", "mediaKind": "video",
+                "fileName": file.name, "mediaPath": path,
+                "mediaUrl": "/fs/storyboard/media?story=" + quote(story_id, safe="")
+                            + "&path=" + quote(path, safe=""),
+                "createdAt": int(datetime.fromisoformat(exported["createdAt"].replace("Z", "+00:00")).timestamp() * 1000) if exported.get("createdAt") else 0,
+                "rating": None, "model": "",
+                "contextLabel": str(story.get("title") or story_id) + " / Sequence export",
+                "roles": ["export"],
+                "fileSize": file.stat().st_size,
+                "uses": [{"storageId": "", "role": "export", "source": "storyboard",
+                          "label": "Sequence export"}],
+            }
         for scene_id, scene in (story.get("scenes") or {}).items():
             if not isinstance(scene, dict):
                 continue

@@ -398,6 +398,8 @@ def list_results(limit=100):
         if isinstance(payload, dict):
             found.append(_listed_result_payload(manifest, payload))
     found.sort(key=lambda item: int(item.get("createdAt") or 0), reverse=True)
+    if limit is None:
+        return found
     return found[:max(1, min(int(limit or 100), 500))]
 
 

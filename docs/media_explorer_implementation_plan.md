@@ -32,6 +32,10 @@ Navigation uses stable per-owner identity and URL/query state, not a shadow rela
 
 Viewing/discovery never modifies media. Ratings and evaluations use the producing feature's metadata writer, **not** a new global metadata store. Permanent deletion uses the relevant owner endpoint with its current confirmation semantics; Explorer must not delete by raw absolute path. Creation of a derivative (crop/resize/convert) is deferred: it needs an explicit source-local naming/provenance contract and must never overwrite the parent by default. No universal Edit button and no new `originals/` for generated output. Set source media operations stay in Set workflow with its reversibility rules. Bulk operations limited to operations demonstrated to be safe for every selected item, with per-item failures visible.
 
+## Reference media
+
+References are first-class media, including training, Epoch Finder, Test Generations and Storyboard references. Explorer must display known roles and originating workflows while keeping files and their metadata with the owning feature. A file may serve more than one workflow; display related usages when owner-local provenance confirms them. Do not infer ownership from visual similarity and do not duplicate files into a global library.
+
 ## Source matrix / availability
 
 1. Generate outputs: discover via Generate results/metadata; open source; rating/delete if existing endpoints support that result.
@@ -87,3 +91,105 @@ Only if users demonstrate need: `Save As` non-destructive crop/resize/convert al
 ## Verification
 
 Per-phase tests for route contracts, path boundaries, filtering/page counts, media serving and deep link identity; manual visual QA at narrow/wide widths, image/video playback, zero/hundreds/thousands of artifacts, partial scan, source deleted, Set navigation, keyboard focus, queued inference unaffected. Ensure error details surface in global Console. Run existing Test/Generate/Storage and shell regression tests. Only merge after relevant checks pass and `AGENTS.md` invariants are maintained.
+
+
+## Implementation checkpoint — 2026-10-18 (PR #408)
+
+This is an **incremental implementation**, not the completed universal library. Do not mark later phases as done or merge solely because the gallery renders.
+
+| Phase | Applied to branch | Remaining acceptance |
+| --- | --- | --- |
+| 0. Ownership & IA | Root AGENTS.md reviewed, reference roles documented, interface contract in `docs/media_explorer_design.md` | Audit source-specific owner contracts before broadening discovery |
+| 1. Gallery foundation | New HTML/CSS/JS workspace, Flask read-only endpoint, Generate result and persisted reference discovery | Execute backend tests; test browser layout and app navigation; add uncapped/full discovery |
+| 2. Visual exploration | Card grid, source-role filter, search, thumbnail sizing, inspector, fullscreen loupe, paging; sorting performed globally *within discovered scope* | Inspect keyboard, media playback, direct links, selection/compare and scroll preservation |
+| 3. Producer coverage | Generate only | Test sessions, Epoch Finder, Training, Storyboard, source/reference usages (owner by owner) |
+| 4. Owner actions | Read-only intentionally | Reuse proven source actions; no generalized deletion/editing |
+| 5. Derivatives | Not started | Explicit ownership/lineage contract, if needed |
+
+### Immediate correctness rules
+
+- Until full scan lands, scope is `Generate (latest 500 results)` and counts are partial. Sorting is within that bounded set, not globally across all on-disk results. This is a real limitation, not a final design.
+- Gallery paging and sort must be executed by the same backend snapshot/query (server-wide sort before slicing). Stale responses must not append to an invalidated gallery view.
+- Source navigation must close the Explorer without overwriting Test/Set editing state. Every shell route must be reviewed for mutual exclusivity.
+- Existing media-serving endpoint must enforce source ownership; do not expose arbitrary absolute or user-supplied filesystem paths.
+- A test file has been added at `tests/test_media_explorer.py` but the linked GitHub environment has no executable checkout; tests have **not** been run or visually verified. Keep PR #408 draft and unmerged until runtime QA can run.
+
+### Next safe cuts
+
+1. Verify the shell navigation and Generate+reference discovery via runnable checkout and tests.
+2. Replace the 500-result bounded source with complete, cancellable/visible discovery and true cross-page sorting without persistent index; stay read-only.
+3. Add Test Generations artifact/session context, then Epoch Finder, Training and Storyboard incrementally based on verified manifest data; ensure references are included as media roles.
+4. Implement deep links and owner-specific capability actions only after those contracts exist; compare/selection and visual polish thereafter.
+
+
+### Phase 2 discovery update (2026-10-18)
+
+- Added `list_results(limit=None)` to enumerate all Generate manifests without the legacy 500-result cap, leaving the existing default behavior unchanged for other Generate callers.
+- The Explorer remains fast/bounded on entry. A visible **Scan all Generate media** action requests complete enumeration, with accurate per-scope count and sort-before-page behavior.
+- No persisted index or copied media is introduced. Stored generated references remain discoverable through their owner manifests.
+- `AbortController` cancels a stale browser request, **not** a server-side Python scan already underway. Progress is currently a busy status rather than incremental enumeration; do not claim server cancellation or progressive scan results.
+- Full enumeration currently runs for each page/filter request in full mode. A reusable process-local snapshot and cooperative cancellation are potential next optimizations, but require measured costs and a clean lifecycle; do not introduce speculative caching.
+- Next build phase is source-specific Test Generations discovery and safe deep links, after its actual session/manifest shape is examined. This does not mark the universal Explorer complete.
+- Local clone/testing was unavailable in this execution environment (GitHub hostname not resolvable from the container). GitHub changes were committed through the connector; tests remain **not executed**.
+
+### Test Generations integration checkpoint
+
+Central Test session manifests at `output/test-generations` and `output/test-generations/sets/*/sessions` are now included through the existing owner/session resolver, with ratings read from session metadata and preview URLs served by `/fs/test_generations/media`. The source filter is exposed in the Explorer. Legacy Set-local sessions are not included yet. **Not yet delivered:** end-to-end source navigation, reference relationships for Test sessions, and verified runtime/browser tests. No source files or test results are modified.
+
+### Source navigation checkpoint
+
+- Test results now expose **Open Test session** from the Explorer inspector, using Test Generations' existing `openTestBenchActivity({folder, sessionId, modelId})` entry point, not direct DOM manipulation.
+- Explorer requests are invalidated when leaving its workspace so late responses cannot append into an inactive view.
+- The scope remains central Test session media plus Generate results/references. Per-Set legacy sessions, Test reference media, Epoch Finder, Training and Storyboard still require owner-specific discovery audits; do not label coverage complete.
+- Source navigation and visual behavior still need executable runtime verification before merge.
+
+
+### Legacy-only Test discovery checkpoint (PR #408)
+
+Explicit full discovery now enumerates legacy Set-local `test-generations` directories using the same key directory exclusions as Storage Manager, without introducing a persisted index or scanning them when merely opening Explorer. For older `test.json` manifests without `ownerFolder`, the directory parent provides the Set owner, and the Test owner resolver must still confirm the session before it appears. A dedicated regression test covers a Set with no central Test record. Browser-side AbortController does not cancel an in-progress Python walk: cooperative server cancellation, incremental progress, and performance benchmarks remain outstanding. The Test manifest does not provide a universal collection of reference files; do not infer reference ownership from filenames. Runtime tests and visual QA have not been run.
+
+### Epoch Finder source phase
+
+Retained Epoch Finder campaign frames are discoverable in the gallery as a separate source. The adapter reads owner-validated campaign manifests via `storage_campaigns()` and serves only existing retained frames via `/fs/epoch_finder/frame`; pruned frames and staging files are omitted. No generic folder-level media server is introduced, and owner workflows remain unchanged. Training and Storyboard discovery, campaign navigation, and runtime QA are still pending. The current implementation calls `storage_campaigns()` per query and must be profiled before considering runtime caching.
+
+### Consolidated source and navigation checkpoint
+
+Storyboard takes and scene references are now discovered from the existing Storyboard store and served through `/fs/storyboard/media`; the inspector links back to `openStoryboardActivity` for the owner story/scene. Training history records expose run paths and checkpoints but no established owner-validated generic training media-serving route. **Do not expose arbitrary training output paths as gallery URLs.** Training media discovery remains gated on an explicit safe route and provenance contract. Comparison, multi-selection, and full user-visible scan cancellation also remain outstanding. This PR is **not release verified**: local checkout cannot reach GitHub and no CI status checks are available.
+
+### Gallery interaction checkpoint
+
+Media Explorer now supports loaded-item Ctrl/Cmd multi-selection, Shift range selection, Clear selection, and a same-media-kind comparison dialog for 2–4 media. Comparison uses owner-validated media URLs and does not invoke model inference, create derivatives, or modify ratings. This is a basic side-by-side view; linked zoom, persistent comparison groups, and video synchronization are not implemented. Selection resets on filter refresh, and only loaded items can be selected. Training samples remain outside the Explorer until owner-backed read-only serving can be verified. Runtime tests and manual wide/narrow visual QA have not been executed; PR #408 remains a draft.
+
+### Owner-backed inspector action checkpoint
+
+Generate outputs now expose a 0–5 rating control in the Explorer inspector. It invokes the existing `/fs/generate/result/rating` owner endpoint, updates the loaded gallery card after success, and reports failures through the global Console. Saved Generate reference copies do not get rating controls. Test, Epoch Finder and Storyboard rating operations remain with their owners until their individual action semantics can be audited. No arbitrary media editing/deletion has been added. Regression tests are committed but have not been executed in this environment.
+
+
+## Release-focused completion plan — revised 2026-10-18
+
+Following the root `AGENTS.md` contract: no new service, database, global media index, event bus, or owner-bypassing media route. Work in PR #408 with small owner-specific changes.
+
+| Safe phase | Delivery / acceptance |
+| --- | --- |
+| A. Correctness first | Fix routing, source boundary bugs, incomplete discovery labels, stale requests and source navigation. Verify recent-vs-full behavior, legacy-only Test Sets, duplicate identities and missing source files. |
+| B. Finish source navigation and provenance | Wire verified owner APIs for existing Generate/Test/Epoch/Storyboard media and references; show source/usage only when the authoritative manifest supplies it. Add Training only after identifying specific owner-local media paths and a safe authenticated media route; never expose arbitrary run paths. |
+| C. Gallery usability | Stable selection, clear inspector, native video handling, comparison, keyboard focus and useful metadata; keep media prominent. Avoid speculative bulk actions and editing until file ownership and derivative lineage are settled. |
+| D. Performance | Profile complete scans with real volumes; only add a process-local snapshot if needed. Explicitly label counts and sort completeness. Browser abort is not server cancellation; implement server cooperative scan cancellation only with a measured need. |
+| E. Release gate | Run Python suite including `tests/test_media_explorer.py`, UI smoke tests for navigation and dialogs at narrow/wide widths, and regression checks for Generate/Test/Epoch/Storyboard/Storage and active queues. Review diffs against `AGENTS.md` and merge only if checks pass. |
+
+**Applied in this pass:** Test discovery no longer exits early if the central output directory is missing, allowing explicit full scans to discover legacy-only Sets. This preserves the existing owner's resolver and media route.
+
+**Gating concerns:** Training's supported media-serving contract and derivatives/lineage need evidence, not a user decision yet. Executable checkout and CI/browser validation remain unavailable here, so this branch stays unmerged. The design intentionally excludes arbitrary source Set datasets by default.
+
+### Source Set discovery checkpoint
+
+Explicit **Scan all media** now includes recognized source Sets (identified by owner-local `.webcap_state.json` or `media_metadata.json`), using existing `caption_ops.list_media_files` and `/caption/media` serving. Source Sets are not scanned on initial entry; generated subdirectories and runtime/output roots are excluded. No files are moved, copied, indexed persistently or modified. Source Set ratings and navigation are deferred until the owner context contract is verified. Added test for explicit-only discovery and route. Training run-output samples still require their own validated media contract. Runtime test execution and visual QA remain pending.
+
+### AGENTS.md simplification audit (2026-10-18)
+
+- Removed duplicate legacy-Test owner discovery during explicit full scans: full scans now use the single legacy-root walk; recent browsing retains known-owner lookups.
+- Removed the guessed `test-sessions` workspace location; only the confirmed Test `sessions` directory is supported.
+- Training sample generation is **not** assumed; diffusion-pipe checkpoints/metrics are not images. Source training datasets remain Set media, not a new Training samples pipeline.
+- Retained existing owner-backed endpoints, transient browser selection and read-only discovery; no index, metadata store, processing queue or new media server introduced.
+- Full scans still perform separate Test and source-Set walks, and query/page calls repeat discovery. Those are measurable performance concerns, not justification for a new caching layer without runtime evidence.
+- This is a code review, not an executed regression run. Tests and browser QA remain pending.

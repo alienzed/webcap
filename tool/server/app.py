@@ -68,6 +68,7 @@ from .storyboard_assembly import current_export as storyboard_current_export, ex
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
+from .media_explorer import list_media as media_explorer_list_media
 from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
 from .test_wildcard_contract import build_request as test_wildcard_build_request
@@ -1938,6 +1939,24 @@ def generate_prompt_delete_route():
         return jsonify({"ok": False, "error": str(exc)}), 404
     except Exception as exc:
         app.logger.exception("GENERATE PROMPT DELETE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/media_explorer", methods=["GET"])
+def media_explorer_route():
+    try:
+        return jsonify(media_explorer_list_media(
+            limit=request.args.get("limit", 60),
+            offset=request.args.get("offset", 0),
+            role=request.args.get("role", ""),
+            kind=request.args.get("kind", ""),
+            search=request.args.get("search", ""),
+            sort=request.args.get("sort", "newest"),
+            full=request.args.get("full", ""),
+            source=request.args.get("source", ""),
+        ))
+    except Exception as exc:
+        app.logger.exception("MEDIA EXPLORER DISCOVERY FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

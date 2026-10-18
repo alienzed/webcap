@@ -22,6 +22,7 @@
         <link rel="stylesheet" href="/static/css/storyboard.css">
         <link rel="stylesheet" href="/static/css/generate.css">
         <link rel="stylesheet" href="/static/css/storage_manager.css">
+        <link rel="stylesheet" href="/static/css/media_explorer.css">
         <link rel="stylesheet" href="/static/css/workbench.css">
         <link rel="stylesheet" href="/static/css/epoch_finder.css">
         <link rel="stylesheet" href="/static/css/ai_validation.css">
@@ -114,6 +115,7 @@
                     </svg>
                 </button>
                 <div class="activity-rail-separator" aria-hidden="true"></div>
+                <button id="activity-media-explorer-btn" type="button" class="activity-rail-btn" title="Media Explorer" aria-label="Media Explorer" aria-pressed="false" aria-controls="media-explorer-workspace"><svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="2"></circle><path d="m5 18 6-6 4 3 3-3 3 3"></path></svg></button>
                 <button id="activity-storage-btn" type="button" class="activity-rail-btn" title="Storage" aria-label="Storage" aria-pressed="false" aria-controls="storage-workspace">
                     <svg class="activity-rail-icon" viewBox="0 0 24 24" aria-hidden="true">
                         <ellipse cx="12" cy="6" rx="7" ry="3"></ellipse>
@@ -1412,6 +1414,31 @@
                         </section>
                     </div>
                 </section>
+            </section>
+            <section id="media-explorer-workspace" class="media-explorer-workspace hidden" data-workspace-root="media" aria-label="Media Explorer">
+                <aside class="media-explorer-sources" aria-label="Media sources">
+                    <div class="media-explorer-rail-title">Browse</div>
+                    <button type="button" class="media-explorer-source active" data-media-role="">All media</button>
+                    <button type="button" class="media-explorer-source" data-media-role="generated">Generations</button>
+                    <button type="button" class="media-explorer-source" data-media-role="reference">References</button>
+                    <button type="button" class="media-explorer-source" data-media-source="test">Test Generations</button>
+                    <button type="button" class="media-explorer-source" data-media-source="epoch">Epoch Finder</button>
+                    <button type="button" class="media-explorer-source" data-media-source="storyboard">Storyboard</button>
+                    <button type="button" class="media-explorer-source" data-media-source="set">Source Sets (full scan)</button>
+                    <div class="media-explorer-source-note">Additional workflows will appear as their discovery adapters become available.</div>
+                </aside>
+                <main class="media-explorer-main">
+                    <header class="media-explorer-header"><div><h2>Media Explorer</h2><p>Explore generated media and saved references across WebCap.</p></div><div class="media-explorer-header-actions"><button type="button" id="media-explorer-refresh" class="review-captions-btn">Refresh</button><button type="button" id="media-explorer-scan-all" class="review-captions-btn">Scan all media</button></div></header>
+                    <div class="media-explorer-searchbar"><input type="search" id="media-explorer-search" placeholder="Search filenames and models…" aria-label="Search media"><select id="media-explorer-kind" aria-label="Filter media type"><option value="">Images &amp; videos</option><option value="image">Images</option><option value="video">Videos</option></select><select id="media-explorer-sort" aria-label="Sort media"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Filename</option><option value="rating">Rating</option></select></div>
+                    <div class="media-explorer-gallery-toolbar"><span id="media-explorer-count">Discovering media…</span><label class="media-explorer-size-label">Thumbnail size <input id="media-explorer-size" type="range" min="180" max="340" step="20" value="240" aria-label="Thumbnail size"></label></div>
+                    <div id="media-explorer-selection" class="media-explorer-selection hidden" role="toolbar" aria-label="Media selection"><span id="media-explorer-selected-count"></span><button type="button" id="media-explorer-compare" class="review-captions-btn">Compare</button><button type="button" id="media-explorer-clear-selection" class="review-captions-btn">Clear selection</button></div>
+                    <div id="media-explorer-status" class="media-explorer-status" role="status"></div>
+                    <div id="media-explorer-grid" class="media-explorer-grid" aria-label="Media gallery"></div>
+                    <div class="media-explorer-more"><button type="button" id="media-explorer-more-btn" class="review-captions-btn hidden">Load more</button></div>
+                </main>
+                <aside id="media-explorer-inspector" class="media-explorer-inspector hidden" aria-label="Media inspector"><div class="media-explorer-inspector-title"><strong>Details</strong><button type="button" id="media-explorer-close-details" class="review-captions-btn">Close</button></div><div id="media-explorer-inspector-body"></div></aside>
+                <dialog id="media-explorer-compare-dialog" class="media-explorer-compare-dialog" aria-label="Compare selected media"><div class="media-explorer-compare-header"><strong>Compare media</strong><button type="button" id="media-explorer-compare-close">Close</button></div><div id="media-explorer-compare-content" class="media-explorer-compare-content"></div></dialog>
+                <dialog id="media-explorer-loupe" class="media-explorer-loupe" aria-label="Media viewer"><div class="media-explorer-loupe-toolbar"><button type="button" id="media-explorer-previous">Previous</button><span id="media-explorer-loupe-name"></span><button type="button" id="media-explorer-next">Next</button><button type="button" id="media-explorer-close-loupe">Close</button></div><div id="media-explorer-loupe-content" class="media-explorer-loupe-content"></div></dialog>
             </section>
             <section id="storage-workspace" class="storage-workspace hidden" data-workspace-root="storage" aria-label="Storage workspace">
                 <header class="storage-toolbar">
@@ -3102,6 +3129,7 @@
         <script src="/static/js/progress_card.js"></script>
         <script src="/static/js/activity_monitor.js"></script>
         <script src="/static/js/storage_manager.js"></script>
+        <script src="/static/js/media_explorer.js"></script>
         <script src="/static/js/generate.js"></script>
         <script src="/static/js/workflow_gate.js"></script>
         <script src="/static/js/test_generations.js"></script>

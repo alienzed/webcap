@@ -5442,6 +5442,7 @@
   }
 
   function openStoryboardActivity(target) {
+    if (window.closeMediaExplorerActivity) window.closeMediaExplorerActivity();
     target = target && typeof target === 'object' ? target : {};
     var targetStoryId = String(target.storyId || '');
     var targetSceneId = String(target.sceneId || '');

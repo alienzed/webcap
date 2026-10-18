@@ -147,3 +147,23 @@ def test_comfy_embedded_profile_requires_valid_schema(monkeypatch):
     })
     loaded = inference_runtime.lora_embedded_profile("set/example.safetensors")
     assert loaded["modelProfile"]["enrichment"]["trainedWords"] == ["tag"]
+
+
+def test_storyboard_profile_context_uses_verified_comfy_selection(monkeypatch):
+    from tool.server import inference_runtime
+    from tool.server.model_epoch_profile import director_context_for_selected_loras
+    looked_up = []
+    def profile_for(name):
+        looked_up.append(name)
+        return {"name": name, "modelProfile": {"enrichment": {
+            "description": "Trained garment variants",
+            "trainedWords": ["dual-ring connectors"],
+            "promptOptions": {"Viewpoint": ["front", "rear"]},
+            "guidance": "Use the precise connector terminology.",
+        }}}
+    monkeypatch.setattr(inference_runtime, "lora_embedded_profile", profile_for)
+    text = director_context_for_selected_loras([{"name": "set/checkpoint.safetensors", "strength": 0.8}])
+    assert looked_up == ["set/checkpoint.safetensors"]
+    assert "\n" in text
+    assert "dual-ring connectors" in text
+    assert "not a request to change the scene" in text

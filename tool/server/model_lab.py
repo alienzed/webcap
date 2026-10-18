@@ -145,6 +145,7 @@ def capability_run_summaries():
                 "status": "", "completed": 0, "failed": 0, "running": 0,
                 "skipped": 0, "interrupted": 0, "samples": 0,
                 "finishReasons": {}, "errors": [],
+                "throughputSamples": [], "outputTokenSamples": [],
             })
             status = str(attempt.get("status") or "")
             if status in {"completed", "failed", "running", "skipped", "interrupted"}:
@@ -158,6 +159,19 @@ def capability_run_summaries():
             error = str(attempt.get("error") or "")
             if error and error not in evidence["errors"]:
                 evidence["errors"].append(error[:240])
+            # Capture only measured metrics; no raw prompts, text or reasoning.
+            timings = result.get("timings") if isinstance(result.get("timings"), dict) else {}
+            usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
+            for source, key, field in (
+                (timings, "predicted_per_second", "throughputSamples"),
+                (usage, "completion_tokens", "outputTokenSamples"),
+                (timings, "predicted_n", "outputTokenSamples"),
+            ):
+                value = source.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value < 10000000:
+                    if field == "outputTokenSamples" and evidence[field]:
+                        continue
+                    evidence[field].append(round(float(value), 2))
             # Summary intentionally excludes prompts, generated text and reasoning.
         summaries.append({
             "id": row["id"], "status": row.get("status"), "depth": run.get("depth", "quick"),

@@ -8,6 +8,8 @@ function diagnosticsEl(id) {
 }
 
 function setDiagnosticsTab(tabName, focusTab) {
+  // Legacy deep links still open their specialist tool panels; only consolidated
+  // primary destinations appear in the tab bar.
   var next = ['health', 'assessment', 'h3', 'models', 'benchmark', 'model-lab'].indexOf(tabName) !== -1 ? tabName : 'health';
   diagnosticsActiveTab = next;
   var selectedButton = null;
@@ -612,7 +614,7 @@ function wireDiagnosticsUi() {
       setDiagnosticsTab(button.getAttribute('data-diagnostics-tab'), false);
     };
     button.onkeydown = function (event) {
-      var tabs = ['health', 'h3', 'models', 'benchmark'];
+      var tabs = ['health', 'assessment', 'h3', 'model-lab'];
       var current = tabs.indexOf(button.getAttribute('data-diagnostics-tab'));
       var next = current;
       if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;

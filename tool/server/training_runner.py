@@ -1166,6 +1166,14 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
         with source.open("rb") as source_handle, destination_path.open("xb") as destination_handle:
             shutil.copyfileobj(source_handle, destination_handle)
             created = True
+        from .model_epoch_profile import _read_object
+        source_profile = _read_object(source.with_suffix(".webcap.json")).get("modelProfile")
+        if source_profile is not None:
+            if not isinstance(source_profile, dict):
+                raise ValueError("Source modelProfile is invalid.")
+            profile_sidecar = destination_path.with_suffix(".webcap.json")
+            with profile_sidecar.open("x", encoding="utf-8") as profile_handle:
+                json.dump({"modelProfile": source_profile}, profile_handle, ensure_ascii=False, indent=2)
         selected = None
         if run is not None and run_dir is not None:
             analysis = _analyze_run_directory(run_dir, algorithm="v5")
@@ -1186,6 +1194,10 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
         if created:
             try:
                 destination_path.unlink()
+            except OSError:
+                pass
+            try:
+                destination_path.with_suffix(".webcap.json").unlink(missing_ok=True)
             except OSError:
                 pass
         raise

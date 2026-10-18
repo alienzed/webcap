@@ -308,7 +308,7 @@ def discover_set_media():
                 "storageId": folder, "ownerFolder": folder, "role": "source",
                 "mediaKind": kind, "fileName": name,
                 "mediaPath": folder + "/" + name,
-                "mediaUrl": "/fs/media?folder=" + quote(folder, safe="")
+                "mediaUrl": "/caption/media?folder=" + quote(folder, safe="")
                             + "&media=" + quote(name, safe=""),
                 "createdAt": int(file.stat().st_mtime * 1000),
                 "rating": None, "model": "", "uses": [],

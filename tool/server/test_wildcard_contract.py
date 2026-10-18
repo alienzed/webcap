@@ -12,7 +12,24 @@ def _clean_context(value):
     return " ".join(str(value or "").strip().split())
 
 
-def build_request(captions, set_name="", focus="", vocabulary=None):
+def observed_group_combinations(annotations, eligible_media):
+    """Actual co-occurring scoped tag sets, scoped to eligible Set media."""
+    observed = {}
+    for media in eligible_media:
+        scoped = annotations.get(media, {})
+        if not isinstance(scoped, dict):
+            continue
+        for group, tags in scoped.items():
+            if not isinstance(tags, list):
+                continue
+            values = tuple(sorted({tag for tag in tags if isinstance(tag, str) and tag.strip()}))
+            if values:
+                observed.setdefault(group, set()).add(values)
+    return {group: [list(combo) for combo in sorted(combos)]
+            for group, combos in sorted(observed.items())}
+
+
+def build_request(captions, set_name="", focus="", vocabulary=None, group_combinations=None):
     cleaned = [_clean_caption(value) for value in (captions or [])]
     cleaned = [value for value in cleaned if value]
     if not cleaned:
@@ -78,6 +95,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None):
         "Set name: " + (set_name or "(not supplied)"),
         "Explicit focus: " + (focus or "(auto - infer from Set name and repeated caption language)"),
         "Annotation groups and terms: " + (json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"),
+        "Observed same-group tag combinations: " + json.dumps(group_combinations or {}, ensure_ascii=False),
     ]
 
     prompt = (
@@ -102,6 +120,10 @@ def build_request(captions, set_name="", focus="", vocabulary=None):
         "Keep hair style and hair color separate.\n"
         "- Prefer independent, composable attributes over whole-phrase alternatives. "
         "For example, separate color, pattern, trim, top shape, and bottom shape rather than collapsing them into a single 'style' wildcard.\n"
+        "- For tags in the SAME annotation group, only use joint combinations observed together in Set media. "
+        "If a pair was never observed together in that group, treat it as mutually exclusive. "
+        "Prefer one option from that group in each resolved caption unless an observed tag combination requires several. "
+        "Do not apply this restriction across DIFFERENT annotation groups; cross-group recombination tests generalization.\\n"
         "- Recombine attributes across dimensions so tests exercise independently selectable properties, "
         "not merely replay complete caption fragments.\n"
         "- Annotation groups, aliases, and terms reveal the important dimensions and preferred terminology. "

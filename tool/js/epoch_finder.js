@@ -10,6 +10,9 @@
   var wizardStep = 1;
   var dimensions = [];
   var inspectedEpoch = null;
+  var crossEvidence = null;
+  var crossEvidenceKey = '';
+  var crossEvidenceVersion = 0;
   var inspectedFrame = 0;
   var campaignState = null;
   var referenceSelections = {};
@@ -695,6 +698,42 @@
           '</div></figcaption></figure>';
       }).join('');
   }
+  function evidenceSection(campaign) {
+    if (inspectedEpoch == null) return '';
+    var key = currentFolder + ':' + campaign.jobId + ':' + inspectedEpoch;
+    var rows = crossEvidenceKey === key ? crossEvidence : null;
+    var html = '<details class="epoch-finder-cross-evidence"' + (rows ? ' open' : '') +
+      '><summary>Checkpoint evidence across campaigns</summary>' +
+      '<button type="button" data-load-cross-evidence>Load evidence</button>';
+    if (rows) {
+      html += rows.length ? rows.map(function (row) {
+        var verdicts = row.rvnVerdicts || {};
+        return '<p><strong>' + escape(row.campaignName || row.campaignId) + '</strong>' +
+          ' · Concept ' + (row.score == null ? 'not scored' : Math.round(row.score * 100) + '%') +
+          ' · ' + row.evaluatedRenders + ' evaluated renders' +
+          ' · ' + row.weightedObservations + ' weighted observations' +
+          ' · RVN ' + (verdicts.MATCH || 0) + '/' + (verdicts.PARTIAL || 0) + '/' +
+          (verdicts.MISMATCH || 0) + '/' + (verdicts.UNCLEAR || 0) + ' (match/partial/mismatch/unclear)' +
+          ' · DINO ' + row.dinoComparisons + ' comparisons' +
+          (row.failedUnits ? ' · ' + row.failedUnits + ' failed units' : '') +
+          (row.campaignId === campaign.id ? ' · current' : '') + '</p>';
+      }).join('') : '<p>No saved campaign evidence.</p>';
+    }
+    return html + '<small>Campaigns are separate protocols. Missing evaluations are not failures.</small></details>';
+  }
+  function loadCrossEvidence() {
+    if (!campaignState || inspectedEpoch == null) return;
+    var folder = currentFolder, campaignId = campaignState.id;
+    var jobId = campaignState.jobId, epoch = inspectedEpoch, version = ++crossEvidenceVersion;
+    api('checkpoint_evidence', {jobId:jobId}).then(function (result) {
+      if (version !== crossEvidenceVersion || currentFolder !== folder ||
+          !campaignState || campaignState.id !== campaignId || inspectedEpoch !== epoch) return;
+      var item = (result.checkpoints || []).find(function (row) { return row.epoch === epoch; });
+      crossEvidenceKey = folder + ':' + jobId + ':' + epoch;
+      crossEvidence = item ? item.campaigns : [];
+      inspectFrame(campaignState);
+    }).catch(error);
+  }
   function inspectFrame(campaign) {
     var node = els('inspector');
     var units = campaign.units.filter(function (u) { return inspectedEpoch != null && u.epoch === inspectedEpoch; })
@@ -755,7 +794,7 @@
         }).join('') + '</details>' : '') +
       (unit.referenceError ? '<p class="epoch-finder-error">Reference VL: ' + escape(unit.referenceError) + '</p>' : '') +
       (unit.dinoError ? '<p class="epoch-finder-error">DINOv2: ' + escape(unit.dinoError) + '</p>' : '') +
-      (unit.error ? '<p class="epoch-finder-error">' + escape(unit.error) + '</p>' : '');
+      (unit.error ? '<p class="epoch-finder-error">' + escape(unit.error) + '</p>' : '') + evidenceSection(campaign);
   }
   function render(campaign) {
     campaignState = campaign;
@@ -855,7 +894,7 @@
     inspectedEpoch = null;
     lastFrameKey = null;
     var changed = currentFolder !== folder;
-    if (changed) listRequestVersion++;
+    if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
     if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     if (mode === 'finder') refresh();
@@ -934,12 +973,14 @@
     var row = event.target.closest('[data-inspect-epoch]');
     if (!row) return;
     inspectedEpoch = Number(row.dataset.inspectEpoch);
+    crossEvidenceVersion++;
     inspectedFrame = 0;
     lastFrameKey = null;
     refreshStatus().catch(error);
   };
   els('inspector').onclick = function (event) {
     if (!campaignState || inspectedEpoch == null) return;
+    if (event.target.closest('[data-load-cross-evidence]')) { loadCrossEvidence(); return; }
     if (event.target.closest('[data-copy-epoch-to-test]')) {
       var button = event.target.closest('[data-copy-epoch-to-test]');
       var folder = currentFolder, campaignId = campaignState.id, epoch = inspectedEpoch;

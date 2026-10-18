@@ -167,6 +167,46 @@ def list_campaigns(folder_path):
     return {"runs": _runs(folder_path), "campaigns": campaigns, "timings": _timing_profiles(folder_path)}
 
 
+
+def checkpoint_evidence(folder_path, job_id):
+    """Read existing campaigns grouped by run and epoch, without mixing protocols."""
+    job_id = str(job_id or "").strip()
+    if not job_id:
+        raise ValueError("Select a training run.")
+    grouped = {}
+    root = _root(folder_path)
+    if root.is_dir():
+        for directory in root.iterdir():
+            if not directory.is_dir() or directory.is_symlink() or not _ID.fullmatch(directory.name):
+                continue
+            campaign = _load(folder_path, directory.name)
+            if campaign.get("jobId") != job_id or not campaign.get("rounds"):
+                continue
+            for entry in _rank(campaign, len(campaign["rounds"])):
+                epoch = entry["epoch"]
+                units = [unit for unit in campaign.get("units", []) if unit.get("epoch") == epoch]
+                verdicts = {"MATCH": 0, "PARTIAL": 0, "MISMATCH": 0, "UNCLEAR": 0}
+                for unit in units:
+                    for result in unit.get("referenceAssessments") or []:
+                        value = result.get("verdict")
+                        if value in verdicts:
+                            verdicts[value] += 1
+                grouped.setdefault(epoch, []).append({
+                    "campaignId": campaign["id"], "campaignName": campaign.get("name", ""),
+                    "score": entry["score"], "weightedObservations": entry["count"],
+                    "evaluatedRenders": sum(unit.get("assessment") is not None for unit in units),
+                    "failedUnits": sum(bool(unit.get("error")) for unit in units),
+                    "rvnVerdicts": verdicts,
+                    "dinoComparisons": sum(len(unit.get("dinoAssessments") or []) for unit in units),
+                    "visionModel": campaign.get("visionModel"),
+                })
+    return {"jobId": job_id, "checkpoints": [
+        {"epoch": epoch, "campaigns": sorted(rows, key=lambda row: row["campaignId"])}
+        for epoch, rows in sorted(grouped.items())
+    ]}
+
+
+
 def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings, round_options=None):
     plan = []
     options_by_round = round_options if round_options is not None else []
@@ -927,6 +967,8 @@ def command(folder_path, operation, criteria=None):
     criteria = criteria if isinstance(criteria, dict) else {}
     if operation == "list":
         return list_campaigns(folder_path)
+    if operation == "checkpoint_evidence":
+        return checkpoint_evidence(folder_path, criteria.get("jobId"))
     if operation == "reference_vocabulary":
         from .epoch_reference import reference_vocabulary
         return {"vocabulary": reference_vocabulary(_folder_key(folder_path), criteria.get("jobId"))}

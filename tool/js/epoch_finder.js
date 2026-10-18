@@ -258,7 +258,10 @@
     var options = runs.filter(function (run) { return run.modelId === model; });
     els('run-choices').innerHTML = options.length ? options.map(function (run,index) {
       var chosen = runEpochSelections[run.jobId] instanceof Set;
-      var label = [run.setName, run.runName || (run.runSequence ? 'Run ' + run.runSequence : 'Run ' + (index+1))].filter(Boolean).join(' · ');
+      var identity = run.runName || '';
+      if (run.runSequence) identity += (identity ? ' · ' : '') + 'Run ' + run.runSequence;
+      if (!identity) identity = 'Run ' + String(run.jobId).slice(-8);
+      var label = [run.setName, identity].filter(Boolean).join(' · ');
       return '<label class="epoch-finder-run-choice"><input type="checkbox" data-run-id="' + escape(run.jobId) +
         '"' + (chosen ? ' checked' : '') + '><span><strong>' + escape(label) + '</strong>' +
         '<small>' + escape(run.stage || run.modelId) + ' · ' + run.epochs.length + ' checkpoints</small></span></label>';

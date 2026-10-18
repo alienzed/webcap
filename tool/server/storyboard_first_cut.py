@@ -11,7 +11,7 @@ import uuid
 
 from .storyboard_llm_contract import build_request
 from .storyboard_store import load_story
-from .storyboard_generation import start_generation, generation_action, generation_queue
+from .storyboard_generation import start_generation, generation_action, generation_queue, generation_status
 from .llm_runner import enqueue, job_status, action as llm_action, storyboard_story_busy
 
 _LOG = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ def _execute(batch):
             batch["takeJobIds"].append(str(job["jobId"]))
             cancelled = batch["cancelled"]
         if cancelled:
-            generation_action("stop", str(job["jobId"]))
+            _cancel_take(str(job["jobId"]))
             raise _Stopped("First Cut stopped.")
 
 
@@ -201,6 +201,17 @@ def enqueue_batch(story_id, model_id):
         return _public(batch)
 
 
+def _cancel_take(job_id):
+    try:
+        status = str(generation_status(job_id).get("status") or "")
+    except FileNotFoundError:
+        return
+    if status in {"queued", "backlog"}:
+        generation_action("cancel", job_id)
+    elif status in {"running", "starting", "stopping"}:
+        generation_action("stop", job_id)
+
+
 def cancel_batch(batch_id):
     with _LOCK:
         batch = next((b for b in _BATCHES if b["id"] == batch_id), None)
@@ -219,7 +230,7 @@ def cancel_batch(batch_id):
         llm_action("cancel_job", llm_id)
     for job_id in takes:
         try:
-            generation_action("stop", job_id)
+            _cancel_take(job_id)
         except (ValueError, FileNotFoundError):
             # A Take that has already completed is deliberately retained.
             pass

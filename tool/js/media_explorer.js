@@ -293,6 +293,38 @@
         window.openTestBenchActivity({folder: item.ownerFolder, modelId: item.model, campaignId: item.storageId});
       }); actions.appendChild(epoch);
     }
+    var deletion = null;
+    if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      deletion = {label: 'Delete generation', description: 'generation and its stored references',
+        url: '/fs/generate/result/delete', data: {storageId: item.storageId}};
+    } else if (item.source === 'test' && item.ownerFolder && item.storageId) {
+      deletion = {label: 'Delete Test session', description: 'entire Test session and all its generated results',
+        url: '/fs/test_generations', data: {folder: item.ownerFolder, operation: 'test_delete_session',
+          criteria: {session: item.storageId}}};
+    } else if (item.source === 'epoch' && item.ownerFolder && item.storageId) {
+      deletion = {label: 'Delete Epoch campaign', description: 'entire Epoch Finder campaign and its generated results',
+        url: '/fs/epoch_finder', data: {folder: item.ownerFolder, operation: 'delete',
+          criteria: {campaignId: item.storageId}}};
+    }
+    if (deletion) {
+      var deleteButton = document.createElement('button');
+      deleteButton.type = 'button'; deleteButton.className = 'review-captions-btn';
+      text(deleteButton, deletion.label);
+      deleteButton.addEventListener('click', function () {
+        if (!window.confirm('Delete the ' + deletion.description + '? This cannot be undone.')) return;
+        deleteButton.disabled = true;
+        fetch(deletion.url, {method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(deletion.data)})
+          .then(function (response) { return response.json().then(function (payload) {
+            if (!response.ok || !payload || !payload.ok)
+              throw new Error(payload && payload.error || 'Could not delete generated media.');
+            return payload;
+          }); })
+          .then(function () { selected.clear(); active = -1; load(true); })
+          .catch(report).finally(function () { deleteButton.disabled = false; });
+      });
+      actions.appendChild(deleteButton);
+    }
     var open = document.createElement('button'); open.type = 'button';
     open.className = 'review-captions-btn'; text(open, 'View full size');
     open.addEventListener('click', function () { openLoupe(); }); actions.appendChild(open);

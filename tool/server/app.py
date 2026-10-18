@@ -2916,6 +2916,25 @@ def training_candidates_profile_route():
     return jsonify(payload), status
 
 
+@app.route("/fs/training_candidates/profile/director", methods=["POST"])
+def training_candidates_profile_director_route():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or set(data) - {"folder", "jobId", "epoch", "directorModel"}:
+        return jsonify({"ok": False, "error": "Profile enrichment accepts folder, jobId, epoch and directorModel."}), 400
+    try:
+        from .training_runner import candidate_epoch_profile
+        from .model_epoch_profile import director_enrichment_request
+        profile = candidate_epoch_profile(data.get("folder", ""), data.get("jobId", ""), data.get("epoch", ""))
+        contract = director_enrichment_request(profile, profile.get("suggestions"))
+        job = enqueue_llm("training", str(data.get("directorModel") or "").strip(), contract,
+                          context={"operation": "epoch_profile_enrichment"},
+                          label="Enrich epoch " + str(profile["epoch"]) + " profile")
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("EPOCH PROFILE DIRECTOR FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/training_candidates/clear_selection", methods=["POST"])
 def training_candidates_clear_selection_route():
     data = request.get_json(silent=True) or {}

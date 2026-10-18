@@ -162,7 +162,7 @@
           row.type = 'button'; row.className = 'media-explorer-use-link';
           row.addEventListener('click', function () {
             if (use.source === 'generate') window.openGenerateActivity({storageId: use.storageId});
-            else if (use.source === 'storyboard') window.openStoryboardActivity({storyId: item.storageId, sceneId: use.storageId});
+            else if (use.source === 'storyboard') window.openStoryboardActivity({storyId: item.storageId, sceneId: use.storageId, takeId: use.takeId || ''});
             else if (use.source === 'test') window.openTestBenchActivity({folder: item.ownerFolder, sessionId: item.storageId, modelId: item.model || ''});
             else if (use.source === 'epoch') window.openTestBenchActivity({folder: item.ownerFolder, campaignId: item.storageId, modelId: item.model || ''});
           });
@@ -280,7 +280,7 @@
       text(storyBtn, 'Open Storyboard');
       storyBtn.addEventListener('click', function () {
         var scene = item.uses && item.uses[0] && item.uses[0].storageId || '';
-        window.openStoryboardActivity({storyId: item.storageId, sceneId: scene});
+        window.openStoryboardActivity({storyId: item.storageId, sceneId: scene, takeId: item.uses && item.uses[0] && item.uses[0].takeId || ''});
       });
       actions.appendChild(storyBtn);
     }

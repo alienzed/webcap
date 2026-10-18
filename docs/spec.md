@@ -1,10 +1,10 @@
 # WebCap Specification (Current Behavior)
 
-Last updated: 2026-09-21
+Documentation note updated: 2026-10-18
 
 ## Scope and architecture
 
-WebCap is a local-first media curation, captioning, dataset-configuration, and managed Diffusion Pipe training app. It uses Flask, classic global JavaScript, and file-based state beside the user's sets.
+WebCap is a local-first media-preparation, managed training, generation, evaluation, and Storyboard workspace. This specification emphasizes core Set/Training contracts; the linked specialist docs own other workflows. It uses Flask, classic global JavaScript, and file-based state beside the user's sets.
 
 Key set-owned artifacts are:
 
@@ -40,7 +40,7 @@ Queued and running jobs use their captured bundle and are independent of later c
 
 ## Training profiles
 
-Supported profiles are Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, and MiniMax H3. The app-owned profile registry defines media support, persistent filenames, run options, and standard DeepSpeed launch behavior.
+Supported profiles are Wan2.2 T2V, Krea2 Raw, Wan2.1 T2V 14B, and MiniMax H3. The app-owned profile registry defines media support, persistent filenames, run options, and standard DeepSpeed launch behavior. Exact filenames should be checked in `docs/training_profiles.md` and the registry.
 
 - Wan2.2 accepts images and videos and owns separate HI and LO setup files. High and Low are independent runs with separate captures.
 - Krea2 Raw is image-only and owns `config.krea2.toml` and `dataset.krea2.toml`.
@@ -70,7 +70,7 @@ The logical run also owns `jobs/` and `output/`. The bundle contains grouped med
 
 Managed Resume is shallow current-set discovery; Custom Resume validates an explicit checkpoint directly and creates a new logical run. The manual command path uses the same capture materializer but never launches a process.
 
-Training History is a lightweight metadata index stored in `.webcap_training/recent_runs.json`. It never infers rows merely because output folders exist; recorded filesystem paths only enrich known history rows with current availability/actions. Test Generations is not part of the Training Queue or Training History: Test owns Session aggregation/results, while each Base/candidate rendition is scheduled through the shared `inference` lane alongside Generate and Storyboard Takes. Prompt Assistant / Director requests use the separate shared `llm` lane; Training retains its specialized queue and all three classes share one exclusive local GPU resource.
+Training History is a lightweight metadata index stored under the host-local WebCap app-data `state/` root (currently `recent_runs.json`), not under a Set root. It never infers rows merely because output folders exist; recorded filesystem paths only enrich known history rows with current availability/actions. Test Generations is not part of the Training Queue or Training History: Test owns Session aggregation/results, while each Base/candidate rendition is scheduled through the shared `inference` lane alongside Generate and Storyboard Takes. Prompt Assistant / Director requests use the separate shared `llm` lane; Training retains its specialized queue and all three classes share one exclusive local GPU resource.
 
 ## Guardrails
 

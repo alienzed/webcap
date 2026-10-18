@@ -485,10 +485,16 @@
               if (!enriched) return '';
               var description = String(enriched.description || '').trim();
               var terms = Array.isArray(enriched.trainedWords) ? enriched.trainedWords : [];
+              var groups = enriched.promptOptions || {};
+              var hasOptions = Object.keys(groups).some(function (key) {
+                return Array.isArray(groups[key]) && groups[key].length > 1;
+              });
               return '<span title="' + escapeHtml(description) + '">' +
                 escapeHtml(description || 'Enriched model profile') + '</span>' +
                 (terms.length ? '<button type="button" class="review-captions-btn" data-generate-lora-insert-phrases="' +
-                  index + '" title="Insert model key phrases at the prompt cursor">Insert phrases</button>' : '');
+                  index + '" title="Insert model key phrases at the prompt cursor">Insert phrases</button>' : '') +
+                (hasOptions ? '<button type="button" class="review-captions-btn" data-generate-lora-insert-options="' +
+                  index + '" title="Insert model wildcard options at the prompt cursor">Insert options</button>' : '');
             })() +
             '<input type="number" min="-2" max="2" step="0.05" value="' + escapeHtml(String(item.strength)) + '" data-generate-lora-strength="' + index + '" aria-label="LoRA strength">' +
             '<button type="button" class="review-captions-btn" data-generate-lora-remove="' + index + '">Remove</button>' +
@@ -2548,6 +2554,32 @@
       items[index].strength = Number(input.value);
       });
     el('generate-lora-list').addEventListener('click', function (event) {
+      var optionsButton = event.target.closest('[data-generate-lora-insert-options]');
+      if (optionsButton) {
+        var chosen = selectedLoras(generateState.modelId)[Number(optionsButton.dataset.generateLoraInsertOptions)];
+        var found = chosen && generateState.loraProfileCache[chosen.name];
+        var groups = found && found.profile && found.profile.enrichment &&
+          found.profile.enrichment.promptOptions || {};
+        var fragments = Object.keys(groups).map(function (key) {
+          var values = groups[key];
+          if (!Array.isArray(values) || values.length < 2) return '';
+          if (values.some(function (value) { return /[{}|]/.test(value); })) {
+            throw new Error('Wildcard group ' + key + ' has unsupported syntax characters.');
+          }
+          return '{' + values.join('|') + '}';
+        }).filter(Boolean);
+        if (!fragments.length) return;
+        var field = el('generate-prompt');
+        var before = field.value.slice(0, field.selectionStart);
+        var after = field.value.slice(field.selectionEnd);
+        var insertText = (before.trim() && !/[\\s,]$/.test(before) ? ', ' : '') + fragments.join(', ');
+        var cursor = before.length + insertText.length;
+        field.value = before + insertText + after;
+        field.dispatchEvent(new Event('input', {bubbles: true}));
+        field.focus();
+        field.setSelectionRange(cursor, cursor);
+        return;
+      }
       var insert = event.target.closest('[data-generate-lora-insert-phrases]');
       if (insert) {
         var selected = selectedLoras(generateState.modelId)[Number(insert.dataset.generateLoraInsertPhrases)];

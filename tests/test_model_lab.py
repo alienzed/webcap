@@ -214,3 +214,11 @@ def test_model_lab_runner_is_server_owned_not_browser_sequenced():
     assert "Resume explicitly" in backend
     assert "completed probes" not in frontend.lower()
     assert "directorModelTestRunOne" not in frontend
+
+
+def test_director_standard_suite_includes_writing_and_schema(monkeypatch):
+    captured = []
+    monkeypatch.setattr(model_lab, "_probe_job", lambda run, **kw: captured.append(kw["kind"]) or {"status": "failed"})
+    monkeypatch.setattr(model_lab, "_run_schema_pair", lambda run, ref, analysis, groups, prefix: captured.append(prefix))
+    model_lab._run_director_model({"referenceVisionRef": ""}, _director())
+    assert captured == ["director_writing", "language"]

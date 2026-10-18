@@ -309,7 +309,7 @@
   var referencePlanSignature = '';
   function prepareReferences() {
     var version = ++referenceGeneration;
-    referencePlanSignature = JSON.stringify([els('run').value, dimensions.map(function (d) { return [d.label,d.role,d.options]; })]);
+    referencePlanSignature = JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options]; })]);
     referenceItems = dimensions.flatMap(function (d) {
       return d.role === 'primary' ? d.options.map(function (option) {
         return {attribute:d.label, option:option, key:JSON.stringify([d.label,option]), candidates:[]};
@@ -414,11 +414,11 @@
     els('next').classList.toggle('hidden', value === 4);
     els('start').classList.toggle('hidden', value !== 4);
     if (value === 3) roundPlan();
-    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify([els('run').value, dimensions.map(function (d) { return [d.label,d.role,d.options]; })])) prepareReferences(); else renderReferenceStep(); }
+    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options]; })])) prepareReferences(); else renderReferenceStep(); }
   }
   function advance() {
     try {
-      if (wizardStep === 1 && !els('run').value) {
+      if (wizardStep === 1 && !selectedRunEntries().length) {
         throw new Error('Choose a saved training run.');
       }
       if (wizardStep === 1 && !chosenEpochs().length) {
@@ -632,7 +632,7 @@
     var suggested = eligible.filter(function (entry) { return recommended.has(entry.epoch); });
     els('shortlist').textContent = suggested.length ?
       'Recommended for human review: ' + suggested.map(function (entry) {
-        return 'Epoch ' + entry.epoch;
+        return candidateLabel(campaign, entry.epoch);
       }).join(', ') + ' · ' + (completed ? (advanced ? 'final retained field' : 'top-scoring ties') : 'survived previous round, provisional') +
       ' · existing VL retention, not a final winner' :
       'Recommendations appear after a completed cut, or when the campaign finishes.';
@@ -649,7 +649,7 @@
       var evidence = (extra.rvn ? ' · RVN ' + observed.filter(function (u) { return u.referenceComplete; }).length + '/' + observed.length : '') +
         (extra.dino ? ' · DINO ' + observed.filter(function (u) { return u.dinoComplete; }).length + '/' + observed.length : '');
       return '<button type="button" class="epoch-finder-ranking-row" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch"><span class="rank">#' + (index + 1) +
-        '</span><span class="epoch">Epoch ' + entry.epoch + (recommended.has(entry.epoch) && entry.score != null ? ' · recommended' : '') + (entry.active === false ? ' · sidelined' : '') +
+        '</span><span class="epoch">' + escape(candidateLabel(campaign, entry.epoch)) + (recommended.has(entry.epoch) && entry.score != null ? ' · recommended' : '') + (entry.active === false ? ' · sidelined' : '') +
         '</span><span class="epoch-finder-score-track"><i style="width:' +
         Math.round((entry.score || 0) * 100) + '%"></i></span><span class="percent">' +
         (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span><small>' + (entry.count || 0) + ' weighted observations' + escape(evidence) + '</small></button>';
@@ -700,9 +700,9 @@
         (errors ? ' (' + errors + ' failed)' : '') + ' · separate evidence');
     });
     host.innerHTML = '<div class="epoch-finder-summary-stats">' +
-      '<div><small>Leading epoch</small><strong>' + escape(first.epoch) + '</strong><span>' +
+      '<div><small>Leading checkpoint</small><strong>' + escape(candidateLabel(campaign, first.epoch)) + '</strong><span>' +
       Math.round(first.score * 100) + '% · ' + first.frames + ' scored frames</span></div>' +
-      '<div><small>Runner-up</small><strong>' + (second ? escape(second.epoch) : '—') +
+      '<div><small>Runner-up</small><strong>' + (second ? escape(candidateLabel(campaign, second.epoch)) : '—') +
       '</strong><span>' + (second ? Math.round(second.score * 100) + '% · ' + second.frames + ' scored frames' : 'No other scored epoch') +
       '</span></div></div><p class="epoch-finder-summary-takeaway">' + escape(note) +
       ' · ' + observations + ' VL-evaluated frames</p>' +
@@ -754,7 +754,8 @@
   }
   function evidenceSection(campaign) {
     if (inspectedEpoch == null) return '';
-    var key = currentFolder + ':' + campaign.jobId + ':' + inspectedEpoch;
+    var source = (campaign.candidateMap || {})[String(inspectedEpoch)];
+    var key = currentFolder + ':' + (source ? source.jobId + ':' + source.epoch : campaign.jobId + ':' + inspectedEpoch);
     var rows = crossEvidenceKey === key ? crossEvidence : null;
     var html = '<details class="epoch-finder-cross-evidence"' + (rows ? ' open' : '') +
       '><summary>Checkpoint evidence across campaigns</summary>' +
@@ -778,7 +779,9 @@
   function loadCrossEvidence() {
     if (!campaignState || inspectedEpoch == null) return;
     var folder = currentFolder, campaignId = campaignState.id;
-    var jobId = campaignState.jobId, epoch = inspectedEpoch, version = ++crossEvidenceVersion;
+    var source = (campaignState.candidateMap || {})[String(inspectedEpoch)];
+    var jobId = source ? source.jobId : campaignState.jobId;
+    var epoch = source ? source.epoch : inspectedEpoch, version = ++crossEvidenceVersion;
     api('checkpoint_evidence', {jobId:jobId}).then(function (result) {
       if (version !== crossEvidenceVersion || currentFolder !== folder ||
           !campaignState || campaignState.id !== campaignId || inspectedEpoch !== epoch) return;
@@ -1121,11 +1124,13 @@
     if (event.target.closest('[data-load-cross-evidence]')) { loadCrossEvidence(); return; }
     if (event.target.closest('[data-copy-epoch-to-test]')) {
       var button = event.target.closest('[data-copy-epoch-to-test]');
-      var folder = currentFolder, campaignId = campaignState.id, epoch = inspectedEpoch;
+      var origin = (campaignState.candidateMap || {})[String(inspectedEpoch)];
+      var folder = currentFolder, campaignId = campaignState.id, epoch = origin ? origin.epoch : inspectedEpoch;
+      var sourceJobId = origin ? origin.jobId : campaignState.jobId;
       button.disabled = true;
       button.textContent = 'Copying epoch…';
       fetch('/fs/training_candidates/copy_to_test', {method:'POST',headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({folder:folder,jobId:campaignState.jobId,epoch:epoch})})
+        body: JSON.stringify({folder:folder,jobId:sourceJobId,epoch:epoch})})
         .then(function (response) { return response.json().then(function (value) {
           if (!response.ok || !value.ok) throw new Error(value.error || 'Could not copy checkpoint.');
           return value;

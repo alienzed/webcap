@@ -241,6 +241,8 @@ def activity_snapshot(limit=20, since=0):
     first_cut_batches = first_cut_snapshot().get("batches", [])
     child_ids = {str(batch.get("llmJobId") or "") for batch in first_cut_batches
                  if batch.get("status") in {"queued", "running", "stopping"}}
+    child_telemetry = {item["id"]: item for item in active
+                       if item.get("lane") == "llm" and item.get("id") in child_ids}
     active = [item for item in active if not (item.get("lane") == "llm" and item.get("id") in child_ids)]
     for batch in first_cut_batches:
         status = str(batch.get("status") or "")
@@ -258,7 +260,11 @@ def activity_snapshot(limit=20, since=0):
         stages = ["Expanding Concept", "Defining Continuity", "Developing Scenes",
                   "Refining Scenes", "Queuing First Takes"]
         stage_index = stages.index(phase) if phase in stages else -1
+        child = child_telemetry.get(str(batch.get("llmJobId") or ""), {})
         active.append({
+            "liveTokens": child.get("liveTokens"), "promptTokensLive": child.get("promptTokensLive"),
+            "promptProcessed": child.get("promptProcessed"), "contextSize": child.get("contextSize"),
+            "outputLimit": child.get("outputLimit"), "runtimePhase": child.get("runtimePhase"),
             "id": "first-cut:" + str(batch["id"]), "batchId": str(batch["id"]),
             "kind": "first-cut", "lane": "background", "status": status,
             "label": "Storyboard First Cut", "storyId": batch.get("storyId"),

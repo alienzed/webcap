@@ -5943,5 +5943,6 @@
   window.closeStoryboardActivity = closeStoryboardActivity;
 
   bindUi();
+  firstCutRequest().then(adoptFirstCutBatches).catch(reportError);
   syncDirectorToolsUi();
 })();

@@ -582,8 +582,19 @@ def _execute_claimed(job_id, gpu_reserved):
         except Exception as exc:
             raise RuntimeError("Revise Scenes failed after " + str(completed) +
                 " of " + str(len(scene_ids)) + " Scenes: " + str(exc)) from exc
+        generated = 0
+        if context.get("generateFreshTakes") is True:
+            from .storyboard_generation import start_generation
+            # All revised Scenes are now persisted. Submit to the existing
+            # inference lane here so leaving the browser cannot drop the handoff.
+            with _revision_progress_lock:
+                _revision_progress[job_id] = {"completed": completed, "total": len(scene_ids), "phase": "Queuing fresh Takes"}
+            for scene_id in scene_ids:
+                start_generation(str(context["storyId"]), scene_id)
+                generated += 1
         return execution_finish_job_transient(job_id, status="completed", result={
             "storyId": context["storyId"], "revisedSceneCount": completed,
+            "freshTakesQueued": generated,
         })
     try:
         if client in {"chat", "caption"}:

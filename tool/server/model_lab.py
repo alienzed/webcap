@@ -156,12 +156,23 @@ def capability_run_summaries():
                 }
             if attempt.get("error") and str(attempt["error"]) not in entry["error"]:
                 entry["error"] += (" · " if entry["error"] else "") + str(attempt["error"])
+            entry.setdefault("throughputSamples", [])
+            entry.setdefault("outputTokenSamples", [])
+            timings = result.get("timings") if isinstance(result.get("timings"), dict) else {}
+            usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
+            rate = timings.get("predicted_per_second")
+            tokens = usage.get("completion_tokens") or timings.get("predicted_n")
+            if isinstance(rate, (int, float)) and not isinstance(rate, bool) and 0 < rate < 10000000:
+                entry["throughputSamples"].append(round(float(rate), 2))
+            if isinstance(tokens, (int, float)) and not isinstance(tokens, bool) and 0 < tokens < 10000000:
+                entry["outputTokenSamples"].append(round(float(tokens), 2))
             entry["status"] = next((value for value in (
                 "failed", "running", "interrupted", "skipped", "completed"
             ) if entry["counts"].get(value)), status)
         summaries.append({
             "id": row["id"], "status": row.get("status"),
             "startedAt": row.get("startedAt"), "folder": row.get("folder"),
+            "depth": run.get("depth", "quick"),
             "error": row.get("error", ""), "models": models,
             "importedFrom": run.get("importedFrom"),
         })
@@ -304,6 +315,9 @@ def _new_run_payload(config):
     except (TypeError, ValueError) as exc:
         raise ValueError("Model Lab sampleCount must be an integer.") from exc
     sample_count = max(2, min(MAX_SAMPLE_COUNT, sample_count))
+    depth = str(config.get("depth") or "quick").strip().lower()
+    if depth not in {"quick", "deep"}:
+        raise ValueError("Model Lab depth must be quick or deep.")
 
     files = _supported_media(folder, config.get("files"))
     if len(files) < 2:
@@ -350,6 +364,7 @@ def _new_run_payload(config):
         "startedAt": _now_iso(),
         "finishedAt": "",
         "folder": folder,
+        "depth": depth,
         "files": sample_files,
         "groups": groups,
         "visionModels": vision_models,
@@ -948,6 +963,21 @@ def _run_director_model(run, model):
             label="Model Lab · Director Writing",
         ),
     )
+    if run.get("depth") == "deep":
+        for budget in (1024, 4096):
+            _probe_job(
+                run,
+                kind="director_writing_" + str(budget),
+                role="director",
+                model_ref=model_ref,
+                enqueue=lambda budget=budget: enqueue(
+                    "chat", model_ref,
+                    {"operation": "freeform_chat", "messages": [
+                        {"role": "user", "content": calibration_prompt("prose", budget)}]},
+                    context={"runtimeOverrides": {"maxTokens": budget}, "assessmentEvidence": True},
+                    label="Model Assessment · Deep Writing " + str(budget),
+                ),
+            )
     synthetic_groups = [
         {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
         {"group": "BT Connector", "terms": ["chain"]},

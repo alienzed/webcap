@@ -95,7 +95,7 @@ function refreshUnifiedModelAssessment() {
           if (entries.some(function (item) { return item.status === 'failed'; })) text = 'Failed';
           else if (entries.some(function (item) { return item.status === 'running'; })) text = 'Running';
           else if (entries.some(function (item) { return item.status === 'skipped'; })) text = 'Skipped';
-          else if (entries.every(function (item) { return item.status === 'completed'; })) text = 'Completed';
+          else if (entries.every(function (item) { return item.status === 'completed'; })) text = 'Response received';
           else text = 'Incomplete';
         }
         findings.push(family.label + ': ' + text);

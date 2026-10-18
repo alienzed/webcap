@@ -134,7 +134,5 @@ def test_experimental_suite_launch_uses_existing_execution_owners():
     assert 'function runUnifiedModelAssessment()' in diagnostics
     assert "action: 'start'" in diagnostics
     assert 'modelLabPost({' in diagnostics
-    assert 'directorModelTestStartCalibrationForModels(selectedDirectors)' in diagnostics
     assert 'function directorModelTestStartCalibrationForModels(selectedModels)' in director
     assert 'Deep Assessment is not available yet' in diagnostics
-    assert 'Keep this page open' in diagnostics

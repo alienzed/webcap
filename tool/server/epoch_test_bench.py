@@ -740,8 +740,10 @@ def _snapshot_session_assessments(folder_path, sessions):
             if not staged.is_file() or staged.is_symlink():
                 continue
             sidecar = staged.with_suffix(".webcap.json")
-            if not sidecar.is_file() or sidecar.is_symlink():
-                continue
+            if sidecar.is_symlink():
+                raise RuntimeError("Candidate assessment sidecar is a symlink: " + sidecar.name)
+            if not sidecar.is_file():
+                _atomic_write_json(sidecar, {"version": 1, "assessments": {}})
             update = updates.setdefault(sidecar, {"manual": {"sum": 0, "count": 0}, "vision": {"matches": 0.0, "count": 0, "previews": 0}})
             if name in ratings:
                 item = ratings[name]

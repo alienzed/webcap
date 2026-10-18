@@ -535,6 +535,7 @@
           : '';
         base.classList.toggle('hidden', !(current.baseLoras || []).length);
       }
+      generateState.loraProfileCache = {};
       renderLoras();
     }).catch(function (err) {
       reportError(err, 'LoRA refresh failed');

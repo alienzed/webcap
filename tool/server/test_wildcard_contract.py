@@ -176,8 +176,22 @@ def validate_group_compatibility(data, combinations):
     groups = data.get("variationGroups") if isinstance(data, dict) else None
     if not isinstance(groups, list):
         raise ValueError("Wildcard proposal must include variation groups.")
-    from .epoch_finder_plan import prompt_options
-    resolved = prompt_options(str(data.get("wildcard") or ""))
+    from .epoch_test_bench import (
+        _parse_wildcard_nodes, _expand_wildcard_option,
+        _normalize_wildcard_text, _strip_wildcard_comments,
+    )
+    nodes = _parse_wildcard_nodes(_strip_wildcard_comments(str(data.get("wildcard") or "")))
+    resolved = []
+    for kind, alternatives in nodes:
+        if kind != "group":
+            continue
+        options = []
+        for alternative in alternatives:
+            for value in _expand_wildcard_option(alternative):
+                value = _normalize_wildcard_text(value)
+                if value not in options:
+                    options.append(value)
+        resolved.append(options)
     if len(resolved) != len(groups):
         raise ValueError("Wildcard group count does not match its annotation dimensions.")
     assigned = {}
@@ -189,7 +203,7 @@ def validate_group_compatibility(data, combinations):
         group = str(item.get("annotationGroup") or "").strip()
         if not group:
             known = {tag for combos in combinations.values() for combo in combos for tag in combo}
-            if item.get("options") and all(option in known for option in item["options"]):
+            if item.get("options") and any(option in known for option in item["options"]):
                 raise ValueError("Tag-grounded wildcard dimension " + str(item.get("label") or "") +
                                  " must identify its annotationGroup.")
             continue

@@ -32,6 +32,10 @@ Navigation uses stable per-owner identity and URL/query state, not a shadow rela
 
 Viewing/discovery never modifies media. Ratings and evaluations use the producing feature's metadata writer, **not** a new global metadata store. Permanent deletion uses the relevant owner endpoint with its current confirmation semantics; Explorer must not delete by raw absolute path. Creation of a derivative (crop/resize/convert) is deferred: it needs an explicit source-local naming/provenance contract and must never overwrite the parent by default. No universal Edit button and no new `originals/` for generated output. Set source media operations stay in Set workflow with its reversibility rules. Bulk operations limited to operations demonstrated to be safe for every selected item, with per-item failures visible.
 
+## Reference media
+
+References are first-class media, including training, Epoch Finder, Test Generations and Storyboard references. Explorer must display known roles and originating workflows while keeping files and their metadata with the owning feature. A file may serve more than one workflow; display related usages when owner-local provenance confirms them. Do not infer ownership from visual similarity and do not duplicate files into a global library.
+
 ## Source matrix / availability
 
 1. Generate outputs: discover via Generate results/metadata; open source; rating/delete if existing endpoints support that result.

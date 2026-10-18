@@ -148,7 +148,7 @@ def capability_run_summaries():
                 "finishReason": str(result.get("finishReason") or ""),
             }
         summaries.append({
-            "id": row["id"], "status": row.get("status"),
+            "id": row["id"], "status": row.get("status"), "depth": run.get("depth", "quick"),
             "startedAt": row.get("startedAt"), "folder": row.get("folder"),
             "error": row.get("error", ""), "models": models,
         })
@@ -291,6 +291,9 @@ def _new_run_payload(config):
     except (TypeError, ValueError) as exc:
         raise ValueError("Model Lab sampleCount must be an integer.") from exc
     sample_count = max(2, min(MAX_SAMPLE_COUNT, sample_count))
+    depth = str(config.get("depth") or "quick").strip().lower()
+    if depth not in {"quick", "deep"}:
+        raise ValueError("Model Lab depth must be quick or deep.")
 
     files = _supported_media(folder, config.get("files"))
     if len(files) < 2:
@@ -337,6 +340,7 @@ def _new_run_payload(config):
         "startedAt": _now_iso(),
         "finishedAt": "",
         "folder": folder,
+        "depth": depth,
         "files": sample_files,
         "groups": groups,
         "visionModels": vision_models,
@@ -925,6 +929,22 @@ def _run_director_model(run, model):
             label="Model Lab · Director Writing",
         ),
     )
+    if run.get("depth") == "deep":
+        # Separate output budgets measure usable writing behavior, not maximum context.
+        for budget in (1024, 4096):
+            _probe_job(
+                run,
+                kind="director_writing_" + str(budget),
+                role="director",
+                model_ref=model_ref,
+                enqueue=lambda budget=budget: enqueue(
+                    "chat", model_ref,
+                    {"operation": "freeform_chat", "messages": [
+                        {"role": "user", "content": calibration_prompt("prose", budget)}]},
+                    context={"runtimeOverrides": {"maxTokens": budget}, "assessmentEvidence": True},
+                    label="Model Assessment · Deep Writing " + str(budget),
+                ),
+            )
     synthetic_groups = [
         {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
         {"group": "BT Connector", "terms": ["chain"]},

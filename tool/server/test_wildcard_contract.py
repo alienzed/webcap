@@ -182,6 +182,10 @@ def validate_group_compatibility(data, combinations):
             raise ValueError("Invalid wildcard dimension.")
         group = str(item.get("annotationGroup") or "").strip()
         if not group:
+            known = {tag for combos in combinations.values() for combo in combos for tag in combo}
+            if item.get("options") and all(option in known for option in item["options"]):
+                raise ValueError("Tag-grounded wildcard dimension " + str(item.get("label") or "") +
+                                 " must identify its annotationGroup.")
             continue
         if group not in combinations:
             raise ValueError("Unknown wildcard annotation group: " + group)

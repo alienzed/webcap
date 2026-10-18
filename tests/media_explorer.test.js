@@ -272,3 +272,14 @@ test('Explorer deletion targets only owner-backed generated artifacts', () => {
   assert.match(source, /window\.confirm\(/);
   assert.doesNotMatch(source, /source === 'set'.*Delete/);
 });
+
+
+test('Storyboard provenance preserves exact take identity for owner handoff', () => {
+  const backend = fs.readFileSync('tool/server/media_explorer.py', 'utf8');
+  const explorer = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
+  const storyboard = fs.readFileSync('tool/js/storyboard.js', 'utf8');
+  assert.match(backend, /use\["takeId"\] = label/);
+  assert.match(explorer, /takeId: use\.takeId \|\| ''/);
+  assert.match(storyboard, /Storyboard Take no longer exists in scene/);
+  assert.match(storyboard, /\.storyboard-take\[data-take-id\]/);
+});

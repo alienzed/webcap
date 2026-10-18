@@ -184,3 +184,12 @@ Following the root `AGENTS.md` contract: no new service, database, global media 
 ### Source Set discovery checkpoint
 
 Explicit **Scan all media** now includes recognized source Sets (identified by owner-local `.webcap_state.json` or `media_metadata.json`), using existing `caption_ops.list_media_files` and `/caption/media` serving. Source Sets are not scanned on initial entry; generated subdirectories and runtime/output roots are excluded. No files are moved, copied, indexed persistently or modified. Source Set ratings and navigation are deferred until the owner context contract is verified. Added test for explicit-only discovery and route. Training run-output samples still require their own validated media contract. Runtime test execution and visual QA remain pending.
+
+### AGENTS.md simplification audit (2026-10-18)
+
+- Removed duplicate legacy-Test owner discovery during explicit full scans: full scans now use the single legacy-root walk; recent browsing retains known-owner lookups.
+- Removed the guessed `test-sessions` workspace location; only the confirmed Test `sessions` directory is supported.
+- Training sample generation is **not** assumed; diffusion-pipe checkpoints/metrics are not images. Source training datasets remain Set media, not a new Training samples pipeline.
+- Retained existing owner-backed endpoints, transient browser selection and read-only discovery; no index, metadata store, processing queue or new media server introduced.
+- Full scans still perform separate Test and source-Set walks, and query/page calls repeat discovery. Those are measurable performance concerns, not justification for a new caching layer without runtime evidence.
+- This is a code review, not an executed regression run. Tests and browser QA remain pending.

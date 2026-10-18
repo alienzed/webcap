@@ -180,3 +180,7 @@ Following the root `AGENTS.md` contract: no new service, database, global media 
 **Applied in this pass:** Test discovery no longer exits early if the central output directory is missing, allowing explicit full scans to discover legacy-only Sets. This preserves the existing owner's resolver and media route.
 
 **Gating concerns:** Training's supported media-serving contract and derivatives/lineage need evidence, not a user decision yet. Executable checkout and CI/browser validation remain unavailable here, so this branch stays unmerged. The design intentionally excludes arbitrary source Set datasets by default.
+
+### Source Set discovery checkpoint
+
+Explicit **Scan all media** now includes recognized source Sets (identified by owner-local `.webcap_state.json` or `media_metadata.json`), using existing `caption_ops.list_media_files` and `/caption/media` serving. Source Sets are not scanned on initial entry; generated subdirectories and runtime/output roots are excluded. No files are moved, copied, indexed persistently or modified. Source Set ratings and navigation are deferred until the owner context contract is verified. Added test for explicit-only discovery and route. Training run-output samples still require their own validated media contract. Runtime test execution and visual QA remain pending.

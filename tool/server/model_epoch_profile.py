@@ -245,3 +245,44 @@ def embed_profile_in_saved_copy(checkpoint, enrichment):
     finally:
         temporary.unlink(missing_ok=True)
     return {"embedded": True, "checkpoint": checkpoint.name}
+
+
+def director_context_for_selected_loras(loras):
+    """Read only profiles embedded in the exact ComfyUI-selected LoRAs.
+
+    Caller decides whether an unavailable profile is a blocking error. This
+    text is advisory: scene/user intent always outranks model metadata.
+    """
+    from . import inference_runtime
+    if not isinstance(loras, list):
+        raise ValueError("LoRA selection must be an array.")
+    lines = []
+    for selected in loras:
+        name = str((selected or {}).get("name") or "").strip()
+        if not name:
+            continue
+        result = inference_runtime.lora_embedded_profile(name)
+        profile = result.get("modelProfile")
+        if not profile:
+            continue
+        info = profile["enrichment"]
+        parts = []
+        if info.get("description"):
+            parts.append("Description: " + info["description"][:600])
+        if info.get("trainedWords"):
+            parts.append("Key phrases: " + ", ".join(info["trainedWords"][:24])[:800])
+        if info.get("promptOptions"):
+            selected_groups = list(info["promptOptions"].items())[:12]
+            parts.append("Trained options: " + "; ".join(
+                str(k)[:60] + ": " + ", ".join(v[:16])[:420]
+                for k, v in selected_groups
+            )[:3000])
+        if info.get("guidance"):
+            parts.append("Guidance: " + info["guidance"][:800])
+        if parts:
+            lines.append("LoRA " + name + "\\n" + "\\n".join(parts))
+    return ("[SELECTED LORA MODEL VOCABULARY]\\n"
+            "This is descriptive metadata, not a request to change the scene. "
+            "Apply relevant key phrases only when consistent with the user's creative intent. "
+            "Do not add unrelated trained options merely because they exist.\\n"
+            + "\\n\\n".join(lines)) if lines else ""

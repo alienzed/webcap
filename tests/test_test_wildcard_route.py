@@ -13,6 +13,7 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     (set_root / "two.jpg").write_bytes(b"image")
     (set_root / "two.txt").write_text("subject sitting on a couch", encoding="utf-8")
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members", lambda folder, job_id: {"one.png", "two.jpg"})
 
     seen = {}
     monkeypatch.setattr(
@@ -30,6 +31,7 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     client = app_module.app.test_client()
     response = client.post("/fs/test_generations/wildcard", json={
         "folder": "set",
+        "jobId": "run-1",
         "directorModel": "director.gguf",
         "focus": "shirt",
         "vocabulary": [{"group": "Clothing", "alias": "Garment type", "terms": ["shirt", "jacket"]}],

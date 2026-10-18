@@ -203,7 +203,10 @@
       state.autoOpenSeen[id] = true;
       // Never displace a workflow drawer for an automatically raised Activity panel.
       var shortInteractive = lane === 'llm' || item.kind === 'first-cut' || item.kind === 'director-diagnostics';
-      if (!state.open && !competingDrawer && shortInteractive && !state.dismissedJobs[id]) setOpen(true);
+      if (!state.open && !competingDrawer && shortInteractive && !state.dismissedJobs[id]) {
+        state.selectedJobKey = id;
+        setOpen(true);
+      }
     });
   }
 

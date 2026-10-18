@@ -420,7 +420,10 @@
         terminalError.jobStatus = status;
         var recovered = current.result && String(current.result.rawText || '');
         if (status === 'failed' && recovered) {
-          var dialog = document.createElement('dialog');
+          var dialog = document.querySelector('[data-director-recovered-output]');
+          if (dialog) dialog.remove();
+          dialog = document.createElement('dialog');
+          dialog.dataset.directorRecoveredOutput = '1';
           dialog.setAttribute('aria-label', 'Director output could not be applied');
           dialog.style.cssText = 'width:min(760px,90vw);max-height:85vh;padding:20px;border-radius:10px;';
           var heading = document.createElement('h3');

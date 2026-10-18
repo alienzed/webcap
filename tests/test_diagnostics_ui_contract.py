@@ -124,3 +124,17 @@ def test_experimental_model_assessment_preserves_existing_diagnostics():
     assert "diagnosticsAssessmentSelected = { director: new Set(), vision: new Set() }" in script
     assert "refreshSelectionSummary()" in script
     assert "setDiagnosticsTab('model-lab', true)" in script
+
+
+def test_experimental_suite_launch_uses_existing_execution_owners():
+    html = (ROOT / 'tool' / 'tool.html').read_text(encoding='utf-8')
+    diagnostics = (ROOT / 'tool' / 'js' / 'diagnostics.js').read_text(encoding='utf-8')
+    director = (ROOT / 'tool' / 'js' / 'director_model_test.js').read_text(encoding='utf-8')
+    assert 'id="diagnostics-assessment-run"' in html
+    assert 'function runUnifiedModelAssessment()' in diagnostics
+    assert "action: 'start'" in diagnostics
+    assert 'modelLabPost({' in diagnostics
+    assert 'directorModelTestStartCalibrationForModels(selectedDirectors)' in diagnostics
+    assert 'function directorModelTestStartCalibrationForModels(selectedModels)' in director
+    assert 'Deep Assessment is not available yet' in diagnostics
+    assert 'Keep this page open' in diagnostics

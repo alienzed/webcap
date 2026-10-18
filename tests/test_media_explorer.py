@@ -140,3 +140,27 @@ def test_full_scan_finds_legacy_only_set_without_owner_field(monkeypatch, tmp_pa
     full = media_explorer.list_media(source="test", full="1")
     assert full["total"] == 1
     assert full["items"][0]["ownerFolder"] == "sets/only-legacy"
+
+
+def test_epoch_frame_uses_existing_owner_route(monkeypatch, tmp_path):
+    import json
+    output = tmp_path / "output"
+    campaign = output / "test-generations" / "sets" / "demo" / "epoch-finder" / "abcdef123456"
+    frames = campaign / "frames"
+    frames.mkdir(parents=True)
+    frame = frames / "r1-e1-c1.png"
+    frame.write_bytes(b"png")
+    (campaign / "campaign.json").write_text(json.dumps({
+        "createdAt": 123, "units": [{"frame": frame.name}]
+    }))
+    monkeypatch.setattr(media_explorer.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: output)
+    from tool.server import epoch_finder
+    monkeypatch.setattr(epoch_finder, "storage_campaigns", lambda: [{
+        "id": "abcdef123456", "folder": "sets/demo", "path": campaign
+    }])
+    monkeypatch.setattr(epoch_finder, "frame_path", lambda folder, campaign_id, name: frame)
+    monkeypatch.setattr(media_explorer.app_config, "safe_join_fs_root", lambda folder: tmp_path / folder)
+    found = media_explorer.list_media(source="epoch")
+    assert found["total"] == 1
+    assert found["items"][0]["mediaUrl"].startswith("/fs/epoch_finder/frame?")

@@ -1933,6 +1933,7 @@ def media_explorer_route():
             role=request.args.get("role", ""),
             kind=request.args.get("kind", ""),
             search=request.args.get("search", ""),
+            sort=request.args.get("sort", "newest"),
         ))
     except Exception as exc:
         app.logger.exception("MEDIA EXPLORER DISCOVERY FAILED: %s", exc)

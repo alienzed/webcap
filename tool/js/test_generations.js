@@ -1657,6 +1657,12 @@
       return waitForWildcardJob(payload.job);
     }).then(function (result) {
       var analysis = result && result.analysis;
+      if (!analysis) throw new Error('Wildcard proposal has no analysis.');
+      return wildcardPostJson('/fs/test_generations/wildcard/validate', {
+        folder: requestFolder, analysis: analysis
+      }).then(function () { return result; });
+    }).then(function (result) {
+      var analysis = result && result.analysis;
       if (!analysis || !String(analysis.wildcard || '').trim()) {
         throw new Error('Wildcard analysis returned no wildcard caption.');
       }

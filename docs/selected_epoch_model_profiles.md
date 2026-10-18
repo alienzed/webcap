@@ -1,6 +1,6 @@
 # Selected epoch model profiles — phased implementation contract
 
-Status: Phase 1 foundation committed on `feature/epoch-model-profiles`; remaining phases not implemented.
+Status: Phase 1 foundation and Phase 2 backend profile endpoint committed on `feature/epoch-model-profiles`; UI and consumer phases remain unimplemented. Tests added but have not been executed in a repository runtime.
 Follow root `AGENTS.md` and `docs/filesystem_state_contract.md`. No new global storage roots, queue lanes, or speculative services.
 
 ## Product behavior
@@ -26,7 +26,7 @@ not necessarily reliable advice.
 - Validation: targeted pytest and full relevant tests on a checkout with project dependencies.
   GitHub connector supports source edits here but cannot run the repository tests.
 
-## Phase 2: authoritative checkpoint owner and selection integration
+## Phase 2: authoritative checkpoint owner and selection integration (backend implemented; UI pending)
 
 - Keep selected epoch identity in `training_run_manifest.py`'s `webcap-run.json`.
 - Resolve the selected checkpoint through existing `training_runner.py` paths; do not infer

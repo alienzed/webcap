@@ -8,7 +8,7 @@ const source = fs.readFileSync(path.join(__dirname, '../tool/js/activity_monitor
 const html = fs.readFileSync(path.join(__dirname, '../tool/tool.html'), 'utf8');
 const monitor = fs.readFileSync(path.join(__dirname, '../tool/server/activity_monitor.py'), 'utf8');
 const shell = fs.readFileSync(path.join(__dirname, '../tool/js/workspace_shell.js'), 'utf8');
-const start = source.indexOf('  function currentActivityItems() {');
+const start = source.indexOf('  function activityJobKey(item) {');
 const end = source.indexOf('  function updateSystemHistory(', start);
 assert.ok(start >= 0 && end > start, 'Live activity selection helpers exist');
 

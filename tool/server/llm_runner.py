@@ -232,6 +232,23 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
                 result["structureWarning"] = str(exc)
         return result
 
+    if client == "generate" and str((frozen_contract or {}).get("operation") or "") == "lora_plan":
+        from .lora_director_plan import validate_plan
+        import json
+        raw = llm_result.get("data")
+        if not isinstance(raw, dict):
+            raw = json.loads(llm_result.get("text") or "{}")
+        return {
+            "proposal": validate_plan(
+                raw, (frozen_contract or {}).get("catalogue") or [],
+                (frozen_contract or {}).get("scenes") or [],
+            ),
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if client == "generate":
         return {
             "result": llm_result["text"],

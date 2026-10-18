@@ -3757,3 +3757,8 @@
 #storyboard-story-action-phase { font-size: clamp(22px, 1.8vw, 30px); line-height: 1.2; }
 #storyboard-story-action-detail { font-size: 16px; }
 .storyboard-first-cut-batch-row { font-size: 15px; }
+
+/* Storyboard overlays explain a blocking operation; Activity owns detailed telemetry. */
+#storyboard-director-activity-trend,
+#storyboard-director-model-load,
+#storyboard-director-prompt-copy { display: none !important; }

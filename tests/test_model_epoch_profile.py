@@ -65,3 +65,33 @@ def test_rejects_malformed_header(tmp_path):
 def test_named_options_must_be_arrays():
     with pytest.raises(ValueError):
         validate_enrichment({"promptOptions": {"view": "rear"}})
+
+
+def test_profile_resolution_uses_recorded_checkpoint(monkeypatch, tmp_path):
+    from tool.server import training_runner
+    model = tmp_path / "epoch90.safetensors"
+    make_checkpoint(model, {"ss_epoch": "90"})
+    monkeypatch.setattr(training_runner, "_candidate_safetensors_path",
+                        lambda folder, job, epoch: model)
+    value = training_runner.candidate_epoch_profile("set", "job", 90)
+    assert value["sources"]["embedded"]["ss_epoch"] == "90"
+    saved = training_runner.save_candidate_epoch_profile(
+        "set", "job", 90, {"description": "Known model"})
+    assert saved["modelProfile"]["enrichment"]["description"] == "Known model"
+    assert training_runner.candidate_epoch_profile("set", "job", 90)["sources"]["webcap"]["modelProfile"]["enrichment"]["description"] == "Known model"
+
+
+def test_profile_response_does_not_change_selection(monkeypatch, tmp_path):
+    from tool.server import training_runner
+    model = tmp_path / "epoch90.safetensors"
+    make_checkpoint(model)
+    monkeypatch.setattr(training_runner, "_candidate_safetensors_path",
+                        lambda folder, job, epoch: model)
+    monkeypatch.setattr(training_runner, "_select_epoch",
+                        lambda *args, **kwargs: pytest.fail("Selection must not change"))
+    response, code = training_runner.candidate_epoch_profile_response(
+        "set", "job", 90, {"trainedWords": ["token"]}, save=True)
+    assert code == 200 and response["ok"]
+    bad, code = training_runner.candidate_epoch_profile_response(
+        "set", "job", 90, {"trainedWords": "bad"}, save=True)
+    assert code == 400 and not bad["ok"]

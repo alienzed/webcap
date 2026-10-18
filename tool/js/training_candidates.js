@@ -843,12 +843,14 @@ function trainingCandidatesAvailableArtifact(epoch, data) {
 }
 
 var epochProfileEditState = null;
+var epochProfileSuggestions = null;
 
 function closeEpochProfile() {
   var modal = document.getElementById('epoch-profile-modal');
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
   epochProfileEditState = null;
+  epochProfileSuggestions = null;
 }
 
 function openEpochProfile(epoch) {
@@ -861,11 +863,13 @@ function openEpochProfile(epoch) {
   modal.setAttribute('aria-hidden', 'false');
   status.textContent = 'Reading checkpoint metadata…';
   epochProfileEditState = {folder: folder, jobId: jobId, epoch: Number(epoch)};
+  epochProfileSuggestions = null;
   trainingRunnerRequest('/fs/training_candidates/profile', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(epochProfileEditState)
   }).then(function (payload) {
     if (!epochProfileEditState || epochProfileEditState.epoch !== Number(epoch)) return;
+    epochProfileSuggestions = payload.suggestions || null;
     var sources = payload.sources || {};
     var enrichment = ((sources.webcap || {}).modelProfile || {}).enrichment || {};
     var imported = sources.sidecar || {};
@@ -913,6 +917,17 @@ document.addEventListener('click', function (event) {
   if (open) { openEpochProfile(open.getAttribute('data-training-candidate-profile-epoch')); return; }
   if (event.target.closest('#epoch-profile-close, #epoch-profile-cancel')) { closeEpochProfile(); return; }
   if (event.target.closest('#epoch-profile-save')) saveEpochProfile();
+  if (event.target.closest('#epoch-profile-import-tags')) {
+    if (!epochProfileSuggestions) { document.getElementById('epoch-profile-status').textContent = 'No captured vocabulary available.'; return; }
+    var options = {};
+    try { options = JSON.parse(document.getElementById('epoch-profile-options').value || '{}'); }
+    catch (err) { document.getElementById('epoch-profile-status').textContent = 'Correct the options JSON before importing.'; return; }
+    Object.keys(epochProfileSuggestions.promptOptions || {}).forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(options, key)) options[key] = epochProfileSuggestions.promptOptions[key];
+    });
+    document.getElementById('epoch-profile-options').value = JSON.stringify(options, null, 2);
+    document.getElementById('epoch-profile-status').textContent = 'Imported suggested training terms into the editor. Review and Save Profile to persist.';
+  }
 });
 
 function trainingCandidatesPinnedActionsHtml(epoch, data) {

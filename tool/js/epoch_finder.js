@@ -375,7 +375,7 @@
     document.querySelectorAll('[data-epoch-step-label]').forEach(function (element) {
       element.classList.toggle('active', Number(element.dataset.epochStepLabel) === value);
     });
-    els('reference-workspace').classList.toggle('hidden', value !== 4);
+    els('reference-workspace').classList.toggle('hidden', value !== 4 || !!activeCampaign);
     els('empty').classList.toggle('hidden', value === 4 || !!activeCampaign);
     els('active').classList.toggle('hidden', value === 4 || !activeCampaign);
     els('back').classList.toggle('hidden', value === 1);
@@ -855,7 +855,8 @@
         ' · ~' + Math.ceil(eta / 60) + 'm remaining (render queue excluded; VL queue included; future cutoff ties uncertain)' :
         ' · full ETA awaiting both measurements');
     els('empty').classList.add('hidden');
-    els('active').classList.toggle('hidden', wizardStep === 4);
+    els('reference-workspace').classList.add('hidden');
+    els('active').classList.remove('hidden');
     els('phase').textContent = String(campaign.phase || campaign.status).toUpperCase();
     els('name').textContent = campaign.name || campaign.runName;
     els('detail').textContent = campaign.detail || '';
@@ -968,7 +969,9 @@
       parentCampaignId: followUpSource};
     els('start').disabled = true;
     api('start', criteria).then(function (response) {
-      followUpSource = ''; activeCampaign = response.campaign.id; inspectedEpoch = null; lastFrameKey = ''; refresh();
+      followUpSource = ''; activeCampaign = response.campaign.id; inspectedEpoch = null; lastFrameKey = '';
+      els('reference-workspace').classList.add('hidden');
+      refresh();
     }).catch(error).finally(function () { els('start').disabled = false; });
   }
   function applyFolder(folder) {

@@ -155,3 +155,7 @@ Retained Epoch Finder campaign frames are discoverable in the gallery as a separ
 ### Consolidated source and navigation checkpoint
 
 Storyboard takes and scene references are now discovered from the existing Storyboard store and served through `/fs/storyboard/media`; the inspector links back to `openStoryboardActivity` for the owner story/scene. Training history records expose run paths and checkpoints but no established owner-validated generic training media-serving route. **Do not expose arbitrary training output paths as gallery URLs.** Training media discovery remains gated on an explicit safe route and provenance contract. Comparison, multi-selection, and full user-visible scan cancellation also remain outstanding. This PR is **not release verified**: local checkout cannot reach GitHub and no CI status checks are available.
+
+### Gallery interaction checkpoint
+
+Media Explorer now supports loaded-item Ctrl/Cmd multi-selection, Shift range selection, Clear selection, and a same-media-kind comparison dialog for 2–4 media. Comparison uses owner-validated media URLs and does not invoke model inference, create derivatives, or modify ratings. This is a basic side-by-side view; linked zoom, persistent comparison groups, and video synchronization are not implemented. Selection resets on filter refresh, and only loaded items can be selected. Training samples remain outside the Explorer until owner-backed read-only serving can be verified. Runtime tests and manual wide/narrow visual QA have not been executed; PR #408 remains a draft.

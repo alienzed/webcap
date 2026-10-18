@@ -192,3 +192,56 @@ def director_enrichment_request(checkpoint_profile, suggestions):
             + json.dumps(compact, ensure_ascii=False)[:18000]
         ),
     }
+
+
+def embed_profile_in_saved_copy(checkpoint, enrichment):
+    """Explicitly rewrite a saved/exported LoRA with portable header metadata.
+
+    Tensor bytes and tensor offsets remain intact. The authoritative training
+    checkpoint must never be passed by the calling route.
+    """
+    import shutil
+    checkpoint = Path(checkpoint)
+    if not checkpoint.is_file() or checkpoint.is_symlink() or checkpoint.suffix.lower() != ".safetensors":
+        raise ValueError("Saved LoRA must be an existing regular safetensors file.")
+    profile = {"schemaVersion": 1, "enrichment": validate_enrichment(enrichment)}
+    target_metadata = json.dumps(profile, ensure_ascii=False, separators=(",", ":"))
+    temporary = checkpoint.with_name("." + checkpoint.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        with checkpoint.open("rb") as source:
+            prefix = source.read(8)
+            if len(prefix) != 8:
+                raise ValueError("Saved LoRA header is truncated.")
+            header_size = struct.unpack("<Q", prefix)[0]
+            if header_size < 2 or header_size > 16 * 1024 * 1024:
+                raise ValueError("Saved LoRA header exceeds the supported limit.")
+            header = json.loads(source.read(header_size))
+            if not isinstance(header, dict):
+                raise ValueError("Saved LoRA header is invalid.")
+            metadata = header.get("__metadata__", {})
+            if not isinstance(metadata, dict):
+                raise ValueError("Saved LoRA metadata is invalid.")
+            if any(not isinstance(k, str) or not isinstance(v, str)
+                   for k, v in metadata.items()):
+                raise ValueError("Saved LoRA metadata must contain string values.")
+            header["__metadata__"] = {**metadata, "webcap.profile": target_metadata}
+            new_header = json.dumps(header, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            new_header += b" " * (-len(new_header) % 8)
+            if len(new_header) > 16 * 1024 * 1024:
+                raise ValueError("New safetensors metadata exceeds the supported header limit.")
+            with temporary.open("xb") as output:
+                output.write(struct.pack("<Q", len(new_header)))
+                output.write(new_header)
+                shutil.copyfileobj(source, output, length=8 * 1024 * 1024)
+                output.flush()
+                os.fsync(output.fileno())
+        with temporary.open("rb") as check:
+            new_size = struct.unpack("<Q", check.read(8))[0]
+            checked = json.loads(check.read(new_size))
+        if checked.get("__metadata__", {}).get("webcap.profile") != target_metadata:
+            raise ValueError("Embedded profile did not verify after writing.")
+        shutil.copymode(checkpoint, temporary)
+        os.replace(temporary, checkpoint)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return {"embedded": True, "checkpoint": checkpoint.name}

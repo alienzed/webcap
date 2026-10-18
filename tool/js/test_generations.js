@@ -2506,6 +2506,40 @@
           });
           heading.appendChild(insertTerms);
         }
+        var groups = profile.promptOptions || {};
+        if (Object.keys(groups).some(function (key) { return Array.isArray(groups[key]) && groups[key].length > 1; })) {
+          var insertOptions = document.createElement('button');
+          insertOptions.type = 'button';
+          insertOptions.className = 'review-captions-btn';
+          insertOptions.textContent = 'Insert options';
+          insertOptions.title = 'Insert structured LoRA options as editable wildcard prompt fragments';
+          insertOptions.addEventListener('click', function () {
+            var fragments;
+            try {
+              fragments = Object.keys(groups).map(function (key) {
+                var values = groups[key];
+                if (!Array.isArray(values) || values.length < 2) return '';
+                if (values.some(function (value) { return /[{}|]/.test(value); })) {
+                  throw new Error('Wildcard options contain syntax characters in ' + key);
+                }
+                return '{' + values.join('|') + '}';
+              }).filter(Boolean);
+            } catch (err) {
+              if (typeof reportError === 'function') reportError(err);
+              return;
+            }
+            var field = el('test-generations-prompt');
+            var before = field.value.slice(0, field.selectionStart);
+            var after = field.value.slice(field.selectionEnd);
+            var text = (before.trim() && !/[\\s,]$/.test(before) ? ', ' : '') + fragments.join(', ');
+            var cursor = before.length + text.length;
+            field.value = before + text + after;
+            field.dispatchEvent(new Event('input', {bubbles: true}));
+            field.focus();
+            field.setSelectionRange(cursor, cursor);
+          });
+          heading.appendChild(insertOptions);
+        }
       }
       if (parts.detail) {
         var runName = document.createElement('span');

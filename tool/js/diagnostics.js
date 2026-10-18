@@ -69,7 +69,10 @@ function refreshUnifiedModelAssessment() {
     var labModels = values[2].models || {};
     var vision = labModels.visions || [];
     diagnosticsAssessmentCatalog = { directors: directors, visions: vision };
-    summary.textContent = directors.length + ' Director models · ' + vision.length + ' Vision models · ' + labRuns.length + ' Model Lab runs';
+    var activeRun = labRuns.find(function (run) { return run.active || run.status === 'running'; });
+    summary.textContent = directors.length + ' Director models · ' + vision.length +
+      ' Vision models · ' + labRuns.length + ' Model Lab runs' +
+      (activeRun ? ' · Running: ' + activeRun.id + ' (' + activeRun.attemptCount + ' probes recorded)' : '');
     results.replaceChildren();
     var selectedBefore = diagnosticsAssessmentSelected;
     var present = { director: new Set(), vision: new Set() };
@@ -222,6 +225,7 @@ function runUnifiedModelAssessment() {
       modelLabState.runs = payload.runs || modelLabState.runs;
       modelLabRender();
       modelLabSchedulePoll();
+      diagnosticsEl('diagnostics-assessment-summary').textContent = 'Running assessment ' + payload.run.id + ' · refresh for progress';
       reportConsoleInfo('Model Assessment', 'Started persistent Model Lab run ' + payload.run.id + '.');
       return payload.run;
     });

@@ -82,6 +82,31 @@ def reference_vocabulary(folder, job_id):
             for g, terms in sorted(vocabulary.items())]
 
 
+def validate_group_combinations(folder, job_id, dimensions, group_by_label):
+    """Reject same-group wildcard combinations absent from the selected training dataset."""
+    from itertools import product
+    root = _resolve_folder(folder)
+    annotations = read_folder_state(root / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+    allowed = set(list_media_files(folder)) & training_image_members(folder, job_id)
+    observed = {}
+    for media in allowed:
+        for group, terms in annotations.get(media, {}).items():
+            for left in terms:
+                for right in terms:
+                    observed.setdefault(group, set()).add((left, right))
+    by_group = {}
+    for dimension in dimensions:
+        if dimension["role"] == "primary":
+            by_group.setdefault(group_by_label[dimension["label"]], []).append(dimension)
+    for group, members in by_group.items():
+        for i, left in enumerate(members):
+            for right in members[i + 1:]:
+                for a, b in product(left["options"], right["options"]):
+                    if (a, b) not in observed.get(group, set()):
+                        raise ValueError("Incompatible tags within group " + group + ": " + a + " / " + b +
+                                         ". Revise wildcard dimensions; cross-group combinations are allowed.")
+
+
 def verified_reference(folder, group, term, media, job_id):
     matches = find_reference_candidates(folder, group, term, job_id)
     reference = next((entry for entry in matches if entry["media"] == media), None)

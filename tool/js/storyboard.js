@@ -1968,7 +1968,7 @@
     });
   }
 
-  function reviseScenes(instruction, modelId) {
+  function reviseScenes(instruction, modelId, generateFreshTakes) {
     if (!storyState.story) return Promise.reject(new Error('Choose a Story first.'));
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'repair', storyId: storyId };
@@ -1997,7 +1997,8 @@
         storyId: storyId,
         operation: 'revise_scenes_sequence',
         instruction: instruction,
-        model: modelId
+        model: modelId,
+        generateFreshTakes: generateFreshTakes === true
       }).then(function (payload) {
         return flushPendingSaves().then(function () { return request(null, 'story=' + encodeURIComponent(storyId)); }).then(function (fresh) {
           if (storyState.story && storyState.story.id === storyId) {
@@ -5449,6 +5450,7 @@
     if (!modal || !input || !preset || !status) throw new Error('Director Tools modal markup is missing.');
     preset.value = '';
     input.value = '';
+    el('storyboard-director-tools-generate-takes').checked = false;
     status.textContent = '';
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
@@ -5467,6 +5469,7 @@
     var run = el('storyboard-director-tools-run');
     var status = el('storyboard-director-tools-status');
     if (!input || !run || !status) throw new Error('Director Tools modal markup is missing.');
+    var generateFreshTakes = el('storyboard-director-tools-generate-takes').checked;
     var instruction = String(input.value || '').trim();
     if (!instruction) {
       status.textContent = 'Enter a revision instruction or choose a preset.';
@@ -5477,7 +5480,7 @@
     status.textContent = 'Starting revision…';
     var storyId = storyState.story && storyState.story.id;
     var target = { kind: 'repair', storyId: storyId };
-    var revision = reviseScenes(instruction, storyState.director.modelId);
+    var revision = reviseScenes(instruction, storyState.director.modelId, generateFreshTakes);
     // The target is registered synchronously once the operation has started.
     // Dismiss the input modal now so its activity card is not obscured.
     var started = directorTargetPending(target);

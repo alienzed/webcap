@@ -743,7 +743,7 @@
           '" data-gallery-round="' + unit.round + '" data-gallery-case="' + unit.case + '">' +
           (src ? '<img loading="lazy" src="' + escape(src) + '" alt="Epoch ' + unit.epoch + ' test frame">' :
             '<div class="epoch-finder-frame-empty">Frame pruned or unavailable</div>') +
-          '<figcaption><div class="epoch-finder-frame-heading"><strong>Epoch ' + unit.epoch +
+          '<figcaption><div class="epoch-finder-frame-heading"><strong>' + escape(candidateLabel(campaign, unit.epoch)) +
           '</strong><span>Round ' + unit.round + ' · Test ' + (unit.case + 1) + '</span></div>' +
           (selections.length ? '<div class="epoch-finder-frame-choices" aria-label="Expected wildcard choices">' +
             selections.join('') + '</div>' : '') +
@@ -815,10 +815,10 @@
         '<img loading="lazy" src="' + escape(href) + '" alt="Approved training reference: ' + escape(name) + '">' +
         '<small>' + escape(name) + '</small></a>';
     }).join('');
-    node.innerHTML = '<div class="epoch-finder-inspect-top"><strong>Epoch ' + unit.epoch +
+    node.innerHTML = '<div class="epoch-finder-inspect-top"><strong>' + escape(candidateLabel(campaign, unit.epoch)) +
       ' · Round ' + unit.round + ' / Test ' + (unit.case+1) + '</strong><span>' +
       (inspectedFrame+1) + ' / ' + units.length + '</span></div>' +
-      '<div class="epoch-finder-inspect-actions"><button type="button" data-copy-epoch-to-test>Copy epoch ' + unit.epoch + ' to Test Generations</button></div>' +
+      '<div class="epoch-finder-inspect-actions"><button type="button" data-copy-epoch-to-test>Copy ' + escape(candidateLabel(campaign, unit.epoch)) + ' to Test Generations</button></div>' +
       (src ? '<button type="button" data-inspect-zoom title="Open original image"><img src="' + escape(src) +
       '" alt="Epoch ' + unit.epoch + ' enlarged preview"></button>' :
       '<p>Frame ' + (unit.framePruned ? 'pruned after scoring' : unit.error ? 'unavailable due to error' : 'not yet captured') + '</p>') +

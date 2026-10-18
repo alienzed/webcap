@@ -163,7 +163,7 @@ def discover_tests():
                 file = session / name
                 if file.is_symlink() or not file.is_file() or not _kind(file):
                     continue
-                relative = file.relative_to(app_config.output_root()).as_posix()
+                relative = file.relative_to(Path(app_config.FS_ROOT)).as_posix()
                 url = ("/fs/test_generations/media?folder=" + quote(folder, safe="")
                        + "&session=" + quote(session.name, safe="")
                        + "&media=" + quote(name, safe=""))

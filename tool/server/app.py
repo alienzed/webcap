@@ -1910,6 +1910,19 @@ def generate_capabilities_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/generate/lora/profile", methods=["GET"])
+def generate_lora_profile_route():
+    try:
+        from .inference_runtime import lora_embedded_profile
+        name = str(request.args.get("name") or "").strip()
+        if not name:
+            raise ValueError("Choose a ComfyUI LoRA.")
+        return jsonify({"ok": True, **lora_embedded_profile(name)})
+    except Exception as exc:
+        app.logger.exception("COMFYUI LORA PROFILE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/generate/prompts", methods=["GET"])
 def generate_prompts_route():
     try:

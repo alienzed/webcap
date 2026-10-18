@@ -249,8 +249,9 @@ function deriveShellNavigationState() {
   var testOpen = !!document.querySelector('.test-generations-pane:not(.hidden)');
   var storyboardOpen = !!document.querySelector('.storyboard-workspace:not(.hidden)');
   var storageOpen = !!document.querySelector('.storage-workspace:not(.hidden)');
-  var activity = storageOpen ? 'storage' : (generateOpen ? 'generate' : (storyboardOpen ? 'storyboard' : (testOpen ? 'test' : (surface === 'training' ? 'training' : 'prep'))));
-  var workspaceRoot = storageOpen
+  var mediaOpen = !!document.querySelector('.media-explorer-workspace:not(.hidden)');
+  var activity = mediaOpen ? 'media' : (storageOpen ? 'storage' : (generateOpen ? 'generate' : (storyboardOpen ? 'storyboard' : (testOpen ? 'test' : (surface === 'training' ? 'training' : 'prep')))));
+  var workspaceRoot = mediaOpen ? 'media' : storageOpen
     ? 'storage'
     : (generateOpen
       ? 'generate'
@@ -263,7 +264,7 @@ function deriveShellNavigationState() {
             : (surface === 'reviewOutput'
               ? 'review'
               : (surface === 'grid' ? 'grid' : (surface === 'focus' ? 'focus' : (surface === 'configEditor' ? 'config' : 'prep'))))))));
-  var contextKind = activity === 'storyboard' || activity === 'generate' || activity === 'storage'
+  var contextKind = activity === 'media' || activity === 'storyboard' || activity === 'generate' || activity === 'storage'
     ? 'none'
     : (activity === 'training' && getTrainingWorkspaceEntryKind() === 'global'
       ? 'global'
@@ -816,13 +817,13 @@ function syncApplicationShellContext() {
   var testOpen = navigation.activity === 'test';
   var storyboardOpen = navigation.activity === 'storyboard';
   var storageOpen = navigation.activity === 'storage';
-  if (setControl) setControl.classList.toggle('hidden', generateOpen || storyboardOpen);
+  if (setControl) setControl.classList.toggle('hidden', generateOpen || storyboardOpen || navigation.activity === 'media');
   if (typeof window.syncInferenceQueueSurface === 'function') {
     window.syncInferenceQueueSurface(navigation.activity);
   }
   var contextText = '';
 
-  if (generateOpen || storyboardOpen || storageOpen) {
+  if (generateOpen || storyboardOpen || storageOpen || navigation.activity === 'media') {
     contextText = '';
   } else if (testOpen) {
     contextText = folder ? '' : 'Select a set';
@@ -835,7 +836,8 @@ function syncApplicationShellContext() {
   }
 
   if (workspaceTitle) {
-    if (storageOpen) workspaceTitle.textContent = 'Storage';
+    if (navigation.activity === 'media') workspaceTitle.textContent = 'Media Explorer';
+    else if (storageOpen) workspaceTitle.textContent = 'Storage';
     else if (generateOpen) workspaceTitle.textContent = 'Generate';
     else if (storyboardOpen) workspaceTitle.textContent = 'Storyboard';
     else if (testOpen) workspaceTitle.textContent = 'Test Generations';
@@ -852,9 +854,9 @@ function syncApplicationShellContext() {
     workspaceContext.textContent = contextText;
   }
 
-  var previewContextRelevant = !generateOpen && !testOpen && !storyboardOpen && !storageOpen && (surface === 'default' || surface === 'focus');
+  var previewContextRelevant = navigation.activity !== 'media' && !generateOpen && !testOpen && !storyboardOpen && !storageOpen && (surface === 'default' || surface === 'focus');
   previewHeader.classList.toggle('shell-context-hidden', !previewContextRelevant);
-  annotationActions.classList.toggle('shell-context-hidden', generateOpen || testOpen || storyboardOpen || storageOpen || surface !== 'default');
+  annotationActions.classList.toggle('shell-context-hidden', navigation.activity === 'media' || generateOpen || testOpen || storyboardOpen || storageOpen || surface !== 'default');
 
   var modelRelevant = navigation.activity === 'training' || navigation.activity === 'test';
   if (modelControl) modelControl.classList.toggle('hidden', !modelRelevant);
@@ -865,7 +867,7 @@ function syncApplicationShellContext() {
   }
 
   if (sidebarToggle) {
-    var sidebarToggleVisible = !generateOpen && !testOpen && !storyboardOpen && !storageOpen && (surface === 'default' || surface === 'training');
+    var sidebarToggleVisible = navigation.activity !== 'media' && !generateOpen && !testOpen && !storyboardOpen && !storageOpen && (surface === 'default' || surface === 'training');
     sidebarToggle.classList.toggle('hidden', !sidebarToggleVisible);
     if (typeof updateSidebarCollapseUi === 'function') {
       updateSidebarCollapseUi(ui && ui.appEl ? ui.appEl.classList.contains('left-rail-collapsed') : false);
@@ -878,6 +880,7 @@ function syncApplicationShellContext() {
   var testBtn = document.getElementById('activity-test-btn');
   var storyboardBtn = document.getElementById('activity-storyboard-btn');
   var storageBtn = document.getElementById('activity-storage-btn');
+  var mediaBtn = document.getElementById('activity-media-explorer-btn');
 
   if (prepBtn) {
     var prepActive = navigation.activity === 'prep';
@@ -909,6 +912,12 @@ function syncApplicationShellContext() {
     storyboardBtn.setAttribute('aria-pressed', storyboardActive ? 'true' : 'false');
     storyboardBtn.setAttribute('aria-current', storyboardActive ? 'page' : 'false');
   }
+  if (mediaBtn) {
+    var mediaActive = navigation.activity === 'media';
+    mediaBtn.classList.toggle('active', mediaActive);
+    mediaBtn.setAttribute('aria-pressed', mediaActive ? 'true' : 'false');
+    mediaBtn.setAttribute('aria-current', mediaActive ? 'page' : 'false');
+  }
   if (storageBtn) {
     var storageActive = navigation.activity === 'storage';
     storageBtn.classList.toggle('active', storageActive);
@@ -918,6 +927,7 @@ function syncApplicationShellContext() {
 }
 
 function openPrepActivity() {
+  if (typeof window.closeMediaExplorerActivity === 'function') window.closeMediaExplorerActivity();
   if (typeof window !== 'undefined' && typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
   if (typeof window !== 'undefined' && typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
@@ -1320,6 +1330,7 @@ function wireWorkspaceHeaderUi() {
   if (testActivityBtn && !testActivityBtn.__workspaceWired) {
     testActivityBtn.__workspaceWired = true;
     testActivityBtn.onclick = function () {
+      if (typeof window.closeMediaExplorerActivity === 'function') window.closeMediaExplorerActivity();
       if (isFocusedCaptionOpen() && !stopFocusedCaption('Focus Caption ended.')) return;
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
         stopFocusedAnnotation();
@@ -1335,6 +1346,7 @@ function wireWorkspaceHeaderUi() {
   if (storyboardActivityBtn && !storyboardActivityBtn.__workspaceWired) {
     storyboardActivityBtn.__workspaceWired = true;
     storyboardActivityBtn.onclick = function () {
+      if (typeof window.closeMediaExplorerActivity === 'function') window.closeMediaExplorerActivity();
       if (isFocusedCaptionOpen() && !stopFocusedCaption('Focus Caption ended.')) return;
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
         stopFocusedAnnotation();
@@ -1345,10 +1357,20 @@ function wireWorkspaceHeaderUi() {
       window.openStoryboardActivity();
     };
   }
+  var mediaActivityBtn = document.getElementById('activity-media-explorer-btn');
+  if (mediaActivityBtn && !mediaActivityBtn.__workspaceWired) {
+    mediaActivityBtn.__workspaceWired = true;
+    mediaActivityBtn.onclick = function () {
+      if (isFocusedCaptionOpen() && !stopFocusedCaption('Focus Caption ended.')) return;
+      if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') stopFocusedAnnotation();
+      window.openMediaExplorerActivity();
+    };
+  }
   var storageActivityBtn = document.getElementById('activity-storage-btn');
   if (storageActivityBtn && !storageActivityBtn.__workspaceWired) {
     storageActivityBtn.__workspaceWired = true;
     storageActivityBtn.onclick = function () {
+      if (typeof window.closeMediaExplorerActivity === 'function') window.closeMediaExplorerActivity();
       if (isFocusedCaptionOpen() && !stopFocusedCaption('Focus Caption ended.')) return;
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') stopFocusedAnnotation();
       if (typeof window.openStorageActivity !== 'function') throw new Error('Storage activity is not available.');

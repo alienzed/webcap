@@ -26,7 +26,7 @@ def test_fresh_takes_handoff_is_server_owned_and_opt_in():
     html = (root / "tool/tool.html").read_text()
     assert 'id="storyboard-director-tools-generate-takes"' in html
     assert '"generateFreshTakes": data.get("generateFreshTakes") is True' in app
-    revision = runner.split('if client == "storyboard" and context.get("operation") == "revise_scenes_sequence":', 1)[1].split('    try:\\n        if client in {"chat", "caption"}:', 1)[0]
+    revision = runner.split('if client == "storyboard" and context.get("operation") == "revise_scenes_sequence":', 1)[1].split('    try:\n        if client in {"chat", "caption"}:', 1)[0]
     assert 'if context.get("generateFreshTakes") is True:' in revision
     assert 'start_generation(str(context["storyId"]), scene_id)' in revision
     assert revision.index('if context.get("generateFreshTakes") is True:') > revision.index('completed += 1')

@@ -325,7 +325,7 @@
           if (!item.candidates.length) throw new Error('No trained reference for ' + item.group + ' / ' + item.option + '.');
         });
       }));
-    })).then(function () {
+    }).then(function () {
       if (version !== referenceGeneration) return;
       referenceDraftChoices = {};
       referenceItems.forEach(function (item) {

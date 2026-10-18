@@ -1388,14 +1388,11 @@
 
   function refreshDirectorActivity() {
     if (!directorActivityActive()) return Promise.resolve();
-    return Promise.all([
-      directorActivityRequest('/fs/director/activity'),
-      directorActivityRequest('/fs/system_status').catch(function () { return null; })
-    ]).then(function (values) {
+    return directorActivityRequest('/fs/director/activity').then(function (activity) {
       storyState.director.activityErrorReported = false;
-      observeTransientLlmActivity(values[0]);
-      var scopedActivity = directorActivityForTargetQueue(values[0], values[0] && values[0].queue);
-      renderDirectorActivity(directorActivityForCurrentRun(scopedActivity), values[1]);
+      observeTransientLlmActivity(activity);
+      var scopedActivity = directorActivityForTargetQueue(activity, activity && activity.queue);
+      renderDirectorActivity(directorActivityForCurrentRun(scopedActivity), null);
     }).catch(function (err) {
       var card = el('storyboard-director-activity');
       if (card) card.classList.add('hidden');

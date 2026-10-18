@@ -377,7 +377,13 @@ def create_campaign(folder_path, criteria):
     parent_id = str(criteria.get("parentCampaignId") or "")
     if parent_id:
         parent = _load(folder_path, parent_id)
-        if parent.get("jobId") != job_id or parent.get("runSelections", [{"jobId": job_id, "epochs": parent["rounds"][0]["epochs"]}]) != normalized:
+        original = parent.get("runSelections", [{"jobId": parent["jobId"], "epochs": parent["rounds"][0]["epochs"]}])
+        selections_match = {
+            item["jobId"]: tuple(item["epochs"]) for item in original
+        } == {
+            item["jobId"]: tuple(item["epochs"]) for item in normalized
+        }
+        if not selections_match:
             raise ValueError("Follow-up campaign must use its original selected runs and checkpoints.")
     campaign_id = secrets.token_hex(6)
     directory = _directory(folder_path, campaign_id)

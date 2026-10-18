@@ -93,11 +93,6 @@
       text: 'Documentary-style realism, handheld camera feel, observational framing, available-light look, raw environmental texture, immediate and unpolished atmosphere, grounded natural motion, candid emotional tone.'
     },
     {
-      id: 'clean-commercial',
-      label: 'Clean commercial',
-      text: 'Clean polished commercial look, crisp lighting, carefully controlled composition, premium production design, flattering textures, refined color palette, smooth camera language, clear and appealing visual presentation.'
-    },
-    {
       id: 'warm-intimate-drama',
       label: 'Warm intimate drama',
       text: 'Warm intimate dramatic atmosphere, soft practical lighting, close human focus, gentle contrast, rich skin tones, emotionally sensitive framing, subtle camera movement, personal and vulnerable tone.'
@@ -116,11 +111,6 @@
       id: 'gritty-urban-realism',
       label: 'Gritty urban realism',
       text: 'Gritty urban realism, worn textures, imperfect environments, practical lighting, muted palette, natural contrast, grounded camera language, rough lived-in atmosphere, emotionally tense and unsentimental tone.'
-    },
-    {
-      id: 'epic-high-contrast',
-      label: 'Epic high-contrast',
-      text: 'Epic high-contrast cinematic style, bold lighting separation, dramatic scale, striking silhouettes, powerful composition, heightened visual intensity, dynamic atmosphere, emotionally forceful and visually assertive tone.'
     },
     {
       id: 'fashion-runway-editorial',
@@ -158,11 +148,6 @@
       text: 'Y2K glossy visual language, bright flash-lit surfaces, chrome and translucent materials, playful futurism, punchy framing, cool highlights, pop-commercial polish, energetic turn-of-the-millennium styling.'
     },
     {
-      id: 'sun-drenched-mediterranean',
-      label: 'Sun-drenched Mediterranean',
-      text: 'Sun-drenched Mediterranean atmosphere, hard natural sunlight, bleached stone and warm earth tones, bright skies, textured shadows, breezy movement, sensual realism, relaxed but visually rich composition.'
-    },
-    {
       id: 'pastel-pop',
       label: 'Pastel pop',
       text: 'Pastel pop aesthetic, clean graphic color blocking, soft candy-toned palette, playful composition, bright even light, crisp surfaces, upbeat movement, stylized but accessible commercial energy.'
@@ -183,24 +168,54 @@
       text: 'Romantic soft-focus atmosphere, gentle bloom, warm diffused light, delicate contrast, intimate framing, graceful movement, tactile softness, emotionally heightened but tasteful cinematic tone.'
     },
     {
-      id: 'surreal-dream-logic',
-      label: 'Surreal dream logic',
-      text: 'Surreal dream-logic visual language, uncanny but coherent spaces, unexpected scale or composition, smooth impossible-feeling transitions, controlled symbolism, atmospheric lighting, elegant visual disorientation without horror.'
-    },
-    {
       id: 'expressionist-shadow',
       label: 'Expressionist shadow',
       text: 'Expressionist shadow-driven style, exaggerated light and darkness, angular compositions, distorted spatial emphasis, bold silhouettes, theatrical contrast, psychologically charged visual tension.'
     },
     {
-      id: 'coastal-natural-light',
-      label: 'Coastal natural light',
-      text: 'Coastal natural-light atmosphere, soft overcast or late-day sun, pale natural palette, open air, wind-shaped movement, reflective water and weathered textures, calm observational framing, understated cinematic realism.'
-    },
-    {
       id: 'kinetic-music-video',
       label: 'Kinetic music video',
       text: 'Kinetic music-video energy, bold camera movement, rhythmic framing, punchy lighting changes, expressive color, dynamic performance staging, visually memorable transitions, polished contemporary spectacle.'
+    },
+    {
+      id: "iphone-video",
+      label: "iPhone video",
+      text: "Everyday smartphone video with natural colors, realistic phone-camera exposure, casual handheld framing and small spontaneous movements."
+    },
+    {
+      id: "selfie-video",
+      label: "Selfie video",
+      text: "Front-facing smartphone footage at arm's length, close personal framing, natural facial perspective, slight hand movement and ordinary available light."
+    },
+    {
+      id: "amateur-home-video",
+      label: "Amateur home video",
+      text: "Casual personal video with imperfect framing, spontaneous camera motion, everyday lighting, realistic textures and an unpolished, candid feel."
+    },
+    {
+      id: "gopro-action-camera",
+      label: "GoPro / Action camera",
+      text: "Immersive wide-angle action-camera footage, close first-person perspective, energetic motion, deep focus and natural outdoor or practical lighting."
+    },
+    {
+      id: "webcam",
+      label: "Webcam",
+      text: "Fixed computer-camera viewpoint, simple eye-level framing, ordinary indoor light, natural webcam image quality and minimal camera movement."
+    },
+    {
+      id: "security-camera",
+      label: "Security camera",
+      text: "Stationary wide-angle surveillance view, fixed high or corner-mounted perspective, plain practical lighting, unembellished detail and continuous observational framing."
+    },
+    {
+      id: "social-media-tiktok",
+      label: "Social media / TikTok",
+      text: "Informal vertical smartphone footage, direct and immediate framing, casual creator-video energy, realistic phone-camera detail and natural handheld or tripod movement."
+    },
+    {
+      id: "bodycam",
+      label: "Bodycam",
+      text: "Chest-mounted first-person footage, wide practical perspective, body-driven camera movement, available light and immediate observational realism."
     }
   ];
 

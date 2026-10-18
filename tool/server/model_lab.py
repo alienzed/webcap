@@ -141,12 +141,24 @@ def capability_run_summaries():
                 continue
             by_kind = models.setdefault(ref, {})
             result = attempt.get("result") if isinstance(attempt.get("result"), dict) else {}
-            by_kind[kind] = {
-                "status": str(attempt.get("status") or ""),
-                "error": str(attempt.get("error") or ""),
-                "file": str(attempt.get("file") or ""),
-                "finishReason": str(result.get("finishReason") or ""),
-            }
+            evidence = by_kind.setdefault(kind, {
+                "status": "", "completed": 0, "failed": 0, "running": 0,
+                "skipped": 0, "interrupted": 0, "samples": 0,
+                "finishReasons": {}, "errors": [],
+            })
+            status = str(attempt.get("status") or "")
+            if status in {"completed", "failed", "running", "skipped", "interrupted"}:
+                evidence[status] += 1
+            evidence["samples"] += 1
+            evidence["status"] = status
+            reason = str(result.get("finishReason") or "")
+            if reason:
+                reasons = evidence["finishReasons"]
+                reasons[reason] = reasons.get(reason, 0) + 1
+            error = str(attempt.get("error") or "")
+            if error and error not in evidence["errors"]:
+                evidence["errors"].append(error[:240])
+            # Summary intentionally excludes prompts, generated text and reasoning.
         summaries.append({
             "id": row["id"], "status": row.get("status"), "depth": run.get("depth", "quick"),
             "startedAt": row.get("startedAt"), "folder": row.get("folder"),

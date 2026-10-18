@@ -554,6 +554,36 @@ def _execute_claimed(job_id, gpu_reserved):
         )
 
     from .storyboard_llm_runtime import run_contract, run_freeform_chat
+    if client == "storyboard" and context.get("operation") == "revise_scenes_sequence":
+        from .storyboard_store import load_story
+        from .storyboard_llm_contract import build_request
+        scene_ids = list(context.get("sceneIds") or [])
+        instruction = str(context.get("sourceInstruction") or "")
+        completed = 0
+        try:
+            for scene_id in scene_ids:
+                with _enqueue_lock:
+                    if execution_get_job(job_id).get("status") == "stopping":
+                        return execution_finish_job_transient(job_id, status="stopped",
+                            error="Revise Scenes stopped after " + str(completed) + " Scenes.")
+                story = load_story(str(context.get("storyId") or ""))
+                scene_contract = build_request(story, scene_id, "refine_prompt", instruction=instruction)
+                result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved))
+                with _enqueue_lock:
+                    if execution_get_job(job_id).get("status") == "stopping":
+                        return execution_finish_job_transient(job_id, status="stopped",
+                            error="Revise Scenes stopped after " + str(completed) + " Scenes.")
+                    _client_result("storyboard", {
+                        "storyId": context["storyId"], "sceneId": scene_id,
+                        "operation": "refine_prompt", "sourceInstruction": instruction,
+                    }, result, job_id=job_id, frozen_contract=scene_contract)
+                completed += 1
+        except Exception as exc:
+            raise RuntimeError("Revise Scenes failed after " + str(completed) +
+                " of " + str(len(scene_ids)) + " Scenes: " + str(exc)) from exc
+        return execution_finish_job_transient(job_id, status="completed", result={
+            "storyId": context["storyId"], "revisedSceneCount": completed,
+        })
     try:
         if client in {"chat", "caption"}:
             overrides = context.get("runtimeOverrides") if isinstance(context.get("runtimeOverrides"), dict) else {}
@@ -775,7 +805,7 @@ def _storyboard_target(context, operation):
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
     if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene"}:
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
-    if operation == "repair_scenes":
+    if operation in {"repair_scenes", "revise_scenes_sequence"}:
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}
     if operation in {"write_prompt", "refine_prompt"} and scene_id:
         return {"kind": "scene-prompt", "storyId": story_id, "sceneId": scene_id}

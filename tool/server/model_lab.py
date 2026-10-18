@@ -15,7 +15,7 @@ RUN_VERSION = 1
 ROOT_NAME = "model-lab-runs"
 DEFAULT_SAMPLE_COUNT = 8
 MAX_SAMPLE_COUNT = 24
-DEFAULT_ACTIVE_TIMEOUT_SECONDS = 20 * 60
+DEFAULT_ACTIVE_TIMEOUT_SECONDS = 60 * 60
 FAILURE_CIRCUIT_BREAKER = 3
 POLL_SECONDS = 0.75
 _TERMINAL_JOB_STATES = {"completed", "failed", "cancelled", "stopped", "interrupted"}
@@ -868,6 +868,27 @@ def _run_reference_director_for_vision(run, vision_model):
 
 def _run_director_model(run, model):
     model_ref = model["modelRef"]
+    from .director_model_test_store import calibration_prompt
+    from .llm_runner import enqueue
+
+    # WebCap's existing representative writing protocol; one bounded request,
+    # independent of browser lifecycle and without changing learned calibration.
+    _probe_job(
+        run,
+        kind="director_writing",
+        role="director",
+        model_ref=model_ref,
+        enqueue=lambda: enqueue(
+            "chat",
+            model_ref,
+            {
+                "operation": "freeform_chat",
+                "messages": [{"role": "user", "content": calibration_prompt("prose", 2048)}],
+            },
+            context={"runtimeOverrides": {"maxTokens": 2048}, "assessmentEvidence": True},
+            label="Model Lab · Director Writing",
+        ),
+    )
     synthetic_groups = [
         {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
         {"group": "BT Connector", "terms": ["chain"]},

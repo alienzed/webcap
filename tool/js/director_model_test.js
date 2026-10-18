@@ -1468,8 +1468,12 @@ function directorModelAssessmentOrderModels(models) {
 }
 
 function directorModelTestStartCalibration() {
-  if (directorModelTestState.running) return;
-  var models = directorModelAssessmentOrderModels(directorModelAssessmentSelectedModels());
+  return directorModelTestStartCalibrationForModels(directorModelAssessmentSelectedModels());
+}
+
+function directorModelTestStartCalibrationForModels(selectedModels) {
+  if (directorModelTestState.running) throw new Error('A Director assessment or benchmark is already running.');
+  var models = directorModelAssessmentOrderModels(selectedModels);
   if (!models.length) {
     directorModelTestSetStatus('Choose at least one model.', 'ready', 'Ready');
     return;
@@ -1508,10 +1512,11 @@ function directorModelTestStartCalibration() {
     });
   });
 
-  chain.catch(function (error) {
+  return chain.catch(function (error) {
     if (directorModelTestState.stopRequested) return;
     assessmentFailed = true;
     reportConsoleError('Director Model Calibration', error);
+    throw error;
   }).finally(function () {
     var assessmentSummary = directorModelTestEl('director-model-assessment-summary-status');
     assessmentSummary.textContent = assessmentFailed ? 'Failed' : (directorModelTestState.stopRequested ? 'Stopped' : 'Complete');

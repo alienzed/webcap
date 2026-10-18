@@ -574,11 +574,11 @@
       if (kind === 'rvn') {
         var firstError = units.find(function (unit) { return !!unit.referenceError; });
         els('reference-compare-error').textContent = firstError ?
-          'Reference Compare failed at epoch ' + firstError.epoch + ': ' + firstError.referenceError : '';
+          'Reference Compare failed at ' + candidateLabel(campaign, firstError.epoch) + ': ' + firstError.referenceError : '';
         els('reference-compare-error').classList.toggle('hidden', !firstError);
       }
     });
-    els('field-count').textContent = plan.epochs.length + ' epochs';
+    els('field-count').textContent = plan.epochs.length + ' checkpoints';
     els('render-bar').style.width = (total ? frames / total * 100 : 0) + '%';
     els('vl-bar').style.width = (total ? evaluated / total * 100 : 0) + '%';
     els('timeline').innerHTML = campaign.rounds.map(function (round) {
@@ -718,7 +718,7 @@
     if (lastFrameKey === key) return;
     lastFrameKey = key;
     var heading = inspectedEpoch == null ? '<strong>Recent retained frames</strong>' :
-      '<strong>Epoch ' + inspectedEpoch + ' · All recorded tests</strong> ' +
+      '<strong>' + escape(candidateLabel(campaign, inspectedEpoch)) + ' · All recorded tests</strong> ' +
       '<button type="button" data-inspect-reset>Show all epochs</button>';
     var shown = inspectedEpoch == null ? units.filter(function (u) { return !!u.frame; }).slice(-40).reverse() :
       units.slice().sort(function (a,b) { return a.round - b.round || a.case - b.case; });
@@ -820,7 +820,7 @@
       (inspectedFrame+1) + ' / ' + units.length + '</span></div>' +
       '<div class="epoch-finder-inspect-actions"><button type="button" data-copy-epoch-to-test>Copy ' + escape(candidateLabel(campaign, unit.epoch)) + ' to Test Generations</button></div>' +
       (src ? '<button type="button" data-inspect-zoom title="Open original image"><img src="' + escape(src) +
-      '" alt="Epoch ' + unit.epoch + ' enlarged preview"></button>' :
+      '" alt="' + escape(candidateLabel(campaign, unit.epoch)) + ' enlarged preview"></button>' :
       '<p>Frame ' + (unit.framePruned ? 'pruned after scoring' : unit.error ? 'unavailable due to error' : 'not yet captured') + '</p>') +
       (referenceThumbnails ? '<div class="epoch-finder-reference-thumbnails"><strong>Approved training references</strong><div>' +
         referenceThumbnails + '</div></div>' : '') +

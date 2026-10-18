@@ -714,7 +714,71 @@ def update_vision(folder_path, session_name, criteria):
         "candidateVisionScores": _candidate_vision_scores(folder_path, model_id),
     }
 
-def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None):
+def _saved_candidate_assessments(folder_path, model_id):
+    model = get_test_model(model_id)
+    totals = {}
+    for candidate in _staged_loras_for_set(folder_path, model):
+        payload = _staged_lora_provenance(candidate)
+        assessment = payload.get("assessments")
+        if isinstance(assessment, dict):
+            totals[candidate.name] = assessment
+    return totals
+
+
+def _snapshot_session_assessments(folder_path, sessions):
+    """Commit only aggregate contributions before discarding session files."""
+    updates = {}
+    for session in sessions:
+        payload = _read_status(session) or {}
+        model_id = str(payload.get("modelId") or payload.get("model") or get_test_model().PROFILE_ID)
+        model = get_test_model(model_id)
+        snapshot = [(session, payload)]
+        ratings = _candidate_rating_scores(folder_path, model_id, session_snapshot=snapshot, include_saved=False)
+        vision = _candidate_vision_scores(folder_path, model_id, session_snapshot=snapshot, include_saved=False)
+        for name in set(ratings) | set(vision):
+            staged = _test_directory(folder_path, model) / name
+            if not staged.is_file() or staged.is_symlink():
+                continue
+            sidecar = staged.with_suffix(".webcap.json")
+            if not sidecar.is_file() or sidecar.is_symlink():
+                continue
+            update = updates.setdefault(sidecar, {"manual": {"sum": 0, "count": 0}, "vision": {"matches": 0.0, "count": 0, "previews": 0}})
+            if name in ratings:
+                item = ratings[name]
+                update["manual"]["sum"] += round(item["average"] * item["count"])
+                update["manual"]["count"] += item["count"]
+            if name in vision:
+                item = vision[name]
+                for key in ("matches", "count", "previews"):
+                    update["vision"][key] += item.get(key, 0)
+    for sidecar, update in updates.items():
+        payload = json.loads(sidecar.read_text(encoding="utf-8"))
+        saved = payload.setdefault("assessments", {})
+        for kind, contribution in update.items():
+            existing = saved.setdefault(kind, {})
+            for key, value in contribution.items():
+                existing[key] = existing.get(key, 0) + value
+        _atomic_write_json(sidecar, payload)
+
+
+def reset_candidate_assessments(folder_path, model_id, candidate_name):
+    model = get_test_model(model_id)
+    name = Path(str(candidate_name or "")).name
+    if name != candidate_name or not name.endswith(".safetensors"):
+        raise ValueError("A staged Test candidate filename is required.")
+    staged = {path.name: path for path in _staged_loras_for_set(folder_path, model)}
+    if name not in staged:
+        raise FileNotFoundError("Staged candidate not found.")
+    sidecar = staged[name].with_suffix(".webcap.json")
+    if not sidecar.is_file():
+        raise FileNotFoundError("Candidate has no stored assessments.")
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    payload.pop("assessments", None)
+    _atomic_write_json(sidecar, payload)
+    return rating_summary(folder_path, model_id)
+
+
+def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None, include_saved=True):
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
     totals = {}
@@ -741,6 +805,13 @@ def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None):
             aggregate = totals.setdefault(candidate_name, {"sum": 0, "count": 0})
             aggregate["sum"] += rating
             aggregate["count"] += 1
+    if include_saved:
+        for name, assessment in _saved_candidate_assessments(folder_path, model_id or default_model_id).items():
+            saved = assessment.get("manual")
+            if isinstance(saved, dict) and saved.get("count", 0) > 0:
+                item = totals.setdefault(name, {"sum": 0, "count": 0})
+                item["sum"] += saved["sum"]
+                item["count"] += saved["count"]
     return {
         name: {
             "average": round(values["sum"] / values["count"], 2),
@@ -768,7 +839,7 @@ def _test_vl_partial_credit(expected, observed):
     return 0.0
 
 
-def _candidate_vision_scores(folder_path, model_id=None, session_snapshot=None):
+def _candidate_vision_scores(folder_path, model_id=None, session_snapshot=None, include_saved=True):
     """Aggregate saved VL agreements across sessions, like manual candidate ratings."""
     selected_model_id = str(model_id or "").strip()
     default_model_id = get_test_model().PROFILE_ID
@@ -816,6 +887,13 @@ def _candidate_vision_scores(folder_path, model_id=None, session_snapshot=None):
             total["matches"] += matches
             total["count"] += counted
             total["previews"] += 1
+    if include_saved:
+        for name, assessment in _saved_candidate_assessments(folder_path, model_id or default_model_id).items():
+            saved = assessment.get("vision")
+            if isinstance(saved, dict) and saved.get("count", 0) > 0:
+                item = totals.setdefault(name, {"matches": 0.0, "count": 0, "previews": 0})
+                for key in ("matches", "count", "previews"):
+                    item[key] += saved.get(key, 0)
     return totals
 
 
@@ -1177,6 +1255,9 @@ def handle_request(folder_path, mode, selection_criteria=None):
             "sessions": [],
             "latest": _latest_status(folder_path),
         }
+    if operation == "test_reset_candidate_assessments":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return reset_candidate_assessments(folder_path, criteria.get("modelId"), criteria.get("candidateFile"))
     if operation == "test_rating_summary":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return rating_summary(folder_path, model_id=criteria.get("modelId"))
@@ -3014,6 +3095,7 @@ def clear_sessions(folder_path):
         raise RuntimeError(
             "Cannot clear Test Generations sessions while active work remains: " + ", ".join(active)
         )
+    _snapshot_session_assessments(folder_path, sessions)
     for session in sessions:
         shutil.rmtree(session)
 
@@ -3036,6 +3118,7 @@ def delete_session(folder_path, session_name):
     model_id = str(session_payload.get("modelId") or session_payload.get("model") or get_test_model().PROFILE_ID)
     if isinstance(session_payload.get("inferenceJobs"), list) and _session_has_nonterminal_jobs(session):
         raise RuntimeError("Cannot delete an active Test Generations session. Stop it first.")
+    _snapshot_session_assessments(folder_path, [session])
     shutil.rmtree(session)
     _invalidate_recent_session_caches()
     return {

@@ -21,6 +21,27 @@
   }
   function active(job) { return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1; }
   function count(jobs) { return jobs.filter(function (job) { return active(job) || job.status === 'queued' || job.status === 'backlog'; }).length; }
+  function updateLaneTab(which) {
+    var jobs = jobsFor(which);
+    var tab = document.getElementById('job-queue-tab-' + which);
+    var badge = tab.querySelector('[data-job-queue-count]');
+    var running = jobs.some(active);
+    var payload = which === 'inference' ? window.getInferenceQueueSnapshot() : snapshots[which];
+    var paused = !!(payload && (which === 'training' ? payload.queuePaused : payload.paused));
+    var waiting = !running && !paused && jobs.some(function (job) { return job.status === 'queued'; });
+    badge.textContent = count(jobs) ? '(' + count(jobs) + ')' : '';
+    tab.classList.toggle('job-queue-tab-running', running);
+    tab.classList.toggle('job-queue-tab-paused', !running && paused);
+    tab.title = which + ' · ' + (running ? 'Running' : paused ? 'Paused' : waiting ? 'Waiting' : 'Idle');
+    var indicator = tab.querySelector('.job-queue-tab-state');
+    if (!indicator) {
+      indicator = textNode('span', 'job-queue-tab-state', '');
+      indicator.setAttribute('aria-hidden', 'true');
+      tab.appendChild(indicator);
+    }
+    indicator.textContent = running ? '●' : paused ? 'Ⅱ' : waiting ? '◦' : '';
+    indicator.title = tab.title;
+  }
   function textNode(tag, klass, value) {
     var node = document.createElement(tag);
     node.className = klass;
@@ -33,7 +54,11 @@
     return payload && Array.isArray(payload.jobs) ? payload.jobs : [];
   }
   function title(job, which) {
-    if (which === 'llm') return [job.client || 'Director', job.operation || job.label].filter(Boolean).join(' · ') || 'LLM request';
+    if (which === 'llm') {
+      var operation = String(job.operation || job.label || '').replace(/_/g, ' ').trim();
+      operation = operation.replace(/\b\w/g, function (char) { return char.toUpperCase(); });
+      return [String(job.client || 'Director').replace(/\b\w/g, function (char) { return char.toUpperCase(); }), operation].filter(Boolean).join(' · ') || 'LLM request';
+    }
     return [job.folder || 'Training', job.stage || job.modelType || job.model || ''].filter(Boolean).join(' · ');
   }
   function detail(job, which) {
@@ -77,6 +102,7 @@
     heading.appendChild(textNode('strong', '', title(job, which)));
     copy.appendChild(heading);
     var details = detail(job, which);
+    if (which === 'llm') heading.querySelector('strong').title = [job.client, job.operation].filter(Boolean).join(' · ');
     if (details) copy.appendChild(textNode('small', '', details));
     if (active(job)) copy.appendChild(textNode('small', '', elapsed(job)));
     node.appendChild(copy);
@@ -105,8 +131,7 @@
   function render(which) {
     var panel = document.getElementById('job-queue-panel-' + which);
     var jobs = jobsFor(which);
-    var badge = document.querySelector('[data-job-queue-count="' + which + '"]');
-    if (badge) badge.textContent = count(jobs) ? '(' + count(jobs) + ')' : '';
+    updateLaneTab(which);
     if (which === 'inference') return;
     var payload = snapshots[which];
     var message = panel.querySelector('[data-job-queue-summary]');

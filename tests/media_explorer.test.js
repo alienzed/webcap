@@ -262,3 +262,13 @@ test('source-to-Explorer navigation opens the exact artifact without a filename 
   f.nodes['media-explorer-filter-chips'].children[0].click();
   assert.equal(new URL(f.pending[2].url,'http://localhost').searchParams.get('artifact'),'');
 });
+
+
+test('Explorer deletion targets only owner-backed generated artifacts', () => {
+  const source = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
+  assert.match(source, /item\.source === 'generate' && item\.role === 'generated'/);
+  assert.match(source, /operation: 'test_delete_session'/);
+  assert.match(source, /operation: 'delete'/);
+  assert.match(source, /window\.confirm\(/);
+  assert.doesNotMatch(source, /source === 'set'.*Delete/);
+});

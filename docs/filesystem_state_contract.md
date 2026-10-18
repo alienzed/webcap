@@ -35,7 +35,7 @@ WebCap should resolve one host-local app-data root automatically:
 - macOS: `~/Library/Application Support/WebCap`
 - Linux: `$XDG_DATA_HOME/WebCap` when set, otherwise `~/.local/share/WebCap`
 
-A future/configured `filesystem.app_data_root` may override this. Blank means use the platform default.
+The implemented optional `filesystem.app_data_root` overrides this. Blank means use the platform default.
 
 This root is **host-local application state**, not portable workspace content and not synchronization storage. Do not encourage sharing it between machines.
 
@@ -71,7 +71,7 @@ Examples:
 
 Persistent JSON should be consolidated by **shared lifecycle**, not merely because several files are JSON.
 
-North-star scheduling layout:
+Illustrative *future consolidation*, not current filenames:
 
 ```text
 state/
@@ -165,7 +165,7 @@ The stable Training action layout remains the owner of Training evidence.
 
 ### Planned explicit Training History run deletion
 
-This is a user-requested, permanent cleanup operation from **Training → History**, not Archive or ordinary history clearing. Implementation is pending.
+This section records the approved deletion design. Consult the current Training History implementation before treating any item below as either missing or shipped.
 
 - Offer **Delete Run** with a confirmation that identifies the selected training run, its Diffusion Pipe timestamped output directory, and the associated artifacts.
 - Block deletion **only** when an active or queued **Training** job references the directory. Do not introduce protections for historical-only references, inference, evaluations, or Test Generations queues.

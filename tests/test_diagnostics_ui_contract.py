@@ -13,8 +13,8 @@ def test_diagnostics_is_a_secondary_utility_not_a_workspace():
     assert 'id="diagnostics-modal"' in html
     assert 'data-diagnostics-tab="health"' in html
     assert 'data-diagnostics-tab="h3"' in html
-    assert 'data-diagnostics-tab="models"' in html
-    assert 'data-diagnostics-tab="benchmark"' in html
+    assert 'data-diagnostics-panel="models"' in html
+    assert 'data-diagnostics-panel="benchmark"' in html
     assert html.index('id="shell-diagnostics-btn"') > html.index('class="activity-rail-spacer"')
     assert 'aria-controls="diagnostics-modal"' in html
 
@@ -97,7 +97,7 @@ def test_shared_progress_card_is_loaded_before_consumers():
     assert 'window.publishActivityProgress = publishProgress' in activity
     assert 'window.finishActivityProgress = finishProgress' in activity
     assert "window.publishActivityProgress(snapshot)" in diagnostics
-    assert "ProgressCard.update(card, snapshot)" in diagnostics
+    assert "ProgressCard.update(card, snapshot," in diagnostics
     assert "isProgressChild(item)" in activity
 
 
@@ -115,8 +115,8 @@ def test_experimental_model_assessment_preserves_existing_diagnostics():
     script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
     assert 'data-diagnostics-tab="assessment"' in html
     assert 'id="diagnostics-assessment-results"' in html
-    assert 'data-diagnostics-tab="models"' in html
-    assert 'data-diagnostics-tab="benchmark"' in html
+    assert 'data-diagnostics-panel="models"' in html
+    assert 'data-diagnostics-panel="benchmark"' in html
     assert 'data-diagnostics-tab="model-lab"' in html
     assert "function refreshUnifiedModelAssessment()" in script
     assert 'id="diagnostics-assessment-deep"' in html
@@ -164,7 +164,7 @@ def test_assessment_launch_shows_synchronous_errors_and_active_run():
     assert "try {\n      Promise.resolve(runUnifiedModelAssessment())" in script
     assert "Cannot start assessment:" in script
     assert "var activeRun = labRuns.find" in script
-    assert "Running assessment " in script
+    assert "modelLabProgressSnapshot(run)" in script
 
 
 

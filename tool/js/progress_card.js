@@ -23,6 +23,7 @@
     append(copy, 'small', '', 'counts');
     append(copy, 'small', '', 'elapsed').setAttribute('aria-live', 'off');
     var track = append(copy, 'div', 'activity-monitor-progress', 'track');
+    track.setAttribute('role', 'progressbar');
     append(track, 'span', '', 'fill');
     var open = append(card, 'button', 'activity-monitor-open', 'open');
     open.type = 'button';
@@ -30,10 +31,11 @@
     return card;
   }
 
-  function elapsed(startedAt) {
+  function elapsed(startedAt, finishedAt) {
     var time = Number(startedAt);
     if (!isFinite(time) || time <= 0) return '';
-    var seconds = Math.max(0, Math.floor(Date.now() / 1000 - time));
+    var finish = Number(finishedAt);
+    var seconds = Math.max(0, Math.floor((isFinite(finish) && finish > 0 ? finish : Date.now() / 1000) - time));
     if (seconds < 60) return seconds + 's elapsed';
     var minutes = Math.floor(seconds / 60);
     if (minutes < 60) return minutes + 'm ' + String(seconds % 60).padStart(2, '0') + 's elapsed';
@@ -56,7 +58,7 @@
     counts.textContent = String(item.progressLabel || '');
     counts.hidden = !counts.textContent;
     var time = card.querySelector('[data-progress-elapsed]');
-    time.textContent = elapsed(item.startedAt);
+    time.textContent = elapsed(item.startedAt, item.finishedAt);
     time.hidden = !time.textContent;
     var dot = card.querySelector('[data-progress-dot]');
     dot.className = 'activity-monitor-dot ' + (item.kind === 'storage' ? 'background' : 'active');
@@ -68,6 +70,11 @@
     var determinate = p && p.total != null && p.completed != null &&
       isFinite(completed) && completed >= 0 && isFinite(total) && total > 0;
     track.classList.toggle('indeterminate', !determinate);
+    track.setAttribute('aria-label', String(item.title || item.label || 'Activity') + ' progress');
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', '100');
+    if (determinate) track.setAttribute('aria-valuenow', String(Math.max(0, Math.min(100, completed / total * 100))));
+    else track.removeAttribute('aria-valuenow');
     track.title = determinate
       ? (p.totalIsUpperBound ? 'Progress against an upper bound, not an ETA' : 'Completed work')
       : 'Progress cannot yet be measured';

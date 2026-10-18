@@ -364,6 +364,7 @@
       queued ? String(queued) + ' queued' : '',
       backlog ? String(backlog) + ' backlog' : ''
     ].filter(Boolean).join(' · ');
+    if (document.getElementById('job-queue-tab-inference').getAttribute('aria-selected') === 'true') {
     summary.textContent = state.queue.paused
       ? String(state.queue.pauseReason || 'Inference is temporarily waiting.')
       : (String(state.queue.waitReason || '').trim() || counts || 'No inference work');
@@ -380,6 +381,7 @@
     clearButton.classList.toggle('hidden', !hasPending);
     clearButton.disabled = !hasPending;
 
+    }
     var previousRows = new Map();
     Array.prototype.forEach.call(host.querySelectorAll('.inference-queue-row'), function (row) {
       previousRows.set(row.dataset.inferenceJobId, row);

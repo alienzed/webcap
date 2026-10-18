@@ -3415,6 +3415,39 @@
   background: var(--panel-soft);
 }
 
+/* First Cut status is an editor-level overlay, never a button-row sibling. */
+.storyboard-editor > .storyboard-story-action-card {
+  position: absolute;
+  z-index: 45;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(540px, calc(100% - 32px));
+  max-width: calc(100% - 32px);
+  min-width: 0;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, .24);
+  flex-wrap: wrap;
+  pointer-events: auto;
+}
+.storyboard-first-cut-batches {
+  flex: 1 0 100%;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.storyboard-first-cut-batch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.storyboard-first-cut-batch-row > span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.storyboard-first-cut-batch-row > button { flex: 0 0 auto; }
+
 .storyboard-story-action-card.hidden {
   display: none;
 }

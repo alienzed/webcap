@@ -2682,6 +2682,12 @@
                                 <button id="diagnostics-assessment-lab" type="button">Vision &amp; Structured Tests</button>
                                 <button id="diagnostics-assessment-benchmark" type="button" class="review-captions-btn">Custom Benchmark</button>
                             </div>
+                            <div class="app-settings-field app-settings-field-wide">
+                                <span class="app-settings-field-label">Assessment scope</span>
+                                <label><input id="diagnostics-assessment-deep" type="checkbox"> Deep Assessment <small>— configuration only; limit probes are not yet connected</small></label>
+                                <span class="app-settings-note">Standard is the default: evaluate WebCap workflows. Deep testing remains unavailable until the coordinated runner is verified.</span>
+                            </div>
+                            <div id="diagnostics-assessment-selection" class="app-settings-help" aria-live="polite">Select models below to prepare an assessment.</div>
                             <div id="diagnostics-assessment-summary" class="app-settings-help" aria-live="polite">Open this tab to load available findings.</div>
                             <div id="diagnostics-assessment-results" class="app-settings-environment-results"></div>
                         </section>

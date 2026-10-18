@@ -2999,6 +2999,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 }
 /* Activity is the operational cockpit; Storyboard overlays remain contextual. */
 .activity-monitor-primary .progress-card {
+  grid-template-columns: 12px minmax(0, 1fr) auto auto;
   padding: 20px 22px;
   gap: 16px;
 }

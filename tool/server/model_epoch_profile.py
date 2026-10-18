@@ -116,3 +116,25 @@ def save_enrichment(checkpoint, enrichment):
     finally:
         temporary.unlink(missing_ok=True)
     return payload["modelProfile"]
+
+
+def training_suggestions(folder, job_id):
+    """Read captured tag vocabulary as suggestions, not proven capabilities.
+
+    Derived results are ephemeral: only explicitly approved enrichment is saved.
+    """
+    from .epoch_reference import reference_vocabulary
+    groups = reference_vocabulary(folder, job_id)
+    options = {}
+    for group in groups:
+        label = str(group.get("group") or "").strip()
+        terms = group.get("terms") or []
+        if not label:
+            continue
+        values = [str(item["term"]).strip() for item in terms
+                  if isinstance(item, dict) and str(item.get("term") or "").strip()]
+        if values:
+            options[label] = list(dict.fromkeys(values))
+    return {"promptOptions": options, "trainedWords": [],
+            "source": "captured_training_annotations",
+            "evidenceLevel": "trained_not_validated"}

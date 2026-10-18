@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 // Minimal DOM fixture: exercise the actual classic script and its async requests.
-function fixture() {
+function fixture(hash = '#/media') {
   const nodes = {}, pending = [], errors = [], closed = [];
   let document;
   class Element {
@@ -28,6 +28,7 @@ function fixture() {
     replaceChildren(...nodes) { for (const node of [...this.children]) node.remove(); nodes.forEach(node => this.appendChild(node)); }
     matches(selector) { return selector.split(',').some(s => { s = s.trim(); return s.startsWith('.') ? this.classList.contains(s.slice(1)) : s.toUpperCase() === this.tagName; }); }
     closest(selector) { return this.matches(selector) ? this : this.parent?.closest(selector) || null; }
+    contains(node) { return node === this || this.children.some(child => child.contains(node)); }
     querySelectorAll(selector) { return this.children.flatMap(node => [...(node.matches(selector) ? [node] : []), ...node.querySelectorAll(selector)]); }
     querySelector(selector) { return this.querySelectorAll(selector)[0]; }
     showModal() { this.open = true; }
@@ -43,10 +44,13 @@ function fixture() {
   nodes['media-explorer-sort'].value = 'newest';
   nodes['media-explorer-inspector'].classList.add('hidden');
   nodes['media-explorer-workspace'].appendChild(nodes['media-explorer-inspector-body']);
+  nodes['media-explorer-workspace'].appendChild(nodes['media-explorer-grid']);
+  nodes['media-explorer-compare-dialog'].appendChild(new Element('strong'));
+  nodes['media-explorer-compare-dialog'].appendChild(nodes['media-explorer-compare-content']);
   document = { getElementById: id => nodes[id], createElement: tag => new Element(tag), listeners: {},
     addEventListener(k, fn) { this.listeners[k] = fn; },
     querySelectorAll: selector => selector.includes('[data-media-role]') ? buttons.filter(b => 'mediaRole' in b.dataset) : selector.includes('[data-media-source]') ? buttons.filter(b => 'mediaSource' in b.dataset) : buttons };
-  const window = { location: {hash:'#/media'}, reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
+  const window = { location: {hash}, reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
   for (const owner of ['Generate', 'TestBench', 'Storyboard', 'Storage']) window['close' + owner + 'Activity'] = () => closed.push(owner);
   vm.runInNewContext(fs.readFileSync('tool/js/media_explorer.js', 'utf8'), {
     document, window, console, URLSearchParams, AbortController, Set, Map, setTimeout, clearTimeout,
@@ -107,6 +111,12 @@ test('selection, grid keys, loupe return and native video cleanup', async () => 
   a.click({ctrlKey:true}); b.click({shiftKey:true});
   assert.match(f.nodes['media-explorer-selected-count'].textContent, /^2 selected/);
   assert.equal(f.nodes['media-explorer-compare'].disabled, false);
+  f.nodes['media-explorer-compare'].click();
+  assert.equal(f.nodes['media-explorer-compare-dialog'].open, true);
+  assert.match(f.nodes['media-explorer-compare-dialog'].querySelector('strong').textContent, /2 selected/);
+  f.nodes['media-explorer-compare-close'].click();
+  f.key(f.nodes['app-frame'], 'a', {ctrlKey:true});
+  assert.match(f.nodes['media-explorer-selected-count'].textContent, /^2 selected/, 'outside keyboard focus is untouched');
   f.key(a, 'a', {ctrlKey:true});
   assert.match(f.nodes['media-explorer-selected-count'].textContent, /^3 selected/);
   f.key(a, 'Escape');
@@ -116,4 +126,58 @@ test('selection, grid keys, loupe return and native video cleanup', async () => 
   f.nodes['media-explorer-close-loupe'].click();
   c.click(); const video = f.nodes['media-explorer-inspector-body'].children[0];
   f.window.closeMediaExplorerActivity(); assert.equal(video.paused, true);
+});
+
+test('Explorer filters restore from and serialize into the shell route', async () => {
+  const f = fixture('#/media?source=set&kind=image&q=bird&sort=name&full=1');
+  f.window.openMediaExplorerActivity();
+  const query = new URL(f.pending[0].url, 'http://localhost').searchParams;
+  assert.equal(query.get('source'), 'set'); assert.equal(query.get('kind'), 'image');
+  assert.equal(query.get('search'), 'bird'); assert.equal(query.get('sort'), 'name');
+  const route = new URLSearchParams(); f.window.appendMediaExplorerRouteParams(route);
+  assert.equal(route.get('q'), 'bird'); assert.equal(route.get('full'), '1');
+  await f.settle(f.pending[0], []);
+});
+
+test('Prep mutation shortcuts cannot act on hidden working media in Explorer', () => {
+  const main = fs.readFileSync('tool/js/main.js', 'utf8');
+  const begin = main.indexOf("  document.addEventListener('keydown'", main.indexOf('handleEditorInputAutosave'));
+  const end = main.indexOf('  if (ui.advancedFilterToggleBtn', begin);
+  const handlers = []; let activity = 'media', renames = 0;
+  const context = {
+    document: {addEventListener: (key, fn) => handlers.push(fn), activeElement:{}},
+    deriveShellNavigationState: () => ({activity}), ui: {editorEl:{}},
+    state: {folder:'set', currentItem:{fileName:'working.png'}},
+    promptRenameMedia: () => renames++,
+    undoLastOperation: () => { throw new Error('must not undo hidden work'); },
+    moveSelectedMediaByOffset: () => { throw new Error('must not move hidden selection'); },
+    pruneMedia: () => { throw new Error('must not remove hidden media'); }
+  };
+  vm.runInNewContext(main.slice(begin, end), context);
+  assert.equal(handlers.length, 5);
+  for (const key of ['F2', 'Delete', 'ArrowDown', 'd', 'r', 'z']) {
+    for (const handler of handlers) handler({key, ctrlKey:key === 'z', preventDefault() {}});
+  }
+  assert.equal(renames, 0);
+  activity = 'prep'; handlers[1]({key:'F2', preventDefault() {}});
+  assert.equal(renames, 1, 'Prep retains its rename shortcut');
+});
+
+test('Generate capability refresh retains the current model draft and settings', () => {
+  const source = fs.readFileSync('tool/js/generate.js', 'utf8');
+  const controls = Object.fromEntries(['model','prompt','aspect','dimensions','megapixels','duration','seed'].map(id => ['generate-' + id, {value:'draft-' + id}]));
+  controls['generate-model'].value = 'model-a';
+  const context = {
+    el: id => controls[id],
+    generateState: {models:[{id:'model-a',label:'A'}], modelId:'model-a'},
+    getGenerateModelPreference: () => 'model-a', setGenerateModelPreference() {}, escapeHtml: value => value,
+    renderModelForm: () => Object.entries(controls).filter(([id]) => id !== 'generate-model').forEach(([,node]) => node.value = 'default')
+  };
+  vm.runInNewContext(source.slice(source.indexOf('  function populateModelSelector()'), source.indexOf('  function fieldVisible(')), context);
+  context.populateModelSelector();
+  assert.equal(controls['generate-prompt'].value, 'draft-prompt');
+  assert.equal(controls['generate-seed'].value, 'draft-seed');
+  context.generateState.models = [{id:'model-b',label:'B'}];
+  context.populateModelSelector();
+  assert.equal(controls['generate-prompt'].value, 'default', 'an explicit model change applies that model defaults');
 });

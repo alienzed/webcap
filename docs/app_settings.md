@@ -1,6 +1,6 @@
 # App Settings
 
-Last reviewed against code: 2026-09-30
+Documentation reconciled with Settings tab markup and configuration paths: 2026-10-18
 
 The app settings modal is the global configuration surface for values stored in `tool/config.json`. Its navigation is organized by user-facing ownership rather than implementation details.
 
@@ -18,6 +18,8 @@ The app settings modal is the global configuration surface for values stored in 
 - **Advanced → Optional Analysis**: persistent Face Focus and MediaPipe enablement. Diagnostics reports whether their dependencies are available; choosing whether WebCap uses them remains a Settings decision.
 - **Advanced → Raw Configuration**: direct JSON editing.
 - **Advanced → Reset App**: restore stock requirement terms.
+
+The tab labels above are confirmed by `tool/tool.html` and the corresponding selection logic in `tool/js/app_settings.js`. The General tab hosts workspace-oriented settings rather than an additional top-level Workspace tab.
 
 ## Information architecture
 

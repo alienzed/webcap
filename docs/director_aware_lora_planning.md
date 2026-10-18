@@ -54,7 +54,19 @@ If strength is unknown, Director may propose a conspicuously **tentative editabl
 
 Refresh catalogue on a deliberate user action or opening an opted-in Director workflow; avoid expensive recurring scans or invisible background inference. Missing/inaccessible root or conflicting identity should be visible, not silently attributed to a different model. Unenriched models remain usable manually but excluded from AI recommendation. A selected LoRA that ComfyUI cannot load must produce an explicit operational error at generation or a clearly labeled availability check, not silently disappear from a proposal.
 
-Pass a **bounded** list of compact candidate summaries to Director, then richer details for shortlist candidates if needed. Do not truncate the catalogue in a way that systematically hides relevant options without indicating an incomplete search.
+### Catalogue presentation and metadata sufficiency
+
+**Metadata is the source of truth for discovery.** A profile must describe *when the LoRA is useful*, as well as its trained phrases, modifiers, and limits. If a concept is absent from the enrichment, neither lexical search nor Director can reasonably be expected to identify that LoRA. Fix the profile rather than creating speculative filename-based or semantic fallback machinery.
+
+- **Small catalogue:** present every enriched LoRA to Director in concise form, with a short **request-local code** (A, B, C…) standing for a real catalogue entry.
+- **Large catalogue:** WebCap uses simple, deterministic keyword relevance over enriched descriptions, usage guidance, trained phrases, and modifier groups/values to shortlist candidates. Filenames can be displayed for identity, **not used to invent capability**. Size limits should follow actual context budget, not an arbitrary hard-coded LoRA count.
+- **Always include previously assigned LoRAs**, even when they do not keyword-match the current instruction, so continuity and intentional choices are preserved.
+- Search Story-wide intent and the ordered Scene summaries together when planning across a Story. The same search can power “Add LoRA” in the approval modal.
+- If nothing meaningfully matches, **propose no additional LoRAs**. Do not fabricate meanings for unenriched files, use fuzzy guesses to mask missing metadata, or add another retrieval service.
+- Director chooses the request-local **codes**, recommended placement, and only metadata-supported phrases/modifiers; WebCap resolves codes back to root-scoped LoRA identities, validates them, and constructs the approval proposal. Never put `<lora:...>` syntax into generation prompts: existing Generate/Storyboard settings load LoRAs separately.
+- Keep the returned selection protocol small and structured. The creative decision belongs to Director; exact paths, identity validation, inheritance, and application belong to WebCap.
+
+The **quality benchmark must cover shortlist recall as well as Director selection quality**. A missed candidate caused by inadequate metadata is a profile-quality failure, not a reason to invent a hidden inference fallback.
 
 ## 4. Director planning — optimize for quality
 

@@ -3703,3 +3703,7 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-row details { margin: 6px 0 0 25px; min-width: 0; }
 .model-assessment-row details summary { cursor: pointer; color: var(--muted); }
 .model-assessment-row details .app-settings-help { overflow-wrap: anywhere; }
+
+.model-assessment-bulk { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.model-assessment-bulk button { width: auto; flex: 0 0 auto; margin: 0; padding: 5px 10px; }
+.model-assessment-bulk .app-settings-help { flex: 1 1 240px; }

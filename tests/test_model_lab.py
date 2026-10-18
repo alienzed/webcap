@@ -1,9 +1,73 @@
 import json
+import threading
 from pathlib import Path
 
 import pytest
 
 from tool.server import model_lab
+
+
+def test_status_reader_cannot_hold_open_journal_during_atomic_replace(monkeypatch):
+    run = {"id": "read-write-race", "version": 1, "status": "completed", "attempts": []}
+    model_lab._write_run(run)
+    path = model_lab._run_path(run["id"])
+    reader_open, release_reader, writer_started, writer_done = [threading.Event() for _ in range(4)]
+    original_read = Path.read_text
+    errors = []
+
+    def held_read(target, *args, **kwargs):
+        if target != path:
+            return original_read(target, *args, **kwargs)
+        with target.open("r", encoding="utf-8") as handle:
+            reader_open.set()
+            assert release_reader.wait(3)
+            return handle.read()
+
+    def reader():
+        try:
+            model_lab._read_raw(run["id"])
+        except Exception as exc:
+            errors.append(exc)
+
+    def writer():
+        writer_started.set()
+        try:
+            model_lab._write_run({**run, "updated": True})
+        except Exception as exc:
+            errors.append(exc)
+        finally:
+            writer_done.set()
+
+    monkeypatch.setattr(Path, "read_text", held_read)
+    read_thread, write_thread = threading.Thread(target=reader), threading.Thread(target=writer)
+    read_thread.start()
+    try:
+        assert reader_open.wait(3)
+        write_thread.start()
+        assert writer_started.wait(3)
+        assert not writer_done.wait(0.1), "writer must wait for the journal reader to close"
+    finally:
+        release_reader.set()
+        read_thread.join(3)
+        if write_thread.ident is not None:
+            write_thread.join(3)
+    assert not errors
+    assert not read_thread.is_alive() and not write_thread.is_alive()
+    assert json.loads(original_read(path, encoding="utf-8"))["updated"] is True
+    assert not list(path.parent.glob("*.tmp"))
+
+
+def test_journal_write_failure_remains_visible_and_preserves_previous_record(monkeypatch):
+    run = {"id": "write-denied", "version": 1, "status": "error"}
+    model_lab._write_run(run)
+    def denied(*args):
+        raise PermissionError("Persistent filesystem denial")
+    monkeypatch.setattr(model_lab.os, "replace", denied)
+    with pytest.raises(PermissionError, match="Persistent filesystem denial"):
+        model_lab._write_run({**run, "status": "running"})
+    path = model_lab._run_path(run["id"])
+    assert json.loads(path.read_text(encoding="utf-8")) == run
+    assert not list(path.parent.glob("*.tmp"))
 
 
 @pytest.fixture(autouse=True)

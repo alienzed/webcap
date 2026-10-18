@@ -25,12 +25,13 @@ function ui() {
       return null;
     }
   }
-  const nodes = Object.fromEntries(['diagnostics-modal', 'diagnostics-assessment-activity', 'diagnostics-assessment-run']
+  const nodes = Object.fromEntries(['diagnostics-modal', 'diagnostics-assessment-activity', 'diagnostics-assessment-run',
+    'diagnostics-assessment-deep', 'diagnostics-assessment-selection', 'diagnostics-assessment-summary']
     .map(id => [id, new Element()]));
   const snapshots = [], timers = [], finished = [], requests = [];
   const ctx = {document: {getElementById: id => nodes[id], createElement: () => new Element()}, Date, Set,
     publishActivityProgress: s => snapshots.push(s), finishActivityProgress: (...args) => finished.push(args),
-    setTimeout: fn => {timers.push(fn); return timers.length;}, clearTimeout() {}, reportConsoleError() {}};
+    setTimeout: fn => {timers.push(fn); return timers.length;}, clearTimeout() {}, reportConsoleError() {}, reportConsoleInfo() {}};
   ctx.window = ctx;
   for (const file of ['progress_card', 'diagnostics', 'model_lab']) {
     const source = fs.readFileSync('tool/js/' + file + '.js', 'utf8')
@@ -46,6 +47,31 @@ function run(status = 'running') {
     progress: {phase: 'testing', currentModelRef: 'ollama::model', currentFile: 'portrait.jpg', currentKind: 'director_writing'},
     attempts: [{jobId: 'job-exact', status: 'running'}]};
 }
+
+test('stale browser running state cannot block admission, and an immediate server failure is not called running', async () => {
+  for (const status of ['running', 'error']) {
+    const {ctx, nodes} = ui();
+    ctx.state = {folder: 'set'};
+    ctx.modelLabCurrentFiles = () => ['a.jpg', 'b.jpg']; ctx.modelLabGroups = () => [];
+    ctx.diagnosticsAssessmentCatalog.directors = [{id: 'local::model', modelId: 'model'}];
+    ctx.diagnosticsAssessmentSelected.director.add('local::model');
+    ctx.modelLabState.run = {id: 'stale-browser-preview', status: 'running'};
+    let admitted = 0;
+    ctx.modelLabPost = async () => { admitted++; return {run: {...run(status), error: status === 'error' ? 'Journal denied' : ''}}; };
+    ctx.modelLabRender = () => ctx.modelLabPublishProgress(ctx.modelLabState.run);
+    ctx.modelLabSchedulePoll = () => {};
+    if (status === 'error') {
+      await assert.rejects(ctx.runUnifiedModelAssessment(), /Journal denied/);
+      assert.match(nodes['diagnostics-assessment-selection'].textContent, /could not complete.*Journal denied/);
+      assert.equal(nodes['diagnostics-assessment-run'].disabled, false);
+    } else {
+      await ctx.runUnifiedModelAssessment();
+      assert.match(nodes['diagnostics-assessment-selection'].textContent, /Assessment running/);
+      assert.equal(nodes['diagnostics-assessment-run'].disabled, true);
+    }
+    assert.equal(admitted, 1, 'the server must decide whether work can start');
+  }
+});
 
 test('Diagnostics and Activity share one snapshot and retain the live card through updates', () => {
   const {ctx, nodes, snapshots} = ui();

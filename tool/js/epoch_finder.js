@@ -584,9 +584,30 @@
     els('ranking-note').textContent = ranking.length ? 'Cumulative concept fidelity · unclear excluded' +
       (errors ? ' · ' + errors + ' failed observation(s)' : '') :
       'Results appear as VL evaluates frames.';
+    // The existing campaign retention plan owns recommendations: no second cutoff
+    // or unvalidated RVN/DINO score. All boundary ties already survive retention.
+    var eligible = ranking.filter(function (entry) { return entry.score != null; });
+    // During a running campaign, only epochs surviving an actual completed cut
+    // are recommendations. At completion, the final round makes no further cut:
+    // use the last retained field. Single-round campaigns have no cut, so show top ties.
+    var completed = campaign.status === 'complete';
+    var topScore = eligible.length ? Math.max.apply(null, eligible.map(function (row) { return row.score; })) : null;
+    var advanced = campaign.rounds.length > 1 && (completed || round > 1);
+    var finalField = campaign.rounds[campaign.rounds.length - 1];
+    var recommended = new Set(advanced ?
+      ((completed ? finalField : plan) || {epochs: []}).epochs :
+      completed ? eligible.filter(function (row) { return row.score === topScore; }).map(function (row) { return row.epoch; }) : []);
+    var suggested = eligible.filter(function (entry) { return recommended.has(entry.epoch); });
+    els('shortlist').textContent = suggested.length ?
+      'Recommended for human review: ' + suggested.map(function (entry) {
+        return 'Epoch ' + entry.epoch;
+      }).join(', ') + ' · ' + (completed ? (advanced ? 'final retained field' : 'top-scoring ties') : 'survived previous round, provisional') +
+      ' · existing VL retention, not a final winner' :
+      'Recommendations appear after a completed cut, or when the campaign finishes.';
     var filter = els('rank-filter').value, sort = els('rank-sort').value;
     ranking = ranking.filter(function (entry) {
-      return filter === 'all' || (filter === 'active' ? entry.active !== false : entry.active === false);
+      return filter === 'all' || (filter === 'recommended' ? recommended.has(entry.epoch) && entry.score != null :
+        filter === 'active' ? entry.active !== false : entry.active === false);
     });
     if (sort === 'epoch') ranking.sort(function (a,b) { return a.epoch-b.epoch; });
     if (sort === 'count') ranking.sort(function (a,b) { return (b.count || 0)-(a.count || 0) || (b.score || 0)-(a.score || 0); });
@@ -596,7 +617,7 @@
       var evidence = (extra.rvn ? ' · RVN ' + observed.filter(function (u) { return u.referenceComplete; }).length + '/' + observed.length : '') +
         (extra.dino ? ' · DINO ' + observed.filter(function (u) { return u.dinoComplete; }).length + '/' + observed.length : '');
       return '<button type="button" class="epoch-finder-ranking-row" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch"><span class="rank">#' + (index + 1) +
-        '</span><span class="epoch">Epoch ' + entry.epoch + (entry.active === false ? ' · sidelined' : '') +
+        '</span><span class="epoch">Epoch ' + entry.epoch + (recommended.has(entry.epoch) && entry.score != null ? ' · recommended' : '') + (entry.active === false ? ' · sidelined' : '') +
         '</span><span class="epoch-finder-score-track"><i style="width:' +
         Math.round((entry.score || 0) * 100) + '%"></i></span><span class="percent">' +
         (entry.score == null ? '—' : Math.round(entry.score * 100) + '%') + '</span><small>' + (entry.count || 0) + ' weighted observations' + escape(evidence) + '</small></button>';

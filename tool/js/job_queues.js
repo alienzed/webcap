@@ -113,7 +113,27 @@
         var id = String(job.jobId || job.id || '');
         var fresh = row(job, which);
         var existing = previous.get(id);
-        if (existing && existing.outerHTML === fresh.outerHTML) return existing;
+        if (existing) {
+          var oldCopy = existing.querySelector('.inference-queue-copy');
+          var newCopy = fresh.querySelector('.inference-queue-copy');
+          existing.className = fresh.className;
+          existing.querySelector('.inference-queue-position').textContent = fresh.querySelector('.inference-queue-position').textContent;
+          var oldTitle = oldCopy.querySelector('strong');
+          oldTitle.textContent = newCopy.querySelector('strong').textContent;
+          var oldDetails = oldCopy.querySelectorAll('small');
+          var newDetails = newCopy.querySelectorAll('small');
+          if (oldDetails.length !== newDetails.length) {
+            oldCopy.replaceWith(newCopy);
+          } else {
+            newDetails.forEach(function (part, index) { oldDetails[index].textContent = part.textContent; });
+          }
+          if (existing.dataset.jobQueueStatus !== job.status) {
+            existing.querySelector('.inference-queue-actions').replaceWith(fresh.querySelector('.inference-queue-actions'));
+          }
+          existing.dataset.jobQueueStatus = job.status;
+          return existing;
+        }
+        fresh.dataset.jobQueueStatus = job.status;
         return fresh;
       });
     if (!wanted.length) wanted.push(textNode('div', 'inference-queue-empty', 'No ' + which + ' work queued.'));
@@ -135,18 +155,24 @@
     if (which !== 'inference') summary.textContent = which === 'llm' ? 'Director requests' : 'Managed training';
     else if (window.refreshInferenceQueue) window.refreshInferenceQueue();
     render(which);
-    if (which !== 'inference') refresh();
+    refresh();
   }
   function refresh() {
-    if (pending || lane === 'inference' || drawer.classList.contains('hidden')) return Promise.resolve();
+    if (pending || drawer.classList.contains('hidden')) return Promise.resolve();
     pending = true;
-    var which = lane;
-    return request(which === 'llm' ? '/fs/director/queue' : '/fs/training_runner/status')
-      .then(function (data) { snapshots[which] = which === 'llm' ? data.queue : data; render(which); })
-      .catch(function (error) {
-        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Job Queues', error);
-        document.querySelector('[data-job-queue-summary="' + which + '"]').textContent = error.message;
-      }).then(function () { pending = false; });
+    var sources = [
+      ['llm', '/fs/director/queue'],
+      ['training', '/fs/training_runner/status']
+    ];
+    return Promise.all(sources.map(function (entry) {
+      return request(entry[1]).then(function (data) {
+        snapshots[entry[0]] = entry[0] === 'llm' ? data.queue : data;
+        render(entry[0]);
+      }).catch(function (error) {
+        if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Job Queues · ' + entry[0], error);
+        document.querySelector('[data-job-queue-summary="' + entry[0] + '"]').textContent = error.message;
+      });
+    })).then(function () { pending = false; }, function (error) { pending = false; throw error; });
   }
   function perform(which, operation, id) {
     if (which === 'llm') {

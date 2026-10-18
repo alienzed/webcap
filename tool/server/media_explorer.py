@@ -77,10 +77,11 @@ def discover_generate(limit=500):
     return sorted(items.values(), key=lambda x: (x["createdAt"], x["id"]), reverse=True)
 
 
-def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest"):
+def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
-    results = discover_generate()
+    full = str(full).strip().lower() in ("1", "true", "yes")
+    results = discover_generate(limit=None if full else 500)
     if role:
         results = [item for item in results if item["role"] == role]
     if kind:
@@ -99,4 +100,4 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest"):
         raise ValueError("Unknown media sort.")
     return {"ok": True, "items": results[offset:offset + limit],
             "total": len(results), "offset": offset, "limit": limit,
-            "complete": False, "scope": "Generate (latest 500 results)"}
+            "complete": full, "scope": "Generate (all results)" if full else "Generate (latest 500 results)"}

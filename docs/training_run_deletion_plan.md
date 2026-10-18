@@ -30,12 +30,12 @@ Phase gate: unit tests for multiple rows sharing output, active/queued train job
 Implement an explicit `POST /fs/training_history/job/delete` using the **same** authoritative resolver/check as preview, rechecking queue state while holding the existing Training lock to avoid a preview/execution race. Respect the runner's existing queue/history lock ordering; do not add a new lock.
 
 - Delete the exact timestamped Diffusion Pipe output directory and associated *run-owned* job/artifact/frozen-media directories **at verified action/job leaves only**. Do not remove an entire logical-run parent containing other captures/jobs.
-- Retire matching terminal queue records through the existing `_write_state(..., retired_job_ids=...)` mechanism (and check continuation bookkeeping) so `_sync_histories` cannot recreate deleted history. Remove all history entries sharing the physical directory **only after** artifact cleanup completes. Ensure a retry remains possible if any filesystem operation fails.
+- Leave ordinary terminal-job persistence/retry/retirement to the existing Training runner reconciliation lifecycle (`_sync_histories`, `_retire_terminal_jobs`, `_persist_reconciled_state`). Do not add queue cleanup to run deletion. Remove history entries **only after** artifact cleanup completes; keep a retry path after any filesystem failure. If a retained terminal record is actually encountered, handle that concrete exception without broadening the deletion operation.
 - If optional candidate cleanup is selected, remove only Copy to Test files with verified matching provenance (and their sidecars); never sweep all Test sessions or unrelated Set-level files.
 - Missing paths are ordinary idempotent cleanup; genuine I/O failures surface in the global Console and endpoint response. Do not report an uncompleted delete as success.
 - No Archive, soft-delete, trash, generalized dependency manager, or special downstream inference failure checks.
 
-Phase gate: focused filesystem tests with temporary training and Test roots, including failure mid-delete and retry, history reappearance after status reconciliation/restart, queued continuation references, and unrelated data surviving.
+Phase gate: focused filesystem tests with temporary training and Test roots, including failure mid-delete and retry, queue-to-history retry and retirement in existing focused runner tests, queued continuation references, and unrelated data surviving.
 
 ## Phase 3 — Training History UI
 

@@ -185,6 +185,8 @@ def list_runs():
             "error": str(payload.get("error") or ""),
             "attemptCount": len(payload.get("attempts") or []),
             "summary": _copy(payload.get("summary") or {}),
+            "progress": _copy(payload.get("progress") or {}),
+            "modelCount": len(payload.get("visionModels") or []) + len(payload.get("directorModels") or []),
             "active": bool(_active_record(payload.get("id"))),
         })
     rows.sort(key=lambda row: row.get("startedAt") or "", reverse=True)

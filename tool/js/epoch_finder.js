@@ -553,6 +553,12 @@
       var completed = units.filter(function (u) { return u[key]; }).length;
       var errors = units.filter(function (u) { return u[errorKey]; }).length;
       els(kind + '-count').textContent = completed + ' / ' + total + (errors ? ' · ' + errors + ' failed' : '');
+      if (kind === 'rvn') {
+        var firstError = units.find(function (unit) { return !!unit.referenceError; });
+        els('reference-compare-error').textContent = firstError ?
+          'Reference Compare failed at epoch ' + firstError.epoch + ': ' + firstError.referenceError : '';
+        els('reference-compare-error').classList.toggle('hidden', !firstError);
+      }
     });
     els('field-count').textContent = plan.epochs.length + ' epochs';
     els('render-bar').style.width = (total ? frames / total * 100 : 0) + '%';

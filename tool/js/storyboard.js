@@ -12,6 +12,7 @@
     sceneSavePromises: {},
     sceneSaveErrors: {},
     generationJobs: {},
+    libraryInferenceJobs: {},
     generationReceipts: {},
     newTakeCounts: {},
     sequenceExport: null,
@@ -3254,8 +3255,13 @@
           && storyState.storyAction.active
           && String(storyState.storyAction.storyId || '') === String(story.id || '');
         var queuedFirstCut = queuedFirstCutForStory(story.id);
+        var inferenceJobs = storyState.libraryInferenceJobs[String(story.id || '')] || [];
+        var runningTakes = inferenceJobs.filter(function (job) { return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1; }).length;
+        var queuedTakes = inferenceJobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
         if (activeFirstCut) meta.push('First Cut running');
         else if (queuedFirstCut) meta.push('First Cut queued #' + String(firstCutQueueDisplayPosition(queuedFirstCut)));
+        if (runningTakes) meta.push(String(runningTakes) + ' Take' + (runningTakes === 1 ? '' : 's') + ' running');
+        if (queuedTakes) meta.push(String(queuedTakes) + ' Take' + (queuedTakes === 1 ? '' : 's') + ' queued');
         if (story.status && story.status !== 'active') meta.push(story.status);
         meta.push(String(Number(story.sceneCount || 0)) + ' scene' + (Number(story.sceneCount || 0) === 1 ? '' : 's'));
         return '<div class="storyboard-story-row' + (active ? ' active' : '') + '" data-story-id="' + escapeHtml(story.id) + '">' +
@@ -5027,7 +5033,17 @@
   }
 
   function syncStoryboardInferenceSnapshot(queue) {
-    if (!storyState.story || !queue || !Array.isArray(queue.jobs)) return;
+    if (!queue || !Array.isArray(queue.jobs)) return;
+    var byStory = Object.create(null);
+    queue.jobs.forEach(function (job) {
+      if (String(job.client || '') !== 'storyboard' || !job.storyId) return;
+      var id = String(job.storyId);
+      if (!byStory[id]) byStory[id] = [];
+      byStory[id].push(job);
+    });
+    storyState.libraryInferenceJobs = byStory;
+    renderLibrary();
+    if (!storyState.story) return;
     var storyId = String(storyState.story.id || '');
     var seenJobIds = Object.create(null);
     queue.jobs.forEach(function (rawJob) {

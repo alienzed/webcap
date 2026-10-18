@@ -1602,6 +1602,7 @@ def test_chat_runtime_overrides_are_validated_and_forwarded(llm_root, monkeypatc
             "assessmentEvidence": assessment_evidence,
         }) or {
             "text": "CONTEXT_OK",
+            "requestSeconds": 2.5,
             "model": model_id,
             "finishReason": "stop",
             "contextSize": context_size,
@@ -1626,6 +1627,7 @@ def test_chat_runtime_overrides_are_validated_and_forwarded(llm_root, monkeypatc
         "assessmentEvidence": assessment_evidence,
     }
     assert finished["result"]["contextSize"] == 16384
+    assert finished["result"]["requestSeconds"] == 2.5
 
 
 def test_runtime_overrides_are_rejected_outside_chat(llm_root):

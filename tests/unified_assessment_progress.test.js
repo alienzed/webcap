@@ -16,6 +16,7 @@ function ui() {
     removeAttribute(k) { delete this.attrs[k]; }
     appendChild(node) { this.children.push(node); return node; }
     replaceChildren(...nodes) { this.children = nodes; }
+    querySelectorAll() { return []; }
     querySelector(selector) {
       const attr = selector.slice(1, -1);
       for (const child of this.children) {
@@ -26,7 +27,7 @@ function ui() {
     }
   }
   const nodes = Object.fromEntries(['diagnostics-modal', 'diagnostics-assessment-activity', 'diagnostics-assessment-run',
-    'diagnostics-assessment-deep', 'diagnostics-assessment-selection', 'diagnostics-assessment-summary']
+    'diagnostics-assessment-deep', 'diagnostics-assessment-selection', 'diagnostics-assessment-summary', 'diagnostics-assessment-results']
     .map(id => [id, new Element()]));
   const snapshots = [], timers = [], finished = [], requests = [];
   const ctx = {document: {getElementById: id => nodes[id], createElement: () => new Element()}, Date, Set,
@@ -47,6 +48,33 @@ function run(status = 'running') {
     progress: {phase: 'testing', currentModelRef: 'ollama::model', currentFile: 'portrait.jpg', currentKind: 'director_writing'},
     attempts: [{jobId: 'job-exact', status: 'running'}]};
 }
+
+test('assessment speed distinguishes request throughput from provider decode speed', () => {
+  const {ctx} = ui();
+  const attempt = {startedAt: '2026-10-18T12:00:00Z', finishedAt: '2026-10-18T12:01:00Z',
+    result: {usage: {completion_tokens: 900}}};
+  assert.equal(ctx.diagnosticsProbeMetrics(attempt).speed, 15);
+  assert.match(ctx.diagnosticsProbeMetrics(attempt).hint, /queue wait/);
+  attempt.result.requestSeconds = 30;
+  assert.equal(ctx.diagnosticsProbeMetrics(attempt).speed, 30);
+  assert.doesNotMatch(ctx.diagnosticsProbeMetrics(attempt).hint, /queue wait/);
+  attempt.result.timings = {predicted_per_second: 45};
+  assert.equal(ctx.diagnosticsProbeMetrics(attempt).speed, 45);
+  assert.match(ctx.diagnosticsProbeMetrics(attempt).hint, /Runtime-reported/);
+});
+
+test('live probe metrics update existing cells without replacing interactive model rows', () => {
+  const {ctx, nodes} = ui();
+  const row = ctx.document.createElement('div'); row.dataset = {assessmentModel: 'vision:local::vl'};
+  const speed = ctx.document.createElement('strong'); speed.setAttribute('data-assessment-speed', '');
+  const output = ctx.document.createElement('strong'); output.setAttribute('data-assessment-output', '');
+  row.appendChild(speed); row.appendChild(output);
+  nodes['diagnostics-assessment-results'].querySelectorAll = () => [row];
+  ctx.diagnosticsUpdateAssessmentMetrics({attempts: [{role: 'vision', modelRef: 'local::vl', finishedAt: 'now',
+    result: {usage: {completion_tokens: 100}, requestSeconds: 5}}]});
+  assert.equal(speed.textContent, '20.0 tok/s'); assert.equal(output.textContent, '100 tokens');
+  assert.equal(row.children[0], speed);
+});
 
 test('stale browser running state cannot block admission, and an immediate server failure is not called running', async () => {
   for (const status of ['running', 'error']) {

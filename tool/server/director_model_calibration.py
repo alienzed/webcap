@@ -236,7 +236,7 @@ def get_report(model_ref):
     return _report_with_derived_fields(_read_document()["reports"].get(model_ref))
 
 
-def save_report(report):
+def normalize_report(report):
     report = report if isinstance(report, dict) else {}
     model_ref = str(report.get("modelRef") or "").strip()
     runtime_id = str(report.get("runtimeId") or "").strip()
@@ -290,10 +290,36 @@ def save_report(report):
         "attempts": normalized_attempts,
     }
 
+    if report.get("importedFrom"):
+        normalized["importedFrom"] = json.loads(json.dumps(report["importedFrom"]))
+        normalized["updatedAt"] = str(report.get("updatedAt") or "")
+        datetime.fromisoformat(normalized["updatedAt"]).astimezone(timezone.utc)
+    return normalized
+
+
+def save_report(report):
+    normalized = normalize_report(report)
     payload = _read_document()
+    model_ref = normalized["modelRef"]
     payload["reports"][model_ref] = normalized
     _write_document(payload)
     return json.loads(json.dumps(normalized))
+
+
+def import_reports(reports):
+    """Keep newer local evidence and never apply imported runtime limits."""
+    normalized = [normalize_report(report) for report in reports]
+    payload = _read_document()
+    count = 0
+    for report in normalized:
+        previous = payload["reports"].get(report["modelRef"])
+        if previous and datetime.fromisoformat(previous["updatedAt"]) >= datetime.fromisoformat(report["updatedAt"]):
+            continue
+        payload["reports"][report["modelRef"]] = report
+        count += 1
+    if count:
+        _write_document(payload)
+    return count
 
 
 

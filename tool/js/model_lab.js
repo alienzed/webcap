@@ -167,6 +167,16 @@ function modelLabProgressSnapshot(run) {
 // The server owns Model Lab; both local Diagnostics and Activity consume the
 // same run snapshot, updated by the existing Model Lab polling cycle.
 function modelLabPublishProgress(run) {
+  if (run && Array.isArray(run.attempts) && !run.importedFrom) {
+    if (modelLabState.errorRunId !== run.id) {
+      modelLabState.errorRunId = run.id; modelLabState.reportedErrors = new Set();
+    }
+    run.attempts.forEach(function (attempt) {
+      if (attempt.status !== 'failed' || modelLabState.reportedErrors.has(attempt.id)) return;
+      modelLabState.reportedErrors.add(attempt.id);
+      reportConsoleError('Model Assessment', new Error([attempt.modelRef, attempt.kind, attempt.file, attempt.error].filter(Boolean).join(' · ')));
+    });
+  }
   if (run) diagnosticsRenderAssessmentProgress(run);
   var id = run && run.id ? 'model-lab:' + String(run.id) : '';
   var status = String(run && run.status || '');
@@ -221,7 +231,7 @@ function modelLabRenderRun() {
   badge.textContent = status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
   badge.dataset.state = status === 'completed' ? 'complete' : (status === 'running' ? 'running' : (status === 'error' ? 'error' : 'stopped'));
   stop.classList.toggle('hidden', status !== 'running');
-  resume.classList.toggle('hidden', ['stopped', 'interrupted', 'error'].indexOf(status) === -1);
+  resume.classList.toggle('hidden', !!run.importedFrom || ['stopped', 'interrupted', 'error'].indexOf(status) === -1);
   runBtn.disabled = status === 'running';
 
   var progress = run.progress || {};
@@ -234,6 +244,7 @@ function modelLabRenderRun() {
         modelLabRunProgress(run)
       ].filter(Boolean).join(' · ')
     : modelLabRunProgress(run);
+  if (run.importedFrom) activity.textContent += ' · Imported from ' + run.importedFrom.host + ' · Historical evidence';
 
   var attempts = Array.isArray(run.attempts) ? run.attempts : [];
   if (!attempts.length) {

@@ -1742,6 +1742,7 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             _debug_llm_response(response, model_ref, time.perf_counter() - request_started)
             result = _completion_result(response, model_ref, allow_truncated=allow_truncated, assessment_evidence=assessment_evidence)
             result["reportedModel"] = reported_model
+            result["requestSeconds"] = time.perf_counter() - request_started
             if _remote_is_ollama():
                 remote_model = _ollama_running_model(model_id)
                 result["contextSize"] = int(remote_model.get("contextSize") or 0)
@@ -1777,6 +1778,7 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
                 slot = _slot_snapshot(model_id)
                 effective_context = int(slot.get("contextSize") or effective_context)
             result["contextSize"] = effective_context
+            result["requestSeconds"] = time.perf_counter() - request_started
             completed = True
             return result
         finally:

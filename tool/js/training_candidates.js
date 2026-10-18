@@ -842,6 +842,181 @@ function trainingCandidatesAvailableArtifact(epoch, data) {
   })[0] || null;
 }
 
+var epochProfileEditState = null;
+var epochProfileSuggestions = null;
+
+function closeEpochProfile() {
+  var modal = document.getElementById('epoch-profile-modal');
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  epochProfileEditState = null;
+  epochProfileSuggestions = null;
+}
+
+function openEpochProfile(epoch) {
+  var folder = String(trainingWorkspaceState.candidateFolder || trainingWorkspaceState.folder || '');
+  var jobId = String(trainingWorkspaceState.candidateJobId || '');
+  if (!folder || !jobId) throw new Error('Select a training run before editing its epoch profile.');
+  var modal = document.getElementById('epoch-profile-modal');
+  var status = document.getElementById('epoch-profile-status');
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  status.textContent = 'Reading checkpoint metadata…';
+  epochProfileEditState = {folder: folder, jobId: jobId, epoch: Number(epoch)};
+  epochProfileSuggestions = null;
+  trainingRunnerRequest('/fs/generate/director', {method: 'GET'}).then(function (payload) {
+    if (!epochProfileEditState || epochProfileEditState.epoch !== Number(epoch)) return;
+    var picker = document.getElementById('epoch-profile-director-model');
+    picker.innerHTML = '<option value="">Choose Director model</option>';
+    (payload.models || []).forEach(function (model) {
+      var option = document.createElement('option');
+      option.value = String(model.id || '');
+      option.textContent = String(model.label || model.name || model.id || '');
+      if (option.value) picker.appendChild(option);
+    });
+  }).catch(function (err) {
+    status.textContent = 'Director model discovery failed: ' + String(err.message || err);
+  });
+  trainingRunnerRequest('/fs/training_candidates/profile', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(epochProfileEditState)
+  }).then(function (payload) {
+    if (!epochProfileEditState || epochProfileEditState.epoch !== Number(epoch)) return;
+    epochProfileSuggestions = payload.suggestions || null;
+    var sources = payload.sources || {};
+    var enrichment = ((sources.webcap || {}).modelProfile || {}).enrichment || {};
+    var imported = sources.sidecar || {};
+    var civitai = sources.civitai || {};
+    document.getElementById('epoch-profile-source').textContent = String(payload.checkpoint || '');
+    document.getElementById('epoch-profile-description').value =
+      String(enrichment.description || imported.description || civitai.description || '');
+    var activation = String(imported['activation text'] || '').trim();
+    var importedWords = activation ? activation.split(',').map(function (term) { return term.trim(); }).filter(Boolean) : [];
+    var words = enrichment.trainedWords || (importedWords.length ? importedWords : civitai.trainedWords || []);
+    document.getElementById('epoch-profile-words').value = Array.isArray(words) ? words.join('\n') : String(words || '');
+    document.getElementById('epoch-profile-options').value =
+      JSON.stringify(enrichment.promptOptions || {}, null, 2);
+    document.getElementById('epoch-profile-guidance').value = String(enrichment.guidance || '');
+    var importedNotes = [];
+    if (typeof imported['preferred weight'] === 'number') {
+      importedNotes.push('SD WebUI preferred weight: ' + imported['preferred weight']);
+    }
+    if (imported['negative text']) importedNotes.push('SD WebUI negative prompt available in source metadata');
+    status.textContent = [payload.vocabularyWarning || 'Imported metadata is suggested; edits are stored separately in WebCap.']
+      .concat(importedNotes).join(' · ');
+  }).catch(function (err) { status.textContent = String(err.message || err); });
+}
+
+function enrichEpochProfile() {
+  if (!epochProfileEditState) return;
+  var modelId = document.getElementById('epoch-profile-director-model').value;
+  var status = document.getElementById('epoch-profile-status');
+  if (!modelId) { status.textContent = 'Choose a Director model first.'; return; }
+  var button = document.getElementById('epoch-profile-enrich');
+  var target = Object.assign({}, epochProfileEditState);
+  button.disabled = true;
+  status.textContent = 'Queueing profile enrichment…';
+  trainingRunnerRequest('/fs/training_candidates/profile/director', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(Object.assign({}, target, {directorModel: modelId}))
+  }).then(function (response) {
+    var job = response.job || {};
+    if (!job.jobId) throw new Error('Director returned no job ID.');
+    function poll() {
+      return trainingRunnerRequest('/fs/director/job?job=' + encodeURIComponent(job.jobId), {method: 'GET'})
+        .then(function (payload) {
+          var current = payload.job || {};
+          if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(current.status) !== -1) {
+            throw new Error(current.error || 'Director ' + current.status);
+          }
+          if (current.status === 'completed') {
+            if (!epochProfileEditState || epochProfileEditState.epoch !== target.epoch ||
+                epochProfileEditState.jobId !== target.jobId) return;
+            var suggestion = (current.result || {}).analysis;
+            if (!suggestion || typeof suggestion !== 'object') throw new Error('Director returned no profile suggestions.');
+            document.getElementById('epoch-profile-description').value = String(suggestion.description || '');
+            document.getElementById('epoch-profile-words').value = (suggestion.trainedWords || []).join('\n');
+            document.getElementById('epoch-profile-options').value = JSON.stringify(suggestion.promptOptions || {}, null, 2);
+            document.getElementById('epoch-profile-guidance').value = String(suggestion.guidance || '');
+            status.textContent = 'Director suggestions loaded for review. Save Profile to keep them.';
+            return;
+          }
+          if (epochProfileEditState && epochProfileEditState.epoch === target.epoch &&
+              epochProfileEditState.jobId === target.jobId) {
+            status.textContent = 'Director ' + String(current.status || 'working') + '…';
+          }
+          return new Promise(function (resolve) { setTimeout(resolve, 2000); }).then(poll);
+        });
+    }
+    return poll();
+  }).catch(function (err) {
+    status.textContent = 'Profile enrichment failed: ' + String(err.message || err);
+  }).finally(function () { button.disabled = false; });
+}
+
+function embedEpochProfile() {
+  if (!epochProfileEditState) return;
+  if (!window.confirm('Embed the last saved profile into the exported LoRA? This rewrites the saved .safetensors file, not the training checkpoint. Unsaved editor changes will not be included.')) return;
+  var status = document.getElementById('epoch-profile-status');
+  var button = document.getElementById('epoch-profile-embed');
+  button.disabled = true;
+  status.textContent = 'Embedding metadata into exported LoRA…';
+  trainingRunnerRequest('/fs/training_candidates/profile/embed', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(epochProfileEditState)
+  }).then(function (payload) {
+    status.textContent = 'Profile embedded in saved LoRA ' + String(payload.checkpoint || '') + '.';
+  }).catch(function (err) {
+    status.textContent = 'Embedding failed: ' + String(err.message || err);
+  }).finally(function () { button.disabled = false; });
+}
+
+function saveEpochProfile() {
+  if (!epochProfileEditState) return;
+  var status = document.getElementById('epoch-profile-status');
+  var button = document.getElementById('epoch-profile-save');
+  var options;
+  try {
+    options = JSON.parse(document.getElementById('epoch-profile-options').value || '{}');
+  } catch (err) {
+    status.textContent = 'Prompt options must be valid JSON: ' + err.message;
+    return;
+  }
+  var data = Object.assign({}, epochProfileEditState, {enrichment: {
+    description: document.getElementById('epoch-profile-description').value,
+    trainedWords: document.getElementById('epoch-profile-words').value.split(/\r?\n/).map(function (word) { return word.trim(); }).filter(Boolean),
+    promptOptions: options,
+    guidance: document.getElementById('epoch-profile-guidance').value
+  }});
+  button.disabled = true;
+  status.textContent = 'Saving profile…';
+  trainingRunnerRequest('/fs/training_candidates/profile', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+  }).then(function () { status.textContent = 'Profile saved.'; })
+    .catch(function (err) { status.textContent = String(err.message || err); })
+    .finally(function () { button.disabled = false; });
+}
+
+document.addEventListener('click', function (event) {
+  var open = event.target.closest('[data-training-candidate-profile-epoch]');
+  if (open) { openEpochProfile(open.getAttribute('data-training-candidate-profile-epoch')); return; }
+  if (event.target.closest('#epoch-profile-close, #epoch-profile-cancel')) { closeEpochProfile(); return; }
+  if (event.target.closest('#epoch-profile-save')) saveEpochProfile();
+  if (event.target.closest('#epoch-profile-enrich')) enrichEpochProfile();
+  if (event.target.closest('#epoch-profile-embed')) embedEpochProfile();
+  if (event.target.closest('#epoch-profile-import-tags')) {
+    if (!epochProfileSuggestions) { document.getElementById('epoch-profile-status').textContent = 'No captured vocabulary available.'; return; }
+    var options = {};
+    try { options = JSON.parse(document.getElementById('epoch-profile-options').value || '{}'); }
+    catch (err) { document.getElementById('epoch-profile-status').textContent = 'Correct the options JSON before importing.'; return; }
+    Object.keys(epochProfileSuggestions.promptOptions || {}).forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(options, key)) options[key] = epochProfileSuggestions.promptOptions[key];
+    });
+    document.getElementById('epoch-profile-options').value = JSON.stringify(options, null, 2);
+    document.getElementById('epoch-profile-status').textContent = 'Imported suggested training terms into the editor. Review and Save Profile to persist.';
+  }
+});
+
 function trainingCandidatesPinnedActionsHtml(epoch, data) {
   var artifact = trainingCandidatesAvailableArtifact(epoch, data);
   if (!artifact) return '';
@@ -869,6 +1044,7 @@ function trainingCandidatesPinnedActionsHtml(epoch, data) {
   return '<div class="training-candidates-pinned-actions">' +
     '<button type="button" class="review-captions-btn training-candidates-select-toggle ' + selectionClass + '" data-training-candidate-select-epoch="' + escapedEpoch + '" title="' + selectionTitle + '"' + selectionDisabled + '>' + saveIcon + '<span>' + selectionLabel + '</span></button>' +
     '<div class="training-candidates-pinned-actions-secondary">' +
+      (isSelected ? '<button type="button" class="review-captions-btn" data-training-candidate-profile-epoch="' + escapedEpoch + '" title="Edit selected epoch metadata">Profile</button>' : '') +
       '<button type="button" class="review-captions-btn training-candidates-open-epoch training-candidates-icon-action" data-training-candidate-epoch="' + escapedEpoch + '" title="Open Epoch Folder" aria-label="Open Epoch Folder">' + folderIcon + '</button>' +
       '<button type="button" class="review-captions-btn training-candidates-test-toggle is-' + testAction + testIconClass + '" data-training-candidate-test-epoch="' + escapedEpoch + '" data-training-candidate-test-action="' + testAction + '" title="' + testTitle + '" aria-label="' + testAria + '">' + testLabel + '</button>' +
     '</div>' +
@@ -1254,7 +1430,10 @@ function saveKeepLora() {
     var onSaved = keepLoraState.onSaved;
     closeKeepLora();
     if (onSaved) onSaved(payload);
-    if (payload && payload.selectionUnavailable) {
+    if (payload && payload.profileWarning) {
+      setStatus(String(payload.profileWarning));
+      if (typeof window.reportConsoleWarning === 'function') window.reportConsoleWarning('Training', payload.profileWarning);
+    } else if (payload && payload.selectionUnavailable) {
       setStatus('Saved ' + String(payload.fileName || filename) + '. The original training job is no longer indexed, so selection metadata was not updated.');
     } else {
       setStatus('Saved ' + String(payload && payload.fileName || filename) + ' and selected epoch ' + String(selectedEpoch) + '.');

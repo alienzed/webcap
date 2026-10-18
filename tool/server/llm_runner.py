@@ -324,6 +324,9 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         elif operation == "analyze_caption_wildcard":
             from .test_wildcard_contract import normalize_result
             analysis = normalize_result(llm_result.get("data"))
+        elif operation == "epoch_profile_enrichment":
+            from .model_epoch_profile import validate_enrichment
+            analysis = validate_enrichment(llm_result.get("data"))
         else:
             raise RuntimeError("Unsupported Test Generations LLM operation: " + (operation or "empty"))
         return {

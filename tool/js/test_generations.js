@@ -2475,6 +2475,72 @@
       var heading = document.createElement('div');
       heading.className = 'test-generations-staged-heading';
       heading.appendChild(name);
+      var profile = metadata && metadata.modelProfile && metadata.modelProfile.enrichment;
+      if (profile) {
+        var profileSummary = document.createElement('span');
+        profileSummary.className = 'test-generations-staged-run';
+        var description = String(profile.description || '').trim();
+        var words = Array.isArray(profile.trainedWords) ? profile.trainedWords : [];
+        profileSummary.textContent = description || (words.length ? 'Prompt terms: ' + words.join(', ') : 'Enriched model profile');
+        profileSummary.title = [description, words.length ? 'Key phrases: ' + words.join(', ') : '',
+          profile.guidance || ''].filter(Boolean).join('\n');
+        heading.appendChild(profileSummary);
+        if (words.length) {
+          var insertTerms = document.createElement('button');
+          insertTerms.type = 'button';
+          insertTerms.className = 'review-captions-btn';
+          insertTerms.textContent = 'Insert phrases';
+          insertTerms.title = 'Insert this LoRA\'s key phrases into the Test prompt; never changes the prompt automatically';
+          insertTerms.addEventListener('click', function () {
+            var promptField = el('test-generations-prompt');
+            var text = words.join(', ');
+            var start = promptField.selectionStart;
+            var end = promptField.selectionEnd;
+            var prefix = promptField.value.slice(0, start);
+            var suffix = promptField.value.slice(end);
+            var separator = prefix.trim() && !/[\s,]$/.test(prefix) ? ', ' : '';
+            promptField.value = prefix + separator + text + suffix;
+            promptField.dispatchEvent(new Event('input', {bubbles: true}));
+            promptField.focus();
+            promptField.setSelectionRange((prefix + separator + text).length, (prefix + separator + text).length);
+          });
+          heading.appendChild(insertTerms);
+        }
+        var groups = profile.promptOptions || {};
+        if (Object.keys(groups).some(function (key) { return Array.isArray(groups[key]) && groups[key].length > 1; })) {
+          var insertOptions = document.createElement('button');
+          insertOptions.type = 'button';
+          insertOptions.className = 'review-captions-btn';
+          insertOptions.textContent = 'Insert options';
+          insertOptions.title = 'Insert structured LoRA options as editable wildcard prompt fragments';
+          insertOptions.addEventListener('click', function () {
+            var fragments;
+            try {
+              fragments = Object.keys(groups).map(function (key) {
+                var values = groups[key];
+                if (!Array.isArray(values) || values.length < 2) return '';
+                if (values.some(function (value) { return /[{}|]/.test(value); })) {
+                  throw new Error('Wildcard options contain syntax characters in ' + key);
+                }
+                return '{' + values.join('|') + '}';
+              }).filter(Boolean);
+            } catch (err) {
+              if (typeof reportError === 'function') reportError(err);
+              return;
+            }
+            var field = el('test-generations-prompt');
+            var before = field.value.slice(0, field.selectionStart);
+            var after = field.value.slice(field.selectionEnd);
+            var text = (before.trim() && !/[\s,]$/.test(before) ? ', ' : '') + fragments.join(', ');
+            var cursor = before.length + text.length;
+            field.value = before + text + after;
+            field.dispatchEvent(new Event('input', {bubbles: true}));
+            field.focus();
+            field.setSelectionRange(cursor, cursor);
+          });
+          heading.appendChild(insertOptions);
+        }
+      }
       if (parts.detail) {
         var runName = document.createElement('span');
         runName.className = 'test-generations-staged-run';

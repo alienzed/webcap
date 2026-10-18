@@ -158,6 +158,38 @@ def available_names(node_type, input_name, label):
     return names
 
 
+
+def lora_embedded_profile(name):
+    """Read portable WebCap guidance from the selected ComfyUI asset itself.
+
+    The exact available LoRA name is resolved before requesting metadata; no
+    filename-based association with an unrelated local checkpoint is made.
+    """
+    selected = resolve_name(name, available_names("LoraLoader", "lora_name", "LoRA"), "LoRA")
+    url = COMFY_BASE_URL + "/view_metadata/loras?filename=" + urllib.parse.quote(selected, safe="")
+    try:
+        metadata = _read_json_response(url, timeout=5)
+    except ComfyHttpError as exc:
+        if exc.status == 404:  # The model may have no safetensors header metadata.
+            return {"name": selected, "modelProfile": None}
+        raise
+    if not isinstance(metadata, dict):
+        raise ValueError("ComfyUI LoRA metadata must be an object.")
+    raw = metadata.get("webcap.profile")
+    if not raw:
+        return {"name": selected, "modelProfile": None}
+    if not isinstance(raw, str):
+        raise ValueError("Embedded WebCap profile must be serialized JSON text.")
+    profile = json.loads(raw)
+    if not isinstance(profile, dict):
+        raise ValueError("Embedded WebCap profile must be an object.")
+    from .model_epoch_profile import validate_enrichment
+    enrichment = validate_enrichment(profile.get("enrichment"))
+    return {"name": selected, "modelProfile": {
+        "schemaVersion": 1, "enrichment": enrichment,
+    }}
+
+
 def resolve_name(configured_name, available, label):
     configured = str(configured_name or "").strip()
     normalized = _normalize_name(configured)

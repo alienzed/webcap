@@ -1188,7 +1188,32 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
                 destination_path.unlink()
             except OSError:
                 pass
+            try:
+                destination_path.with_suffix(".webcap.json").unlink(missing_ok=True)
+            except OSError:
+                pass
         raise
+
+    # Portable metadata is optional: failure must not reverse successful Save & Select.
+    profile_warning = ""
+    sidecar = destination_path.with_suffix(".webcap.json")
+    temporary = sidecar.with_name("." + sidecar.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        from .model_epoch_profile import _read_object
+        source_profile = _read_object(source.with_suffix(".webcap.json")).get("modelProfile")
+        if source_profile is not None:
+            if not isinstance(source_profile, dict):
+                raise ValueError("Source modelProfile is invalid.")
+            with temporary.open("x", encoding="utf-8") as profile_handle:
+                json.dump({"modelProfile": source_profile}, profile_handle, ensure_ascii=False, indent=2)
+                profile_handle.flush()
+                os.fsync(profile_handle.fileno())
+            os.replace(temporary, sidecar)
+    except (OSError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
+        profile_warning = "LoRA saved and selected, but profile metadata was not copied: " + str(exc)
+        _logger.warning("%s", profile_warning)
+    finally:
+        temporary.unlink(missing_ok=True)
 
     return {
         "destination": str(destination_path),
@@ -1197,6 +1222,7 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
         "stage": stage,
         "selected": selected,
         "selectionUnavailable": selection_unavailable,
+        "profileWarning": profile_warning,
     }
 
 
@@ -1251,6 +1277,14 @@ def copy_candidate_epoch_to_test(folder, job_id, epoch):
         with source.open("rb") as source_file, destination.open("xb") as destination_file:
             created_destination = True
             shutil.copyfileobj(source_file, destination_file)
+        # Carry user-authored checkpoint guidance into the staged copy. The source
+        # remains authoritative; do not import its run-local assessment state.
+        from .model_epoch_profile import _read_object
+        source_profile = _read_object(source.with_suffix(".webcap.json")).get("modelProfile")
+        if source_profile is not None:
+            if not isinstance(source_profile, dict):
+                raise ValueError("Source modelProfile is invalid.")
+            provenance["modelProfile"] = source_profile
         sidecar.write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     except Exception:
         if created_destination:
@@ -1378,6 +1412,76 @@ def select_candidate_epoch_response(folder, job_id, epoch):
     except FileNotFoundError as exc:
         return {"ok": False, "error": str(exc)}, 422
     except (RuntimeError, ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+
+
+def candidate_epoch_profile(folder, job_id, epoch):
+    """Read metadata for a recorded checkpoint, without trusting client-supplied paths."""
+    from .model_epoch_profile import read_sources
+    checkpoint = _candidate_safetensors_path(folder, job_id, epoch)
+    from .model_epoch_profile import training_suggestions
+    sources = read_sources(checkpoint)
+    try:
+        suggestions = training_suggestions(folder, job_id)
+        warning = None
+    except (FileNotFoundError, LookupError, ValueError, RuntimeError, OSError) as exc:
+        suggestions = None
+        warning = "Captured training vocabulary is unavailable: " + str(exc)
+    return {"epoch": int(epoch), "checkpoint": checkpoint.name,
+            "sources": sources, "suggestions": suggestions, "vocabularyWarning": warning}
+
+
+def save_candidate_epoch_profile(folder, job_id, epoch, enrichment):
+    """Edit only checkpoint-owned enrichment, leaving selection and provenance unchanged."""
+    from .model_epoch_profile import save_enrichment
+    checkpoint = _candidate_safetensors_path(folder, job_id, epoch)
+    return {"epoch": int(epoch), "checkpoint": checkpoint.name,
+            "modelProfile": save_enrichment(checkpoint, enrichment)}
+
+
+def candidate_epoch_profile_response(folder, job_id, epoch, enrichment=None, save=False):
+    try:
+        result = (save_candidate_epoch_profile(folder, job_id, epoch, enrichment)
+                  if save else candidate_epoch_profile(folder, job_id, epoch))
+        return {"ok": True, **result}, 200
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    except (RuntimeError, ValueError, OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+
+
+def embed_selected_epoch_profile(folder, job_id, epoch):
+    """Explicitly export metadata only into the manifest-recorded saved LoRA."""
+    from .model_epoch_profile import _read_object, embed_profile_in_saved_copy
+    selected = candidate_selected_epoch(folder, job_id)
+    if not selected or int(selected.get("epoch") or 0) != int(epoch):
+        raise ValueError("Select and save this epoch before embedding its profile.")
+    stage = str(selected.get("savedStage") or "").strip()
+    filename = str(selected.get("savedFileName") or "").strip()
+    if not stage or not filename or Path(filename).name != filename:
+        raise ValueError("Selected epoch has no recorded saved LoRA destination.")
+    destination = test_source_path(stage, selected.get("savedDestination") or "") / filename
+    if not destination.is_file() or destination.is_symlink():
+        raise FileNotFoundError("The recorded saved LoRA is unavailable.")
+    source = _candidate_safetensors_path(folder, job_id, epoch)
+    profile = _read_object(source.with_suffix(".webcap.json")).get("modelProfile") or {}
+    if not isinstance(profile, dict) or not isinstance(profile.get("enrichment"), dict):
+        raise ValueError("Save an enriched profile before embedding it in the exported LoRA.")
+    return embed_profile_in_saved_copy(destination, profile["enrichment"])
+
+
+def embed_selected_epoch_profile_response(folder, job_id, epoch):
+    try:
+        return {"ok": True, **embed_selected_epoch_profile(folder, job_id, epoch)}, 200
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    except (RuntimeError, ValueError, OSError, UnicodeError, json.JSONDecodeError) as exc:
         return {"ok": False, "error": str(exc)}, 400
 
 

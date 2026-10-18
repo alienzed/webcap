@@ -38,7 +38,7 @@ from .video_clip_ops import clip_video_response, get_clip_job_status
 from .video_frame_ops import extract_video_frame_response, inspect_video_frame_response
 from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
-from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_available as training_runner_candidate_run_available, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, save_candidate_epoch_response as training_runner_save_candidate_epoch_response, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, select_candidate_epoch_response as training_runner_select_candidate_epoch_response, clear_candidate_epoch_selection_response as training_runner_clear_candidate_epoch_selection_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, clear_history_response as training_runner_clear_history_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, reconcile_startup as reconcile_training_startup, start_observer as start_training_runner_observer
+from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_available as training_runner_candidate_run_available, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, save_candidate_epoch_response as training_runner_save_candidate_epoch_response, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, select_candidate_epoch_response as training_runner_select_candidate_epoch_response, candidate_epoch_profile_response as training_runner_candidate_epoch_profile_response, clear_candidate_epoch_selection_response as training_runner_clear_candidate_epoch_selection_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, clear_history_response as training_runner_clear_history_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, reconcile_startup as reconcile_training_startup, start_observer as start_training_runner_observer
 from .training_run_delete import preview as training_run_delete_preview, delete as training_run_delete_execute
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
 from .training_archive import preview as training_archive_preview, finalize as training_archive_finalize, list_archives as training_archive_list, archive_metrics as training_archive_metrics
@@ -1795,6 +1795,20 @@ def storyboard_director_route():
             operation,
             **contract_kwargs,
         )
+        if operation in {"write_prompt", "refine_prompt"}:
+            from .storyboard_store import resolve_scene_loras
+            from .model_epoch_profile import director_context_for_selected_loras
+            scene = (story.get("scenes") or {}).get(scene_id) or {}
+            selected_loras = resolve_scene_loras(story, scene)
+            if selected_loras:
+                try:
+                    knowledge = director_context_for_selected_loras(selected_loras)
+                except (ConnectionError, TimeoutError, RuntimeError, ValueError, OSError) as exc:
+                    # ComfyUI metadata is advisory; Director must still work offline.
+                    app.logger.warning("Story Director LoRA metadata unavailable: %s", exc)
+                    knowledge = ""
+                if knowledge:
+                    contract["prompt"] = str(contract["prompt"]) + "\n\n" + knowledge
         repair_base = None
         if operation == "repair_scenes":
             scene_order = list(story.get("sceneOrder") or [])
@@ -1908,6 +1922,19 @@ def generate_capabilities_route():
         return jsonify({"ok": True, **generate_capabilities()})
     except Exception as exc:
         app.logger.exception("GENERATE CAPABILITIES FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/lora/profile", methods=["GET"])
+def generate_lora_profile_route():
+    try:
+        from .inference_runtime import lora_embedded_profile
+        name = str(request.args.get("name") or "").strip()
+        if not name:
+            raise ValueError("Choose a ComfyUI LoRA.")
+        return jsonify({"ok": True, **lora_embedded_profile(name)})
+    except Exception as exc:
+        app.logger.exception("COMFYUI LORA PROFILE FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
@@ -2899,6 +2926,50 @@ def training_candidates_select_route():
     if not isinstance(data, dict) or set(data) - {"folder", "jobId", "epoch"}:
         return jsonify({"ok": False, "error": "Select epoch accepts only folder, jobId, and epoch."}), 400
     payload, status = training_runner_select_candidate_epoch_response(
+        data.get("folder", ""), data.get("jobId", ""), data.get("epoch", "")
+    )
+    return jsonify(payload), status
+
+
+@app.route("/fs/training_candidates/profile", methods=["POST"])
+def training_candidates_profile_route():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or set(data) - {"folder", "jobId", "epoch", "enrichment"}:
+        return jsonify({"ok": False, "error": "Profile accepts folder, jobId, epoch, and optional enrichment."}), 400
+    save = "enrichment" in data
+    payload, status = training_runner_candidate_epoch_profile_response(
+        data.get("folder", ""), data.get("jobId", ""), data.get("epoch", ""),
+        data.get("enrichment"), save=save,
+    )
+    return jsonify(payload), status
+
+
+@app.route("/fs/training_candidates/profile/director", methods=["POST"])
+def training_candidates_profile_director_route():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or set(data) - {"folder", "jobId", "epoch", "directorModel"}:
+        return jsonify({"ok": False, "error": "Profile enrichment accepts folder, jobId, epoch and directorModel."}), 400
+    try:
+        from .training_runner import candidate_epoch_profile
+        from .model_epoch_profile import director_enrichment_request
+        profile = candidate_epoch_profile(data.get("folder", ""), data.get("jobId", ""), data.get("epoch", ""))
+        contract = director_enrichment_request(profile, profile.get("suggestions"))
+        job = enqueue_llm("test", str(data.get("directorModel") or "").strip(), contract,
+                          context={"operation": "epoch_profile_enrichment"},
+                          label="Enrich epoch " + str(profile["epoch"]) + " profile")
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("EPOCH PROFILE DIRECTOR FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/training_candidates/profile/embed", methods=["POST"])
+def training_candidates_profile_embed_route():
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or set(data) - {"folder", "jobId", "epoch"}:
+        return jsonify({"ok": False, "error": "Embed profile accepts folder, jobId and epoch."}), 400
+    from .training_runner import embed_selected_epoch_profile_response
+    payload, status = embed_selected_epoch_profile_response(
         data.get("folder", ""), data.get("jobId", ""), data.get("epoch", "")
     )
     return jsonify(payload), status

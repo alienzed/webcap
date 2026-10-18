@@ -8,6 +8,7 @@
     unavailableModels: [],
     modelId: getGenerateModelPreference(),
     lorasByModel: {},
+    loraProfileCache: {},
     loraMode: 'selected',
     sweepFolderByModel: {},
     sweepSelections: {},
@@ -454,6 +455,22 @@
     setLoraMode(generateState.loraMode);
   }
 
+  function loadGenerateLoraProfile(name) {
+    var cache = generateState.loraProfileCache;
+    if (Object.prototype.hasOwnProperty.call(cache, name)) return;
+    cache[name] = {loading: true};
+    requestJson('/fs/generate/lora/profile?name=' + encodeURIComponent(name))
+      .then(function (payload) {
+        cache[name] = {profile: payload.modelProfile || null};
+        if (generateState.open) renderLoras();
+      }).catch(function (err) {
+        cache[name] = {error: String(err.message || err)};
+        if (typeof window.reportConsoleWarning === 'function') {
+          window.reportConsoleWarning('Generate', 'LoRA metadata unavailable for ' + name + ': ' + cache[name].error);
+        }
+      });
+  }
+
   function renderLoras() {
     var host = el('generate-lora-list');
     if (!host) return;
@@ -462,11 +479,29 @@
       ? items.map(function (item, index) {
           return '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
             '<span title="' + escapeHtml(item.name) + '">' + escapeHtml(item.name) + '</span>' +
+            (function () {
+              var entry = generateState.loraProfileCache[item.name];
+              var enriched = entry && entry.profile && entry.profile.enrichment;
+              if (!enriched) return '';
+              var description = String(enriched.description || '').trim();
+              var terms = Array.isArray(enriched.trainedWords) ? enriched.trainedWords : [];
+              var groups = enriched.promptOptions || {};
+              var hasOptions = Object.keys(groups).some(function (key) {
+                return Array.isArray(groups[key]) && groups[key].length > 1;
+              });
+              return '<span title="' + escapeHtml(description) + '">' +
+                escapeHtml(description || 'Enriched model profile') + '</span>' +
+                (terms.length ? '<button type="button" class="review-captions-btn" data-generate-lora-insert-phrases="' +
+                  index + '" title="Insert model key phrases at the prompt cursor">Insert phrases</button>' : '') +
+                (hasOptions ? '<button type="button" class="review-captions-btn" data-generate-lora-insert-options="' +
+                  index + '" title="Insert model wildcard options at the prompt cursor">Insert options</button>' : '');
+            })() +
             '<input type="number" min="-2" max="2" step="0.05" value="' + escapeHtml(String(item.strength)) + '" data-generate-lora-strength="' + index + '" aria-label="LoRA strength">' +
             '<button type="button" class="review-captions-btn" data-generate-lora-remove="' + index + '">Remove</button>' +
           '</div>';
         }).join('')
       : '<div class="generate-empty-inline">No added LoRAs.</div>';
+    items.forEach(function (item) { loadGenerateLoraProfile(item.name); });
     var picker = el('generate-lora-picker');
     if (picker && picker.getAttribute('aria-expanded') === 'true') renderGenerateLoraPickerMenu();
     renderSweep();
@@ -506,6 +541,7 @@
           : '';
         base.classList.toggle('hidden', !(current.baseLoras || []).length);
       }
+      generateState.loraProfileCache = {};
       renderLoras();
     }).catch(function (err) {
       reportError(err, 'LoRA refresh failed');
@@ -2518,6 +2554,53 @@
       items[index].strength = Number(input.value);
       });
     el('generate-lora-list').addEventListener('click', function (event) {
+      var optionsButton = event.target.closest('[data-generate-lora-insert-options]');
+      if (optionsButton) {
+        var chosen = selectedLoras(generateState.modelId)[Number(optionsButton.dataset.generateLoraInsertOptions)];
+        var found = chosen && generateState.loraProfileCache[chosen.name];
+        var groups = found && found.profile && found.profile.enrichment &&
+          found.profile.enrichment.promptOptions || {};
+        var fragments;
+        try {
+          fragments = Object.keys(groups).map(function (key) {
+            var values = groups[key];
+            if (!Array.isArray(values) || values.length < 2) return '';
+            if (values.some(function (value) { return /[{}|]/.test(value); })) {
+              throw new Error('Wildcard group ' + key + ' has unsupported syntax characters.');
+            }
+            return '{' + values.join('|') + '}';
+          }).filter(Boolean);
+        } catch (err) { reportError(err, 'Cannot insert wildcard options'); return; }
+        if (!fragments.length) return;
+        var field = el('generate-prompt');
+        var before = field.value.slice(0, field.selectionStart);
+        var after = field.value.slice(field.selectionEnd);
+        var insertText = (before.trim() && !/[\s,]$/.test(before) ? ', ' : '') + fragments.join(', ');
+        var cursor = before.length + insertText.length;
+        field.value = before + insertText + after;
+        field.dispatchEvent(new Event('input', {bubbles: true}));
+        field.focus();
+        field.setSelectionRange(cursor, cursor);
+        return;
+      }
+      var insert = event.target.closest('[data-generate-lora-insert-phrases]');
+      if (insert) {
+        var selected = selectedLoras(generateState.modelId)[Number(insert.dataset.generateLoraInsertPhrases)];
+        var profile = selected && generateState.loraProfileCache[selected.name];
+        var words = profile && profile.profile && profile.profile.enrichment &&
+          profile.profile.enrichment.trainedWords || [];
+        if (!words.length) return;
+        var prompt = el('generate-prompt');
+        var start = prompt.selectionStart;
+        var end = prompt.selectionEnd;
+        var before = prompt.value.slice(0, start);
+        var text = (before.trim() && !/[\s,]$/.test(before) ? ', ' : '') + words.join(', ');
+        prompt.value = before + text + prompt.value.slice(end);
+        prompt.dispatchEvent(new Event('input', {bubbles: true}));
+        prompt.focus();
+        prompt.setSelectionRange(start + text.length, start + text.length);
+        return;
+      }
       var button = event.target.closest('[data-generate-lora-remove]');
       if (!button) return;
       selectedLoras(generateState.modelId).splice(Number(button.dataset.generateLoraRemove), 1);

@@ -1,6 +1,6 @@
 # Director-aware LoRA planning — product and implementation specification
 
-**Status:** Approved product decisions; specification only, not implemented.
+**Status:** Approved product decisions, updated after model-root and UX discussion; specification only, not implemented.
 **Scope:** WebCap Generate and Storyboard. Follow `AGENTS.md`, `docs/filesystem_state_contract.md`, and existing queue/GPU invariants.
 **Success condition:** Director meaningfully reduces manual LoRA discovery, selection, prompt vocabulary work, and per-scene configuration. A polished approval dialog cannot compensate for poor recommendations.
 
@@ -14,6 +14,7 @@ Decisions:
 - **Always require approval** before changing LoRA assignments. A revision never silently replaces existing selections.
 - Story-wide assignments inherit into every Scene; Scenes can explicitly override strength or disable inheritance using the existing Storyboard model.
 - **Only enriched LoRAs are eligible for automatic suggestion.** Do not guess from filenames or recommend unenriched models. Manual selection of unenriched models remains available.
+- **Director LoRA planning is opt-in:** default off, configured per Story and per Generate workflow/session. Opt-in enables discovery and proposals, never silent application. When off, existing Director behavior and manual LoRA selection remain unchanged.
 - Character/identity/style LoRAs may persist story-wide; progression or state-change LoRAs can change from Scene to Scene; situational LoRAs apply only where relevant. These are planning concepts, **not new runtime layers**.
 - **UX is a hard requirement:** one concise review surface, pre-populated decisions, fast bulk approval, easy correction. Not a wizard, not a ten-page form.
 - Director may choose **no LoRA** if none adds value. It must never fabricate a model, capability, strength recommendation, or trigger phrase.
@@ -36,11 +37,11 @@ This is **not** a manual metadata browser as the principal workflow. Existing ma
 
 ## 3. Discovery and evidence contract
 
-Build one shared, lightweight **eligible LoRA catalogue** from configured, accessible LoRA directories. Discover `*.safetensors` with adjacent `*.webcap.json` and `modelProfile.enrichment`; also accept embedded `webcap.profile` if available. Reuse existing configured filesystem ownership and ComfyUI's inventory. Do not add a new global state root.
+Build one shared, lightweight **eligible LoRA catalogue** by scanning WebCap's **configured model roots**. Discover `*.safetensors` with adjacent `.webcap.json` containing `modelProfile.enrichment`; embedded `webcap.profile` can remain an optional portability source. Use existing filesystem/root ownership and no new global state root. **ComfyUI's inventory is not required for discovery or catalogue construction**; generation-time model resolution remains ComfyUI's existing responsibility.
 
 Catalogue entries must have:
 
-- Exact ComfyUI-selectable `name` / stable identifier, associated model or workflow family when known, and verified availability.
+- Root-scoped relative LoRA identity/path, model or workflow family when known, and enough information to map the choice into existing Generate/Storyboard LoRA controls. Avoid relying on globally unique basenames. ComfyUI loadability is a separate generation-time fact, not a catalogue inclusion condition.
 - Human-meaningful `description`, `trainedWords`, `promptOptions`, `guidance`; source and last observed freshness information.
 - Any known recommended strength, intended use, exclusions/limitations, or compatibility **only when explicitly supported by metadata or tests**.
 - A clear distinction among `user-authored guidance`, `observed training vocabulary`, `evaluated performance`, and `LLM hypothesis`. Training occurrence is not proof of reliable generation.
@@ -51,7 +52,7 @@ The current enrichment schema has no explicit, structured **recommended strength
 
 If strength is unknown, Director may propose a conspicuously **tentative editable default** based on existing WebCap controls, not falsely cite a measured optimum. Do not promote arbitrary scores to compatibility claims.
 
-Refresh catalogue on a deliberate user action, opening the relevant Director workflow, or when known owned files change; avoid expensive recurring scans or invisible background inference. Missing/inaccessible root or conflicting identity should be visible, not silently attributed to a different model. Unenriched models remain usable manually but excluded from AI recommendation.
+Refresh catalogue on a deliberate user action or opening an opted-in Director workflow; avoid expensive recurring scans or invisible background inference. Missing/inaccessible root or conflicting identity should be visible, not silently attributed to a different model. Unenriched models remain usable manually but excluded from AI recommendation. A selected LoRA that ComfyUI cannot load must produce an explicit operational error at generation or a clearly labeled availability check, not silently disappear from a proposal.
 
 Pass a **bounded** list of compact candidate summaries to Director, then richer details for shortlist candidates if needed. Do not truncate the catalogue in a way that systematically hides relevant options without indicating an incomplete search.
 
@@ -100,11 +101,30 @@ Storyboard's existing Story-wide inheritance, Scene overrides, disable flags, an
 
 For Scene revisions, display additions, removals, changed strengths and changed phrases; unchanged assignments remain untouched. A changed Story-wide selection should visibly disclose all affected Scenes. Revisions must not leave earlier-stage phrases in later prompts.
 
+
+## 5a. Profile creation and contextual access
+
+The initial library may contain **very few enriched sidecars**. Catalogue authoring is therefore a first-class, independently useful workflow, not an afterthought of Director planning.
+
+- Add a compact **LoRA Library** surface in the existing Settings/model-root area: discovered file count, enriched count, missing-profile count, model-family/root filtering, and easy selection of an item to enrich. Avoid a new full-screen subsystem or independent database.
+- Reuse the existing selected-epoch `modelProfile.enrichment` editor and validation wherever possible. Allow users to create/edit the same adjacent `.webcap.json` for any supported LoRA in configured model roots, even when it is **not** attached to a training run.
+- For unenriched models, import available embedded or adjacent descriptive metadata and allow optional **Director-assisted enrichment** as a reviewable proposal. Never invent trained capabilities or save suggestions without approval. Manual editing must work without an LLM.
+- Show a small **metadata/info icon next to LoRA assignments** in Generate and Storyboard (Story-wide and Scene-specific). It opens the **same modal** in view/edit mode; for missing sidecars it offers `Create profile`. This should not redirect the user to Settings or create multiple competing editors.
+- Keep that metadata modal small: short purpose, trigger phrases, modifiers/options, guidance, expandable provenance/details and explicit Save. No long required form. Editing metadata does **not** automatically apply a LoRA, change prompt text, or opt into Director planning.
+- Optional bulk enrichment can be considered only when individual editing proves costly; use existing queue/activity and explicit per-profile review, never unattended inference or a complicated wizard.
+
+### Opt-in persistence and visibility
+
+- **Per Story:** one concise `Director LoRA planning` toggle in the Story's existing configuration; default off and stored with that Story. Scene operations inherit this toggle; a scene may still be reviewed independently when invoked, but should not spawn a separate opt-in mechanism by default.
+- **Per Generate workflow/session:** one toggle near existing LoRA or Director controls; default off, scoped to the current Generate working context, with no new persistence substrate or implicit global enablement. Precisely map this scope to the current Generate state lifecycle before coding.
+- When off, no catalogue-injected planning, no surprise approval dialog, no assignment mutation. Contextual metadata icons and manual LoRA selection still work.
+- When on, Director may propose; **the pre-apply modal is mandatory** for all assignment changes. An opt-in is not permission to auto-apply.
+
 ## 6. Approval UX — one lightweight surface
 
 **Design goal: most good proposals require one quick review and one Apply.**
 
-- Show a compact headline: “Director suggests 2 Story-wide LoRAs + 3 Scene changes,” with reasons and any uncertainty.
+- Show a compact headline: “Director suggests 2 Story-wide LoRAs + 3 Scene changes,” with reasons and any uncertainty. The modal appears **only when opted-in planning produces a proposal**.
 - Group **Story-wide** at top; **Scene assignments** in timeline/order beneath. Progressive assignments should be easy to scan as a sequence.
 - Default to reasonable choices already filled in. Expand an entry to edit: inclusion, target scope/Scene(s), strength, exact trigger phrases/modifiers, or replace with another catalogue item. Provide quick “Add LoRA” search and a way to inspect source metadata.
 - Clearly distinguish newly suggested, existing/manual, and changed assignments. Show effects of inheritance without making users configure it.
@@ -150,19 +170,21 @@ The threshold for implementation is **demonstrated usefulness**, not merely vali
 
 ## 9. Safe implementation phases
 
-1. **Audit and resolve catalogue ownership:** verify accessible configured LoRA roots vs ComfyUI's reported logical names; demonstrate correct sidecar association for both H3 and Krea2 (or explicitly report unsupported variants). Do not assume filenames alone are unique.
-2. **Build small read-only catalogue and benchmark harness:** no assignment mutation; capture grounded candidate choices, scope/progression outputs and metrics.
+1. **Audit configured model roots and exact identity:** demonstrate reliable recursive discovery and sidecar association under existing roots for both relevant model families. Verify the minimal name/path conversion needed by existing generation controls; do not require ComfyUI inventory for discovery or assume globally unique basenames.
+2. **Build Settings LoRA Library and shared contextual profile editor, then a small read-only catalogue and benchmark harness:** enable sidecar creation for existing model-root files; no assignment mutation; capture grounded candidate choices, scope/progression outputs and metrics.
 3. **Harden metadata as needed:** only fields proven missing for reliable choices; maintain old `modelProfile` sidecars and embedded export compatibility.
 4. **Prove plan quality:** run tests with real Director runtimes. Stop and revisit metadata or model capability if scores and user time savings are inadequate.
-5. **Generate vertical slice:** one Director proposal with prompt intent + reviewed LoRA choices; validate/apply only on explicit approval; retain existing prompt-only path.
-6. **Storyboard Story-level and Scene-level planning:** reuse `resolve_scene_loras`, scene order, inheritance/override semantics, existing Director operations and Activity. Replan on revision through an editable diff.
+5. **Generate vertical slice:** opt-in per Generate workflow/session (default off), one Director proposal with prompt intent + reviewed LoRA choices; validate/apply only on explicit approval; retain existing prompt-only path.
+6. **Storyboard Story-level and Scene-level planning:** persist a default-off opt-in with each Story using its existing authored state; reuse `resolve_scene_loras`, scene order, inheritance/override semantics, existing Director operations and Activity. Replan on revision through an editable diff.
 7. **UX polish and end-to-end audit:** a single fast approval surface, keyboard flow, accessibility, stale-state handling, queue/cancel behavior, no unexpected prompt mutation, test real assets; compare to `AGENTS.md`.
 
 Do not introduce new queue lanes, storage roots, services, automatic inference scans, or a parallel LoRA-assignment state model. Keep backend changes localized and leverage existing frontend patterns.
 
 ## 10. Acceptance checklist
 
-- [ ] A sidecar-enriched LoRA physically present and selectable in ComfyUI is discoverable and correctly linked; same-name mismatches never receive the wrong metadata.
+- [ ] A sidecar-enriched LoRA in a configured model root is discoverable and correctly linked without contacting ComfyUI; same-name mismatches never receive the wrong metadata.
+- [ ] An unenriched LoRA can be given a profile through Settings or a contextual metadata icon, and the same editable sidecar is used by discovery.
+- [ ] Planning is default-off per Story and per Generate workflow/session; existing behavior remains unchanged when off.
 - [ ] Director can recommend a meaningful LoRA with precise documented phrases and a clearly labeled strength.
 - [ ] Director can correctly choose **none**.
 - [ ] Character LoRA is recommended Story-wide when appropriate, while stage-specific LoRAs follow a meaningful progression across ordered Scenes.

@@ -1917,3 +1917,23 @@ def test_llm_ingest_failure_does_not_log_private_content(llm_root, monkeypatch, 
     assert llm_runner.job_status(job["jobId"])["status"] == "failed"
     assert secret not in caplog.text
     assert response_secret not in caplog.text
+
+
+def test_llm_model_failure_does_not_log_private_prompt(llm_root, monkeypatch, caplog):
+    secret = "PRIVATE_LLM_INPUT_DO_NOT_LOG"
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(
+        storyboard_llm_runtime, "run_contract",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("PRIVATE_MODEL_ERROR_DO_NOT_LOG")),
+    )
+    job = llm_runner.enqueue(
+        "generate", "qwen",
+        {"operation": "generate_test", "prompt": secret, "output": "text"},
+    )
+    with caplog.at_level("ERROR", logger="tool.server.llm_runner"):
+        llm_runner._advance_queue()
+    finished = llm_runner.job_status(job["jobId"])
+    assert finished["status"] == "failed"
+    assert "PRIVATE_MODEL_ERROR_DO_NOT_LOG" in finished["error"]
+    assert secret not in caplog.text
+    assert "PRIVATE_MODEL_ERROR_DO_NOT_LOG" not in caplog.text

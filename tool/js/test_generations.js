@@ -2498,7 +2498,7 @@
             var end = promptField.selectionEnd;
             var prefix = promptField.value.slice(0, start);
             var suffix = promptField.value.slice(end);
-            var separator = prefix.trim() && !/[\\s,]$/.test(prefix) ? ', ' : '';
+            var separator = prefix.trim() && !/[\s,]$/.test(prefix) ? ', ' : '';
             promptField.value = prefix + separator + text + suffix;
             promptField.dispatchEvent(new Event('input', {bubbles: true}));
             promptField.focus();

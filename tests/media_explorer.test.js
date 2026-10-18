@@ -72,7 +72,7 @@ function fixture(hash = '#/media') {
   const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
   return {nodes, buttons, pending, errors, closed, window, settle, key};
 }
-const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'source', source:'set', rating:null});
+const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
 
 test('Explorer replaces activities, retains keyed media on refresh/reorder and ignores stale requests', async () => {
   const f = fixture(); f.window.openMediaExplorerActivity();
@@ -101,8 +101,8 @@ test('failed refresh retains cards and aborted filter refresh resumes on reentry
   await f.settle(f.pending[1], [], false);
   assert.equal(f.nodes['media-explorer-grid'].children[0], card);
   assert.deepEqual(f.errors, ['owner discovery failed']);
-  f.buttons.find(b => b.dataset.mediaSource === 'set').click();
-  assert.match(f.pending[2].url, /source=set&full=1/);
+  f.buttons.find(b => b.dataset.mediaSource === 'test').click();
+  assert.match(f.pending[2].url, /source=test/);
   f.window.closeMediaExplorerActivity();
   assert.equal(f.pending[2].options.signal.aborted, true);
   f.window.openMediaExplorerActivity();
@@ -137,10 +137,10 @@ test('selection, grid keys, loupe return and native video cleanup', async () => 
 });
 
 test('Explorer filters restore from and serialize into the shell route', async () => {
-  const f = fixture('#/media?source=set&kind=image&q=bird&sort=name&full=1');
+  const f = fixture('#/media?source=generate&kind=image&q=bird&sort=name&full=1');
   f.window.openMediaExplorerActivity();
   const query = new URL(f.pending[0].url, 'http://localhost').searchParams;
-  assert.equal(query.get('source'), 'set'); assert.equal(query.get('kind'), 'image');
+  assert.equal(query.get('source'), 'generate'); assert.equal(query.get('kind'), 'image');
   assert.equal(query.get('search'), 'bird'); assert.equal(query.get('sort'), 'name');
   const route = new URLSearchParams(); f.window.appendMediaExplorerRouteParams(route);
   assert.equal(route.get('q'), 'bird'); assert.equal(route.get('full'), '1');

@@ -953,8 +953,10 @@
           samples.push({ time: now, tokens: generated });
           if (samples.length > 30) samples.shift();
         }
-        var rate = previous && generated > previous.tokens && now > previous.time
-          ? (generated - previous.tokens) * 1000 / (now - previous.time) : null;
+        var latest = samples[samples.length - 1];
+        var priorSample = samples.length > 1 ? samples[samples.length - 2] : null;
+        var rate = priorSample && latest.tokens >= priorSample.tokens && latest.time > priorSample.time
+          ? (latest.tokens - priorSample.tokens) * 1000 / (latest.time - priorSample.time) : null;
         var metricsNode = existingStats.querySelector('.activity-director-metrics');
         metricsNode.replaceChildren();
         [

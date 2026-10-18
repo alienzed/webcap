@@ -842,6 +842,79 @@ function trainingCandidatesAvailableArtifact(epoch, data) {
   })[0] || null;
 }
 
+var epochProfileEditState = null;
+
+function closeEpochProfile() {
+  var modal = document.getElementById('epoch-profile-modal');
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  epochProfileEditState = null;
+}
+
+function openEpochProfile(epoch) {
+  var folder = String(trainingWorkspaceState.candidateFolder || trainingWorkspaceState.folder || '');
+  var jobId = String(trainingWorkspaceState.candidateJobId || '');
+  if (!folder || !jobId) throw new Error('Select a training run before editing its epoch profile.');
+  var modal = document.getElementById('epoch-profile-modal');
+  var status = document.getElementById('epoch-profile-status');
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  status.textContent = 'Reading checkpoint metadata…';
+  epochProfileEditState = {folder: folder, jobId: jobId, epoch: Number(epoch)};
+  trainingRunnerRequest('/fs/training_candidates/profile', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(epochProfileEditState)
+  }).then(function (payload) {
+    if (!epochProfileEditState || epochProfileEditState.epoch !== Number(epoch)) return;
+    var sources = payload.sources || {};
+    var enrichment = ((sources.webcap || {}).modelProfile || {}).enrichment || {};
+    var imported = sources.sidecar || {};
+    var civitai = sources.civitai || {};
+    document.getElementById('epoch-profile-source').textContent = String(payload.checkpoint || '');
+    document.getElementById('epoch-profile-description').value =
+      String(enrichment.description || imported.description || civitai.description || '');
+    document.getElementById('epoch-profile-words').value =
+      (enrichment.trainedWords || civitai.trainedWords || []).join('\n');
+    document.getElementById('epoch-profile-options').value =
+      JSON.stringify(enrichment.promptOptions || {}, null, 2);
+    document.getElementById('epoch-profile-guidance').value = String(enrichment.guidance || '');
+    status.textContent = 'Imported metadata is suggested; edits are stored separately in WebCap.';
+  }).catch(function (err) { status.textContent = String(err.message || err); });
+}
+
+function saveEpochProfile() {
+  if (!epochProfileEditState) return;
+  var status = document.getElementById('epoch-profile-status');
+  var button = document.getElementById('epoch-profile-save');
+  var options;
+  try {
+    options = JSON.parse(document.getElementById('epoch-profile-options').value || '{}');
+  } catch (err) {
+    status.textContent = 'Prompt options must be valid JSON: ' + err.message;
+    return;
+  }
+  var data = Object.assign({}, epochProfileEditState, {enrichment: {
+    description: document.getElementById('epoch-profile-description').value,
+    trainedWords: document.getElementById('epoch-profile-words').value.split(/\r?\n/).map(function (word) { return word.trim(); }).filter(Boolean),
+    promptOptions: options,
+    guidance: document.getElementById('epoch-profile-guidance').value
+  }});
+  button.disabled = true;
+  status.textContent = 'Saving profile…';
+  trainingRunnerRequest('/fs/training_candidates/profile', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+  }).then(function () { status.textContent = 'Profile saved.'; })
+    .catch(function (err) { status.textContent = String(err.message || err); })
+    .finally(function () { button.disabled = false; });
+}
+
+document.addEventListener('click', function (event) {
+  var open = event.target.closest('[data-training-candidate-profile-epoch]');
+  if (open) { openEpochProfile(open.getAttribute('data-training-candidate-profile-epoch')); return; }
+  if (event.target.closest('#epoch-profile-close, #epoch-profile-cancel')) { closeEpochProfile(); return; }
+  if (event.target.closest('#epoch-profile-save')) saveEpochProfile();
+});
+
 function trainingCandidatesPinnedActionsHtml(epoch, data) {
   var artifact = trainingCandidatesAvailableArtifact(epoch, data);
   if (!artifact) return '';
@@ -869,6 +942,7 @@ function trainingCandidatesPinnedActionsHtml(epoch, data) {
   return '<div class="training-candidates-pinned-actions">' +
     '<button type="button" class="review-captions-btn training-candidates-select-toggle ' + selectionClass + '" data-training-candidate-select-epoch="' + escapedEpoch + '" title="' + selectionTitle + '"' + selectionDisabled + '>' + saveIcon + '<span>' + selectionLabel + '</span></button>' +
     '<div class="training-candidates-pinned-actions-secondary">' +
+      (isSelected ? '<button type="button" class="review-captions-btn" data-training-candidate-profile-epoch="' + escapedEpoch + '" title="Edit selected epoch metadata">Profile</button>' : '') +
       '<button type="button" class="review-captions-btn training-candidates-open-epoch training-candidates-icon-action" data-training-candidate-epoch="' + escapedEpoch + '" title="Open Epoch Folder" aria-label="Open Epoch Folder">' + folderIcon + '</button>' +
       '<button type="button" class="review-captions-btn training-candidates-test-toggle is-' + testAction + testIconClass + '" data-training-candidate-test-epoch="' + escapedEpoch + '" data-training-candidate-test-action="' + testAction + '" title="' + testTitle + '" aria-label="' + testAria + '">' + testLabel + '</button>' +
     '</div>' +

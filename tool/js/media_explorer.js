@@ -76,7 +76,7 @@
   function load(reset) {
     if (!visible) return;
     if (reset) {
-      serial++; items = []; offset = 0; active = -1;
+      serial++; items = []; offset = 0; active = -1; loading = false;
       el('media-explorer-grid').replaceChildren();
       el('media-explorer-inspector').classList.add('hidden');
     }
@@ -84,7 +84,8 @@
     var request = serial;
     loading = true; el('media-explorer-status').textContent = 'Discovering saved Generate media…';
     var qs = new URLSearchParams({limit:pageSize, offset:offset, role:role,
-      kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim()});
+      kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
+      sort:el('media-explorer-sort').value});
     fetch('/fs/media_explorer?' + qs).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok || !data.ok) throw new Error(data.error || 'Media discovery failed.');
@@ -94,15 +95,6 @@
       if (request !== serial || !visible) return;
       total = data.total;
       var incoming = data.items || [];
-      var sort = el('media-explorer-sort').value;
-      if (sort !== 'newest') {
-        // Sort the *current loaded page* only; never claim a global ordered result.
-        incoming.sort(function (a,b) {
-          if (sort === 'oldest') return a.createdAt - b.createdAt;
-          if (sort === 'name') return a.fileName.localeCompare(b.fileName);
-          return (b.rating || 0) - (a.rating || 0);
-        });
-      }
       var host = el('media-explorer-grid');
       incoming.forEach(function (item) {
         var index = items.length; items.push(item); host.appendChild(renderCard(item, index));

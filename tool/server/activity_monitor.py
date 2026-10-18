@@ -210,9 +210,30 @@ def activity_snapshot(limit=20, since=0):
     for job in inference.get("jobs", []):
         if str(job.get("status") or "") in _ACTIVE_STATUSES:
             active.append(_execution_item("inference", job))
+    active_llm_id = str(llm.get("activeJobId") or "")
     for job in llm.get("jobs", []):
-        if str(job.get("status") or "") in _ACTIVE_STATUSES:
-            active.append(_execution_item("llm", job))
+        if str(job.get("status") or "") not in _ACTIVE_STATUSES:
+            continue
+        item = _execution_item("llm", job)
+        # The queue owns identity. Runtime telemetry is only a live projection
+        # for the matching active job, never for another queued Director request.
+        if active_llm_id and item["id"] == active_llm_id:
+            from .storyboard_llm_runtime import activity_status
+            runtime = activity_status()
+            job_started = float(job.get("startedAt") or 0)
+            runtime_started = float(runtime.get("startedAt") or 0)
+            if (runtime.get("active") and runtime_started >= job_started - 2
+                    and str(runtime.get("model") or "") == item["modelId"]):
+                slot = runtime.get("slot")
+                if isinstance(slot, dict):
+                    item["liveTokens"] = slot.get("generatedTokens")
+                    item["promptTokensLive"] = slot.get("promptTokens")
+                    item["promptProcessed"] = slot.get("promptProcessed")
+                    item["contextSize"] = slot.get("contextSize") or runtime.get("contextSize")
+                    item["outputLimit"] = slot.get("maxTokens")
+                item["runtimePhase"] = str(runtime.get("phase") or "")
+                item["runtimeMode"] = str(runtime.get("runtimeMode") or "")
+        active.append(item)
     active.extend(training_active)
 
     # Model Lab is server-owned, not a queued lane. Project its existing

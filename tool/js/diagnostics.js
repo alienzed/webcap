@@ -113,6 +113,82 @@ function refreshUnifiedModelAssessment() {
   });
 }
 
+function runUnifiedModelAssessment() {
+  var selectedDirectors = directorModelTestState.models.filter(function (model) {
+    return diagnosticsAssessmentSelected.director.has(String(model.id || ''));
+  }).map(function (model) {
+    return {
+      modelRef: String(model.id || ''),
+      runtimeId: String(model.runtimeId || ''),
+      runtimeName: String(model.runtimeName || ''),
+      modelId: String(model.modelId || ''),
+      label: String(model.label || model.modelId || ''),
+      sizeBytes: Number(model.sizeBytes || 0)
+    };
+  });
+  var directorRefs = diagnosticsAssessmentSelected.director;
+  var visionRefs = diagnosticsAssessmentSelected.vision;
+  if (!directorRefs.size && !visionRefs.size) throw new Error('Choose at least one model.');
+  if (diagnosticsEl('diagnostics-assessment-deep').checked) {
+    throw new Error('Deep Assessment is not available yet. Uncheck it to run the standard suite.');
+  }
+  if (directorModelTestState.running) throw new Error('Director assessment or benchmark is already running.');
+  var catalog = modelLabState.models || {};
+  var visions = (catalog.visions || []).filter(function (model) { return visionRefs.has(String(model.modelRef || '')); });
+  var directors = (catalog.directors || []).filter(function (model) { return directorRefs.has(String(model.modelRef || '')); });
+  if (selectedDirectors.length !== directorRefs.size || visions.length !== visionRefs.size || directors.length !== directorRefs.size) {
+    throw new Error('Model selections are stale; refresh assessment findings and retry.');
+  }
+  var sourceFolder = String(state && state.folder || '').trim();
+  var files = modelLabCurrentFiles();
+  var canLab = !!sourceFolder && files.length >= 2;
+  var status = diagnosticsEl('diagnostics-assessment-selection');
+  if (!canLab && !selectedDirectors.length) throw new Error('Vision testing requires a Set with at least two media items.');
+  status.textContent = 'Starting standard assessment…';
+  var runButton = diagnosticsEl('diagnostics-assessment-run');
+  runButton.disabled = true;
+  return Promise.resolve().then(function () {
+    if (!canLab) return null;
+    return modelLabPost({
+      action: 'start',
+      config: {
+        folder: sourceFolder, files: files, groups: modelLabGroups(), sampleCount: 8,
+        visionModels: visions, directorModels: directors,
+        referenceVisionRef: visions.length ? String(visions[0].modelRef) : '',
+        referenceDirectorRef: directors.length ? String(directors[0].modelRef) : '',
+        referenceVision: visions.length ? visions[0] : null,
+        referenceDirector: directors.length ? directors[0] : null
+      }
+    }).then(function (payload) {
+      modelLabState.run = payload.run;
+      modelLabState.runs = payload.runs || modelLabState.runs;
+      modelLabRender();
+      modelLabSchedulePoll();
+      reportConsoleInfo('Model Assessment', 'Started persistent Model Lab run ' + payload.run.id + '.');
+      return payload.run;
+    });
+  }).then(function (labRun) {
+    if (!selectedDirectors.length) {
+      status.textContent = 'Vision suite started in Model Lab. You may close Diagnostics.';
+      return;
+    }
+    status.textContent = labRun
+      ? 'Model Lab running; Director writing assessment started separately. Keep this page open for writing tests.'
+      : 'Director writing assessment running. Keep this page open until it completes.';
+    return directorModelTestRefresh().then(function () {
+      return directorModelTestStartCalibrationForModels(selectedDirectors);
+    });
+  }).then(function () {
+    status.textContent = 'Writing assessment complete. Model Lab continues independently; refresh findings for results.';
+  }).catch(function (error) {
+    status.textContent = 'Assessment could not complete: ' + String(error.message || error);
+    reportConsoleError('Model Assessment', error);
+    throw error;
+  }).finally(function () {
+    runButton.disabled = false;
+  });
+}
+
 function loadDiagnosticsConfig() {
   return fetch('/app/config')
     .then(function (response) {
@@ -429,6 +505,7 @@ function wireDiagnosticsUi() {
   diagnosticsEl('h3-calibration-stop-btn').onclick = stopH3Calibration;
   diagnosticsEl('h3-calibration-reset-btn').onclick = resetH3CalibrationSettings;
   diagnosticsEl('h3-calibration-console-btn').onclick = showConsolePanel;
+  diagnosticsEl('diagnostics-assessment-run').onclick = function () { runUnifiedModelAssessment().catch(function (error) { reportConsoleError('Model Assessment', error); }); };
   diagnosticsEl('diagnostics-assessment-refresh').onclick = function () { refreshUnifiedModelAssessment().catch(function () {}); };
   diagnosticsEl('diagnostics-assessment-director').onclick = function () { setDiagnosticsTab('models', true); };
   diagnosticsEl('diagnostics-assessment-lab').onclick = function () { setDiagnosticsTab('model-lab', true); };

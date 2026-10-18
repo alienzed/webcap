@@ -63,6 +63,8 @@ _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _monitor_lock = threading.Lock()
 _monitor_thread = None
+_revision_progress = {}
+_revision_progress_lock = threading.Lock()
 _logger = logging.getLogger(__name__)
 
 
@@ -116,7 +118,10 @@ def _job_view(job):
         return None
     metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
     result = job.get("result") if isinstance(job.get("result"), dict) else {}
+    with _revision_progress_lock:
+        revision = dict(_revision_progress.get(str(job.get("id") or ""), {}))
     return {
+        "revisionProgress": revision,
         "jobId": str(job.get("id") or ""),
         "client": str(metadata.get("client") or ""),
         "label": str(metadata.get("label") or ""),
@@ -190,6 +195,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
             "contextSize": llm_result.get("contextSize"),
+            "requestSeconds": llm_result.get("requestSeconds"),
         }
         operation = str((frozen_contract or {}).get("operation") or "").strip()
         if client == "caption" and operation == "caption_vision_validate":
@@ -563,6 +569,8 @@ def _execute_claimed(job_id, gpu_reserved):
         scene_ids = list(context.get("sceneIds") or [])
         instruction = str(context.get("sourceInstruction") or "")
         completed = 0
+        with _revision_progress_lock:
+            _revision_progress[job_id] = {"completed": 0, "total": len(scene_ids), "phase": "Revising Scenes"}
         try:
             for scene_id in scene_ids:
                 with _enqueue_lock:
@@ -581,11 +589,27 @@ def _execute_claimed(job_id, gpu_reserved):
                         "operation": "refine_prompt", "sourceInstruction": instruction,
                     }, result, job_id=job_id, frozen_contract=scene_contract)
                 completed += 1
+                with _revision_progress_lock:
+                    _revision_progress[job_id] = {"completed": completed, "total": len(scene_ids), "phase": "Revising Scenes"}
         except Exception as exc:
             raise RuntimeError("Revise Scenes failed after " + str(completed) +
                 " of " + str(len(scene_ids)) + " Scenes: " + str(exc)) from exc
+        finally:
+            with _revision_progress_lock:
+                _revision_progress.pop(job_id, None)
+        generated = 0
+        if context.get("generateFreshTakes") is True:
+            from .storyboard_generation import start_generation
+            # The revised Scenes are committed before Take submission.
+            # This handoff is server-owned and survives browser navigation.
+            with _revision_progress_lock:
+                _revision_progress[job_id] = {"completed": completed, "total": len(scene_ids), "phase": "Queuing fresh Takes"}
+            for scene_id in scene_ids:
+                start_generation(str(context["storyId"]), scene_id)
+                generated += 1
         return execution_finish_job_transient(job_id, status="completed", result={
             "storyId": context["storyId"], "revisedSceneCount": completed,
+            "freshTakesQueued": generated,
         })
     try:
         if client in {"chat", "caption"}:

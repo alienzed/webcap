@@ -2430,6 +2430,32 @@
       detail.title = scoreCount ? scoreCount + ' rating' + (scoreCount === 1 ? '' : 's') : '';
       detail.classList.toggle('hidden', !scoreCount);
       metrics.appendChild(detail);
+      var scoreMenu = document.createElement('details');
+      scoreMenu.className = 'test-generations-score-menu';
+      scoreMenu.style.cssText = 'position:relative;display:inline-flex;align-items:center;';
+      var scoreMenuToggle = document.createElement('summary');
+      scoreMenuToggle.textContent = '⋯';
+      scoreMenuToggle.title = 'Score options';
+      scoreMenuToggle.setAttribute('aria-label', 'Score options for ' + String(parts.label || fileName || 'candidate'));
+      scoreMenuToggle.style.cssText = 'cursor:pointer;list-style:none;padding:0 4px;opacity:.65;';
+      scoreMenu.appendChild(scoreMenuToggle);
+      var reset = document.createElement('button');
+      reset.type = 'button';
+      reset.dataset.resetCandidateAssessments = String(fileName || '');
+      reset.title = 'Clear saved assessment aggregates (existing Test sessions are unchanged)';
+      reset.textContent = 'Reset scores…';
+      reset.style.cssText = 'position:absolute;right:0;top:100%;z-index:10;white-space:nowrap;min-width:125px;';
+      scoreMenu.appendChild(reset);
+      metrics.appendChild(scoreMenu);
+      detail.title = (detail.title ? detail.title + ' · ' : '') + 'Right-click for score options';
+      detail.addEventListener('contextmenu', function (event) {
+        event.preventDefault();
+        document.querySelectorAll('.test-generations-score-menu[open]').forEach(function (menu) {
+          if (menu !== scoreMenu) menu.open = false;
+        });
+        scoreMenu.open = true;
+        scoreMenuToggle.focus();
+      });
       // The pooled checkpoint rating is read-only; individual candidate ratings remain authoritative.
       var checkpointRating = checkpointRatings.find(function (item) {
         return metadata && item.folder === metadata.folder &&
@@ -2484,12 +2510,6 @@
           actions.appendChild(save);
         }
       }
-      var reset = document.createElement('button');
-      reset.type = 'button';
-      reset.dataset.resetCandidateAssessments = String(fileName || '');
-      reset.title = 'Clear saved assessment aggregates (existing Test sessions are unchanged)';
-      reset.textContent = 'Reset scores';
-      actions.appendChild(reset);
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'test-generations-remove-candidate';
@@ -5384,6 +5404,8 @@
       }
       var resetButton = event.target.closest('[data-reset-candidate-assessments]');
       if (resetButton) {
+        var activeScoreMenu = resetButton.closest('.test-generations-score-menu');
+        if (activeScoreMenu) activeScoreMenu.open = false;
         var resetName = String(resetButton.dataset.resetCandidateAssessments || '');
         if (!window.confirm('Reset saved assessment aggregates for ' + resetName + '? Ratings in existing sessions will remain.')) return;
         resetButton.disabled = true;
@@ -5408,6 +5430,11 @@
         showError(err);
       });
     };
+    document.addEventListener('click', function (event) {
+      document.querySelectorAll('.test-generations-score-menu[open]').forEach(function (menu) {
+        if (!menu.contains(event.target)) menu.open = false;
+      });
+    });
     el('test-generations-sessions-list').onclick = function (event) {
       var queueCancel = event.target.closest('[data-queue-cancel]');
       if (queueCancel) {

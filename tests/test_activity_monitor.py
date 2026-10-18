@@ -6,6 +6,7 @@ from tool.server import activity_monitor
 @pytest.fixture(autouse=True)
 def _idle_gpu_owner(monkeypatch):
     monkeypatch.setattr(activity_monitor, "execution_resource_owner", lambda: "")
+    monkeypatch.setattr(activity_monitor, "first_cut_snapshot", lambda: {"batches": []})
 
 
 def test_activity_snapshot_projects_existing_domain_state(monkeypatch):

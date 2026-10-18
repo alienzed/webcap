@@ -120,6 +120,9 @@
       startedAt: item.startedAt || item.createdAt,
       progress: null,
       original: item,
+      phase: item.revisionProgress && item.revisionProgress.total ? 'Revising Scene ' + (Number(item.revisionProgress.completed || 0) + 1) + ' of ' + item.revisionProgress.total : String(item.runtimePhase || item.status || 'queued'),
+      progress: item.revisionProgress && item.revisionProgress.total ? item.revisionProgress : null,
+      progressLabel: item.revisionProgress && item.revisionProgress.total ? String(item.revisionProgress.completed || 0) + ' scenes complete' : '',
       liveTokens: item.liveTokens,
       promptTokensLive: item.promptTokensLive,
       promptProcessed: item.promptProcessed,
@@ -492,7 +495,7 @@
       window.openTestBenchActivity({ folder: item.folder, modelId: item.modelId });
       return;
     }
-    if (item.kind === 'storyboard' && typeof window.openStoryboardActivity === 'function') {
+    if ((item.kind === 'storyboard' || item.kind === 'first-cut') && typeof window.openStoryboardActivity === 'function') {
       window.openStoryboardActivity(target);
       return;
     }

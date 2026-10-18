@@ -103,3 +103,19 @@ def test_wildcard_vocabulary_supplies_independent_dimensions_without_closing_opt
     assert '"terms": ["triangle", "teardrop"]' in prompt
     assert "not a closed list of test values" in prompt
     assert "{brown|black|blonde|ginger} hair" in prompt
+
+
+def test_wildcard_proposal_observes_same_group_pairs_only():
+    from tool.server.test_wildcard_contract import observed_group_combinations
+    tagged = {
+        "a.png": {"BT Shape": ["triangle"], "BT Back": ["dual-ring"]},
+        "b.png": {"BT Shape": ["teardrop"], "BT Back": ["dual-ring"]},
+        "c.png": {"BT Shape": ["triangle", "micro"], "BT Back": ["string"]},
+    }
+    combos = observed_group_combinations(tagged, ["a.png", "b.png", "c.png"])
+    assert combos["BT Shape"] == [["micro", "triangle"], ["teardrop"], ["triangle"]]
+    assert ["dual-ring", "triangle"] not in combos["BT Shape"]
+    request = build_request(["a triangle bikini"], group_combinations=combos)
+    assert "Observed same-group tag combinations:" in request["prompt"]
+    assert "mutually exclusive" in request["prompt"]
+    assert "cross-group recombination" in request["prompt"]

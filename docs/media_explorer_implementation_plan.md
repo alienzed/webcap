@@ -159,3 +159,7 @@ Storyboard takes and scene references are now discovered from the existing Story
 ### Gallery interaction checkpoint
 
 Media Explorer now supports loaded-item Ctrl/Cmd multi-selection, Shift range selection, Clear selection, and a same-media-kind comparison dialog for 2–4 media. Comparison uses owner-validated media URLs and does not invoke model inference, create derivatives, or modify ratings. This is a basic side-by-side view; linked zoom, persistent comparison groups, and video synchronization are not implemented. Selection resets on filter refresh, and only loaded items can be selected. Training samples remain outside the Explorer until owner-backed read-only serving can be verified. Runtime tests and manual wide/narrow visual QA have not been executed; PR #408 remains a draft.
+
+### Owner-backed inspector action checkpoint
+
+Generate outputs now expose a 0–5 rating control in the Explorer inspector. It invokes the existing `/fs/generate/result/rating` owner endpoint, updates the loaded gallery card after success, and reports failures through the global Console. Saved Generate reference copies do not get rating controls. Test, Epoch Finder and Storyboard rating operations remain with their owners until their individual action semantics can be audited. No arbitrary media editing/deletion has been added. Regression tests are committed but have not been executed in this environment.

@@ -108,3 +108,12 @@ test('manual Activity dismissal is scoped to a job, not the whole LLM lane', () 
   assert.ok(!source.includes('silencedLanes'));
   assert.ok(source.includes('state.selectedJobKey = activityJobKey(item); render();'));
 });
+
+
+test('Activity only receives job-scoped live Director telemetry', () => {
+  assert.ok(monitor.includes('item["id"] == active_llm_id'));
+  assert.ok(monitor.includes('runtime_started >= job_started - 2'));
+  assert.ok(monitor.includes('item["liveTokens"] = slot.get("generatedTokens")'));
+  assert.ok(source.includes("data-director-live-stats"));
+  assert.ok(source.includes("snapshot.liveTokens != null"));
+});

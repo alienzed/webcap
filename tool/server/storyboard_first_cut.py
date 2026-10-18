@@ -73,6 +73,7 @@ def _director(batch, operation, scene_id="", instruction="", replace=False):
     job_id = str(job["jobId"])
     with _LOCK:
         batch["llmJobId"] = job_id
+        batch["llmJobIds"].append(job_id)
         cancelled = batch["cancelled"]
     if cancelled:
         llm_action("cancel_job", job_id)
@@ -191,6 +192,7 @@ def enqueue_batch(story_id, model_id):
             "finishedAt": 0,
             "sceneCount": 0,
             "llmJobId": "",
+            "llmJobIds": [],
             "takeJobIds": [],
             "cancelled": False,
         }

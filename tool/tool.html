@@ -2646,8 +2646,6 @@
                     <button id="diagnostics-tab-health" type="button" class="app-settings-tab diagnostics-tab active" data-diagnostics-tab="health" role="tab" aria-selected="true" aria-controls="diagnostics-panel-health">Health</button>
                     <button id="diagnostics-tab-assessment" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="assessment" role="tab" aria-selected="false" aria-controls="diagnostics-panel-assessment" tabindex="-1">Model Assessment</button>
                     <button id="diagnostics-tab-h3" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="h3" role="tab" aria-selected="false" aria-controls="diagnostics-panel-h3" tabindex="-1">H3 Calibration</button>
-                    <button id="diagnostics-tab-models" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="models" role="tab" aria-selected="false" aria-controls="diagnostics-panel-models" tabindex="-1">Director Models</button>
-                    <button id="diagnostics-tab-benchmark" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="benchmark" role="tab" aria-selected="false" aria-controls="diagnostics-panel-benchmark" tabindex="-1">Benchmark</button>
                     <button id="diagnostics-tab-model-lab" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="model-lab" role="tab" aria-selected="false" aria-controls="diagnostics-panel-model-lab" tabindex="-1">Model Lab</button>
                 </div>
                 <div class="app-settings-tab-panels diagnostics-panels">
@@ -2683,9 +2681,9 @@
                             </div>
                             <details class="model-assessment-tools"><summary>Other testing tools</summary>
                                 <div class="model-assessment-toolbar">
-                                    <button id="diagnostics-assessment-director" type="button">Director Assessment</button>
+                                    <button id="diagnostics-assessment-director" type="button">Director Calibration</button>
                                     <button id="diagnostics-assessment-lab" type="button">Vision &amp; Structured Tests</button>
-                                    <button id="diagnostics-assessment-benchmark" type="button">Custom Benchmark</button>
+                                    <button id="diagnostics-assessment-benchmark" type="button">Benchmark &amp; Performance History</button>
                                 </div>
                             </details>
                             <div class="model-assessment-bulk">
@@ -2714,7 +2712,7 @@
                             </details>
                         </section>
                     </div>
-                    <div id="diagnostics-panel-models" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="models" role="tabpanel" aria-labelledby="diagnostics-tab-models" hidden>
+                    <div id="diagnostics-panel-models" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="models" role="tabpanel" aria-label="Director calibration tools" hidden>
                         <section class="app-settings-section" id="director-model-assessment-settings">
                             <div class="app-settings-section-header director-model-assessment-header">
                                 <div class="director-model-assessment-title-row">
@@ -2752,7 +2750,7 @@
                             </details>
                                                 </section>
                     </div>
-                    <div id="diagnostics-panel-benchmark" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="benchmark" role="tabpanel" aria-labelledby="diagnostics-tab-benchmark" hidden>
+                    <div id="diagnostics-panel-benchmark" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="benchmark" role="tabpanel" aria-label="Director benchmark tools" hidden>
                         <section class="app-settings-section" id="director-model-test-settings">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Director Benchmark <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>

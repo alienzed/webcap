@@ -41,11 +41,12 @@ function refreshUnifiedModelAssessment() {
   return Promise.all([
     fetch('/fs/storyboard/director').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Director discovery failed.'); return p; }); }),
     fetch('/app/director-model-test').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Director findings failed.'); return p; }); }),
-    fetch('/app/model-lab').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Model Lab findings failed.'); return p; }); })
+    fetch('/app/model-lab?summary=1').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Model Lab findings failed.'); return p; }); })
   ]).then(function (values) {
     var directors = values[0].models || [];
     var reports = values[1].calibrationReports || [];
     var labRuns = values[2].runs || [];
+    var capabilityRuns = values[2].capabilityRuns || [];
     var labModels = values[2].models || {};
     var vision = labModels.visions || [];
     diagnosticsAssessmentCatalog = { directors: directors, visions: vision };
@@ -56,7 +57,7 @@ function refreshUnifiedModelAssessment() {
     function refreshSelectionSummary() {
       diagnosticsEl('diagnostics-assessment-selection').textContent =
         (diagnosticsAssessmentSelected.director.size + diagnosticsAssessmentSelected.vision.size) +
-        ' model(s) selected · selection is preview-only; tests still launch from the existing tabs.';
+        ' model(s) selected · Run Selected Tests starts the server-owned suite.';
     }
     function addChoice(row, kind, ref) {
       present[kind].add(ref);
@@ -71,36 +72,68 @@ function refreshUnifiedModelAssessment() {
       });
       row.insertBefore(checkbox, row.firstChild);
     }
-    function addRow(title, detail, kind, ref) {
+    function addRow(title, kind, ref, report) {
       var row = document.createElement('div');
       row.className = 'app-settings-environment-result';
       var heading = document.createElement('strong');
       heading.textContent = title;
-      var description = document.createElement('div');
-      description.className = 'app-settings-help';
-      description.textContent = detail;
       row.appendChild(heading);
-      row.appendChild(description);
       addChoice(row, kind, ref);
+      var findings = [];
+      var relevant = capabilityRuns.filter(function (run) { return run.models && run.models[ref]; });
+      var latest = relevant[0];
+      var tests = latest && latest.models[ref] || {};
+      var families = kind === 'vision'
+        ? [{label:'Open Vision', keys:['vision_open']}, {label:'Annotation-aware Vision', keys:['vision_group_aware']}]
+        : [{label:'Writing', keys:['director_writing']},
+           {label:'Structured synthesis', keys:['language_synthesis','set_vocabulary_synthesis']},
+           {label:'Schema challenge', keys:['language_challenge','set_vocabulary_challenge']}];
+      families.forEach(function (family) {
+        var entries = family.keys.filter(function (key) { return tests[key]; }).map(function (key) { return tests[key]; });
+        var text = 'Not tested';
+        if (entries.length) {
+          if (entries.some(function (item) { return item.status === 'failed'; })) text = 'Failed';
+          else if (entries.some(function (item) { return item.status === 'running'; })) text = 'Running';
+          else if (entries.some(function (item) { return item.status === 'skipped'; })) text = 'Skipped';
+          else if (entries.every(function (item) { return item.status === 'completed'; })) text = 'Completed';
+          else text = 'Incomplete';
+        }
+        findings.push(family.label + ': ' + text);
+      });
+      if (kind === 'director' && report) findings.push('Legacy writing assessment: ' + String(report.health || report.status || 'recorded'));
+      var line = document.createElement('div');
+      line.className = 'app-settings-help';
+      line.textContent = findings.join(' · ');
+      row.appendChild(line);
+      var details = document.createElement('details');
+      var caption = document.createElement('summary');
+      caption.textContent = 'Evidence and provenance';
+      details.appendChild(caption);
+      var provenance = document.createElement('div');
+      provenance.className = 'app-settings-help';
+      provenance.textContent = latest
+        ? 'Latest matching Model Lab run: ' + latest.id + ' · ' + (latest.status || 'unknown') +
+          (latest.startedAt ? ' · ' + latest.startedAt : '')
+        : 'No saved Model Lab evidence for this model.';
+      details.appendChild(provenance);
+      Object.keys(tests).forEach(function (key) {
+        var line = document.createElement('div');
+        line.className = 'app-settings-help';
+        var item = tests[key];
+        line.textContent = key + ': ' + item.status + (item.error ? ' · ' + item.error : '');
+        details.appendChild(line);
+      });
+      row.appendChild(details);
       results.appendChild(row);
     }
     directors.forEach(function (model) {
       var ref = String(model.id || '');
       var report = reports.find(function (entry) { return String(entry.modelRef || '') === ref; });
-      var matchingRuns = labRuns.filter(function (run) {
-        return !!(run.summary && run.summary.byModel && run.summary.byModel[ref]);
-      });
-      addRow(String(model.label || model.modelId || ref), 'Director · ' +
-        (report ? 'Writing: ' + String(report.health || report.status || 'recorded') : 'Writing: unassessed') +
-        ' · Structured: ' + (matchingRuns.length ? matchingRuns.length + ' Lab run(s)' : 'not tested here'), 'director', ref);
+      addRow(String(model.label || model.modelId || ref), 'director', ref, report);
     });
     vision.forEach(function (model) {
       var ref = String(model.modelRef || '');
-      var matchingRuns = labRuns.filter(function (run) {
-        return !!(run.summary && run.summary.byModel && run.summary.byModel[ref]);
-      });
-      addRow(String(model.label || model.modelId || ref), 'Vision · ' +
-        (matchingRuns.length ? matchingRuns.length + ' Lab run(s)' : 'No saved Lab runs'), 'vision', ref);
+      addRow(String(model.label || model.modelId || ref), 'vision', ref, null);
     });
     ['director', 'vision'].forEach(function (kind) {
       diagnosticsAssessmentSelected[kind].forEach(function (ref) {

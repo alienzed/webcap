@@ -161,6 +161,11 @@ def discover_tests(full=False):
             if not isinstance(status, dict):
                 continue
             folder = str(status.get("ownerFolder") or "").strip("/")
+            if not folder and root.name == "test-generations" and root != central:
+                try:
+                    folder = root.parent.resolve().relative_to(Path(app_config.FS_ROOT).resolve()).as_posix()
+                except ValueError:
+                    continue
             if not folder:
                 continue
             # Only advertise sessions the owner's standard resolver recognizes.

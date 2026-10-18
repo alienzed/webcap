@@ -1105,6 +1105,25 @@ def test_run_contract_parses_schema_constrained_json(monkeypatch):
 
 
 
+
+def test_run_contract_preserves_malformed_json_for_downstream_inspection(monkeypatch):
+    authored = '{"scenes":[{"title":"One"}'
+    monkeypatch.setattr(
+        storyboard_llm_runtime, "chat",
+        lambda model_id, messages, **kwargs: {
+            "text": authored, "model": model_id, "finishReason": "length",
+        },
+    )
+    result = storyboard_llm_runtime.run_contract("director", {
+        "operation": "develop_story_outline",
+        "prompt": "Develop one scene.",
+        "output": "json",
+    })
+    assert result["text"] == authored
+    assert result["structureWarning"] == "Director returned invalid structured JSON."
+    assert "data" not in result
+
+
 def test_run_contract_keeps_model_authored_prompt_text_inside_json(monkeypatch):
     schema = {
         "type": "object",

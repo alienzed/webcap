@@ -1094,7 +1094,7 @@
     if (fillsRegion) {
       var workspaceWidth = Math.max(0, targetRect.width - 48);
       var availableWidth = Math.max(0, editorRect.width - 24);
-      var preferredOverlayWidth = 840;
+      var preferredOverlayWidth = 440;
       var cardWidth = Math.min(preferredOverlayWidth, workspaceWidth || preferredOverlayWidth, availableWidth || preferredOverlayWidth);
       cardWidth = Math.max(320, cardWidth);
       if (cardWidth > availableWidth && availableWidth > 0) cardWidth = availableWidth;

@@ -882,7 +882,7 @@ function openEpochProfile(epoch) {
     document.getElementById('epoch-profile-options').value =
       JSON.stringify(enrichment.promptOptions || {}, null, 2);
     document.getElementById('epoch-profile-guidance').value = String(enrichment.guidance || '');
-    status.textContent = 'Imported metadata is suggested; edits are stored separately in WebCap.';
+    status.textContent = payload.vocabularyWarning || 'Imported metadata is suggested; edits are stored separately in WebCap.';
   }).catch(function (err) { status.textContent = String(err.message || err); });
 }
 

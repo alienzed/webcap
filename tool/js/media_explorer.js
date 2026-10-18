@@ -333,6 +333,14 @@
       var destructive = document.createElement('div'); destructive.className = 'media-explorer-danger-actions';
       destructive.appendChild(deleteButton); host.appendChild(destructive);
     }
+    if (item.mediaUrl) {
+      var download = document.createElement('a');
+      download.className = 'review-captions-btn';
+      download.href = item.mediaUrl;
+      download.download = item.fileName || 'media';
+      download.textContent = 'Download original';
+      actions.appendChild(download);
+    }
     var open = document.createElement('button'); open.type = 'button';
     open.className = 'review-captions-btn'; text(open, 'View full size');
     open.addEventListener('click', function () { openLoupe(); }); actions.appendChild(open);
@@ -406,7 +414,7 @@
     el('media-explorer-more-btn').classList.toggle('hidden', offset >= total);
     el('media-explorer-scope').classList.toggle('hidden', complete);
   }
-  var facetIds = ['kind', 'model', 'folder', 'rating'];
+  var facetIds = ['kind', 'model', 'folder', 'rating', 'date'];
   function hasFilters() {
     return artifact || owner || role || source || el('media-explorer-search').value.trim() || facetIds.some(function (id) { return el('media-explorer-' + id).value; });
   }
@@ -475,7 +483,7 @@
     var qs = new URLSearchParams({limit:pageSize, offset:reset ? 0 : offset, role:role,
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
       sort:el('media-explorer-sort').value, source:source, full:full ? '1' : '0',
-      model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, artifact:artifact, owner:owner});
+      model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, date:el('media-explorer-date').value, artifact:artifact, owner:owner});
     fetch('/fs/media_explorer?' + qs, {signal: controller.signal}).then(function (res) {
       return res.json().catch(function (err) { throw new Error('Media discovery HTTP ' + res.status + ': ' + err.message); }).then(function (data) {
         if (!res.ok || !data.ok) throw new Error(data.error || 'Media discovery failed.');

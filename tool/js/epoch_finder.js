@@ -855,7 +855,7 @@
         ' · ~' + Math.ceil(eta / 60) + 'm remaining (render queue excluded; VL queue included; future cutoff ties uncertain)' :
         ' · full ETA awaiting both measurements');
     els('empty').classList.add('hidden');
-    els('active').classList.remove('hidden');
+    els('active').classList.toggle('hidden', wizardStep === 4);
     els('phase').textContent = String(campaign.phase || campaign.status).toUpperCase();
     els('name').textContent = campaign.name || campaign.runName;
     els('detail').textContent = campaign.detail || '';

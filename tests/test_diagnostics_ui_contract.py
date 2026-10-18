@@ -177,3 +177,14 @@ def test_unified_assessment_compact_comparison_uses_real_evidence():
     assert "Context limit: not established" in script
     assert "More capabilities, limits and evidence" in script
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
+
+
+def test_specialist_model_tools_are_preserved_without_duplicate_top_level_tabs():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
+    assert 'id="diagnostics-tab-models"' not in html
+    assert 'id="diagnostics-tab-benchmark"' not in html
+    assert 'id="diagnostics-panel-models"' in html
+    assert 'id="diagnostics-panel-benchmark"' in html
+    assert "setDiagnosticsTab('models', true)" in script
+    assert "setDiagnosticsTab('benchmark', true)" in script

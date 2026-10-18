@@ -231,7 +231,7 @@ def discover_tests(full=False):
                     "contextLabel": str(status.get("name") or session.name),
                     "fileSize": file.stat().st_size,
                     "assessment": _assessment(assessments.get(name)),
-                    "uses": [{"storageId": session.name, "role": "test result"}],
+                    "uses": [{"storageId": session.name, "role": "test result", "source": "test"}],
                 })
     return results
 
@@ -272,7 +272,7 @@ def discover_epoch_frames():
                 "contextLabel": str(payload.get("name") or campaign_id),
                 "epoch": unit.get("epoch"), "fileSize": file.stat().st_size,
                 "assessment": _assessment(unit.get("assessment")),
-                "uses": [{"storageId": campaign_id, "role": "Epoch Finder campaign"}],
+                "uses": [{"storageId": campaign_id, "role": "Epoch Finder campaign", "source": "epoch"}],
             })
     return frames
 

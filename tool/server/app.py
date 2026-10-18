@@ -1960,6 +1960,7 @@ def media_explorer_route():
             model=request.args.get("model", ""),
             folder=request.args.get("folder", ""),
             rating=request.args.get("rating", ""),
+            date=request.args.get("date", ""),
             artifact=request.args.get("artifact", ""),
             owner=request.args.get("owner", ""),
         ))

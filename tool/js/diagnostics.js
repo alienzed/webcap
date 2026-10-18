@@ -556,7 +556,19 @@ function wireDiagnosticsUi() {
   diagnosticsEl('h3-calibration-console-btn').onclick = showConsolePanel;
   diagnosticsEl('diagnostics-assessment-all').onclick = function () { selectUnifiedAssessmentModels(true); };
   diagnosticsEl('diagnostics-assessment-none').onclick = function () { selectUnifiedAssessmentModels(false); };
-  diagnosticsEl('diagnostics-assessment-run').onclick = function () { runUnifiedModelAssessment().catch(function (error) { reportConsoleError('Model Assessment', error); }); };
+  diagnosticsEl('diagnostics-assessment-run').onclick = function () {
+    try {
+      Promise.resolve(runUnifiedModelAssessment()).catch(function (error) {
+        diagnosticsEl('diagnostics-assessment-selection').textContent =
+          'Assessment failed: ' + String(error.message || error);
+        reportConsoleError('Model Assessment', error);
+      });
+    } catch (error) {
+      diagnosticsEl('diagnostics-assessment-selection').textContent =
+        'Cannot start assessment: ' + String(error.message || error);
+      reportConsoleError('Model Assessment', error);
+    }
+  };
   diagnosticsEl('diagnostics-assessment-refresh').onclick = function () { refreshUnifiedModelAssessment().catch(function () {}); };
   diagnosticsEl('diagnostics-assessment-director').onclick = function () { setDiagnosticsTab('models', true); };
   diagnosticsEl('diagnostics-assessment-lab').onclick = function () { setDiagnosticsTab('model-lab', true); };

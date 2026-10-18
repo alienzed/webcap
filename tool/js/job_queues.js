@@ -196,7 +196,7 @@
     var tab = event.target.closest('[data-job-queue-tab]');
     if (tab) { select(tab.dataset.jobQueueTab); return; }
     var button = event.target.closest('[data-job-queue-action]');
-    if (button) perform(button.dataset.jobQueueLane, button.dataset.jobQueueAction, button.dataset.jobQueueId || '')
+    if (button) Promise.resolve(perform(button.dataset.jobQueueLane, button.dataset.jobQueueAction, button.dataset.jobQueueId || ''))
       .catch(function (error) { if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Job Queues', error); });
   });
   drawer.addEventListener('keydown', function (event) {

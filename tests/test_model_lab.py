@@ -279,3 +279,17 @@ def test_capability_summary_aggregates_repeated_probe_samples(monkeypatch):
     assert summary["completed"] == 2
     assert summary["failed"] == 1
     assert "private" not in json.dumps(summary)
+
+
+def test_capability_summary_keeps_measurements_per_probe(monkeypatch):
+    run = {"id": "metrics", "depth": "deep", "attempts": [
+        {"kind": "director_writing", "modelRef": "local::writer", "status": "completed",
+         "result": {"usage": {"completion_tokens": 300}, "timings": {"predicted_per_second": 12, "predicted_n": 299}}},
+        {"kind": "director_writing", "modelRef": "local::writer", "status": "completed",
+         "result": {"timings": {"predicted_per_second": 10, "predicted_n": 600}}},
+    ]}
+    monkeypatch.setattr(model_lab, "list_runs", lambda: [{"id": "metrics", "status": "completed"}])
+    monkeypatch.setattr(model_lab, "get_run", lambda key: run)
+    evidence = model_lab.capability_run_summaries()[0]["models"]["local::writer"]["director_writing"]
+    assert evidence["throughputSamples"] == [12.0, 10.0]
+    assert evidence["outputTokenSamples"] == [300.0, 600.0]

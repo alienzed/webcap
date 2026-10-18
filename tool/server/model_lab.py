@@ -162,6 +162,7 @@ def capability_run_summaries():
             # Capture only measured metrics; no raw prompts, text or reasoning.
             timings = result.get("timings") if isinstance(result.get("timings"), dict) else {}
             usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
+            output_recorded = False
             for source, key, field in (
                 (timings, "predicted_per_second", "throughputSamples"),
                 (usage, "completion_tokens", "outputTokenSamples"),
@@ -169,9 +170,11 @@ def capability_run_summaries():
             ):
                 value = source.get(key)
                 if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 < value < 10000000:
-                    if field == "outputTokenSamples" and evidence[field]:
+                    if field == "outputTokenSamples" and output_recorded:
                         continue
                     evidence[field].append(round(float(value), 2))
+                    if field == "outputTokenSamples":
+                        output_recorded = True
             # Summary intentionally excludes prompts, generated text and reasoning.
         summaries.append({
             "id": row["id"], "status": row.get("status"), "depth": run.get("depth", "quick"),

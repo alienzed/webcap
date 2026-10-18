@@ -69,3 +69,28 @@ def test_explicit_full_scan_has_complete_scope(monkeypatch, tmp_path):
     assert recent["complete"] is False
     assert complete["complete"] is True
     assert "all results" in complete["scope"]
+
+
+def test_test_session_discovery_uses_owner_media_route(monkeypatch, tmp_path):
+    import json
+    root = tmp_path / "output"
+    session = root / "test-generations" / "sets" / "demo" / "sessions" / "one"
+    session.mkdir(parents=True)
+    (session / "frame.png").write_bytes(b"img")
+    (session / "test.json").write_text(json.dumps({
+        "ownerFolder": "sets/demo", "modelId": "krea2",
+        "startedAt": 100, "results": [{"mediaFile": "frame.png"}]
+    }))
+    monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: root)
+    monkeypatch.setattr(media_explorer.app_config, "FS_ROOT", tmp_path)
+    from tool.server import epoch_test_bench
+    monkeypatch.setattr(epoch_test_bench, "_session_directory",
+                        lambda owner, name: session if name == "one" else None)
+    monkeypatch.setattr(epoch_test_bench, "_session_rating_map", lambda path: {"frame.png": 5})
+    result = media_explorer.list_media(source="test")
+    assert result["total"] == 1
+    item = result["items"][0]
+    assert item["source"] == "test"
+    assert item["rating"] == 5
+    assert "/fs/test_generations/media?" in item["mediaUrl"]
+    assert "folder=sets%2Fdemo" in item["mediaUrl"]

@@ -3780,15 +3780,10 @@
 .storyboard-director-activity #storyboard-director-activity-phase {
   font-size: 21px;
 }
-.storyboard-director-activity [data-view-activity] {
+#storyboard-director-view-activity {
   grid-area: action;
-  justify-self: start;
-  padding: 8px 12px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
+  justify-self: end;
+  pointer-events: auto;
 }
 /* Storyboard overlays explain a blocking operation; Activity owns detailed telemetry. */
 #storyboard-director-activity-trend,
@@ -3800,10 +3795,9 @@
 .storyboard-director-activity.is-workspace-overlay,
 .storyboard-director-activity.is-structure-overlay {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "label" "phase" "detail" "activity" "stop";
+  grid-template-areas: "label" "phase" "detail" "action" "stop";
   row-gap: 8px;
   align-items: start;
   min-height: 0;
 }
-#storyboard-director-view-activity { grid-area: activity; pointer-events: auto; justify-self: start; }
 #storyboard-director-stop { grid-area: stop; pointer-events: auto; justify-self: start; }

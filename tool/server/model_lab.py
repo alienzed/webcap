@@ -48,44 +48,48 @@ def _run_path(run_id):
 
 
 def _write(path, payload):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=path.parent,
-            prefix="." + path.name + ".",
-            suffix=".tmp",
-            delete=False,
-        ) as handle:
-            temporary_path = handle.name
-            json.dump(payload, handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary_path, path)
-        normalize_path_permissions(path)
-    finally:
-        if temporary_path and os.path.exists(temporary_path):
-            try:
-                os.unlink(temporary_path)
-            except OSError:
-                pass
+    # Windows readers do not share delete access: keep a status read from
+    # holding the destination open during atomic replacement.
+    with _lock:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix="." + path.name + ".",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temporary_path = handle.name
+                json.dump(payload, handle, indent=2, ensure_ascii=False)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_path, path)
+            normalize_path_permissions(path)
+        finally:
+            if temporary_path and os.path.exists(temporary_path):
+                try:
+                    os.unlink(temporary_path)
+                except OSError:
+                    pass
 
 
 def _read_raw(run_id):
-    path = _run_path(run_id)
-    if not path.is_file():
-        raise FileNotFoundError("Model Lab run does not exist: " + str(run_id))
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise RuntimeError("Could not read Model Lab run: " + str(exc)) from exc
-    if not isinstance(payload, dict) or payload.get("version") != RUN_VERSION:
-        raise RuntimeError("Model Lab run has an unsupported format.")
-    return payload
+    with _lock:
+        path = _run_path(run_id)
+        if not path.is_file():
+            raise FileNotFoundError("Model Lab run does not exist: " + str(run_id))
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("Could not read Model Lab run: " + str(exc)) from exc
+        if not isinstance(payload, dict) or payload.get("version") != RUN_VERSION:
+            raise RuntimeError("Model Lab run has an unsupported format.")
+        return payload
 
 
 def _active_record(run_id):
@@ -118,7 +122,8 @@ def _reconcile_interrupted(payload):
 
 
 def get_run(run_id):
-    return _copy(_reconcile_interrupted(_read_raw(run_id)))
+    with _lock:
+        return _copy(_reconcile_interrupted(_read_raw(run_id)))
 
 
 def capability_run_summaries():
@@ -162,7 +167,7 @@ def list_runs():
     rows = []
     for path in root.glob("*.json"):
         try:
-            payload = _reconcile_interrupted(_read_raw(path.stem))
+            payload = get_run(path.stem)
         except Exception as exc:
             rows.append({
                 "id": path.stem,
@@ -1057,30 +1062,32 @@ def _start_thread(run_id):
 
 def start_run(config):
     run = _new_run_payload(config)
-    _write_run(run)
-    try:
-        _start_thread(run["id"])
-    except Exception:
-        run["status"] = "error"
-        run["finishedAt"] = _now_iso()
-        run["error"] = "Could not start Model Lab runner."
+    with _lock:
         _write_run(run)
-        raise
+        try:
+            _start_thread(run["id"])
+        except Exception:
+            run["status"] = "error"
+            run["finishedAt"] = _now_iso()
+            run["error"] = "Could not start Model Lab runner."
+            _write_run(run)
+            raise
     return get_run(run["id"])
 
 
 def resume_run(run_id):
-    run = get_run(run_id)
-    if run["status"] == "completed":
-        raise ValueError("Completed Model Lab runs do not need to resume.")
-    if _active_record(run_id):
-        return run
+    with _lock:
+        run = get_run(run_id)
+        if run["status"] == "completed":
+            raise ValueError("Completed Model Lab runs do not need to resume.")
+        if _active_record(run_id):
+            return run
 
-    run["status"] = "running"
-    run["finishedAt"] = ""
-    run["error"] = ""
-    _write_run(run)
-    _start_thread(run_id)
+        run["status"] = "running"
+        run["finishedAt"] = ""
+        run["error"] = ""
+        _write_run(run)
+        _start_thread(run_id)
     return get_run(run_id)
 
 
@@ -1101,13 +1108,14 @@ def stop_run(run_id):
 
 
 def delete_run(run_id):
-    if _active_record(run_id):
-        raise RuntimeError("Active Model Lab run cannot be deleted.")
-    path = _run_path(run_id)
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        raise FileNotFoundError("Model Lab run does not exist: " + str(run_id))
+    with _lock:
+        if _active_record(run_id):
+            raise RuntimeError("Active Model Lab run cannot be deleted.")
+        path = _run_path(run_id)
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            raise FileNotFoundError("Model Lab run does not exist: " + str(run_id))
     return True
 
 

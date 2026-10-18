@@ -283,7 +283,8 @@ function runUnifiedModelAssessment() {
   runButton.disabled = true;
   return Promise.resolve().then(function () {
 
-    if (modelLabState.run && modelLabState.run.status === 'running') throw new Error('Model Lab is already running. Stop or complete that run first.');
+    // The server owns active-run admission; a cached historical preview must
+    // not block a new assessment after its worker has already failed.
     return modelLabPost({
       action: 'start',
       config: {
@@ -301,14 +302,17 @@ function runUnifiedModelAssessment() {
       modelLabState.runs = payload.runs || modelLabState.runs;
       modelLabRender();
       modelLabSchedulePoll();
+      if (payload.run.status === 'error' || payload.run.status === 'interrupted') {
+        throw new Error(payload.run.error || 'Assessment failed before probes could complete.');
+      }
       diagnosticsEl('diagnostics-assessment-summary').textContent = 'Live assessment progress · findings update when the run finishes.';
       reportConsoleInfo('Model Assessment', 'Started persistent Model Lab run ' + payload.run.id + '.');
       return payload.run;
     });
   }).then(function (labRun) {
-    status.textContent = labRun
-      ? 'Server-owned assessment running. You may close Diagnostics.'
-      : 'No Model Lab run was started.';
+    status.textContent = labRun.status === 'running'
+      ? 'Assessment running. You may close Diagnostics.'
+      : 'Assessment ' + String(labRun.status) + '.';
   }).catch(function (error) {
     status.textContent = 'Assessment could not complete: ' + String(error.message || error);
     reportConsoleError('Model Assessment', error);

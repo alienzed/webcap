@@ -127,7 +127,8 @@
       related.className = 'review-captions-btn';
       text(related, 'Show media from this ' + (sourceNames[item.source] || 'source'));
       related.addEventListener('click', function () {
-        owner = item.storageId; source = item.source; artifact = '';
+        owner = item.storageId; source = item.source; role = ''; artifact = '';
+        if (source === 'set') full = true;
         el('media-explorer-search').value = '';
         facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
         sourceButtons.forEach(function (button) {
@@ -478,7 +479,7 @@
     }
     if (target) {
       source = target.source; role = ''; artifact = target.id; owner = ''; full = true; needsLoad = true;
-    el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
+      el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
       facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
       sourceButtons.forEach(function (button, index) {
         var match = button.dataset.mediaSource === source;

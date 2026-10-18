@@ -1274,9 +1274,12 @@
     copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
     positionDirectorActivity();
     if (!visible) return;
-    updateDirectorTrend(activity, system);
-    updateDirectorModelLoad(activity, String(activity && activity.runtimeMode || '') === 'remote' ? null : system);
-    phase.textContent = directorPhaseLabel(activity && activity.phase);
+    // Activity owns operational telemetry; the overlay explains why editing is blocked.
+    var targetKind = String(storyState.director.activityTarget && storyState.director.activityTarget.kind || '');
+    var action = {concept: 'developing the Story', scenes: 'working on Scenes', repair: 'repairing Scenes', 'scene-prompt': 'revising this Scene'};
+    phase.textContent = terminal ? directorPhaseLabel(phaseName) : 'Director is ' + (action[targetKind] || 'working') + '…';
+    detail.textContent = terminal ? 'Review the result in Storyboard.' : 'Editing is temporarily unavailable here.';
+    return;
     var startedAt = Number(activity && activity.startedAt) || storyState.director.activityStartedAt;
     var parts = [];
     directorQueuedLabel(activity).forEach(function (label) {

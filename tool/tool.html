@@ -2507,6 +2507,24 @@
                                 </div>
                             </div>
                         </section>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">LoRA Library</div>
+                                <div class="app-settings-section-copy">Edit Director-readable profiles alongside models in configured Test LoRA roots. No ComfyUI required.</div>
+                            </div>
+                            <button type="button" id="lora-library-refresh" class="review-captions-btn">Scan configured roots</button>
+                            <div id="lora-library-status" class="training-history-summary" aria-live="polite"></div>
+                            <div id="lora-library-list" class="training-config-list"></div>
+                            <div id="lora-library-editor" class="hidden">
+                                <h3 id="lora-library-profile-heading"></h3>
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Purpose / description</span><textarea id="lora-library-description" rows="3"></textarea></label>
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Trained phrases (one per line)</span><textarea id="lora-library-words" rows="3"></textarea></label>
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Prompt options (JSON object of named phrase lists)</span><textarea id="lora-library-options" rows="3" spellcheck="false"></textarea></label>
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Guidance and limitations</span><textarea id="lora-library-guidance" rows="3"></textarea></label>
+                                <button type="button" id="lora-library-save" class="training-btn">Save LoRA profile</button>
+                                <button type="button" id="lora-library-editor-close" class="review-captions-btn">Close editor</button>
+                            </div>
+                        </section>
                     </div>
 
                     <div id="app-settings-panel-training" class="app-settings-panel hidden" data-app-settings-panel="training" role="tabpanel" aria-labelledby="app-settings-tab-training">

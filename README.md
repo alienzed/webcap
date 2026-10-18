@@ -39,6 +39,80 @@ The **Activity** drawer shows current and recently finished work with navigation
 
 Training, inference (Generate, Test renditions, Storyboard Takes), and LLM/Director requests have different lifecycles and queue controls. They coordinate use of the local GPU without collapsing their domain-specific semantics. See [`docs/execution_queue.md`](docs/execution_queue.md) and [`docs/gpu_coordination_invariants.md`](docs/gpu_coordination_invariants.md).
 
+## Feature guide: what to do and where to start
+
+This section is a task-oriented quick start, not a substitute for the in-app controls. Many tools depend on a selected Set, configured runtime, or completed prior step. Start with the workspace on the left activity rail; contextual tabs and dialogs appear within it.
+
+### Prep: browse, organize, and annotate
+
+**Open and filter a Set.** In **Prep**, choose a source folder. Use the filter controls or **Advanced filters** to limit the visible items; use **Media Grid** for an overview or select an item for detailed work. A **Focus Set** is a temporary working selection rather than a new copy of the media. **SuperSet Search** in Advanced filters searches a folder and its descendants; use **Create Set** to materialize matches into a separate Set when needed.
+
+**Rate, select, and edit media.** Select an item, inspect its preview, then use the preview actions or **More** for supported edits such as crop, clip, rotate, flip, deface, background processing, duplication, prune, and restore. For videos, open **Clip** to navigate frames, choose clip boundaries, or export a frame. Source-media edits that support restoration retain their original under `originals/`; do not assume generated artifacts have the same restore behavior.
+
+**Write captions and tags.** Select an item in Annotation and edit its caption, requirements, groups, and tags. Caption text is stored as a `<media>.txt` sidecar. Use the Set's template and vocabulary/mappings for consistency; save edits explicitly when prompted. **Focus Annotate** (or `F` when applicable) lets you work group-by-group through the current scope instead of repeatedly returning to the standard editor. [Focused annotation](docs/focused_annotation.md) · [Mappings](docs/primer_mappings_v2.md).
+
+**Use Caption Assist.** Open **Caption Assist** for the selected item to review proposed caption wording and tag changes. Inspect suggestions and edit them before applying; proposals are not an automatic replacement for the user's caption. Vision-based descriptions and LLM rewrites are separate operations where exposed, and availability depends on the configured models.
+
+**Inspect Set Intelligence and Guided Tagging.** Open the Set Intelligence tools for an explicit analysis pass over the selected scope; scans do not start merely because you opened a panel. Review cached visual evidence and proposed vocabulary matches. Use **Guided Tagging** to inspect candidate additions before applying them; it is a review workflow, not permission for the scanner to rewrite the whole Set.
+
+**Review quality and focus on fixes.** Open **Review** to inspect the caption sheet, **Media Metadata**, **Caption Report**, and **Prune Candidates** for the visible scope. Use the report and Focus Set actions to narrow an issue, then **QA Focus Review** to work through actionable items one at a time. Inspect duplicate findings before deciding to prune. [Review](docs/review.md).
+
+### Generate: create standalone media
+
+**Start a generation.** Open **Generate**, select the supported generation configuration, enter or refine the prompt and generation settings, then submit the job. Configured ComfyUI connectivity is required for execution. A generated result is a derived artifact, not an addition to the source Set by default.
+
+**Use the Director when helpful.** Select an available Director model/runtime and use the prompt-writing or refinement actions to develop an idea. Review the proposed text before using it for generation. A local Director request participates in shared GPU coordination; remote OpenAI-compatible runtimes use their configured endpoint.
+
+**Find the output.** Follow the job's status in the workspace or shared **Activity**/**Queue** surfaces, then inspect the result and its provenance in Generate or **Media Explorer**. See [Execution Queue](docs/execution_queue.md).
+
+### Training: capture, run, and manage LoRAs
+
+**Prepare a run.** In **Training**, select the Base Model and source Set, filter to the media you intend to train, adjust **Run setup** values such as learning rate, rank, epochs, and dropout, then inspect **Training Review** and bucket settings. Advanced configuration exposes the persistent TOMLs. **Train** captures the current visible selection and settings into an independent run bundle; edits made later to the Set do not retroactively change that run.
+
+**Run or queue training.** Press **Train** to start or queue managed training. Use the Training Queue for progress, **Pause**, **Finish**, **Resume**, and the run log; **Generate & Copy Manual Command** is the explicit manual-launch alternative. **Pause** and **Finish** have checkpoint-aware meanings, not generic process termination. [Training runs](docs/train.md) · [Profiles](docs/training_profiles.md).
+
+**Inspect history and checkpoints.** In **Training History**, open a recorded run to inspect its output and checkpoint choices. Use the candidate-analysis action to review loss-based checkpoint suggestions, then stage chosen LoRAs for Test. Choose **Resume checkpoint** for compatible continuation or **Fine-tune from saved LoRA** for initialization of a new run. History/Archive operations and permanent run deletion must not be confused with deleting source media.
+
+**Use Epoch Finder.** Open the **Epoch Finder** tab in the Test area to configure an evaluation campaign for training checkpoints. Review the selected training run, reference/control material, prompt or wildcard choices, generation settings, and candidate epochs before launching. Inspect resulting preview images and comparison evidence, then use manual ratings to inform checkpoint selection; automated visual scores are advisory, not proof that an epoch is best. Campaigns and results are separate from Training History. Do not assume that a reference image was necessarily included in the run's training capture without checking its provenance.
+
+### Test: compare candidates and examine results
+
+**Create a normal Test session.** Open **Test** and select staged LoRAs, a prompt, and common generation settings; include a base-model result when useful. Submit a Test session: each chosen Base/candidate rendition uses frozen session inputs and joins the shared inference queue. Reopen prior **Sessions** to inspect the saved results. Compare in **Grid** or **Compare**, and rate the previews.
+
+**Use Weight Sweep or Batch Test.** Select **Weight Sweep** to compare chosen strength values, or **Batch Test + Ask VL** to queue multiple sessions with new seeds and optional automatic evaluation of completed previews. Inspect the batch progress and results; batch mode is not a separate scheduler.
+
+**Evaluate with Ask VL.** For a completed session, choose an evaluation method from the selector—**Ask VL — Original**, **VL Compare — Training Reference**, or **DINOv2 Compare — Training Reference**—then start the assessment. Reference-based modes require suitable reference material. Open the per-preview details, review agreements/disagreements and technical evidence, and use **Recheck** where available. Automated evaluation supplements manual visual judgment; it does not replace it.
+
+**Build varied prompts.** Use wildcard prompts or the **Wildcard Builder** to inspect and adjust controlled variations. Preview or regenerate the proposed prompt before choosing **Use as Prompt**. [Execution Queue](docs/execution_queue.md).
+
+### Storyboard: author Stories, Scenes, and Takes
+
+**Create and develop a Story.** Open **Storyboard**, create or select a Story, enter its concept and visual style, then add **Invariants** for facts that should remain consistent. Choose a target Scene count or **Auto**, and use **Develop Scenes** for an optional Director-assisted plan. Read and revise generated text before adopting it; manual scene authoring remains available.
+
+**Edit Scenes.** Switch between **Overview** and **Focus**. For a Scene, edit the prompt, entry/exit state, duration, seed behavior, aspect settings, references, and optional LoRAs. Story defaults can be inherited or overridden by individual Scenes. **Director Tools** provides additional authoring/revision operations when a Director runtime is available.
+
+**Generate and select Takes.** Use a Scene's generation action or the Story-wide **Generate** action to queue Takes. Inspect/rate the results and select the Take to use for that Scene. **First Cut** offers a more automated path from the current Story through Director preparation and initial Take generation; review its proposed changes and queued work rather than assuming it has finalized the Story.
+
+**Review the sequence.** Open **Sequence** to inspect the ordered selected Takes. Story/Scene edits do not rewrite the original provenance of already generated Takes. [Storyboard reference](docs/storyboard.md).
+
+### Media Explorer and Storage: find, inspect, clean up
+
+**Browse generated media.** Open **Media Explorer** from the activity rail. Choose **All media**, **Generations**, **References**, or a source such as Generate, Test Generations, Epoch Finder, or Storyboard. Search by name, prompt, model, or Set; narrow by media-type filters. Select an item to inspect its details, provenance, and navigation links to its owning workflow.
+
+**Compare or remove output.** Select media and use **Compare** when available; inspect the full viewer before acting. Deletion rules depend on the artifact's owner and dependencies—sometimes removal is deliberately directed back to the original feature. Do not treat output cleanup as the same operation as pruning source Set files.
+
+**Inspect disk usage.** Open **Storage** to review tracked WebCap storage, refresh its inventory, and follow the relevant navigation or cleanup action for the selected category. The source **training/Set root** and the **generated output root** have distinct ownership; avoid relocating generated media into source Sets. [Filesystem ownership](docs/filesystem_state_contract.md).
+
+### Global tools: queues, diagnostics, and settings
+
+**Activity versus Queue.** Use **Activity** to see what is running or recently finished and navigate to its source. Use the global **Queue** drawer to inspect and control scheduling for the **Inference**, **LLM**, and **Training** lanes as each lane permits. Inference Queue/Backlog, local LLM requests, and long-running Training are distinct lifecycles; a drawer view does not replace the owner workspace's results. [Scheduling contract](docs/execution_queue.md).
+
+**Console and Diagnostics.** Open **Console** to inspect application/runtime errors. Use **Diagnostics** for one-off environment checks, troubleshooting, calibration, and model-related inspection; it is not the main Settings surface. [Diagnostics](docs/diagnostics.md).
+
+**App Settings.** Open **Settings** for **General**, **Models**, **Training**, **Director**, and **Advanced** options. Configure the source Set root, generated output root, shared models path, runtime endpoints, enabled model profiles, caption defaults, and optional analysis. Use Advanced raw JSON only when necessary. [App Settings](docs/app_settings.md).
+
+**Navigation and help.** The activity rail switches workspaces; deep links preserve major workspace/folder context but not every open modal or local tab. The existing **Help** control and specialist documentation provide references; a screen-wide contextual Help Mode is a proposed improvement, not an implemented feature.
+
 ## Supported training profiles
 
 Current profiles are app-owned and intentionally finite:

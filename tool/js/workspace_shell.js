@@ -1369,6 +1369,9 @@ function wireWorkspaceHeaderUi() {
     mediaActivityBtn.onclick = function () {
       if (isFocusedCaptionOpen() && !stopFocusedCaption('Focus Caption ended.')) return;
       if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') stopFocusedAnnotation();
+      // Explicit navigation takes precedence over an unfinished startup restore.
+      initialShellLocationRestored = true;
+      initialShellLocationRoute = null;
       window.openMediaExplorerActivity();
     };
   }

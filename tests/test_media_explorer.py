@@ -327,3 +327,17 @@ def test_focused_artifact_uses_full_owner_discovery_and_exact_identity(monkeypat
     assert limits==[None]
     assert result['total']==1
     assert result['items'][0]['storageId']=='old/one'
+
+def test_explorer_route_passes_supported_filters_without_touching_context(monkeypatch):
+    from tool.server import app as app_module
+    seen={}
+    def listing(**kwargs):
+        seen.update(kwargs)
+        return {'ok':True,'items':[],'total':0,'complete':True}
+    monkeypatch.setattr(app_module,'media_explorer_list_media',listing)
+    response=app_module.app.test_client().get('/fs/media_explorer?source=generate&model=krea2_raw&folder=sets/other&rating=4&artifact=generate:record&full=1')
+    assert response.status_code==200
+    assert seen['folder']=='sets/other'
+    assert seen['artifact']=='generate:record'
+    assert seen['model']=='krea2_raw'
+    assert seen['rating']=='4'

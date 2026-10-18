@@ -522,11 +522,13 @@
     chosen.forEach(function (item) {
       var pane = document.createElement('div'); pane.className = 'media-explorer-compare-pane';
       pane.tabIndex = 0;
+      pane.setAttribute('role', 'group'); pane.setAttribute('aria-label', item.fileName);
       pane.appendChild(mediaElement(item, true));
       var label = document.createElement('span'); text(label, item.fileName); pane.appendChild(label);
       host.appendChild(pane);
     });
     text(el('media-explorer-compare-dialog').querySelector('strong'), (chosen.length > 2 ? 'Survey' : 'Compare') + ' · ' + chosen.length + ' selected');
+    text(el('media-explorer-compare-hint'), chosen.some(function (item) { return item.mediaKind === 'video'; }) ? 'Original media · independent playback' : 'Original media · ← → move focus');
     el('media-explorer-compare-dialog').showModal();
   });
   el('media-explorer-compare-close').addEventListener('click', function () { el('media-explorer-compare-dialog').close(); });

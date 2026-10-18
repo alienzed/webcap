@@ -1274,6 +1274,18 @@
     copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
     positionDirectorActivity();
     if (!visible) return;
+    var activityLink = card.querySelector('[data-view-activity]');
+    if (!activityLink) {
+      activityLink = document.createElement('button');
+      activityLink.type = 'button';
+      activityLink.textContent = 'View Activity';
+      activityLink.setAttribute('data-view-activity', '');
+      activityLink.onclick = function () {
+        if (typeof window.setActivityDrawerOpen !== 'function') throw new Error('Activity drawer is unavailable.');
+        window.setActivityDrawerOpen(true, 'manual-open');
+      };
+      card.appendChild(activityLink);
+    }
     updateDirectorTrend(activity, system);
     updateDirectorModelLoad(activity, String(activity && activity.runtimeMode || '') === 'remote' ? null : system);
     phase.textContent = directorPhaseLabel(activity && activity.phase);

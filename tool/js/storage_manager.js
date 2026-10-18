@@ -589,6 +589,7 @@
   }
 
   function openStorageActivity() {
+    if (typeof window.closeMediaExplorerActivity === 'function') window.closeMediaExplorerActivity();
     var frame = el('app-frame');
     var workspace = el('storage-workspace');
     if (!frame || !workspace) throw new Error('Storage workspace markup is missing.');

@@ -68,7 +68,7 @@ def test_explicit_full_scan_has_complete_scope(monkeypatch, tmp_path):
     assert seen == [500, None]
     assert recent["complete"] is False
     assert complete["complete"] is True
-    assert "all results" in complete["scope"]
+    assert "full Generate/legacy Test scan" in complete["scope"]
 
 
 def test_test_session_discovery_uses_owner_media_route(monkeypatch, tmp_path):

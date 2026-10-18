@@ -2,7 +2,7 @@
   'use strict';
   var lane = 'inference';
   var snapshots = { llm: null, training: null };
-  var pending = false, timer = 0;
+  var pending = false;
   var drawer = document.getElementById('inference-queue-drawer');
   var summary = document.getElementById('inference-queue-summary');
   var oldPause = document.getElementById('inference-queue-pause');
@@ -62,11 +62,11 @@
     if (job) button.dataset.jobQueueId = String(job.jobId || job.id || '');
     return button;
   }
-  function row(job, which) {
+  function row(job, which, position, totalQueued) {
     var node = document.createElement('div');
     node.className = 'inference-queue-row job-queue-row status-' + String(job.status || 'queued');
     node.dataset.jobQueueId = String(job.jobId || job.id || '');
-    node.appendChild(textNode('span', 'inference-queue-position', active(job) ? job.status : job.status === 'queued' ? '#' + (job.queuePosition || '') : job.status));
+    node.appendChild(textNode('span', 'inference-queue-position', active(job) ? job.status : job.status === 'queued' ? '#' + (position || job.queuePosition || '') : job.status));
     var copy = textNode('div', 'inference-queue-copy', '');
     copy.appendChild(textNode('strong', '', title(job, which)));
     var details = detail(job, which);
@@ -77,13 +77,19 @@
     if (which === 'llm') controls.appendChild(actionButton(active(job) ? 'Stop' : 'Cancel', which, 'cancel_job', job));
     if (which === 'training') {
       if (job.status === 'queued') {
-        controls.appendChild(actionButton('↑', which, 'up', job));
-        controls.appendChild(actionButton('↓', which, 'down', job));
+        var up = actionButton('↑', which, 'up', job);
+        var down = actionButton('↓', which, 'down', job);
+        up.disabled = position <= 1;
+        down.disabled = position >= totalQueued;
+        controls.appendChild(up);
+        controls.appendChild(down);
         controls.appendChild(actionButton('Cancel', which, 'cancel', job));
-      } else if (active(job)) {
+      } else if (active(job) && job.status !== 'stopping' && !job.actionRequested) {
         controls.appendChild(actionButton('Stop', which, 'stop', job));
-        controls.appendChild(actionButton('Pause', which, 'pause', job));
-        controls.appendChild(actionButton('Finish', which, 'finish', job));
+        if (['hi', 'lo', 'krea2', 'wan21', 'h3'].indexOf(String(job.stage || '')) !== -1) {
+          if (!snapshots.training.queuePaused) controls.appendChild(actionButton('Pause', which, 'pause', job));
+          controls.appendChild(actionButton('Finish', which, 'finish', job));
+        }
       }
     }
     node.appendChild(controls);
@@ -103,15 +109,17 @@
       ? payload.pauseReason || payload.waitReason || (count(jobs) + ' requests')
       : payload.queuePauseReason || payload.runnerNotice || (count(jobs) + ' jobs');
     var controls = panel.querySelector('.job-queue-lane-actions');
-    controls.classList.toggle('hidden', which === 'training' ? !payload.queuePaused : !jobs.length);
+    controls.classList.toggle('hidden', which === 'training' ? (!payload.queuePaused || jobs.some(active)) : !jobs.length);
     var previous = new Map();
     Array.prototype.forEach.call(list.querySelectorAll('[data-job-queue-id]'), function (node) { previous.set(node.dataset.jobQueueId, node); });
+    var queuedCount = jobs.filter(function (job) { return job.status === 'queued'; }).length;
+    var position = 0;
     var wanted = jobs.filter(function (job) { return active(job) || job.status === 'queued'; })
-      .sort(function (a, b) {
-        return Number(active(b)) - Number(active(a)) || (Number(a.queuePosition || 0) - Number(b.queuePosition || 0));
-      }).map(function (job) {
+      .sort(function (a, b) { return Number(active(b)) - Number(active(a)); })
+      .map(function (job) {
+        var queuePosition = job.status === 'queued' ? ++position : 0;
         var id = String(job.jobId || job.id || '');
-        var fresh = row(job, which);
+        var fresh = row(job, which, queuePosition, queuedCount);
         var existing = previous.get(id);
         if (existing) {
           var oldCopy = existing.querySelector('.inference-queue-copy');
@@ -127,7 +135,7 @@
           } else {
             newDetails.forEach(function (part, index) { oldDetails[index].textContent = part.textContent; });
           }
-          if (existing.dataset.jobQueueStatus !== job.status) {
+          if (existing.querySelector('.inference-queue-actions').outerHTML !== fresh.querySelector('.inference-queue-actions').outerHTML) {
             existing.querySelector('.inference-queue-actions').replaceWith(fresh.querySelector('.inference-queue-actions'));
           }
           existing.dataset.jobQueueStatus = job.status;
@@ -188,7 +196,7 @@
     else if (operation === 'up' || operation === 'down') { url = '/fs/training_runner/reorder'; payload = { jobId: id, direction: operation }; }
     else { url = '/fs/training_runner/stop'; payload = { jobId: id, cancel: operation === 'cancel', pause: operation === 'pause', finish: operation === 'finish' }; }
     return post(url, payload).then(function () {
-      if (typeof window.refreshTrainingRunnerStatus === 'function') window.refreshTrainingRunnerStatus();
+      window.refreshTrainingRunnerStatus();
       return refresh();
     });
   }
@@ -208,6 +216,6 @@
     document.getElementById('job-queue-tab-' + lane).focus();
   });
   window.addEventListener('webcap:inference-queue-snapshot', function () { render('inference'); });
-  timer = window.setInterval(function () { refresh(); }, 3000);
+  window.setInterval(function () { refresh(); }, 3000);
   select('inference');
 }());

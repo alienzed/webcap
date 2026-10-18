@@ -620,11 +620,10 @@ def _execute_claimed(job_id, gpu_reserved):
         else:
             llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
     except Exception as exc:
-        _logger.exception(
-            "Director/model stage failed before WebCap ingest.\n"
-            "--- FROZEN LLM CONTRACT ---\n%s",
-            _diagnostic_contract_json(contract),
-        )
+        # Full failure detail remains in the transient job receipt / live Console.
+        # Never persist contract content or exception text in server logs.
+        _logger.error("LLM model stage failed: client=%s operation=%s error_type=%s",
+                      client, str(contract.get("operation") or ""), type(exc).__name__)
         raise RuntimeError(
             "Director/model stage failed before WebCap ingest: " + str(exc)
         ) from exc
@@ -644,18 +643,24 @@ def _execute_claimed(job_id, gpu_reserved):
         try:
             result = _client_result(client, context, llm_result, job_id=job_id, frozen_contract=contract)
         except Exception as exc:
-            _logger.exception(
-                "WebCap ingest rejected a successful LLM response.\n"
-                "--- FROZEN LLM CONTRACT ---\n%s\n"
-                "--- CLIENT CONTEXT ---\n%s\n"
-                "--- RAW MODEL RESPONSE ---\n%s",
-                _diagnostic_contract_json(contract),
-                json.dumps(context, indent=2, ensure_ascii=False),
-                str(llm_result.get("text") or ""),
+            # Keep the original error in the transient job receipt, not on disk.
+            _logger.error("LLM ingest failed: client=%s operation=%s error_type=%s",
+                          client, str(contract.get("operation") or ""), type(exc).__name__)
+            # The model did finish. Keep its output available in the memory-only
+            # terminal receipt even when it cannot be safely applied to Set state.
+            # Do not turn an invalid structured result into an automatic mutation.
+            return execution_finish_job_transient(
+                job_id,
+                status="failed",
+                error="WebCap ingest failed after a successful model response: " + str(exc),
+                result={
+                    "rawText": str(llm_result.get("text") or ""),
+                    "model": str(llm_result.get("model") or model_id),
+                    "finishReason": llm_result.get("finishReason"),
+                    "usage": llm_result.get("usage"),
+                    "structureWarning": "Model output was retained but could not be applied.",
+                },
             )
-            raise RuntimeError(
-                "WebCap ingest failed after a successful model response: " + str(exc)
-            ) from exc
 
         return execution_finish_job_transient(job_id, status="completed", result=result)
 
@@ -734,7 +739,7 @@ def _advance_queue():
                     status="failed",
                     error=str(exc),
                 )
-            _logger.exception("Queued LLM job failed.")
+            _logger.error("Queued LLM job failed: error_type=%s", type(exc).__name__)
         finally:
             if local_gpu and release_gpu:
                 current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)
@@ -772,8 +777,8 @@ def _monitor_loop():
     while True:
         try:
             _advance_queue()
-        except Exception:
-            _logger.exception("LLM queue monitor failed.")
+        except Exception as exc:
+            _logger.error("LLM queue monitor failed: error_type=%s", type(exc).__name__)
 
         with _monitor_lock:
             if not _monitor_has_work():
@@ -1010,7 +1015,7 @@ def cancel_job(job_id):
             try:
                 stop_active_request(_job_model_id(result))
             except (ValueError, RuntimeError) as exc:
-                _logger.warning("LLM runtime could not be interrupted; abandoning its result: %s", exc)
+                _logger.warning("LLM runtime could not be interrupted; abandoning its result: error_type=%s", type(exc).__name__)
         return {"job": _job_view(result), "queue": snapshot(include_terminal=False)}
 
 
@@ -1031,7 +1036,7 @@ def reset():
                 # Some externally-owned or generic remote runtimes cannot be
                 # interrupted. The job remains stopping and its eventual result
                 # is still discarded before client application.
-                _logger.warning("LLM runtime could not be interrupted; abandoning its result: %s", exc)
+                _logger.warning("LLM runtime could not be interrupted; abandoning its result: error_type=%s", type(exc).__name__)
         else:
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()

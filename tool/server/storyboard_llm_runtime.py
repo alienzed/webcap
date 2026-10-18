@@ -1657,7 +1657,6 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
                 "model": model_id,
                 "request_seconds": round(float(elapsed_seconds), 3),
                 "error_type": type(exc).__name__,
-                "error": str(exc),
             },
             ensure_ascii=False,
         ),
@@ -2000,11 +1999,13 @@ def run_contract(model_id, contract, gpu_reserved=False):
             if contract.get("output") == "json":
                 try:
                     data = json.loads(result["text"])
-                except (TypeError, json.JSONDecodeError) as exc:
-                    raise RuntimeError("Director returned invalid structured JSON.") from exc
-                if not isinstance(data, dict):
-                    raise RuntimeError("Director structured output must be a JSON object.")
-                result["data"] = data
+                except (TypeError, json.JSONDecodeError):
+                    result["structureWarning"] = "Director returned invalid structured JSON."
+                else:
+                    if not isinstance(data, dict):
+                        result["structureWarning"] = "Director structured output must be a JSON object."
+                    else:
+                        result["data"] = data
 
 
 

@@ -1720,6 +1720,10 @@
     target = target || {};
     if (!storyState.story || String(target.storyId || '') !== String(storyState.story.id || '')) return;
     if (target.kind === 'story-action') {
+      // The authoritative First Cut batch owns this Story, not the current browser view.
+      // Keep the library/navigation outside these protected editor regions.
+      setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState);
+      setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState);
       var storyAction = storyState.storyAction;
       var sceneDefaultsLocked = !!(storyAction && storyAction.defaultsLocked);
       document.querySelectorAll(
@@ -1780,6 +1784,13 @@
     Object.keys(storyState.director.pendingTargets).forEach(function (key) {
       setDirectorTargetProtected(storyState.director.pendingTargets[key], true);
     });
+    // First Cut batches are server-owned and are deliberately not Director pending targets.
+    // Protect only the selected Story while its own batch is queued or running.
+    var firstCut = (storyState.firstCutBatches || []).find(function (batch) {
+      return String(batch.storyId || '') === currentStoryId
+        && ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1;
+    });
+    if (firstCut) setDirectorTargetProtected({ kind: 'story-action', storyId: currentStoryId }, true);
     syncPlanReplacementControls();
     syncDirectorToolsUi();
   }
@@ -2206,12 +2217,17 @@
     var storyId = storyState.story ? String(storyState.story.id || '') : '';
     var batches = storyState.firstCutBatches || [];
     var action = batches.find(function (batch) {
-      return batch.storyId === storyId && ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1;
-    }) || batches.find(function (batch) { return batch.storyId === storyId; });
+      return String(batch.storyId || '') === storyId
+        && ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1;
+    });
+    // Keep the card outside inert Story authoring: cancellation must remain usable.
+    var editor = document.querySelector('.storyboard-editor');
+    if (!editor) throw new Error('Storyboard editor is missing.');
+    if (card.parentNode !== editor) editor.appendChild(card);
     button.textContent = 'Queue First Cut';
     button.classList.toggle('hidden', !!action && ['queued', 'running', 'stopping'].indexOf(action.status) !== -1);
     card.classList.toggle('hidden', !action);
-    syncPlanReplacementControls();
+    syncDirectorPendingControls();
     if (action) {
       phase.textContent = action.phase || action.status;
       detail.textContent = action.detail || (action.status === 'queued' ? 'Waiting for earlier First Cuts.' : '');
@@ -2221,11 +2237,12 @@
       cancel.disabled = action.status === 'stopping';
     }
     // Compact all-batch overview without introducing another dashboard or owner.
-    var overview = card.parentNode.querySelector('[data-first-cut-batches]');
+    var overview = card.querySelector('[data-first-cut-batches]');
     if (!overview) {
       overview = document.createElement('div');
       overview.dataset.firstCutBatches = '1';
-      card.parentNode.appendChild(overview);
+      overview.className = 'storyboard-first-cut-batches';
+      card.appendChild(overview);
     }
     var activeBatches = batches.filter(function (batch) {
       return ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1;

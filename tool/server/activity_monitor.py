@@ -3,6 +3,7 @@ import time
 
 from .execution_queue import ExecutionQueueStateError, recent_snapshot as execution_recent_snapshot, resource_owner as execution_resource_owner
 from .inference_runner import snapshot as inference_snapshot
+from .model_lab import list_runs as model_lab_runs
 from .llm_runner import recent_snapshot as llm_recent_snapshot, snapshot as llm_snapshot
 from .storage_manager import scan_status as storage_scan_status
 from .training_history import recent_jobs as training_recent_jobs
@@ -144,6 +145,38 @@ def _execution_recent(lane, limit, since=0.0):
     return items
 
 
+def _model_lab_item(run):
+    from datetime import datetime
+    def timestamp(value):
+        if not value:
+            return 0.0
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+
+    summary = run.get("summary") or {}
+    progress = run.get("progress") or {}
+    return {
+        "id": str(run["id"]),
+        "kind": "model-lab",
+        "lane": "background",
+        "status": str(run.get("status") or ""),
+        "label": "Model Assessment",
+        "folder": str(run.get("folder") or ""),
+        "startedAt": timestamp(run.get("startedAt")),
+        "finishedAt": timestamp(run.get("finishedAt")),
+        "updatedAt": timestamp(run.get("finishedAt")),
+        "error": str(run.get("error") or ""),
+        "attemptCount": int(run.get("attemptCount") or 0),
+        "modelCount": int(run.get("modelCount") or 0),
+        "currentModelRef": str(progress.get("currentModelRef") or ""),
+        "currentKind": str(progress.get("currentKind") or ""),
+        "phase": str(progress.get("phase") or ""),
+        "completed": int(summary.get("completed") or 0),
+        "failed": int(summary.get("failed") or 0),
+        "skipped": int(summary.get("skipped") or 0),
+        "interrupted": int(summary.get("interrupted") or 0),
+    }
+
+
 def activity_snapshot(limit=20, since=0):
     try:
         limit = max(1, min(int(limit), 50))
@@ -181,6 +214,16 @@ def activity_snapshot(limit=20, since=0):
         if str(job.get("status") or "") in _ACTIVE_STATUSES:
             active.append(_execution_item("llm", job))
     active.extend(training_active)
+
+    # Model Lab is server-owned, not a queued lane. Project its existing
+    # persisted receipts; never create competing Activity state.
+    try:
+        assessments = [_model_lab_item(row) for row in model_lab_runs()]
+    except (OSError, ValueError, TypeError) as exc:
+        _logger.exception("Model Assessment activity is unavailable.")
+        errors.append({"area": "model assessment", "error": str(exc)})
+        assessments = []
+    active.extend(item for item in assessments if item["status"] == "running")
 
     scan_payload = storage_scan_status()
     scan = scan_payload.get("scan") if isinstance(scan_payload, dict) and isinstance(scan_payload.get("scan"), dict) else {}
@@ -228,6 +271,8 @@ def activity_snapshot(limit=20, since=0):
             errors.append({"area": "training", "error": str(exc)})
 
     recent = inference_recent + llm_recent + training_recent
+    recent.extend(item for item in assessments
+                  if item["status"] in _TERMINAL_STATUSES and item["finishedAt"] >= since and item["finishedAt"] > 0)
 
     if (
         str(scan.get("status") or "") in {"completed", "failed", "cancelled"}

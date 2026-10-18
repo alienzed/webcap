@@ -22,7 +22,7 @@ Every execution job has:
 - generic metadata, runtime details, result data, and errors
 - a requested action field for domain executors to honor
 
-Durable lanes persist the state they need under `<filesystem.root>/.webcap/execution_queue.json`.
+The shared execution queue's durable inference state uses the centralized host-local app-data path `state/execution_queue.json` (resolved by `execution_queue_state_path()` in `tool/server/config.py`), not a hidden directory under the Set root. Training queue persistence is separately owned.
 The LLM lane does not: its unfinished work is session-only and is discarded on WebCap restart or an
 explicit LLM reset.
 
@@ -51,9 +51,9 @@ backlog <-> queued
 
 Queue and Backlog are pending states and may be cancelled directly. Only active jobs can be stopped or finished.
 
-## Inference target
+## Inference scheduling contract
 
-Generate, Storyboard Takes, and Test renditions are all short-form GPU inference clients and should ultimately share one `inference` lane.
+Generate, Storyboard Takes, and Test renditions are short-form GPU inference clients of the shared `inference` lane.
 
 That target means:
 

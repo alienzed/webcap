@@ -375,6 +375,8 @@ def test_storyboard_provenance_keeps_exact_scene_take_and_reference_uses(monkeyp
     file.write_bytes(b"image")
     monkeypatch.setattr(storyboard_store, "list_stories", lambda: [{"id": "story-a"}])
     monkeypatch.setattr(storyboard_store, "load_story", lambda story_id: story)
+    from tool.server import storyboard_assembly
+    monkeypatch.setattr(storyboard_assembly, "current_export", lambda story_id: None)
     monkeypatch.setattr(storyboard_store, "resolve_story_media", lambda story_id, path: file)
     items = media_explorer.discover_storyboards()
     assert len(items) == 1

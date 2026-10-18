@@ -76,9 +76,10 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["label", "options"],
+                    "required": ["label", "options", "annotationGroup"],
                     "properties": {
                         "label": {"type": "string", "minLength": 1},
+                        "annotationGroup": {"type": "string", "description": "Exact Set annotation group name when options are tags; empty for free prompt variation."},
                         "options": {
                             "type": "array",
                             "minItems": 2,
@@ -120,6 +121,8 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "Keep hair style and hair color separate.\n"
         "- Prefer independent, composable attributes over whole-phrase alternatives. "
         "For example, separate color, pattern, trim, top shape, and bottom shape rather than collapsing them into a single 'style' wildcard.\n"
+        "- Set annotationGroup to the exact annotation group name for tag-grounded dimensions; use empty string for general prompt-only variation. " 
+        "Never guess an annotation group from similar words.\\n"
         "- For tags in the SAME annotation group, only use joint combinations observed together in Set media. "
         "If a pair was never observed together in that group, treat it as mutually exclusive. "
         "Prefer one option from that group in each resolved caption unless an observed tag combination requires several. "
@@ -164,6 +167,41 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
     }
 
 
+def validate_group_compatibility(data, combinations):
+    """Reject proposed same-group choices with unobserved co-occurrence.
+
+    The explicit annotationGroup field is the identity contract. Unmapped
+    dimensions are general prompt variation, not inferred trained tags.
+    """
+    groups = data.get("variationGroups") if isinstance(data, dict) else None
+    if not isinstance(groups, list):
+        raise ValueError("Wildcard proposal must include variation groups.")
+    assigned = {}
+    for item in groups:
+        if not isinstance(item, dict):
+            raise ValueError("Invalid wildcard dimension.")
+        group = str(item.get("annotationGroup") or "").strip()
+        if not group:
+            continue
+        if group not in combinations:
+            raise ValueError("Unknown wildcard annotation group: " + group)
+        allowed = {tag for combo in combinations[group] for tag in combo}
+        options = item.get("options") or []
+        if not isinstance(options, list) or any(option not in allowed for option in options):
+            raise ValueError("Wildcard values must be exact tags in group " + group)
+        assigned.setdefault(group, []).append(options)
+    from itertools import product
+    for group, dimensions in assigned.items():
+        if len(dimensions) < 2:
+            continue
+        observed = [set(combo) for combo in combinations[group]]
+        for selected in product(*dimensions):
+            if not any(set(selected).issubset(combo) for combo in observed):
+                raise ValueError("Unobserved same-group wildcard combination in " +
+                                 group + ": " + " + ".join(selected))
+    return True
+
+
 def normalize_result(data):
     if not isinstance(data, dict):
         raise ValueError("Wildcard analysis response must be an object.")
@@ -200,7 +238,7 @@ def normalize_result(data):
         options = [str(value or "").strip() for value in options]
         if len(options) < 2 or not any(options):
             raise ValueError("Wildcard analysis variation groups require at least two options and one concrete value.")
-        normalized_groups.append({"label": label, "options": options})
+        normalized_groups.append({"label": label, "options": options, "annotationGroup": str(group.get("annotationGroup") or "").strip()})
 
     return {
         "wildcard": wildcard,

@@ -117,6 +117,7 @@ For local work started by WebCap, durable uncertainty is a bug, not a safety sta
 - After restart or crash, reconcile managed work from that exact identity plus authoritative runtime evidence. Managed work must resolve to active, terminal, absent, or failed; "possibly still running" must not become a durable state.
 - Positive evidence that managed GPU work is active may delay conflicting execution. Missing, unreachable, or ambiguous evidence must never create an indefinite GPU reservation or queue blocker.
 - Shared GPU ownership is process-local scheduling state, not durable truth. Persist identities needed to reconstruct reality rather than speculative ownership.
+- On WebCap startup or restart, never automatically unpause a previously paused queue, campaign, or managed operation. Reconcile saved work and preserve its paused state; only an explicit user action may resume scheduling. Reconciliation of work already active is not permission to restart paused work.
 - When reconciliation fails, expose the failure and preserve enough identity/evidence to diagnose it. Prefer a traceable execution failure over refusing unrelated work because WebCap is unsure.
 
 ## Mutation Safety

@@ -138,3 +138,43 @@ def training_suggestions(folder, job_id):
     return {"promptOptions": options, "trainedWords": [],
             "source": "captured_training_annotations",
             "evidenceLevel": "trained_not_validated"}
+
+
+def director_enrichment_request(checkpoint_profile, suggestions):
+    """Create review-only metadata suggestions for the existing LLM queue."""
+    if not isinstance(checkpoint_profile, dict):
+        raise ValueError("Profile context must be an object.")
+    sources = checkpoint_profile.get("sources") or {}
+    compact = {
+        "checkpoint": checkpoint_profile.get("checkpoint"),
+        "embedded": sources.get("embedded") or {},
+        "existingEnrichment": ((sources.get("webcap") or {}).get("modelProfile") or {}).get("enrichment") or {},
+        "externalDescription": (sources.get("sidecar") or {}).get("description") or (sources.get("civitai") or {}).get("description") or "",
+        "externalTrainedWords": (sources.get("civitai") or {}).get("trainedWords") or [],
+        "capturedVocabulary": (suggestions or {}).get("promptOptions") or {},
+    }
+    schema = {
+        "type": "object", "additionalProperties": False,
+        "required": ["description", "trainedWords", "guidance", "promptOptions"],
+        "properties": {
+            "description": {"type": "string"},
+            "trainedWords": {"type": "array", "items": {"type": "string"}},
+            "guidance": {"type": "string"},
+            "promptOptions": {"type": "object", "additionalProperties": {
+                "type": "array", "items": {"type": "string"}}},
+        },
+    }
+    return {
+        "operation": "epoch_profile_enrichment", "output": "json",
+        "response_schema": schema,
+        "prompt": (
+            "Suggest human-reviewable LoRA profile metadata from the supplied evidence. "
+            "Use only observed training terminology and imported facts. "
+            "Do not claim quality, reliable generation, or supported generalization "
+            "from tags alone. Do not infer trigger words as proven unless explicitly "
+            "supplied. Preserve the user's existing wording when appropriate. "
+            "Return concise description, key phrases, named variation groups, "
+            "and optional generation guidance as JSON. Nothing is automatically saved.\\n"
+            + json.dumps(compact, ensure_ascii=False)[:18000]
+        ),
+    }

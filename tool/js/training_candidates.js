@@ -927,7 +927,7 @@ function enrichEpochProfile() {
             var suggestion = (current.result || {}).analysis;
             if (!suggestion || typeof suggestion !== 'object') throw new Error('Director returned no profile suggestions.');
             document.getElementById('epoch-profile-description').value = String(suggestion.description || '');
-            document.getElementById('epoch-profile-words').value = (suggestion.trainedWords || []).join('\\n');
+            document.getElementById('epoch-profile-words').value = (suggestion.trainedWords || []).join('\n');
             document.getElementById('epoch-profile-options').value = JSON.stringify(suggestion.promptOptions || {}, null, 2);
             document.getElementById('epoch-profile-guidance').value = String(suggestion.guidance || '');
             status.textContent = 'Director suggestions loaded for review. Save Profile to keep them.';

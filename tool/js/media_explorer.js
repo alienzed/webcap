@@ -9,7 +9,7 @@
   var roleNames = {generated: 'Generated', reference: 'Reference', source: 'Source media'};
   var mediaFacts = new Map();
   var loupeReturn = null;
-  var artifact = '';
+  var artifact = '', owner = '';
   function el(id) { return document.getElementById(id); }
   function report(err) {
     var message = String(err && err.message || err);
@@ -121,6 +121,22 @@
     var provenance = document.createElement('div'); provenance.className = 'media-explorer-provenance';
     text(provenance, 'Owned by · ' + sourceNames[item.source] + ' › ' + (item.contextLabel || item.storageId)); host.appendChild(provenance);
     var actions = document.createElement('div'); actions.className = 'media-explorer-inspector-actions'; host.appendChild(actions);
+    if (item.storageId) {
+      var related = document.createElement('button');
+      related.type = 'button';
+      related.className = 'review-captions-btn';
+      text(related, 'Show media from this ' + (sourceNames[item.source] || 'source'));
+      related.addEventListener('click', function () {
+        owner = item.storageId; source = item.source; artifact = '';
+        el('media-explorer-search').value = '';
+        facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
+        sourceButtons.forEach(function (button) {
+          button.classList.toggle('active', button.dataset.mediaSource === source);
+        });
+        load(true);
+      });
+      actions.appendChild(related);
+    }
     var dl = document.createElement('dl'); dl.className = 'media-explorer-detail';
     renderDetails(item, dl);
     host.appendChild(dl);
@@ -312,7 +328,7 @@
   }
   var facetIds = ['kind', 'model', 'folder', 'rating'];
   function hasFilters() {
-    return artifact || role || source || el('media-explorer-search').value.trim() || facetIds.some(function (id) { return el('media-explorer-' + id).value; });
+    return artifact || owner || role || source || el('media-explorer-search').value.trim() || facetIds.some(function (id) { return el('media-explorer-' + id).value; });
   }
   function emptyState() {
     var empty = el('media-explorer-empty'); empty.classList.toggle('hidden', items.length > 0 || loading);
@@ -334,6 +350,7 @@
     }
     var search = el('media-explorer-search');
     if (artifact) chip('Focused media', function () { artifact = ''; load(true); });
+    if (owner) chip('Related to ' + owner, function () { owner = ''; load(true); });
     if (search.value.trim()) chip('“' + search.value.trim() + '”', function () { search.value = ''; load(true); });
     facetIds.slice(1).forEach(function (id) {
       var select = el('media-explorer-' + id);
@@ -378,7 +395,7 @@
     var qs = new URLSearchParams({limit:pageSize, offset:reset ? 0 : offset, role:role,
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
       sort:el('media-explorer-sort').value, source:source, full:full ? '1' : '0',
-      model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, artifact:artifact});
+      model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, artifact:artifact, owner:owner});
     fetch('/fs/media_explorer?' + qs, {signal: controller.signal}).then(function (res) {
       return res.json().catch(function (err) { throw new Error('Media discovery HTTP ' + res.status + ': ' + err.message); }).then(function (data) {
         if (!res.ok || !data.ok) throw new Error(data.error || 'Media discovery failed.');
@@ -440,7 +457,7 @@
       if (window.location.hash.split('?')[0] === '#/media') {
         var params = new URLSearchParams(window.location.hash.split('?')[1] || '');
         role = params.get('role') || ''; source = params.get('source') || '';
-        artifact = params.get('artifact') || '';
+        artifact = params.get('artifact') || ''; owner = params.get('owner') || '';
         full = params.get('full') === '1' || source === 'set';
         el('media-explorer-search').value = params.get('q') || '';
         el('media-explorer-kind').value = params.get('kind') || '';
@@ -460,8 +477,9 @@
       }
     }
     if (target) {
-      source = target.source; role = ''; artifact = target.id; full = true; needsLoad = true;
-      el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
+      source = target.source; role = ''; artifact = target.id; owner = ''; full = true; needsLoad = true;
+      owner = ''; artifact = '';
+    el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
       facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
       sourceButtons.forEach(function (button, index) {
         var match = button.dataset.mediaSource === source;
@@ -493,7 +511,7 @@
   Array.prototype.forEach.call(document.querySelectorAll('[data-media-role]'), function (button) {
     button.addEventListener('click', function () {
       role = button.dataset.mediaRole;
-      artifact = '';
+      artifact = ''; owner = '';
       source = '';
       Array.prototype.forEach.call(document.querySelectorAll('.media-explorer-source'), function (node) {
         node.classList.toggle('active', node === button);
@@ -504,7 +522,7 @@
   Array.prototype.forEach.call(document.querySelectorAll('[data-media-source]'), function (button) {
     button.addEventListener('click', function () {
       source = button.dataset.mediaSource;
-      artifact = '';
+      artifact = ''; owner = '';
       if (source === 'set') full = true;
       role = '';
       Array.prototype.forEach.call(document.querySelectorAll('.media-explorer-source'), function (node) { node.classList.toggle('active', node === button); });
@@ -537,7 +555,7 @@
   el('media-explorer-more-btn').addEventListener('click', function () { load(false); });
   var debounce;
   el('media-explorer-search').addEventListener('input', function () {
-    artifact = '';
+    artifact = ''; owner = '';
     clearTimeout(debounce); debounce = setTimeout(function () { load(true); }, 250);
   });
   el('media-explorer-kind').addEventListener('change', function () { load(true); });

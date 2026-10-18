@@ -1320,3 +1320,19 @@ def test_storyboard_director_scene_follow_is_visible_story_scoped():
 
     scene_request = storyboard.split("function requestSceneDirector(storyId, sceneId, operation, instruction, modelId, clearCorrection)", 1)[1].split("\n  function ", 1)[0]
     assert "followVisibleWorkingScene(storyId, sceneId);" in scene_request
+
+
+def test_storyboard_first_cut_idle_heartbeat_keeps_active_updates_fast():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    render = storyboard.split("function renderStoryAction()", 1)[1].split("\n  function ", 1)[0]
+    assert "activeBatches.length ? 2000 : 30000" in render
+    assert "firstCutRequest().then(adoptFirstCutBatches)" in render
+    assert "clearTimeout(storyState.storyActionTimer)" in render
+
+
+def test_epoch_finder_does_not_poll_terminal_campaign_status():
+    source = (ROOT / "tool" / "js" / "epoch_finder.js").read_text(encoding="utf-8")
+    polling = source.split("timer = setInterval(function () {", 1)[1]
+    assert "['queued', 'running'].includes(campaignState.status)" in polling
+    assert "mode === 'finder' && activeCampaign && campaignState" in polling
+    assert "refreshStatus().catch(error)" in polling

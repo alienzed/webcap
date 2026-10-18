@@ -1933,7 +1933,7 @@
         instruction: instruction,
         model: modelId
       }).then(function (payload) {
-        return request(null, 'story=' + encodeURIComponent(storyId)).then(function (fresh) {
+        return flushPendingSaves().then(function () { return request(null, 'story=' + encodeURIComponent(storyId)); }).then(function (fresh) {
           if (storyState.story && storyState.story.id === storyId) {
             storyState.story = fresh.story;
             renderStory();
@@ -1951,7 +1951,15 @@
     }).catch(function (err) {
       if (directorWasStopped(err)) setRepairStatus('Revise Scenes stopped.');
       else setRepairStatus('Revise Scenes failed.');
-      throw err;
+      // Earlier Scenes may have been saved before a later Scene failed.
+      return flushPendingSaves().then(function () {
+        return request(null, 'story=' + encodeURIComponent(storyId));
+      }).then(function (fresh) {
+        if (storyState.story && storyState.story.id === storyId) {
+          storyState.story = fresh.story;
+          renderStory();
+        }
+      }).catch(reportError).then(function () { throw err; });
     }).finally(function () {
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();

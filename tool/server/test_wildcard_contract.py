@@ -262,7 +262,10 @@ def normalize_result(data):
         options = [str(value or "").strip() for value in options]
         if len(options) < 2 or not any(options):
             raise ValueError("Wildcard analysis variation groups require at least two options and one concrete value.")
-        normalized = {"label": label, "options": options}\n        if "annotationGroup" in group:\n            normalized["annotationGroup"] = str(group.get("annotationGroup") or "").strip()\n        normalized_groups.append(normalized)
+        normalized = {"label": label, "options": options}
+        if "annotationGroup" in group:
+            normalized["annotationGroup"] = str(group.get("annotationGroup") or "").strip()
+        normalized_groups.append(normalized)
 
     return {
         "wildcard": wildcard,

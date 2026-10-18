@@ -119,4 +119,8 @@ def test_experimental_model_assessment_preserves_existing_diagnostics():
     assert 'data-diagnostics-tab="benchmark"' in html
     assert 'data-diagnostics-tab="model-lab"' in html
     assert "function refreshUnifiedModelAssessment()" in script
+    assert 'id="diagnostics-assessment-deep"' in html
+    assert 'id="diagnostics-assessment-selection"' in html
+    assert "diagnosticsAssessmentSelected = { director: new Set(), vision: new Set() }" in script
+    assert "refreshSelectionSummary()" in script
     assert "setDiagnosticsTab('model-lab', true)" in script

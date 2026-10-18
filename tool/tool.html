@@ -2644,6 +2644,7 @@
                 </div>
                 <div class="app-settings-tabs diagnostics-tabs" role="tablist" aria-label="Diagnostics sections">
                     <button id="diagnostics-tab-health" type="button" class="app-settings-tab diagnostics-tab active" data-diagnostics-tab="health" role="tab" aria-selected="true" aria-controls="diagnostics-panel-health">Health</button>
+                    <button id="diagnostics-tab-assessment" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="assessment" role="tab" aria-selected="false" aria-controls="diagnostics-panel-assessment" tabindex="-1">Model Assessment (Preview)</button>
                     <button id="diagnostics-tab-h3" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="h3" role="tab" aria-selected="false" aria-controls="diagnostics-panel-h3" tabindex="-1">H3 Calibration</button>
                     <button id="diagnostics-tab-models" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="models" role="tab" aria-selected="false" aria-controls="diagnostics-panel-models" tabindex="-1">Director Models</button>
                     <button id="diagnostics-tab-benchmark" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="benchmark" role="tab" aria-selected="false" aria-controls="diagnostics-panel-benchmark" tabindex="-1">Benchmark</button>
@@ -2667,6 +2668,22 @@
                                     <div id="app-settings-environment-results" class="app-settings-environment-results hidden" aria-live="polite"></div>
                                 </div>
                             </details>
+                        </section>
+                    </div>
+                    <div id="diagnostics-panel-assessment" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="assessment" role="tabpanel" aria-labelledby="diagnostics-tab-assessment" hidden>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Model Assessment <span class="app-settings-help">Experimental overview</span></div>
+                                <div class="app-settings-section-copy">One view of existing Director and Vision findings. The original assessment tools remain available and unchanged while unified execution is validated.</div>
+                            </div>
+                            <div class="app-settings-actions app-settings-actions-inline">
+                                <button id="diagnostics-assessment-refresh" type="button" class="review-captions-btn">Refresh Findings</button>
+                                <button id="diagnostics-assessment-director" type="button">Director Assessment</button>
+                                <button id="diagnostics-assessment-lab" type="button">Vision &amp; Structured Tests</button>
+                                <button id="diagnostics-assessment-benchmark" type="button" class="review-captions-btn">Custom Benchmark</button>
+                            </div>
+                            <div id="diagnostics-assessment-summary" class="app-settings-help" aria-live="polite">Open this tab to load available findings.</div>
+                            <div id="diagnostics-assessment-results" class="app-settings-environment-results"></div>
                         </section>
                     </div>
                     <div id="diagnostics-panel-h3" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="h3" role="tabpanel" aria-labelledby="diagnostics-tab-h3" hidden>

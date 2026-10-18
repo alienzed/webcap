@@ -61,6 +61,7 @@ def _execution_item(lane, job):
         "sessionId": str(job.get("sessionId") or metadata.get("sessionId") or ""),
         "source": str(job.get("source") or metadata.get("source") or ""),
         "operation": str(job.get("operation") or metadata.get("operation") or ""),
+        "revisionProgress": job.get("revisionProgress") if isinstance(job.get("revisionProgress"), dict) else {},
         "finishReason": str(result.get("finishReason") or ""),
         "promptTokens": _usage_token_count(usage, "prompt_tokens", "promptTokens", "input_tokens", "inputTokens"),
         "outputTokens": _usage_token_count(usage, "completion_tokens", "completionTokens", "output_tokens", "outputTokens", "eval_count"),

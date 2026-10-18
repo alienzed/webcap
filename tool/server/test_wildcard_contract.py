@@ -64,7 +64,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
             "wildcard": {
                 "type": "string",
                 "minLength": 1,
-                "description": "One reusable wildcard caption using concrete {a|b|c} syntax.",
+                "description": "One reusable wildcard caption using observed training values in concrete {a|b|c} syntax.",
             },
             "stableTerms": {
                 "type": "array",
@@ -121,19 +121,17 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "Keep hair style and hair color separate.\n"
         "- Prefer independent, composable attributes over whole-phrase alternatives. "
         "For example, separate color, pattern, trim, top shape, and bottom shape rather than collapsing them into a single 'style' wildcard.\n"
-        "- Set annotationGroup to the exact annotation group name for tag-grounded dimensions; use empty string for general prompt-only variation. " 
-        "Never guess an annotation group from similar words.\n"
-        "- For tags in the SAME annotation group, only use joint combinations observed together in Set media. "
+        "- Set annotationGroup to the exact group name ONLY if every option is an exact observed tag in that group. "
+        "For natural-language caption phrases use an empty annotationGroup; never map paraphrases to exact tag identifiers.\n"
+        "- For tags in the SAME annotation group, only use joint combinations observed together in the selected training media. "
         "If a pair was never observed together in that group, treat it as mutually exclusive. "
         "Prefer one option from that group in each resolved caption unless an observed tag combination requires several. "
         "Do not apply this restriction across DIFFERENT annotation groups; cross-group recombination tests generalization.\n"
         "- Recombine attributes across dimensions so tests exercise independently selectable properties, "
         "not merely replay complete caption fragments.\n"
-        "- Annotation groups, aliases, and terms reveal the important dimensions and preferred terminology. "
-        "They are guidance, not a closed list of test values or proof that every term occurs in the captions.\n"
-        "- Include sensible concrete unseen alternatives where useful for testing generalization. "
-        "For example, black hair can be tested even when the captions mention only brown and blonde hair. "
-        "Do not claim unseen values were learned or observed. Avoid implausible combinations.\n"
+        "- Annotation groups, aliases, and terms identify important dimensions, but are not proof of training membership. "
+        "Only the supplied selected-run captions and observed tag combinations provide evidence for values.\n"
+        "- Do not invent unseen values or generalization probes. Every option must be evidenced in the training captions or scoped tags.\n"
         "- Use supplied garment-construction terms accurately; do not invent nonsensical hardware or garment structures.\n"
         "- Every wildcard option must itself be usable prompt text. Never emit category placeholders such as 'various styles', "
         "'other background', 'different poses', 'multiple colors', 'etc.', or similar descriptions of options you failed to enumerate.\n"
@@ -144,7 +142,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "[GENERAL RULES]\n"
         "- Each caption is prefixed with [count=N] frequency metadata. Use the count as evidence of prevalence; it is not caption text.\n"
         "- Keep stable subject tokens, identity terms, and consistently recurring descriptors outside wildcard braces.\n"
-        "- Put meaningful test alternatives in {a|b|c} groups. An attribute may be worth testing even if rare or constant in the captions.\n"
+        "- Put evidenced alternatives in {a|b|c} groups; do not add new values absent from training.\n"
         "- Consolidate obvious synonymous wording only when the alternatives mean the same thing.\n"
         "- Put shared nouns and grammar outside braces; use the shortest interchangeable option that keeps every result natural. "
         "Whole phrases are appropriate only for a genuinely inseparable single attribute.\n"
@@ -202,10 +200,6 @@ def validate_group_compatibility(data, combinations):
             raise ValueError("Wildcard group options do not match the generated prompt.")
         group = str(item.get("annotationGroup") or "").strip()
         if not group:
-            known = {tag for combos in combinations.values() for combo in combos for tag in combo}
-            if item.get("options") and any(option in known for option in item["options"]):
-                raise ValueError("Tag-grounded wildcard dimension " + str(item.get("label") or "") +
-                                 " must identify its annotationGroup.")
             continue
         if group not in combinations:
             raise ValueError("Unknown wildcard annotation group: " + group)

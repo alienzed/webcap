@@ -916,19 +916,73 @@
         primaryHost.replaceChildren(primaryCard);
       }
       ProgressCard.update(primaryCard, snapshot, { onOpen: function () { itemOpen(snapshot); } });
+      // Keep a short, per-job in-memory token history. No new network polling.
       var existingStats = primaryCard.querySelector('[data-director-live-stats]');
-      if (snapshot.kind === 'director' && snapshot.liveTokens != null) {
+      var directorJob = snapshot.kind === 'director' && snapshot.original;
+      var generated = directorJob && directorJob.liveTokens != null ? Number(directorJob.liveTokens) : NaN;
+      if (directorJob && Number.isFinite(generated) && generated >= 0) {
         if (!existingStats) {
           existingStats = document.createElement('div');
           existingStats.className = 'activity-director-live-stats';
           existingStats.setAttribute('data-director-live-stats', '');
           primaryCard.querySelector('[data-progress-copy]').appendChild(existingStats);
+          var metrics = document.createElement('div');
+          metrics.className = 'activity-director-metrics';
+          existingStats.appendChild(metrics);
+          var heading = document.createElement('strong');
+          heading.textContent = 'Live token throughput';
+          existingStats.appendChild(heading);
+          var graph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          graph.setAttribute('viewBox', '0 0 300 90');
+          graph.setAttribute('preserveAspectRatio', 'none');
+          graph.setAttribute('role', 'img');
+          graph.setAttribute('aria-label', 'Live token generation rate');
+          var plot = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          plot.setAttribute('fill', 'none');
+          plot.setAttribute('stroke', 'currentColor');
+          plot.setAttribute('stroke-width', '3');
+          graph.appendChild(plot);
+          existingStats.appendChild(graph);
         }
-        var values = [String(snapshot.liveTokens) + ' generated'];
-        if (snapshot.promptTokensLive != null) values.push(String(snapshot.promptProcessed || 0) + '/' + String(snapshot.promptTokensLive) + ' prompt');
-        if (snapshot.contextSize) values.push(String(snapshot.contextSize) + ' context');
-        if (snapshot.outputLimit != null) values.push(String(snapshot.outputLimit) + ' output limit');
-        existingStats.textContent = values.join(' · ');
+        var key = activityJobKey(directorJob);
+        if (!state.directorSamples) state.directorSamples = Object.create(null);
+        var samples = state.directorSamples[key] || (state.directorSamples[key] = []);
+        var now = Date.now();
+        var previous = samples[samples.length - 1];
+        if (!previous || generated !== previous.tokens) {
+          samples.push({ time: now, tokens: generated });
+          if (samples.length > 30) samples.shift();
+        }
+        var rate = previous && generated > previous.tokens && now > previous.time
+          ? (generated - previous.tokens) * 1000 / (now - previous.time) : null;
+        var metricsNode = existingStats.querySelector('.activity-director-metrics');
+        metricsNode.replaceChildren();
+        [
+          [generated.toLocaleString(), 'Tokens generated'],
+          [rate != null ? rate.toFixed(1) : '—', 'Tokens/sec'],
+          [directorJob.contextSize ? Number(directorJob.contextSize).toLocaleString() : '—', 'Context window']
+        ].forEach(function (metric) {
+          var tile = document.createElement('div');
+          var value = document.createElement('b');
+          value.textContent = metric[0];
+          var label = document.createElement('small');
+          label.textContent = metric[1];
+          tile.appendChild(value);
+          tile.appendChild(label);
+          metricsNode.appendChild(tile);
+        });
+        var speeds = samples.slice(1).map(function (sample, i) {
+          var prior = samples[i];
+          return Math.max(0, (sample.tokens - prior.tokens) * 1000 / Math.max(1, sample.time - prior.time));
+        });
+        var maximum = Math.max(1, ...speeds);
+        var points = speeds.map(function (speed, i) {
+          return (speeds.length === 1 ? 150 : i * 300 / (speeds.length - 1)).toFixed(1) + ',' +
+            (85 - speed / maximum * 75).toFixed(1);
+        });
+        existingStats.querySelector('polyline').setAttribute('points', points.join(' '));
+        existingStats.querySelector('svg').setAttribute('aria-label',
+          speeds.length ? 'Recent token throughput samples' : 'Waiting for another token sample');
       } else if (existingStats) existingStats.remove();
       var queueKey = activityLane(primary) === 'llm' ? 'director' : activityLane(primary);
       var queue = queues[queueKey] || {};

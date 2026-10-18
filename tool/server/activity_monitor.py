@@ -331,7 +331,28 @@ def activity_snapshot(limit=20, since=0):
         if not any(item.get("area") == "training" for item in errors):
             errors.append({"area": "training", "error": str(exc)})
 
-    recent = inference_recent + llm_recent + training_recent
+    # Keep one completed First Cut parent card; its child Director receipts
+    # remain queue-owned but should not flood the session Activity history.
+    all_cut_children = {str(job_id) for batch in first_cut_batches
+                        for job_id in batch.get("llmJobIds", [])}
+    recent = inference_recent + [item for item in llm_recent if item["id"] not in all_cut_children] + training_recent
+    for batch in first_cut_batches:
+        if batch.get("status") not in {"complete", "failed", "stopped"}:
+            continue
+        finished = float(batch.get("finishedAt") or 0)
+        if finished <= 0 or finished < since:
+            continue
+        recent.append({
+            "id": "first-cut:" + str(batch["id"]), "batchId": str(batch["id"]),
+            "kind": "first-cut", "lane": "background",
+            "status": {"complete": "completed"}.get(batch["status"], batch["status"]),
+            "label": "Storyboard First Cut", "storyId": batch.get("storyId"),
+            "modelId": batch.get("modelId"), "phase": batch.get("phase"),
+            "detail": batch.get("detail"), "sceneCount": batch.get("sceneCount"),
+            "stageCount": 5, "stageIndex": 4,
+            "startedAt": batch.get("startedAt") or batch.get("queuedAt"),
+            "finishedAt": finished,
+        })
     recent.extend(item for item in assessments
                   if item["status"] in _TERMINAL_STATUSES and item["finishedAt"] >= since and item["finishedAt"] > 0)
 

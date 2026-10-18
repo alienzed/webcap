@@ -5536,10 +5536,15 @@
     }
     run.disabled = true;
     status.textContent = 'Starting revision…';
-    reviseScenes(instruction, storyState.director.modelId).then(function () {
-      closeDirectorTools();
-    }).catch(function (err) {
-      status.textContent = String(err && err.message ? err.message : err);
+    var storyId = storyState.story && storyState.story.id;
+    var target = { kind: 'repair', storyId: storyId };
+    var revision = reviseScenes(instruction, storyState.director.modelId);
+    // The target is registered synchronously once the operation has started.
+    // Dismiss the input modal now so its activity card is not obscured.
+    var started = directorTargetPending(target);
+    if (started) closeDirectorTools();
+    revision.catch(function (err) {
+      if (!started) status.textContent = String(err && err.message ? err.message : err);
       reportError(err);
     }).finally(function () {
       syncDirectorToolsUi();

@@ -1665,6 +1665,7 @@
                         <strong>Director</strong>
                         <span id="storyboard-director-activity-phase">Preparing…</span>
                         <span id="storyboard-director-activity-detail"></span>
+                        <button id="storyboard-director-view-activity" type="button" class="review-captions-btn">View Activity →</button>
                         <div id="storyboard-director-model-load" class="director-model-load hidden" aria-live="polite">
                             <div class="director-model-load-copy"><span>Model</span><strong id="storyboard-director-model-load-label"></strong></div>
                             <div class="director-model-load-track" role="progressbar" aria-label="Approximate Director model load" aria-valuemin="0" aria-valuemax="100"><span id="storyboard-director-model-load-fill"></span></div>
@@ -2221,6 +2222,8 @@
                         <textarea id="storyboard-director-tools-instruction" rows="7" placeholder="Describe what should be revised across these Scenes."></textarea>
                         <small>Presets prime this instruction; edit it freely before running.</small>
                     </div>
+                    <label class="storyboard-develop-individual"><input id="storyboard-director-tools-generate-takes" type="checkbox"> Generate fresh Takes after successful revision</label>
+                    <small>Queues new Takes for every revised Scene; existing Takes are kept.</small>
                     <div id="storyboard-director-tools-status" class="training-history-summary" aria-live="polite"></div>
                 </div>
                 <footer class="keep-lora-footer">
@@ -2703,10 +2706,22 @@
                             </div>
                             <div class="model-assessment-toolbar">
                                 <button id="diagnostics-assessment-run" type="button">Run Selected Tests</button>
+                                <button id="diagnostics-assessment-stop" type="button" class="review-captions-btn" disabled>Stop Assessment</button>
                                 <button id="diagnostics-assessment-refresh" type="button" class="review-captions-btn">Refresh</button>
+                                <button id="diagnostics-assessment-export" type="button" class="review-captions-btn">Export Results</button>
+                                <button id="diagnostics-assessment-import" type="button" class="review-captions-btn">Import Results</button>
+                                <input id="diagnostics-assessment-file" type="file" accept=".json,application/json" hidden>
                                 <label class="model-assessment-deep"><input id="diagnostics-assessment-deep" type="checkbox"> Deep Assessment <small>(not yet available)</small></label>
                             </div>
                             <div id="diagnostics-assessment-activity" class="hidden" role="region" aria-label="Model Assessment progress"></div>
+                            <div id="diagnostics-assessment-transfer" class="hidden" role="region" aria-label="Import assessment results">
+                                <p id="diagnostics-assessment-transfer-copy" class="app-settings-help"></p>
+                                <div id="diagnostics-assessment-runtime-map" class="model-assessment-toolbar"></div>
+                                <p class="app-settings-help">Choose the runtime hosting the same models on this machine. Imports preserve source evidence and newer local reports. Media, credentials and runtime settings are not transferred.</p>
+                                <button id="diagnostics-assessment-import-apply" type="button">Import Evidence</button>
+                                <button id="diagnostics-assessment-import-cancel" type="button" class="review-captions-btn">Cancel</button>
+                            </div>
+                            <p id="diagnostics-assessment-transfer-status" class="app-settings-help" role="status"></p>
                             <details class="model-assessment-tools"><summary>Other testing tools</summary>
                                 <div class="model-assessment-toolbar">
                                     <button id="diagnostics-assessment-director" type="button">Director Calibration</button>

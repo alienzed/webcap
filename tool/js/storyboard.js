@@ -2143,53 +2143,56 @@
     return minutes ? (String(minutes) + 'm ' + String(remainder) + 's') : (String(remainder) + 's');
   }
 
+  // First Cut is owned by the server. This browser only observes and controls batches.
+  function firstCutRequest(body) {
+    return fetch('/fs/storyboard/first-cut', body ? {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    } : {}).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok || !payload.ok) throw new Error(payload.error || 'First Cut request failed.');
+        return payload;
+      });
+    });
+  }
+
+  function adoptFirstCutBatches(payload) {
+    var batches = payload.batches || [];
+    var priorLibraryState = (storyState.firstCutBatches || []).map(function (batch) {
+      return batch.id + ':' + batch.status;
+    }).join('|');
+    storyState.storyActionQueue = batches.filter(function (batch) {
+      return batch.status === 'queued';
+    }).map(function (batch) {
+      batch.queued = true;
+      return batch;
+    });
+    storyState.storyAction = batches.find(function (batch) {
+      return batch.status === 'running' || batch.status === 'stopping';
+    }) || null;
+    if (storyState.storyAction) storyState.storyAction.active = true;
+    storyState.firstCutBatches = batches;
+    var nextLibraryState = batches.map(function (batch) {
+      return batch.id + ':' + batch.status;
+    }).join('|');
+    if (priorLibraryState !== nextLibraryState) renderLibrary();
+    renderStoryAction();
+  }
+
   function queuedFirstCutForStory(storyId) {
-    storyId = String(storyId || '');
-    return storyState.storyActionQueue.find(function (action) {
-      return !action.cancelled && String(action.storyId || '') === storyId;
+    return storyState.storyActionQueue.find(function (batch) {
+      return String(batch.storyId || '') === String(storyId || '');
     }) || null;
   }
 
-  function firstCutQueuePosition(action) {
-    var index = storyState.storyActionQueue.indexOf(action);
-    return index < 0 ? 0 : index + 1;
-  }
-
-  function firstCutQueueDisplayPosition(action) {
-    return firstCutQueuePosition(action) + (
-      storyState.storyAction && storyState.storyAction.active ? 1 : 0
-    );
-  }
-
-  function removeQueuedFirstCut(storyId) {
-    storyId = String(storyId || '');
-    var removed = null;
-    storyState.storyActionQueue = storyState.storyActionQueue.filter(function (action) {
-      if (!removed && String(action.storyId || '') === storyId) {
-        removed = action;
-        return false;
-      }
-      return true;
-    });
-    if (removed) {
-      removed.queued = false;
-      removed.cancelled = true;
-    }
-    return removed;
-  }
-
-  function clearQueuedFirstCuts() {
-    storyState.storyActionQueue.forEach(function (action) {
-      action.queued = false;
-      action.cancelled = true;
-    });
-    storyState.storyActionQueue = [];
+  function firstCutQueueDisplayPosition(batch) {
+    return storyState.storyActionQueue.indexOf(batch) + 1
+      + (storyState.storyAction && storyState.storyAction.active ? 1 : 0);
   }
 
   function renderStoryAction() {
     if (storyState.storyActionTimer) clearTimeout(storyState.storyActionTimer);
     storyState.storyActionTimer = 0;
-
     var button = el('storyboard-first-cut-btn');
     var card = el('storyboard-story-action-card');
     var phase = el('storyboard-story-action-phase');
@@ -2197,292 +2200,88 @@
     var elapsed = el('storyboard-story-action-elapsed');
     var cancel = el('storyboard-story-action-cancel');
     if (!button || !card || !phase || !detail || !elapsed || !cancel) {
-      throw new Error('Storyboard Story action card markup is missing.');
+      throw new Error('Storyboard First Cut controls are missing.');
     }
-
-    var currentStoryId = storyState.story ? String(storyState.story.id || '') : '';
-    var activeAction = storyState.storyAction;
-    var queuedAction = queuedFirstCutForStory(currentStoryId);
-    var action = activeAction && String(activeAction.storyId || '') === currentStoryId
-      ? activeAction
-      : queuedAction;
-    var queued = !!(action && action.queued);
-    var anotherRunning = !!(activeAction && activeAction.active);
-
-    button.textContent = anotherRunning ? 'Queue First Cut' : 'First Cut';
-    button.classList.toggle('hidden', !!(action && (action.active || queued)));
+    var storyId = storyState.story ? String(storyState.story.id || '') : '';
+    var batches = storyState.firstCutBatches || [];
+    var action = batches.find(function (batch) {
+      return batch.storyId === storyId && ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1;
+    }) || batches.find(function (batch) { return batch.storyId === storyId; });
+    button.textContent = 'Queue First Cut';
+    button.classList.toggle('hidden', !!action && ['queued', 'running', 'stopping'].indexOf(action.status) !== -1);
     card.classList.toggle('hidden', !action);
     syncPlanReplacementControls();
-    if (!action) return;
-
-    if (queued) {
-      var displayPosition = firstCutQueueDisplayPosition(action);
-      var ahead = Math.max(0, displayPosition - 1);
-      phase.textContent = 'Queued · #' + String(displayPosition);
-      detail.textContent = ahead
-        ? String(ahead) + ' First Cut' + (ahead === 1 ? '' : 's') + ' ahead.'
-        : 'Next First Cut.';
-      elapsed.textContent = storyActionElapsed(
-        (Date.now() / 1000) - Number(action.queuedAt || Date.now() / 1000)
-      ) + ' queued' + (action.modelId ? ' · ' + action.modelId : '');
-      cancel.classList.remove('hidden');
-      storyState.storyActionTimer = setTimeout(renderStoryAction, 1000);
-      return;
+    if (action) {
+      phase.textContent = action.phase || action.status;
+      detail.textContent = action.detail || (action.status === 'queued' ? 'Waiting for earlier First Cuts.' : '');
+      elapsed.textContent = storyActionElapsed(Date.now() / 1000 - (action.startedAt || action.queuedAt || Date.now() / 1000))
+        + ' · ' + (action.modelId || '');
+      cancel.classList.toggle('hidden', ['queued', 'running', 'stopping'].indexOf(action.status) === -1);
+      cancel.disabled = action.status === 'stopping';
     }
+    // Compact all-batch overview without introducing another dashboard or owner.
+    var overview = card.parentNode.querySelector('[data-first-cut-batches]');
+    if (!overview) {
+      overview = document.createElement('div');
+      overview.dataset.firstCutBatches = '1';
+      card.parentNode.appendChild(overview);
+    }
+    var activeBatches = batches.filter(function (batch) {
+      return ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1;
+    });
+    Array.from(overview.children).forEach(function (line) {
+      if (!activeBatches.some(function (batch) { return batch.id === line.dataset.batchId; })) {
+        line.remove();
+      }
+    });
+    activeBatches.forEach(function (batch) {
+      var line = Array.from(overview.children).find(function (node) {
+        return node.dataset.batchId === batch.id;
+      });
+      if (!line) {
+        line = document.createElement('div');
+        line.className = 'storyboard-first-cut-batch-row';
+        line.dataset.batchId = batch.id;
+        line.appendChild(document.createElement('span'));
+        var stop = document.createElement('button');
+        stop.type = 'button';
+        stop.onclick = function () { cancelFirstCutBatch(batch.id); };
+        line.appendChild(stop);
+      }
+      var story = (storyState.stories || []).find(function (item) { return item.id === batch.storyId; });
+      line.firstChild.textContent = (story ? story.title : batch.storyId) + ' · ' + batch.phase
+        + (batch.detail ? ' · ' + batch.detail : '');
+      var button = line.lastChild;
+      button.textContent = batch.status === 'queued' ? 'Remove' : 'Stop';
+      button.disabled = batch.status === 'stopping';
+      overview.appendChild(line);
+    });
+    storyState.storyActionTimer = setTimeout(function () {
+      firstCutRequest().then(adoptFirstCutBatches).catch(reportError);
+    }, 2000);
+  }
 
-    phase.textContent = action.phase || 'Preparing';
-    detail.textContent = action.detail || '';
-    elapsed.textContent = storyActionElapsed((Date.now() / 1000) - Number(action.startedAt || Date.now() / 1000))
-      + (action.modelId ? ' · ' + action.modelId : '');
-    cancel.classList.toggle('hidden', !action.active);
-    if (action.active) storyState.storyActionTimer = setTimeout(renderStoryAction, 1000);
+  function cancelFirstCutBatch(id) {
+    return firstCutRequest({ operation: 'cancel', batchId: id })
+      .then(adoptFirstCutBatches).catch(reportError);
   }
 
   function cancelStoryAction() {
-    var visibleStoryId = storyState.story ? String(storyState.story.id || '') : '';
-    var queued = queuedFirstCutForStory(visibleStoryId);
-    if (queued) {
-      removeQueuedFirstCut(visibleStoryId);
-      renderLibrary();
-      renderStoryAction();
-      return;
-    }
-
-    var action = storyState.storyAction;
-    if (!action || !action.active || String(action.storyId || '') !== visibleStoryId) return;
-    action.cancelled = true;
-    action.detail = 'Stopping…';
-    clearQueuedFirstCuts();
-    renderLibrary();
-    renderStoryAction();
-    if (action.phase !== 'Queued') resetLlmExecution().catch(reportError);
-  }
-
-  function requireStoryAction(action) {
-    if (storyState.storyAction !== action || action.cancelled) {
-      var err = new Error('First Cut stopped.');
-      err.storyActionStopped = true;
-      throw err;
-    }
-  }
-
-  function updateStoryAction(action, phase, detail) {
-    if (storyState.storyAction !== action) return;
-    action.phase = phase;
-    action.detail = detail || '';
-    syncDirectorPendingControls();
-    renderStoryAction();
-  }
-
-  function runFirstCut(action) {
-    if (!action || action.cancelled) return;
-    if (storyState.storyAction && storyState.storyAction.active) {
-      throw new Error('Cannot start a second First Cut while one is active.');
-    }
-
-    var storyId = String(action.storyId || '');
-    var modelId = String(action.modelId || '');
-    var directorTarget = { kind: 'story-action', storyId: storyId };
-    if (directorTargetBlocked(directorTarget)) {
-      action.active = false;
-      action.queued = false;
-      action.phase = 'Failed';
-      action.detail = 'This Story has Director work in progress.';
-      storyState.storyAction = action;
-      reportError(new Error('Queued First Cut could not start because this Story has Director work in progress.'));
-      renderLibrary();
-      renderStoryAction();
-      startNextFirstCut();
-      return;
-    }
-
-    action.active = true;
-    action.queued = false;
-    action.cancelled = false;
-    action.startedAt = Date.now() / 1000;
-    action.phase = 'Preparing';
-    action.detail = '';
-    storyState.storyAction = action;
-    setDirectorPending(directorTarget, true);
-    startDirectorActivity();
-    renderLibrary();
-    renderStoryAction();
-
-    var replaceExisting = false;
-    var gateKey = 'firstcut:' + storyId + ':' + action.startedAt + ':' + Math.random().toString(36).slice(2);
-    window.webcapWorkflowGate.acquire('firstcut', gateKey,
-      function () { return storyState.storyAction === action && !action.cancelled; },
-      function (message) { if (!action.cancelled) updateStoryAction(action, 'Queued', message); },
-      function (message) {
-        if (action.cancelled || storyState.storyAction !== action) return;
-        action.cancelled = true;
-        action.detail = message;
-        reportError(new Error(message));
-        renderStoryAction();
-      }
-    ).then(function (lease) {
-      action.workflowLease = lease;
-      requireStoryAction(action);
-      return flushPendingSaves();
-    }).then(function () {
-      requireStoryAction(action);
-      return request(null, 'story=' + encodeURIComponent(storyId));
-    }).then(function (payload) {
-      requireStoryAction(action);
-      var actionStory = payload.story;
-      replaceExisting = Array.isArray(actionStory && actionStory.sceneOrder) && actionStory.sceneOrder.length > 0;
-      updateStoryAction(action, 'Expanding Concept', '');
-      return requestStoryDirector(storyId, 'expand_concept', modelId, false);
-    }).then(function () {
-      requireStoryAction(action);
-      updateStoryAction(action, 'Defining Continuity', '');
-      return requestStoryDirector(storyId, 'define_invariants', modelId, false);
-    }).then(function () {
-      requireStoryAction(action);
-      updateStoryAction(action, 'Developing Scenes', '');
-      return requestStoryDirector(storyId, 'develop_story', modelId, replaceExisting);
-    }).then(function () {
-      requireStoryAction(action);
-      return request(null, 'story=' + encodeURIComponent(storyId));
-    }).then(function (payload) {
-      requireStoryAction(action);
-      var actionStory = payload.story;
-      var sceneIds = Array.isArray(actionStory && actionStory.sceneOrder)
-        ? actionStory.sceneOrder.slice()
-        : [];
-      if (!sceneIds.length) throw new Error('First Cut developed no Scenes.');
-      action.sceneCount = sceneIds.length;
-      updateStoryAction(action, 'Refining Scenes', '0 / ' + String(sceneIds.length));
-      return runSceneDirectorPass(
-        storyId,
-        sceneIds,
-        DIRECTOR_PASS_PRESETS.continuity.instruction,
-        modelId,
-        function (sceneId, index) {
-          requireStoryAction(action);
-          var scene = actionStory.scenes && actionStory.scenes[sceneId];
-          updateStoryAction(
-            action,
-            'Refining Scenes',
-            String(index + 1) + ' / ' + String(sceneIds.length)
-              + (scene && scene.title ? ' · ' + scene.title : '')
-          );
-        }
-      ).then(function () {
-        return sceneIds;
-      });
-    }).then(function (sceneIds) {
-      requireStoryAction(action);
-      updateStoryAction(action, 'Queuing First Takes', '0 / ' + String(sceneIds.length));
-      return flushPendingSaves().then(function () {
-        requireStoryAction(action);
-        action.defaultsLocked = true;
-        updateStoryAction(action, 'Queuing First Takes', '0 / ' + String(sceneIds.length));
-        return flushPendingSaves().then(function () {
-          requireStoryAction(action);
-          return sceneIds.reduce(function (promise, sceneId, index) {
-            return promise.then(function () {
-              requireStoryAction(action);
-              updateStoryAction(
-                action,
-                'Queuing First Takes',
-                String(index + 1) + ' / ' + String(sceneIds.length)
-              );
-              return enqueueSceneGeneration(storyId, sceneId);
-            });
-          }, Promise.resolve());
-        });
-      });
-    }).then(function () {
-      requireStoryAction(action);
-      action.active = false;
-      action.phase = 'Complete';
-      action.detail = 'First Takes queued.';
-      setDevelopStatus('First Cut queued one Take for every Scene.');
-      renderStoryAction();
-      return refreshLibrary();
-    }).catch(function (err) {
-      action.active = false;
-      if (action.cancelled || err.storyActionStopped || directorWasStopped(err)) {
-        action.cancelled = true;
-        clearQueuedFirstCuts();
-        action.phase = 'Stopped';
-        action.detail = 'Completed steps were kept.';
-      } else {
-        action.phase = 'Failed';
-        action.detail = String(err && err.message ? err.message : err);
-        reportError(err);
-      }
-      renderStoryAction();
-    }).finally(function () {
-      if (action.workflowLease) action.workflowLease.release().catch(reportError);
-      setDirectorPending(directorTarget, false);
-      finishDirectorActivity();
-      renderLibrary();
-      renderStoryAction();
-      startNextFirstCut();
+    var storyId = storyState.story ? String(storyState.story.id || '') : '';
+    var batch = (storyState.firstCutBatches || []).find(function (item) {
+      return item.storyId === storyId && ['queued', 'running'].indexOf(item.status) !== -1;
     });
-  }
-
-  function startNextFirstCut() {
-    if (storyState.storyAction && storyState.storyAction.active) return;
-    var next = null;
-    while (storyState.storyActionQueue.length && !next) {
-      var candidate = storyState.storyActionQueue.shift();
-      if (!candidate.cancelled) next = candidate;
-    }
-    renderLibrary();
-    renderStoryAction();
-    if (next) runFirstCut(next);
+    if (batch) return cancelFirstCutBatch(batch.id);
   }
 
   function startFirstCut() {
     if (!storyState.story) return;
-
     var storyId = String(storyState.story.id || '');
-    if (
-      (storyState.storyAction && storyState.storyAction.active
-        && String(storyState.storyAction.storyId || '') === storyId)
-      || queuedFirstCutForStory(storyId)
-    ) {
-      reportError(new Error('This Story already has a First Cut running or queued.'));
-      return;
-    }
-
     var modelId = String(storyState.director.modelId || '');
-    if (!modelId) {
-      reportError(new Error('Choose a Storyboard Director model first.'));
-      return;
-    }
-
-    var directorTarget = { kind: 'story-action', storyId: storyId };
-    if (directorTargetBlocked(directorTarget)) {
-      reportError(new Error('This Story already has Director work in progress.'));
-      return;
-    }
-
-    var action = {
-      storyId: storyId,
-      modelId: modelId,
-      active: false,
-      queued: false,
-      cancelled: false,
-      queuedAt: Date.now() / 1000,
-      startedAt: 0,
-      phase: 'Preparing',
-      detail: ''
-    };
-
-    if (storyState.storyAction && storyState.storyAction.active) {
-      action.queued = true;
-      action.phase = 'Queued';
-      storyState.storyActionQueue.push(action);
-      renderLibrary();
-      renderStoryAction();
-      return;
-    }
-
-    runFirstCut(action);
+    if (!modelId) return reportError(new Error('Choose a Storyboard Director model first.'));
+    return flushPendingSaves().then(function () {
+      return firstCutRequest({ operation: 'enqueue', storyId: storyId, modelId: modelId });
+    }).then(adoptFirstCutBatches).catch(reportError);
   }
 
   function setSaveState(text) {
@@ -4245,12 +4044,14 @@
 
     setSaveState('Deleting...');
     flushPendingSaves().then(function () {
+      if ((storyState.firstCutBatches || []).some(function (batch) {
+        return batch.storyId === storyId && ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1;
+      })) throw new Error('Stop or remove this Story\'s First Cut before deleting it.');
       return request({
         operation: 'delete_story',
         storyId: storyId
       });
     }).then(function () {
-      removeQueuedFirstCut(storyId);
       if (deletedWasOpen) {
         storyState.story = null;
         storyState.sequenceExport = null;
@@ -6161,5 +5962,6 @@
   window.closeStoryboardActivity = closeStoryboardActivity;
 
   bindUi();
+  firstCutRequest().then(adoptFirstCutBatches).catch(reportError);
   syncDirectorToolsUi();
 })();

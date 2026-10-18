@@ -66,6 +66,7 @@ from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
+from .storyboard_first_cut import register_routes as register_storyboard_first_cut_routes
 from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .media_explorer import list_media as media_explorer_list_media
@@ -95,6 +96,7 @@ TEMPLATES_DIR = TOOL_DIR / "templates"
 app = Flask(__name__, static_folder=None)
 register_director_model_test_routes(app)
 register_model_lab_routes(app)
+register_storyboard_first_cut_routes(app)
 
 
 @app.errorhandler(TrainingStateError)

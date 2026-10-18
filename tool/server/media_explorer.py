@@ -204,15 +204,54 @@ def discover_tests(full=False):
     return results
 
 
+
+def discover_epoch_frames():
+    """Read retained campaign frames only, via Epoch Finder's owner contract."""
+    from .epoch_finder import storage_campaigns, frame_path
+    frames = []
+    for campaign in storage_campaigns():
+        folder = str(campaign["folder"])
+        campaign_id = str(campaign["id"])
+        manifest = Path(campaign["path"]) / "campaign.json"
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        owner = app_config.safe_join_fs_root(folder)
+        for unit in payload.get("units") or []:
+            if not isinstance(unit, dict):
+                continue
+            name = str(unit.get("frame") or "")
+            if not name:
+                continue
+            try:
+                file = frame_path(owner, campaign_id, name)
+            except FileNotFoundError:
+                continue  # Retired screening frames are not durable artifacts.
+            relative = file.relative_to(Path(app_config.FS_ROOT)).as_posix()
+            frames.append({
+                "id": "epoch:" + relative,
+                "source": "epoch", "storageId": campaign_id,
+                "ownerFolder": folder, "role": "generated",
+                "mediaKind": "image", "fileName": name, "mediaPath": relative,
+                "mediaUrl": "/fs/epoch_finder/frame?folder=" + quote(folder, safe="")
+                            + "&campaign=" + quote(campaign_id, safe="")
+                            + "&frame=" + quote(name, safe=""),
+                "createdAt": int(payload.get("createdAt") or 0),
+                "rating": None, "model": str(payload.get("modelId") or ""),
+                "uses": [{"storageId": campaign_id, "role": "Epoch Finder campaign"}],
+            })
+    return frames
+
+
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
-    if source not in ('', 'generate', 'test'):
+    if source not in ('', 'generate', 'test', 'epoch'):
         raise ValueError('Unknown Media Explorer source.')
-    results = ([] if source == 'test' else discover_generate(limit=None if full else 500))
+    results = (discover_generate(limit=None if full else 500) if source in ('', 'generate') else [])
     if source in ('', 'test'):
         results.extend(discover_tests(full=full))
+    if source in ('', 'epoch'):
+        results.extend(discover_epoch_frames())
     results.sort(key=lambda item: (item['createdAt'], item['id']), reverse=True)
     if role:
         results = [item for item in results if item["role"] == role]

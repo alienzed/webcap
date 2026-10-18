@@ -41,6 +41,17 @@
     var uses = Array.isArray(item.uses) ? item.uses : [];
     if (uses.length) detail('Used by', uses.map(function (u) { return u.role + ' · ' + u.storageId; }).join(', '), dl);
     host.appendChild(dl);
+    if (item.source === 'test' && item.ownerFolder && item.storageId) {
+      var back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'review-captions-btn';
+      text(back, 'Open Test session');
+      back.addEventListener('click', function () {
+        if (typeof window.openTestBenchActivity !== 'function') throw new Error('Test navigation is unavailable.');
+        window.openTestBenchActivity({folder: item.ownerFolder, sessionId: item.storageId, modelId: item.model || ''});
+      });
+      host.appendChild(back);
+    }
     var open = document.createElement('button'); open.type = 'button';
     open.className = 'review-captions-btn'; text(open, 'View full size');
     open.addEventListener('click', openLoupe); host.appendChild(open);
@@ -122,6 +133,8 @@
   }
   function close() {
     visible = false; serial++;
+    if (activeRequest) { activeRequest.abort(); activeRequest = null; }
+    loading = false;
     el('media-explorer-workspace').classList.add('hidden');
     el('app-frame').classList.remove('workspace-media-explorer-open');
     var dlg = el('media-explorer-loupe'); if (dlg.open) dlg.close();

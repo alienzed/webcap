@@ -1174,7 +1174,15 @@
           jobStatus: jobStatus
         };
       }
-      return Object.assign({}, activity || {}, {
+      // The queue identifies the job; only matching runtime activity owns live
+      // slot/token telemetry. Never display another job's telemetry here.
+      var runtimeMatchesJob = String(activity && activity.jobId || '') === jobId;
+      return Object.assign({}, runtimeMatchesJob ? activity : {}, {
+        active: true,
+        phase: runtimeMatchesJob ? activity.phase : 'preparing',
+        model: job.modelId || '',
+        operation: job.operation || '',
+        startedAt: job.startedAt || job.createdAt,
         jobId: jobId,
         jobStatus: jobStatus
       });
@@ -2229,8 +2237,19 @@
     card.classList.toggle('hidden', !action);
     syncDirectorPendingControls();
     if (action) {
-      phase.textContent = action.phase || action.status;
-      detail.textContent = action.detail || (action.status === 'queued' ? 'Waiting for earlier First Cuts.' : '');
+      var firstCutSteps = ['Expanding Concept', 'Defining Continuity', 'Developing Scenes', 'Refining Scenes', 'Queuing First Takes'];
+      var stageIndex = firstCutSteps.indexOf(action.phase);
+      var sceneStep = Number(String(action.detail || '').split('/')[0].trim());
+      var sceneTotal = Number(action.sceneCount) || 0;
+      var scenePhase = stageIndex >= 3 && sceneStep > 0 && sceneTotal > 0;
+      phase.textContent = scenePhase
+        ? action.phase + ' · Scene ' + sceneStep + ' of ' + sceneTotal
+        : (action.phase || action.status);
+      detail.textContent = stageIndex >= 0
+        ? ('Stage ' + (stageIndex + 1) + ' of ' + firstCutSteps.length +
+          (scenePhase ? ' · ' + Math.max(0, sceneTotal - sceneStep) + ' scenes remaining' : '') +
+          (action.detail && !scenePhase ? ' · ' + action.detail : ''))
+        : (action.detail || (action.status === 'queued' ? 'Waiting for earlier First Cuts.' : ''));
       elapsed.textContent = storyActionElapsed(Date.now() / 1000 - (action.startedAt || action.queuedAt || Date.now() / 1000))
         + ' · ' + (action.modelId || '');
       cancel.classList.toggle('hidden', ['queued', 'running', 'stopping'].indexOf(action.status) === -1);

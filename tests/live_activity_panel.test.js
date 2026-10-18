@@ -100,3 +100,11 @@ test('short job notifications wake Activity through the shared tracker', () => {
   assert.ok(common.includes('entry.activityWakeSent = true'));
   assert.ok(common.includes('window.refreshActivityMonitor()'));
 });
+
+
+test('Model Assessment Activity counters never stringify missing fields', () => {
+  const source = fs.readFileSync(path.join(root, 'tool/js/activity_monitor.js'), 'utf8');
+  assert.ok(source.includes("['attemptCount', 'completed', 'failed', 'skipped', 'interrupted'].map"));
+  assert.ok(source.includes("Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0"));
+  assert.ok(!source.includes("item.completed + ' completed'"));
+});

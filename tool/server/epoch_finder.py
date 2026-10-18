@@ -182,11 +182,16 @@ def checkpoint_evidence(folder_path, job_id):
             if not directory.is_dir() or directory.is_symlink() or not _ID.fullmatch(directory.name):
                 continue
             campaign = _load(folder_path, directory.name)
-            if campaign.get("jobId") != job_id or not campaign.get("rounds"):
+            if not campaign.get("rounds"):
                 continue
             for entry in _rank(campaign, len(campaign["rounds"])):
-                epoch = entry["epoch"]
-                units = [unit for unit in campaign.get("units", []) if unit.get("epoch") == epoch]
+                candidate = entry["epoch"]
+                origin = (campaign.get("candidateMap") or {}).get(str(candidate))
+                source_job = origin["jobId"] if origin else campaign.get("jobId")
+                if source_job != job_id:
+                    continue
+                epoch = origin["epoch"] if origin else candidate
+                units = [unit for unit in campaign.get("units", []) if unit.get("epoch") == candidate]
                 verdicts = {"MATCH": 0, "PARTIAL": 0, "MISMATCH": 0, "UNCLEAR": 0}
                 for unit in units:
                     for result in unit.get("referenceAssessments") or []:

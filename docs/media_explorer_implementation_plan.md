@@ -120,3 +120,14 @@ This is an **incremental implementation**, not the completed universal library. 
 2. Replace the 500-result bounded source with complete, cancellable/visible discovery and true cross-page sorting without persistent index; stay read-only.
 3. Add Test Generations artifact/session context, then Epoch Finder, Training and Storyboard incrementally based on verified manifest data; ensure references are included as media roles.
 4. Implement deep links and owner-specific capability actions only after those contracts exist; compare/selection and visual polish thereafter.
+
+
+### Phase 2 discovery update (2026-10-18)
+
+- Added `list_results(limit=None)` to enumerate all Generate manifests without the legacy 500-result cap, leaving the existing default behavior unchanged for other Generate callers.
+- The Explorer remains fast/bounded on entry. A visible **Scan all Generate media** action requests complete enumeration, with accurate per-scope count and sort-before-page behavior.
+- No persisted index or copied media is introduced. Stored generated references remain discoverable through their owner manifests.
+- `AbortController` cancels a stale browser request, **not** a server-side Python scan already underway. Progress is currently a busy status rather than incremental enumeration; do not claim server cancellation or progressive scan results.
+- Full enumeration currently runs for each page/filter request in full mode. A reusable process-local snapshot and cooperative cancellation are potential next optimizations, but require measured costs and a clean lifecycle; do not introduce speculative caching.
+- Next build phase is source-specific Test Generations discovery and safe deep links, after its actual session/manifest shape is examined. This does not mark the universal Explorer complete.
+- Local clone/testing was unavailable in this execution environment (GitHub hostname not resolvable from the container). GitHub changes were committed through the connector; tests remain **not executed**.

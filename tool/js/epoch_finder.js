@@ -1185,6 +1185,8 @@
     if (mode === 'finder') refresh();
   });
   timer = setInterval(function () {
-    if (mode === 'finder' && activeCampaign && !els('screen').classList.contains('hidden')) refreshStatus().catch(error);
+    if (mode === 'finder' && activeCampaign && campaignState &&
+        ['queued', 'running'].includes(campaignState.status) &&
+        !els('screen').classList.contains('hidden')) refreshStatus().catch(error);
   }, 2500);
 })();

@@ -111,7 +111,7 @@
     var controls = panel.querySelector('.job-queue-lane-actions');
     controls.classList.toggle('hidden', which === 'training' ? (!payload.queuePaused || jobs.some(active)) : !jobs.length);
     var previous = new Map();
-    Array.prototype.forEach.call(list.querySelectorAll('[data-job-queue-id]'), function (node) { previous.set(node.dataset.jobQueueId, node); });
+    Array.prototype.forEach.call(list.querySelectorAll('.job-queue-row[data-job-queue-id]'), function (node) { previous.set(node.dataset.jobQueueId, node); });
     var queuedCount = jobs.filter(function (job) { return job.status === 'queued'; }).length;
     var position = 0;
     var wanted = jobs.filter(function (job) { return active(job) || job.status === 'queued'; })

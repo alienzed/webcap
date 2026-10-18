@@ -2484,6 +2484,12 @@
           actions.appendChild(save);
         }
       }
+      var reset = document.createElement('button');
+      reset.type = 'button';
+      reset.dataset.resetCandidateAssessments = String(fileName || '');
+      reset.title = 'Clear saved assessment aggregates (existing Test sessions are unchanged)';
+      reset.textContent = 'Reset scores';
+      actions.appendChild(reset);
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'test-generations-remove-candidate';
@@ -5374,6 +5380,22 @@
             refreshStagedFilesAfterCandidates().catch(showError);
           }
         });
+        return;
+      }
+      var resetButton = event.target.closest('[data-reset-candidate-assessments]');
+      if (resetButton) {
+        var resetName = String(resetButton.dataset.resetCandidateAssessments || '');
+        if (!window.confirm('Reset saved assessment aggregates for ' + resetName + '? Ratings in existing sessions will remain.')) return;
+        resetButton.disabled = true;
+        request('test_reset_candidate_assessments', { modelId: currentTestModelId(), candidateFile: resetName })
+          .then(function (payload) {
+            if (prepared) {
+              prepared.candidateScores = payload.candidateScores || {};
+              prepared.candidateVisionScores = payload.candidateVisionScores || {};
+              syncStagedCandidateScores(prepared.candidateScores);
+              syncTestVlCandidateRows();
+            }
+          }).catch(showError).finally(function () { resetButton.disabled = false; });
         return;
       }
       var button = event.target.closest('[data-file-name]');

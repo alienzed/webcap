@@ -383,3 +383,24 @@ def test_storyboard_provenance_keeps_exact_scene_take_and_reference_uses(monkeyp
         {"storageId": "scene-one", "role": "take-1", "source": "storyboard", "label": "First", "takeId": "take-1"},
         {"storageId": "scene-two", "role": "visual", "source": "storyboard", "label": "Second"},
     ]
+
+
+def test_media_explorer_recent_date_filter(monkeypatch):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    records = [
+        {"id": "new", "source": "generate", "storageId": "a", "role": "generated",
+         "roles": ["generated"], "mediaKind": "image", "fileName": "new.png",
+         "model": "", "ownerFolder": "", "rating": None, "createdAt": int((now - timedelta(days=2)).timestamp() * 1000)},
+        {"id": "old", "source": "generate", "storageId": "b", "role": "generated",
+         "roles": ["generated"], "mediaKind": "image", "fileName": "old.png",
+         "model": "", "ownerFolder": "", "rating": None, "createdAt": int((now - timedelta(days=45)).timestamp() * 1000)},
+    ]
+    monkeypatch.setattr(media_explorer, "discover_generate", lambda limit=500: records)
+    monkeypatch.setattr(media_explorer, "discover_tests", lambda full=False: [])
+    monkeypatch.setattr(media_explorer, "discover_epoch_frames", lambda: [])
+    monkeypatch.setattr(media_explorer, "discover_storyboards", lambda: [])
+    assert [item["id"] for item in media_explorer.list_media(date="7")["items"]] == ["new"]
+    assert len(media_explorer.list_media(date="90")["items"]) == 2
+    with pytest.raises(ValueError, match="date"):
+        media_explorer.list_media(date="999")

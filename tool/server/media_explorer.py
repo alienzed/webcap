@@ -1,7 +1,7 @@
 """Read-only owner-backed Media Explorer discovery; no persistent index."""
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.parse import quote
 from . import config as app_config
@@ -331,7 +331,7 @@ def discover_storyboards():
 
 
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
-               model="", folder="", rating="", artifact="", owner=""):
+               model="", folder="", rating="", artifact="", owner="", date=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
@@ -372,6 +372,11 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
             results = [item for item in results if (item.get("rating") or 0) >= int(rating)]
         else:
             raise ValueError("Unknown media rating filter.")
+    if date:
+        if str(date) not in {"7", "30", "90"}:
+            raise ValueError("Unknown media date filter.")
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=int(date))).timestamp() * 1000
+        results = [item for item in results if item.get("createdAt") and item["createdAt"] >= cutoff]
     if sort == "oldest":
         results.sort(key=lambda item: (item["createdAt"], item["id"]))
     elif sort == "name":

@@ -224,3 +224,13 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-reference-preview img{display:block;max-width:100%;max-height:73vh;margin:10px auto;object-fit:contain}
 .epoch-finder-reference-preview p{overflow-wrap:anywhere;max-width:900px}
 @media(max-width:850px){.epoch-finder-reference-workspace .epoch-finder-reference-gallery{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));max-height:55vh}}
+
+/* Set-scoped campaign run selection */
+.epoch-finder-run-choices{display:grid;gap:6px;margin:8px 0 12px;max-height:240px;overflow-y:auto}
+.epoch-finder-run-choice{display:flex!important;align-items:center;gap:8px;margin:0!important;padding:8px;border:1px solid var(--border-color,#384653);border-radius:7px;cursor:pointer}
+.epoch-finder-run-choice input{width:auto!important;margin:0!important;flex:none}
+.epoch-finder-run-choice span{min-width:0}
+.epoch-finder-run-choice strong,.epoch-finder-run-choice small{display:block;overflow-wrap:anywhere}
+.epoch-finder-run-choice small{font-weight:400;opacity:.72;margin-top:3px}
+.epoch-finder-run-epochs{border-top:1px solid var(--border-color,#384653);padding-top:10px;margin-top:10px}
+.epoch-finder-run-epochs>strong{display:block;font-size:12px;margin-bottom:7px}

@@ -149,13 +149,13 @@
   function itemOpen(item) {
     if (item.original) return openItem(item.original);
     if (item.kind === 'test-batch') return openItem(item);
+    if (item.kind === 'model-lab') return window.openDiagnosticsModal('assessment');
     if (item.kind === 'director-diagnostics') return window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
     if (item.kind === 'set-intelligence') return window.openSetIntelligence();
     if (item.kind === 'deep-qa' || item.kind === 'qa-concept-check') {
       window.setWorkspaceSurface('reviewOutput');
       return window.setReviewDetailTab('qa');
     }
-    if (item.kind === 'model-lab') return window.openDiagnosticsModal('model-lab');
     if (item.kind !== 'vocabulary-discovery' && item.kind !== 'vision-tag-assist') return openItem(item);
   }
 
@@ -290,6 +290,7 @@
   }
 
   function kindLabel(item) {
+    if (item.kind === 'model-lab') return 'Model Assessment';
     if (item.kind === 'test-batch') return 'Batch Test + VL';
     if (item.kind === 'storyboard') return 'Storyboard';
     if (item.kind === 'test') return 'Test';
@@ -317,7 +318,12 @@
 
   function activityDetail(item) {
     var parts = [];
-    if (item.kind === 'training') {
+    if (item.kind === 'model-lab') {
+      if (item.modelCount) parts.push(item.modelCount + ' models');
+      if (item.currentModelRef) parts.push(item.currentModelRef);
+      if (item.currentKind) parts.push(item.currentKind.replace(/_/g, ' '));
+      if (item.attemptCount) parts.push(item.attemptCount + ' probes recorded');
+    } else if (item.kind === 'training') {
       if (item.folder) parts.push(item.folder);
       var progress = item.progress && typeof item.progress === 'object' ? item.progress : {};
       var epoch = Number(progress.epoch);
@@ -347,7 +353,7 @@
   // Convert existing managed work to the same presentation contract as Diagnostics.
   // The backend and owning workspace remain authoritative; no new progress polling.
   function managedProgressSnapshot(item) {
-    if (['training', 'storage', 'generate', 'test', 'storyboard'].indexOf(item.kind) === -1 ||
+    if (['model-lab', 'training', 'storage', 'generate', 'test', 'storyboard'].indexOf(item.kind) === -1 ||
         (['generate', 'test', 'storyboard'].indexOf(item.kind) !== -1 && item.lane !== 'inference')) return null;
     var snapshot = {
       id: 'managed:' + String(item.kind) + ':' + String(item.id),
@@ -360,7 +366,16 @@
       progressLabel: '',
       progress: null
     };
-    if (item.kind === 'training') {
+    if (item.kind === 'model-lab') {
+      snapshot.title = 'Model Assessment';
+      snapshot.detail = activityDetail(item);
+      snapshot.phase = String(item.phase || item.status || 'running').replace(/_/g, ' ');
+      snapshot.progressLabel = item.attemptCount + ' probes recorded · ' +
+        item.completed + ' completed · ' + item.failed + ' failed' +
+        (item.skipped ? ' · ' + item.skipped + ' skipped' : '') +
+        (item.interrupted ? ' · ' + item.interrupted + ' interrupted' : '');
+      // Probe count is not a known total. An indeterminate bar is honest.
+    } else if (item.kind === 'training') {
       var source = item.progress && typeof item.progress === 'object' ? item.progress : {};
       var stage = String(source.stage || item.stage || '').replace(/_/g, ' ');
       // The Training runner remains "starting" until its first step/epoch.
@@ -439,6 +454,10 @@
       source: String(item.source || ''),
       modelId: String(item.modelId || '')
     };
+    if (item.kind === 'model-lab') {
+      window.openDiagnosticsModal('assessment');
+      return;
+    }
     if (item.kind === 'test-batch') {
       window.openTestBenchActivity({ folder: item.folder, modelId: item.modelId });
       return;

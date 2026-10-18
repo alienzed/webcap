@@ -62,6 +62,15 @@ test('silencing Director prevents subsequent automatic opening', () => {
   assert.equal(h.opened.length, 0);
 });
 
+test('Model Assessment uses server-owned Activity receipts and an honest indeterminate progress card', () => {
+  assert.ok(monitor.includes('from .model_lab import list_runs as model_lab_runs'));
+  assert.ok(monitor.includes('active.extend(item for item in assessments'));
+  assert.ok(monitor.includes('recent.extend(item for item in assessments'));
+  assert.ok(source.includes("if (item.kind === 'model-lab') return 'Model Assessment'"));
+  assert.ok(source.includes("window.openDiagnosticsModal('assessment')"));
+  assert.ok(source.includes('Probe count is not a known total'));
+});
+
 test('unified shell has one overlay Activity surface and no old follower', () => {
   assert.equal((html.match(/id="activity-monitor-drawer"/g) || []).length, 1);
   assert.ok(html.indexOf('id="activity-monitor-drawer"') > html.indexOf('id="app-overlay-root"'));

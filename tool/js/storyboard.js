@@ -1274,17 +1274,6 @@
     copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
     positionDirectorActivity();
     if (!visible) return;
-    var activityLink = card.querySelector('[data-view-activity]');
-    if (!activityLink) {
-      activityLink = document.createElement('button');
-      activityLink.type = 'button';
-      activityLink.textContent = 'View Activity';
-      activityLink.setAttribute('data-view-activity', '');
-      activityLink.onclick = function () {
-        window.setActivityDrawerOpen(true, 'manual-open');
-      };
-      card.appendChild(activityLink);
-    }
     // Activity owns operational telemetry; the overlay explains why editing is blocked.
     var targetKind = String(storyState.director.activityTarget && storyState.director.activityTarget.kind || '');
     var action = {concept: 'developing the Story', scenes: 'working on Scenes', repair: 'repairing Scenes', 'scene-prompt': 'revising this Scene'};

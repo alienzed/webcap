@@ -6,6 +6,7 @@ from .inference_runner import snapshot as inference_snapshot
 from .model_lab import list_runs as model_lab_runs
 from .llm_runner import recent_snapshot as llm_recent_snapshot, snapshot as llm_snapshot
 from .storage_manager import scan_status as storage_scan_status
+from .storyboard_first_cut import snapshot as first_cut_snapshot
 from .training_history import recent_jobs as training_recent_jobs
 from .training_runner import passive_status_snapshot as training_status_snapshot
 
@@ -234,6 +235,38 @@ def activity_snapshot(limit=20, since=0):
                 item["runtimePhase"] = str(runtime.get("phase") or "")
                 item["runtimeMode"] = str(runtime.get("runtimeMode") or "")
         active.append(item)
+    # First Cut is a server-owned batch, not a collection of unrelated LLM jobs.
+    # Project the parent and hide its active child from duplicate Activity cards.
+    first_cut_batches = first_cut_snapshot().get("batches", [])
+    child_ids = {str(batch.get("llmJobId") or "") for batch in first_cut_batches
+                 if batch.get("status") in {"queued", "running", "stopping"}}
+    active = [item for item in active if not (item.get("lane") == "llm" and item.get("id") in child_ids)]
+    for batch in first_cut_batches:
+        status = str(batch.get("status") or "")
+        if status not in {"queued", "running", "stopping"}:
+            continue
+        phase = str(batch.get("phase") or "")
+        detail = str(batch.get("detail") or "")
+        total = int(batch.get("sceneCount") or 0)
+        completed = 0
+        if phase in {"Refining Scenes", "Queuing First Takes"} and "/" in detail:
+            try:
+                completed = max(0, int(detail.split("/", 1)[0].strip()) - 1)
+            except ValueError:
+                completed = 0
+        stages = ["Expanding Concept", "Defining Continuity", "Developing Scenes",
+                  "Refining Scenes", "Queuing First Takes"]
+        stage_index = stages.index(phase) if phase in stages else -1
+        active.append({
+            "id": "first-cut:" + str(batch["id"]), "batchId": str(batch["id"]),
+            "kind": "first-cut", "lane": "background", "status": status,
+            "label": "Storyboard First Cut", "storyId": batch.get("storyId"),
+            "modelId": batch.get("modelId"), "phase": phase, "detail": detail,
+            "stageIndex": stage_index, "stageCount": len(stages),
+            "sceneCount": total, "sceneCompleted": completed,
+            "startedAt": batch.get("startedAt") or batch.get("queuedAt"),
+            "llmJobId": batch.get("llmJobId"),
+        })
     active.extend(training_active)
 
     # Model Lab is server-owned, not a queued lane. Project its existing

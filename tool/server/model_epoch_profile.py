@@ -280,9 +280,9 @@ def director_context_for_selected_loras(loras):
         if info.get("guidance"):
             parts.append("Guidance: " + info["guidance"][:800])
         if parts:
-            lines.append("LoRA " + name + "\\n" + "\\n".join(parts))
-    return ("[SELECTED LORA MODEL VOCABULARY]\\n"
+            lines.append("LoRA " + name + "\n" + "\n".join(parts))
+    return ("[SELECTED LORA MODEL VOCABULARY]\n"
             "This is descriptive metadata, not a request to change the scene. "
             "Apply relevant key phrases only when consistent with the user's creative intent. "
-            "Do not add unrelated trained options merely because they exist.\\n"
-            + "\\n\\n".join(lines)) if lines else ""
+            "Do not add unrelated trained options merely because they exist.\n"
+            + "\n\n".join(lines)) if lines else ""

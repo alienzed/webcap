@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   var visible = false, items = [], offset = 0, total = 0, active = -1, role = '', loading = false;
+  var selected = new Set(), anchor = -1;
   var source = '', pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
   function el(id) { return document.getElementById(id); }
   function report(err) {
@@ -21,6 +22,17 @@
     if (media.tagName === 'VIDEO') { media.controls = !!controls; media.preload = 'metadata'; }
     else media.alt = item.fileName;
     return media;
+  }
+  function updateSelection() {
+    var panel = el('media-explorer-selection');
+    panel.classList.toggle('hidden', !selected.size);
+    text(el('media-explorer-selected-count'), selected.size + ' selected (loaded items)');
+    var chosen = items.filter(function (item) { return selected.has(item.id); });
+    el('media-explorer-compare').disabled = chosen.length < 2 || chosen.length > 4 || chosen.some(function (item) { return item.mediaKind !== chosen[0].mediaKind; });
+    Array.prototype.forEach.call(el('media-explorer-grid').children, function (card, i) {
+      card.classList.toggle('selected', selected.has(items[i].id));
+      card.setAttribute('aria-pressed', selected.has(items[i].id) ? 'true' : 'false');
+    });
   }
   function selectItem(index) {
     active = index;
@@ -87,7 +99,15 @@
     var sub = document.createElement('div'); sub.className = 'media-explorer-card-sub';
     text(sub, item.role + ' · ' + (item.model || item.source) + (item.rating ? ' · ★ ' + item.rating : ''));
     meta.appendChild(sub); card.appendChild(meta);
-    card.addEventListener('click', function () { selectItem(index); });
+    card.addEventListener('click', function (event) {
+      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+        if (event.shiftKey && anchor >= 0) {
+          for (var i = Math.min(index, anchor); i <= Math.max(index, anchor); i++) selected.add(items[i].id);
+        } else if (selected.has(item.id)) selected.delete(item.id);
+        else selected.add(item.id);
+        anchor = index; updateSelection();
+      } else { anchor = index; selectItem(index); }
+    });
     card.addEventListener('dblclick', function () { selectItem(index); openLoupe(); });
     return card;
   }
@@ -99,6 +119,7 @@
     if (!visible) return;
     if (reset) {
       serial++; items = []; offset = 0; active = -1; loading = false;
+      selected.clear(); anchor = -1; updateSelection();
       el('media-explorer-grid').replaceChildren();
       el('media-explorer-inspector').classList.add('hidden');
     }
@@ -127,7 +148,7 @@
         var index = items.length; items.push(item); host.appendChild(renderCard(item, index));
       });
       offset += incoming.length;
-      count();
+      count(); updateSelection();
       text(el('media-explorer-status'), incoming.length ? '' : (items.length ? '' : 'No matching media found in this source.'));
     }).catch(function (err) { if (request === serial && err.name !== 'AbortError') report(err); })
       .finally(function () { if (request === serial) { loading = false; activeRequest = null; el('media-explorer-scan-all').disabled = false; } });
@@ -149,6 +170,7 @@
     el('media-explorer-workspace').classList.add('hidden');
     el('app-frame').classList.remove('workspace-media-explorer-open');
     var dlg = el('media-explorer-loupe'); if (dlg.open) dlg.close();
+    var compare = el('media-explorer-compare-dialog'); if (compare.open) compare.close();
   }
   Array.prototype.forEach.call(document.querySelectorAll('[data-media-role]'), function (button) {
     button.addEventListener('click', function () {
@@ -168,6 +190,21 @@
       load(true);
     });
   });
+  el('media-explorer-clear-selection').addEventListener('click', function () { selected.clear(); updateSelection(); });
+  el('media-explorer-compare').addEventListener('click', function () {
+    var chosen = items.filter(function (item) { return selected.has(item.id); });
+    if (chosen.length < 2 || chosen.length > 4 || chosen.some(function (item) { return item.mediaKind !== chosen[0].mediaKind; })) return;
+    var host = el('media-explorer-compare-content');
+    host.replaceChildren();
+    chosen.forEach(function (item) {
+      var pane = document.createElement('div'); pane.className = 'media-explorer-compare-pane';
+      pane.appendChild(mediaElement(item, true));
+      var label = document.createElement('span'); text(label, item.fileName); pane.appendChild(label);
+      host.appendChild(pane);
+    });
+    el('media-explorer-compare-dialog').showModal();
+  });
+  el('media-explorer-compare-close').addEventListener('click', function () { el('media-explorer-compare-dialog').close(); });
   el('media-explorer-refresh').addEventListener('click', function () { load(true); });
   el('media-explorer-scan-all').addEventListener('click', function () { full = true; load(true); });
   el('media-explorer-more-btn').addEventListener('click', function () { load(false); });

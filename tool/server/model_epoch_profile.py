@@ -135,9 +135,22 @@ def training_suggestions(folder, job_id):
                   if isinstance(item, dict) and str(item.get("term") or "").strip()]
         if values:
             options[label] = list(dict.fromkeys(values))
+    from .epoch_reference import training_wildcard_members
+    from .caption_ops import list_media_files, load_caption_text
+    members = training_wildcard_members(folder, job_id)
+    captions = []
+    for name in list_media_files(folder):
+        if name not in members:
+            continue
+        value = str(load_caption_text(folder, name).get("caption") or "").strip()
+        if value:
+            captions.append(value[:600])
+        if len(captions) >= 40:
+            break
     return {"promptOptions": options, "trainedWords": [],
-            "source": "captured_training_annotations",
-            "evidenceLevel": "trained_not_validated"}
+            "captionSamples": captions,
+            "source": "captured_membership_current_annotations",
+            "evidenceLevel": "training_membership_only_not_validated"}
 
 
 def director_enrichment_request(checkpoint_profile, suggestions):
@@ -152,6 +165,7 @@ def director_enrichment_request(checkpoint_profile, suggestions):
         "externalDescription": (sources.get("sidecar") or {}).get("description") or (sources.get("civitai") or {}).get("description") or "",
         "externalTrainedWords": (sources.get("civitai") or {}).get("trainedWords") or [],
         "capturedVocabulary": (suggestions or {}).get("promptOptions") or {},
+        "currentCaptionSamples": (suggestions or {}).get("captionSamples") or [],
     }
     schema = {
         "type": "object", "additionalProperties": False,

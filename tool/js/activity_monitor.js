@@ -140,7 +140,12 @@
       startedAt: item.startedAt,
       progressLabel: item.stageIndex >= 0 ? 'Stage ' + (item.stageIndex + 1) + ' of ' + item.stageCount : String(item.status || ''),
       progress: scenePhase && item.sceneCount ? { completed: item.sceneCompleted, total: item.sceneCount } : null,
-      original: item
+      original: item,
+      liveTokens: item.liveTokens,
+      promptTokensLive: item.promptTokensLive,
+      promptProcessed: item.promptProcessed,
+      contextSize: item.contextSize,
+      outputLimit: item.outputLimit
     };
   }
 
@@ -956,7 +961,7 @@
       ProgressCard.update(primaryCard, snapshot, { onOpen: function () { itemOpen(snapshot); } });
       // Keep a short, per-job in-memory token history. No new network polling.
       var existingStats = primaryCard.querySelector('[data-director-live-stats]');
-      var directorJob = snapshot.kind === 'director' && snapshot.original;
+      var directorJob = (snapshot.kind === 'director' || snapshot.kind === 'first-cut') && snapshot.original;
       var generated = directorJob && directorJob.liveTokens != null ? Number(directorJob.liveTokens) : NaN;
       if (directorJob && Number.isFinite(generated) && generated >= 0) {
         if (!existingStats) {

@@ -3257,7 +3257,7 @@
         var queuedFirstCut = queuedFirstCutForStory(story.id);
         var inferenceJobs = storyState.libraryInferenceJobs[String(story.id || '')] || [];
         var runningTakes = inferenceJobs.filter(function (job) { return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1; }).length;
-        var queuedTakes = inferenceJobs.filter(function (job) { return String(job.status || '') === 'queued'; }).length;
+        var queuedTakes = inferenceJobs.filter(function (job) { return ['backlog', 'queued'].indexOf(String(job.status || '')) !== -1; }).length;
         if (activeFirstCut) meta.push('First Cut running');
         else if (queuedFirstCut) meta.push('First Cut queued #' + String(firstCutQueueDisplayPosition(queuedFirstCut)));
         if (runningTakes) meta.push(String(runningTakes) + ' Take' + (runningTakes === 1 ? '' : 's') + ' running');

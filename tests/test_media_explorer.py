@@ -188,3 +188,16 @@ def test_storyboard_references_and_takes_use_owner_media_route(monkeypatch, tmp_
     assert {item["role"] for item in items} == {"generated", "reference"}
     assert all(item["mediaUrl"].startswith("/fs/storyboard/media?story=story1")
                for item in items)
+
+
+def test_generate_references_have_no_rating_action(monkeypatch, tmp_path):
+    monkeypatch.setattr(media_explorer.app_config, 'output_root', lambda: tmp_path)
+    _media(tmp_path / 'generations/day/job/result.png')
+    _media(tmp_path / 'generations/day/job/references/style.png')
+    monkeypatch.setattr(media_explorer, 'list_results', lambda limit: [{
+        'storageId': 'day/job', 'createdAt': 1, 'mediaPath': 'generations/day/job/result.png',
+        'references': {'style': 'generations/day/job/references/style.png'},
+    }])
+    media = media_explorer.list_media()['items']
+    assert next(item for item in media if item['role'] == 'reference')['rating'] is None
+    assert next(item for item in media if item['role'] == 'generated')['storageId'] == 'day/job'

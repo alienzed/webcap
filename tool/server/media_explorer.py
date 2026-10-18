@@ -1,7 +1,4 @@
-"""Read-only Media Explorer discovery of durable Generate artifacts.
-
-Only files recorded by Generate manifests are displayed. No persistent index.
-"""
+"""Read-only owner-backed Media Explorer discovery; no persistent index."""
 import json
 import os
 from pathlib import Path
@@ -314,4 +311,4 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         raise ValueError("Unknown media sort.")
     return {"ok": True, "items": results[offset:offset + limit],
             "total": len(results), "offset": offset, "limit": limit,
-            "complete": full, "scope": "Generate and Test session media (full scan)" if full else "Recent Generate and known Test sessions"}
+            "complete": full, "scope": "Supported sources (full Generate/legacy Test scan)" if full else "Supported sources (recent Generate/known Test)"}

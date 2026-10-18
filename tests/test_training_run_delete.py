@@ -30,3 +30,21 @@ def test_symlink_target_never_removed(tmp_path):
 def test_missing_target_is_idempotent(tmp_path):
     target = tmp_path / "already-deleted"
     assert deletion._existing_or_absent(target) == target
+
+
+def test_resolved_child_cannot_escape_via_symlink(tmp_path):
+    root = tmp_path / "runs"
+    root.mkdir()
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (root / "linked").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError):
+        deletion._under(root / "linked" / "victim", root)
+
+
+def test_nested_normal_child_is_allowed(tmp_path):
+    root = tmp_path / "runs"
+    root.mkdir()
+    child = root / "action" / "output"
+    child.mkdir(parents=True)
+    assert deletion._under(child, root) == child

@@ -147,3 +147,10 @@ test('Storyboard blocking card delegates detailed LLM progress to focused Activi
   assert.ok(monitor.includes('directorJob.promptTokensLive || directorJob.promptTokens'));
   assert.ok(!storyboard.includes('    updateDirectorTrend(activity, system);'));
 });
+
+
+test('Model Assessment Activity counters never stringify missing fields', () => {
+  assert.ok(source.includes("['attemptCount', 'completed', 'failed', 'skipped', 'interrupted'].map"));
+  assert.ok(source.includes("Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0"));
+  assert.ok(!source.includes("item.completed + ' completed'"));
+});

@@ -54,3 +54,18 @@ def test_missing_media_not_listed_and_outside_root_not_served(monkeypatch, tmp_p
         {"storageId": "two", "createdAt": 2, "mediaPath": "generations/missing.png"},
     ])
     assert media_explorer.list_media()["total"] == 0
+
+
+def test_explicit_full_scan_has_complete_scope(monkeypatch, tmp_path):
+    monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: tmp_path)
+    seen = []
+    def records(limit):
+        seen.append(limit)
+        return []
+    monkeypatch.setattr(media_explorer, "list_results", records)
+    recent = media_explorer.list_media()
+    complete = media_explorer.list_media(full="1")
+    assert seen == [500, None]
+    assert recent["complete"] is False
+    assert complete["complete"] is True
+    assert "all results" in complete["scope"]

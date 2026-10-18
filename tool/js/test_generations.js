@@ -4699,22 +4699,22 @@
     card.classList.toggle('hidden', !testBatch || testBatch.dismissed || String(launchFolder) !== testBatch.folder);
     if (!testBatch) return;
     var batch = testBatch;
-    el('test-generations-batch-heading').textContent = 'Batch Test + VL · ' + batch.folder;
+    el('test-generations-batch-heading').textContent = (batch.autoVl ? 'Batch Test + VL' : 'Batch Test') + ' · ' + batch.folder;
     var lines = [];
     lines.push(batch.phase + ' · ' + batch.sessions.length + '/' + batch.count + ' sessions submitted');
-    if (batch.phase === 'Generating + VL' || batch.phase === 'Evaluating') {
+    if (batch.phase === 'Generating + VL' || batch.phase === 'Generating' || batch.phase === 'Evaluating') {
       lines.push(batch.finished + '/' + batch.sessions.length + ' sessions finished');
-      lines.push(batch.evaluated + '/' + batch.previews + ' previews evaluated');
+      if (batch.autoVl) lines.push(batch.evaluated + '/' + batch.previews + ' previews evaluated');
     }
     if (batch.detail) lines.push(batch.detail);
     if (batch.errors.length) lines.push(batch.errors.length + ' error(s); see Console.');
     el('test-generations-batch-progress').textContent = lines.join(' · ');
     if (batch.active) {
       var evaluatingOnly = batch.phase === 'Evaluating';
-      var completed = evaluatingOnly ? batch.evaluated : batch.phase === 'Generating + VL' ? batch.finished : batch.sessions.length;
-      var total = evaluatingOnly ? batch.previews : batch.phase === 'Generating + VL' ? batch.sessions.length : batch.count;
+      var completed = evaluatingOnly ? batch.evaluated : (batch.phase === 'Generating + VL' || batch.phase === 'Generating') ? batch.finished : batch.sessions.length;
+      var total = evaluatingOnly ? batch.previews : (batch.phase === 'Generating + VL' || batch.phase === 'Generating') ? batch.sessions.length : batch.count;
       window.publishActivityProgress({
-        id: batch.activityId, kind: 'test-batch', lane: 'background', title: 'Batch Test + VL',
+        id: batch.activityId, kind: 'test-batch', lane: 'background', title: batch.autoVl ? 'Batch Test + VL' : 'Batch Test',
         status: 'running', phase: batch.phase, detail: batch.folder + (batch.detail ? ' · ' + batch.detail : ''),
         progress: total > 0 ? { completed: completed, total: total } : null,
         progressLabel: total > 0 ? completed + ' / ' + total + (batch.phase === 'Evaluating' ? ' previews' : ' sessions') : '',
@@ -4725,7 +4725,7 @@
       if (!batch.activityFinished) {
         batch.activityFinished = true;
         window.recordActivityCompletion({ id: batch.activityId, kind: 'test-batch', lane: 'background',
-          title: 'Batch Test + VL', status: batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'completed',
+          title: batch.autoVl ? 'Batch Test + VL' : 'Batch Test', status: batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'completed',
           folder: batch.folder, modelId: batch.criteria.modelId, detail: batch.detail, finishedAt: Date.now() / 1000 });
       }
     }
@@ -4859,14 +4859,18 @@
           }).join('; ') || String(status.error || failed + ' failed generation(s)');
           testBatchError(batch, new Error(reason), sessionLabel(session) + ' generation');
         }
-        batch.evaluationQueue = batch.evaluationQueue.then(function () {
-          return testBatchEvaluateSession(batch, session);
-        }).catch(function (err) {
-          if (batch.active) testBatchError(batch, err, sessionLabel(session) + ' evaluation');
-        });
+        if (batch.autoVl) {
+          batch.evaluationQueue = batch.evaluationQueue.then(function () {
+            return testBatchEvaluateSession(batch, session);
+          }).catch(function (err) {
+            if (batch.active) testBatchError(batch, err, sessionLabel(session) + ' evaluation');
+          });
+        }
       });
 
-      batch.phase = batch.finished === batch.sessions.length ? 'Evaluating' : 'Generating + VL';
+      batch.phase = batch.finished === batch.sessions.length
+        ? (batch.autoVl ? 'Evaluating' : 'Complete')
+        : (batch.autoVl ? 'Generating + VL' : 'Generating');
       renderTestBatch();
       if (batch.finished === batch.sessions.length) return batch.evaluationQueue;
       return testBatchWait(batch).then(function () { return testBatchPoll(batch); });
@@ -4993,7 +4997,7 @@
     var batch = {
       active: true, dismissed: false, activityId: 'test-batch:' + (++testBatchSequence),
       startedAt: Date.now() / 1000, activityFinished: false, folder: String(launchFolder), count: count,
-      criteria: criteria, vlModel: '', sessions: [], statuses: Object.create(null),
+      criteria: criteria, autoVl: el('test-generations-batch-auto-vl').checked, vlModel: '', sessions: [], statuses: Object.create(null),
       finished: 0, previews: 0, evaluated: 0, errors: [], scores: [],
       phase: 'Preparing', detail: '', vlJobId: '', scheduledSessions: new Set(), evaluationQueue: Promise.resolve()
     };
@@ -5013,11 +5017,13 @@
         renderTestBatch();
       }).then(function (lease) {
         batch.workflowLease = lease;
-        return loadCaptionVisionCapabilities();
+        return batch.autoVl ? loadCaptionVisionCapabilities() : null;
       }).then(function () {
       testBatchCheck(batch);
-      batch.vlModel = getCaptionVisionModelId();
-      if (!batch.vlModel) throw new Error('Select an available Vision model.');
+      if (batch.autoVl) {
+        batch.vlModel = getCaptionVisionModelId();
+        if (!batch.vlModel) throw new Error('Select an available Vision model.');
+      }
       batch.phase = 'Queuing';
       return Array.from({ length: count }, function (_, index) { return index; }).reduce(function (chain, index) {
         return chain.then(function () {
@@ -5041,8 +5047,10 @@
       }, Promise.resolve());
     }).then(function () {
       testBatchCheck(batch);
-      batch.phase = 'Generating + VL';
-      batch.detail = 'All sessions submitted. Completed sessions are evaluated as soon as available.';
+      batch.phase = batch.autoVl ? 'Generating + VL' : 'Generating';
+      batch.detail = batch.autoVl
+        ? 'All sessions submitted. Completed sessions are evaluated as soon as available.'
+        : 'All sessions submitted. Each is a normal Test session.';
       renderTestBatch();
       return testBatchPoll(batch);
     }).then(function () {
@@ -5059,7 +5067,8 @@
         });
       }
       batch.phase = 'Complete';
-      batch.detail = batch.errors.length ? 'Completed with generation or assessment errors.' :
+      batch.detail = !batch.autoVl ? (batch.errors.length ? 'Generation finished with errors; see Console.' : 'Generation finished. Sessions are ready for review.') :
+        batch.errors.length ? 'Completed with generation or assessment errors.' :
         batch.scores.some(function (row) { return row.count > 0; }) ? 'Ready for manual review.' :
         'No scoreable attributes. Use resolved wildcard choices to obtain VL percentages.';
       batch.active = false;
@@ -5086,7 +5095,7 @@
     var count = el('test-generations-batch-count');
     count.value = '5';
     el('test-generations-batch-config-summary').textContent =
-      selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session · automatic Ask VL';
+      selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session';
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
   }

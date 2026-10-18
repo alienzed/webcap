@@ -48,10 +48,11 @@
   function showMode(next) {
     mode = next;
     var finder = next === 'finder';
-    els('mode-finder').classList.toggle('active', finder);
-    els('mode-tests').classList.toggle('active', !finder);
-    els('mode-finder').setAttribute('aria-pressed', String(finder));
-    els('mode-tests').setAttribute('aria-pressed', String(!finder));
+    document.querySelectorAll('[data-test-workspace-mode]').forEach(function (button) {
+      var active = button.dataset.testWorkspaceMode === next;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
     els('screen').classList.toggle('hidden', !finder);
     document.getElementById('test-generations-body').classList.toggle('hidden', finder);
     if (finder) refresh();
@@ -1014,8 +1015,9 @@
     showMode('finder');
     refreshStatus().catch(error);
   };
-  els('mode-tests').onclick = function () { showMode('tests'); };
-  els('mode-finder').onclick = function () { showMode('finder'); };
+  document.querySelectorAll('[data-test-workspace-mode]').forEach(function (button) {
+    button.addEventListener('click', function () { showMode(button.dataset.testWorkspaceMode); });
+  });
   els('refresh').onclick = refresh;
   els('new').onclick = function () { followUpSource = ''; activeCampaign = ''; campaignState = null; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); };
   els('start').onclick = start;

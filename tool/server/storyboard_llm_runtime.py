@@ -1657,7 +1657,6 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
                 "model": model_id,
                 "request_seconds": round(float(elapsed_seconds), 3),
                 "error_type": type(exc).__name__,
-                "error": str(exc),
             },
             ensure_ascii=False,
         ),

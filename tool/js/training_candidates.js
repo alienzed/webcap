@@ -946,6 +946,23 @@ function enrichEpochProfile() {
   }).finally(function () { button.disabled = false; });
 }
 
+function embedEpochProfile() {
+  if (!epochProfileEditState) return;
+  if (!window.confirm('Embed the last saved profile into the exported LoRA? This rewrites the saved .safetensors file, not the training checkpoint. Unsaved editor changes will not be included.')) return;
+  var status = document.getElementById('epoch-profile-status');
+  var button = document.getElementById('epoch-profile-embed');
+  button.disabled = true;
+  status.textContent = 'Embedding metadata into exported LoRA…';
+  trainingRunnerRequest('/fs/training_candidates/profile/embed', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(epochProfileEditState)
+  }).then(function (payload) {
+    status.textContent = 'Profile embedded in saved LoRA ' + String(payload.checkpoint || '') + '.';
+  }).catch(function (err) {
+    status.textContent = 'Embedding failed: ' + String(err.message || err);
+  }).finally(function () { button.disabled = false; });
+}
+
 function saveEpochProfile() {
   if (!epochProfileEditState) return;
   var status = document.getElementById('epoch-profile-status');
@@ -978,6 +995,7 @@ document.addEventListener('click', function (event) {
   if (event.target.closest('#epoch-profile-close, #epoch-profile-cancel')) { closeEpochProfile(); return; }
   if (event.target.closest('#epoch-profile-save')) saveEpochProfile();
   if (event.target.closest('#epoch-profile-enrich')) enrichEpochProfile();
+  if (event.target.closest('#epoch-profile-embed')) embedEpochProfile();
   if (event.target.closest('#epoch-profile-import-tags')) {
     if (!epochProfileSuggestions) { document.getElementById('epoch-profile-status').textContent = 'No captured vocabulary available.'; return; }
     var options = {};

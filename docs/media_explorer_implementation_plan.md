@@ -151,3 +151,7 @@ Explicit full discovery now enumerates legacy Set-local `test-generations` direc
 ### Epoch Finder source phase
 
 Retained Epoch Finder campaign frames are discoverable in the gallery as a separate source. The adapter reads owner-validated campaign manifests via `storage_campaigns()` and serves only existing retained frames via `/fs/epoch_finder/frame`; pruned frames and staging files are omitted. No generic folder-level media server is introduced, and owner workflows remain unchanged. Training and Storyboard discovery, campaign navigation, and runtime QA are still pending. The current implementation calls `storage_campaigns()` per query and must be profiled before considering runtime caching.
+
+### Consolidated source and navigation checkpoint
+
+Storyboard takes and scene references are now discovered from the existing Storyboard store and served through `/fs/storyboard/media`; the inspector links back to `openStoryboardActivity` for the owner story/scene. Training history records expose run paths and checkpoints but no established owner-validated generic training media-serving route. **Do not expose arbitrary training output paths as gallery URLs.** Training media discovery remains gated on an explicit safe route and provenance contract. Comparison, multi-selection, and full user-visible scan cancellation also remain outstanding. This PR is **not release verified**: local checkout cannot reach GitHub and no CI status checks are available.

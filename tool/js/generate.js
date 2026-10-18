@@ -2558,7 +2558,7 @@
         var start = prompt.selectionStart;
         var end = prompt.selectionEnd;
         var before = prompt.value.slice(0, start);
-        var text = (before.trim() && !/[\\s,]$/.test(before) ? ', ' : '') + words.join(', ');
+        var text = (before.trim() && !/[\s,]$/.test(before) ? ', ' : '') + words.join(', ');
         prompt.value = before + text + prompt.value.slice(end);
         prompt.dispatchEvent(new Event('input', {bubbles: true}));
         prompt.focus();

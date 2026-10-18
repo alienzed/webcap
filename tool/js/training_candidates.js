@@ -1404,7 +1404,10 @@ function saveKeepLora() {
     var onSaved = keepLoraState.onSaved;
     closeKeepLora();
     if (onSaved) onSaved(payload);
-    if (payload && payload.selectionUnavailable) {
+    if (payload && payload.profileWarning) {
+      setStatus(String(payload.profileWarning));
+      if (typeof window.reportConsoleWarning === 'function') window.reportConsoleWarning('Training', payload.profileWarning);
+    } else if (payload && payload.selectionUnavailable) {
       setStatus('Saved ' + String(payload.fileName || filename) + '. The original training job is no longer indexed, so selection metadata was not updated.');
     } else {
       setStatus('Saved ' + String(payload && payload.fileName || filename) + ' and selected epoch ' + String(selectedEpoch) + '.');

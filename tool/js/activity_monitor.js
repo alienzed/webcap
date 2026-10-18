@@ -449,8 +449,11 @@
       jobId: String(item.id || ''),
       storyId: String(item.storyId || ''),
       sceneId: String(item.sceneId || ''),
+      takeId: String(item.takeId || ''),
       folder: String(item.folder || ''),
       sessionId: String(item.sessionId || ''),
+      campaignId: String(item.campaignId || ''),
+      storageId: String(item.storageId || ''),
       source: String(item.source || ''),
       modelId: String(item.modelId || '')
     };

@@ -15,7 +15,8 @@
     reportedErrors: Object.create(null),
     localProgress: Object.create(null),
     progressChildIds: Object.create(null),
-    silencedLanes: Object.create(null),
+    dismissedJobs: Object.create(null),
+    selectedJobKey: '',
     detailsOpen: false,
     systemHistory: [],
     lastSystemSampleAt: 0,
@@ -132,8 +133,14 @@
     return String(item && (item.lane || item.kind) || 'background');
   }
 
+  function activityJobKey(item) {
+    return activityLane(item) + ':' + String(item && item.id || '');
+  }
+
   function currentPrimaryItem() {
     var items = currentActivityItems();
+    var selected = items.find(function (item) { return activityJobKey(item) === state.selectedJobKey; });
+    if (selected) return selected;
     var owner = String(state.payload.gpuOwner || '');
     if (owner && owner !== 'none') {
       var matching = items.filter(function (item) { return activityLane(item) === owner; });
@@ -166,12 +173,12 @@
     });
     currentActivityItems().forEach(function (item) {
       var lane = activityLane(item);
-      var id = lane + ':' + String(item.id);
+      var id = activityJobKey(item);
       if (state.autoOpenSeen[id]) return;
       state.autoOpenSeen[id] = true;
       // Never displace a workflow drawer for an automatically raised Activity panel.
       var shortInteractive = lane === 'llm' || item.kind === 'director-diagnostics';
-      if (!state.open && !competingDrawer && shortInteractive && !state.silencedLanes[lane]) setOpen(true);
+      if (!state.open && !competingDrawer && shortInteractive && !state.dismissedJobs[id]) setOpen(true);
     });
   }
 
@@ -920,7 +927,7 @@
     renderSystemTrend();
 
     var nowSection = ensureActivitySection(host, 'now', 'Other active', active.length > 1 ? String(active.length - 1) + ' active' : '');
-    var otherActive = active.filter(function (item) { return item !== primary; });
+    var otherActive = active.filter(function (item) { return activityJobKey(item) !== (primary && activityJobKey(primary)); });
     nowSection.classList.toggle('hidden', !otherActive.length);
     var existingActive = Object.create(null);
     Array.prototype.forEach.call(nowSection.querySelectorAll('[data-activity-active-line]'), function (row) {
@@ -937,7 +944,7 @@
       }
       row.textContent = activityTitle(item) + ' · ' + String(item.status || 'running').replace(/_/g, ' ');
       row.title = activityDetail(item);
-      row.onclick = function () { itemOpen(itemProgress(item)); };
+      row.onclick = function () { state.selectedJobKey = activityJobKey(item); render(); };
       return row;
     });
     reconcileActivityRows(nowSection, nowRows);
@@ -1067,14 +1074,14 @@
     var wasOpen = state.open;
     state.open = !!open;
     if (state.open) {
-      if (manualClose === 'manual-open') state.silencedLanes = Object.create(null);
+      // Reopening Activity does not reset per-job dismissal decisions.
       if (!wasOpen) state.openedAt = Date.now() / 1000;
       if (typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
       if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
     } else if (wasOpen) {
       if (manualClose) {
         var item = currentPrimaryItem();
-        if (item) state.silencedLanes[activityLane(item)] = true;
+        if (item) state.dismissedJobs[activityJobKey(item)] = true;
       }
       storeLastSeen(Date.now() / 1000);
       state.openedAt = 0;

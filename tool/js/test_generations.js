@@ -1159,12 +1159,37 @@
     panel.classList.remove('hidden');
   }
 
+  function wildcardRunId() {
+    var selector = el('test-generations-wildcard-run');
+    if (!selector || !selector.value) throw new Error('Choose the training run used to build this wildcard.');
+    return selector.value;
+  }
+
   function openWildcardBuilder() {
     var modal = el('test-generations-wildcard-modal');
     var setLabel = el('test-generations-wildcard-set');
     var focus = el('test-generations-wildcard-focus');
     if (!modal || !setLabel || !focus) throw new Error('Wildcard Builder modal markup is missing.');
+    var runPicker = el('test-generations-wildcard-run');
+    if (!runPicker) throw new Error('Wildcard training run selector is missing.');
     var folder = owningSetFolder(launchFolder || (state && state.folder) || '');
+    var runs = prepared && Array.isArray(prepared.candidateRuns)
+      ? prepared.candidateRuns.filter(function (run) { return run && run.jobId && run.folder === folder; })
+      : [];
+    var previous = runPicker.value;
+    runPicker.replaceChildren();
+    var blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = runs.length ? 'Choose training run' : 'No linked training runs';
+    runPicker.appendChild(blank);
+    runs.forEach(function (run, index) {
+      var option = document.createElement('option');
+      option.value = String(run.jobId);
+      option.textContent = candidateRunLabel(run, index);
+      runPicker.appendChild(option);
+    });
+    if (runs.some(function (run) { return String(run.jobId) === previous; })) runPicker.value = previous;
+    else if (runs.length === 1) runPicker.value = String(runs[0].jobId);
     var parts = String(folder || '').split('/').filter(Boolean);
     var name = parts.length ? parts[parts.length - 1] : folder;
     setLabel.textContent = name
@@ -1636,6 +1661,7 @@
     if (wildcardDirector.busy) return;
     if (!wildcardDirector.modelId) throw new Error('Choose a Director model.');
     var requestFolder = owningSetFolder(launchFolder || (state && state.folder) || '');
+    var trainingJobId = wildcardRunId();
     var focus = String(el('test-generations-wildcard-focus') && el('test-generations-wildcard-focus').value || '').trim();
     wildcardDirector.busy = true;
     wildcardDirector.requestFolder = requestFolder;
@@ -1648,6 +1674,7 @@
 
     return wildcardPostJson('/fs/test_generations/wildcard', {
       folder: requestFolder,
+      jobId: trainingJobId,
       directorModel: wildcardDirector.modelId,
       focus: focus,
       vocabulary: testPlanningVocabulary()
@@ -1660,7 +1687,7 @@
       var analysis = result && result.analysis;
       if (!analysis) throw new Error('Wildcard proposal has no analysis.');
       return wildcardPostJson('/fs/test_generations/wildcard/validate', {
-        folder: requestFolder, analysis: analysis
+        folder: requestFolder, jobId: trainingJobId, analysis: analysis
       }).then(function () { return result; });
     }).then(function (result) {
       var analysis = result && result.analysis;
@@ -1682,8 +1709,9 @@
         el('test-generations-wildcard-status').textContent = 'Wildcard analysis stopped.';
         el('test-generations-wildcard-modal-status').textContent = 'Wildcard analysis stopped.';
       } else {
-        el('test-generations-wildcard-status').textContent = 'Wildcard analysis failed.';
-        el('test-generations-wildcard-modal-status').textContent = 'Wildcard analysis failed.';
+        var message = String(err && err.message || 'Wildcard analysis failed.');
+        el('test-generations-wildcard-status').textContent = message;
+        el('test-generations-wildcard-modal-status').textContent = message;
         showError(err);
       }
     }).then(function () {

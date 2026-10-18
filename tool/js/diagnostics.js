@@ -4,6 +4,7 @@ var diagnosticsAssessmentSelected = { director: new Set(), vision: new Set() };
 var diagnosticsAssessmentCatalog = { directors: [], visions: [] };
 var diagnosticsAssessmentRunId = '';
 var diagnosticsAssessmentRunStatus = '';
+var diagnosticsAssessmentStoppingId = '';
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
@@ -86,6 +87,10 @@ function diagnosticsRenderAssessmentProgress(run) {
   var wasRunning = diagnosticsAssessmentRunStatus === 'running';
   diagnosticsAssessmentRunStatus = String(run.status);
   diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running';
+  if (run.status !== 'running' && diagnosticsAssessmentStoppingId === String(run.id)) diagnosticsAssessmentStoppingId = '';
+  var stop = diagnosticsEl('diagnostics-assessment-stop');
+  stop.disabled = run.status !== 'running' || diagnosticsAssessmentStoppingId === String(run.id);
+  stop.textContent = diagnosticsAssessmentStoppingId === String(run.id) ? 'Stopping…' : 'Stop Assessment';
   diagnosticsUpdateAssessmentMetrics(run);
   if (wasRunning && run.status !== 'running') refreshUnifiedModelAssessment().catch(function () {});
 }
@@ -328,6 +333,7 @@ function refreshUnifiedModelAssessment() {
       diagnosticsAssessmentRunId = ''; diagnosticsAssessmentRunStatus = '';
       diagnosticsEl('diagnostics-assessment-activity').classList.add('hidden');
       diagnosticsEl('diagnostics-assessment-run').disabled = false;
+      diagnosticsEl('diagnostics-assessment-stop').disabled = true;
     }
   }).catch(function (error) {
     summary.textContent = 'Could not load assessment findings: ' + String(error.message || error);
@@ -409,6 +415,28 @@ function runUnifiedModelAssessment() {
   }).finally(function () {
     runButton.disabled = diagnosticsAssessmentRunStatus === 'running';
   });
+}
+
+async function stopUnifiedModelAssessment() {
+  var runId = diagnosticsAssessmentRunId;
+  if (!runId || diagnosticsAssessmentRunStatus !== 'running' || diagnosticsAssessmentStoppingId === runId) return;
+  var button = diagnosticsEl('diagnostics-assessment-stop');
+  diagnosticsAssessmentStoppingId = runId;
+  button.disabled = true; button.textContent = 'Stopping…';
+  try {
+    var payload = await modelLabPost({action: 'stop', runId: runId});
+    modelLabState.runs = payload.runs || modelLabState.runs;
+    modelLabPublishProgress(payload.run);
+    modelLabSchedulePoll();
+    diagnosticsEl('diagnostics-assessment-selection').textContent = payload.run.status === 'running'
+      ? 'Stop requested. Cancelling the current probe; completed results are preserved.'
+      : 'Assessment stopped. Completed results are preserved.';
+  } catch (error) {
+    diagnosticsAssessmentStoppingId = '';
+    button.disabled = diagnosticsAssessmentRunStatus !== 'running'; button.textContent = 'Stop Assessment';
+    diagnosticsEl('diagnostics-assessment-selection').textContent = 'Could not stop assessment: ' + String(error.message || error);
+    reportConsoleError('Model Assessment', error);
+  }
 }
 
 var diagnosticsAssessmentImportBundle = null;
@@ -829,6 +857,7 @@ function wireDiagnosticsUi() {
     }
   };
   diagnosticsEl('diagnostics-assessment-refresh').onclick = function () { refreshUnifiedModelAssessment().catch(function () {}); };
+  diagnosticsEl('diagnostics-assessment-stop').onclick = stopUnifiedModelAssessment;
   diagnosticsEl('diagnostics-assessment-export').onclick = exportAssessmentResults;
   diagnosticsEl('diagnostics-assessment-import').onclick = function () { diagnosticsEl('diagnostics-assessment-file').click(); };
   diagnosticsEl('diagnostics-assessment-file').onchange = function () { previewAssessmentImport(this.files[0]); this.value = ''; };

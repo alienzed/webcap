@@ -27,7 +27,7 @@ function ui() {
     }
   }
   const nodes = Object.fromEntries(['diagnostics-modal', 'diagnostics-assessment-activity', 'diagnostics-assessment-run',
-    'diagnostics-assessment-deep', 'diagnostics-assessment-selection', 'diagnostics-assessment-summary', 'diagnostics-assessment-results']
+    'diagnostics-assessment-stop', 'diagnostics-assessment-deep', 'diagnostics-assessment-selection', 'diagnostics-assessment-summary', 'diagnostics-assessment-results']
     .map(id => [id, new Element()]));
   const snapshots = [], timers = [], finished = [], requests = [];
   const ctx = {document: {getElementById: id => nodes[id], createElement: () => new Element()}, Date, Set,
@@ -48,6 +48,34 @@ function run(status = 'running') {
     progress: {phase: 'testing', currentModelRef: 'ollama::model', currentFile: 'portrait.jpg', currentKind: 'director_writing'},
     attempts: [{jobId: 'job-exact', status: 'running'}]};
 }
+
+test('Stop targets the followed assessment rather than selected history and waits for terminal state', async () => {
+  const {ctx, nodes} = ui();
+  ctx.diagnosticsAssessmentRunStatus = 'running';
+  ctx.modelLabState.run = {id: 'historical-preview', status: 'completed'};
+  const calls = [];
+  ctx.modelLabPost = async payload => { calls.push(payload); return {run: run(), runs: []}; };
+  ctx.modelLabSchedulePoll = () => {};
+  await ctx.stopUnifiedModelAssessment();
+  assert.equal(calls[0].runId, 'live'); assert.equal(calls[0].action, 'stop');
+  assert.equal(nodes['diagnostics-assessment-stop'].textContent, 'Stopping…');
+  await ctx.stopUnifiedModelAssessment(); assert.equal(calls.length, 1);
+  ctx.diagnosticsRenderAssessmentProgress(run('stopped'));
+  assert.equal(nodes['diagnostics-assessment-stop'].disabled, true);
+  assert.equal(nodes['diagnostics-assessment-stop'].textContent, 'Stop Assessment');
+  assert.equal(ctx.modelLabState.run.id, 'historical-preview');
+});
+
+test('a failed Stop request remains visible and retryable', async () => {
+  const {ctx, nodes} = ui();
+  ctx.diagnosticsAssessmentRunStatus = 'running';
+  ctx.modelLabPost = async () => { throw new Error('Connection lost'); };
+  const errors = []; ctx.reportConsoleError = (...args) => errors.push(args);
+  await ctx.stopUnifiedModelAssessment();
+  assert.equal(nodes['diagnostics-assessment-stop'].disabled, false);
+  assert.match(nodes['diagnostics-assessment-selection'].textContent, /Connection lost/);
+  assert.equal(errors.length, 1);
+});
 
 test('assessment speed distinguishes request throughput from provider decode speed', () => {
   const {ctx} = ui();

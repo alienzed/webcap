@@ -163,6 +163,18 @@ These stay with their durable owner:
 
 The stable Training action layout remains the owner of Training evidence.
 
+### Planned explicit Training History run deletion
+
+This is a user-requested, permanent cleanup operation from **Training → History**, not Archive or ordinary history clearing. Implementation is pending.
+
+- Offer **Delete Run** with a confirmation that identifies the selected training run, its Diffusion Pipe timestamped output directory, and the associated artifacts.
+- Block deletion **only** when an active or queued **Training** job references the directory. Do not introduce protections for historical-only references, inference, evaluations, or Test Generations queues.
+- On confirmation, permanently remove the exact run output directory (never its parent), associated Training job artifacts and frozen media, and the relevant Training History entry/entries. If multiple history entries reference the deleted output directory, reconcile/remove those entries rather than leaving known broken history links.
+- Offer an **optional checkbox, checked by default**, to delete associated Test Generations candidate copies (including copied/moved candidates where recorded provenance identifies them) and their associated metadata/results. Leave candidates alone when unchecked; never sweep unrelated Set-level candidates.
+- Do **not** move anything to Archive, implement soft deletion, or build a general reference-counting/dependency framework.
+- Other existing inference/evaluation/test jobs may reference files subsequently deleted by this explicit operation. **No special preflight or missing-file behavior is required for those jobs**; their existing normal failure/skip handling applies.
+- Follow existing path ownership and provenance conventions; surface actual implementation blockers or verified risks rather than adding hypothetical constraints.
+
 ## 6. Frontend versus backend temporary state
 
 Browser-only interaction state should remain in browser memory or `sessionStorage` when it should survive navigation/reload within the browser session.

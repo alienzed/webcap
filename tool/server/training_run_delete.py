@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 from . import config as app_config
-from .training_action import read_action
+from .training_action import read_action, update_action
 from .training_history import _read_recent_runs, _write_recent_runs, _history_lock, host_path_for_training_path
 from .training_test_paths import TEST_COPY_STAGE_LABELS, test_copy_destination
 
@@ -179,6 +179,26 @@ def delete(folder, job_id, delete_candidates=True):
                     shutil.rmtree(target)
                 elif target.exists():
                     raise ValueError("Expected a run-owned directory: " + str(target))
+            # Reconcile only records associated with the deleted jobs/captures.
+            # Keep other action records even when they share the logical action.
+            by_action = {}
+            for item in plan["jobs"]:
+                by_action.setdefault(str(item.get("actionId") or ""), set()).add(str(item.get("id") or ""))
+            for action_id, deleted_ids in by_action.items():
+                if not action_id:
+                    continue
+                def prune_action(data):
+                    data["captures"] = [
+                        entry for entry in data.get("captures", [])
+                        if str(entry.get("jobId") or "") not in deleted_ids
+                    ]
+                    jobs = data.get("jobs", {})
+                    for stage, entries in jobs.items():
+                        jobs[stage] = [
+                            entry for entry in entries
+                            if str(entry.get("id") or "") not in deleted_ids
+                        ]
+                update_action(action_id, prune_action)
             recent = _read_recent_runs()
             recent["jobs"] = [job for job in recent["jobs"]
                               if not (job.get("id") in plan["historyIds"] and

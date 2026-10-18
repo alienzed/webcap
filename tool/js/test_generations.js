@@ -4425,7 +4425,8 @@
 
       return previewRefresh.then(function () {
         if (testStatusHasPendingWork(status) || testStatusHasPendingWork(currentStatus)) {
-          if (queuedTestJobs.length) refreshSessionsIfDue(10000).catch(showError);
+          // Running sessions need library updates even after the pending queue empties.
+          refreshSessionsIfDue(10000).catch(showError);
           pollTimer = setTimeout(pollStatus, 4000);
           return null;
         }

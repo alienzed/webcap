@@ -99,14 +99,12 @@ def _preview_locked(folder, job_id):
             if not raw:
                 continue
             target = Path(raw).absolute()
-            _under(target, base if key == "artifactDir" else owner_root)
+            _under(target, base)
             if key != "artifactDir" and any(
                 other.get(key) == raw or other.get("inputPath") == raw or other.get("recordPath") == raw
                 for other in remaining
             ):
                 continue
-            if key != "artifactDir" and "captures" not in target.parts:
-                raise ValueError("Capture target is outside the action captures tree.")
             if key != "artifactDir":
                 target = target if target.parent.name == "captures" else target.parent
                 _under(target, owner_root / "captures")
@@ -139,7 +137,7 @@ def _preview_locked(folder, job_id):
             run_path = str(provenance.get("sourceRunPath") or "")
             if not run_path or Path(host_path_for_training_path(run_path)).absolute() != physical:
                 continue
-            candidate = sidecar.with_suffix(".safetensors") if sidecar.name.endswith(".webcap.json") else None
+            candidate = sidecar.with_name(sidecar.name[:-len(".webcap.json")] + ".safetensors") if sidecar.name.endswith(".webcap.json") else None
             if candidate is None:
                 continue
             if candidate.is_symlink():

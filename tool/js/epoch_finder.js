@@ -21,6 +21,7 @@
   var selectedEpochs = new Set();
   var selectedRunId = "";
   var proposalBusy = false;
+  var followUpSource = '';
   var timingProfiles = {};
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
@@ -835,6 +836,7 @@
     els('resume').classList.toggle('hidden', !['paused', 'interrupted', 'failed'].includes(campaign.status));
     els('delete').classList.toggle('hidden', running);
     progress(campaign);
+    els('follow-up').classList.toggle('hidden', campaign.status === 'running' || campaign.status === 'queued');
     ranking(campaign);
     campaignSummary(campaign);
     gallery(campaign);
@@ -867,6 +869,55 @@
     clearError();
     return api(operation, {campaignId: activeCampaign}).then(function () { refresh(); }).catch(error);
   }
+  function followUpCampaign() {
+    if (!campaignState) return;
+    var source = campaignState;
+    var first = source.rounds[0];
+    activeCampaign = '';
+    els('active').classList.add('hidden');
+    els('empty').classList.remove('hidden');
+    setup();
+    els('run').value = source.jobId;
+    els('run').onchange();
+    selectedEpochs = new Set(first.epochs);
+    drawEpochPicker();
+    els('prompt').value = first.prompt;
+    els('concept').value = source.concept || '';
+    dimensions = source.dimensions.map(function (item) {
+      return {label:item.label, options:item.options.slice(), role:item.role};
+    });
+    renderDimensions();
+    [['aspectRatio','test-generations-aspect'],['megapixels','test-generations-megapixels'],
+      ['duration','test-generations-duration'],['dimensions','test-generations-dimensions']].forEach(function (pair) {
+      var field = document.getElementById(pair[1]);
+      if (field && first.settings[pair[0]] != null) field.value = String(first.settings[pair[0]]);
+    });
+    els('rounds').value = String(source.rounds.length);
+    els('cases').value = String(first.seeds.length);
+    els('retention').value = String(first.keepPercent);
+    els('enable-rvn').checked = !!source.referenceEvaluation.rvn;
+    els('enable-dino').checked = !!source.referenceEvaluation.dino;
+    referenceSelections = {};
+    (source.referencePlan || []).forEach(function (ref) {
+      referenceSelections[JSON.stringify([ref.attribute,ref.option])] = {
+        attribute:ref.attribute, option:ref.option, group:ref.group, tag:ref.tag, media:ref.media
+      };
+    });
+    followUpSource = source.id;
+    els('round-plan').innerHTML = '';
+    roundPlan();
+    Array.from(els('round-plan').querySelectorAll('[data-epoch-round]')).forEach(function (row,index) {
+      var plan = source.rounds[index];
+      row.querySelector('[data-case]').value = String(plan.seeds.length);
+      row.querySelector('[data-keep]').value = String(plan.keepPercent);
+      if (row.querySelector('[data-mp]') && plan.settings.megapixels != null)
+        row.querySelector('[data-mp]').value = String(plan.settings.megapixels);
+      if (row.querySelector('[data-dimensions]') && plan.settings.dimensions != null)
+        row.querySelector('[data-dimensions]').value = String(plan.settings.dimensions);
+    });
+    showStep(1);
+    list();
+  }
   function start() {
     clearError();
     try { approvedReferences(); recordDimensions(); } catch (exc) { return error(exc); }
@@ -884,16 +935,18 @@
       roundPlans: getRoundPlans(), concept: els("concept").value.trim(), dimensions: recordDimensions(),
       vlImageMP: 0.45,
       epochs: chosenEpochs(), referencePlan: approvedReferences(),
-      referenceEvaluation: {rvn: els('enable-rvn').checked, dino: els('enable-dino').checked}};
+      referenceEvaluation: {rvn: els('enable-rvn').checked, dino: els('enable-dino').checked},
+      parentCampaignId: followUpSource};
     els('start').disabled = true;
     api('start', criteria).then(function (response) {
-      activeCampaign = response.campaign.id; inspectedEpoch = null; lastFrameKey = ''; refresh();
+      followUpSource = ''; activeCampaign = response.campaign.id; inspectedEpoch = null; lastFrameKey = ''; refresh();
     }).catch(error).finally(function () { els('start').disabled = false; });
   }
   function applyFolder(folder) {
     inspectedEpoch = null;
     lastFrameKey = null;
     var changed = currentFolder !== folder;
+    if (changed) followUpSource = '';
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
     if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
@@ -903,8 +956,9 @@
   els('mode-tests').onclick = function () { showMode('tests'); };
   els('mode-finder').onclick = function () { showMode('finder'); };
   els('refresh').onclick = refresh;
-  els('new').onclick = function () { activeCampaign = ''; campaignState = null; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); };
+  els('new').onclick = function () { followUpSource = ''; activeCampaign = ''; campaignState = null; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); };
   els('start').onclick = start;
+  els('follow-up').onclick = followUpCampaign;
   els('suggest').onclick = propose;
   els('next').onclick = advance;
   els('back').onclick = function () { clearError(); showStep(Math.max(1, wizardStep - 1)); };

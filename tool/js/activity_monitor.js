@@ -992,6 +992,11 @@
         var samples = state.directorSamples[key] || (state.directorSamples[key] = []);
         var now = Date.now();
         var previous = samples[samples.length - 1];
+        // First Cut starts a new LLM request at each stage; token counters reset.
+        if (previous && generated < previous.tokens) {
+          samples.length = 0;
+          previous = null;
+        }
         if (!previous || generated !== previous.tokens) {
           samples.push({ time: now, tokens: generated });
           if (samples.length > 30) samples.shift();

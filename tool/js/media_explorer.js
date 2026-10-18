@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   var visible = false, items = [], offset = 0, total = 0, active = -1, role = '', loading = false;
-  var pageSize = 60, serial = 0;
+  var pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
   function el(id) { return document.getElementById(id); }
   function report(err) {
     var message = String(err && err.message || err);
@@ -70,7 +70,7 @@
     return card;
   }
   function count() {
-    text(el('media-explorer-count'), items.length + ' of ' + total + ' discovered media · Generate scope (partial)');
+    text(el('media-explorer-count'), items.length + ' of ' + total + ' Generate media' + (complete ? ' · complete scan' : ' · recent results only'));
     el('media-explorer-more-btn').classList.toggle('hidden', items.length >= total);
   }
   function load(reset) {
@@ -81,12 +81,16 @@
       el('media-explorer-inspector').classList.add('hidden');
     }
     if (loading && !reset) return;
+    if (reset && activeRequest) activeRequest.abort();
     var request = serial;
-    loading = true; el('media-explorer-status').textContent = 'Discovering saved Generate media…';
+    loading = true;
+    var controller = new AbortController(); activeRequest = controller;
+    el('media-explorer-scan-all').disabled = full && loading;
+    el('media-explorer-status').textContent = full ? 'Scanning all Generate manifests…' : 'Discovering recent Generate media…';
     var qs = new URLSearchParams({limit:pageSize, offset:offset, role:role,
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
-      sort:el('media-explorer-sort').value});
-    fetch('/fs/media_explorer?' + qs).then(function (res) {
+      sort:el('media-explorer-sort').value, full:full ? '1' : '0'});
+    fetch('/fs/media_explorer?' + qs, {signal: controller.signal}).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok || !data.ok) throw new Error(data.error || 'Media discovery failed.');
         return data;
@@ -94,6 +98,7 @@
     }).then(function (data) {
       if (request !== serial || !visible) return;
       total = data.total;
+      complete = !!data.complete;
       var incoming = data.items || [];
       var host = el('media-explorer-grid');
       incoming.forEach(function (item) {
@@ -102,8 +107,8 @@
       offset += incoming.length;
       count();
       text(el('media-explorer-status'), incoming.length ? '' : (items.length ? '' : 'No matching media found in the discovered Generate outputs.'));
-    }).catch(function (err) { if (request === serial) report(err); })
-      .finally(function () { if (request === serial) loading = false; });
+    }).catch(function (err) { if (request === serial && err.name !== 'AbortError') report(err); })
+      .finally(function () { if (request === serial) { loading = false; activeRequest = null; el('media-explorer-scan-all').disabled = false; } });
   }
   function open() {
     window.closeGenerateActivity(); window.closeTestBenchActivity();
@@ -131,6 +136,7 @@
     });
   });
   el('media-explorer-refresh').addEventListener('click', function () { load(true); });
+  el('media-explorer-scan-all').addEventListener('click', function () { full = true; load(true); });
   el('media-explorer-more-btn').addEventListener('click', function () { load(false); });
   var debounce;
   el('media-explorer-search').addEventListener('input', function () {

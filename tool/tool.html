@@ -2676,17 +2676,23 @@
                                 <div class="app-settings-section-title">Model Assessment <span class="app-settings-help">Experimental overview</span></div>
                                 <div class="app-settings-section-copy">One view of existing Director and Vision findings. The original assessment tools remain available and unchanged while unified execution is validated.</div>
                             </div>
-                            <div class="app-settings-actions app-settings-actions-inline">
+                            <div class="model-assessment-toolbar">
                                 <button id="diagnostics-assessment-run" type="button">Run Selected Tests</button>
-                                <button id="diagnostics-assessment-refresh" type="button" class="review-captions-btn">Refresh Findings</button>
-                                <button id="diagnostics-assessment-director" type="button">Director Assessment</button>
-                                <button id="diagnostics-assessment-lab" type="button">Vision &amp; Structured Tests</button>
-                                <button id="diagnostics-assessment-benchmark" type="button" class="review-captions-btn">Custom Benchmark</button>
+                                <button id="diagnostics-assessment-refresh" type="button" class="review-captions-btn">Refresh</button>
+                                <label class="model-assessment-deep"><input id="diagnostics-assessment-deep" type="checkbox"> Deep Assessment <small>(not yet available)</small></label>
                             </div>
-                            <div class="app-settings-field app-settings-field-wide">
-                                <span class="app-settings-field-label">Assessment scope</span>
-                                <label><input id="diagnostics-assessment-deep" type="checkbox"> Deep Assessment <small>— configuration only; limit probes are not yet connected</small></label>
-                                <span class="app-settings-note">Standard is the default: evaluate WebCap workflows. Deep testing remains unavailable until the coordinated runner is verified.</span>
+                            <details class="model-assessment-tools"><summary>Other testing tools</summary>
+                                <div class="model-assessment-toolbar">
+                                    <button id="diagnostics-assessment-director" type="button">Director Assessment</button>
+                                    <button id="diagnostics-assessment-lab" type="button">Vision &amp; Structured Tests</button>
+                                    <button id="diagnostics-assessment-benchmark" type="button">Custom Benchmark</button>
+                                </div>
+                            </details>
+                            <div class="model-assessment-bulk">
+                                <strong>Models</strong>
+                                <button id="diagnostics-assessment-all" type="button" class="review-captions-btn">Select All</button>
+                                <button id="diagnostics-assessment-none" type="button" class="review-captions-btn">Select None</button>
+                                <span class="app-settings-help">Choose models below, then Run Selected Tests. Results appear in this tab after Refresh.</span>
                             </div>
                             <div id="diagnostics-assessment-selection" class="app-settings-help" aria-live="polite">Select models below to prepare an assessment.</div>
                             <div id="diagnostics-assessment-summary" class="app-settings-help" aria-live="polite">Open this tab to load available findings.</div>

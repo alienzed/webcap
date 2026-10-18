@@ -121,6 +121,40 @@ def get_run(run_id):
     return _copy(_reconcile_interrupted(_read_raw(run_id)))
 
 
+def capability_run_summaries():
+    """Compact per-probe outcomes for Diagnostics; never expose raw model output."""
+    summaries = []
+    for row in list_runs():
+        if not row.get("id") or row.get("status") == "error":
+            summaries.append({
+                "id": row.get("id"), "status": row.get("status"),
+                "startedAt": row.get("startedAt"), "error": row.get("error"),
+                "models": {},
+            })
+            continue
+        run = get_run(row["id"])
+        models = {}
+        for attempt in run.get("attempts") or []:
+            ref = str(attempt.get("modelRef") or "")
+            kind = str(attempt.get("kind") or "")
+            if not ref or not kind:
+                continue
+            by_kind = models.setdefault(ref, {})
+            result = attempt.get("result") if isinstance(attempt.get("result"), dict) else {}
+            by_kind[kind] = {
+                "status": str(attempt.get("status") or ""),
+                "error": str(attempt.get("error") or ""),
+                "file": str(attempt.get("file") or ""),
+                "finishReason": str(result.get("finishReason") or ""),
+            }
+        summaries.append({
+            "id": row["id"], "status": row.get("status"),
+            "startedAt": row.get("startedAt"), "folder": row.get("folder"),
+            "error": row.get("error", ""), "models": models,
+        })
+    return summaries
+
+
 def list_runs():
     root = run_root()
     if not root.is_dir():
@@ -1121,6 +1155,8 @@ def register_routes(app):
                     "runs": list_runs(),
                     "models": model_catalog(),
                 }
+                if request.args.get("summary") == "1":
+                    payload["capabilityRuns"] = capability_run_summaries()
                 if run_id:
                     payload["run"] = get_run(run_id)
                 return jsonify(payload)

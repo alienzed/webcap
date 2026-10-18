@@ -3,6 +3,7 @@
   var lane = 'inference';
   var snapshots = { llm: null, training: null };
   var pending = false;
+  var pendingRefresh = null;
   var opening = 0;
   var drawer = document.getElementById('inference-queue-drawer');
   var summary = document.getElementById('inference-queue-summary');
@@ -221,13 +222,14 @@
     refresh();
   }
   function refresh() {
-    if (pending || drawer.classList.contains('hidden')) return Promise.resolve();
+    if (pending) return pendingRefresh;
+    if (drawer.classList.contains('hidden')) return Promise.resolve();
     pending = true;
     var sources = [
       ['llm', '/fs/director/queue'],
       ['training', '/fs/training_runner/status']
     ];
-    return Promise.all(sources.map(function (entry) {
+    pendingRefresh = Promise.all(sources.map(function (entry) {
       return request(entry[1]).then(function (data) {
         snapshots[entry[0]] = entry[0] === 'llm' ? data.queue : data;
         render(entry[0]);
@@ -235,7 +237,8 @@
         if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Job Queues · ' + entry[0], error);
         document.querySelector('[data-job-queue-summary="' + entry[0] + '"]').textContent = error.message;
       });
-    })).then(function () { pending = false; }, function (error) { pending = false; throw error; });
+    })).then(function () { pending = false; pendingRefresh = null; }, function (error) { pending = false; pendingRefresh = null; throw error; });
+    return pendingRefresh;
   }
   function perform(which, operation, id) {
     if (which === 'llm') {

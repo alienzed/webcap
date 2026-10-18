@@ -176,16 +176,47 @@
       id: 'kinetic-music-video',
       label: 'Kinetic music video',
       text: 'Kinetic music-video energy, bold camera movement, rhythmic framing, punchy lighting changes, expressive color, dynamic performance staging, visually memorable transitions, polished contemporary spectacle.'
+    },
+    {
+      id: "iphone-video",
+      label: "iPhone video",
+      text: "Everyday smartphone video with natural colors, realistic phone-camera exposure, casual handheld framing and small spontaneous movements."
+    },
+    {
+      id: "selfie-video",
+      label: "Selfie video",
+      text: "Front-facing smartphone footage at arm's length, close personal framing, natural facial perspective, slight hand movement and ordinary available light."
+    },
+    {
+      id: "amateur-home-video",
+      label: "Amateur home video",
+      text: "Casual personal video with imperfect framing, spontaneous camera motion, everyday lighting, realistic textures and an unpolished, candid feel."
+    },
+    {
+      id: "gopro-action-camera",
+      label: "GoPro / Action camera",
+      text: "Immersive wide-angle action-camera footage, close first-person perspective, energetic motion, deep focus and natural outdoor or practical lighting."
+    },
+    {
+      id: "webcam",
+      label: "Webcam",
+      text: "Fixed computer-camera viewpoint, simple eye-level framing, ordinary indoor light, natural webcam image quality and minimal camera movement."
+    },
+    {
+      id: "security-camera",
+      label: "Security camera",
+      text: "Stationary wide-angle surveillance view, fixed high or corner-mounted perspective, plain practical lighting, unembellished detail and continuous observational framing."
+    },
+    {
+      id: "social-media-tiktok",
+      label: "Social media / TikTok",
+      text: "Informal vertical smartphone footage, direct and immediate framing, casual creator-video energy, realistic phone-camera detail and natural handheld or tripod movement."
+    },
+    {
+      id: "bodycam",
+      label: "Bodycam",
+      text: "Chest-mounted first-person footage, wide practical perspective, body-driven camera movement, available light and immediate observational realism."
     }
-,
-    {\n      id: 'iphone-video',\n      label: 'iPhone video',\n      text: 'Everyday smartphone video with natural colors, realistic phone-camera exposure, casual handheld framing and small spontaneous movements.'\n    },
-    {\n      id: 'selfie-video',\n      label: 'Selfie video',\n      text: 'Front-facing smartphone footage at arm's length, close personal framing, natural facial perspective, slight hand movement and ordinary available light.'\n    },
-    {\n      id: 'amateur-home-video',\n      label: 'Amateur home video',\n      text: 'Casual personal video with imperfect framing, spontaneous camera motion, everyday lighting, realistic textures and an unpolished, candid feel.'\n    },
-    {\n      id: 'gopro-action-camera',\n      label: 'GoPro / Action camera',\n      text: 'Immersive wide-angle action-camera footage, close first-person perspective, energetic motion, deep focus and natural outdoor or practical lighting.'\n    },
-    {\n      id: 'webcam',\n      label: 'Webcam',\n      text: 'Fixed computer-camera viewpoint, simple eye-level framing, ordinary indoor light, natural webcam image quality and minimal camera movement.'\n    },
-    {\n      id: 'security-camera',\n      label: 'Security camera',\n      text: 'Stationary wide-angle surveillance view, fixed high or corner-mounted perspective, plain practical lighting, unembellished detail and continuous observational framing.'\n    },
-    {\n      id: 'social-media-tiktok',\n      label: 'Social media / TikTok',\n      text: 'Informal vertical smartphone footage, direct and immediate framing, casual creator-video energy, realistic phone-camera detail and natural handheld or tripod movement.'\n    },
-    {\n      id: 'bodycam',\n      label: 'Bodycam',\n      text: 'Chest-mounted first-person footage, wide practical perspective, body-driven camera movement, available light and immediate observational realism.'\n    }
   ];
 
   function el(id) {

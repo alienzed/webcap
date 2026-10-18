@@ -20,6 +20,7 @@
   var listRequestVersion = 0;
   var selectedEpochs = new Set();
   var selectedRunId = "";
+  var runEpochSelections = {};
   var proposalBusy = false;
   var followUpSource = '';
   var timingProfiles = {};
@@ -238,50 +239,63 @@
       els('suggest').disabled = false;
     });
   }
+  function selectedRunEntries() {
+    return runs.filter(function (run) { return runEpochSelections[run.jobId] instanceof Set; }).map(function (run) {
+      return {jobId:run.jobId, epochs:run.epochs.filter(function (epoch) { return runEpochSelections[run.jobId].has(epoch); })};
+    });
+  }
   function chosenEpochs() {
-    var run = runs.find(function (item) { return item.jobId === els('run').value; });
-    return run ? run.epochs.filter(function (epoch) { return selectedEpochs.has(epoch); }) : [];
+    return selectedRunEntries().flatMap(function (entry) { return entry.epochs; });
+  }
+  function candidateLabel(campaign, candidate) {
+    var source = (campaign.candidateMap || {})[String(candidate)];
+    if (!source) return 'Epoch ' + candidate;
+    var run = String(source.runName || (source.runSequence ? 'Run ' + source.runSequence : source.jobId));
+    return run + ' · Epoch ' + source.epoch;
+  }
+  function drawRuns() {
+    var model = String(window.getWorkingModelProfileId() || '');
+    var options = runs.filter(function (run) { return run.modelId === model; });
+    els('run-choices').innerHTML = options.length ? options.map(function (run,index) {
+      var chosen = runEpochSelections[run.jobId] instanceof Set;
+      var label = [run.setName, run.runName || (run.runSequence ? 'Run ' + run.runSequence : 'Run ' + (index+1))].filter(Boolean).join(' · ');
+      return '<label class="epoch-finder-run-choice"><input type="checkbox" data-run-id="' + escape(run.jobId) +
+        '"' + (chosen ? ' checked' : '') + '><span><strong>' + escape(label) + '</strong>' +
+        '<small>' + escape(run.stage || run.modelId) + ' · ' + run.epochs.length + ' checkpoints</small></span></label>';
+    }).join('') : '<p class="epoch-finder-muted">No available saved checkpoints for this model.</p>';
+    var selected = selectedRunEntries();
+    els('run').value = selected.length ? selected[0].jobId : '';
+    els('run-detail').textContent = selected.length + ' runs · ' + chosenEpochs().length + ' checkpoints selected';
   }
   function drawEpochPicker() {
-    var run = runs.find(function (item) { return item.jobId === els('run').value; });
-    var host = els('epoch-picker');
-    if (!run) { host.classList.add('hidden'); host.innerHTML = ''; return; }
-    host.classList.remove('hidden');
-    var epochs = run.epochs.slice().sort(function (a,b) { return a-b; });
-    var chosen = chosenEpochs();
-    var last = epochs[epochs.length - 1];
-    host.innerHTML = '<div class="epoch-finder-epoch-summary"><strong>' +
-      chosen.length + ' of ' + epochs.length + ' selected</strong>' +
-      '<span>Saved checkpoints · ' + epochs[0] + '–' + last + '</span></div>' +
-      '<div class="epoch-finder-epoch-timeline" role="group" aria-label="Select saved epochs">' +
-      epochs.map(function (epoch) {
-        var selected = selectedEpochs.has(epoch);
-        return '<button type="button" class="epoch-finder-epoch-tick' +
-          (selected ? ' is-selected' : '') + '" data-epoch-choice="' + epoch +
-          '" aria-pressed="' + selected + '" aria-label="Epoch ' + epoch +
-          (selected ? ', selected' : ', not selected') + '" title="Epoch ' + epoch +
-          (selected ? ' · selected' : '') + '">' + epoch + '</button>';
-      }).join('') + '</div>' +
-      '<div class="epoch-finder-epoch-tools">' +
-      '<button type="button" data-epoch-action="all">All</button>' +
-      '<button type="button" data-epoch-action="every5">Every 5</button>' +
-      '<button type="button" data-epoch-action="last10">Last 10</button>' +
-      '<button type="button" data-epoch-action="none">Clear</button>' +
-      '<div class="epoch-finder-epoch-range"><label>From <input type="number" data-epoch-min placeholder="' + epochs[0] + '" min="' + epochs[0] + '" max="' + last + '"></label>' +
-      '<label>To <input type="number" data-epoch-max placeholder="' + last + '" min="' + epochs[0] + '" max="' + last + '"></label>' +
-      '<button type="button" data-epoch-action="range">Select range</button></div></div>';
+    drawRuns();
+    var host = els('epoch-picker'), selected = selectedRunEntries();
+    host.classList.toggle('hidden', !selected.length);
+    host.innerHTML = selected.map(function (choice) {
+      var run = runs.find(function (item) { return item.jobId === choice.jobId; });
+      return '<section class="epoch-finder-run-epochs" data-epoch-run="' + escape(run.jobId) + '">' +
+        '<strong>' + escape(run.runName || run.runSequence || run.jobId) + ' · ' + choice.epochs.length + '/' + run.epochs.length + ' selected</strong>' +
+        '<div class="epoch-finder-epoch-timeline">' + run.epochs.map(function (epoch) {
+          return '<button type="button" class="epoch-finder-epoch-tick' + (runEpochSelections[run.jobId].has(epoch) ? ' is-selected' : '') +
+            '" data-epoch-choice="' + epoch + '" aria-pressed="' + runEpochSelections[run.jobId].has(epoch) + '"> ' + epoch + '</button>';
+        }).join('') + '</div><div class="epoch-finder-epoch-tools">' +
+        '<button type="button" data-epoch-action="all">All</button><button type="button" data-epoch-action="every5">Every 5</button>' +
+        '<button type="button" data-epoch-action="last10">Last 10</button><button type="button" data-epoch-action="none">Clear</button>' +
+        '</div></section>';
+    }).join('');
   }
+
   function reviewWizard() {
     var parts = recordDimensions();
-    var run = runs.find(function (item) { return item.jobId === els('run').value; });
-    if (!run) throw new Error('Select a training run.');
+    var selections = selectedRunEntries();
+    if (!selections.length || selections.some(function (entry) { return !entry.epochs.length; })) throw new Error('Select checkpoints from each chosen run.');
     var roundSummary = getRoundPlans().map(function (round, index) {
       return 'R' + (index + 1) + ': ' + round.cases + ' tests/epoch · keep ' +
         round.keepPercent + '%' + (round.megapixels ? ' · ' + round.megapixels + ' MP' : '') +
         (round.dimensions ? ' · ' + round.dimensions : '');
     });
-    els('review').innerHTML = '<p><strong>' + escape(run.runName) + '</strong> · ' +
-      chosenEpochs().length + ' selected of ' + run.epochs.length + ' saved epochs</p><p>' + escape(els('concept').value.trim() || 'Concept not specified') +
+    els('review').innerHTML = '<p><strong>' + selections.length + ' training runs</strong> · ' +
+      chosenEpochs().length + ' saved checkpoints selected</p><p>' + escape(els('concept').value.trim() || 'Concept not specified') +
       '</p><p>' + parts.map(function (item) {
         return escape(item.label) + ' (' + escape(item.role) + ': ' + item.options.length + ' values)';
       }).join(' · ') + '</p><p>' + roundSummary.map(escape).join('<br>') +
@@ -517,32 +531,18 @@
   function setup() {
     var current = String(window.getWorkingModelProfileId() || '');
     var options = runs.filter(function (run) { return run.modelId === current; });
-    var select = els('run');
-    var previous = select.value;
-    select.innerHTML = '<option value="">Select saved training run…</option>' + options.map(function (run) {
-      return '<option value="' + escape(run.jobId) + '">' + escape(run.runName) + ' · ' +
-        run.epochs.length + ' epochs</option>';
+    Object.keys(runEpochSelections).forEach(function (jobId) {
+      if (!options.some(function (run) { return run.jobId === jobId; })) delete runEpochSelections[jobId];
+    });
+    els('run').innerHTML = '<option value="">No run selected</option>' + options.map(function (run) {
+      return '<option value="' + escape(run.jobId) + '">' + escape(run.runName || run.jobId) + '</option>';
     }).join('');
-    if (options.some(function (run) { return run.jobId === previous; })) select.value = previous;
-    select.onchange = function () {
-      var run = options.find(function (item) { return item.jobId === select.value; });
-      if (selectedRunId !== select.value) {
-        referenceSelections = {};
-        selectedRunId = select.value;
-        selectedEpochs = new Set(run ? run.epochs : []);
-      }
-      drawEpochPicker();
-      els('run-detail').textContent = run ? run.epochs.length + ' saved epochs · ' +
-        run.epochs[0] + '–' + run.epochs[run.epochs.length - 1] : '';
-      roundPlan();
-    };
-    select.onchange();
+    drawEpochPicker();
     roundPlan();
-    if (!els('prompt').value) {
-      els('prompt').value = String(document.getElementById('test-generations-prompt').value || '');
-    }
+    if (!els('prompt').value) els('prompt').value = String(document.getElementById('test-generations-prompt').value || '');
     els('start').disabled = !options.length;
   }
+
   function list() {
     els('count').textContent = String(campaigns.length);
     var model = String(window.getWorkingModelProfileId() || '');
@@ -931,9 +931,10 @@
     els('active').classList.add('hidden');
     els('empty').classList.remove('hidden');
     setup();
-    els('run').value = source.jobId;
-    els('run').onchange();
-    selectedEpochs = new Set(first.epochs);
+    runEpochSelections = {};
+    (source.runSelections || [{jobId:source.jobId, epochs:first.epochs}]).forEach(function (item) {
+      runEpochSelections[item.jobId] = new Set(item.epochs);
+    });
     drawEpochPicker();
     els('prompt').value = first.prompt;
     els('concept').value = source.concept || '';
@@ -975,8 +976,10 @@
   function start() {
     clearError();
     try { approvedReferences(); recordDimensions(); } catch (exc) { return error(exc); }
-    var jobId = els('run').value;
-    if (!jobId) return error(new Error('Select a saved training run.'));
+    var selections = selectedRunEntries();
+    if (!selections.length || selections.some(function (entry) { return !entry.epochs.length; }))
+      return error(new Error('Select checkpoints from each chosen training run.'));
+    var jobId = selections[0].jobId;
     var settings = {};
     [['aspectRatio','test-generations-aspect'],['megapixels','test-generations-megapixels'],
       ['duration','test-generations-duration'],['dimensions','test-generations-dimensions']].forEach(function (entry) {
@@ -988,7 +991,7 @@
       cases: Number(els('cases').value), keepPercent: Number(els('retention').value),
       roundPlans: getRoundPlans(), concept: els("concept").value.trim(), dimensions: recordDimensions(),
       vlImageMP: 0.45,
-      epochs: chosenEpochs(), referencePlan: approvedReferences(),
+      runSelections: selections, epochs: selections[0].epochs, referencePlan: approvedReferences(),
       referenceEvaluation: {rvn: els('enable-rvn').checked, dino: els('enable-dino').checked},
       parentCampaignId: followUpSource};
     els('start').disabled = true;
@@ -1005,7 +1008,7 @@
     if (changed) followUpSource = '';
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;
@@ -1025,34 +1028,40 @@
   els('suggest').onclick = propose;
   els('next').onclick = advance;
   els('back').onclick = function () { clearError(); showStep(Math.max(1, wizardStep - 1)); };
-  els('epoch-picker').addEventListener('click', function (event) {
-    var choice = event.target.closest('[data-epoch-choice]');
-    if (!choice) return;
-    var epoch = Number(choice.dataset.epochChoice);
-    if (selectedEpochs.has(epoch)) selectedEpochs.delete(epoch); else selectedEpochs.add(epoch);
+  els('run-choices').addEventListener('change', function (event) {
+    var checkbox = event.target.closest('[data-run-id]');
+    if (!checkbox) return;
+    var jobId = checkbox.dataset.runId;
+    var run = runs.find(function (item) { return item.jobId === jobId; });
+    if (!run) throw new Error('Selected training run disappeared.');
+    if (checkbox.checked) runEpochSelections[jobId] = new Set(run.epochs);
+    else delete runEpochSelections[jobId];
+    referenceSelections = {};
+    referenceGeneration++;
     drawEpochPicker();
     roundPlan();
   });
   els('epoch-picker').addEventListener('click', function (event) {
-    var action = event.target.closest('[data-epoch-action]');
-    if (!action) return;
-    var run = runs.find(function (item) { return item.jobId === els('run').value; });
-    if (!run) return;
-    if (action.dataset.epochAction === 'all') selectedEpochs = new Set(run.epochs);
-    if (action.dataset.epochAction === 'none') selectedEpochs.clear();
-    if (action.dataset.epochAction === 'every5') selectedEpochs = new Set(run.epochs.filter(function (epoch) { return epoch % 5 === 0; }));
-    if (action.dataset.epochAction === 'last10') selectedEpochs = new Set(run.epochs.slice(-10));
-    if (action.dataset.epochAction === 'range') {
-      var minField = els('epoch-picker').querySelector('[data-epoch-min]');
-      var maxField = els('epoch-picker').querySelector('[data-epoch-max]');
-      var min = minField.value.trim() === '' ? -Infinity : Number(minField.value);
-      var max = maxField.value.trim() === '' ? Infinity : Number(maxField.value);
-      if (min > max) return error(new Error('Range start must not exceed range end.'));
-      selectedEpochs = new Set(run.epochs.filter(function (epoch) { return epoch >= min && epoch <= max; }));
+    var region = event.target.closest('[data-epoch-run]');
+    if (!region) return;
+    var jobId = region.dataset.epochRun, choice = event.target.closest('[data-epoch-choice]');
+    var selected = runEpochSelections[jobId];
+    if (!(selected instanceof Set)) throw new Error('Run selection missing.');
+    if (choice) {
+      var epoch = Number(choice.dataset.epochChoice);
+      if (selected.has(epoch)) selected.delete(epoch); else selected.add(epoch);
+    } else {
+      var action = event.target.closest('[data-epoch-action]');
+      if (!action) return;
+      var run = runs.find(function (item) { return item.jobId === jobId; });
+      if (action.dataset.epochAction === 'all') runEpochSelections[jobId] = new Set(run.epochs);
+      if (action.dataset.epochAction === 'none') selected.clear();
+      if (action.dataset.epochAction === 'every5') runEpochSelections[jobId] = new Set(run.epochs.filter(function (epoch) { return epoch % 5 === 0; }));
+      if (action.dataset.epochAction === 'last10') runEpochSelections[jobId] = new Set(run.epochs.slice(-10));
     }
-    drawEpochPicker();
-    roundPlan();
+    drawEpochPicker(); roundPlan();
   });
+
   function referenceClick(event) {
     var preview = event.target.closest('[data-reference-preview]');
     if (preview) {

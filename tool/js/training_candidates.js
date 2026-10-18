@@ -890,12 +890,20 @@ function openEpochProfile(epoch) {
     document.getElementById('epoch-profile-source').textContent = String(payload.checkpoint || '');
     document.getElementById('epoch-profile-description').value =
       String(enrichment.description || imported.description || civitai.description || '');
-    document.getElementById('epoch-profile-words').value =
-      (enrichment.trainedWords || civitai.trainedWords || []).join('\n');
+    var activation = String(imported['activation text'] || '').trim();
+    var importedWords = activation ? activation.split(',').map(function (term) { return term.trim(); }).filter(Boolean) : [];
+    var words = enrichment.trainedWords || (importedWords.length ? importedWords : civitai.trainedWords || []);
+    document.getElementById('epoch-profile-words').value = Array.isArray(words) ? words.join('\n') : String(words || '');
     document.getElementById('epoch-profile-options').value =
       JSON.stringify(enrichment.promptOptions || {}, null, 2);
     document.getElementById('epoch-profile-guidance').value = String(enrichment.guidance || '');
-    status.textContent = payload.vocabularyWarning || 'Imported metadata is suggested; edits are stored separately in WebCap.';
+    var importedNotes = [];
+    if (typeof imported['preferred weight'] === 'number') {
+      importedNotes.push('SD WebUI preferred weight: ' + imported['preferred weight']);
+    }
+    if (imported['negative text']) importedNotes.push('SD WebUI negative prompt available in source metadata');
+    status.textContent = [payload.vocabularyWarning || 'Imported metadata is suggested; edits are stored separately in WebCap.']
+      .concat(importedNotes).join(' · ');
   }).catch(function (err) { status.textContent = String(err.message || err); });
 }
 

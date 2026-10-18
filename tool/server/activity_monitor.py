@@ -388,7 +388,7 @@ def activity_snapshot(limit=20, since=0):
                 "jobs": [
                     _execution_item("llm", job)
                     for job in llm_jobs
-                    if str(job.get("status") or "") == "queued"
+                    if str(job.get("status") or "") == "queued" and str(job.get("jobId") or "") not in child_ids
                 ],
             },
         },

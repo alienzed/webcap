@@ -115,5 +115,15 @@ test('Activity only receives job-scoped live Director telemetry', () => {
   assert.ok(monitor.includes('runtime_started >= job_started - 2'));
   assert.ok(monitor.includes('item["liveTokens"] = slot.get("generatedTokens")'));
   assert.ok(source.includes("data-director-live-stats"));
-  assert.ok(source.includes("snapshot.liveTokens != null"));
+  assert.ok(source.includes("directorJob.liveTokens != null"));
+});
+
+
+test('First Cut is a parent Activity card with live operation controls', () => {
+  assert.ok(monitor.includes('first_cut_batches = first_cut_snapshot()'));
+  assert.ok(monitor.includes('child_telemetry.get'));
+  assert.ok(source.includes('function firstCutProgressSnapshot(item)'));
+  assert.ok(source.includes("item.kind === 'first-cut' || item.kind === 'director-diagnostics'"));
+  assert.ok(source.includes("operation: 'cancel', batchId: item.batchId"));
+  assert.ok(source.includes("operation: 'cancel_job', jobId: item.id"));
 });

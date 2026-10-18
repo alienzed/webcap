@@ -53,6 +53,51 @@
     var uses = Array.isArray(item.uses) ? item.uses : [];
     if (uses.length) detail('Used by', uses.map(function (u) { return u.role + ' · ' + u.storageId; }).join(', '), dl);
     host.appendChild(dl);
+    if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
+      var ratingRow = document.createElement('div');
+      ratingRow.className = 'media-explorer-rating';
+      var ratingLabel = document.createElement('span');
+      text(ratingLabel, 'Rate generation');
+      ratingRow.appendChild(ratingLabel);
+      for (var score = 0; score <= 5; score++) {
+        (function (value) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'review-captions-btn';
+          text(button, value === 0 ? 'Clear' : String(value) + '★');
+          button.setAttribute('aria-label', value === 0 ? 'Clear rating' : 'Rate ' + value + ' out of 5');
+          button.setAttribute('aria-pressed', Number(item.rating || 0) === value ? 'true' : 'false');
+          button.addEventListener('click', function () {
+            Array.prototype.forEach.call(ratingRow.querySelectorAll('button'), function (node) { node.disabled = true; });
+            fetch('/fs/generate/result/rating', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({storageId: item.storageId, rating: value})
+            }).then(function (response) {
+              return response.json().then(function (payload) {
+                if (!response.ok || !payload || payload.ok === false) {
+                  throw new Error(payload && payload.error || 'Could not update rating.');
+                }
+                return payload;
+              });
+            }).then(function (payload) {
+              item.rating = payload.rating;
+              if (visible && active >= 0 && items[active] === item) selectItem(active);
+              var card = el('media-explorer-grid').children[items.indexOf(item)];
+              if (card) {
+                var sub = card.querySelector('.media-explorer-card-sub');
+                if (sub) text(sub, item.role + ' · ' + (item.model || item.source) +
+                  (item.rating ? ' · ★ ' + item.rating : ''));
+              }
+            }).catch(report).finally(function () {
+              Array.prototype.forEach.call(ratingRow.querySelectorAll('button'), function (node) { node.disabled = false; });
+            });
+          });
+          ratingRow.appendChild(button);
+        })(score);
+      }
+      host.appendChild(ratingRow);
+    }
     if (item.source === 'test' && item.ownerFolder && item.storageId) {
       var back = document.createElement('button');
       back.type = 'button';

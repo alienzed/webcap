@@ -18,8 +18,8 @@
 Create a dedicated delete-run helper in the existing Training runner/history ownership, not a new service or scheduler.
 
 1. Resolve the selected row by recorded folder + job ID, on the server. Resolve its exact physical `outputRunPath` (the trainer timestamp folder), not merely `outputRoot` or a client-supplied path.
-2. Gather *all* history entries referring to that same physical run path (including resume/revision records), and their recorded action/job artifact directories. Deduplicate paths.
-3. Read current Training queue state under its existing lock. Refuse deletion if **any active or queued Training job** points to that physical run directory or to an action/job directory scheduled for removal. Do not block for completed history references or inference/evaluation/Test jobs.
+2. Gather *all* history entries referring to that same physical run path (including resume/revision records), and their recorded action/job artifact directories. Deduplicate paths; identify the **job/capture-specific** leaves, not the shared logical-run parent.
+3. Read current Training queue state under its existing lock. Refuse deletion if **any active or queued Training job** references that physical run directory through `outputRunPath` **or** `resumeFromCheckpoint`, or references an action/job directory scheduled for removal. Include paused/continuation jobs represented as queued work. Do not block for completed history references or inference/evaluation/Test jobs.
 4. Validate each deletion target against its known owner and expected directory shape; never delete a parent runs root, source Set media, configured Test root, or another run's directory. Missing already-deleted artifacts are shown as absent, not reconstructed.
 5. Return a preview: exact trainer directory, action/job paths, count of history rows, and candidate copies eligible for optional cleanup.
 
@@ -29,7 +29,7 @@ Phase gate: unit tests for multiple rows sharing output, active/queued train job
 
 Implement an explicit `POST /fs/training_history/job/delete` using the **same** authoritative resolver/check as preview, rechecking queue state while holding the existing Training lock to avoid a preview/execution race.
 
-- Delete the exact timestamped Diffusion Pipe output directory and associated *run-owned* job/artifact/frozen-media directories.
+- Delete the exact timestamped Diffusion Pipe output directory and associated *run-owned* job/artifact/frozen-media directories **at verified action/job leaves only**. Do not remove an entire logical-run parent containing other captures/jobs.
 - Remove all history entries sharing the deleted physical directory, and retire their non-active terminal queue records so dangling job definitions do not persist.
 - If optional candidate cleanup is selected, remove only Copy to Test files with verified matching provenance (and their sidecars); never sweep all Test sessions or unrelated Set-level files.
 - Missing paths are ordinary idempotent cleanup; genuine I/O failures surface in the global Console and endpoint response. Do not report an uncompleted delete as success.

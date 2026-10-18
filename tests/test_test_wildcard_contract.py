@@ -103,3 +103,50 @@ def test_wildcard_vocabulary_supplies_independent_dimensions_without_closing_opt
     assert '"terms": ["triangle", "teardrop"]' in prompt
     assert "not a closed list of test values" in prompt
     assert "{brown|black|blonde|ginger} hair" in prompt
+
+
+def test_wildcard_proposal_observes_same_group_pairs_only():
+    from tool.server.test_wildcard_contract import observed_group_combinations
+    tagged = {
+        "a.png": {"BT Shape": ["triangle"], "BT Back": ["dual-ring"]},
+        "b.png": {"BT Shape": ["teardrop"], "BT Back": ["dual-ring"]},
+        "c.png": {"BT Shape": ["triangle", "micro"], "BT Back": ["string"]},
+    }
+    combos = observed_group_combinations(tagged, ["a.png", "b.png", "c.png"])
+    assert combos["BT Shape"] == [["micro", "triangle"], ["teardrop"], ["triangle"]]
+    assert ["dual-ring", "triangle"] not in combos["BT Shape"]
+    request = build_request(["a triangle bikini"], group_combinations=combos)
+    assert "Observed same-group tag combinations:" in request["prompt"]
+    assert "mutually exclusive" in request["prompt"]
+    assert "cross-group recombination" in request["prompt"]
+
+
+def test_within_group_unobserved_wildcard_pair_rejected():
+    import pytest
+    from tool.server.test_wildcard_contract import validate_group_compatibility
+    observations = {"Shape": [["triangle"], ["teardrop"], ["triangle", "micro"]]}
+    data = {"wildcard":"{triangle|teardrop} {micro|triangle}", "variationGroups": [
+        {"label":"Shape", "annotationGroup":"Shape", "options":["triangle","teardrop"]},
+        {"label":"Detail", "annotationGroup":"Shape", "options":["micro","triangle"]},
+    ]}
+    with pytest.raises(ValueError, match="Unobserved same-group"):
+        validate_group_compatibility(data, observations)
+
+
+def test_cross_group_recombination_is_allowed():
+    from tool.server.test_wildcard_contract import validate_group_compatibility
+    observations = {"Shape":[["triangle"],["teardrop"]], "Back":[["ring"],["string"]]}
+    data = {"wildcard":"{triangle|teardrop} {ring|string}", "variationGroups":[
+        {"label":"Shape", "annotationGroup":"Shape", "options":["triangle","teardrop"]},
+        {"label":"Back", "annotationGroup":"Back", "options":["ring","string"]},
+    ]}
+    assert validate_group_compatibility(data, observations)
+
+
+def test_tag_values_without_group_identity_are_rejected():
+    import pytest
+    from tool.server.test_wildcard_contract import validate_group_compatibility
+    with pytest.raises(ValueError, match="annotationGroup"):
+        validate_group_compatibility({"wildcard":"{triangle|teardrop}", "variationGroups":[
+            {"label":"Shape", "options":["triangle","teardrop"]}
+        ]}, {"Shape":[["triangle"],["teardrop"]]})

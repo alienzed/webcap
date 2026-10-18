@@ -12,7 +12,24 @@ def _clean_context(value):
     return " ".join(str(value or "").strip().split())
 
 
-def build_request(captions, set_name="", focus="", vocabulary=None):
+def observed_group_combinations(annotations, eligible_media):
+    """Actual co-occurring scoped tag sets, scoped to eligible Set media."""
+    observed = {}
+    for media in eligible_media:
+        scoped = annotations.get(media, {})
+        if not isinstance(scoped, dict):
+            continue
+        for group, tags in scoped.items():
+            if not isinstance(tags, list):
+                continue
+            values = tuple(sorted({tag for tag in tags if isinstance(tag, str) and tag.strip()}))
+            if values:
+                observed.setdefault(group, set()).add(values)
+    return {group: [list(combo) for combo in sorted(combos)]
+            for group, combos in sorted(observed.items())}
+
+
+def build_request(captions, set_name="", focus="", vocabulary=None, group_combinations=None):
     cleaned = [_clean_caption(value) for value in (captions or [])]
     cleaned = [value for value in cleaned if value]
     if not cleaned:
@@ -59,9 +76,10 @@ def build_request(captions, set_name="", focus="", vocabulary=None):
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["label", "options"],
+                    "required": ["label", "options", "annotationGroup"],
                     "properties": {
                         "label": {"type": "string", "minLength": 1},
+                        "annotationGroup": {"type": "string", "description": "Exact Set annotation group name when options are tags; empty for free prompt variation."},
                         "options": {
                             "type": "array",
                             "minItems": 2,
@@ -78,6 +96,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None):
         "Set name: " + (set_name or "(not supplied)"),
         "Explicit focus: " + (focus or "(auto - infer from Set name and repeated caption language)"),
         "Annotation groups and terms: " + (json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"),
+        "Observed same-group tag combinations: " + json.dumps(group_combinations or {}, ensure_ascii=False),
     ]
 
     prompt = (
@@ -102,6 +121,12 @@ def build_request(captions, set_name="", focus="", vocabulary=None):
         "Keep hair style and hair color separate.\n"
         "- Prefer independent, composable attributes over whole-phrase alternatives. "
         "For example, separate color, pattern, trim, top shape, and bottom shape rather than collapsing them into a single 'style' wildcard.\n"
+        "- Set annotationGroup to the exact annotation group name for tag-grounded dimensions; use empty string for general prompt-only variation. " 
+        "Never guess an annotation group from similar words.\n"
+        "- For tags in the SAME annotation group, only use joint combinations observed together in Set media. "
+        "If a pair was never observed together in that group, treat it as mutually exclusive. "
+        "Prefer one option from that group in each resolved caption unless an observed tag combination requires several. "
+        "Do not apply this restriction across DIFFERENT annotation groups; cross-group recombination tests generalization.\n"
         "- Recombine attributes across dimensions so tests exercise independently selectable properties, "
         "not merely replay complete caption fragments.\n"
         "- Annotation groups, aliases, and terms reveal the important dimensions and preferred terminology. "
@@ -142,6 +167,65 @@ def build_request(captions, set_name="", focus="", vocabulary=None):
     }
 
 
+def validate_group_compatibility(data, combinations):
+    """Reject proposed same-group choices with unobserved co-occurrence.
+
+    The explicit annotationGroup field is the identity contract. Unmapped
+    dimensions are general prompt variation, not inferred trained tags.
+    """
+    groups = data.get("variationGroups") if isinstance(data, dict) else None
+    if not isinstance(groups, list):
+        raise ValueError("Wildcard proposal must include variation groups.")
+    from .epoch_test_bench import (
+        _parse_wildcard_nodes, _expand_wildcard_option,
+        _normalize_wildcard_text, _strip_wildcard_comments,
+    )
+    nodes = _parse_wildcard_nodes(_strip_wildcard_comments(str(data.get("wildcard") or "")))
+    resolved = []
+    for kind, alternatives in nodes:
+        if kind != "group":
+            continue
+        options = []
+        for alternative in alternatives:
+            for value in _expand_wildcard_option(alternative):
+                value = _normalize_wildcard_text(value)
+                if value not in options:
+                    options.append(value)
+        resolved.append(options)
+    if len(resolved) != len(groups):
+        raise ValueError("Wildcard group count does not match its annotation dimensions.")
+    assigned = {}
+    for index, item in enumerate(groups):
+        if not isinstance(item, dict):
+            raise ValueError("Invalid wildcard dimension.")
+        if [str(option).strip() for option in (item.get("options") or [])] != resolved[index]:
+            raise ValueError("Wildcard group options do not match the generated prompt.")
+        group = str(item.get("annotationGroup") or "").strip()
+        if not group:
+            known = {tag for combos in combinations.values() for combo in combos for tag in combo}
+            if item.get("options") and any(option in known for option in item["options"]):
+                raise ValueError("Tag-grounded wildcard dimension " + str(item.get("label") or "") +
+                                 " must identify its annotationGroup.")
+            continue
+        if group not in combinations:
+            raise ValueError("Unknown wildcard annotation group: " + group)
+        allowed = {tag for combo in combinations[group] for tag in combo}
+        options = item.get("options") or []
+        if not isinstance(options, list) or any(option not in allowed for option in options):
+            raise ValueError("Wildcard values must be exact tags in group " + group)
+        assigned.setdefault(group, []).append(options)
+    from itertools import product
+    for group, dimensions in assigned.items():
+        if len(dimensions) < 2:
+            continue
+        observed = [set(combo) for combo in combinations[group]]
+        for selected in product(*dimensions):
+            if not any(set(selected).issubset(combo) for combo in observed):
+                raise ValueError("Unobserved same-group wildcard combination in " +
+                                 group + ": " + " + ".join(selected))
+    return True
+
+
 def normalize_result(data):
     if not isinstance(data, dict):
         raise ValueError("Wildcard analysis response must be an object.")
@@ -178,7 +262,10 @@ def normalize_result(data):
         options = [str(value or "").strip() for value in options]
         if len(options) < 2 or not any(options):
             raise ValueError("Wildcard analysis variation groups require at least two options and one concrete value.")
-        normalized_groups.append({"label": label, "options": options})
+        normalized = {"label": label, "options": options}
+        if "annotationGroup" in group:
+            normalized["annotationGroup"] = str(group.get("annotationGroup") or "").strip()
+        normalized_groups.append(normalized)
 
     return {
         "wildcard": wildcard,

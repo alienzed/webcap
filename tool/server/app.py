@@ -2125,8 +2125,14 @@ def test_generations_wildcard_route():
         captions = [caption for caption in captions if caption]
         focus = str(data.get("focus") or "").strip()
         set_name = Path(folder.rstrip("/\\")).name or folder
+        from .test_wildcard_contract import observed_group_combinations
+        from .folder_state_store import read_folder_state
+        from .caption_ops import _resolve_folder
+        scoped = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+        combinations = observed_group_combinations(scoped, list_media_files(folder))
         contract = test_wildcard_build_request(
-            captions, set_name=set_name, focus=focus, vocabulary=data.get("vocabulary")
+            captions, set_name=set_name, focus=focus, vocabulary=data.get("vocabulary"),
+            group_combinations=combinations,
         )
         job = enqueue_llm(
             "test",
@@ -2144,6 +2150,23 @@ def test_generations_wildcard_route():
         }), 202
     except Exception as exc:
         app.logger.exception("TEST WILDCARD GENERATION FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/test_generations/wildcard/validate", methods=["POST"])
+def test_generations_wildcard_validate_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        folder = str(data.get("folder") or "").strip()
+        from .caption_ops import _resolve_folder
+        from .folder_state_store import read_folder_state
+        from .test_wildcard_contract import observed_group_combinations, validate_group_compatibility
+        annotations = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+        combinations = observed_group_combinations(annotations, list_media_files(folder))
+        validate_group_compatibility(data.get("analysis"), combinations)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        app.logger.exception("TEST WILDCARD COMPATIBILITY FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

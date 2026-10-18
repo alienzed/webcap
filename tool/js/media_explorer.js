@@ -281,7 +281,7 @@
     if (item.source === 'storyboard' && item.storageId) {
       var storyBtn = document.createElement('button');
       storyBtn.type = 'button'; storyBtn.className = 'review-captions-btn';
-      text(storyBtn, (item.uses || []).length > 1 ? 'Choose owning scene below' : 'Manage in Storyboard');
+      text(storyBtn, (item.uses || []).length > 1 ? 'Choose owning scene in Used by' : 'Manage in Storyboard');
       storyBtn.disabled = (item.uses || []).length !== 1;
       storyBtn.addEventListener('click', function () {
         var scene = item.uses && item.uses[0] && item.uses[0].storageId || '';
@@ -336,6 +336,7 @@
     var open = document.createElement('button'); open.type = 'button';
     open.className = 'review-captions-btn'; text(open, 'View full size');
     open.addEventListener('click', function () { openLoupe(); }); actions.appendChild(open);
+    if (typeof related !== 'undefined') actions.appendChild(related);
     inspector.classList.remove('hidden');
   }
   function openLoupe(index) {

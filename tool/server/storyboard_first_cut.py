@@ -73,6 +73,10 @@ def _director(batch, operation, scene_id="", instruction="", replace=False):
     job_id = str(job["jobId"])
     with _LOCK:
         batch["llmJobId"] = job_id
+        cancelled = batch["cancelled"]
+    if cancelled:
+        llm_action("cancel_job", job_id)
+        raise _Stopped("First Cut stopped.")
     while True:
         _check(batch)
         try:
@@ -123,6 +127,10 @@ def _execute(batch):
         job = start_generation(story_id, scene_id)
         with _LOCK:
             batch["takeJobIds"].append(str(job["jobId"]))
+            cancelled = batch["cancelled"]
+        if cancelled:
+            generation_action("stop", str(job["jobId"]))
+            raise _Stopped("First Cut stopped.")
 
 
 def _run():

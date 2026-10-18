@@ -210,6 +210,7 @@
   }
   function close() {
     visible = false; serial++;
+    selected.clear(); anchor = -1; updateSelection();
     if (activeRequest) { activeRequest.abort(); activeRequest = null; }
     loading = false;
     el('media-explorer-workspace').classList.add('hidden');

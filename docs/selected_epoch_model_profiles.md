@@ -1,6 +1,6 @@
 # Selected epoch model profiles — phased implementation contract
 
-Status: Phase 1 foundation and Phase 2 backend profile endpoint committed on `feature/epoch-model-profiles`; UI and consumer phases remain unimplemented. Tests added but have not been executed in a repository runtime.
+Status: Metadata foundation, backend profile endpoint, contextual manual profile editor, captured-tag suggestion import, and staged Test profile exposure committed on `feature/epoch-model-profiles`. Optional Director enrichment, Generate prompt controls, and Storyboard Director consumption remain unimplemented. Tests have not been executed in a repository runtime.
 Follow root `AGENTS.md` and `docs/filesystem_state_contract.md`. No new global storage roots, queue lanes, or speculative services.
 
 ## Product behavior

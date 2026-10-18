@@ -215,6 +215,8 @@ function restoreInitialShellLocationRoute() {
     window.openTestBenchForCurrentFolder();
   } else if (route.workspace === 'storyboard' && typeof window.openStoryboardActivity === 'function') {
     window.openStoryboardActivity();
+  } else if (route.workspace === 'media' && typeof window.openMediaExplorerActivity === 'function') {
+    window.openMediaExplorerActivity();
   } else if (route.workspace === 'storage' && typeof window.openStorageActivity === 'function') {
     window.openStorageActivity();
   } else {
@@ -1084,6 +1086,7 @@ function exitWorkspaceSurface(surfaceOverride) {
 }
 
 function openTrainingSurface(mode, target) {
+  if (typeof window.closeMediaExplorerActivity === 'function') window.closeMediaExplorerActivity();
   target = target && typeof target === 'object' ? target : {};
   if (isFocusedCaptionOpen() && !stopFocusedCaption('Focus Caption ended.')) return false;
   if (typeof window !== 'undefined' && typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();

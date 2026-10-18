@@ -3757,3 +3757,36 @@
 #storyboard-story-action-phase { font-size: clamp(22px, 1.8vw, 30px); line-height: 1.2; }
 #storyboard-story-action-detail { font-size: 16px; }
 .storyboard-first-cut-batch-row { font-size: 15px; }
+
+/* Activity owns detailed progress. Protected Storyboard surfaces only identify
+   the blocked operation and offer a route to its authoritative Activity card. */
+.storyboard-director-activity,
+.storyboard-director-activity.is-workspace-overlay {
+  width: min(380px, calc(100% - 24px)) !important;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "label" "phase" "action";
+  row-gap: 10px;
+  padding: 16px 18px;
+  pointer-events: auto;
+}
+.storyboard-director-activity #storyboard-director-activity-trend,
+.storyboard-director-activity #storyboard-director-activity-detail,
+.storyboard-director-activity #storyboard-director-model-load,
+.storyboard-director-activity #storyboard-director-prompt-copy,
+.storyboard-director-activity #storyboard-director-stop {
+  display: none !important;
+}
+.storyboard-director-activity #storyboard-director-activity-phase {
+  font-size: 21px;
+}
+.storyboard-director-activity [data-view-activity] {
+  grid-area: action;
+  justify-self: start;
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}

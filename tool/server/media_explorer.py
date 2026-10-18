@@ -3,6 +3,7 @@
 Only files recorded by Generate manifests are displayed. No persistent index.
 """
 import json
+import os
 from pathlib import Path
 from urllib.parse import quote
 from . import config as app_config
@@ -83,11 +84,28 @@ def discover_generate(limit=500):
     return sorted(items.values(), key=lambda x: (x["createdAt"], x["id"]), reverse=True)
 
 
-def discover_tests():
+def _legacy_test_roots():
+    """Find legacy session roots during an explicit full scan only."""
+    base = Path(app_config.FS_ROOT)
+    if base.is_symlink():
+        raise RuntimeError("Media Explorer root cannot be symlinked.")
+    for directory, names, _files in os.walk(base, followlinks=False):
+        path = Path(directory)
+        names[:] = [name for name in names
+                    if name not in ("output", ".webcap", ".webcap_training", ".webcap_runtime",
+                                    "originals", "auto_dataset")
+                    and not (path / name).is_symlink()]
+        if path != base and "test-generations" in names:
+            candidate = path / "test-generations"
+            names.remove("test-generations")
+            yield candidate
+
+
+def discover_tests(full=False):
     """Read supported central Test session manifests without changing session state.
 
-    Legacy per-Set sessions are not enumerated here until their Set discovery
-    contract is available. Every thumbnail uses the existing owner-validated route.
+    Legacy-only Sets are enumerated only on explicit full scans. Every
+    thumbnail uses the existing owner-validated route.
     """
     central = app_config.output_root() / "test-generations"
     if not central.is_dir() or central.is_symlink():
@@ -125,6 +143,8 @@ def discover_tests():
         legacy = owner / "test-generations"
         if legacy.is_dir() and not legacy.is_symlink():
             roots.append(legacy)
+    if full:
+        roots.extend(_legacy_test_roots())
     results = []
     seen_sessions = set()
     for root in roots:
@@ -187,7 +207,7 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         raise ValueError('Unknown Media Explorer source.')
     results = ([] if source == 'test' else discover_generate(limit=None if full else 500))
     if source in ('', 'test'):
-        results.extend(discover_tests())
+        results.extend(discover_tests(full=full))
     results.sort(key=lambda item: (item['createdAt'], item['id']), reverse=True)
     if role:
         results = [item for item in results if item["role"] == role]
@@ -207,4 +227,4 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         raise ValueError("Unknown media sort.")
     return {"ok": True, "items": results[offset:offset + limit],
             "total": len(results), "offset": offset, "limit": limit,
-            "complete": full, "scope": "Generate and central Test sessions" if full else "Recent Generate and central Test sessions"}
+            "complete": full, "scope": "Generate and Test session media (full scan)" if full else "Recent Generate and known Test sessions"}

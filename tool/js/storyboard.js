@@ -293,12 +293,16 @@
     flushPendingSaves().then(function () {
       return directorRequest({storyId:storyId, operation:'interpret_atmosphere', model:modelId});
     }).then(function (result) {
-      if (!storyState.story || storyState.story.id !== storyId) return;
-      atmosphereProposal = {text:String(result.result || '').trim(), source:input, storyId:storyId};
-      if (!atmosphereProposal.text) throw new Error('Director returned an empty interpretation.');
-      el('storyboard-style-proposal-text').textContent = atmosphereProposal.text;
-      el('storyboard-style-proposal').classList.remove('hidden');
-      return consumeDirectorJob(result.jobId);
+      // Consume completed work even when the user navigated away during execution.
+      return consumeDirectorJob(result.jobId).then(function () {
+        if (!storyState.story || storyState.story.id !== storyId ||
+            el('storyboard-story-style').value.trim() !== input) return;
+        var suggestion = String(result.result || '').trim();
+        if (!suggestion) throw new Error('Director returned an empty interpretation.');
+        atmosphereProposal = {text:suggestion, source:input, storyId:storyId};
+        el('storyboard-style-proposal-text').textContent = suggestion;
+        el('storyboard-style-proposal').classList.remove('hidden');
+      });
     }).catch(reportError).finally(function () {
       button.disabled = false;
       setDirectorPending(target, false);
@@ -5742,7 +5746,8 @@
       if (!atmosphereProposal || !storyState.story ||
           storyState.story.id !== atmosphereProposal.storyId ||
           el('storyboard-story-style').value.trim() !== atmosphereProposal.source) {
-        throw new Error('Visual / Atmosphere changed since the Director proposal. Interpret again.');
+        reportError(new Error('Visual / Atmosphere changed since the Director proposal. Interpret again.'));
+        return;
       }
       el('storyboard-story-style').value = atmosphereProposal.text;
       atmosphereProposal = null;

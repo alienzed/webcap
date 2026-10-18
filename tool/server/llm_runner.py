@@ -765,8 +765,8 @@ def _monitor_loop():
     while True:
         try:
             _advance_queue()
-        except Exception:
-            _logger.exception("LLM queue monitor failed.")
+        except Exception as exc:
+            _logger.error("LLM queue monitor failed: error_type=%s", type(exc).__name__)
 
         with _monitor_lock:
             if not _monitor_has_work():
@@ -1003,7 +1003,7 @@ def cancel_job(job_id):
             try:
                 stop_active_request(_job_model_id(result))
             except (ValueError, RuntimeError) as exc:
-                _logger.warning("LLM runtime could not be interrupted; abandoning its result: %s", exc)
+                _logger.warning("LLM runtime could not be interrupted; abandoning its result: error_type=%s", type(exc).__name__)
         return {"job": _job_view(result), "queue": snapshot(include_terminal=False)}
 
 
@@ -1024,7 +1024,7 @@ def reset():
                 # Some externally-owned or generic remote runtimes cannot be
                 # interrupted. The job remains stopping and its eventual result
                 # is still discarded before client application.
-                _logger.warning("LLM runtime could not be interrupted; abandoning its result: %s", exc)
+                _logger.warning("LLM runtime could not be interrupted; abandoning its result: error_type=%s", type(exc).__name__)
         else:
             if execution_resource_owner() == GPU_RESERVATION_OWNER:
                 _release_gpu()

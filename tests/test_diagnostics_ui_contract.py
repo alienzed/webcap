@@ -136,3 +136,14 @@ def test_experimental_suite_launch_uses_existing_execution_owners():
     assert 'modelLabPost({' in diagnostics
     assert 'function directorModelTestStartCalibrationForModels(selectedModels)' in director
     assert 'Deep Assessment is not available yet' in diagnostics
+
+
+def test_unified_model_assessment_uses_compact_rows_and_toolbar():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    js = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "modals.css").read_text(encoding="utf-8")
+    assert 'class="model-assessment-toolbar"' in html
+    assert 'class="model-assessment-tools"' in html
+    assert "row.className = 'model-assessment-row';" in js
+    assert "head.className = 'model-assessment-row-head';" in js
+    assert ".model-assessment-row-head input" in css

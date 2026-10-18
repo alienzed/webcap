@@ -64,7 +64,7 @@ function refreshUnifiedModelAssessment() {
       var ref = String(model.id || '');
       var report = reports.find(function (entry) { return String(entry.modelRef || '') === ref; });
       var matchingRuns = labRuns.filter(function (run) {
-        return (run.directorModels || []).some(function (entry) { return String(entry.modelRef || '') === ref; });
+        return !!(run.summary && run.summary.byModel && run.summary.byModel[ref]);
       });
       addRow(String(model.label || model.modelId || ref), 'Director · ' +
         (report ? 'Writing: ' + String(report.health || report.status || 'recorded') : 'Writing: unassessed') +
@@ -73,7 +73,7 @@ function refreshUnifiedModelAssessment() {
     vision.forEach(function (model) {
       var ref = String(model.modelRef || '');
       var matchingRuns = labRuns.filter(function (run) {
-        return (run.visionModels || []).some(function (entry) { return String(entry.modelRef || '') === ref; });
+        return !!(run.summary && run.summary.byModel && run.summary.byModel[ref]);
       });
       addRow(String(model.label || model.modelId || ref), 'Vision · ' +
         (matchingRuns.length ? matchingRuns.length + ' Lab run(s)' : 'No saved Lab runs'));

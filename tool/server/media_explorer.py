@@ -327,54 +327,13 @@ def discover_storyboards():
 
 
 
-def discover_set_media():
-    """Explicit full scan of recognized source Sets, using their existing media contract."""
-    from .caption_ops import list_media_files
-    base = Path(app_config.FS_ROOT)
-    if base.is_symlink() or not base.is_dir():
-        return []
-    found = []
-    excluded = {"output", ".webcap", ".webcap_training", ".webcap_runtime",
-                "test-generations", "originals", "auto_dataset"}
-    for directory, names, files in os.walk(base, followlinks=False):
-        path = Path(directory)
-        names[:] = [name for name in names if name not in excluded
-                    and not (path / name).is_symlink()]
-        if path == base or not ({".webcap_state.json", "media_metadata.json"} & set(files)):
-            continue
-        folder = path.relative_to(base).as_posix()
-        state = read_folder_state(path / ".webcap_state.json")
-        metadata_path = path / "media_metadata.json"
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
-        for name in list_media_files(folder):
-            file = path / name
-            if file.is_symlink() or not file.is_file():
-                continue
-            kind = _kind(file)
-            if not kind:
-                continue
-            found.append({
-                "id": "set:" + folder + "/" + name, "source": "set",
-                "storageId": folder, "ownerFolder": folder, "role": "source",
-                "mediaKind": kind, "fileName": name,
-                "mediaPath": folder + "/" + name,
-                "mediaUrl": "/caption/media?folder=" + quote(folder, safe="")
-                            + "&media=" + quote(name, safe=""),
-                "createdAt": int(file.stat().st_mtime * 1000),
-                "rating": (state.get("ratings_by_media") or {}).get(name), "model": "", "uses": [],
-                "contextLabel": folder, "fileSize": file.stat().st_size,
-                "resolution": (metadata.get(name) or {}).get("resolution", ""),
-                "duration": (metadata.get(name) or {}).get("duration"),
-            })
-    return found
-
 
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
                model="", folder="", rating="", artifact="", owner=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
-    if source not in ('', 'generate', 'test', 'epoch', 'storyboard', 'set'):
+    if source not in ('', 'generate', 'test', 'epoch', 'storyboard'):
         raise ValueError('Unknown Media Explorer source.')
     results = (discover_generate(limit=None if full else 500) if source in ('', 'generate') else [])
     if source in ('', 'test'):
@@ -383,8 +342,6 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         results.extend(discover_epoch_frames())
     if source in ('', 'storyboard'):
         results.extend(discover_storyboards())
-    if full and source in ('', 'set'):
-        results.extend(discover_set_media())
     facets = {
         "models": sorted({item["model"] for item in results if item["model"]}),
         "folders": sorted({item.get("ownerFolder", "") for item in results if item.get("ownerFolder")}),

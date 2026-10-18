@@ -171,18 +171,9 @@ function runUnifiedModelAssessment() {
       return payload.run;
     });
   }).then(function (labRun) {
-    if (!selectedDirectors.length) {
-      status.textContent = 'Vision suite started in Model Lab. You may close Diagnostics.';
-      return;
-    }
     status.textContent = labRun
-      ? 'Model Lab running; Director writing assessment started separately. Keep this page open for writing tests.'
-      : 'Director writing assessment running. Keep this page open until it completes.';
-    return directorModelTestRefresh().then(function () {
-      return directorModelTestStartCalibrationForModels(selectedDirectors);
-    });
-  }).then(function () {
-    status.textContent = 'Writing assessment complete. Model Lab continues independently; refresh findings for results.';
+      ? 'Server-owned assessment running. You may close Diagnostics.'
+      : 'No Model Lab run was started.';
   }).catch(function (error) {
     status.textContent = 'Assessment could not complete: ' + String(error.message || error);
     reportConsoleError('Model Assessment', error);

@@ -216,3 +216,128 @@ def test_source_set_media_requires_explicit_full_scan(monkeypatch, tmp_path):
     full = media_explorer.list_media(source="set", full="1")
     assert full["total"] == 1
     assert full["items"][0]["mediaUrl"] == "/caption/media?folder=sets%2Fone&media=photo.png"
+
+def test_explorer_normalizes_recorded_facts_and_filters_before_paging(monkeypatch, tmp_path):
+    monkeypatch.setattr(media_explorer.app_config, 'output_root', lambda: tmp_path)
+    _media(tmp_path/'generations/day/one/result.jpg')
+    _media(tmp_path/'generations/day/two/result.jpg')
+    monkeypatch.setattr(media_explorer, 'list_results', lambda limit: [
+        {'storageId':'day/one','mediaPath':'generations/day/one/result.jpg','modelId':'one','rating':5,
+         'resolvedPrompt':'A quiet CEDAR forest','seed':0,'settings':{'dimensions':'800x1200'},
+         'loras':[{'name':'style.safetensors','strength':0.7}]},
+        {'storageId':'day/two','mediaPath':'generations/day/two/result.jpg','modelId':'two','rating':0},
+    ])
+    result = media_explorer.list_media(search='cedar', model='one', rating='4', limit=1)
+    assert result['total'] == 1
+    assert result['facets']['models'] == ['one','two']
+    item = result['items'][0]
+    assert item['prompt'] == 'A quiet CEDAR forest'
+    assert item['seed'] == 0
+    assert item['resolution'] == '800x1200'
+    assert item['fileSize'] == 6
+    assert item['loras'] == [{'name':'style.safetensors','strength':0.7}]
+    assert media_explorer.list_media(rating='unrated')['total'] == 1
+    with pytest.raises(ValueError, match='rating'):
+        media_explorer.list_media(rating='imaginary')
+
+
+def test_set_filters_use_saved_ratings_and_cached_metadata_without_analysis(monkeypatch, tmp_path):
+    import json
+    folder = tmp_path/'sets'/'one'
+    folder.mkdir(parents=True)
+    (folder/'photo.png').write_bytes(b'image')
+    state = {'ratings_by_media':{'photo.png':4}}
+    cached = {'photo.png':{'resolution':'640x480','duration':2.0}}
+    (folder/'.webcap_state.json').write_text(json.dumps(state))
+    (folder/'media_metadata.json').write_text(json.dumps(cached))
+    monkeypatch.setattr(media_explorer.app_config, 'FS_ROOT', tmp_path)
+    monkeypatch.setattr(media_explorer.app_config, 'output_root', lambda: tmp_path/'output')
+    from tool.server import caption_ops
+    monkeypatch.setattr(caption_ops, 'list_media_files', lambda name: ['photo.png'])
+    result = media_explorer.list_media(source='set',full='1',folder='sets/one',rating='4')
+    assert result['items'][0]['resolution'] == '640x480'
+    assert result['items'][0]['rating'] == 4
+    assert result['facets']['folders'] == ['sets/one']
+    assert json.loads((folder/'media_metadata.json').read_text()) == cached
+    assert json.loads((folder/'.webcap_state.json').read_text()) == state
+
+
+def test_storyboard_same_file_can_be_generated_and_a_reference(monkeypatch, tmp_path):
+    from tool.server import storyboard_store
+    file = tmp_path/'take.jpg'
+    file.write_bytes(b'image')
+    monkeypatch.setattr(storyboard_store,'list_stories',lambda:[{'id':'story'}])
+    monkeypatch.setattr(storyboard_store,'load_story',lambda id:{'title':'Continuity','scenes':{
+        'one':{'title':'First shot','takes':{'take':{'mediaPath':'takes/a.jpg','generated':True,'rating':5,'prompt':'Recorded prompt'}}},
+        'two':{'title':'Next shot','references':[{'mediaPath':'takes/a.jpg','role':'first_frame'}]},
+    }})
+    monkeypatch.setattr(storyboard_store,'resolve_story_media',lambda id,path:file)
+    result=media_explorer.list_media(source='storyboard',role='reference')
+    assert result['total']==1
+    assert result['items'][0]['roles']==['generated','reference']
+    assert len(result['items'][0]['uses'])==2
+    assert result['items'][0]['rating']==5
+    assert result['items'][0]['prompt']=='Recorded prompt'
+
+
+def test_generate_source_reads_exact_record_with_owner_path_validation(monkeypatch, tmp_path):
+    import json
+    from tool.server import generate_store
+    monkeypatch.setattr(generate_store.app_config,'output_root',lambda:tmp_path)
+    directory=tmp_path/'generations/day/old-record'
+    directory.mkdir(parents=True)
+    (directory/'image.jpg').write_bytes(b'image')
+    (directory/'generation.json').write_text(json.dumps({'mediaPath':'generations/day/old-record/image.jpg','sourcePrompt':'Historical settings stay read only'}))
+    result=generate_store.load_result('day/old-record')
+    assert result['storageId']=='day/old-record'
+    assert result['sourcePrompt']=='Historical settings stay read only'
+    with pytest.raises(ValueError):
+        generate_store.load_result('../../outside')
+
+def test_test_discovery_supports_output_root_outside_the_source_tree(monkeypatch, tmp_path):
+    import json
+    from tool.server import epoch_test_bench
+    source=tmp_path/'source'
+    source.mkdir()
+    output=tmp_path/'separate-output'
+    session=output/'test-generations/sets/demo/sessions/session'
+    session.mkdir(parents=True)
+    (session/'image.jpg').write_bytes(b'image')
+    (session/'test.json').write_text(json.dumps({'ownerFolder':'sets/demo','results':[{'mediaFile':'image.jpg'}]}))
+    monkeypatch.setattr(media_explorer.app_config,'FS_ROOT',source)
+    monkeypatch.setattr(media_explorer.app_config,'output_root',lambda:output)
+    monkeypatch.setattr(epoch_test_bench,'_session_directory',lambda owner,name:session)
+    found=media_explorer.list_media(source='test')
+    assert found['total']==1
+    assert found['items'][0]['id']=='test:sets/demo/test-generations/session/image.jpg'
+    assert found['items'][0]['mediaUrl'].startswith('/fs/test_generations/media?folder=sets%2Fdemo')
+
+def test_focused_artifact_uses_full_owner_discovery_and_exact_identity(monkeypatch, tmp_path):
+    monkeypatch.setattr(media_explorer.app_config,'output_root',lambda:tmp_path)
+    _media(tmp_path/'generations/old/one/result.jpg')
+    _media(tmp_path/'generations/new/two/result.jpg')
+    records=[{'storageId':'old/one','mediaPath':'generations/old/one/result.jpg'},
+             {'storageId':'new/two','mediaPath':'generations/new/two/result.jpg'}]
+    limits=[]
+    def listed(limit):
+        limits.append(limit)
+        return records if limit is None else records[1:]
+    monkeypatch.setattr(media_explorer,'list_results',listed)
+    result=media_explorer.list_media(source='generate',full=True,artifact='generate:generations/old/one/result.jpg')
+    assert limits==[None]
+    assert result['total']==1
+    assert result['items'][0]['storageId']=='old/one'
+
+def test_explorer_route_passes_supported_filters_without_touching_context(monkeypatch):
+    from tool.server import app as app_module
+    seen={}
+    def listing(**kwargs):
+        seen.update(kwargs)
+        return {'ok':True,'items':[],'total':0,'complete':True}
+    monkeypatch.setattr(app_module,'media_explorer_list_media',listing)
+    response=app_module.app.test_client().get('/fs/media_explorer?source=generate&model=krea2_raw&folder=sets/other&rating=4&artifact=generate:record&full=1')
+    assert response.status_code==200
+    assert seen['folder']=='sets/other'
+    assert seen['artifact']=='generate:record'
+    assert seen['model']=='krea2_raw'
+    assert seen['rating']=='4'

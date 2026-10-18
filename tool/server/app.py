@@ -69,6 +69,7 @@ from .storyboard_llm_contract import build_request as storyboard_build_llm_reque
 from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .media_explorer import list_media as media_explorer_list_media
+from .generate_store import load_result as generate_load_result
 from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
 from .test_wildcard_contract import build_request as test_wildcard_build_request
@@ -1954,6 +1955,10 @@ def media_explorer_route():
             sort=request.args.get("sort", "newest"),
             full=request.args.get("full", ""),
             source=request.args.get("source", ""),
+            model=request.args.get("model", ""),
+            folder=request.args.get("folder", ""),
+            rating=request.args.get("rating", ""),
+            artifact=request.args.get("artifact", ""),
         ))
     except Exception as exc:
         app.logger.exception("MEDIA EXPLORER DISCOVERY FAILED: %s", exc)
@@ -1966,6 +1971,15 @@ def generate_results_route():
         return jsonify({"ok": True, "results": generate_list_results(request.args.get("limit", 100))})
     except Exception as exc:
         app.logger.exception("GENERATE RESULTS FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/generate/result", methods=["GET"])
+def generate_result_route():
+    try:
+        return jsonify({"ok": True, "result": generate_load_result(request.args.get("storageId", ""))})
+    except Exception as exc:
+        app.logger.exception("GENERATE RESULT READ FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 

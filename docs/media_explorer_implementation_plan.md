@@ -210,3 +210,14 @@ Executed verification:
 - Broader suites have baseline defects: 7 Training contract failures, 9 Generate contract failures and an empty `for` body at `tests/test_ui_shell_contract.py:746`. The same failures were reproduced using isolated unchanged-main snapshots; the malformed shell test is byte-identical to main. They were not expanded into this UI task.
 
 Verification used a separate port-4201 server imported without the startup reconciliation/runner hooks. The existing port-4200 process was not restarted or stopped; it predates the merged Explorer API and must be restarted to serve that endpoint. No training or inference jobs were started/cancelled. No live training job or completed generated workflow artifacts were available on this development machine, so running-job continuity and those owner backlinks remain unverified in a live production context. Training samples, additional metadata adapters, synchronized video comparison and full-scan performance work remain outside this pass.
+
+### Completion pass plan — 2026-10-18
+
+Review of PR #414 and its browser evidence: shell ownership and draft retention are working. New browser inspection establishes that portrait gallery media exceeds the 4:3 frame (612×816 image renders 309×411 inside a 309×231 frame). Thus the current contain styling still crops composition. Source navigation is flat, selection lacks a direct checkbox, discovery scope is understated, the inspector exposes raw IDs instead of useful context, and available Generate metadata is discarded by the adapter.
+
+Implementation phases:
+
+1. Correct fixed media framing; refine gallery density, card hierarchy, grouped source rail and compact sticky toolbar. Keep explicit contain/fill control, stable keyed cards and independent inspector scroll.
+2. Add direct accessible selection, filter chips and supported model/Set/rating facets; distinguish loading, empty, partial and failure states. Preserve old cards on request failure and keep selection/active focus separate.
+3. Normalize available prompts, settings, LoRAs, file size and source labels from existing Generate/Test/Epoch/Storyboard records and existing Set metadata/state; expose them in a sectioned inspector. Add owner-specific source navigation only through verified existing feature functions, without loading historical settings into editors. No new index or metadata store.
+4. Refine viewer/Compare/Survey focus, mixed-media inspection, zoom and native playback; exercise actual local media at narrow/desktop/ultrawide widths, rapid switching, paging, long names, decoding errors and incomplete discovery. Use isolated owner-shaped fixtures when this development library has no completed generated artifacts, label those tests separately, remove temporary fixtures and audit before merge.

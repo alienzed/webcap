@@ -1,14 +1,39 @@
 """Read-only owner-backed Media Explorer discovery; no persistent index."""
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 from . import config as app_config
 from .generate_store import list_results
+from .folder_state_store import read_folder_state
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".avif"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".mkv", ".avi"}
+
+
+def _record_details(record):
+    """Expose recorded facts, never run analysis or copy an owner's raw payload."""
+    settings = record.get("settings") or {}
+    return {
+        "prompt": str(record.get("resolvedPrompt") or record.get("prompt") or ""),
+        "sourcePrompt": str(record.get("sourcePrompt") or ""),
+        "seed": record.get("seed", settings.get("seed")),
+        "resolution": str(settings.get("dimensions") or ""),
+        "duration": record.get("durationSeconds", settings.get("duration")),
+        "aspectRatio": str(record.get("aspectRatio") or settings.get("aspectRatio") or ""),
+        "workflow": str(record.get("workflowProfile") or record.get("workflowFile") or ""),
+        "loras": [{"name": str(item.get("name") or ""), "strength": item.get("strength")}
+                  for item in record.get("loras") or [] if isinstance(item, dict) and item.get("name")],
+    }
+
+
+def _assessment(record):
+    if not isinstance(record, dict) or not record.get("text"):
+        return None
+    return {"label": "Vision assessment", "model": str(record.get("modelId") or ""),
+            "text": str(record["text"])}
 
 
 def _kind(path):
@@ -50,6 +75,7 @@ def _item(path, role, storage_id, created_at, rating=0, model="", uses=None):
         "rating": rating if role == "generated" else None,
         "model": model,
         "uses": uses or [],
+        "fileSize": candidate.stat().st_size,
     }
 
 
@@ -64,6 +90,8 @@ def discover_generate(limit=500):
         output = _item(media, "generated", storage_id, created,
                        record.get("rating", 0), model)
         if output:
+            output.update(_record_details(record))
+            output["contextLabel"] = storage_id
             items[output["id"]] = output
         references = record.get("references") or {}
         if not isinstance(references, dict):
@@ -71,8 +99,9 @@ def discover_generate(limit=500):
         for role, path in references.items():
             relative = str(path or "")
             item = _item(relative, "reference", storage_id, created, model=model,
-                         uses=[{"storageId": storage_id, "role": str(role)}])
+                         uses=[{"storageId": storage_id, "role": str(role), "source": "generate"}])
             if item:
+                item["contextLabel"] = str(role).replace("_", " ").title() + " reference"
                 current = items.get(item["id"])
                 if current:
                     current["uses"].extend(item["uses"])
@@ -142,7 +171,7 @@ def discover_tests(full=False):
             legacy = owner / "test-generations"
             if legacy.is_dir() and not legacy.is_symlink():
                 roots.append(legacy)
-    from .epoch_test_bench import _session_directory, _session_rating_map
+    from .epoch_test_bench import _session_directory, _session_rating_map, _session_vision_state
     results = []
     seen_sessions = set()
     for root in roots:
@@ -177,6 +206,7 @@ def discover_tests(full=False):
                 continue
             seen_sessions.add(session.resolve())
             ratings = _session_rating_map(session)
+            assessments = _session_vision_state(session).get("byMedia") or {}
             for record in status.get("results") or []:
                 if not isinstance(record, dict):
                     continue
@@ -186,17 +216,21 @@ def discover_tests(full=False):
                 file = session / name
                 if file.is_symlink() or not file.is_file() or not _kind(file):
                     continue
-                relative = file.relative_to(Path(app_config.FS_ROOT)).as_posix()
+                relative = folder + "/test-generations/" + session.name + "/" + name
                 url = ("/fs/test_generations/media?folder=" + quote(folder, safe="")
                        + "&session=" + quote(session.name, safe="")
                        + "&media=" + quote(name, safe=""))
                 results.append({
+                    **_record_details({**status, **record}),
                     "id": "test:" + relative, "source": "test", "storageId": session.name,
                     "ownerFolder": folder, "role": "generated",
                     "mediaKind": _kind(file), "fileName": name,
                     "mediaPath": relative, "mediaUrl": url,
                     "createdAt": int(status.get("startedAt") or 0),
                     "rating": ratings.get(name), "model": str(status.get("modelId") or ""),
+                    "contextLabel": str(status.get("name") or session.name),
+                    "fileSize": file.stat().st_size,
+                    "assessment": _assessment(assessments.get(name)),
                     "uses": [{"storageId": session.name, "role": "test result"}],
                 })
     return results
@@ -223,8 +257,9 @@ def discover_epoch_frames():
                 file = frame_path(owner, campaign_id, name)
             except FileNotFoundError:
                 continue  # Retired screening frames are not durable artifacts.
-            relative = file.relative_to(Path(app_config.FS_ROOT)).as_posix()
+            relative = folder + "/epoch-finder/" + campaign_id + "/" + name
             frames.append({
+                **_record_details(unit),
                 "id": "epoch:" + relative,
                 "source": "epoch", "storageId": campaign_id,
                 "ownerFolder": folder, "role": "generated",
@@ -234,6 +269,9 @@ def discover_epoch_frames():
                             + "&frame=" + quote(name, safe=""),
                 "createdAt": int(payload.get("createdAt") or 0),
                 "rating": None, "model": str(payload.get("modelId") or ""),
+                "contextLabel": str(payload.get("name") or campaign_id),
+                "epoch": unit.get("epoch"), "fileSize": file.stat().st_size,
+                "assessment": _assessment(unit.get("assessment")),
                 "uses": [{"storageId": campaign_id, "role": "Epoch Finder campaign"}],
             })
     return frames
@@ -264,19 +302,27 @@ def discover_storyboards():
                 if not kind:
                     continue
                 identity = "storyboard:" + story_id + ":" + path
-                use = {"storageId": str(scene_id), "role": label}
+                use = {"storageId": str(scene_id), "role": label, "source": "storyboard", "label": str(scene.get("title") or scene_id)}
                 if identity in found:
                     found[identity]["uses"].append(use)
+                    if role not in found[identity]["roles"]:
+                        found[identity]["roles"].append(role)
                     continue
                 found[identity] = {
+                    **_record_details(entry),
                     "id": identity, "source": "storyboard", "storageId": story_id,
                     "ownerFolder": "", "role": role, "mediaKind": kind,
                     "fileName": file.name, "mediaPath": path,
                     "mediaUrl": "/fs/storyboard/media?story=" + quote(story_id, safe="")
                                 + "&path=" + quote(path, safe=""),
-                    "createdAt": 0, "rating": None, "model": "",
+                    "createdAt": int(datetime.fromisoformat(entry["createdAt"]).timestamp() * 1000) if entry.get("createdAt") else 0,
+                    "rating": None, "model": str(entry.get("modelId") or ""),
+                    "contextLabel": str(story.get("title") or story_id) + " / " + str(scene.get("title") or scene_id),
+                    "roles": [role], "fileSize": file.stat().st_size,
                     "uses": [use],
                 }
+                if role != "reference":
+                    found[identity]["rating"] = entry.get("rating")
     return list(found.values())
 
 
@@ -297,6 +343,9 @@ def discover_set_media():
         if path == base or not ({".webcap_state.json", "media_metadata.json"} & set(files)):
             continue
         folder = path.relative_to(base).as_posix()
+        state = read_folder_state(path / ".webcap_state.json")
+        metadata_path = path / "media_metadata.json"
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
         for name in list_media_files(folder):
             file = path / name
             if file.is_symlink() or not file.is_file():
@@ -312,12 +361,16 @@ def discover_set_media():
                 "mediaUrl": "/caption/media?folder=" + quote(folder, safe="")
                             + "&media=" + quote(name, safe=""),
                 "createdAt": int(file.stat().st_mtime * 1000),
-                "rating": None, "model": "", "uses": [],
+                "rating": (state.get("ratings_by_media") or {}).get(name), "model": "", "uses": [],
+                "contextLabel": folder, "fileSize": file.stat().st_size,
+                "resolution": (metadata.get(name) or {}).get("resolution", ""),
+                "duration": (metadata.get(name) or {}).get("duration"),
             })
     return found
 
 
-def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source=""):
+def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
+               model="", folder="", rating="", artifact=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
@@ -332,15 +385,32 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         results.extend(discover_storyboards())
     if full and source in ('', 'set'):
         results.extend(discover_set_media())
+    facets = {
+        "models": sorted({item["model"] for item in results if item["model"]}),
+        "folders": sorted({item.get("ownerFolder", "") for item in results if item.get("ownerFolder")}),
+    }
     results.sort(key=lambda item: (item['createdAt'], item['id']), reverse=True)
     if role:
-        results = [item for item in results if item["role"] == role]
+        results = [item for item in results if role in item.get("roles", [item["role"]])]
+    if artifact:
+        results = [item for item in results if item["id"] == artifact]
     if kind:
         results = [item for item in results if item["mediaKind"] == kind]
     if search:
         query = search.casefold()
-        results = [item for item in results if query in item["fileName"].casefold()
-                   or query in item["model"].casefold()]
+        results = [item for item in results if query in " ".join(str(item.get(key) or "") for key in
+                   ("fileName", "model", "prompt", "sourcePrompt", "contextLabel", "ownerFolder")).casefold()]
+    if model:
+        results = [item for item in results if item["model"] == model]
+    if folder:
+        results = [item for item in results if item.get("ownerFolder") == folder]
+    if rating:
+        if rating == "unrated":
+            results = [item for item in results if not item.get("rating")]
+        elif rating in ("1", "2", "3", "4", "5"):
+            results = [item for item in results if (item.get("rating") or 0) >= int(rating)]
+        else:
+            raise ValueError("Unknown media rating filter.")
     if sort == "oldest":
         results.sort(key=lambda item: (item["createdAt"], item["id"]))
     elif sort == "name":
@@ -351,4 +421,5 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         raise ValueError("Unknown media sort.")
     return {"ok": True, "items": results[offset:offset + limit],
             "total": len(results), "offset": offset, "limit": limit,
+            "facets": facets,
             "complete": full, "scope": "Supported sources (full Generate/legacy Test scan)" if full else "Supported sources (recent Generate/known Test)"}

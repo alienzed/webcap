@@ -26,6 +26,7 @@
   var candidateSort = 'rating';
   var sweepWeights = '0.6, 0.8, 1.0, 1.2';
   var pendingActivitySession = '';
+  var pendingActivityCampaign = '';
   var queuedTestJobs = [];
   var trackedTestInferenceSessions = Object.create(null);
   var pendingTestCompletionChecks = Object.create(null);
@@ -1976,11 +1977,15 @@
   function openTestBenchActivity(target) {
     target = target && typeof target === 'object' ? target : {};
     if (target.sessionId) pendingActivitySession = String(target.sessionId || '');
+    if (target.campaignId) pendingActivityCampaign = String(target.campaignId);
     if (target.folder || target.modelId) {
       openTestBenchSet(String(target.folder || ''), String(target.modelId || ''));
       return;
     }
     if (isOpen()) {
+      if (pendingActivityCampaign) {
+        window.epochFinderInspectCampaign(pendingActivityCampaign); pendingActivityCampaign = '';
+      }
       if (pendingActivitySession) {
         var session = pendingActivitySession;
         pendingActivitySession = '';
@@ -4515,6 +4520,9 @@
     renderStatus({ status: 'idle' });
     renderTestBatch();
     window.epochFinderPrepare(launchFolder);
+    if (pendingActivityCampaign) {
+      window.epochFinderInspectCampaign(pendingActivityCampaign); pendingActivityCampaign = '';
+    }
     refreshActivityButton();
     if (!isTestModelSupported()) {
       if (summary) summary.textContent = 'Testing unavailable for selected Base Model.';
@@ -4523,6 +4531,11 @@
         errorEl.classList.remove('hidden');
       }
       syncActiveRunControls({ status: 'idle' });
+      var historicalSession = String(pendingActivitySession || rememberedSession || '');
+      pendingActivitySession = '';
+      if (historicalSession) {
+        request('test_open_session', {session: historicalSession}).then(selectSessionStatus).catch(showError);
+      }
       return;
     }
     refreshWildcardDirector().catch(function (err) {

@@ -1176,7 +1176,8 @@
       }
       // The queue identifies the job; only matching runtime activity owns live
       // slot/token telemetry. Never display another job's telemetry here.
-      var runtimeMatchesJob = String(activity && activity.jobId || '') === jobId;
+      var runtimeMatchesJob = String(queue.activeJobId || '') === jobId && !!(activity && activity.active) &&
+        (!activity.jobId || String(activity.jobId) === jobId);
       return Object.assign({}, runtimeMatchesJob ? activity : {}, {
         active: true,
         phase: runtimeMatchesJob ? activity.phase : 'preparing',

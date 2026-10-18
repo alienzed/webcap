@@ -140,6 +140,7 @@ function normalizeShellRouteWorkspace(value) {
   if (workspace === 'test') return 'test';
   if (workspace === 'storyboard') return 'storyboard';
   if (workspace === 'storage') return 'storage';
+  if (workspace === 'media') return 'media';
   if (workspace === 'review') return 'review';
   if (workspace === 'grid') return 'grid';
   return 'prep';
@@ -163,6 +164,7 @@ function currentShellRouteWorkspace() {
   if (navigation.activity === 'test') return 'test';
   if (navigation.activity === 'storyboard') return 'storyboard';
   if (navigation.activity === 'storage') return 'storage';
+  if (navigation.activity === 'media') return 'media';
   if (navigation.workspaceRoot === 'training') return 'training';
   if (navigation.workspaceRoot === 'review') return 'review';
   if (navigation.workspaceRoot === 'grid') return 'grid';

@@ -9,6 +9,40 @@ function diagnosticsEl(id) {
   return document.getElementById(id);
 }
 
+function diagnosticsProbeMetrics(attempt) {
+  var result = attempt && attempt.result || {};
+  var tokens = Number((result.usage || {}).completion_tokens || 0);
+  var decodeSpeed = Number((result.timings || {}).predicted_per_second || 0);
+  var requestSeconds = Number(result.requestSeconds || 0);
+  var duration = requestSeconds || (Date.parse(attempt && attempt.finishedAt) - Date.parse(attempt && attempt.startedAt)) / 1000;
+  return {
+    speed: decodeSpeed > 0 ? decodeSpeed : tokens > 0 && duration > 0 ? tokens / duration : 0,
+    tokens: tokens,
+    hint: decodeSpeed > 0 ? 'Runtime-reported generation speed.' : requestSeconds > 0
+      ? 'Effective request throughput, including prompt processing, model loading and network time; not decode-only speed.'
+      : 'Effective probe throughput, including queue wait, prompt processing, model loading and network time; not decode-only speed.'
+  };
+}
+
+function diagnosticsUpdateAssessmentMetrics(run) {
+  if (!Array.isArray(run.attempts)) return;
+  var latest = {};
+  run.attempts.forEach(function (attempt) {
+    if (attempt.finishedAt && diagnosticsProbeMetrics(attempt).tokens > 0) {
+      latest[attempt.role + ':' + attempt.modelRef] = attempt;
+    }
+  });
+  diagnosticsEl('diagnostics-assessment-results').querySelectorAll('[data-assessment-model]').forEach(function (row) {
+    var attempt = latest[row.dataset.assessmentModel];
+    if (!attempt) return;
+    var measured = diagnosticsProbeMetrics(attempt);
+    var speed = row.querySelector('[data-assessment-speed]');
+    speed.textContent = measured.speed > 0 ? measured.speed.toFixed(1) + ' tok/s' : '—';
+    speed.title = measured.hint;
+    row.querySelector('[data-assessment-output]').textContent = measured.tokens.toLocaleString() + ' tokens';
+  });
+}
+
 function diagnosticsRenderAssessmentProgress(run) {
   if (String(run.id) !== diagnosticsAssessmentRunId || diagnosticsActiveTab !== 'assessment' ||
       diagnosticsEl('diagnostics-modal').classList.contains('hidden')) return;
@@ -24,6 +58,7 @@ function diagnosticsRenderAssessmentProgress(run) {
   var wasRunning = diagnosticsAssessmentRunStatus === 'running';
   diagnosticsAssessmentRunStatus = String(run.status);
   diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running';
+  diagnosticsUpdateAssessmentMetrics(run);
   if (wasRunning && run.status !== 'running') refreshUnifiedModelAssessment().catch(function () {});
 }
 
@@ -131,6 +166,7 @@ function refreshUnifiedModelAssessment() {
     function addRow(title, kind, ref, report) {
       var row = document.createElement('div');
       row.className = 'model-assessment-row';
+      row.dataset.assessmentModel = kind + ':' + ref;
       var heading = document.createElement('strong');
       heading.textContent = title;
       var head = document.createElement('div');
@@ -173,6 +209,7 @@ function refreshUnifiedModelAssessment() {
         cell.appendChild(name);
         cell.appendChild(data);
         metrics.appendChild(cell);
+        return data;
       }
       var attempts = report && Array.isArray(report.attempts) ? report.attempts : [];
       var measured = attempts.filter(function (attempt) {
@@ -182,12 +219,21 @@ function refreshUnifiedModelAssessment() {
       var abilities = report && report.abilities || {};
       var output = Number(abilities.coherentOutputTokens || 0);
       var quality = kind === 'director' && report ? String(report.health || report.status || 'Recorded') : '—';
-      metric('Speed', speed, 'Measured from saved Director assessment probe, not a model-wide speed guarantee');
-      metric('Output observed', output > 0 ? output.toLocaleString() + ' tokens' : '—',
-        'Observed coherent output, not a verified maximum');
+      var samples = Object.keys(tests).filter(function (key) {
+        return kind === 'vision' ? key === 'vision_open' || key === 'vision_group_aware' : key === 'director_writing';
+      }).map(function (key) { return tests[key].measurement; }).filter(Boolean).sort(function (a, b) {
+        return Date.parse(b.finishedAt) - Date.parse(a.finishedAt);
+      });
+      var probe = samples.length ? diagnosticsProbeMetrics(samples[0]) : null;
+      var speedMetric = metric('Speed', probe && probe.speed > 0 ? probe.speed.toFixed(1) + ' tok/s' : speed,
+        probe ? probe.hint : 'Measured from saved Director assessment probe, not a model-wide speed guarantee');
+      speedMetric.setAttribute('data-assessment-speed', '');
+      var outputMetric = metric('Output observed', probe ? probe.tokens.toLocaleString() + ' tokens' : output > 0 ? output.toLocaleString() + ' tokens' : '—',
+        'Latest measured probe token count; may include provider reasoning. Not a verified maximum or a quality score.');
+      outputMetric.setAttribute('data-assessment-output', '');
       var primary = findings[0] || 'Not tested';
       metric(kind === 'vision' ? 'Vision' : 'Writing', primary.split(': ').slice(1).join(': ') || 'Not tested');
-      metric('Assessment', quality === '—' ? (latest ? latest.status || 'Recorded' : 'Not tested') : quality);
+      metric('Assessment', latest ? latest.status || 'Recorded' : quality === '—' ? 'Not tested' : quality);
       row.appendChild(metrics);
       var details = document.createElement('details');
       var caption = document.createElement('summary');
@@ -200,6 +246,12 @@ function refreshUnifiedModelAssessment() {
           (latest.startedAt ? ' · ' + latest.startedAt : '')
         : 'No saved Model Lab evidence for this model.';
       details.appendChild(provenance);
+      if (latest && latest.importedFrom) {
+        provenance.textContent += ' · Imported from ' + latest.importedFrom.host + ' (measurements from source runtime)';
+      }
+      if (report && report.importedFrom) {
+        provenance.textContent += ' · Legacy report imported from ' + report.importedFrom.host + ' (source runtime measurements)';
+      }
       var other = document.createElement('div');
       other.className = 'app-settings-help';
       other.textContent = findings.join(' · ') + ' · Context limit: not established by this assessment';
@@ -208,7 +260,8 @@ function refreshUnifiedModelAssessment() {
         var line = document.createElement('div');
         line.className = 'app-settings-help';
         var item = tests[key];
-        line.textContent = key + ': ' + item.status + (item.error ? ' · ' + item.error : '');
+        var counts = Object.keys(item.counts || {}).map(function (status) { return item.counts[status] + ' ' + status; }).join(', ');
+        line.textContent = key + ': ' + (counts || item.status) + (item.error ? ' · ' + item.error : '');
         details.appendChild(line);
       });
       row.appendChild(details);
@@ -320,6 +373,92 @@ function runUnifiedModelAssessment() {
   }).finally(function () {
     runButton.disabled = diagnosticsAssessmentRunStatus === 'running';
   });
+}
+
+var diagnosticsAssessmentImportBundle = null;
+
+function diagnosticsAssessmentTransferError(error) {
+  diagnosticsEl('diagnostics-assessment-transfer-status').textContent = String(error.message || error);
+  reportConsoleError('Assessment transfer', error);
+}
+
+async function exportAssessmentResults() {
+  try {
+    var bundle = await modelLabRequest('/app/model-lab?export=1');
+    var url = URL.createObjectURL(new Blob([JSON.stringify(bundle, null, 2)], {type: 'application/json'}));
+    var link = document.createElement('a');
+    link.href = url; link.download = 'webcap-assessments-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    diagnosticsEl('diagnostics-assessment-transfer-status').textContent =
+      'Exported ' + bundle.runs.length + ' runs and ' + bundle.reports.length + ' reports.' +
+      (bundle.activeRunsExcluded ? ' Running assessments are excluded; export again when they finish.' : '');
+  } catch (error) { diagnosticsAssessmentTransferError(error); }
+}
+
+async function previewAssessmentImport(file) {
+  diagnosticsAssessmentImportBundle = null;
+  diagnosticsEl('diagnostics-assessment-transfer').classList.add('hidden');
+  if (!file) return;
+  try {
+    var bundle = JSON.parse(await file.text());
+    if (bundle.format !== 'webcap-assessments' || bundle.version !== 1 || !Array.isArray(bundle.runs) || !Array.isArray(bundle.reports)) {
+      throw new Error('Choose a WebCap assessment export (version 1).');
+    }
+    var catalog = (await modelLabRequest('/app/model-lab')).models;
+    var targets = new Map();
+    (catalog.directors || []).concat(catalog.visions || []).forEach(function (model) {
+      targets.set(model.runtimeId, model.runtimeName || model.runtimeId);
+    });
+    var sources = new Set();
+    bundle.runs.forEach(function (run) {
+      (run.attempts || []).forEach(function (attempt) { sources.add(String(attempt.modelRef).split('::')[0]); });
+      ['visionModels', 'directorModels', 'allVisionModels', 'allDirectorModels'].forEach(function (field) {
+        (run[field] || []).forEach(function (model) { sources.add(String(model.modelRef).split('::')[0]); });
+      });
+    });
+    bundle.reports.forEach(function (report) { sources.add(String(report.modelRef).split('::')[0]); });
+    var host = diagnosticsEl('diagnostics-assessment-runtime-map');
+    host.replaceChildren();
+    sources.forEach(function (source) {
+      var label = document.createElement('label');
+      label.textContent = source + ' → ';
+      var select = document.createElement('select');
+      select.dataset.sourceRuntime = source;
+      select.setAttribute('aria-label', 'Destination runtime for ' + source);
+      var placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = 'Choose runtime…'; select.appendChild(placeholder);
+      targets.forEach(function (name, id) {
+        var option = document.createElement('option'); option.value = id; option.textContent = name + ' (' + id + ')'; select.appendChild(option);
+      });
+      label.appendChild(select); host.appendChild(label);
+    });
+    diagnosticsAssessmentImportBundle = bundle;
+    diagnosticsEl('diagnostics-assessment-transfer-copy').textContent = bundle.runs.length + ' runs · ' + bundle.reports.length +
+      ' reports · Exported from ' + bundle.sourceHost + ' · ' + bundle.exportedAt;
+    diagnosticsEl('diagnostics-assessment-transfer').classList.remove('hidden');
+    diagnosticsEl('diagnostics-assessment-transfer-status').textContent = '';
+  } catch (error) { diagnosticsAssessmentTransferError(error); }
+}
+
+async function importAssessmentResults() {
+  var runtimeMap = {};
+  var choices = diagnosticsEl('diagnostics-assessment-runtime-map').querySelectorAll('select');
+  for (var select of choices) {
+    if (!select.value) {
+      diagnosticsEl('diagnostics-assessment-transfer-status').textContent = 'Choose a destination for each source runtime.';
+      select.focus(); return;
+    }
+    runtimeMap[select.dataset.sourceRuntime] = select.value;
+  }
+  var button = diagnosticsEl('diagnostics-assessment-import-apply'); button.disabled = true;
+  try {
+    var result = await modelLabPost({action: 'import', bundle: diagnosticsAssessmentImportBundle, runtimeMap: runtimeMap});
+    diagnosticsEl('diagnostics-assessment-transfer-status').textContent = 'Imported ' + result.runsImported + ' runs and ' + result.reportsImported +
+      ' reports · ' + result.runsAlreadyPresent + ' runs already present.';
+    diagnosticsAssessmentImportBundle = null;
+    diagnosticsEl('diagnostics-assessment-transfer').classList.add('hidden');
+    await refreshUnifiedModelAssessment();
+  } catch (error) { diagnosticsAssessmentTransferError(error); }
+  finally { button.disabled = false; }
 }
 
 function loadDiagnosticsConfig() {
@@ -654,6 +793,13 @@ function wireDiagnosticsUi() {
     }
   };
   diagnosticsEl('diagnostics-assessment-refresh').onclick = function () { refreshUnifiedModelAssessment().catch(function () {}); };
+  diagnosticsEl('diagnostics-assessment-export').onclick = exportAssessmentResults;
+  diagnosticsEl('diagnostics-assessment-import').onclick = function () { diagnosticsEl('diagnostics-assessment-file').click(); };
+  diagnosticsEl('diagnostics-assessment-file').onchange = function () { previewAssessmentImport(this.files[0]); this.value = ''; };
+  diagnosticsEl('diagnostics-assessment-import-apply').onclick = importAssessmentResults;
+  diagnosticsEl('diagnostics-assessment-import-cancel').onclick = function () {
+    diagnosticsAssessmentImportBundle = null; diagnosticsEl('diagnostics-assessment-transfer').classList.add('hidden');
+  };
   diagnosticsEl('diagnostics-assessment-director').onclick = function () { setDiagnosticsTab('models', true); };
   diagnosticsEl('diagnostics-assessment-lab').onclick = function () { setDiagnosticsTab('model-lab', true); };
   diagnosticsEl('diagnostics-assessment-benchmark').onclick = function () { setDiagnosticsTab('benchmark', true); };

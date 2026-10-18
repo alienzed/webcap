@@ -172,6 +172,7 @@ def test_only_ollama_assessment_requests_disable_thinking(monkeypatch, ollama, a
     result = runtime.chat("remote-1::qwen", [{"role": "user", "content": "probe"}],
                           max_tokens=512, allow_truncated=True, assessment_evidence=assessment_evidence)
     assert result["text"] == "answer"
+    assert result["requestSeconds"] >= 0
     assert captured["max_tokens"] == 512
     if ollama and assessment_evidence:
         assert captured["reasoning_effort"] == "none"

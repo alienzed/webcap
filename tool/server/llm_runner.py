@@ -190,6 +190,7 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "usage": llm_result.get("usage"),
             "timings": llm_result.get("timings"),
             "contextSize": llm_result.get("contextSize"),
+            "requestSeconds": llm_result.get("requestSeconds"),
         }
         operation = str((frozen_contract or {}).get("operation") or "").strip()
         if client == "caption" and operation == "caption_vision_validate":

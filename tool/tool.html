@@ -2677,9 +2677,20 @@
                             <div class="model-assessment-toolbar">
                                 <button id="diagnostics-assessment-run" type="button">Run Selected Tests</button>
                                 <button id="diagnostics-assessment-refresh" type="button" class="review-captions-btn">Refresh</button>
+                                <button id="diagnostics-assessment-export" type="button" class="review-captions-btn">Export Results</button>
+                                <button id="diagnostics-assessment-import" type="button" class="review-captions-btn">Import Results</button>
+                                <input id="diagnostics-assessment-file" type="file" accept=".json,application/json" hidden>
                                 <label class="model-assessment-deep"><input id="diagnostics-assessment-deep" type="checkbox"> Deep Assessment <small>(not yet available)</small></label>
                             </div>
                             <div id="diagnostics-assessment-activity" class="hidden" role="region" aria-label="Model Assessment progress"></div>
+                            <div id="diagnostics-assessment-transfer" class="hidden" role="region" aria-label="Import assessment results">
+                                <p id="diagnostics-assessment-transfer-copy" class="app-settings-help"></p>
+                                <div id="diagnostics-assessment-runtime-map" class="model-assessment-toolbar"></div>
+                                <p class="app-settings-help">Choose the runtime hosting the same models on this machine. Imports preserve source evidence and newer local reports. Media, credentials and runtime settings are not transferred.</p>
+                                <button id="diagnostics-assessment-import-apply" type="button">Import Evidence</button>
+                                <button id="diagnostics-assessment-import-cancel" type="button" class="review-captions-btn">Cancel</button>
+                            </div>
+                            <p id="diagnostics-assessment-transfer-status" class="app-settings-help" role="status"></p>
                             <details class="model-assessment-tools"><summary>Other testing tools</summary>
                                 <div class="model-assessment-toolbar">
                                     <button id="diagnostics-assessment-director" type="button">Director Calibration</button>

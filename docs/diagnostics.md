@@ -4,6 +4,16 @@ Last reviewed against code: 2026-10-03
 
 Diagnostics is a secondary maintenance utility, not a core WebCap workspace.
 
+## Moving assessment results between machines
+
+In **Model Assessment**, choose **Export Results**, copy the JSON file to the other machine, then choose **Import Results**. Select which destination runtime hosts each source runtime's models and click **Import Evidence**. Model IDs, including quantization tags, remain exact; runtime IDs are machine-local and require this explicit mapping.
+
+The bundle contains finished/interrupted Model Lab runs with their probe evidence and saved Director assessment reports. Active runs are excluded with a visible message; export again after they finish. Source host and timestamps travel with imported evidence. Speed/context observations describe the source runtime, not a new measurement on the destination machine. Media, credentials, runtime configuration, and applied calibration limits are not transferred.
+
+Repeated imports do not duplicate identical evidence. Newer local Director reports take precedence. Imported runs are viewable history and cannot resume against another machine's Set paths; run a new assessment to produce new local evidence. Reports use their existing Diagnostics state owner, and raw runs use the existing Model Lab evidence store.
+
+The comparison's speed/output cells update after measured probes finish. Prefer runtime-reported generation speed when available; otherwise show effective request throughput with an explicit tooltip covering processing/loading/network overhead. Historical records without request timing use total probe elapsed time, including queue wait. Output token counts may include provider reasoning and are not a quality score. Vision probes use the configured runtime token budget and preserve raw assessment evidence; missing/invalid structured answers count as failed probes. Per-kind summaries aggregate all attempts instead of hiding failures behind the last sample.
+
 ## Boundary
 
 - **Settings** owns persistent configuration: paths, runtimes, endpoints, model visibility, feature enablement, defaults, debug logging, raw configuration, and reset actions.

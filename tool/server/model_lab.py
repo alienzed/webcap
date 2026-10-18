@@ -145,17 +145,25 @@ def capability_run_summaries():
             if not ref or not kind:
                 continue
             by_kind = models.setdefault(ref, {})
-            result = attempt.get("result") if isinstance(attempt.get("result"), dict) else {}
-            by_kind[kind] = {
-                "status": str(attempt.get("status") or ""),
-                "error": str(attempt.get("error") or ""),
-                "file": str(attempt.get("file") or ""),
-                "finishReason": str(result.get("finishReason") or ""),
-            }
+            entry = by_kind.setdefault(kind, {"status": "", "error": "", "counts": {}})
+            status = str(attempt.get("status") or "interrupted")
+            entry["counts"][status] = entry["counts"].get(status, 0) + 1
+            result = attempt.get("result") or {}
+            if (result.get("usage") or {}).get("completion_tokens") and attempt.get("finishedAt"):
+                entry["measurement"] = {
+                    "startedAt": attempt.get("startedAt"), "finishedAt": attempt["finishedAt"],
+                    "result": {key: result.get(key) for key in ("usage", "timings", "requestSeconds", "contextSize", "finishReason")},
+                }
+            if attempt.get("error") and str(attempt["error"]) not in entry["error"]:
+                entry["error"] += (" · " if entry["error"] else "") + str(attempt["error"])
+            entry["status"] = next((value for value in (
+                "failed", "running", "interrupted", "skipped", "completed"
+            ) if entry["counts"].get(value)), status)
         summaries.append({
             "id": row["id"], "status": row.get("status"),
             "startedAt": row.get("startedAt"), "folder": row.get("folder"),
             "error": row.get("error", ""), "models": models,
+            "importedFrom": run.get("importedFrom"),
         })
     return summaries
 
@@ -542,10 +550,20 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                 if status != "completed":
                     raise RuntimeError(str(job.get("error") or ("LLM job ended as " + status)))
                 result = job.get("result") if isinstance(job.get("result"), dict) else {}
+                required_result = {"vision_open": "sight", "vision_group_aware": "vocabularySight"}.get(kind)
+                validation_error = ""
+                if required_result and not isinstance(result.get(required_result), dict):
+                    validation_error = result.get("structureWarning") or "Vision returned no usable structured evidence."
+                    if not str(result.get("text") or "").strip():
+                        validation_error = "Vision returned no answer text" + (
+                            " (token budget exhausted during reasoning)." if result.get("reasoning") and result.get("finishReason") == "length"
+                            else "."
+                        )
                 _update_attempt(
                     run,
                     attempt_id,
-                    status="completed",
+                    status="failed" if validation_error else "completed",
+                    error=validation_error,
                     finishedAt=_now_iso(),
                     result=result,
                 )
@@ -553,7 +571,7 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                     job_status(job_id, consume=True)
                 except Exception:
                     pass
-                return _completed_attempt(run, kind, model_ref, file_name)
+                return next(row for row in run["attempts"] if row.get("id") == attempt_id)
             time.sleep(POLL_SECONDS)
     except ModelLabStopped:
         _update_attempt(
@@ -723,7 +741,7 @@ def _run_vision_model(run, model):
                     "operation": "vision_schema_sight",
                     "messages": build_vision_schema_sight_messages(media),
                 },
-                context={"runtimeOverrides": {"maxTokens": 900}},
+                context={"assessmentEvidence": True},
                 label="Model Lab · Open Vision",
             ),
         )
@@ -759,7 +777,7 @@ def _run_vision_model(run, model):
                     "messages": build_vision_vocabulary_sight_messages(media, run["groups"]),
                 },
                 context={
-                    "runtimeOverrides": {"maxTokens": 900},
+                    "assessmentEvidence": True,
                     "existingGroups": run["groups"],
                 },
                 label="Model Lab · Group-aware Vision",
@@ -1078,6 +1096,8 @@ def start_run(config):
 def resume_run(run_id):
     with _lock:
         run = get_run(run_id)
+        if run.get("importedFrom"):
+            raise ValueError("Imported assessments are historical evidence. Start a new assessment to test on this machine.")
         if run["status"] == "completed":
             raise ValueError("Completed Model Lab runs do not need to resume.")
         if _active_record(run_id):
@@ -1159,6 +1179,11 @@ def register_routes(app):
     def model_lab_route():
         try:
             if request.method == "GET":
+                if request.args.get("export") == "1":
+                    from .assessment_transfer import export_results
+                    response = jsonify(export_results())
+                    response.headers["Content-Disposition"] = 'attachment; filename="webcap-assessments.json"'
+                    return response
                 run_id = str(request.args.get("run") or "").strip()
                 payload = {
                     "ok": True,
@@ -1178,6 +1203,9 @@ def register_routes(app):
 
             data = request.get_json(silent=True) or {}
             action = str(data.get("action") or "").strip()
+            if action == "import":
+                from .assessment_transfer import import_results
+                return jsonify({"ok": True, **import_results(data.get("bundle"), data.get("runtimeMap"))})
             if action == "start":
                 run = start_run(data.get("config"))
                 return jsonify({"ok": True, "run": run, "runs": list_runs()}), 201

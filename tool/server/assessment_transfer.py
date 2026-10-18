@@ -1,0 +1,95 @@
+"""Portable assessment evidence; runtime configuration and media stay on their host."""
+import hashlib
+import json
+import socket
+
+from . import model_lab, director_model_calibration
+
+
+def export_results():
+    with model_lab._lock:
+        rows = model_lab.list_runs()
+        return {
+            "format": "webcap-assessments", "version": 1,
+            "sourceHost": socket.gethostname(), "exportedAt": model_lab._now_iso(),
+            "runs": [model_lab.get_run(row["id"]) for row in rows if not row["active"]],
+            "reports": director_model_calibration.list_reports(),
+            "activeRunsExcluded": sum(bool(row["active"]) for row in rows),
+        }
+
+
+def import_results(bundle, runtime_map):
+    if not isinstance(bundle, dict) or bundle.get("format") != "webcap-assessments" or bundle.get("version") != 1:
+        raise ValueError("Choose a WebCap assessment export (version 1).")
+    if not isinstance(bundle.get("runs"), list) or not isinstance(bundle.get("reports"), list):
+        raise ValueError("Assessment export must contain runs and reports lists.")
+    if not isinstance(runtime_map, dict):
+        raise ValueError("Choose the destination runtime for each source runtime.")
+    source = {"host": str(bundle.get("sourceHost") or ""), "exportedAt": str(bundle.get("exportedAt") or "")}
+
+    def remap(ref):
+        runtime, separator, model = str(ref or "").partition("::")
+        target = runtime_map.get(runtime)
+        if not separator or not model or not isinstance(target, str) or not target or "::" in target:
+            raise ValueError("Choose a destination runtime for " + runtime + ".")
+        return target + "::" + model
+
+    def remap_model(model):
+        if str(model.get("modelRef") or "") != str(model.get("runtimeId") or "") + "::" + str(model.get("modelId") or ""):
+            raise ValueError("Assessment model identity is inconsistent.")
+        model["modelRef"] = remap(model["modelRef"])
+        model["runtimeId"] = model["modelRef"].split("::", 1)[0]
+        # Keep the source runtime name as evidence; the destination owns its label.
+
+    runs, reports = [], []
+    for original in bundle["runs"]:
+        if not isinstance(original, dict) or original.get("version") != model_lab.RUN_VERSION:
+            raise ValueError("Unsupported assessment run format.")
+        model_lab._run_path(original.get("id"))  # Validate before any writes.
+        if original.get("status") not in {"completed", "stopped", "interrupted", "error"}:
+            raise ValueError("Only finished or interrupted assessment evidence can be imported.")
+        run = model_lab._copy(original)
+        if not isinstance(run.get("attempts"), list):
+            raise ValueError("Assessment run is missing probe evidence.")
+        for field in ("visionModels", "directorModels", "allVisionModels", "allDirectorModels"):
+            for model in run.get(field) or []:
+                remap_model(model)
+        for field in ("referenceVisionRef", "referenceDirectorRef"):
+            if run.get(field):
+                run[field] = remap(run[field])
+        for attempt in run["attempts"]:
+            attempt["modelRef"] = remap(attempt["modelRef"])
+            kind = str(attempt.get("kind") or "")
+            if kind.startswith("vision:") and ":vocab_" in kind:
+                ref, suffix = kind[7:].rsplit(":vocab_", 1)
+                attempt["kind"] = "vision:" + remap(ref) + ":vocab_" + suffix
+        run["progress"] = {}
+        run["summary"] = model_lab._summarize(run)
+        run["importedFrom"] = original.get("importedFrom") or {**source, "runId": original["id"]}
+        # Content identity makes repeated imports idempotent without replacing local evidence.
+        identity = model_lab._copy(run)
+        identity["id"] = run["importedFrom"]["runId"]
+        identity["importedFrom"].pop("exportedAt", None)
+        digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()[:24]
+        run["id"] = "import-" + digest
+        runs.append((run, original))
+    for original in bundle["reports"]:
+        report = model_lab._copy(original)
+        remap_model(report)
+        report["importedFrom"] = original.get("importedFrom") or {**source, "modelRef": original["modelRef"]}
+        reports.append(director_model_calibration.normalize_report(report))
+
+    added = skipped = 0
+    with model_lab._lock:
+        for run, original in runs:
+            path = model_lab._run_path(run["id"])
+            original_path = model_lab._run_path(original["id"])
+            unchanged_local = (all(key == value for key, value in runtime_map.items())
+                               and original_path.exists() and model_lab._read_raw(original["id"]) == original)
+            if path.exists() or unchanged_local:
+                skipped += 1
+            else:
+                model_lab._write_run(run)
+                added += 1
+        report_count = director_model_calibration.import_reports(reports)
+    return {"runsImported": added, "runsAlreadyPresent": skipped, "reportsImported": report_count}

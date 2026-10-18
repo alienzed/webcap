@@ -2153,6 +2153,23 @@ def test_generations_wildcard_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/test_generations/wildcard/validate", methods=["POST"])
+def test_generations_wildcard_validate_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        folder = str(data.get("folder") or "").strip()
+        from .caption_ops import _resolve_folder
+        from .folder_state_store import read_folder_state
+        from .test_wildcard_contract import observed_group_combinations, validate_group_compatibility
+        annotations = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+        combinations = observed_group_combinations(annotations, list_media_files(folder))
+        validate_group_compatibility(data.get("analysis"), combinations)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        app.logger.exception("TEST WILDCARD COMPATIBILITY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/test_generations/models", methods=["GET"])
 def test_generations_models_route():
     try:

@@ -2531,7 +2531,7 @@
             var field = el('test-generations-prompt');
             var before = field.value.slice(0, field.selectionStart);
             var after = field.value.slice(field.selectionEnd);
-            var text = (before.trim() && !/[\\s,]$/.test(before) ? ', ' : '') + fragments.join(', ');
+            var text = (before.trim() && !/[\s,]$/.test(before) ? ', ' : '') + fragments.join(', ');
             var cursor = before.length + text.length;
             field.value = before + text + after;
             field.dispatchEvent(new Event('input', {bubbles: true}));

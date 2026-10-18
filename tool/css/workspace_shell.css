@@ -2967,3 +2967,14 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .job-queue-row .inference-queue-actions:empty { display: none; }
 .job-queue-row .inference-queue-copy { min-width: 0; overflow-wrap: anywhere; }
 .job-queue-row .inference-queue-actions { flex-wrap: wrap; justify-content: flex-end; }
+
+/* Shared job queue: lane activity is independent of selection. */
+.job-queue-tabs button { position: relative; padding: 8px 18px 8px 8px; }
+.job-queue-tab-state { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); font-size: 11px !important; line-height: 1; opacity: .8 !important; }
+.job-queue-tab-running .job-queue-tab-state { color: var(--accent); opacity: 1 !important; }
+.job-queue-tab-running:not([aria-selected="true"]) { border-color: color-mix(in srgb, var(--accent) 65%, var(--border)); }
+.job-queue-tab-paused .job-queue-tab-state { color: var(--muted); }
+.job-queue-row .inference-queue-position { flex: 0 0 auto; width: auto; min-width: 0; padding: 3px 7px; font-size: 11px; }
+.job-queue-row .inference-queue-heading { align-items: center; }
+.job-queue-row .inference-queue-actions { flex-wrap: nowrap; }
+.job-queue-row .inference-queue-copy { overflow: hidden; }

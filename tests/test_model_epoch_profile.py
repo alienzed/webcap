@@ -95,3 +95,15 @@ def test_profile_response_does_not_change_selection(monkeypatch, tmp_path):
     bad, code = training_runner.candidate_epoch_profile_response(
         "set", "job", 90, {"trainedWords": "bad"}, save=True)
     assert code == 400 and not bad["ok"]
+
+
+def test_training_suggestions_are_not_saved(monkeypatch):
+    from tool.server import epoch_reference
+    from tool.server.model_epoch_profile import training_suggestions
+    monkeypatch.setattr(epoch_reference, "reference_vocabulary", lambda folder, job: [
+        {"group": "Viewpoint", "terms": [{"term": "front", "count": 4},
+                                        {"term": "rear", "count": 2}]}
+    ])
+    suggestions = training_suggestions("set", "job")
+    assert suggestions["evidenceLevel"] == "trained_not_validated"
+    assert suggestions["promptOptions"] == {"Viewpoint": ["front", "rear"]}

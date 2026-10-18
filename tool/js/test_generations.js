@@ -2485,6 +2485,27 @@
         profileSummary.title = [description, words.length ? 'Key phrases: ' + words.join(', ') : '',
           profile.guidance || ''].filter(Boolean).join('\n');
         heading.appendChild(profileSummary);
+        if (words.length) {
+          var insertTerms = document.createElement('button');
+          insertTerms.type = 'button';
+          insertTerms.className = 'review-captions-btn';
+          insertTerms.textContent = 'Insert phrases';
+          insertTerms.title = 'Insert this LoRA\'s key phrases into the Test prompt; never changes the prompt automatically';
+          insertTerms.addEventListener('click', function () {
+            var promptField = el('test-generations-prompt');
+            var text = words.join(', ');
+            var start = promptField.selectionStart;
+            var end = promptField.selectionEnd;
+            var prefix = promptField.value.slice(0, start);
+            var suffix = promptField.value.slice(end);
+            var separator = prefix.trim() && !/[\\s,]$/.test(prefix) ? ', ' : '';
+            promptField.value = prefix + separator + text + suffix;
+            promptField.dispatchEvent(new Event('input', {bubbles: true}));
+            promptField.focus();
+            promptField.setSelectionRange((prefix + separator + text).length, (prefix + separator + text).length);
+          });
+          heading.appendChild(insertTerms);
+        }
       }
       if (parts.detail) {
         var runName = document.createElement('span');

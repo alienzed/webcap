@@ -274,6 +274,42 @@
     select.value = storyStylePresetIdForText(textarea.value);
   }
 
+  var atmosphereProposal = null;
+  function interpretAtmosphere() {
+    if (!storyState.story) return;
+    var input = el('storyboard-story-style').value.trim();
+    if (!input) return reportError(new Error('Enter your visual intent first.'));
+    var modelId = storyState.director.modelId;
+    if (!modelId) return reportError(new Error('Choose a Storyboard Director model first.'));
+    var storyId = storyState.story.id;
+    var target = {kind:'concept', storyId:storyId};
+    if (directorTargetBlocked(target)) return reportError(new Error('That Director target already has pending work.'));
+    atmosphereProposal = null;
+    el('storyboard-style-proposal').classList.add('hidden');
+    var button = el('storyboard-interpret-style-btn');
+    button.disabled = true;
+    setDirectorPending(target, true);
+    startDirectorActivity();
+    flushPendingSaves().then(function () {
+      return directorRequest({storyId:storyId, operation:'interpret_atmosphere', model:modelId});
+    }).then(function (result) {
+      // Consume completed work even when the user navigated away during execution.
+      return consumeDirectorJob(result.jobId).then(function () {
+        if (!storyState.story || storyState.story.id !== storyId ||
+            el('storyboard-story-style').value.trim() !== input) return;
+        var suggestion = String(result.result || '').trim();
+        if (!suggestion) throw new Error('Director returned an empty interpretation.');
+        atmosphereProposal = {text:suggestion, source:input, storyId:storyId};
+        el('storyboard-style-proposal-text').textContent = suggestion;
+        el('storyboard-style-proposal').classList.remove('hidden');
+      });
+    }).catch(reportError).finally(function () {
+      button.disabled = false;
+      setDirectorPending(target, false);
+      finishDirectorActivity();
+    });
+  }
+
   function applyStoryStylePreset(presetId) {
     var preset = storyStylePresetById(presetId);
     var textarea = el('storyboard-story-style');
@@ -5701,7 +5737,27 @@
     ['storyboard-story-title', 'storyboard-story-concept', 'storyboard-story-target-scenes'].forEach(function (id) {
       el(id).addEventListener('input', scheduleStorySave);
     });
+    el('storyboard-interpret-style-btn').onclick = interpretAtmosphere;
+    el('storyboard-style-dismiss').onclick = function () {
+      atmosphereProposal = null;
+      el('storyboard-style-proposal').classList.add('hidden');
+    };
+    el('storyboard-style-apply').onclick = function () {
+      if (!atmosphereProposal || !storyState.story ||
+          storyState.story.id !== atmosphereProposal.storyId ||
+          el('storyboard-story-style').value.trim() !== atmosphereProposal.source) {
+        reportError(new Error('Visual / Atmosphere changed since the Director proposal. Interpret again.'));
+        return;
+      }
+      el('storyboard-story-style').value = atmosphereProposal.text;
+      atmosphereProposal = null;
+      el('storyboard-style-proposal').classList.add('hidden');
+      renderStoryStylePresetSelector();
+      scheduleStorySave();
+    };
     el('storyboard-story-style').addEventListener('input', function () {
+      atmosphereProposal = null;
+      el('storyboard-style-proposal').classList.add('hidden');
       renderStoryStylePresetSelector();
       scheduleStorySave();
     });

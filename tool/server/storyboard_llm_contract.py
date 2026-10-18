@@ -10,7 +10,7 @@ H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
 SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"
-VALID_OPERATIONS = {"expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "repair_scenes", "write_prompt", "refine_prompt"}
+VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "repair_scenes", "write_prompt", "refine_prompt"}
 
 
 def _read_text(path, label):
@@ -283,6 +283,23 @@ def build_request(story, scene_id, operation, instruction="", development=None):
             "response_schema": _read_json(INVARIANT_SCHEMA_PATH, "Storyboard invariant schema"),
         }
 
+    if operation == "interpret_atmosphere":
+        style = _clean(story.get("style"))
+        if not style:
+            raise ValueError("Enter a Visual / Atmosphere description first.")
+        blocks = ["[USER VISUAL INTENT]\n" + style]
+        concept = _clean(story.get("concept"))
+        if concept:
+            blocks.append("[STORY CONTEXT — FOR INTERPRETATION ONLY]\n" + concept[:3500])
+        blocks.append(
+            "[TASK]\nInterpret the visual intent into practical video-generation direction. "
+            "Describe camera viewpoint or capture style, lighting, movement, texture, and mood only where useful. "
+            "Preserve the intended realism, informality, and recording medium. "
+            "Do not quote, paraphrase mechanically, or repeat the user's style label. "
+            "Do not add scene events, characters, locations, or unrelated details. "
+            "Return just 1-3 short lines of concrete visual direction, no heading or bullets."
+        )
+        return {"operation": operation, "output": "text", "prompt": "\n\n".join(blocks)}
     if operation == "expand_concept":
         concept = _clean(story.get("concept"))
         if not concept:

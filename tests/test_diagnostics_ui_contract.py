@@ -147,3 +147,13 @@ def test_unified_model_assessment_uses_compact_rows_and_toolbar():
     assert "row.className = 'model-assessment-row';" in js
     assert "head.className = 'model-assessment-row-head';" in js
     assert ".model-assessment-row-head input" in css
+
+
+def test_unified_assessment_bulk_selection_is_wired():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
+    assert 'id="diagnostics-assessment-all"' in html
+    assert 'id="diagnostics-assessment-none"' in html
+    assert "function selectUnifiedAssessmentModels(select)" in script
+    assert "selectUnifiedAssessmentModels(true)" in script
+    assert "selectUnifiedAssessmentModels(false)" in script

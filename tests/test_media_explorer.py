@@ -203,19 +203,17 @@ def test_generate_references_have_no_rating_action(monkeypatch, tmp_path):
     assert next(item for item in media if item['role'] == 'generated')['storageId'] == 'day/job'
 
 
-def test_source_set_media_requires_explicit_full_scan(monkeypatch, tmp_path):
-    from tool.server import caption_ops
+def test_source_set_media_is_never_exposed(monkeypatch, tmp_path):
     folder = tmp_path / "sets" / "one"
     folder.mkdir(parents=True)
     (folder / ".webcap_state.json").write_text("{}")
     (folder / "photo.png").write_bytes(b"image")
     monkeypatch.setattr(media_explorer.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: tmp_path / "output")
-    monkeypatch.setattr(caption_ops, "list_media_files", lambda name: ["photo.png"])
-    assert media_explorer.list_media(source="set")["total"] == 0
-    full = media_explorer.list_media(source="set", full="1")
-    assert full["total"] == 1
-    assert full["items"][0]["mediaUrl"] == "/caption/media?folder=sets%2Fone&media=photo.png"
+    assert media_explorer.list_media(full="1")["total"] == 0
+    with pytest.raises(ValueError, match="source"):
+        media_explorer.list_media(source="set", full="1")
+
 
 def test_explorer_normalizes_recorded_facts_and_filters_before_paging(monkeypatch, tmp_path):
     monkeypatch.setattr(media_explorer.app_config, 'output_root', lambda: tmp_path)
@@ -239,27 +237,6 @@ def test_explorer_normalizes_recorded_facts_and_filters_before_paging(monkeypatc
     assert media_explorer.list_media(rating='unrated')['total'] == 1
     with pytest.raises(ValueError, match='rating'):
         media_explorer.list_media(rating='imaginary')
-
-
-def test_set_filters_use_saved_ratings_and_cached_metadata_without_analysis(monkeypatch, tmp_path):
-    import json
-    folder = tmp_path/'sets'/'one'
-    folder.mkdir(parents=True)
-    (folder/'photo.png').write_bytes(b'image')
-    state = {'ratings_by_media':{'photo.png':4}}
-    cached = {'photo.png':{'resolution':'640x480','duration':2.0}}
-    (folder/'.webcap_state.json').write_text(json.dumps(state))
-    (folder/'media_metadata.json').write_text(json.dumps(cached))
-    monkeypatch.setattr(media_explorer.app_config, 'FS_ROOT', tmp_path)
-    monkeypatch.setattr(media_explorer.app_config, 'output_root', lambda: tmp_path/'output')
-    from tool.server import caption_ops
-    monkeypatch.setattr(caption_ops, 'list_media_files', lambda name: ['photo.png'])
-    result = media_explorer.list_media(source='set',full='1',folder='sets/one',rating='4')
-    assert result['items'][0]['resolution'] == '640x480'
-    assert result['items'][0]['rating'] == 4
-    assert result['facets']['folders'] == ['sets/one']
-    assert json.loads((folder/'media_metadata.json').read_text()) == cached
-    assert json.loads((folder/'.webcap_state.json').read_text()) == state
 
 
 def test_storyboard_same_file_can_be_generated_and_a_reference(monkeypatch, tmp_path):
@@ -358,21 +335,11 @@ def test_owner_filter_limits_media_to_existing_producer_identity(monkeypatch, tm
     assert media_explorer.list_media(source="generate", owner="missing")["total"] == 0
 
 
-def test_existing_owner_ratings_are_discovered_for_test_and_set_media(monkeypatch, tmp_path):
+def test_existing_test_owner_ratings_are_discovered(monkeypatch, tmp_path):
     import json
     from tool.server import epoch_test_bench
-    source = tmp_path / "sets" / "one"
-    source.mkdir(parents=True)
-    (source / "photo.png").write_bytes(b"image")
-    (source / ".webcap_state.json").write_text(json.dumps({"ratings_by_media": {"photo.png": 5}}))
     monkeypatch.setattr(media_explorer.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: tmp_path / "output")
-    from tool.server import caption_ops
-    monkeypatch.setattr(caption_ops, "list_media_files", lambda folder: ["photo.png"])
-    set_items = media_explorer.list_media(source="set", full="1")["items"]
-    assert len(set_items) == 1
-    assert set_items[0]["rating"] == 5
-
     session = tmp_path / "output" / "test-generations" / "sets" / "one" / "sessions" / "sess"
     session.mkdir(parents=True)
     (session / "result.png").write_bytes(b"image")

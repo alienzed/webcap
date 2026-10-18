@@ -128,7 +128,6 @@
       text(related, 'Show media from this ' + (sourceNames[item.source] || 'source'));
       related.addEventListener('click', function () {
         owner = item.storageId; source = item.source; role = ''; artifact = '';
-        if (source === 'set') full = true;
         el('media-explorer-search').value = '';
         facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
         sourceButtons.forEach(function (button) {
@@ -220,47 +219,6 @@
       }
       host.appendChild(ratingRow);
     }
-    if (item.source === 'set' && item.ownerFolder && item.fileName) {
-      var setRating = document.createElement('div');
-      setRating.className = 'media-explorer-rating';
-      var setRatingLabel = document.createElement('span');
-      text(setRatingLabel, 'Rate Set media');
-      setRating.appendChild(setRatingLabel);
-      for (var setScore = 0; setScore <= 5; setScore++) {
-        (function (value) {
-          var button = document.createElement('button');
-          button.type = 'button'; button.className = 'review-captions-btn';
-          text(button, value === 0 ? 'Clear' : String(value) + '★');
-          button.setAttribute('aria-pressed', String(Number(item.rating || 0) === value));
-          button.setAttribute('aria-label', value === 0 ? 'Clear Set rating' : 'Rate Set media ' + value + ' out of 5');
-          button.addEventListener('click', function () {
-            setRating.querySelectorAll('button').forEach(function (node) { node.disabled = true; });
-            fetch('/fs/folder_state/rating', {
-              method: 'POST', headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({folder: item.ownerFolder, mediaKey: item.fileName, rating: value})
-            }).then(function (response) {
-              return response.json().then(function (payload) {
-                if (!response.ok || !payload || !payload.ok) throw new Error(payload && payload.error || 'Could not rate Set media.');
-                return payload;
-              });
-            }).then(function (payload) {
-              item.rating = payload.rating;
-              setRating.querySelectorAll('button').forEach(function (node, score) {
-                node.setAttribute('aria-pressed', String(Number(item.rating || 0) === score));
-              });
-              renderDetails(item, dl);
-              var card = el('media-explorer-grid').children[items.indexOf(item)];
-              if (card) text(card.querySelector('.media-explorer-card-sub'), cardSummary(item));
-              if (visible && (el('media-explorer-rating').value || el('media-explorer-sort').value === 'rating')) load(true);
-            }).catch(report).finally(function () {
-              setRating.querySelectorAll('button').forEach(function (node) { node.disabled = false; });
-            });
-          });
-          setRating.appendChild(button);
-        })(setScore);
-      }
-      host.appendChild(setRating);
-    }
     if (item.source === 'test' && item.ownerFolder && item.storageId && item.fileName) {
       var testRating = document.createElement('div');
       testRating.className = 'media-explorer-rating';
@@ -334,10 +292,6 @@
       text(epoch, 'Open Epoch Finder'); epoch.addEventListener('click', function () {
         window.openTestBenchActivity({folder: item.ownerFolder, modelId: item.model, campaignId: item.storageId});
       }); actions.appendChild(epoch);
-    }
-    if (item.source === 'set') {
-      var reveal = document.createElement('button'); reveal.type = 'button'; reveal.className = 'review-captions-btn';
-      text(reveal, 'Reveal file'); reveal.addEventListener('click', function () { window.openPathInExplorer(item.mediaPath); }); actions.appendChild(reveal);
     }
     var open = document.createElement('button'); open.type = 'button';
     open.className = 'review-captions-btn'; text(open, 'View full size');
@@ -423,8 +377,8 @@
       text(el('media-explorer-empty-description'), 'Your filters are kept. Try again, or open the Console for the full error.');
       text(el('media-explorer-empty-action'), 'Try again'); return;
     }
-    text(el('media-explorer-empty-title'), filtered ? 'No matching media' : 'Your library, in one place');
-    text(el('media-explorer-empty-description'), filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Discover all to include recognized source Sets.');
+    text(el('media-explorer-empty-title'), filtered ? 'No matching media' : 'Generated media, in one place');
+    text(el('media-explorer-empty-description'), filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Discover all for complete supported generation history.');
     text(el('media-explorer-empty-action'), !full ? 'Discover all media' : filtered ? 'Clear filters' : 'Refresh library');
   }
   function filterControls() {
@@ -543,7 +497,7 @@
         var params = new URLSearchParams(window.location.hash.split('?')[1] || '');
         role = params.get('role') || ''; source = params.get('source') || '';
         artifact = params.get('artifact') || ''; owner = params.get('owner') || '';
-        full = params.get('full') === '1' || source === 'set';
+        full = params.get('full') === '1';
         el('media-explorer-search').value = params.get('q') || '';
         el('media-explorer-kind').value = params.get('kind') || '';
         el('media-explorer-sort').value = params.get('sort') || 'newest';
@@ -607,7 +561,6 @@
     button.addEventListener('click', function () {
       source = button.dataset.mediaSource;
       artifact = ''; owner = '';
-      if (source === 'set') full = true;
       role = '';
       Array.prototype.forEach.call(document.querySelectorAll('.media-explorer-source'), function (node) { node.classList.toggle('active', node === button); });
       load(true);

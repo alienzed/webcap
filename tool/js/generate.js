@@ -2260,6 +2260,7 @@
     setDirectorStatus('Finding relevant enriched LoRAs…');
     renderDirector();
     startDirectorActivity();
+    var continueWithoutMatches = false;
     return postJson('/fs/lora_library/plan', {
       stage: stage,
       intent: [originalPrompt, operation === 'refine_prompt' ? originalInstruction : ''].filter(Boolean).join('\\n'),
@@ -2280,7 +2281,8 @@
       }
       if (result.empty) {
         setDirectorStatus('No enriched LoRA suggestions; continuing prompt authoring.');
-        return runDirector(operation, true);
+        continueWithoutMatches = true;
+        return;
       }
       return requestJson('/fs/lora_library').then(function (library) {
         var options = (library.items || []).filter(function (item) {
@@ -2324,6 +2326,7 @@
       generateState.director.jobId = '';
       renderDirector();
       finishDirectorActivity();
+      if (continueWithoutMatches) return runDirector(operation, true);
     });
   }
 

@@ -164,3 +164,9 @@
 .media-explorer-use-link { display: block; max-width: 100%; margin: 10px 0 0; padding: 0; border: 0; background: transparent; color: var(--explorer-accent); font-size: 12px; line-height: 1.5; text-align: left; overflow-wrap: anywhere; }
 .media-explorer-use-link:hover { background: transparent; text-decoration: underline; }
 .media-explorer-card-open:hover { background: transparent; color: inherit; }
+
+/* Media Explorer IA: keep permanent deletion visually separate from browsing actions. */
+.media-explorer-danger-actions { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.media-explorer-danger-actions .review-captions-btn { border-color: #b96861; color: #b96861; }
+.media-explorer-danger-actions .review-captions-btn:hover { border-color: #b96861; color: #b96861; }
+.media-explorer-selection-hint { color: var(--muted); font-size: 11px; }

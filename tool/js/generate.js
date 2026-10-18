@@ -2560,19 +2560,22 @@
         var found = chosen && generateState.loraProfileCache[chosen.name];
         var groups = found && found.profile && found.profile.enrichment &&
           found.profile.enrichment.promptOptions || {};
-        var fragments = Object.keys(groups).map(function (key) {
-          var values = groups[key];
-          if (!Array.isArray(values) || values.length < 2) return '';
-          if (values.some(function (value) { return /[{}|]/.test(value); })) {
-            throw new Error('Wildcard group ' + key + ' has unsupported syntax characters.');
-          }
-          return '{' + values.join('|') + '}';
-        }).filter(Boolean);
+        var fragments;
+        try {
+          fragments = Object.keys(groups).map(function (key) {
+            var values = groups[key];
+            if (!Array.isArray(values) || values.length < 2) return '';
+            if (values.some(function (value) { return /[{}|]/.test(value); })) {
+              throw new Error('Wildcard group ' + key + ' has unsupported syntax characters.');
+            }
+            return '{' + values.join('|') + '}';
+          }).filter(Boolean);
+        } catch (err) { reportError(err, 'Cannot insert wildcard options'); return; }
         if (!fragments.length) return;
         var field = el('generate-prompt');
         var before = field.value.slice(0, field.selectionStart);
         var after = field.value.slice(field.selectionEnd);
-        var insertText = (before.trim() && !/[\\s,]$/.test(before) ? ', ' : '') + fragments.join(', ');
+        var insertText = (before.trim() && !/[\s,]$/.test(before) ? ', ' : '') + fragments.join(', ');
         var cursor = before.length + insertText.length;
         field.value = before + insertText + after;
         field.dispatchEvent(new Event('input', {bubbles: true}));

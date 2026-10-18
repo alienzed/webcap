@@ -339,6 +339,14 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         raise RuntimeError("Storyboard LLM job is missing its frozen contract.")
     _assert_storyboard_contract_current(context, frozen_contract)
 
+    if operation == "interpret_atmosphere":
+        suggestion = str(llm_result.get("text") or "").strip()
+        if not suggestion:
+            raise ValueError("Director returned no Visual / Atmosphere proposal.")
+        return {"storyId": story_id, "result": suggestion,
+                "model": llm_result["model"], "finishReason": llm_result.get("finishReason"),
+                "usage": llm_result.get("usage"), "timings": llm_result.get("timings")}
+
     if operation == "expand_concept":
         from .storyboard_store import apply_concept_expansion
         story = apply_concept_expansion(story_id, llm_result.get("text"))
@@ -763,7 +771,7 @@ def _storyboard_target(context, operation):
     operation = str(operation or "").strip()
     if not story_id:
         return None
-    if operation in {"expand_concept", "define_invariants"}:
+    if operation in {"interpret_atmosphere", "expand_concept", "define_invariants"}:
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
     if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene"}:
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}

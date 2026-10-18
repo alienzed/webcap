@@ -18,6 +18,7 @@ function fixture(hash = '#/media') {
       this.style = {setProperty() {}};
       Object.defineProperty(this, 'options', {get: () => this.children});
       Object.defineProperty(this, 'selectedIndex', {get: () => this.children.findIndex(option => option.value === this.value)});
+      Object.defineProperty(this, 'parentElement', {get: () => this.parent});
     }
     setAttribute(k, v) { this.attrs[k] = v; }
     getAttribute(k) { return this.attrs[k]; }
@@ -73,6 +74,21 @@ function fixture(hash = '#/media') {
   return {nodes, buttons, pending, errors, closed, window, settle, key};
 }
 const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
+
+test('unavailable previews keep their card and expose decoder details in the Console', async () => {
+  const f = fixture(); f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], [media('missing'), media('broken', 'video')]);
+  const [imageCard, videoCard] = f.nodes['media-explorer-grid'].children;
+  imageCard.querySelector('img').emit('error');
+  const video = videoCard.querySelector('video');
+  video.error = {message: 'Unsupported video codec', code: 4};
+  video.emit('error'); video.emit('error');
+  assert.equal(f.nodes['media-explorer-grid'].children.length, 2);
+  assert.match(imageCard.querySelector('.media-explorer-card-error').textContent, /Preview unavailable/);
+  assert.equal(videoCard.querySelectorAll('.media-explorer-card-error').length, 1);
+  assert.match(f.errors[0], /missing.png.*\/media\/missing/);
+  assert.match(f.errors[1], /Unsupported video codec.*code 4/);
+});
 
 test('Explorer replaces activities, retains keyed media on refresh/reorder and ignores stale requests', async () => {
   const f = fixture(); f.window.openMediaExplorerActivity();

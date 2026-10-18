@@ -413,8 +413,8 @@
       text(el('media-explorer-empty-action'), 'Try again'); return;
     }
     text(el('media-explorer-empty-title'), filtered ? 'No matching media' : 'Generated media, in one place');
-    text(el('media-explorer-empty-description'), filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Discover all for complete supported generation history.');
-    text(el('media-explorer-empty-action'), !full ? 'Discover all media' : filtered ? 'Clear filters' : 'Refresh library');
+    text(el('media-explorer-empty-description'), filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Scan full history for older generated media.');
+    text(el('media-explorer-empty-action'), !full ? 'Scan full history' : filtered ? 'Clear filters' : 'Refresh library');
   }
   function filterControls() {
     var chips = el('media-explorer-filter-chips'); chips.replaceChildren();
@@ -464,7 +464,7 @@
     emptyState();
     var controller = new AbortController(); activeRequest = controller;
     el('media-explorer-scan-all').disabled = full && loading;
-    el('media-explorer-status').textContent = full ? 'Scanning all recognized media sources…' : 'Discovering recent media…';
+    el('media-explorer-status').textContent = full ? 'Scanning full generated-media history…' : 'Discovering recent media…';
     el('media-explorer-status').dataset.state = 'loading';
     var qs = new URLSearchParams({limit:pageSize, offset:reset ? 0 : offset, role:role,
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),

@@ -91,3 +91,32 @@ Only if users demonstrate need: `Save As` non-destructive crop/resize/convert al
 ## Verification
 
 Per-phase tests for route contracts, path boundaries, filtering/page counts, media serving and deep link identity; manual visual QA at narrow/wide widths, image/video playback, zero/hundreds/thousands of artifacts, partial scan, source deleted, Set navigation, keyboard focus, queued inference unaffected. Ensure error details surface in global Console. Run existing Test/Generate/Storage and shell regression tests. Only merge after relevant checks pass and `AGENTS.md` invariants are maintained.
+
+
+## Implementation checkpoint — 2026-10-18 (PR #408)
+
+This is an **incremental implementation**, not the completed universal library. Do not mark later phases as done or merge solely because the gallery renders.
+
+| Phase | Applied to branch | Remaining acceptance |
+| --- | --- | --- |
+| 0. Ownership & IA | Root AGENTS.md reviewed, reference roles documented, interface contract in `docs/media_explorer_design.md` | Audit source-specific owner contracts before broadening discovery |
+| 1. Gallery foundation | New HTML/CSS/JS workspace, Flask read-only endpoint, Generate result and persisted reference discovery | Execute backend tests; test browser layout and app navigation; add uncapped/full discovery |
+| 2. Visual exploration | Card grid, source-role filter, search, thumbnail sizing, inspector, fullscreen loupe, paging; sorting performed globally *within discovered scope* | Inspect keyboard, media playback, direct links, selection/compare and scroll preservation |
+| 3. Producer coverage | Generate only | Test sessions, Epoch Finder, Training, Storyboard, source/reference usages (owner by owner) |
+| 4. Owner actions | Read-only intentionally | Reuse proven source actions; no generalized deletion/editing |
+| 5. Derivatives | Not started | Explicit ownership/lineage contract, if needed |
+
+### Immediate correctness rules
+
+- Until full scan lands, scope is `Generate (latest 500 results)` and counts are partial. Sorting is within that bounded set, not globally across all on-disk results. This is a real limitation, not a final design.
+- Gallery paging and sort must be executed by the same backend snapshot/query (server-wide sort before slicing). Stale responses must not append to an invalidated gallery view.
+- Source navigation must close the Explorer without overwriting Test/Set editing state. Every shell route must be reviewed for mutual exclusivity.
+- Existing media-serving endpoint must enforce source ownership; do not expose arbitrary absolute or user-supplied filesystem paths.
+- A test file has been added at `tests/test_media_explorer.py` but the linked GitHub environment has no executable checkout; tests have **not** been run or visually verified. Keep PR #408 draft and unmerged until runtime QA can run.
+
+### Next safe cuts
+
+1. Verify the shell navigation and Generate+reference discovery via runnable checkout and tests.
+2. Replace the 500-result bounded source with complete, cancellable/visible discovery and true cross-page sorting without persistent index; stay read-only.
+3. Add Test Generations artifact/session context, then Epoch Finder, Training and Storyboard incrementally based on verified manifest data; ensure references are included as media roles.
+4. Implement deep links and owner-specific capability actions only after those contracts exist; compare/selection and visual polish thereafter.

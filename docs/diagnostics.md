@@ -90,3 +90,8 @@ Short assessment reports use `assessmentKind: confirmation`, so a 2K sample is n
 The Benchmark view also displays previously saved, completed Director confirmation writing samples in a separate read-only disclosure; full raw prompts and prose are fetched only when an item is expanded. They are not benchmark runs, are not directly comparable to the custom benchmark prompt, and do not trigger inference; only evidence matching the current report timestamp is displayed. Historical raw assessment evidence remains independently managed.
 
 Production Director inference no longer automatically imports limits from historical calibration profiles when settings are Auto. Explicit settings, per-request context/output limits and the runtime's native defaults retain their normal precedence. Existing profile files, reports, and UI evidence remain available; nothing is purged. The actual effective runtime limit still depends on the selected backend and available hardware.
+
+
+### Unified Model Assessment (incremental consolidation)
+
+Model Assessment supports Quick (eight Set samples) and Deep (up to sixteen Set samples with additional 1K and 4K Director writing probes) through the existing Model Lab runner. Completed writing probes demonstrate only observed behavior at the requested output budget, not a verified maximum output or context limit. Recorded summaries aggregate per-probe completion counts and measured token throughput without exposing raw prose in the summary. The underlying diagnostics journal still retains raw test outputs; use its existing deletion controls when no longer needed. Specialist calibration, benchmark, and hardware tools remain available until their distinct functionality is verified as replaced. No GPU scheduling changes.

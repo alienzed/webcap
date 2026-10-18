@@ -424,8 +424,8 @@
       if (wizardStep === 1 && !selectedRunEntries().length) {
         throw new Error('Choose a saved training run.');
       }
-      if (wizardStep === 1 && !chosenEpochs().length) {
-        throw new Error('Select at least one epoch.');
+      if (wizardStep === 1 && selectedRunEntries().some(function (entry) { return !entry.epochs.length; })) {
+        throw new Error('Select at least one checkpoint in every checked run, or uncheck that run.');
       }
       if (wizardStep === 2) {
         if (!dimensions.length && els('prompt').value.trim()) updateDimensions();

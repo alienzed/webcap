@@ -63,6 +63,8 @@ _reconcile_lock = threading.Lock()
 _startup_reconciled = False
 _monitor_lock = threading.Lock()
 _monitor_thread = None
+_revision_progress = {}
+_revision_progress_lock = threading.Lock()
 _logger = logging.getLogger(__name__)
 
 
@@ -116,7 +118,10 @@ def _job_view(job):
         return None
     metadata = job.get("metadata") if isinstance(job.get("metadata"), dict) else {}
     result = job.get("result") if isinstance(job.get("result"), dict) else {}
+    with _revision_progress_lock:
+        revision = dict(_revision_progress.get(str(job.get("id") or ""), {}))
     return {
+        "revisionProgress": revision,
         "jobId": str(job.get("id") or ""),
         "client": str(metadata.get("client") or ""),
         "label": str(metadata.get("label") or ""),
@@ -561,6 +566,8 @@ def _execute_claimed(job_id, gpu_reserved):
         scene_ids = list(context.get("sceneIds") or [])
         instruction = str(context.get("sourceInstruction") or "")
         completed = 0
+        with _revision_progress_lock:
+            _revision_progress[job_id] = {"completed": 0, "total": len(scene_ids), "phase": "Revising Scenes"}
         try:
             for scene_id in scene_ids:
                 with _enqueue_lock:
@@ -579,6 +586,8 @@ def _execute_claimed(job_id, gpu_reserved):
                         "operation": "refine_prompt", "sourceInstruction": instruction,
                     }, result, job_id=job_id, frozen_contract=scene_contract)
                 completed += 1
+                with _revision_progress_lock:
+                    _revision_progress[job_id] = {"completed": completed, "total": len(scene_ids), "phase": "Revising Scenes"}
         except Exception as exc:
             raise RuntimeError("Revise Scenes failed after " + str(completed) +
                 " of " + str(len(scene_ids)) + " Scenes: " + str(exc)) from exc

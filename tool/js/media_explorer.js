@@ -149,7 +149,7 @@
     section('Prompt', item.prompt, true);
     if (item.sourcePrompt !== item.prompt) section('Original prompt', item.sourcePrompt, false);
     if (item.assessment) section(item.assessment.label + (item.assessment.model ? ' · ' + item.assessment.model : ''), item.assessment.text, false);
-    var uses = Array.from(new Map((item.uses || []).map(function (use) { return [use.storageId + ':' + use.role, use]; })).values());
+    var uses = Array.from(new Map((item.uses || []).map(function (use) { return [use.source + ':' + use.storageId + ':' + (use.takeId || '') + ':' + use.role, use]; })).values());
     if (uses.length) {
       var relationships = document.createElement('details'), relationshipsTitle = document.createElement('summary');
       relationships.className = 'media-explorer-inspector-section'; relationships.open = true;
@@ -162,7 +162,7 @@
           row.type = 'button'; row.className = 'media-explorer-use-link';
           row.addEventListener('click', function () {
             if (use.source === 'generate') window.openGenerateActivity({storageId: use.storageId});
-            else if (use.source === 'storyboard') window.openStoryboardActivity({storyId: item.storageId, sceneId: use.storageId});
+            else if (use.source === 'storyboard') window.openStoryboardActivity({storyId: item.storageId, sceneId: use.storageId, takeId: use.takeId || ''});
             else if (use.source === 'test') window.openTestBenchActivity({folder: item.ownerFolder, sessionId: item.storageId, modelId: item.model || ''});
             else if (use.source === 'epoch') window.openTestBenchActivity({folder: item.ownerFolder, campaignId: item.storageId, modelId: item.model || ''});
           });
@@ -277,10 +277,11 @@
     if (item.source === 'storyboard' && item.storageId) {
       var storyBtn = document.createElement('button');
       storyBtn.type = 'button'; storyBtn.className = 'review-captions-btn';
-      text(storyBtn, 'Open Storyboard');
+      text(storyBtn, (item.uses || []).length > 1 ? 'View Storyboard owners above' : 'Manage in Storyboard');
+      storyBtn.disabled = (item.uses || []).length !== 1;
       storyBtn.addEventListener('click', function () {
         var scene = item.uses && item.uses[0] && item.uses[0].storageId || '';
-        window.openStoryboardActivity({storyId: item.storageId, sceneId: scene});
+        window.openStoryboardActivity({storyId: item.storageId, sceneId: scene, takeId: item.uses && item.uses[0] && item.uses[0].takeId || ''});
       });
       actions.appendChild(storyBtn);
     }

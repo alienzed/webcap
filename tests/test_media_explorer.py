@@ -351,3 +351,35 @@ def test_existing_test_owner_ratings_are_discovered(monkeypatch, tmp_path):
     test_items = media_explorer.list_media(source="test")["items"]
     assert len(test_items) == 1
     assert test_items[0]["rating"] == 3
+
+
+def test_storyboard_provenance_keeps_exact_scene_take_and_reference_uses(monkeypatch, tmp_path):
+    from tool.server import storyboard_store
+
+    story = {
+        "id": "story-a", "title": "Storyboard",
+        "scenes": {
+            "scene-one": {
+                "title": "First",
+                "takes": {"take-1": {"mediaPath": "takes/shared.png", "generated": True}},
+                "references": [],
+            },
+            "scene-two": {
+                "title": "Second",
+                "takes": {},
+                "references": [{"mediaPath": "takes/shared.png", "role": "visual"}],
+            },
+        },
+    }
+    file = tmp_path / "shared.png"
+    file.write_bytes(b"image")
+    monkeypatch.setattr(storyboard_store, "list_stories", lambda: [{"id": "story-a"}])
+    monkeypatch.setattr(storyboard_store, "load_story", lambda story_id: story)
+    monkeypatch.setattr(storyboard_store, "resolve_story_media", lambda story_id, path: file)
+    items = media_explorer.discover_storyboards()
+    assert len(items) == 1
+    assert items[0]["roles"] == ["generated", "reference"]
+    assert items[0]["uses"] == [
+        {"storageId": "scene-one", "role": "take-1", "source": "storyboard", "label": "First", "takeId": "take-1"},
+        {"storageId": "scene-two", "role": "visual", "source": "storyboard", "label": "Second"},
+    ]

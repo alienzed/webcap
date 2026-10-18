@@ -5451,6 +5451,7 @@
     target = target && typeof target === 'object' ? target : {};
     var targetStoryId = String(target.storyId || '');
     var targetSceneId = String(target.sceneId || '');
+    var targetTakeId = String(target.takeId || '');
     if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
     var frame = el('app-frame');
     var workspace = el('storyboard-workspace');
@@ -5482,7 +5483,20 @@
       if (!storyState.story.scenes || !storyState.story.scenes[targetSceneId]) {
         throw new Error('Storyboard activity Scene no longer exists: ' + targetSceneId);
       }
-      return setSceneViewMode('focus', targetSceneId);
+      return Promise.resolve(setSceneViewMode('focus', targetSceneId)).then(function () {
+        if (!targetTakeId) return;
+        var scene = storyState.story.scenes[targetSceneId];
+        if (!(scene.takes && scene.takes[targetTakeId]) && !(scene.removedTakes && scene.removedTakes[targetTakeId])) {
+          throw new Error('Storyboard Take no longer exists in scene: ' + targetTakeId);
+        }
+        var sceneRoot = sceneElement(targetSceneId);
+        var cards = sceneRoot && sceneRoot.querySelectorAll('.storyboard-take[data-take-id]');
+        var card = cards && Array.prototype.find.call(cards, function (node) { return node.dataset.takeId === targetTakeId; });
+        if (!card) throw new Error('Storyboard Take is not visible in scene: ' + targetTakeId);
+        card.setAttribute('tabindex', '-1');
+        card.scrollIntoView({block: 'center'});
+        card.focus();
+      });
     }).catch(reportError);
   }
 

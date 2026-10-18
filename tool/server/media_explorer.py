@@ -303,6 +303,8 @@ def discover_storyboards():
                     continue
                 identity = "storyboard:" + story_id + ":" + path
                 use = {"storageId": str(scene_id), "role": label, "source": "storyboard", "label": str(scene.get("title") or scene_id)}
+                if role != "reference":
+                    use["takeId"] = label
                 if identity in found:
                     found[identity]["uses"].append(use)
                     if role not in found[identity]["roles"]:

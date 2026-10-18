@@ -3734,3 +3734,26 @@
   }
 
 }
+
+
+/* Readable, spacious live Storyboard command cards on large monitors. */
+@media (min-width: 981px) {
+  .storyboard-director-activity.is-workspace-overlay {
+    min-height: 250px;
+    column-gap: 30px;
+    row-gap: 14px;
+    padding: 26px 30px;
+    grid-template-columns: minmax(300px, 0.85fr) minmax(320px, 1.15fr);
+  }
+  .storyboard-director-activity.is-workspace-overlay #storyboard-director-activity-trend svg {
+    min-height: 170px;
+  }
+}
+.storyboard-director-activity strong { font-size: 14px; }
+.storyboard-director-activity > span { font-size: 15px; line-height: 1.5; }
+#storyboard-director-activity-phase { font-size: clamp(23px, 2vw, 32px); line-height: 1.15; }
+#storyboard-director-activity-detail { font-size: 16px; line-height: 1.65; }
+.storyboard-story-action-card { font-size: 16px; line-height: 1.5; }
+#storyboard-story-action-phase { font-size: clamp(22px, 1.8vw, 30px); line-height: 1.2; }
+#storyboard-story-action-detail { font-size: 16px; }
+.storyboard-first-cut-batch-row { font-size: 15px; }

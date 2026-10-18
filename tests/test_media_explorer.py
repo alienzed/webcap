@@ -376,6 +376,8 @@ def test_storyboard_provenance_keeps_exact_scene_take_and_reference_uses(monkeyp
     monkeypatch.setattr(storyboard_store, "list_stories", lambda: [{"id": "story-a"}])
     monkeypatch.setattr(storyboard_store, "load_story", lambda story_id: story)
     monkeypatch.setattr(storyboard_store, "resolve_story_media", lambda story_id, path: file)
+    from tool.server import storyboard_assembly
+    monkeypatch.setattr(storyboard_assembly, "current_export", lambda story_id: None)
     items = media_explorer.discover_storyboards()
     assert len(items) == 1
     assert items[0]["roles"] == ["generated", "reference"]
@@ -404,3 +406,23 @@ def test_media_explorer_recent_date_filter(monkeypatch):
     assert len(media_explorer.list_media(date="90")["items"]) == 2
     with pytest.raises(ValueError, match="date"):
         media_explorer.list_media(date="999")
+
+
+def test_storyboard_sequence_export_is_discovered(monkeypatch, tmp_path):
+    from tool.server import storyboard_store, storyboard_assembly
+
+    story = {"id": "story-a", "title": "My story", "scenes": {}}
+    video = tmp_path / "selected-sequence.mp4"
+    video.write_bytes(b"video")
+    monkeypatch.setattr(storyboard_store, "list_stories", lambda: [{"id": "story-a"}])
+    monkeypatch.setattr(storyboard_store, "load_story", lambda story_id: story)
+    monkeypatch.setattr(storyboard_store, "resolve_story_media", lambda story_id, path: video)
+    monkeypatch.setattr(storyboard_assembly, "current_export", lambda story_id: {
+        "mediaPath": "exports/selected-sequence.mp4", "createdAt": "2026-10-18T20:00:00+00:00"
+    })
+    items = media_explorer.discover_storyboards()
+    assert len(items) == 1
+    assert items[0]["role"] == "export"
+    assert items[0]["mediaKind"] == "video"
+    assert items[0]["storageId"] == "story-a"
+    assert items[0]["uses"][0]["label"] == "Sequence export"

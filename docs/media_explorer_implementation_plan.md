@@ -135,3 +135,10 @@ This is an **incremental implementation**, not the completed universal library. 
 ### Test Generations integration checkpoint
 
 Central Test session manifests at `output/test-generations` and `output/test-generations/sets/*/sessions` are now included through the existing owner/session resolver, with ratings read from session metadata and preview URLs served by `/fs/test_generations/media`. The source filter is exposed in the Explorer. Legacy Set-local sessions are not included yet. **Not yet delivered:** end-to-end source navigation, reference relationships for Test sessions, and verified runtime/browser tests. No source files or test results are modified.
+
+### Source navigation checkpoint
+
+- Test results now expose **Open Test session** from the Explorer inspector, using Test Generations' existing `openTestBenchActivity({folder, sessionId, modelId})` entry point, not direct DOM manipulation.
+- Explorer requests are invalidated when leaving its workspace so late responses cannot append into an inactive view.
+- The scope remains central Test session media plus Generate results/references. Per-Set legacy sessions, Test reference media, Epoch Finder, Training and Storyboard still require owner-specific discovery audits; do not label coverage complete.
+- Source navigation and visual behavior still need executable runtime verification before merge.

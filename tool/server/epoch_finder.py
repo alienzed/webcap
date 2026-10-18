@@ -96,7 +96,9 @@ def _runs(folder_path):
             continue
         if epochs:
             result.append({
-                "jobId": job_id, "runName": run.get("runName") or job_id,
+                "jobId": job_id, "runName": run.get("runName") or "",
+                "runSequence": run.get("runSequence") or "",
+                "setName": Path(folder).name,
                 "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
                 "epochs": epochs,
             })
@@ -246,18 +248,57 @@ def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings, round_op
 def create_campaign(folder_path, criteria):
     criteria = criteria if isinstance(criteria, dict) else {}
     folder = _folder_key(folder_path)
-    job_id = str(criteria.get("jobId") or "").strip()
     runs = {run["jobId"]: run for run in _runs(folder_path)}
-    if job_id not in runs:
-        raise ValueError("Select a training run with available saved epochs.")
-    run = runs[job_id]
-    available = set(run["epochs"])
-    selected_epochs = criteria.get("epochs", run["epochs"])
-    if (not isinstance(selected_epochs, list) or not selected_epochs or
-            any(type(epoch) is not int or epoch not in available for epoch in selected_epochs) or
-            len(selected_epochs) != len(set(selected_epochs))):
-        raise ValueError("Select one or more distinct available epochs from this training run.")
-    selected_epochs = sorted(selected_epochs)
+    selections = criteria.get("runSelections")
+    candidate_map = None
+    if selections is not None:
+        if not isinstance(selections, list) or not selections:
+            raise ValueError("Select at least one training run.")
+        seen_runs = set()
+        normalized = []
+        for choice in selections:
+            if not isinstance(choice, dict):
+                raise ValueError("Invalid training-run selection.")
+            chosen_id = str(choice.get("jobId") or "").strip()
+            if chosen_id in seen_runs or chosen_id not in runs:
+                raise ValueError("Training run selection is duplicate or unavailable in this Set.")
+            seen_runs.add(chosen_id)
+            source = runs[chosen_id]
+            epochs = choice.get("epochs")
+            if (not isinstance(epochs, list) or not epochs or
+                    len(epochs) != len(set(epochs)) or
+                    any(type(epoch) is not int or epoch not in source["epochs"] for epoch in epochs)):
+                raise ValueError("Select distinct, available checkpoints for every chosen run.")
+            normalized.append({"jobId": chosen_id, "epochs": sorted(epochs)})
+        models = {(runs[item["jobId"]]["modelId"], runs[item["jobId"]]["stage"]) for item in normalized}
+        if len(models) != 1:
+            raise ValueError("A campaign can compare only runs using the same Test model and stage.")
+        job_id = normalized[0]["jobId"]
+        run = runs[job_id]
+        if len(normalized) > 1:
+            candidate_map = {}
+            for choice in normalized:
+                for epoch in choice["epochs"]:
+                    candidate_map[str(len(candidate_map) + 1)] = {
+                        "jobId": choice["jobId"], "epoch": epoch,
+                        "runName": runs[choice["jobId"]]["runName"],
+                        "runSequence": runs[choice["jobId"]].get("runSequence") or ""}
+            selected_epochs = list(range(1, len(candidate_map) + 1))
+        else:
+            selected_epochs = normalized[0]["epochs"]
+    else:
+        job_id = str(criteria.get("jobId") or "").strip()
+        if job_id not in runs:
+            raise ValueError("Select a training run with available saved epochs.")
+        run = runs[job_id]
+        available = set(run["epochs"])
+        selected_epochs = criteria.get("epochs", run["epochs"])
+        if (not isinstance(selected_epochs, list) or not selected_epochs or
+                any(type(epoch) is not int or epoch not in available for epoch in selected_epochs) or
+                len(selected_epochs) != len(set(selected_epochs))):
+            raise ValueError("Select one or more distinct available epochs from this training run.")
+        selected_epochs = sorted(selected_epochs)
+        normalized = [{"jobId": job_id, "epochs": selected_epochs}]
     model = get_test_model_for_staging_key(run["stage"])
     model.load_template()
     prompt = str(criteria.get("prompt") or "").strip()
@@ -331,16 +372,18 @@ def create_campaign(folder_path, criteria):
     parent_id = str(criteria.get("parentCampaignId") or "")
     if parent_id:
         parent = _load(folder_path, parent_id)
-        if parent.get("jobId") != job_id:
-            raise ValueError("Follow-up campaign must use the original training run.")
+        if parent.get("jobId") != job_id or parent.get("runSelections", [{"jobId": job_id, "epochs": parent["rounds"][0]["epochs"]}]) != normalized:
+            raise ValueError("Follow-up campaign must use its original selected runs and checkpoints.")
     campaign_id = secrets.token_hex(6)
     directory = _directory(folder_path, campaign_id)
     directory.mkdir(parents=True, exist_ok=False)
     (directory / "frames").mkdir()
     campaign = {
-        "version": 1, "id": campaign_id, "folder": folder, "jobId": job_id,
+        "version": 2 if candidate_map else 1, "id": campaign_id, "folder": folder, "jobId": job_id,
         "parentCampaignId": parent_id or None,
-        "runName": run["runName"], "modelId": model.PROFILE_ID, "stage": run["stage"],
+        "runName": (str(len(normalized)) + " runs · " + str(run["runName"] or "Run")) if candidate_map else run["runName"],
+        "runSelections": normalized, "candidateMap": candidate_map or {},
+        "modelId": model.PROFILE_ID, "stage": run["stage"],
         "name": str(criteria.get("name") or run["runName"]).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
         "round": 1, "rounds": plans,
@@ -368,7 +411,11 @@ def _staging(folder_path, campaign):
 def _stage_epoch(folder_path, campaign, epoch):
     directory = _staging(folder_path, campaign)
     directory.mkdir(parents=True, exist_ok=True)
-    source = _candidate_safetensors_path(_folder_key(folder_path), campaign["jobId"], epoch)
+    origin = (campaign.get("candidateMap") or {}).get(str(epoch))
+    source = _candidate_safetensors_path(
+        _folder_key(folder_path),
+        origin["jobId"] if origin else campaign["jobId"],
+        origin["epoch"] if origin else epoch)
     target = directory / ("epoch" + str(epoch) + ".safetensors")
     if target.exists():
         if target.is_symlink() or target.stat().st_size != source.stat().st_size:

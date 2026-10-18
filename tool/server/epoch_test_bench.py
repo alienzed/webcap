@@ -745,7 +745,7 @@ def _snapshot_session_assessments(folder_path, sessions):
             update = updates.setdefault(sidecar, {"manual": {"sum": 0, "count": 0}, "vision": {"matches": 0.0, "count": 0, "previews": 0}})
             if name in ratings:
                 item = ratings[name]
-                update["manual"]["sum"] += round(item["average"] * item["count"])
+                update["manual"]["sum"] += item["sum"]
                 update["manual"]["count"] += item["count"]
             if name in vision:
                 item = vision[name]
@@ -815,6 +815,7 @@ def _candidate_rating_scores(folder_path, model_id=None, session_snapshot=None, 
     return {
         name: {
             "average": round(values["sum"] / values["count"], 2),
+            "sum": values["sum"],
             "count": values["count"],
         }
         for name, values in totals.items()

@@ -39,6 +39,7 @@ from .video_frame_ops import extract_video_frame_response, inspect_video_frame_r
 from .run_ops import train_run_response
 from .training_profiles import profiles as training_profiles
 from .training_runner import TrainingStateError, log_response as training_runner_log_response, log_path_for_job as training_runner_log_path_for_job, output_path_for_job as training_runner_output_path_for_job, action_path_for_job as training_runner_action_path_for_job, candidate_run_available as training_runner_candidate_run_available, candidate_run_folder_path as training_runner_candidate_run_folder_path, candidate_epoch_folder_path as training_runner_candidate_epoch_folder_path, candidate_test_folder_path as training_runner_candidate_test_folder_path, save_candidate_epoch_response as training_runner_save_candidate_epoch_response, copy_candidate_epoch_to_test_response as training_runner_copy_candidate_epoch_to_test_response, remove_candidate_epoch_from_test_response as training_runner_remove_candidate_epoch_from_test_response, select_candidate_epoch_response as training_runner_select_candidate_epoch_response, clear_candidate_epoch_selection_response as training_runner_clear_candidate_epoch_selection_response, start_response as training_runner_start_response, status_response as training_runner_status_response, gpu_status_response as training_runner_gpu_status_response, stop_response as training_runner_stop_response, finish_schedule_response as training_runner_finish_schedule_response, validate_response as training_runner_validate_response, reorder_response as training_runner_reorder_response, resume_queue_response as training_runner_resume_queue_response, history_metrics_response as training_runner_history_metrics_response, clear_history_response as training_runner_clear_history_response, candidate_analysis_response as training_runner_candidate_analysis_response, recover_state_response as training_runner_recover_state_response, reconcile_startup as reconcile_training_startup, start_observer as start_training_runner_observer
+from .training_run_delete import preview as training_run_delete_preview, delete as training_run_delete_execute
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, clear_history as clear_training_history, discovered_run_output_path, history_job_output_path
 from .training_archive import preview as training_archive_preview, finalize as training_archive_finalize, list_archives as training_archive_list, archive_metrics as training_archive_metrics
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
@@ -2611,6 +2612,35 @@ def training_history_job_clear_route():
         return jsonify({"ok": False, "error": "Folder and job ID are required."}), 400
     payload, status = training_runner_clear_history_response(folder, job_id)
     return jsonify(payload), status
+
+
+@app.route("/fs/training_history/job/delete/preview", methods=["POST"])
+def training_history_delete_preview_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        result = training_run_delete_preview(str(data.get("folder") or ""), str(data.get("jobId") or ""))
+        return jsonify({"ok": True, "preview": result})
+    except LookupError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (ValueError, RuntimeError, OSError) as exc:
+        app.logger.error("Training deletion preview failed: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 409
+
+
+@app.route("/fs/training_history/job/delete", methods=["POST"])
+def training_history_delete_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        result = training_run_delete_execute(
+            str(data.get("folder") or ""), str(data.get("jobId") or ""),
+            delete_candidates=bool(data.get("deleteCandidates", True)),
+        )
+        return jsonify({"ok": True, **result})
+    except LookupError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 404
+    except (ValueError, RuntimeError, OSError) as exc:
+        app.logger.exception("Training deletion failed")
+        return jsonify({"ok": False, "error": str(exc)}), 409
 
 
 @app.route("/fs/training_archive", methods=["GET"])

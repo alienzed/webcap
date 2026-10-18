@@ -279,6 +279,7 @@ function renderTrainingHistory() {
           '<details class="training-history-more"><summary class="training-history-action" title="More run actions" aria-label="More run actions">&#8230;</summary><div class="training-history-more-menu">' +
             (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">&#128193; Open output</button>' : '') +
             (job.actionAvailable !== false && job.actionPath ? '<button type="button" data-training-history-action="' + escapeHtml(job.id || '') + '">&#128451; Open action folder</button>' : '') +
+            '<button type="button" data-training-history-delete="' + escapeHtml(job.id || '') + '">Delete run and files…</button>' +
             '<button type="button" data-training-history-clear="' + escapeHtml(job.id || '') + '">Remove from Training History</button>' +
           '</div></details>' +
         '</div>' +
@@ -864,3 +865,43 @@ function refreshTrainingHistory(force) {
       setStatus('Could not load training history: ' + String(err.message || err));
     });
 }
+
+function deleteTrainingHistoryRun(jobId) {
+  var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
+    ? trainingWorkspaceState.history.jobs : [];
+  var job = jobs.filter(function (item) { return String(item.id) === String(jobId); })[0];
+  if (!job || !job.folder) throw new Error('Training History entry not found.');
+  var data = { folder: job.folder, jobId: jobId };
+  trainingRunnerRequest('/fs/training_history/job/delete/preview', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  }).then(function (payload) {
+    var preview = payload.preview;
+    var message = 'PERMANENTLY delete this training run?\\n\\n' +
+      'Trainer directory: ' + preview.output + '\\n' +
+      'Associated action artifacts: ' + preview.artifacts.length + '\\n' +
+      'History records: ' + preview.historyCount + '\\n' +
+      'Identified Test copies: ' + preview.candidateCount + '\\n\\n' +
+      'Files will NOT be archived or recoverable.';
+    if (!window.confirm(message)) return;
+    var removeCandidates = preview.candidateCount > 0 &&
+      window.confirm('Also delete the ' + preview.candidateCount + ' identified Test candidate copies?\\n\\nOK = delete candidates (recommended). Cancel = keep candidates.');
+    return trainingRunnerRequest('/fs/training_history/job/delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({}, data, {deleteCandidates: removeCandidates}))
+    }).then(function () {
+      setStatus('Training run and associated files permanently deleted.');
+      return Promise.all([refreshTrainingHistory(true), refreshTrainingRunnerStatus()]);
+    });
+  }).catch(function (err) {
+    setStatus('Could not delete training run: ' + String(err && err.message || err));
+    if (typeof window.reportConsoleError === 'function')
+      window.reportConsoleError('Training Run Deletion', String(err && err.message || err));
+  });
+}
+
+document.addEventListener('click', function (event) {
+  var target = event.target.closest('[data-training-history-delete]');
+  if (!target) return;
+  event.preventDefault();
+  deleteTrainingHistoryRun(target.getAttribute('data-training-history-delete'));
+});

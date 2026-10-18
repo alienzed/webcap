@@ -3,6 +3,7 @@
   var lane = 'inference';
   var snapshots = { llm: null, training: null };
   var pending = false;
+  var opening = 0;
   var drawer = document.getElementById('inference-queue-drawer');
   var summary = document.getElementById('inference-queue-summary');
   var oldPause = document.getElementById('inference-queue-pause');
@@ -184,6 +185,25 @@
     Array.prototype.forEach.call(list.children, function (node) { if (!keep.has(node)) node.remove(); });
     wanted.forEach(function (node, index) { if (list.children[index] !== node) list.insertBefore(node, list.children[index] || null); });
   }
+  function preferredLane() {
+    var names = ['inference', 'llm', 'training'];
+    function mostRecent(which, runningOnly) {
+      return jobsFor(which).filter(function (job) {
+        return runningOnly ? active(job) : job.status === 'queued' || job.status === 'backlog';
+      }).reduce(function (latest, job) {
+        var raw = job.startedAt || job.createdAt || 0;
+        var stamp = typeof raw === 'number' ? raw : Date.parse(raw);
+        return Math.max(latest, Number.isFinite(stamp) ? stamp : 0);
+      }, 0);
+    }
+    var running = names.filter(function (which) { return jobsFor(which).some(active); });
+    if (running.length) return running.sort(function (a, b) { return mostRecent(b, true) - mostRecent(a, true); })[0];
+    var queued = names.filter(function (which) { return jobsFor(which).some(function (job) {
+      return job.status === 'queued' || job.status === 'backlog';
+    }); });
+    if (queued.length) return queued.sort(function (a, b) { return mostRecent(b, false) - mostRecent(a, false); })[0];
+    return lane;
+  }
   function select(which) {
     if (['inference', 'llm', 'training'].indexOf(which) < 0) throw new Error('Unknown job queue lane ' + which);
     lane = which;
@@ -237,7 +257,7 @@
   }
   drawer.addEventListener('click', function (event) {
     var tab = event.target.closest('[data-job-queue-tab]');
-    if (tab) { select(tab.dataset.jobQueueTab); return; }
+    if (tab) { opening++; select(tab.dataset.jobQueueTab); return; }
     var button = event.target.closest('[data-job-queue-action]');
     if (button) Promise.resolve(perform(button.dataset.jobQueueLane, button.dataset.jobQueueAction, button.dataset.jobQueueId || ''))
       .catch(function (error) { if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Job Queues', error); });
@@ -247,8 +267,16 @@
     if (!tab || ['ArrowLeft', 'ArrowRight'].indexOf(event.key) === -1) return;
     event.preventDefault();
     var all = ['inference', 'llm', 'training'];
+    opening++;
     select(all[(all.indexOf(lane) + (event.key === 'ArrowRight' ? 1 : 2)) % 3]);
     document.getElementById('job-queue-tab-' + lane).focus();
+  });
+  window.addEventListener('webcap:job-queues-opened', function () {
+    var attempt = ++opening;
+    // Inference refresh makes the drawer visible; then retrieve the other lanes.
+    window.refreshInferenceQueue().then(function () { return refresh(); }).then(function () {
+      if (attempt === opening && !drawer.classList.contains('hidden')) select(preferredLane());
+    });
   });
   window.addEventListener('webcap:inference-queue-snapshot', function () { render('inference'); });
   window.setInterval(function () { refresh(); }, 3000);

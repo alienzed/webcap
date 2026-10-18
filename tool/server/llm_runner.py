@@ -620,11 +620,10 @@ def _execute_claimed(job_id, gpu_reserved):
         else:
             llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
     except Exception as exc:
-        _logger.exception(
-            "Director/model stage failed before WebCap ingest.\n"
-            "--- FROZEN LLM CONTRACT ---\n%s",
-            _diagnostic_contract_json(contract),
-        )
+        # Full failure detail remains in the transient job receipt / live Console.
+        # Never persist contract content or exception text in server logs.
+        _logger.error("LLM model stage failed: client=%s operation=%s error_type=%s",
+                      client, str(contract.get("operation") or ""), type(exc).__name__)
         raise RuntimeError(
             "Director/model stage failed before WebCap ingest: " + str(exc)
         ) from exc
@@ -644,15 +643,9 @@ def _execute_claimed(job_id, gpu_reserved):
         try:
             result = _client_result(client, context, llm_result, job_id=job_id, frozen_contract=contract)
         except Exception as exc:
-            _logger.exception(
-                "WebCap ingest rejected a successful LLM response.\n"
-                "--- FROZEN LLM CONTRACT ---\n%s\n"
-                "--- CLIENT CONTEXT ---\n%s\n"
-                "--- RAW MODEL RESPONSE ---\n%s",
-                _diagnostic_contract_json(contract),
-                json.dumps(context, indent=2, ensure_ascii=False),
-                str(llm_result.get("text") or ""),
-            )
+            # Keep the original error in the transient job receipt, not on disk.
+            _logger.error("LLM ingest failed: client=%s operation=%s error_type=%s",
+                          client, str(contract.get("operation") or ""), type(exc).__name__)
             raise RuntimeError(
                 "WebCap ingest failed after a successful model response: " + str(exc)
             ) from exc
@@ -734,7 +727,7 @@ def _advance_queue():
                     status="failed",
                     error=str(exc),
                 )
-            _logger.exception("Queued LLM job failed.")
+            _logger.error("Queued LLM job failed: error_type=%s", type(exc).__name__)
         finally:
             if local_gpu and release_gpu:
                 current = execution_lane_snapshot(EXECUTION_LANE, include_terminal=False)

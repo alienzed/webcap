@@ -282,7 +282,7 @@ def create_campaign(folder_path, criteria):
     plans = _create_plan(selected_epochs, prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans"))
     for round_plan in plans:
         model.normalize_settings(template, lambda: 1, dict(round_plan["settings"], seed=1))
-    from .epoch_reference import verified_reference, reference_vocabulary
+    from .epoch_reference import verified_reference, reference_vocabulary, validate_group_combinations
     scoped = reference_vocabulary(folder, job_id)
     primary_groups = {}
     for dimension in dimensions:
@@ -295,6 +295,7 @@ def create_campaign(folder_path, criteria):
             raise ValueError("Primary attribute " + dimension["label"] +
                              " must match exact tags in one trained annotation group.")
         primary_groups[dimension["label"]] = matches[0]
+    validate_group_combinations(folder, job_id, dimensions, primary_groups)
     reference_choices = criteria.get("referencePlan")
     if not isinstance(reference_choices, list):
         raise ValueError("Approve a training reference for every Primary wildcard option.")

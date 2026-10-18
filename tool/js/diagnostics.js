@@ -8,12 +8,14 @@ function diagnosticsEl(id) {
 }
 
 function setDiagnosticsTab(tabName, focusTab) {
+  // Legacy deep links still open their specialist tool panels; only consolidated
+  // primary destinations appear in the tab bar.
   var next = ['health', 'assessment', 'h3', 'models', 'benchmark', 'model-lab'].indexOf(tabName) !== -1 ? tabName : 'health';
   diagnosticsActiveTab = next;
   var selectedButton = null;
 
   Array.prototype.forEach.call(document.querySelectorAll('[data-diagnostics-tab]'), function (button) {
-    var active = button.getAttribute('data-diagnostics-tab') === next;
+    var active = button.getAttribute('data-diagnostics-tab') === (next === 'models' || next === 'benchmark' ? 'assessment' : next);
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', active ? 'true' : 'false');
     button.tabIndex = active ? 0 : -1;
@@ -126,13 +128,38 @@ function refreshUnifiedModelAssessment() {
         findings.push(family.label + ': ' + text);
       });
       if (kind === 'director' && report) findings.push('Legacy writing assessment: ' + String(report.health || report.status || 'recorded'));
-      var line = document.createElement('div');
-      line.className = 'app-settings-help';
-      line.textContent = findings.join(' · ');
-      row.appendChild(line);
+      var metrics = document.createElement('div');
+      metrics.className = 'model-assessment-metrics';
+      function metric(label, value, hint) {
+        var cell = document.createElement('div');
+        cell.className = 'model-assessment-metric';
+        var name = document.createElement('small');
+        name.textContent = label;
+        var data = document.createElement('strong');
+        data.textContent = value;
+        if (hint) data.title = hint;
+        cell.appendChild(name);
+        cell.appendChild(data);
+        metrics.appendChild(cell);
+      }
+      var attempts = report && Array.isArray(report.attempts) ? report.attempts : [];
+      var measured = attempts.filter(function (attempt) {
+        return attempt.status === 'passed' && Number(attempt.tokensPerSecond) > 0;
+      });
+      var speed = measured.length ? Number(measured[measured.length - 1].tokensPerSecond).toFixed(1) + ' tok/s' : '—';
+      var abilities = report && report.abilities || {};
+      var output = Number(abilities.coherentOutputTokens || 0);
+      var quality = kind === 'director' && report ? String(report.health || report.status || 'Recorded') : '—';
+      metric('Speed', speed, 'Measured from saved Director assessment probe, not a model-wide speed guarantee');
+      metric('Output observed', output > 0 ? output.toLocaleString() + ' tokens' : '—',
+        'Observed coherent output, not a verified maximum');
+      var primary = findings[0] || 'Not tested';
+      metric(kind === 'vision' ? 'Vision' : 'Writing', primary.split(': ').slice(1).join(': ') || 'Not tested');
+      metric('Assessment', quality === '—' ? (latest ? latest.status || 'Recorded' : 'Not tested') : quality);
+      row.appendChild(metrics);
       var details = document.createElement('details');
       var caption = document.createElement('summary');
-      caption.textContent = 'Evidence and provenance';
+      caption.textContent = 'More capabilities, limits and evidence';
       details.appendChild(caption);
       var provenance = document.createElement('div');
       provenance.className = 'app-settings-help';
@@ -141,6 +168,10 @@ function refreshUnifiedModelAssessment() {
           (latest.startedAt ? ' · ' + latest.startedAt : '')
         : 'No saved Model Lab evidence for this model.';
       details.appendChild(provenance);
+      var other = document.createElement('div');
+      other.className = 'app-settings-help';
+      other.textContent = findings.join(' · ') + ' · Context limit: not established by this assessment';
+      details.appendChild(other);
       Object.keys(tests).forEach(function (key) {
         var line = document.createElement('div');
         line.className = 'app-settings-help';
@@ -583,7 +614,7 @@ function wireDiagnosticsUi() {
       setDiagnosticsTab(button.getAttribute('data-diagnostics-tab'), false);
     };
     button.onkeydown = function (event) {
-      var tabs = ['health', 'h3', 'models', 'benchmark'];
+      var tabs = ['health', 'assessment', 'h3', 'model-lab'];
       var current = tabs.indexOf(button.getAttribute('data-diagnostics-tab'));
       var next = current;
       if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;

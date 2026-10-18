@@ -3694,7 +3694,12 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-tools { margin: 8px 0 12px; }
 .model-assessment-tools > summary { cursor: pointer; color: var(--muted); }
 .model-assessment-tools > .model-assessment-toolbar { padding-top: 10px; }
-#diagnostics-assessment-results { display: grid; gap: 6px; min-width: 0; width: 100%; }
+#diagnostics-assessment-results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; width: 100%; }
+@media (max-width: 950px) { #diagnostics-assessment-results { grid-template-columns: 1fr; } }
+.model-assessment-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 10px 0 4px 25px; }
+.model-assessment-metric { min-width: 0; padding: 6px 8px; background: var(--surface-alt, rgba(128,128,128,.07)); border-radius: 5px; }
+.model-assessment-metric small { display: block; color: var(--muted); font-size: 11px; }
+.model-assessment-metric strong { display: block; margin-top: 3px; font-size: 13px; overflow-wrap: anywhere; }
 .model-assessment-row { min-width: 0; padding: 10px 12px; border: 1px solid var(--border, #353b45); border-radius: 7px; }
 .model-assessment-row-head { display: flex; gap: 9px; align-items: center; min-width: 0; }
 .model-assessment-row-head input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; }
@@ -3707,3 +3712,6 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-bulk { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .model-assessment-bulk button { width: auto; flex: 0 0 auto; margin: 0; padding: 5px 10px; }
 .model-assessment-bulk .app-settings-help { flex: 1 1 240px; }
+
+/* Specialist calibration and benchmark panels remain accessible from Assessment only. */
+#diagnostics-tab-models, #diagnostics-tab-benchmark { display: none; }

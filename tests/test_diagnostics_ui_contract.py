@@ -165,3 +165,26 @@ def test_assessment_launch_shows_synchronous_errors_and_active_run():
     assert "Cannot start assessment:" in script
     assert "var activeRun = labRuns.find" in script
     assert "Running assessment " in script
+
+
+
+def test_unified_assessment_compact_comparison_uses_real_evidence():
+    script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "modals.css").read_text(encoding="utf-8")
+    assert "model-assessment-metrics" in script
+    assert "attempt.tokensPerSecond" in script
+    assert "abilities.coherentOutputTokens" in script
+    assert "Context limit: not established" in script
+    assert "More capabilities, limits and evidence" in script
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
+
+
+def test_specialist_model_tools_are_preserved_without_duplicate_top_level_tabs():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
+    assert 'id="diagnostics-tab-models"' not in html
+    assert 'id="diagnostics-tab-benchmark"' not in html
+    assert 'id="diagnostics-panel-models"' in html
+    assert 'id="diagnostics-panel-benchmark"' in html
+    assert "setDiagnosticsTab('models', true)" in script
+    assert "setDiagnosticsTab('benchmark', true)" in script

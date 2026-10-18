@@ -51,7 +51,6 @@ function refreshUnifiedModelAssessment() {
     results.replaceChildren();
     var selectedBefore = diagnosticsAssessmentSelected;
     var present = { director: new Set(), vision: new Set() };
-    var totalSelected = 0;
     function refreshSelectionSummary() {
       diagnosticsEl('diagnostics-assessment-selection').textContent =
         (diagnosticsAssessmentSelected.director.size + diagnosticsAssessmentSelected.vision.size) +

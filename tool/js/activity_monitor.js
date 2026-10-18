@@ -119,7 +119,12 @@
       detail: activityDetail(item),
       startedAt: item.startedAt || item.createdAt,
       progress: null,
-      original: item
+      original: item,
+      liveTokens: item.liveTokens,
+      promptTokensLive: item.promptTokensLive,
+      promptProcessed: item.promptProcessed,
+      contextSize: item.contextSize,
+      outputLimit: item.outputLimit
     };
   }
 
@@ -911,6 +916,20 @@
         primaryHost.replaceChildren(primaryCard);
       }
       ProgressCard.update(primaryCard, snapshot, { onOpen: function () { itemOpen(snapshot); } });
+      var existingStats = primaryCard.querySelector('[data-director-live-stats]');
+      if (snapshot.kind === 'director' && snapshot.liveTokens != null) {
+        if (!existingStats) {
+          existingStats = document.createElement('div');
+          existingStats.className = 'activity-director-live-stats';
+          existingStats.setAttribute('data-director-live-stats', '');
+          primaryCard.querySelector('[data-progress-copy]').appendChild(existingStats);
+        }
+        var values = [String(snapshot.liveTokens) + ' generated'];
+        if (snapshot.promptTokensLive != null) values.push(String(snapshot.promptProcessed || 0) + '/' + String(snapshot.promptTokensLive) + ' prompt');
+        if (snapshot.contextSize) values.push(String(snapshot.contextSize) + ' context');
+        if (snapshot.outputLimit != null) values.push(String(snapshot.outputLimit) + ' output limit');
+        existingStats.textContent = values.join(' · ');
+      } else if (existingStats) existingStats.remove();
       var queueKey = activityLane(primary) === 'llm' ? 'director' : activityLane(primary);
       var queue = queues[queueKey] || {};
       var waiting = Number(queue.queued || 0);

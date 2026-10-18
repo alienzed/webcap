@@ -241,17 +241,60 @@ def discover_epoch_frames():
     return frames
 
 
+
+def discover_storyboards():
+    """Story-owned takes and references, served only by Storyboard's media route."""
+    from .storyboard_store import list_stories, load_story, resolve_story_media
+    found = {}
+    for summary in list_stories():
+        story_id = str(summary.get("id") or "")
+        story = load_story(story_id)
+        for scene_id, scene in (story.get("scenes") or {}).items():
+            if not isinstance(scene, dict):
+                continue
+            entries = [(take, "generated" if take.get("generated") else "source", take_id)
+                       for take_id, take in (scene.get("takes") or {}).items() if isinstance(take, dict)]
+            entries += [(ref, "reference", str(ref.get("role") or "reference"))
+                        for ref in scene.get("references") or [] if isinstance(ref, dict)]
+            for entry, role, label in entries:
+                path = str(entry.get("mediaPath") or "")
+                try:
+                    file = resolve_story_media(story_id, path)
+                except (ValueError, RuntimeError, FileNotFoundError):
+                    continue
+                kind = _kind(file)
+                if not kind:
+                    continue
+                identity = "storyboard:" + story_id + ":" + path
+                use = {"storageId": str(scene_id), "role": label}
+                if identity in found:
+                    found[identity]["uses"].append(use)
+                    continue
+                found[identity] = {
+                    "id": identity, "source": "storyboard", "storageId": story_id,
+                    "ownerFolder": "", "role": role, "mediaKind": kind,
+                    "fileName": file.name, "mediaPath": path,
+                    "mediaUrl": "/fs/storyboard/media?story=" + quote(story_id, safe="")
+                                + "&path=" + quote(path, safe=""),
+                    "createdAt": 0, "rating": None, "model": "",
+                    "uses": [use],
+                }
+    return list(found.values())
+
+
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
-    if source not in ('', 'generate', 'test', 'epoch'):
+    if source not in ('', 'generate', 'test', 'epoch', 'storyboard'):
         raise ValueError('Unknown Media Explorer source.')
     results = (discover_generate(limit=None if full else 500) if source in ('', 'generate') else [])
     if source in ('', 'test'):
         results.extend(discover_tests(full=full))
     if source in ('', 'epoch'):
         results.extend(discover_epoch_frames())
+    if source in ('', 'storyboard'):
+        results.extend(discover_storyboards())
     results.sort(key=lambda item: (item['createdAt'], item['id']), reverse=True)
     if role:
         results = [item for item in results if item["role"] == role]

@@ -1281,7 +1281,6 @@
       activityLink.textContent = 'View Activity';
       activityLink.setAttribute('data-view-activity', '');
       activityLink.onclick = function () {
-        if (typeof window.setActivityDrawerOpen !== 'function') throw new Error('Activity drawer is unavailable.');
         window.setActivityDrawerOpen(true, 'manual-open');
       };
       card.appendChild(activityLink);

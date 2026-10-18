@@ -1453,6 +1453,38 @@ def candidate_epoch_profile_response(folder, job_id, epoch, enrichment=None, sav
         return {"ok": False, "error": str(exc)}, 400
 
 
+
+def embed_selected_epoch_profile(folder, job_id, epoch):
+    """Explicitly export metadata only into the manifest-recorded saved LoRA."""
+    from .model_epoch_profile import _read_object, embed_profile_in_saved_copy
+    selected = candidate_selected_epoch(folder, job_id)
+    if not selected or int(selected.get("epoch") or 0) != int(epoch):
+        raise ValueError("Select and save this epoch before embedding its profile.")
+    stage = str(selected.get("savedStage") or "").strip()
+    filename = str(selected.get("savedFileName") or "").strip()
+    if not stage or not filename or Path(filename).name != filename:
+        raise ValueError("Selected epoch has no recorded saved LoRA destination.")
+    destination = test_source_path(stage, selected.get("savedDestination") or "") / filename
+    if not destination.is_file() or destination.is_symlink():
+        raise FileNotFoundError("The recorded saved LoRA is unavailable.")
+    source = _candidate_safetensors_path(folder, job_id, epoch)
+    profile = _read_object(source.with_suffix(".webcap.json")).get("modelProfile") or {}
+    if not isinstance(profile, dict) or not isinstance(profile.get("enrichment"), dict):
+        raise ValueError("Save an enriched profile before embedding it in the exported LoRA.")
+    return embed_profile_in_saved_copy(destination, profile["enrichment"])
+
+
+def embed_selected_epoch_profile_response(folder, job_id, epoch):
+    try:
+        return {"ok": True, **embed_selected_epoch_profile(folder, job_id, epoch)}, 200
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    except (RuntimeError, ValueError, OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+
 def clear_candidate_epoch_selection(folder, job_id):
     raw_run_path, run = _candidate_run_snapshot(folder, job_id)
     run_dir = host_path_for_training_path(raw_run_path)

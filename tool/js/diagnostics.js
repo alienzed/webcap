@@ -218,7 +218,7 @@ function refreshUnifiedModelAssessment() {
       var tests = latest && latest.models[ref] || {};
       var families = kind === 'vision'
         ? [{label:'Open Vision', keys:['vision_open']}, {label:'Annotation-aware Vision', keys:['vision_group_aware']}]
-        : [{label:'Writing', keys:['director_writing']},
+        : [{label:'Writing', keys:['director_writing','director_writing_1024','director_writing_4096']},
            {label:'Structured synthesis', keys:['language_synthesis','set_vocabulary_synthesis']},
            {label:'Schema challenge', keys:['language_challenge','set_vocabulary_challenge']}];
       families.forEach(function (family) {
@@ -262,11 +262,14 @@ function refreshUnifiedModelAssessment() {
       }).map(function (key) { return tests[key].measurement; }).filter(Boolean).sort(function (a, b) {
         return Date.parse(b.finishedAt) - Date.parse(a.finishedAt);
       });
+      var probeMetrics = Object.keys(tests).map(function (key) { return tests[key]; });
+      var rates = probeMetrics.flatMap(function (entry) { return entry.throughputSamples || []; }).filter(function (n) { return Number(n) > 0; });
+      var outputs = probeMetrics.flatMap(function (entry) { return entry.outputTokenSamples || []; }).filter(function (n) { return Number(n) > 0; });
       var probe = samples.length ? diagnosticsProbeMetrics(samples[0]) : null;
-      var speedMetric = metric('Speed', probe && probe.speed > 0 ? probe.speed.toFixed(1) + ' tok/s' : speed,
+      var speedMetric = metric('Speed', rates.length ? (rates.reduce(function (a, b) { return a + Number(b); }, 0) / rates.length).toFixed(1) + ' tok/s' : probe && probe.speed > 0 ? probe.speed.toFixed(1) + ' tok/s' : speed,
         probe ? probe.hint : 'Measured from saved Director assessment probe, not a model-wide speed guarantee');
       speedMetric.setAttribute('data-assessment-speed', '');
-      var outputMetric = metric('Output observed', probe ? probe.tokens.toLocaleString() + ' tokens' : output > 0 ? output.toLocaleString() + ' tokens' : '—',
+      var outputMetric = metric('Output observed', outputs.length ? Math.max.apply(null, outputs).toLocaleString() + ' tokens' : probe ? probe.tokens.toLocaleString() + ' tokens' : output > 0 ? output.toLocaleString() + ' tokens' : '—',
         'Latest measured probe token count; may include provider reasoning. Not a verified maximum or a quality score.');
       outputMetric.setAttribute('data-assessment-output', '');
       var primary = findings[0] || 'Not tested';
@@ -358,9 +361,7 @@ function runUnifiedModelAssessment() {
   var directorRefs = diagnosticsAssessmentSelected.director;
   var visionRefs = diagnosticsAssessmentSelected.vision;
   if (!directorRefs.size && !visionRefs.size) throw new Error('Choose at least one model.');
-  if (diagnosticsEl('diagnostics-assessment-deep').checked) {
-    throw new Error('Deep Assessment is not available yet. Uncheck it to run the standard suite.');
-  }
+  var deep = diagnosticsEl('diagnostics-assessment-deep').checked;
 
   var catalog = diagnosticsAssessmentCatalog;
   var visions = (catalog.visions || []).filter(function (model) { return visionRefs.has(String(model.modelRef || '')); });
@@ -373,7 +374,7 @@ function runUnifiedModelAssessment() {
   var canLab = !!sourceFolder && files.length >= 2;
   var status = diagnosticsEl('diagnostics-assessment-selection');
   if (!canLab) throw new Error('Open a Set with at least two media items to run the assessment.');
-  status.textContent = 'Starting standard assessment…';
+  status.textContent = 'Starting ' + (deep ? 'deep' : 'quick') + ' assessment…';
   var runButton = diagnosticsEl('diagnostics-assessment-run');
   runButton.disabled = true;
   return Promise.resolve().then(function () {
@@ -383,7 +384,7 @@ function runUnifiedModelAssessment() {
     return modelLabPost({
       action: 'start',
       config: {
-        folder: sourceFolder, files: files, groups: modelLabGroups(), sampleCount: 8,
+        folder: sourceFolder, files: files, groups: modelLabGroups(), depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
         visionModels: visions, directorModels: directors,
         referenceVisionRef: visions.length ? String(visions[0].modelRef) : '',
         referenceDirectorRef: directors.length ? String(directors[0].modelRef) : '',
@@ -401,7 +402,7 @@ function runUnifiedModelAssessment() {
         throw new Error(payload.run.error || 'Assessment failed before probes could complete.');
       }
       diagnosticsEl('diagnostics-assessment-summary').textContent = 'Live assessment progress · findings update when the run finishes.';
-      reportConsoleInfo('Model Assessment', 'Started persistent Model Lab run ' + payload.run.id + '.');
+      reportConsoleInfo('Model Assessment', 'Started persistent ' + (deep ? 'deep' : 'quick') + ' Model Lab run ' + payload.run.id + '.');
       return payload.run;
     });
   }).then(function (labRun) {

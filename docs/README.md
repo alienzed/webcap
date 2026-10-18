@@ -1,6 +1,6 @@
 # WebCap Docs Map
 
-Documentation index refreshed: 2026-10-18 (specialist documents require individual verification)
+Documentation index refreshed: 2026-10-18 (selected specialist documents reconciled; not a full repository audit)
 
 This folder mixes three different kinds of documents:
 
@@ -24,12 +24,12 @@ Start here when you need to know what the app does today:
 - `docs/training_review.md` - bucket review plus the relationship between Run setup overrides and persistent TOMLs
 - `docs/dataset_config.md` - generated dataset roles, direct-folder capture, and saved-TOML behavior
 - `docs/repeat_targeting.md` - fixed-reference repeat calculation and its separation from run epochs
-- `docs/app_settings.md` - current Settings tabs, runtime paths, Copy-to-Test roots, and repeat-reference setting
+- `docs/app_settings.md` - Settings tabs, runtime paths, Copy-to-Test roots, and repeat-reference setting; tab names reconciled 2026-10-18
 - `docs/image_bucketing.md` - single-bucket image selection and audit behavior
 - `docs/src_videos_semantics.md` - current `src_videos` rules
 - `docs/phrase_copy.md` - helper panel, annotate strip, and tag copy/paste
 - `docs/primer_mappings_v2.md` - structured mappings/rules storage and UI contract
-- `docs/execution_queue.md` - current shared inference/LLM scheduling, backlog, GPU arbitration, and Activity/Inference Queue boundaries
+- `docs/execution_queue.md` - shared inference/LLM scheduling, backlog, GPU arbitration, and Activity/queue boundaries; state path reconciled 2026-10-18
 - `docs/gpu_coordination_invariants.md` - authoritative local-GPU coordination invariants; runtime truth, ownership, restart, and deterministic dispatch
 - `docs/storyboard.md` - current Storyboard storage, Director, generation, First Cut, and Sequence behavior
 - `INSTALLATION.md` - current installation/bootstrap and environment-diagnostics guide

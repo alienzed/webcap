@@ -1081,6 +1081,9 @@ def test_storyboard_ingest_failure_is_distinguished_from_model_failure(llm_root,
     assert finished["status"] == "failed"
     assert finished["error"].startswith("WebCap ingest failed after a successful model response:")
     assert "duration must be between 6 and 15 seconds" in finished["error"]
+    assert finished["result"]["rawText"] == "{}"
+    assert finished["result"]["structureWarning"] == "Model output was retained but could not be applied."
+
 
 
 def test_storyboard_develop_accepts_minimal_scene_without_continuity_metadata(llm_root, monkeypatch):

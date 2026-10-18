@@ -781,10 +781,10 @@
     var folder = currentFolder, campaignId = campaignState.id;
     var source = (campaignState.candidateMap || {})[String(inspectedEpoch)];
     var jobId = source ? source.jobId : campaignState.jobId;
-    var epoch = source ? source.epoch : inspectedEpoch, version = ++crossEvidenceVersion;
+    var candidateId = inspectedEpoch, epoch = source ? source.epoch : inspectedEpoch, version = ++crossEvidenceVersion;
     api('checkpoint_evidence', {jobId:jobId}).then(function (result) {
       if (version !== crossEvidenceVersion || currentFolder !== folder ||
-          !campaignState || campaignState.id !== campaignId || inspectedEpoch !== epoch) return;
+          !campaignState || campaignState.id !== campaignId || inspectedEpoch !== candidateId) return;
       var item = (result.checkpoints || []).find(function (row) { return row.epoch === epoch; });
       crossEvidenceKey = folder + ':' + jobId + ':' + epoch;
       crossEvidence = item ? item.campaigns : [];

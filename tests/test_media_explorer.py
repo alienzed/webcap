@@ -164,3 +164,27 @@ def test_epoch_frame_uses_existing_owner_route(monkeypatch, tmp_path):
     found = media_explorer.list_media(source="epoch")
     assert found["total"] == 1
     assert found["items"][0]["mediaUrl"].startswith("/fs/epoch_finder/frame?")
+
+
+def test_storyboard_references_and_takes_use_owner_media_route(monkeypatch, tmp_path):
+    from tool.server import storyboard_store
+    base = tmp_path / "story"
+    (base / "takes").mkdir(parents=True)
+    (base / "references").mkdir()
+    take = base / "takes" / "one.png"
+    ref = base / "references" / "style.png"
+    take.write_bytes(b"image")
+    ref.write_bytes(b"image")
+    monkeypatch.setattr(storyboard_store, "list_stories", lambda: [{"id": "story1"}])
+    monkeypatch.setattr(storyboard_store, "load_story", lambda id: {
+        "scenes": {"scene1": {
+            "takes": {"take1": {"mediaPath": "takes/one.png", "generated": True}},
+            "references": [{"mediaPath": "references/style.png", "role": "style"}]
+        }}
+    })
+    monkeypatch.setattr(storyboard_store, "resolve_story_media",
+                        lambda id, path: base / path)
+    items = media_explorer.list_media(source="storyboard")["items"]
+    assert {item["role"] for item in items} == {"generated", "reference"}
+    assert all(item["mediaUrl"].startswith("/fs/storyboard/media?story=story1")
+               for item in items)

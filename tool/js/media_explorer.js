@@ -155,14 +155,16 @@
       relationships.className = 'media-explorer-inspector-section'; relationships.open = true;
       text(relationshipsTitle, 'Used by · ' + uses.length); relationships.appendChild(relationshipsTitle);
       uses.forEach(function (use) {
-        var canOpen = use.source === 'generate' || use.source === 'storyboard';
+        var canOpen = ['generate', 'storyboard', 'test', 'epoch'].indexOf(use.source) !== -1;
         var row = document.createElement(canOpen ? 'button' : 'p');
         text(row, (use.label || use.storageId) + ' · ' + use.role);
         if (canOpen) {
           row.type = 'button'; row.className = 'media-explorer-use-link';
           row.addEventListener('click', function () {
             if (use.source === 'generate') window.openGenerateActivity({storageId: use.storageId});
-            else window.openStoryboardActivity({storyId: item.storageId, sceneId: use.storageId});
+            else if (use.source === 'storyboard') window.openStoryboardActivity({storyId: item.storageId, sceneId: use.storageId});
+            else if (use.source === 'test') window.openTestBenchActivity({folder: item.ownerFolder, sessionId: item.storageId, modelId: item.model || ''});
+            else if (use.source === 'epoch') window.openTestBenchActivity({folder: item.ownerFolder, campaignId: item.storageId, modelId: item.model || ''});
           });
         }
         relationships.appendChild(row);

@@ -3,6 +3,7 @@
 Only files recorded by Generate manifests are displayed. No persistent index.
 """
 from pathlib import Path
+from urllib.parse import quote
 from . import config as app_config
 from .generate_store import list_results
 
@@ -40,7 +41,7 @@ def _item(path, role, storage_id, created_at, rating=0, model="", uses=None):
         "mediaKind": kind,
         "fileName": candidate.name,
         "mediaPath": path,
-        "mediaUrl": "/fs/generate/media?path=" + __import__("urllib.parse", fromlist=["quote"]).quote(path, safe=""),
+        "mediaUrl": "/fs/generate/media?path=" + quote(path, safe=""),
         "createdAt": created_at,
         "rating": rating if role == "generated" else None,
         "model": model,

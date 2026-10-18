@@ -1279,8 +1279,6 @@
     var action = {concept: 'developing the Story', scenes: 'working on Scenes', repair: 'repairing Scenes', 'scene-prompt': 'revising this Scene'};
     phase.textContent = terminal ? directorPhaseLabel(phaseName) : 'Director is ' + (action[targetKind] || 'working') + '…';
     detail.textContent = terminal ? 'Review the result in Storyboard.' : 'Editing is temporarily unavailable here.';
-    return;
-
   }
 
   function directorActivityActive() {
@@ -5496,7 +5494,9 @@
       closeSceneActionMenus();
     }, { passive: true });
     el('storyboard-director-view-activity').onclick = function () {
-      window.focusActivityJob(el('storyboard-director-stop').dataset.directorJobId);
+      var jobId = String(el('storyboard-director-stop').dataset.directorJobId || '');
+      if (jobId) window.focusActivityJob(jobId);
+      else window.setActivityDrawerOpen(true);
     };
     el('storyboard-director-stop').onclick = function () {
       stopDirectorJob();

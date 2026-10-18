@@ -866,6 +866,16 @@ function refreshTrainingHistory(force) {
     });
 }
 
+var trainingRunDeletePending = null;
+
+function closeTrainingRunDelete() {
+  if (trainingRunDeletePending && trainingRunDeletePending.busy) return;
+  trainingRunDeletePending = null;
+  var modal = document.getElementById('training-run-delete-modal');
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
 function deleteTrainingHistoryRun(jobId) {
   var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
     ? trainingWorkspaceState.history.jobs : [];
@@ -876,28 +886,65 @@ function deleteTrainingHistoryRun(jobId) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
   }).then(function (payload) {
     var preview = payload.preview;
-    var message = 'PERMANENTLY delete this training run?\\n\\n' +
-      'Trainer directory: ' + preview.output + '\\n' +
-      'Associated action artifacts: ' + preview.artifacts.length + '\\n' +
-      'History records: ' + preview.historyCount + '\\n' +
-      'Identified Test copies: ' + preview.candidateCount + '\\n\\n' +
-      'Files will NOT be archived or recoverable.';
-    if (!window.confirm(message)) return;
-    var removeCandidates = preview.candidateCount > 0 &&
-      window.confirm('Also delete the ' + preview.candidateCount + ' identified Test candidate copies?\\n\\nOK = delete candidates (recommended). Cancel = keep candidates.');
-    return trainingRunnerRequest('/fs/training_history/job/delete', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.assign({}, data, {deleteCandidates: removeCandidates}))
-    }).then(function () {
-      setStatus('Training run and associated files permanently deleted.');
-      return Promise.all([refreshTrainingHistory(true), refreshTrainingRunnerStatus()]);
-    });
+    trainingRunDeletePending = { data: data, busy: false };
+    document.getElementById('training-run-delete-identity').textContent =
+      String(job.runName || job.name || job.id) + ' · ' + String(job.folder);
+    document.getElementById('training-run-delete-path').textContent = String(preview.output || '');
+    document.getElementById('training-run-delete-details').textContent =
+      String(preview.artifacts.length) + ' action artifact directories · ' +
+      String(preview.historyCount) + ' history records · ' +
+      String(preview.candidateCount) + ' identified Test copies';
+    var checkbox = document.getElementById('training-run-delete-candidates');
+    checkbox.checked = false;
+    checkbox.disabled = !preview.candidateCount;
+    document.getElementById('training-run-delete-candidate-count').textContent = String(preview.candidateCount);
+    document.getElementById('training-run-delete-status').textContent = 'Nothing has been deleted.';
+    document.getElementById('training-run-delete-confirm').disabled = false;
+    var modal = document.getElementById('training-run-delete-modal');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    document.getElementById('training-run-delete-cancel').focus();
   }).catch(function (err) {
-    setStatus('Could not delete training run: ' + String(err && err.message || err));
+    setStatus('Could not preview training run deletion: ' + String(err && err.message || err));
     if (typeof window.reportConsoleError === 'function')
       window.reportConsoleError('Training Run Deletion', String(err && err.message || err));
   });
 }
+
+function confirmTrainingRunDelete() {
+  var pending = trainingRunDeletePending;
+  if (!pending || pending.busy) return;
+  pending.busy = true;
+  document.getElementById('training-run-delete-confirm').disabled = true;
+  document.getElementById('training-run-delete-candidates').disabled = true;
+  document.getElementById('training-run-delete-status').textContent = 'Deleting the reviewed run…';
+  trainingRunnerRequest('/fs/training_history/job/delete', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({}, pending.data, {
+      deleteCandidates: document.getElementById('training-run-delete-candidates').checked
+    }))
+  }).then(function () {
+    pending.busy = false;
+    closeTrainingRunDelete();
+    setStatus('Training run and associated files permanently deleted.');
+    return Promise.all([refreshTrainingHistory(true), refreshTrainingRunnerStatus()]);
+  }).catch(function (err) {
+    pending.busy = false;
+    document.getElementById('training-run-delete-confirm').disabled = false;
+    document.getElementById('training-run-delete-candidates').disabled = false;
+    document.getElementById('training-run-delete-status').textContent =
+      'Deletion failed: ' + String(err && err.message || err);
+    if (typeof window.reportConsoleError === 'function')
+      window.reportConsoleError('Training Run Deletion', String(err && err.message || err));
+  });
+}
+
+document.addEventListener('click', function (event) {
+  if (event.target.closest('#training-run-delete-confirm')) { confirmTrainingRunDelete(); return; }
+  if (event.target.closest('#training-run-delete-close, #training-run-delete-cancel')) {
+    closeTrainingRunDelete();
+  }
+});
 
 document.addEventListener('click', function (event) {
   var target = event.target.closest('[data-training-history-delete]');

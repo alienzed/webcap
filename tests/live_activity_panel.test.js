@@ -17,7 +17,8 @@ function harness(active, owner, local = []) {
   const sandbox = {
     state: {
       payload: { active, gpuOwner: owner },
-      silencedLanes: Object.create(null),
+      dismissedJobs: Object.create(null),
+      selectedJobKey: '',
       autoOpenSeen: Object.create(null),
       open: false,
     },
@@ -55,9 +56,9 @@ test('short Director work opens automatically; Training and Inference do not', (
   assert.deepEqual(h.opened, [true]);
 });
 
-test('silencing Director prevents subsequent automatic opening', () => {
+test('dismissing one Director job prevents reopening for that job', () => {
   const h = harness([{ id: 'd1', lane: 'llm', kind: 'director' }], 'none');
-  h.state.silencedLanes.llm = true;
+  h.state.dismissedJobs['llm:d1'] = true;
   h.autoOpen();
   assert.equal(h.opened.length, 0);
 });
@@ -99,4 +100,11 @@ test('short job notifications wake Activity through the shared tracker', () => {
   const common = fs.readFileSync(path.join(__dirname, '../tool/js/common.js'), 'utf8');
   assert.ok(common.includes('entry.activityWakeSent = true'));
   assert.ok(common.includes('window.refreshActivityMonitor()'));
+});
+
+
+test('manual Activity dismissal is scoped to a job, not the whole LLM lane', () => {
+  assert.ok(source.includes('state.dismissedJobs[activityJobKey(item)] = true'));
+  assert.ok(!source.includes('silencedLanes'));
+  assert.ok(source.includes('state.selectedJobKey = activityJobKey(item); render();'));
 });

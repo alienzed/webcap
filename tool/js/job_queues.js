@@ -40,7 +40,7 @@
     if (which === 'llm') return [job.modelId, job.label, job.error].filter(Boolean).join(' · ');
     var p = job.progress || {};
     return [
-      job.resumeFromCheckpoint ? 'Resume' : '',
+      job.resumeFromCheckpoint ? 'From checkpoint' : '',
       p.epoch != null && p.epochs ? 'Epoch ' + p.epoch + '/' + p.epochs : '',
       p.step != null && p.plannedSteps ? 'Step ' + p.step + '/' + p.plannedSteps : '',
       job.error || job.sourceUnavailable
@@ -60,15 +60,22 @@
     button.dataset.jobQueueAction = operation;
     button.dataset.jobQueueLane = which;
     if (job) button.dataset.jobQueueId = String(job.jobId || job.id || '');
+    if (operation === 'up' || operation === 'down') {
+      button.classList.add('inference-queue-icon-action');
+      button.title = operation === 'up' ? 'Move earlier' : 'Move later';
+      button.setAttribute('aria-label', (operation === 'up' ? 'Move earlier' : 'Move later') + ' in ' + which + ' queue');
+    }
     return button;
   }
   function row(job, which, position, totalQueued) {
     var node = document.createElement('div');
     node.className = 'inference-queue-row job-queue-row status-' + String(job.status || 'queued');
     node.dataset.jobQueueId = String(job.jobId || job.id || '');
-    node.appendChild(textNode('span', 'inference-queue-position', active(job) ? job.status : job.status === 'queued' ? '#' + (position || job.queuePosition || '') : job.status));
     var copy = textNode('div', 'inference-queue-copy', '');
-    copy.appendChild(textNode('strong', '', title(job, which)));
+    var heading = textNode('div', 'inference-queue-heading', '');
+    heading.appendChild(textNode('span', 'inference-queue-position', active(job) ? job.status : job.status === 'queued' ? '#' + (position || job.queuePosition || '') : job.status));
+    heading.appendChild(textNode('strong', '', title(job, which)));
+    copy.appendChild(heading);
     var details = detail(job, which);
     if (details) copy.appendChild(textNode('small', '', details));
     if (active(job)) copy.appendChild(textNode('small', '', elapsed(job)));
@@ -92,7 +99,7 @@
         }
       }
     }
-    node.appendChild(controls);
+    if (controls.children.length) node.appendChild(controls);
     return node;
   }
   function render(which) {
@@ -135,9 +142,11 @@
           } else {
             newDetails.forEach(function (part, index) { oldDetails[index].textContent = part.textContent; });
           }
-          if (existing.querySelector('.inference-queue-actions').outerHTML !== fresh.querySelector('.inference-queue-actions').outerHTML) {
-            existing.querySelector('.inference-queue-actions').replaceWith(fresh.querySelector('.inference-queue-actions'));
-          }
+          var oldActions = existing.querySelector('.inference-queue-actions');
+          var newActions = fresh.querySelector('.inference-queue-actions');
+          if (!newActions && oldActions) oldActions.remove();
+          else if (newActions && !oldActions) existing.appendChild(newActions);
+          else if (newActions && oldActions && oldActions.outerHTML !== newActions.outerHTML) oldActions.replaceWith(newActions);
           existing.dataset.jobQueueStatus = job.status;
           return existing;
         }

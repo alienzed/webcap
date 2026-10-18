@@ -842,7 +842,7 @@
   function render() {
     var active = currentActivityItems();
     var pendingItems = [].concat((state.payload.queues.inference || {}).jobs || [], (state.payload.queues.director || {}).jobs || []);
-    var recent = sessionRecent().filter(function (item) { return Date.now() / 1000 - finishedAt(item) <= 30; });
+    var recent = sessionRecent().filter(function (item) { return Date.now() / 1000 - finishedAt(item) <= 1800; });
     var queues = state.payload.queues || {};
     var drawer = el('activity-monitor-drawer');
     var host = el('activity-monitor-list');

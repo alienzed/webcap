@@ -329,29 +329,34 @@
     }).catch(function (exc) { referencePlanSignature = ''; error(exc); });
   }
   function renderReferenceStep() {
-    var host = els('reference-options');
+    var host = els('reference-options'), galleryHost = els('reference-workspace');
     var item = referenceItems[referenceIndex];
     if (!item) {
-      host.innerHTML = '<p class="epoch-finder-muted">No tagged training images matched these Primary options. Original VL scoring remains available; RVN/DINO will have no reference evidence.</p>';
+      host.innerHTML = '<p class="epoch-finder-muted">No tagged training images matched these Primary options. Original VL scoring remains available.</p>';
+      galleryHost.innerHTML = '<h3>Training references</h3><p class="epoch-finder-muted">No matching images found.</p>';
       els('reference-choices').textContent = '0 reference comparisons';
       els('start').disabled = false;
       return;
     }
     var selected = referenceDraftChoices[item.key] == null ? 0 : referenceDraftChoices[item.key];
-    host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' +
-      escape(item.attribute) + ' · ' + escape(item.option) + '</strong><span>' +
-      (referenceIndex+1) + ' / ' + referenceItems.length + '</span></div>' +
-      '<p class="epoch-finder-muted">Automatically selected from matching Set tags. Partial matches are suggestions; review or change if needed.</p>' +
+    host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' + escape(item.attribute) +
+      ' · ' + escape(item.option) + '</strong><span>' + (referenceIndex+1) + ' / ' +
+      referenceItems.length + '</span></div><p class="epoch-finder-muted">Auto-selected from matching tags. Review or change as needed.</p>' +
+      '<div class="epoch-finder-reference-nav"><button type="button" data-reference-nav="prev"' +
+      (referenceIndex===0?' disabled':'') + '>← Previous</button><button type="button" data-reference-nav="next">' +
+      (referenceIndex===referenceItems.length-1?'Finish':'Next →') + '</button></div>';
+    galleryHost.innerHTML = '<h3>' + escape(item.attribute) + ' · ' + escape(item.option) +
+      '</h3><p class="epoch-finder-muted">Click Select to choose, or Preview to inspect a larger image.</p>' +
       '<div class="epoch-finder-reference-gallery">' + item.candidates.map(function (candidate,i) {
         var active = selected === i;
-        return '<button type="button" class="epoch-finder-reference-tile' + (active ? ' selected' : '') +
-          '" data-reference-pick="' + i + '" aria-pressed="' + !!active + '" title="' + escape(candidate.media) +
-          ' · ' + escape(candidate.group + ': ' + candidate.tag) + '"><img loading="lazy" src="/caption/media?folder=' +
-          encodeURIComponent(currentFolder) + '&media=' + encodeURIComponent(candidate.media) +
-          '" alt="' + escape(candidate.media) + '"><span>' + (active ? '✓ Selected' : 'Choose') + '</span></button>';
-      }).join('') + '</div><div class="epoch-finder-reference-nav">' +
-      '<button type="button" data-reference-nav="prev"' + (referenceIndex===0?' disabled':'') + '>← Previous</button>' +
-      '<button type="button" data-reference-nav="next">' + (referenceIndex===referenceItems.length-1?'Finish':'Next →') + '</button></div>';
+        var media = '/caption/media?folder=' + encodeURIComponent(currentFolder) +
+          '&media=' + encodeURIComponent(candidate.media);
+        return '<div class="epoch-finder-reference-tile' + (active ? ' selected' : '') + '">' +
+          '<img loading="lazy" src="' + media + '" alt="' + escape(candidate.media) + '">' +
+          '<div class="epoch-finder-reference-tile-actions"><button type="button" data-reference-pick="' + i +
+          '" aria-pressed="' + !!active + '">' + (active ? '✓ Selected' : 'Select') +
+          '</button><button type="button" data-reference-preview="' + i + '">Preview</button></div></div>';
+      }).join('') + '</div>';
     updateReferenceStatus();
   }
   function updateReferenceStatus() {
@@ -370,6 +375,9 @@
     document.querySelectorAll('[data-epoch-step-label]').forEach(function (element) {
       element.classList.toggle('active', Number(element.dataset.epochStepLabel) === value);
     });
+    els('reference-workspace').classList.toggle('hidden', value !== 4 || !!activeCampaign);
+    els('empty').classList.toggle('hidden', value === 4 || !!activeCampaign);
+    els('active').classList.toggle('hidden', value === 4 || !activeCampaign);
     els('back').classList.toggle('hidden', value === 1);
     els('next').classList.toggle('hidden', value === 4);
     els('start').classList.toggle('hidden', value !== 4);
@@ -847,6 +855,7 @@
         ' · ~' + Math.ceil(eta / 60) + 'm remaining (render queue excluded; VL queue included; future cutoff ties uncertain)' :
         ' · full ETA awaiting both measurements');
     els('empty').classList.add('hidden');
+    els('reference-workspace').classList.add('hidden');
     els('active').classList.remove('hidden');
     els('phase').textContent = String(campaign.phase || campaign.status).toUpperCase();
     els('name').textContent = campaign.name || campaign.runName;
@@ -960,7 +969,9 @@
       parentCampaignId: followUpSource};
     els('start').disabled = true;
     api('start', criteria).then(function (response) {
-      followUpSource = ''; activeCampaign = response.campaign.id; inspectedEpoch = null; lastFrameKey = ''; refresh();
+      followUpSource = ''; activeCampaign = response.campaign.id; inspectedEpoch = null; lastFrameKey = '';
+      els('reference-workspace').classList.add('hidden');
+      refresh();
     }).catch(error).finally(function () { els('start').disabled = false; });
   }
   function applyFolder(folder) {
@@ -1011,7 +1022,16 @@
     drawEpochPicker();
     roundPlan();
   });
-  els('reference-options').addEventListener('click', function (event) {
+  function referenceClick(event) {
+    var preview = event.target.closest('[data-reference-preview]');
+    if (preview) {
+      var candidate = referenceItems[referenceIndex].candidates[Number(preview.dataset.referencePreview)];
+      els('preview-image').src = '/caption/media?folder=' + encodeURIComponent(currentFolder) + '&media=' + encodeURIComponent(candidate.media);
+      els('preview-image').alt = candidate.media;
+      els('preview-caption').textContent = candidate.media + ' · ' + candidate.group + ': ' + candidate.tag;
+      els('reference-preview').showModal();
+      return;
+    }
     var pick = event.target.closest('[data-reference-pick]');
     if (pick) {
       var item = referenceItems[referenceIndex];
@@ -1033,7 +1053,10 @@
       if (referenceIndex < referenceItems.length-1) referenceIndex++;
     }
     renderReferenceStep();
-  });
+  }
+  els('reference-options').addEventListener('click', referenceClick);
+  els('reference-workspace').addEventListener('click', referenceClick);
+  els('preview-close').onclick = function () { els('reference-preview').close(); };
   els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });
   showStep(1);
   var testDuration = document.getElementById('test-generations-duration');

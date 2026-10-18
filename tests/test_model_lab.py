@@ -261,3 +261,21 @@ def test_deep_assessment_director_probe_budgets_exist():
     assert 'if run.get("depth") == "deep":' in source
     assert "for budget in (1024, 4096):" in source
     assert 'kind="director_writing_" + str(budget)' in source
+
+
+def test_capability_summary_aggregates_repeated_probe_samples(monkeypatch):
+    run = {
+        "id": "run-summary", "status": "completed", "startedAt": "now", "folder": "set",
+        "attempts": [
+            {"modelRef": "local::vl", "kind": "vision_open", "status": "completed", "result": {"text": "private one"}},
+            {"modelRef": "local::vl", "kind": "vision_open", "status": "completed", "result": {"text": "private two"}},
+            {"modelRef": "local::vl", "kind": "vision_open", "status": "failed", "error": "probe failed", "result": {}},
+        ],
+    }
+    monkeypatch.setattr(model_lab, "list_runs", lambda: [{"id": "run-summary", "status": "completed"}])
+    monkeypatch.setattr(model_lab, "get_run", lambda run_id: run)
+    summary = model_lab.capability_run_summaries()[0]["models"]["local::vl"]["vision_open"]
+    assert summary["samples"] == 3
+    assert summary["completed"] == 2
+    assert summary["failed"] == 1
+    assert "private" not in json.dumps(summary)

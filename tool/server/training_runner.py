@@ -1166,14 +1166,6 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
         with source.open("rb") as source_handle, destination_path.open("xb") as destination_handle:
             shutil.copyfileobj(source_handle, destination_handle)
             created = True
-        from .model_epoch_profile import _read_object
-        source_profile = _read_object(source.with_suffix(".webcap.json")).get("modelProfile")
-        if source_profile is not None:
-            if not isinstance(source_profile, dict):
-                raise ValueError("Source modelProfile is invalid.")
-            profile_sidecar = destination_path.with_suffix(".webcap.json")
-            with profile_sidecar.open("x", encoding="utf-8") as profile_handle:
-                json.dump({"modelProfile": source_profile}, profile_handle, ensure_ascii=False, indent=2)
         selected = None
         if run is not None and run_dir is not None:
             analysis = _analyze_run_directory(run_dir, algorithm="v5")
@@ -1202,6 +1194,27 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
                 pass
         raise
 
+    # Portable metadata is optional: failure must not reverse successful Save & Select.
+    profile_warning = ""
+    sidecar = destination_path.with_suffix(".webcap.json")
+    temporary = sidecar.with_name("." + sidecar.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        from .model_epoch_profile import _read_object
+        source_profile = _read_object(source.with_suffix(".webcap.json")).get("modelProfile")
+        if source_profile is not None:
+            if not isinstance(source_profile, dict):
+                raise ValueError("Source modelProfile is invalid.")
+            with temporary.open("x", encoding="utf-8") as profile_handle:
+                json.dump({"modelProfile": source_profile}, profile_handle, ensure_ascii=False, indent=2)
+                profile_handle.flush()
+                os.fsync(profile_handle.fileno())
+            os.replace(temporary, sidecar)
+    except (OSError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
+        profile_warning = "LoRA saved and selected, but profile metadata was not copied: " + str(exc)
+        _logger.warning("%s", profile_warning)
+    finally:
+        temporary.unlink(missing_ok=True)
+
     return {
         "destination": str(destination_path),
         "fileName": destination_path.name,
@@ -1209,6 +1222,7 @@ def save_candidate_epoch(folder, job_id, epoch, destination, filename, stage="",
         "stage": stage,
         "selected": selected,
         "selectionUnavailable": selection_unavailable,
+        "profileWarning": profile_warning,
     }
 
 

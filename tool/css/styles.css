@@ -7215,7 +7215,8 @@ html[data-theme="dark"] iframe {
 }
 
 /* Ephemeral Test VL results live alongside the Test Generations cards. */
-.test-generations-vl-toolbar { display:flex; align-items:center; gap:8px; }
+.test-generations-vl-toolbar { display:flex; align-items:center; gap:8px; white-space:nowrap; }
+#test-generations-vl-progress { flex:0 0 auto; font-variant-numeric:tabular-nums; }
 .test-generations-vl-result { align-self:flex-end; margin:4px 0; }
 .test-generations-vl-detail { border:1px solid var(--border); border-radius:5px; padding:12px; margin:10px 0; max-height:45vh; overflow:auto; }
 .test-generations-vl-detail-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }

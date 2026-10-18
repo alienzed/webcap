@@ -341,3 +341,18 @@ def test_explorer_route_passes_supported_filters_without_touching_context(monkey
     assert seen['artifact']=='generate:record'
     assert seen['model']=='krea2_raw'
     assert seen['rating']=='4'
+
+
+def test_owner_filter_limits_media_to_existing_producer_identity(monkeypatch, tmp_path):
+    monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: tmp_path)
+    for name in ("one", "two"):
+        _media(tmp_path / "generations" / name / "result.png")
+    monkeypatch.setattr(media_explorer, "list_results", lambda limit: [
+        {"storageId": name, "createdAt": i,
+         "mediaPath": "generations/" + name + "/result.png"}
+        for i, name in enumerate(("one", "two"), 1)
+    ])
+    result = media_explorer.list_media(source="generate", owner="two")
+    assert result["total"] == 1
+    assert result["items"][0]["storageId"] == "two"
+    assert media_explorer.list_media(source="generate", owner="missing")["total"] == 0

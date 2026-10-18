@@ -586,16 +586,22 @@
       'Results appear as VL evaluates frames.';
     // The existing campaign retention plan owns recommendations: no second cutoff
     // or unvalidated RVN/DINO score. All boundary ties already survive retention.
-    var recommended = new Set((plan && plan.epochs) || []);
-    var suggested = ranking.filter(function (entry) {
-      return recommended.has(entry.epoch) && entry.score != null;
-    });
+    var eligible = ranking.filter(function (entry) { return entry.score != null; });
+    // During a running campaign, only epochs surviving an actual completed cut
+    // are recommendations. At completion, the final round makes no further cut:
+    // recommend the leading score and all exact ties, never the entire field.
+    var completed = campaign.status === 'complete';
+    var topScore = eligible.length ? Math.max.apply(null, eligible.map(function (row) { return row.score; })) : null;
+    var recommended = new Set(completed ?
+      eligible.filter(function (row) { return row.score === topScore; }).map(function (row) { return row.epoch; }) :
+      round > 1 ? (plan && plan.epochs) || [] : []);
+    var suggested = eligible.filter(function (entry) { return recommended.has(entry.epoch); });
     els('shortlist').textContent = suggested.length ?
       'Recommended for human review: ' + suggested.map(function (entry) {
         return 'Epoch ' + entry.epoch;
-      }).join(', ') + ' · ' + (campaign.status === 'complete' ? 'final active field' : 'provisional active field') +
+      }).join(', ') + ' · ' + (completed ? 'top-scoring ties, pending human review' : 'survived previous round, provisional') +
       ' · existing VL retention, not a final winner' :
-      'Recommendations appear as the active field gains scored VL evidence.';
+      'Recommendations appear after a completed cut, or when the campaign finishes.';
     var filter = els('rank-filter').value, sort = els('rank-sort').value;
     ranking = ranking.filter(function (entry) {
       return filter === 'all' || (filter === 'recommended' ? recommended.has(entry.epoch) && entry.score != null :

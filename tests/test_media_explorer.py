@@ -201,3 +201,18 @@ def test_generate_references_have_no_rating_action(monkeypatch, tmp_path):
     media = media_explorer.list_media()['items']
     assert next(item for item in media if item['role'] == 'reference')['rating'] is None
     assert next(item for item in media if item['role'] == 'generated')['storageId'] == 'day/job'
+
+
+def test_source_set_media_requires_explicit_full_scan(monkeypatch, tmp_path):
+    from tool.server import caption_ops
+    folder = tmp_path / "sets" / "one"
+    folder.mkdir(parents=True)
+    (folder / ".webcap_state.json").write_text("{}")
+    (folder / "photo.png").write_bytes(b"image")
+    monkeypatch.setattr(media_explorer.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: tmp_path / "output")
+    monkeypatch.setattr(caption_ops, "list_media_files", lambda name: ["photo.png"])
+    assert media_explorer.list_media(source="set")["total"] == 0
+    full = media_explorer.list_media(source="set", full="1")
+    assert full["total"] == 1
+    assert full["items"][0]["mediaUrl"] == "/caption/media?folder=sets%2Fone&media=photo.png"

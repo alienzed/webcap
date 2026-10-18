@@ -117,3 +117,16 @@ test('Activity only receives job-scoped live Director telemetry', () => {
   assert.ok(source.includes("data-director-live-stats"));
   assert.ok(source.includes("snapshot.liveTokens != null"));
 });
+
+
+test('Storyboard blocking card delegates detailed LLM progress to focused Activity', () => {
+  const storyboard = fs.readFileSync(path.join(root, 'tool/js/storyboard.js'), 'utf8');
+  const monitor = fs.readFileSync(path.join(root, 'tool/js/activity_monitor.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'tool/tool.html'), 'utf8');
+  assert.ok(html.includes('id="storyboard-director-view-activity"'));
+  assert.ok(storyboard.includes('window.focusActivityJob('));
+  assert.ok(monitor.includes('window.focusActivityJob = function (jobId)'));
+  assert.ok(monitor.includes('item.runtimePhase || item.status'));
+  assert.ok(monitor.includes('directorJob.promptTokensLive || directorJob.promptTokens'));
+  assert.ok(!storyboard.includes('    updateDirectorTrend(activity, system);'));
+});

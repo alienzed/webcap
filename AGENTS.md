@@ -142,6 +142,21 @@ Keep the UI efficient and calm.
 - Polling and live refreshes must preserve DOM identity for stateful or interactive elements (especially video/audio playback, inputs, selection, scroll, and expanded controls). Reconcile by stable key and add/update/remove only what actually changed; do not replace whole live containers on a timer unless an intentional context reset requires it.
 - For a local list mutation, prefer updating/removing only the affected keyed element when the mutation's effect is local. If the operation legitimately changes other rows, ordering, grouping, filtering, or collection-wide state, use an authoritative refresh; do not use a scoped response to reconstruct unrelated items.
 
+## Visible, Rewarding Progress
+
+Make ongoing work feel alive. A user waiting for model loading, inference, training, scanning, assessment, queue execution, or a Storyboard operation should never have to wonder whether WebCap is broken.
+
+- **Show meaningful activity prominently**, not as timid 11px text, hidden status, or a spinner with no explanation. Use the available screen space, especially on large monitors, while respecting existing WebCap styling and visual hierarchy.
+- Prefer lively, useful feedback: explicit phase/state, current item and total when known, queue position, completed work, throughput/tokens per second where genuinely available, elapsed activity, real metrics, charts, recent results, and obvious completion or failure states. Choose widgets that illuminate that workflow; do not require every screen to have the same dashboard.
+- Make the waiting experience engaging and satisfying, including when little changes. Show honest current state and last meaningful activity; never invent progress percentages, estimates, throughput, or heartbeat activity merely to create motion. Indeterminate work should look intentional and alive without pretending to advance.
+- Give progress room to breathe. Favor legible, expressive cards, graphs, and states over cramped rows and tiny type; provide a focused summary with optional expansion for detailed diagnostics.
+- Keep feedback contextual and nonintrusive. Avoid incessant toasts, flashing, gratuitous animations, needless polling, or overlays that block unrelated work. Allow dismissal/collapse where appropriate without hiding essential running, completion, cancellation, or failure signals.
+- Surface stalls, loss of connection, errors, cancellation, and terminal states explicitly. Distinguish queued, loading, actively working, waiting on a dependency, complete, cancelled, and failed when authoritative state supports those distinctions. Silence is not a status.
+- Reuse existing Activity, queue controls, shared status, and styling rather than creating competing reporting layers, fake telemetry, or new backend machinery solely for decoration. The interface should reflect authoritative operation state and preserve interactive DOM state during live updates.
+- Treat this as a default design requirement for **new and substantially revised workflows**, not a demand to redesign unrelated screens. Review every lengthy operation for clear, enjoyable, trustworthy feedback.
+
+Aim for **playful clarity, not noise**: confidence and delight from seeing real work happen.
+
 ## Analysis / Metadata Rules
 
 For new analysis features:

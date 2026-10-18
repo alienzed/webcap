@@ -130,7 +130,7 @@
     button.addEventListener('click', function () {
       role = button.dataset.mediaRole;
       source = '';
-      Array.prototype.forEach.call(document.querySelectorAll('[data-media-role]'), function (node) {
+      Array.prototype.forEach.call(document.querySelectorAll('.media-explorer-source'), function (node) {
         node.classList.toggle('active', node === button);
       });
       load(true);

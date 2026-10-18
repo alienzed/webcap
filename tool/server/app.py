@@ -2926,7 +2926,7 @@ def training_candidates_profile_director_route():
         from .model_epoch_profile import director_enrichment_request
         profile = candidate_epoch_profile(data.get("folder", ""), data.get("jobId", ""), data.get("epoch", ""))
         contract = director_enrichment_request(profile, profile.get("suggestions"))
-        job = enqueue_llm("training", str(data.get("directorModel") or "").strip(), contract,
+        job = enqueue_llm("test", str(data.get("directorModel") or "").strip(), contract,
                           context={"operation": "epoch_profile_enrichment"},
                           label="Enrich epoch " + str(profile["epoch"]) + " profile")
         return jsonify({"ok": True, "job": job}), 202

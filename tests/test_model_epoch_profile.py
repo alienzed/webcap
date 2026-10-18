@@ -104,6 +104,13 @@ def test_training_suggestions_are_not_saved(monkeypatch):
         {"group": "Viewpoint", "terms": [{"term": "front", "count": 4},
                                         {"term": "rear", "count": 2}]}
     ])
+    from tool.server import caption_ops
+    monkeypatch.setattr(epoch_reference, "training_wildcard_members",
+                        lambda folder, job: {"a.mp4"})
+    monkeypatch.setattr(caption_ops, "list_media_files", lambda folder: ["a.mp4", "other.png"])
+    monkeypatch.setattr(caption_ops, "load_caption_text",
+                        lambda folder, name: {"caption": "rear view, outdoors"})
     suggestions = training_suggestions("set", "job")
     assert suggestions["evidenceLevel"] == "trained_not_validated"
     assert suggestions["promptOptions"] == {"Viewpoint": ["front", "rear"]}
+    assert suggestions["captionSamples"] == ["rear view, outdoors"]

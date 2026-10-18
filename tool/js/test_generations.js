@@ -2475,6 +2475,17 @@
       var heading = document.createElement('div');
       heading.className = 'test-generations-staged-heading';
       heading.appendChild(name);
+      var profile = metadata && metadata.modelProfile && metadata.modelProfile.enrichment;
+      if (profile) {
+        var profileSummary = document.createElement('span');
+        profileSummary.className = 'test-generations-staged-run';
+        var description = String(profile.description || '').trim();
+        var words = Array.isArray(profile.trainedWords) ? profile.trainedWords : [];
+        profileSummary.textContent = description || (words.length ? 'Prompt terms: ' + words.join(', ') : 'Enriched model profile');
+        profileSummary.title = [description, words.length ? 'Key phrases: ' + words.join(', ') : '',
+          profile.guidance || ''].filter(Boolean).join('\n');
+        heading.appendChild(profileSummary);
+      }
       if (parts.detail) {
         var runName = document.createElement('span');
         runName.className = 'test-generations-staged-run';

@@ -8,6 +8,7 @@
     unavailableModels: [],
     modelId: getGenerateModelPreference(),
     lorasByModel: {},
+    loraProfileCache: {},
     loraMode: 'selected',
     sweepFolderByModel: {},
     sweepSelections: {},
@@ -454,6 +455,22 @@
     setLoraMode(generateState.loraMode);
   }
 
+  function loadGenerateLoraProfile(name) {
+    var cache = generateState.loraProfileCache;
+    if (Object.prototype.hasOwnProperty.call(cache, name)) return;
+    cache[name] = {loading: true};
+    requestJson('/fs/generate/lora/profile?name=' + encodeURIComponent(name))
+      .then(function (payload) {
+        cache[name] = {profile: payload.modelProfile || null};
+        if (generateState.open) renderLoras();
+      }).catch(function (err) {
+        cache[name] = {error: String(err.message || err)};
+        if (typeof window.reportConsoleWarning === 'function') {
+          window.reportConsoleWarning('Generate', 'LoRA metadata unavailable for ' + name + ': ' + cache[name].error);
+        }
+      });
+  }
+
   function renderLoras() {
     var host = el('generate-lora-list');
     if (!host) return;
@@ -462,11 +479,23 @@
       ? items.map(function (item, index) {
           return '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
             '<span title="' + escapeHtml(item.name) + '">' + escapeHtml(item.name) + '</span>' +
+            (function () {
+              var entry = generateState.loraProfileCache[item.name];
+              var enriched = entry && entry.profile && entry.profile.enrichment;
+              if (!enriched) return '';
+              var description = String(enriched.description || '').trim();
+              var terms = Array.isArray(enriched.trainedWords) ? enriched.trainedWords : [];
+              return '<span title="' + escapeHtml(description) + '">' +
+                escapeHtml(description || 'Enriched model profile') + '</span>' +
+                (terms.length ? '<button type="button" class="review-captions-btn" data-generate-lora-insert-phrases="' +
+                  index + '" title="Insert model key phrases at the prompt cursor">Insert phrases</button>' : '');
+            })() +
             '<input type="number" min="-2" max="2" step="0.05" value="' + escapeHtml(String(item.strength)) + '" data-generate-lora-strength="' + index + '" aria-label="LoRA strength">' +
             '<button type="button" class="review-captions-btn" data-generate-lora-remove="' + index + '">Remove</button>' +
           '</div>';
         }).join('')
       : '<div class="generate-empty-inline">No added LoRAs.</div>';
+    items.forEach(function (item) { loadGenerateLoraProfile(item.name); });
     var picker = el('generate-lora-picker');
     if (picker && picker.getAttribute('aria-expanded') === 'true') renderGenerateLoraPickerMenu();
     renderSweep();
@@ -2518,6 +2547,24 @@
       items[index].strength = Number(input.value);
       });
     el('generate-lora-list').addEventListener('click', function (event) {
+      var insert = event.target.closest('[data-generate-lora-insert-phrases]');
+      if (insert) {
+        var selected = selectedLoras(generateState.modelId)[Number(insert.dataset.generateLoraInsertPhrases)];
+        var profile = selected && generateState.loraProfileCache[selected.name];
+        var words = profile && profile.profile && profile.profile.enrichment &&
+          profile.profile.enrichment.trainedWords || [];
+        if (!words.length) return;
+        var prompt = el('generate-prompt');
+        var start = prompt.selectionStart;
+        var end = prompt.selectionEnd;
+        var before = prompt.value.slice(0, start);
+        var text = (before.trim() && !/[\\s,]$/.test(before) ? ', ' : '') + words.join(', ');
+        prompt.value = before + text + prompt.value.slice(end);
+        prompt.dispatchEvent(new Event('input', {bubbles: true}));
+        prompt.focus();
+        prompt.setSelectionRange(start + text.length, start + text.length);
+        return;
+      }
       var button = event.target.closest('[data-generate-lora-remove]');
       if (!button) return;
       selectedLoras(generateState.modelId).splice(Number(button.dataset.generateLoraRemove), 1);

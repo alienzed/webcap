@@ -1,6 +1,6 @@
 # WebCap Docs Map
 
-Last reviewed against code: 2026-09-28
+Documentation index refreshed: 2026-10-18 (specialist documents require individual verification)
 
 This folder mixes three different kinds of documents:
 
@@ -14,7 +14,7 @@ Do not treat every file in `docs/` as live product truth.
 
 Start here when you need to know what the app does today:
 
-- `README.md` - best top-level map of the shipped app surface
+- `README.md` - top-level map of the app workspaces, shared shell, and workflows
 - `docs/spec.md` - current behavior and route/workflow contract
 - `docs/dataset_workflow.md` - end-to-end working flow
 - `docs/config_file_system.md` - config-file discovery and edit flow
@@ -55,10 +55,10 @@ These describe implemented features, but they are narrower than `README.md` / `d
 
 These are useful product notes, not authoritative implementation references:
 
-- `docs/live_activity_panel.md` - agreed design and interaction rules for a unified live Activity card (not yet implemented)
+- `docs/live_activity_panel.md` - design history for Activity presentation; verify shipped behavior in the app and execution queue reference
 
 - `docs/model-modules.md` - North Star for model-owned training configuration and policy boundaries
-- `docs/filesystem_state_contract.md` - North Star for app-data, cache, queue persistence, temporary work, and filesystem lifecycle ownership
+- `docs/filesystem_state_contract.md` - authoritative filesystem lifecycle rules (partially migrated; contains historical/planned sections)
 - `docs/ui_gold_master.md`
 - `docs/workspace_shell_architecture_audit.md` - pre-refactor shell audit retained as architecture history; superseded by the completed shell
 - `docs/ui_shell_refactor_plan.md` - completed phased migration record for the permanent activity rail/header shell
@@ -95,4 +95,8 @@ Additional superseded references:
 
 - Training references describe model visibility, visible-media capture, per-run LR/rank/epochs/dropout overrides, fixed-reference repeat planning, logical-run ownership, lightweight Training History, and current Resume/Test boundaries.
 
-When a doc conflicts with code and does not explicitly say it is planning-only, prefer `README.md`, `docs/spec.md`, and the code.
+## Documentation maintenance notes
+
+The README and this index describe navigation, not a guarantee that every specialist document has been audited recently. In particular, inspect queue persistence paths, output-root separation, UI labels, and implementation-status claims against current code before relying on older prose. Do not promote a proposal into shipped behavior merely because it appears in a design document.
+
+When documents disagree, the current implementation and `AGENTS.md` constraints take precedence. Update any affected behavior reference alongside its code change.

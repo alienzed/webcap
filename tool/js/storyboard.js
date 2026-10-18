@@ -453,7 +453,7 @@
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
     if (job.operation === 'interpret_atmosphere' || job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
     if (job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene') return { kind: 'scenes', storyId: job.storyId };
-    if (job.operation === 'repair_scenes') return { kind: 'repair', storyId: job.storyId };
+    if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence') return { kind: 'repair', storyId: job.storyId };
     if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId, operation: job.operation };
     }
@@ -1927,21 +1927,20 @@
     setDirectorPending(directorTarget, true);
     startDirectorActivity();
     return saveBarrier.then(function () {
-      return runSceneDirectorPass(
-        storyId,
-        sceneIds,
-        instruction,
-        modelId,
-        function (sceneId, index) {
-          var scene = storyState.story && storyState.story.scenes
-            ? storyState.story.scenes[sceneId]
-            : null;
-          setRepairStatus(
-            'Revising Scene ' + String(index + 1) + ' / ' + String(sceneIds.length)
-            + (scene && scene.title ? ' · ' + scene.title : '')
-          );
-        }
-      );
+      return directorRequest({
+        storyId: storyId,
+        operation: 'revise_scenes_sequence',
+        instruction: instruction,
+        model: modelId
+      }).then(function (payload) {
+        return request(null, 'story=' + encodeURIComponent(storyId)).then(function (fresh) {
+          if (storyState.story && storyState.story.id === storyId) {
+            storyState.story = fresh.story;
+            renderStory();
+          }
+          return consumeDirectorJob(payload.jobId);
+        });
+      });
     }).then(function () {
       if (storyState.story && String(storyState.story.id || '') === String(storyId)) {
         storyState.story.repairComplete = true;

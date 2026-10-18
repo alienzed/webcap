@@ -2,6 +2,7 @@
 
 Only files recorded by Generate manifests are displayed. No persistent index.
 """
+import json
 from pathlib import Path
 from urllib.parse import quote
 from . import config as app_config
@@ -77,11 +78,83 @@ def discover_generate(limit=500):
     return sorted(items.values(), key=lambda x: (x["createdAt"], x["id"]), reverse=True)
 
 
-def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False):
+def discover_tests():
+    """Read supported central Test session manifests without changing session state.
+
+    Legacy per-Set sessions are not enumerated here until their Set discovery
+    contract is available. Every thumbnail uses the existing owner-validated route.
+    """
+    central = app_config.output_root() / "test-generations"
+    if not central.is_dir() or central.is_symlink():
+        return []
+    roots = [central]
+    workspaces = central / "sets"
+    if workspaces.is_dir() and not workspaces.is_symlink():
+        for workspace in workspaces.iterdir():
+            if workspace.is_dir() and not workspace.is_symlink():
+                for child in ("sessions", "test-sessions"):
+                    candidate = workspace / child
+                    if candidate.is_dir() and not candidate.is_symlink():
+                        roots.append(candidate)
+    results = []
+    from .epoch_test_bench import _session_directory, _session_rating_map
+    for root in roots:
+        for session in root.iterdir():
+            if not session.is_dir() or session.is_symlink():
+                continue
+            manifest = session / "test.json"
+            if not manifest.is_file() or manifest.is_symlink():
+                continue
+            try:
+                status = json.loads(manifest.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if not isinstance(status, dict):
+                continue
+            folder = str(status.get("ownerFolder") or "").strip("/")
+            if not folder:
+                continue
+            # Only advertise sessions the owner's standard resolver recognizes.
+            try:
+                owner = Path(app_config.FS_ROOT) / folder
+                if _session_directory(owner, session.name).resolve() != session.resolve():
+                    continue
+            except (ValueError, FileNotFoundError):
+                continue
+            ratings = _session_rating_map(session)
+            for record in status.get("results") or []:
+                if not isinstance(record, dict):
+                    continue
+                name = str(record.get("mediaFile") or record.get("outputVideo") or "")
+                if not name or Path(name).name != name:
+                    continue
+                file = session / name
+                if file.is_symlink() or not file.is_file() or not _kind(file):
+                    continue
+                relative = file.relative_to(app_config.output_root()).as_posix()
+                url = ("/fs/test_generations/media?folder=" + quote(folder, safe="")
+                       + "&session=" + quote(session.name, safe="")
+                       + "&media=" + quote(name, safe=""))
+                results.append({
+                    "id": "test:" + relative, "source": "test", "storageId": session.name,
+                    "ownerFolder": folder, "role": "generated",
+                    "mediaKind": _kind(file), "fileName": name,
+                    "mediaPath": relative, "mediaUrl": url,
+                    "createdAt": int(status.get("startedAt") or 0),
+                    "rating": ratings.get(name), "model": str(status.get("modelId") or ""),
+                    "uses": [{"storageId": session.name, "role": "test result"}],
+                })
+    return results
+
+
+def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
-    results = discover_generate(limit=None if full else 500)
+    results = ([] if source == 'test' else discover_generate(limit=None if full else 500))
+    if source in ('', 'test'):
+        results.extend(discover_tests())
+    results.sort(key=lambda item: (item['createdAt'], item['id']), reverse=True)
     if role:
         results = [item for item in results if item["role"] == role]
     if kind:
@@ -100,4 +173,4 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         raise ValueError("Unknown media sort.")
     return {"ok": True, "items": results[offset:offset + limit],
             "total": len(results), "offset": offset, "limit": limit,
-            "complete": full, "scope": "Generate (all results)" if full else "Generate (latest 500 results)"}
+            "complete": full, "scope": "Generate and central Test sessions" if full else "Recent Generate and central Test sessions"}

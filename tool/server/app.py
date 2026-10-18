@@ -2150,6 +2150,26 @@ def generate_director_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/lora_library", methods=["GET", "POST"])
+def lora_library_route():
+    """Discover profiles, read one profile or save an explicitly reviewed edit."""
+    from .lora_library import catalogue, profile
+    try:
+        if request.method == "GET":
+            return jsonify({"ok": True, "items": catalogue()})
+        data = request.get_json(silent=True) or {}
+        stage = str(data.get("stage") or "")
+        path = str(data.get("path") or "")
+        if "enrichment" in data:
+            result = profile(stage, path, data["enrichment"])
+        else:
+            result = profile(stage, path)
+        return jsonify({"ok": True, "modelProfile": result})
+    except (ValueError, OSError) as exc:
+        app.logger.error("LORA LIBRARY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/training_profiles", methods=["GET"])
 def training_profiles_route():
     enabled = set((app_config.config.get("training") or {}).get("enabled_profiles") or [])

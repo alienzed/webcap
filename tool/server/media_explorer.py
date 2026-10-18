@@ -101,8 +101,32 @@ def discover_tests():
                     candidate = workspace / child
                     if candidate.is_dir() and not candidate.is_symlink():
                         roots.append(candidate)
-    results = []
+    # Owner folders from recorded central manifests also identify their legacy
+    # per-Set session roots. Do not recursively crawl arbitrary source Sets.
+    known_owners = set()
+    for root in roots:
+        for session in root.iterdir():
+            manifest = session / "test.json"
+            if not session.is_dir() or session.is_symlink() or not manifest.is_file() or manifest.is_symlink():
+                continue
+            try:
+                payload = json.loads(manifest.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(payload, dict) and payload.get("ownerFolder"):
+                known_owners.add(str(payload["ownerFolder"]).strip("/"))
     from .epoch_test_bench import _session_directory, _session_rating_map
+    for folder in known_owners:
+        owner = (Path(app_config.FS_ROOT) / folder).resolve()
+        try:
+            owner.relative_to(Path(app_config.FS_ROOT).resolve())
+        except ValueError:
+            continue
+        legacy = owner / "test-generations"
+        if legacy.is_dir() and not legacy.is_symlink():
+            roots.append(legacy)
+    results = []
+    seen_sessions = set()
     for root in roots:
         for session in root.iterdir():
             if not session.is_dir() or session.is_symlink():
@@ -126,6 +150,9 @@ def discover_tests():
                     continue
             except (ValueError, FileNotFoundError):
                 continue
+            if session.resolve() in seen_sessions:
+                continue
+            seen_sessions.add(session.resolve())
             ratings = _session_rating_map(session)
             for record in status.get("results") or []:
                 if not isinstance(record, dict):

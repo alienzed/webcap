@@ -222,3 +222,21 @@ def test_director_standard_suite_includes_writing_and_schema(monkeypatch):
     monkeypatch.setattr(model_lab, "_run_schema_pair", lambda run, ref, analysis, groups, prefix: captured.append(prefix))
     model_lab._run_director_model({"referenceVisionRef": ""}, _director())
     assert captured == ["director_writing", "language"]
+
+
+def test_capability_summaries_do_not_expose_model_text(monkeypatch):
+    run = {
+        "version": model_lab.RUN_VERSION, "id": "summary-1", "status": "completed",
+        "startedAt": "2026-10-18T00:00:00+00:00", "finishedAt": "",
+        "folder": "set", "files": [], "groups": [],
+        "visionModels": [], "directorModels": [], "allVisionModels": [],
+        "allDirectorModels": [], "referenceVisionRef": "", "referenceDirectorRef": "",
+        "options": {}, "progress": {}, "summary": {}, "error": "",
+        "attempts": [{"kind": "director_writing", "modelRef": "local::writer",
+                      "status": "completed", "error": "",
+                      "result": {"text": "private test response", "finishReason": "stop"}}],
+    }
+    model_lab._write_run(run)
+    summaries = model_lab.capability_run_summaries()
+    assert summaries[0]["models"]["local::writer"]["director_writing"]["status"] == "completed"
+    assert "private test response" not in json.dumps(summaries)

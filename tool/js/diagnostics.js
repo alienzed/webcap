@@ -33,6 +33,34 @@ function diagnosticsUpdateAssessmentMetrics(run) {
     }
   });
   diagnosticsEl('diagnostics-assessment-results').querySelectorAll('[data-assessment-model]').forEach(function (row) {
+    var role = row.dataset.assessmentModel.split(':')[0];
+    var ref = row.dataset.assessmentModel.slice(role.length + 1);
+    var attempts = run.attempts.filter(function (item) { return item.role === role && item.modelRef === ref; });
+    if (attempts.length) {
+      var primary = attempts.filter(function (item) { return item.kind === (role === 'vision' ? 'vision_open' : 'director_writing'); });
+      var primaryText = primary.some(function (item) { return item.status === 'failed'; }) ? 'Failed'
+        : primary.some(function (item) { return item.status === 'running'; }) ? 'Running'
+        : primary.length && primary.every(function (item) { return item.status === 'completed'; }) ? 'Response received'
+        : primary.length ? 'Incomplete' : 'Not tested';
+      row.querySelector('[data-assessment-primary]').textContent = primaryText;
+      row.querySelector('[data-assessment-state]').textContent = run.status;
+      row.querySelector('[data-assessment-provenance]').textContent = 'Model Lab run: ' + run.id + ' · ' + run.status +
+        (run.importedFrom ? ' · Imported from ' + run.importedFrom.host + ' (source runtime measurements)' : '');
+      var counts = {};
+      attempts.forEach(function (item) {
+        var group = counts[item.kind] || (counts[item.kind] = {states: {}, errors: new Set()});
+        group.states[item.status] = (group.states[item.status] || 0) + 1;
+        if (item.error) group.errors.add(item.error);
+      });
+      row.querySelector('[data-assessment-capabilities]').textContent = Object.keys(counts).map(function (kind) {
+        var group = counts[kind];
+        return modelLabAttemptLabel(kind) + ': ' + Object.keys(group.states).map(function (status) {
+          return group.states[status] + ' ' + status;
+        }).join(', ') + (group.errors.size ? ' · ' + Array.from(group.errors).join(' · ') : '');
+      }).join(' · ');
+      // These are plain diagnostic text lines; the surrounding details/input DOM stays intact.
+      row.querySelectorAll('[data-assessment-initial-evidence]').forEach(function (line) { line.remove(); });
+    }
     var attempt = latest[row.dataset.assessmentModel];
     if (!attempt) return;
     var measured = diagnosticsProbeMetrics(attempt);
@@ -175,7 +203,12 @@ function refreshUnifiedModelAssessment() {
       row.appendChild(head);
       addChoice(head, kind, ref);
       var findings = [];
-      var relevant = capabilityRuns.filter(function (run) { return run.models && run.models[ref]; });
+      var relevant = capabilityRuns.filter(function (run) {
+        return run.models && run.models[ref] && Object.keys(run.models[ref]).some(function (key) {
+          var visionProbe = ['vision_open', 'vision_group_aware', 'vision_model_error'].indexOf(key) !== -1;
+          return kind === 'vision' ? visionProbe : !visionProbe;
+        });
+      });
       var latest = relevant[0];
       var tests = latest && latest.models[ref] || {};
       var families = kind === 'vision'
@@ -232,8 +265,8 @@ function refreshUnifiedModelAssessment() {
         'Latest measured probe token count; may include provider reasoning. Not a verified maximum or a quality score.');
       outputMetric.setAttribute('data-assessment-output', '');
       var primary = findings[0] || 'Not tested';
-      metric(kind === 'vision' ? 'Vision' : 'Writing', primary.split(': ').slice(1).join(': ') || 'Not tested');
-      metric('Assessment', latest ? latest.status || 'Recorded' : quality === '—' ? 'Not tested' : quality);
+      metric(kind === 'vision' ? 'Vision' : 'Writing', primary.split(': ').slice(1).join(': ') || 'Not tested').setAttribute('data-assessment-primary', '');
+      metric('Assessment', latest ? latest.status || 'Recorded' : quality === '—' ? 'Not tested' : quality).setAttribute('data-assessment-state', '');
       row.appendChild(metrics);
       var details = document.createElement('details');
       var caption = document.createElement('summary');
@@ -241,6 +274,7 @@ function refreshUnifiedModelAssessment() {
       details.appendChild(caption);
       var provenance = document.createElement('div');
       provenance.className = 'app-settings-help';
+      provenance.setAttribute('data-assessment-provenance', '');
       provenance.textContent = latest
         ? 'Latest matching Model Lab run: ' + latest.id + ' · ' + (latest.status || 'unknown') +
           (latest.startedAt ? ' · ' + latest.startedAt : '')
@@ -254,11 +288,13 @@ function refreshUnifiedModelAssessment() {
       }
       var other = document.createElement('div');
       other.className = 'app-settings-help';
+      other.setAttribute('data-assessment-capabilities', '');
       other.textContent = findings.join(' · ') + ' · Context limit: not established by this assessment';
       details.appendChild(other);
       Object.keys(tests).forEach(function (key) {
         var line = document.createElement('div');
         line.className = 'app-settings-help';
+        line.setAttribute('data-assessment-initial-evidence', '');
         var item = tests[key];
         var counts = Object.keys(item.counts || {}).map(function (status) { return item.counts[status] + ' ' + status; }).join(', ');
         line.textContent = key + ': ' + (counts || item.status) + (item.error ? ' · ' + item.error : '');

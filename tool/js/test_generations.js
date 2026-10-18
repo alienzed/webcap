@@ -2246,6 +2246,12 @@
     }
   }
 
+  function closeTestCandidateScoreMenus(event) {
+    document.querySelectorAll('.test-generations-score-menu[open]').forEach(function (menu) {
+      if (!menu.contains(event.target)) menu.open = false;
+    });
+  }
+
   function renderStagedFiles(payload) {
     var count = Number(payload && payload.count || 0);
     var files = payload && Array.isArray(payload.files) ? payload.files : [];
@@ -5430,11 +5436,9 @@
         showError(err);
       });
     };
-    document.addEventListener('click', function (event) {
-      document.querySelectorAll('.test-generations-score-menu[open]').forEach(function (menu) {
-        if (!menu.contains(event.target)) menu.open = false;
-      });
-    });
+    // Replaceable handler: rewiring Test Generations must not accumulate listeners.
+    document.removeEventListener('click', closeTestCandidateScoreMenus);
+    document.addEventListener('click', closeTestCandidateScoreMenus);
     el('test-generations-sessions-list').onclick = function (event) {
       var queueCancel = event.target.closest('[data-queue-cancel]');
       if (queueCancel) {

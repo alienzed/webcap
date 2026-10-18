@@ -220,6 +220,49 @@
       }
       host.appendChild(ratingRow);
     }
+    if (item.source === 'test' && item.ownerFolder && item.storageId && item.fileName) {
+      var testRating = document.createElement('div');
+      testRating.className = 'media-explorer-rating';
+      var testRatingLabel = document.createElement('span');
+      text(testRatingLabel, 'Rate Test result');
+      testRating.appendChild(testRatingLabel);
+      for (var testScore = 0; testScore <= 5; testScore++) {
+        (function (value) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'review-captions-btn';
+          text(button, value === 0 ? 'Clear' : String(value) + '★');
+          button.setAttribute('aria-label', value === 0 ? 'Clear Test rating' : 'Rate Test result ' + value + ' out of 5');
+          button.setAttribute('aria-pressed', String(Number(item.rating || 0) === value));
+          button.addEventListener('click', function () {
+            testRating.querySelectorAll('button').forEach(function (node) { node.disabled = true; });
+            fetch('/fs/test_generations', {
+              method: 'POST', headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({folder: item.ownerFolder, operation: 'test_rate_result',
+                criteria: {session: item.storageId, mediaFile: item.fileName, rating: value}})
+            }).then(function (response) {
+              return response.json().then(function (payload) {
+                if (!response.ok || !payload || !payload.ok) throw new Error(payload && payload.error || 'Could not rate Test result.');
+                return payload;
+              });
+            }).then(function (payload) {
+              item.rating = payload.rating;
+              testRating.querySelectorAll('button').forEach(function (node, score) {
+                node.setAttribute('aria-pressed', String(Number(item.rating || 0) === score));
+              });
+              renderDetails(item, dl);
+              var card = el('media-explorer-grid').children[items.indexOf(item)];
+              if (card) text(card.querySelector('.media-explorer-card-sub'), cardSummary(item));
+              if (visible && (el('media-explorer-rating').value || el('media-explorer-sort').value === 'rating')) load(true);
+            }).catch(report).finally(function () {
+              testRating.querySelectorAll('button').forEach(function (node) { node.disabled = false; });
+            });
+          });
+          testRating.appendChild(button);
+        })(testScore);
+      }
+      host.appendChild(testRating);
+    }
     if (item.source === 'test' && item.ownerFolder && item.storageId) {
       var back = document.createElement('button');
       back.type = 'button';

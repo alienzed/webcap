@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   var visible = false, items = [], offset = 0, total = 0, active = -1, role = '', loading = false;
-  var pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
+  var source = '', pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
   function el(id) { return document.getElementById(id); }
   function report(err) {
     var message = String(err && err.message || err);
@@ -70,7 +70,7 @@
     return card;
   }
   function count() {
-    text(el('media-explorer-count'), items.length + ' of ' + total + ' Generate media' + (complete ? ' · complete scan' : ' · recent results only'));
+    text(el('media-explorer-count'), items.length + ' of ' + total + ' media' + (complete ? ' · complete scan' : ' · recent results only'));
     el('media-explorer-more-btn').classList.toggle('hidden', items.length >= total);
   }
   function load(reset) {
@@ -89,7 +89,7 @@
     el('media-explorer-status').textContent = full ? 'Scanning all Generate manifests…' : 'Discovering recent Generate media…';
     var qs = new URLSearchParams({limit:pageSize, offset:offset, role:role,
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
-      sort:el('media-explorer-sort').value, full:full ? '1' : '0'});
+      sort:el('media-explorer-sort').value, source:source, full:full ? '1' : '0'});
     fetch('/fs/media_explorer?' + qs, {signal: controller.signal}).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok || !data.ok) throw new Error(data.error || 'Media discovery failed.');
@@ -129,9 +129,18 @@
   Array.prototype.forEach.call(document.querySelectorAll('[data-media-role]'), function (button) {
     button.addEventListener('click', function () {
       role = button.dataset.mediaRole;
+      source = '';
       Array.prototype.forEach.call(document.querySelectorAll('[data-media-role]'), function (node) {
         node.classList.toggle('active', node === button);
       });
+      load(true);
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-media-source]'), function (button) {
+    button.addEventListener('click', function () {
+      source = button.dataset.mediaSource;
+      role = '';
+      Array.prototype.forEach.call(document.querySelectorAll('.media-explorer-source'), function (node) { node.classList.toggle('active', node === button); });
       load(true);
     });
   });

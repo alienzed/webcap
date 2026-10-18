@@ -1187,7 +1187,7 @@
                                     <p class="epoch-finder-muted">Model settings come from Test Generations. Vision uses the selected model in the global header.</p>
                                     </div>
                                     <div data-epoch-wizard-step="4" class="hidden">
-                                        <section class="epoch-finder-reference-setup"><h4>Training references</h4><p class="epoch-finder-muted">Review suggested training images for Primary options with matching Set tags. Options without candidates are skipped for reference comparisons; original VL is unchanged.</p><div id="epoch-finder-reference-options"></div><div id="epoch-finder-reference-choices"></div><label><input type="checkbox" id="epoch-finder-enable-rvn" checked> RVN reference comparisons</label><label><input type="checkbox" id="epoch-finder-enable-dino" checked> DINOv2 visual similarity</label></section>
+                                        <section class="epoch-finder-reference-setup"><h4>Training references</h4><p class="epoch-finder-muted">Review suggested training images for Primary options with matching Set tags. Options without candidates are skipped for reference comparisons; original VL is unchanged.</p><div id="epoch-finder-reference-options"></div><p class="epoch-finder-muted">Images are shown in the right-hand gallery during this step.</p><div id="epoch-finder-reference-choices"></div><label><input type="checkbox" id="epoch-finder-enable-rvn" checked> RVN reference comparisons</label><label><input type="checkbox" id="epoch-finder-enable-dino" checked> DINOv2 visual similarity</label></section>
                                         <strong>Review your campaign</strong>
                                         <div id="epoch-finder-review" class="epoch-finder-review"></div>
                                     </div>
@@ -1204,6 +1204,8 @@
                                 </section>
                             </aside>
                             <main class="epoch-finder-dashboard">
+                                <section id="epoch-finder-reference-workspace" class="epoch-finder-reference-workspace hidden" aria-label="Training reference gallery"><h3>Choose training references</h3><p class="epoch-finder-muted">Select a matching training image for each attribute. Preview images before choosing.</p></section>
+                                <dialog id="epoch-finder-reference-preview" class="epoch-finder-reference-preview"><button type="button" id="epoch-finder-preview-close" aria-label="Close preview">Close ×</button><img id="epoch-finder-preview-image" alt=""><p id="epoch-finder-preview-caption"></p></dialog>
                                 <div id="epoch-finder-empty" class="epoch-finder-empty"><strong>Ready when you are.</strong><p>Choose a saved training run and start a campaign to watch every round unfold.</p></div>
                                 <div id="epoch-finder-active" class="hidden">
                                     <div class="epoch-finder-heading">

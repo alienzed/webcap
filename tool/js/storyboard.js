@@ -1094,7 +1094,7 @@
     if (fillsRegion) {
       var workspaceWidth = Math.max(0, targetRect.width - 48);
       var availableWidth = Math.max(0, editorRect.width - 24);
-      var preferredOverlayWidth = 840;
+      var preferredOverlayWidth = 440;
       var cardWidth = Math.min(preferredOverlayWidth, workspaceWidth || preferredOverlayWidth, availableWidth || preferredOverlayWidth);
       cardWidth = Math.max(320, cardWidth);
       if (cardWidth > availableWidth && availableWidth > 0) cardWidth = availableWidth;
@@ -1285,80 +1285,11 @@
       };
       card.appendChild(activityLink);
     }
-    updateDirectorTrend(activity, system);
-    updateDirectorModelLoad(activity, String(activity && activity.runtimeMode || '') === 'remote' ? null : system);
-    phase.textContent = directorPhaseLabel(activity && activity.phase);
-    var startedAt = Number(activity && activity.startedAt) || storyState.director.activityStartedAt;
-    var parts = [];
-    directorQueuedLabel(activity).forEach(function (label) {
-      var reason = String(activity && activity.waitReason || '');
-      parts.push('<span' + (reason ? ' title="' + escapeHtml(reason) + '"' : '') + '>' + escapeHtml(label) + '</span>');
-    });
-    if (startedAt) {
-      var endedAt = terminal ? Number(activity && activity.updatedAt) : Date.now() / 1000;
-      if (!isFinite(endedAt) || endedAt < startedAt) endedAt = Date.now() / 1000;
-      parts.push('<span>' + escapeHtml(String(Math.max(0, Math.round(endedAt - startedAt))) + 's elapsed') + '</span>');
-    }
-    if (terminal && String(activity && activity.phase || '') === 'complete') {
-      directorCompletionStats(activity).forEach(function (stat) {
-        parts.push('<span>' + escapeHtml(stat) + '</span>');
-      });
-    } else {
-      directorLiveStats(activity).forEach(function (stat) {
-        parts.push('<span>' + escapeHtml(stat) + '</span>');
-      });
-    }
-
-    var isRemote = String(activity && activity.runtimeMode || '') === 'remote';
-    if (isRemote) {
-      var provider = String(activity && activity.runtimeProvider || '').trim();
-      parts.push('<span>' + escapeHtml(provider === 'ollama' ? 'Remote Ollama' : 'Remote') + '</span>');
-      var showRemoteModelTelemetry = phaseName !== 'queued';
-      var remoteModelSizeBytes = showRemoteModelTelemetry ? Number(activity && activity.modelSizeBytes) : NaN;
-      if (isFinite(remoteModelSizeBytes) && remoteModelSizeBytes > 0) {
-        parts.push('<span>Model ' + escapeHtml(directorBytesGiB(remoteModelSizeBytes)) + '</span>');
-      }
-      var remoteVramBytes = showRemoteModelTelemetry ? Number(activity && activity.remoteModelVramBytes) : NaN;
-      if (isFinite(remoteVramBytes) && remoteVramBytes > 0) {
-        parts.push('<span title="Model bytes reported resident on the remote GPU">GPU-resident ' + escapeHtml(directorBytesGiB(remoteVramBytes)) + '</span>');
-      }
-      var remoteContextSize = showRemoteModelTelemetry ? Number(activity && activity.contextSize) : NaN;
-      if (isFinite(remoteContextSize) && remoteContextSize > 0 && phaseName !== 'complete') {
-        parts.push('<span>' + escapeHtml(directorTokenCount(remoteContextSize)) + ' ctx</span>');
-      }
-    }
-
-    var gpu = !isRemote && system && system.gpu;
-    var primary = gpu && gpu.available && Array.isArray(gpu.gpus) ? gpu.gpus[0] : null;
-    if (primary) {
-      var utilization = Number(primary.utilization);
-      if (isFinite(utilization)) {
-        parts.push('<span title="GPU utilization">GPU ' + Math.round(utilization) + '%</span>');
-      }
-      var memoryUsed = Number(primary.memoryUsed);
-      var memoryTotal = Number(primary.memoryTotal);
-      var used = directorMemoryGiB(memoryUsed);
-      var total = directorMemoryGiB(memoryTotal);
-      var vramPercent = memoryTotal > 0 ? memoryUsed / memoryTotal * 100 : NaN;
-      if (isFinite(vramPercent)) {
-        var vramTitle = used && total ? used + ' used of ' + total : '';
-        parts.push('<span' + (vramTitle ? ' title="' + escapeHtml(vramTitle) + '"' : '') + '>VRAM ' + Math.round(vramPercent) + '%</span>');
-      }
-    }
-
-    var ram = !isRemote && system && system.ram;
-    if (ram && ram.available) {
-      var ramUsedBytes = Number(ram.used);
-      var ramTotalBytes = Number(ram.total);
-      var ramUsed = directorBytesGiB(ramUsedBytes);
-      var ramTotal = directorBytesGiB(ramTotalBytes);
-      var ramPercent = ramTotalBytes > 0 ? ramUsedBytes / ramTotalBytes * 100 : NaN;
-      if (isFinite(ramPercent)) {
-        var ramTitle = ramUsed && ramTotal ? ramUsed + ' used of ' + ramTotal : '';
-        parts.push('<span' + (ramTitle ? ' title="' + escapeHtml(ramTitle) + '"' : '') + '>RAM ' + Math.round(ramPercent) + '%</span>');
-      }
-    }
-    detail.innerHTML = parts.join(' · ');
+    // Activity owns operational telemetry; the overlay explains why editing is blocked.
+    var targetKind = String(storyState.director.activityTarget && storyState.director.activityTarget.kind || '');
+    var action = {concept: 'developing the Story', scenes: 'working on Scenes', repair: 'repairing Scenes', 'scene-prompt': 'revising this Scene'};
+    phase.textContent = terminal ? directorPhaseLabel(phaseName) : 'Director is ' + (action[targetKind] || 'working') + '…';
+    detail.textContent = terminal ? 'Review the result in Storyboard.' : 'Editing is temporarily unavailable here.';
   }
 
   function directorActivityActive() {
@@ -5573,6 +5504,11 @@
     sceneProgression.addEventListener('scroll', function () {
       closeSceneActionMenus();
     }, { passive: true });
+    el('storyboard-director-view-activity').onclick = function () {
+      var jobId = String(el('storyboard-director-stop').dataset.directorJobId || '');
+      if (jobId) window.focusActivityJob(jobId);
+      else window.setActivityDrawerOpen(true);
+    };
     el('storyboard-director-stop').onclick = function () {
       stopDirectorJob();
     };

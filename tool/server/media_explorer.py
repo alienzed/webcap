@@ -370,7 +370,7 @@ def discover_set_media():
 
 
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
-               model="", folder="", rating="", artifact=""):
+               model="", folder="", rating="", artifact="", owner=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
@@ -394,6 +394,8 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         results = [item for item in results if role in item.get("roles", [item["role"]])]
     if artifact:
         results = [item for item in results if item["id"] == artifact]
+    if owner:
+        results = [item for item in results if item.get("storageId") == owner]
     if kind:
         results = [item for item in results if item["mediaKind"] == kind]
     if search:

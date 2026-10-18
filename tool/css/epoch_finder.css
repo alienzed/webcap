@@ -1,6 +1,7 @@
-.epoch-finder-tabs{display:flex;gap:6px;padding:9px 16px;border-bottom:1px solid var(--border-color,#354154);background:var(--panel-bg,#19232e)}
-.epoch-finder-tab{border:0;border-radius:7px;background:transparent;color:var(--text-muted,#aeb8c4);padding:8px 16px;cursor:pointer;font-weight:650}
-.epoch-finder-tab.active{color:var(--text-primary,#f4f7fb);background:var(--background-secondary,#344251);box-shadow:inset 0 -2px 0 var(--accent-color,#6ba4de)}
+.test-workspace-pane-switcher{display:flex;gap:4px;min-width:0;margin:0 0 12px;padding:3px;border:1px solid var(--border-color,#354154);border-radius:9px;background:var(--panel-bg,#19232e)}
+.test-workspace-pane-btn{flex:1;min-width:0;border:0;border-radius:6px;background:transparent;color:var(--text-muted,#aeb8c4);padding:7px 5px;cursor:pointer;font-size:12px;font-weight:650;white-space:nowrap}
+.test-workspace-pane-btn.active{color:var(--text-primary,#f4f7fb);background:var(--background-secondary,#344251);box-shadow:inset 0 -2px 0 var(--accent-color,#6ba4de)}
+.test-workspace-pane-btn:focus-visible{outline:2px solid var(--accent-color,#6ba4de);outline-offset:2px}
 .epoch-finder-screen{padding:18px 20px 36px;overflow-y:auto;min-height:0;flex:1;color:var(--text-primary,#eaf0f8)}
 .epoch-finder-screen.hidden{display:none}
 .epoch-finder-intro,.epoch-finder-heading,.epoch-finder-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}

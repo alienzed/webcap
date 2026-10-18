@@ -105,9 +105,9 @@ def discover_tests(full=False):
     thumbnail uses the existing owner-validated route.
     """
     central = app_config.output_root() / "test-generations"
-    if not central.is_dir() or central.is_symlink():
-        return []
-    roots = [central]
+    if central.is_symlink():
+        raise RuntimeError("Test Generations storage root cannot be symlinked.")
+    roots = [central] if central.is_dir() else []
     workspaces = central / "sets"
     if workspaces.is_dir() and not workspaces.is_symlink():
         for workspace in workspaces.iterdir():

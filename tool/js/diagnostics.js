@@ -6,7 +6,7 @@ function diagnosticsEl(id) {
 }
 
 function setDiagnosticsTab(tabName, focusTab) {
-  var next = ['health', 'h3', 'models', 'benchmark', 'model-lab'].indexOf(tabName) !== -1 ? tabName : 'health';
+  var next = ['health', 'assessment', 'h3', 'models', 'benchmark', 'model-lab'].indexOf(tabName) !== -1 ? tabName : 'health';
   diagnosticsActiveTab = next;
   var selectedButton = null;
 
@@ -24,10 +24,65 @@ function setDiagnosticsTab(tabName, focusTab) {
     panel.hidden = !active;
   });
 
+  if (next === 'assessment') refreshUnifiedModelAssessment();
   if (next === 'h3') refreshH3CalibrationSettings();
   if ((next === 'models' || next === 'benchmark') && !directorModelTestState.loaded) directorModelTestRefresh();
   if (next === 'model-lab') modelLabRefresh();
   if (focusTab && selectedButton) selectedButton.focus();
+}
+
+function refreshUnifiedModelAssessment() {
+  var summary = diagnosticsEl('diagnostics-assessment-summary');
+  var results = diagnosticsEl('diagnostics-assessment-results');
+  if (!summary || !results) throw new Error('Unified assessment markup is missing.');
+  summary.textContent = 'Loading model findings…';
+  return Promise.all([
+    fetch('/fs/storyboard/director').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Director discovery failed.'); return p; }); }),
+    fetch('/app/director-model-test').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Director findings failed.'); return p; }); }),
+    fetch('/app/model-lab').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Model Lab findings failed.'); return p; }); })
+  ]).then(function (values) {
+    var directors = values[0].models || [];
+    var reports = values[1].calibrationReports || [];
+    var labRuns = values[2].runs || [];
+    var labModels = values[2].models || {};
+    var vision = labModels.visions || [];
+    summary.textContent = directors.length + ' Director models · ' + vision.length + ' Vision models · ' + labRuns.length + ' Model Lab runs';
+    results.replaceChildren();
+    function addRow(title, detail) {
+      var row = document.createElement('div');
+      row.className = 'app-settings-environment-result';
+      var heading = document.createElement('strong');
+      heading.textContent = title;
+      var description = document.createElement('div');
+      description.className = 'app-settings-help';
+      description.textContent = detail;
+      row.appendChild(heading);
+      row.appendChild(description);
+      results.appendChild(row);
+    }
+    directors.forEach(function (model) {
+      var ref = String(model.id || '');
+      var report = reports.find(function (entry) { return String(entry.modelRef || '') === ref; });
+      var matchingRuns = labRuns.filter(function (run) {
+        return (run.directorModels || []).some(function (entry) { return String(entry.modelRef || '') === ref; });
+      });
+      addRow(String(model.label || model.modelId || ref), 'Director · ' +
+        (report ? 'Writing: ' + String(report.health || report.status || 'recorded') : 'Writing: unassessed') +
+        ' · Structured: ' + (matchingRuns.length ? matchingRuns.length + ' Lab run(s)' : 'not tested here'));
+    });
+    vision.forEach(function (model) {
+      var ref = String(model.modelRef || '');
+      var matchingRuns = labRuns.filter(function (run) {
+        return (run.visionModels || []).some(function (entry) { return String(entry.modelRef || '') === ref; });
+      });
+      addRow(String(model.label || model.modelId || ref), 'Vision · ' +
+        (matchingRuns.length ? matchingRuns.length + ' Lab run(s)' : 'No saved Lab runs'));
+    });
+  }).catch(function (error) {
+    summary.textContent = 'Could not load assessment findings: ' + String(error.message || error);
+    reportConsoleError('Model Assessment', error);
+    throw error;
+  });
 }
 
 function loadDiagnosticsConfig() {
@@ -346,6 +401,10 @@ function wireDiagnosticsUi() {
   diagnosticsEl('h3-calibration-stop-btn').onclick = stopH3Calibration;
   diagnosticsEl('h3-calibration-reset-btn').onclick = resetH3CalibrationSettings;
   diagnosticsEl('h3-calibration-console-btn').onclick = showConsolePanel;
+  diagnosticsEl('diagnostics-assessment-refresh').onclick = function () { refreshUnifiedModelAssessment().catch(function () {}); };
+  diagnosticsEl('diagnostics-assessment-director').onclick = function () { setDiagnosticsTab('models', true); };
+  diagnosticsEl('diagnostics-assessment-lab').onclick = function () { setDiagnosticsTab('model-lab', true); };
+  diagnosticsEl('diagnostics-assessment-benchmark').onclick = function () { setDiagnosticsTab('benchmark', true); };
 
   Array.prototype.forEach.call(document.querySelectorAll('[data-diagnostics-tab]'), function (button) {
     button.onclick = function () {

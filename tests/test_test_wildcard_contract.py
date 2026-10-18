@@ -125,7 +125,7 @@ def test_within_group_unobserved_wildcard_pair_rejected():
     import pytest
     from tool.server.test_wildcard_contract import validate_group_compatibility
     observations = {"Shape": [["triangle"], ["teardrop"], ["triangle", "micro"]]}
-    data = {"variationGroups": [
+    data = {"wildcard":"{triangle|teardrop} {micro|triangle}", "variationGroups": [
         {"label":"Shape", "annotationGroup":"Shape", "options":["triangle","teardrop"]},
         {"label":"Detail", "annotationGroup":"Shape", "options":["micro","triangle"]},
     ]}
@@ -136,7 +136,7 @@ def test_within_group_unobserved_wildcard_pair_rejected():
 def test_cross_group_recombination_is_allowed():
     from tool.server.test_wildcard_contract import validate_group_compatibility
     observations = {"Shape":[["triangle"],["teardrop"]], "Back":[["ring"],["string"]]}
-    data = {"variationGroups":[
+    data = {"wildcard":"{triangle|teardrop} {ring|string}", "variationGroups":[
         {"label":"Shape", "annotationGroup":"Shape", "options":["triangle","teardrop"]},
         {"label":"Back", "annotationGroup":"Back", "options":["ring","string"]},
     ]}
@@ -147,6 +147,6 @@ def test_tag_values_without_group_identity_are_rejected():
     import pytest
     from tool.server.test_wildcard_contract import validate_group_compatibility
     with pytest.raises(ValueError, match="annotationGroup"):
-        validate_group_compatibility({"variationGroups":[
+        validate_group_compatibility({"wildcard":"{triangle|teardrop}", "variationGroups":[
             {"label":"Shape", "options":["triangle","teardrop"]}
         ]}, {"Shape":[["triangle"],["teardrop"]]})

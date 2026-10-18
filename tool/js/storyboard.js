@@ -12,6 +12,7 @@
     sceneSavePromises: {},
     sceneSaveErrors: {},
     generationJobs: {},
+    libraryInferenceJobs: {},
     generationReceipts: {},
     newTakeCounts: {},
     sequenceExport: null,
@@ -3053,8 +3054,13 @@
           && storyState.storyAction.active
           && String(storyState.storyAction.storyId || '') === String(story.id || '');
         var queuedFirstCut = queuedFirstCutForStory(story.id);
+        var inferenceJobs = storyState.libraryInferenceJobs[String(story.id || '')] || [];
+        var runningTakes = inferenceJobs.filter(function (job) { return ['starting', 'running', 'stopping'].indexOf(String(job.status || '')) !== -1; }).length;
+        var queuedTakes = inferenceJobs.filter(function (job) { return ['backlog', 'queued'].indexOf(String(job.status || '')) !== -1; }).length;
         if (activeFirstCut) meta.push('First Cut running');
         else if (queuedFirstCut) meta.push('First Cut queued #' + String(firstCutQueueDisplayPosition(queuedFirstCut)));
+        if (runningTakes) meta.push(String(runningTakes) + ' Take' + (runningTakes === 1 ? '' : 's') + ' running');
+        if (queuedTakes) meta.push(String(queuedTakes) + ' Take' + (queuedTakes === 1 ? '' : 's') + ' queued');
         if (story.status && story.status !== 'active') meta.push(story.status);
         meta.push(String(Number(story.sceneCount || 0)) + ' scene' + (Number(story.sceneCount || 0) === 1 ? '' : 's'));
         return '<div class="storyboard-story-row' + (active ? ' active' : '') + '" data-story-id="' + escapeHtml(story.id) + '">' +
@@ -4828,7 +4834,31 @@
   }
 
   function syncStoryboardInferenceSnapshot(queue) {
-    if (!storyState.story || !queue || !Array.isArray(queue.jobs)) return;
+    if (!queue || !Array.isArray(queue.jobs)) return;
+    var byStory = Object.create(null);
+    queue.jobs.forEach(function (job) {
+      if (String(job.client || '') !== 'storyboard' || !job.storyId) return;
+      var id = String(job.storyId);
+      if (!byStory[id]) byStory[id] = [];
+      byStory[id].push(job);
+    });
+    var previousByStory = storyState.libraryInferenceJobs;
+    storyState.libraryInferenceJobs = byStory;
+    function counts(jobs) {
+      var queued = 0;
+      var running = 0;
+      (jobs || []).forEach(function (job) {
+        var status = String(job.status || '');
+        if (status === 'backlog' || status === 'queued') queued += 1;
+        else if (status === 'starting' || status === 'running' || status === 'stopping') running += 1;
+      });
+      return String(queued) + ':' + String(running);
+    }
+    var storyIds = Object.keys(byStory).concat(Object.keys(previousByStory));
+    if (storyIds.some(function (id) { return counts(byStory[id]) !== counts(previousByStory[id]); })) {
+      renderLibrary();
+    }
+    if (!storyState.story) return;
     var storyId = String(storyState.story.id || '');
     var seenJobIds = Object.create(null);
     queue.jobs.forEach(function (rawJob) {

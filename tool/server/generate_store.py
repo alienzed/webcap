@@ -387,6 +387,12 @@ def rate_result(storage_id, rating):
     }
 
 
+def load_result(storage_id):
+    manifest = _result_directory(storage_id) / MANIFEST_NAME
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    return _listed_result_payload(manifest, payload)
+
+
 def list_results(limit=100):
     found = []
     root = generation_root()

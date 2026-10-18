@@ -1,6 +1,7 @@
 """Read-only owner-backed Media Explorer discovery; no persistent index."""
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 from . import config as app_config
@@ -22,6 +23,7 @@ def _record_details(record):
         "resolution": str(settings.get("dimensions") or ""),
         "duration": record.get("durationSeconds", settings.get("duration")),
         "aspectRatio": str(record.get("aspectRatio") or settings.get("aspectRatio") or ""),
+        "workflow": str(record.get("workflowProfile") or record.get("workflowFile") or ""),
         "loras": [{"name": str(item.get("name") or ""), "strength": item.get("strength")}
                   for item in record.get("loras") or [] if isinstance(item, dict) and item.get("name")],
     }
@@ -214,7 +216,7 @@ def discover_tests(full=False):
                 file = session / name
                 if file.is_symlink() or not file.is_file() or not _kind(file):
                     continue
-                relative = file.relative_to(Path(app_config.FS_ROOT)).as_posix()
+                relative = folder + "/test-generations/" + session.name + "/" + name
                 url = ("/fs/test_generations/media?folder=" + quote(folder, safe="")
                        + "&session=" + quote(session.name, safe="")
                        + "&media=" + quote(name, safe=""))
@@ -255,7 +257,7 @@ def discover_epoch_frames():
                 file = frame_path(owner, campaign_id, name)
             except FileNotFoundError:
                 continue  # Retired screening frames are not durable artifacts.
-            relative = file.relative_to(Path(app_config.FS_ROOT)).as_posix()
+            relative = folder + "/epoch-finder/" + campaign_id + "/" + name
             frames.append({
                 **_record_details(unit),
                 "id": "epoch:" + relative,
@@ -300,7 +302,7 @@ def discover_storyboards():
                 if not kind:
                     continue
                 identity = "storyboard:" + story_id + ":" + path
-                use = {"storageId": str(scene_id), "role": label}
+                use = {"storageId": str(scene_id), "role": label, "source": "storyboard", "label": str(scene.get("title") or scene_id)}
                 if identity in found:
                     found[identity]["uses"].append(use)
                     if role not in found[identity]["roles"]:
@@ -313,7 +315,8 @@ def discover_storyboards():
                     "fileName": file.name, "mediaPath": path,
                     "mediaUrl": "/fs/storyboard/media?story=" + quote(story_id, safe="")
                                 + "&path=" + quote(path, safe=""),
-                    "createdAt": 0, "rating": None, "model": "",
+                    "createdAt": int(datetime.fromisoformat(entry["createdAt"]).timestamp() * 1000) if entry.get("createdAt") else 0,
+                    "rating": None, "model": str(entry.get("modelId") or ""),
                     "contextLabel": str(story.get("title") or story_id) + " / " + str(scene.get("title") or scene_id),
                     "roles": [role], "fileSize": file.stat().st_size,
                     "uses": [use],
@@ -367,7 +370,7 @@ def discover_set_media():
 
 
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
-               model="", folder="", rating=""):
+               model="", folder="", rating="", artifact=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
@@ -389,6 +392,8 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
     results.sort(key=lambda item: (item['createdAt'], item['id']), reverse=True)
     if role:
         results = [item for item in results if role in item.get("roles", [item["role"]])]
+    if artifact:
+        results = [item for item in results if item["id"] == artifact]
     if kind:
         results = [item for item in results if item["mediaKind"] == kind]
     if search:

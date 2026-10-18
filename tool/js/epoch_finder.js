@@ -991,6 +991,12 @@
     if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;
+  window.epochFinderInspectCampaign = function (campaignId) {
+    activeCampaign = String(campaignId);
+    inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = '';
+    showMode('finder');
+    refreshStatus().catch(error);
+  };
   els('mode-tests').onclick = function () { showMode('tests'); };
   els('mode-finder').onclick = function () { showMode('finder'); };
   els('refresh').onclick = refresh;

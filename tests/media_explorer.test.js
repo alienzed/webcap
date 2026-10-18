@@ -16,6 +16,8 @@ function fixture(hash = '#/media') {
         toggle: (x, force = !classes.has(x)) => { force ? classes.add(x) : classes.delete(x); return force; } };
       Object.defineProperty(this, 'className', {set: value => { classes.clear(); value.split(' ').filter(Boolean).forEach(x => classes.add(x)); }});
       this.style = {setProperty() {}};
+      Object.defineProperty(this, 'options', {get: () => this.children});
+      Object.defineProperty(this, 'selectedIndex', {get: () => this.children.findIndex(option => option.value === this.value)});
     }
     setAttribute(k, v) { this.attrs[k] = v; }
     getAttribute(k) { return this.attrs[k]; }
@@ -38,6 +40,11 @@ function fixture(hash = '#/media') {
   }
   const html = fs.readFileSync('tool/tool.html', 'utf8');
   for (const [,id] of html.matchAll(/id="(media-explorer-[^"]+|app-frame)"/g)) nodes[id] = new Element();
+  for (const [,id,content] of html.matchAll(/<select[^>]*id="(media-explorer-[^"]+)"[^>]*>([\s\S]*?)<\/select>/g)) {
+    for (const [,value,label] of content.matchAll(/<option value="([^"]*)">([^<]*)<\/option>/g)) {
+      const option = new Element('option'); option.value = value; option.textContent = label; nodes[id].appendChild(option);
+    }
+  }
   const buttons = [...html.matchAll(/class="media-explorer-source(?: active)?" data-media-(role|source)="([^"]*)"/g)].map(([,kind,value]) => {
     const button = new Element('button'); button.dataset[kind === 'role' ? 'mediaRole' : 'mediaSource'] = value; button.className = 'media-explorer-source'; return button;
   });
@@ -48,6 +55,7 @@ function fixture(hash = '#/media') {
   nodes['media-explorer-compare-dialog'].appendChild(new Element('strong'));
   nodes['media-explorer-compare-dialog'].appendChild(nodes['media-explorer-compare-content']);
   document = { getElementById: id => nodes[id], createElement: tag => new Element(tag), listeners: {},
+    querySelector: () => ({scrollTop:0}),
     addEventListener(k, fn) { this.listeners[k] = fn; },
     querySelectorAll: selector => selector.includes('[data-media-role]') ? buttons.filter(b => 'mediaRole' in b.dataset) : selector.includes('[data-media-source]') ? buttons.filter(b => 'mediaSource' in b.dataset) : buttons };
   const window = { location: {hash}, reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
@@ -124,7 +132,7 @@ test('selection, grid keys, loupe return and native video cleanup', async () => 
   f.key(a, 'ArrowRight'); assert.equal(b.classList.contains('active'), true);
   f.key(b, 'Enter'); assert.equal(f.nodes['media-explorer-loupe'].open, true);
   f.nodes['media-explorer-close-loupe'].click();
-  c.click(); const video = f.nodes['media-explorer-inspector-body'].children[0];
+  c.click(); const video = f.nodes['media-explorer-inspector-body'].querySelector('video');
   f.window.closeMediaExplorerActivity(); assert.equal(video.paused, true);
 });
 
@@ -180,4 +188,77 @@ test('Generate capability refresh retains the current model draft and settings',
   context.generateState.models = [{id:'model-b',label:'B'}];
   context.populateModelSelector();
   assert.equal(controls['generate-prompt'].value, 'default', 'an explicit model change applies that model defaults');
+});
+
+test('Set filter routing is separate from the active working Set and framing is explicit', async () => {
+  const f = fixture('#/media?folder=working-set&mediaSet=reference-set&kind=image');
+  f.window.openMediaExplorerActivity();
+  assert.equal(new URL(f.pending[0].url,'http://localhost').searchParams.get('folder'),'reference-set');
+  const route = new URLSearchParams({folder:'working-set'});
+  f.window.appendMediaExplorerRouteParams(route);
+  assert.equal(route.get('folder'),'working-set');
+  assert.equal(route.get('mediaSet'),'reference-set');
+  await f.settle(f.pending[0],[media('a')]);
+  f.nodes['media-explorer-fill'].click();
+  assert.equal(f.nodes['media-explorer-grid'].classList.contains('fill'),true);
+  f.nodes['media-explorer-fit'].click();
+  assert.equal(f.nodes['media-explorer-grid'].classList.contains('fill'),false);
+});
+
+test('direct checkboxes, Space, range keys and mixed comparison work without touching active work', async () => {
+  const f = fixture(); f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0],[media('a'),media('b','video'),media('c')]);
+  const [a,b,c] = f.nodes['media-explorer-grid'].children;
+  a.querySelector('.media-explorer-card-check').click({stopPropagation() {}});
+  assert.equal(a.querySelector('.media-explorer-card-check').checked,true);
+  f.key(b,' ');
+  assert.equal(f.nodes['media-explorer-compare'].disabled,false,'mixed images and videos use independent playback');
+  f.key(b,'ArrowRight',{shiftKey:true});
+  assert.match(f.nodes['media-explorer-selected-count'].textContent,/^3 selected/);
+  f.nodes['media-explorer-compare'].click();
+  assert.equal(f.nodes['media-explorer-compare-content'].classList.contains('survey'),true);
+  assert.match(f.nodes['media-explorer-compare-dialog'].querySelector('strong').textContent,/Survey · 3 selected/);
+});
+
+test('historical Generate source navigation is read only and rejects late source responses', async () => {
+  const source = fs.readFileSync('tool/js/generate.js','utf8');
+  const requests=[]; let shown='';
+  const node={classList:{add() {},remove() {}}};
+  const context={
+    window:{closeMediaExplorerActivity() {},syncApplicationShellContext() {},syncShellLocationRoute() {}},
+    generateState:{open:false,navigationVersion:0,director:{},viewMode:'create'},
+    el:()=>node,getDirectorModelPreference:()=>'',trackGenerateJob() {},setGenerateViewMode() {},setTakesCollapsed() {},syncCancelQueuedButton() {},
+    refreshCapabilities:()=>Promise.resolve(),refreshDirector:()=>Promise.resolve(),refreshTrackedGenerateJobs:()=>Promise.resolve(),refreshResults:()=>Promise.resolve(),
+    requestJson:url=>new Promise(resolve=>requests.push({url,resolve})),
+    renderActiveResult:result=>shown=result.storageId,
+    restoreResultConfiguration:()=>assert.fail('historical navigation must never replace the working draft'),
+    reportError:error=>assert.fail(String(error))
+  };
+  vm.runInNewContext(source.slice(source.indexOf('  function openGenerateActivity('),source.indexOf('  function bindUi()')),context);
+  const first=context.openGenerateActivity({storageId:'day/a'});
+  await new Promise(resolve=>setImmediate(resolve));
+  const second=context.openGenerateActivity({storageId:'day/b'});
+  await new Promise(resolve=>setImmediate(resolve));
+  requests[1].resolve({result:{storageId:'day/b'}}); await second;
+  requests[0].resolve({result:{storageId:'day/a'}}); await first;
+  assert.equal(shown,'day/b');
+  const third=context.openGenerateActivity({storageId:'day/c'});
+  await new Promise(resolve=>setImmediate(resolve));
+  context.closeGenerateActivity();
+  requests[2].resolve({result:{storageId:'day/c'}}); await third;
+  assert.equal(shown,'day/b','leaving the activity cancels late preview navigation');
+});
+
+test('source-to-Explorer navigation opens the exact artifact without a filename search', async () => {
+  const f=fixture();
+  f.window.openMediaExplorerActivity(); await f.settle(f.pending[0],[media('unrelated')]);
+  const id='generate:generations/day/old/result.jpg';
+  f.window.openMediaExplorerActivity({source:'generate',id});
+  const query=new URL(f.pending[1].url,'http://localhost').searchParams;
+  assert.equal(query.get('artifact'),id); assert.equal(query.get('full'),'1');
+  await f.settle(f.pending[1],[{...media(id),source:'generate',role:'reference',storageId:'day/old'}]);
+  assert.equal(f.nodes['media-explorer-inspector-body'].dataset.id,id);
+  assert.equal(f.nodes['media-explorer-inspector'].classList.contains('hidden'),false);
+  f.nodes['media-explorer-filter-chips'].children[0].click();
+  assert.equal(new URL(f.pending[2].url,'http://localhost').searchParams.get('artifact'),'');
 });

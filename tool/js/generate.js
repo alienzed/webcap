@@ -34,6 +34,8 @@
     results: [],
     viewMode: 'create',
     activeResultKey: '',
+    inspectedResult: null,
+    navigationVersion: 0,
     activePendingJobId: '',
     takesCollapsed: false,
     takesVisibleCount: TAKE_BATCH_SIZE,
@@ -1187,6 +1189,7 @@
     var key = resultKey(result);
     if (!key) throw new Error('Generate result is missing its stable identity.');
     generateState.activeResultKey = key;
+    generateState.inspectedResult = result;
     generateState.activePendingJobId = '';
     summary.textContent = [String(result.modelId || 'Generated'), resultSummary(result)].filter(Boolean).join(' · ');
 
@@ -1541,6 +1544,11 @@
 
     utility.appendChild(rating);
     utility.appendChild(openButton);
+    var exploreButton = document.createElement('button'); exploreButton.type = 'button';
+    exploreButton.className = 'review-captions-btn'; exploreButton.textContent = 'Explore';
+    exploreButton.title = 'View in Media Explorer'; exploreButton.setAttribute('aria-label', 'View in Media Explorer');
+    exploreButton.dataset.generateExplorePath = result.mediaPath;
+    utility.appendChild(exploreButton);
     primary.appendChild(model);
     primary.appendChild(utility);
 
@@ -1623,6 +1631,9 @@
         return resultKey(result) === generateState.activeResultKey;
       });
       if (selected) renderActiveResult(selected);
+      else if (generateState.inspectedResult && resultKey(generateState.inspectedResult) === generateState.activeResultKey) {
+        renderActiveResult(generateState.inspectedResult);
+      }
       else {
         generateState.activeResultKey = '';
         if (items.length) renderActiveResult(items[0]);
@@ -2303,6 +2314,7 @@
   function openGenerateActivity(target) {
     if (window.closeMediaExplorerActivity) window.closeMediaExplorerActivity();
     target = target && typeof target === 'object' ? target : {};
+    var navigationVersion = ++generateState.navigationVersion;
     var targetJobId = String(target.jobId || '');
     if (targetJobId) {
       trackGenerateJob(targetJobId);
@@ -2323,15 +2335,23 @@
     syncCancelQueuedButton();
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
-    Promise.all([
+    return Promise.all([
       refreshCapabilities(),
       refreshDirector(),
       refreshTrackedGenerateJobs(),
       refreshResults()
-    ]).catch(reportError);
+    ]).then(function () {
+      if (!target.storageId || !generateState.open || navigationVersion !== generateState.navigationVersion) return;
+      return requestJson('/fs/generate/result?storageId=' + encodeURIComponent(target.storageId)).then(function (payload) {
+        if (!generateState.open || navigationVersion !== generateState.navigationVersion) return;
+        renderActiveResult(payload.result);
+        setGenerateViewMode('create');
+      });
+    }).catch(reportError);
   }
 
   function closeGenerateActivity() {
+    generateState.navigationVersion++;
     var frame = el('app-frame');
     var workspace = el('generate-workspace');
     generateState.open = false;
@@ -2557,6 +2577,9 @@
         if (!window.confirm('Permanently delete this generation and all of its artifacts?')) return;
         deleteButton.disabled = true;
         postJson('/fs/generate/result/delete', { storageId: storageId }).then(function () {
+          if (generateState.inspectedResult && generateState.inspectedResult.storageId === storageId) {
+            generateState.inspectedResult = null; generateState.activeResultKey = '';
+          }
           var card = deleteButton.closest('.generate-result-card');
           if (card) card.remove();
           return refreshResults();
@@ -2567,6 +2590,10 @@
         return;
       }
 
+      var explore = event.target.closest('[data-generate-explore-path]');
+      if (explore) {
+        window.openMediaExplorerActivity({source: 'generate', id: 'generate:' + explore.dataset.generateExplorePath}); return;
+      }
       var openButton = event.target.closest('[data-generate-open-result-key]');
       if (!openButton) return;
       var key = String(openButton.dataset.generateOpenResultKey || '');

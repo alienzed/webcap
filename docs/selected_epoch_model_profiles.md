@@ -1,6 +1,6 @@
 # Selected epoch model profiles — phased implementation contract
 
-Status: Metadata foundation, backend profile endpoint, contextual manual profile editor, captured-tag suggestion import, and staged Test profile exposure committed on `feature/epoch-model-profiles`. Optional Director enrichment, Generate prompt controls, and Storyboard Director consumption remain unimplemented. Tests have not been executed in a repository runtime.
+Status: End-to-end feature implementation on draft PR #457: checkpoint metadata reader/editor, captured training vocabulary, optional queued Director enrichment, Test/Generate prompt phrase and wildcard insertion, explicit atomic embedding in the manifest-recorded saved LoRA, and Storyboard Director profile context read from ComfyUI's exact LoRA asset. Static review ongoing; project tests and end-to-end runtime verification have NOT been executed. Branch is not merged and currently trails newer main changes.
 Follow root `AGENTS.md` and `docs/filesystem_state_contract.md`. No new global storage roots, queue lanes, or speculative services.
 
 ## Product behavior
@@ -87,3 +87,17 @@ not necessarily reliable advice.
 None currently block Phases 1–5. The only deferred decision is whether to expose
 safetensors rewriting, since it changes file bytes and identity; keep it opt-in and
 separate from routine selection and editing.
+
+
+## Implementation observations / audit boundary
+
+- `POST /fs/training_candidates/profile` reads or saves the original checkpoint profile by server-resolved training identity; selection remains independent.
+- `POST /fs/training_candidates/profile/director` uses the existing ephemeral Test LLM client/queue and fills reviewable draft fields only.
+- `POST /fs/training_candidates/profile/embed` explicitly rewrites only the manifest-recorded saved/exported copy atomically, preserving tensor byte content; the training checkpoint remains untouched.
+- `GET /fs/generate/lora/profile?name=...` resolves through ComfyUI's actual LoRA selection and reads `webcap.profile` from its safetensors metadata. No local filename guesses are used.
+- Test and Generate explicitly insert key phrases or `{a|b}` wildcard fragments at cursor; no auto-overwrite of prompts.
+- Storyboard Director `write_prompt` / `refine_prompt` includes relevant embedded LoRA guidance where available. ComfyUI metadata failure does not prevent Director work.
+- Current freeform/manual profile changes are not automatically re-embedded into an already saved LoRA. The explicit Embed action is required after editing.
+- The configured Copy-to-Test destination and ComfyUI LoRA directory are not assumed to be the same path. Only metadata actually embedded in the ComfyUI-selected asset is used as authoritative cross-workspace guidance.
+- Tests committed in `tests/test_model_epoch_profile.py`, but cannot be executed here because the running container cannot resolve GitHub and does not have a WebCap checkout. Treat this as unverified, not passed.
+- Before merging: reconcile newer `main` updates, execute targeted tests, inspect frontend/runtime behaviors, and re-audit after integration.

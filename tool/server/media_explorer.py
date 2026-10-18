@@ -279,11 +279,48 @@ def discover_storyboards():
     return list(found.values())
 
 
+
+def discover_set_media():
+    """Explicit full scan of recognized source Sets, using their existing media contract."""
+    from .caption_ops import list_media_files
+    base = Path(app_config.FS_ROOT)
+    if base.is_symlink() or not base.is_dir():
+        return []
+    found = []
+    excluded = {"output", ".webcap", ".webcap_training", ".webcap_runtime",
+                "test-generations", "originals", "auto_dataset"}
+    for directory, names, files in os.walk(base, followlinks=False):
+        path = Path(directory)
+        names[:] = [name for name in names if name not in excluded
+                    and not (path / name).is_symlink()]
+        if path == base or not ({".webcap_state.json", "media_metadata.json"} & set(files)):
+            continue
+        folder = path.relative_to(base).as_posix()
+        for name in list_media_files(folder):
+            file = path / name
+            if file.is_symlink() or not file.is_file():
+                continue
+            kind = _kind(file)
+            if not kind:
+                continue
+            found.append({
+                "id": "set:" + folder + "/" + name, "source": "set",
+                "storageId": folder, "ownerFolder": folder, "role": "source",
+                "mediaKind": kind, "fileName": name,
+                "mediaPath": folder + "/" + name,
+                "mediaUrl": "/fs/media?folder=" + quote(folder, safe="")
+                            + "&media=" + quote(name, safe=""),
+                "createdAt": int(file.stat().st_mtime * 1000),
+                "rating": None, "model": "", "uses": [],
+            })
+    return found
+
+
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
-    if source not in ('', 'generate', 'test', 'epoch', 'storyboard'):
+    if source not in ('', 'generate', 'test', 'epoch', 'storyboard', 'set'):
         raise ValueError('Unknown Media Explorer source.')
     results = (discover_generate(limit=None if full else 500) if source in ('', 'generate') else [])
     if source in ('', 'test'):
@@ -292,6 +329,8 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         results.extend(discover_epoch_frames())
     if source in ('', 'storyboard'):
         results.extend(discover_storyboards())
+    if full and source in ('', 'set'):
+        results.extend(discover_set_media())
     results.sort(key=lambda item: (item['createdAt'], item['id']), reverse=True)
     if role:
         results = [item for item in results if item["role"] == role]

@@ -88,3 +88,35 @@ def test_test_wildcard_route_rejects_set_without_captions(tmp_path, monkeypatch)
 
     assert response.status_code == 400
     assert "no captions" in response.get_json()["error"].lower()
+
+
+def test_wildcard_excludes_media_not_in_training_run(tmp_path, monkeypatch):
+    set_root = tmp_path / "set"
+    set_root.mkdir()
+    for name, caption in [("trained.png", "trained red dress"), ("excluded.jpg", "excluded purple dress")]:
+        (set_root / name).write_bytes(b"media")
+        (set_root / (Path(name).stem + ".txt")).write_text(caption, encoding="utf-8")
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members", lambda folder, job_id: {"trained.png"})
+    seen = {}
+    monkeypatch.setattr(app_module, "enqueue_llm",
+                        lambda _client, _model, contract, **kwargs: seen.update(contract=contract) or {"jobId": "queued"})
+    result = app_module.app.test_client().post("/fs/test_generations/wildcard",
+                                                 json={"folder": "set", "jobId": "run-1", "directorModel": "director.gguf"})
+    assert result.status_code == 202
+    assert result.get_json()["trainingMediaCount"] == 1
+    assert "trained red dress" in seen["contract"]["prompt"]
+    assert "excluded purple dress" not in seen["contract"]["prompt"]
+
+
+def test_wildcard_rejects_missing_training_run(tmp_path, monkeypatch):
+    set_root = tmp_path / "set"
+    set_root.mkdir()
+    (set_root / "one.png").write_bytes(b"media")
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members",
+                        lambda folder, job_id: (_ for _ in ()).throw(ValueError("Choose a training run")) if not job_id else {"one.png"})
+    response = app_module.app.test_client().post("/fs/test_generations/wildcard",
+                                                  json={"folder": "set", "directorModel": "director.gguf"})
+    assert response.status_code == 400
+    assert "Choose a training run" in response.get_json()["error"]

@@ -1,5 +1,6 @@
 var diagnosticsActiveTab = 'health';
 var diagnosticsLoadedConfig = null;
+var diagnosticsAssessmentSelected = { director: new Set(), vision: new Set() };
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
@@ -48,7 +49,28 @@ function refreshUnifiedModelAssessment() {
     var vision = labModels.visions || [];
     summary.textContent = directors.length + ' Director models · ' + vision.length + ' Vision models · ' + labRuns.length + ' Model Lab runs';
     results.replaceChildren();
-    function addRow(title, detail) {
+    var selectedBefore = diagnosticsAssessmentSelected;
+    var present = { director: new Set(), vision: new Set() };
+    var totalSelected = 0;
+    function refreshSelectionSummary() {
+      diagnosticsEl('diagnostics-assessment-selection').textContent =
+        (diagnosticsAssessmentSelected.director.size + diagnosticsAssessmentSelected.vision.size) +
+        ' model(s) selected · selection is preview-only; tests still launch from the existing tabs.';
+    }
+    function addChoice(row, kind, ref) {
+      present[kind].add(ref);
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = selectedBefore[kind].has(ref);
+      checkbox.setAttribute('aria-label', 'Select ' + kind + ' model ' + ref);
+      checkbox.addEventListener('change', function () {
+        if (checkbox.checked) diagnosticsAssessmentSelected[kind].add(ref);
+        else diagnosticsAssessmentSelected[kind].delete(ref);
+        refreshSelectionSummary();
+      });
+      row.insertBefore(checkbox, row.firstChild);
+    }
+    function addRow(title, detail, kind, ref) {
       var row = document.createElement('div');
       row.className = 'app-settings-environment-result';
       var heading = document.createElement('strong');
@@ -58,6 +80,7 @@ function refreshUnifiedModelAssessment() {
       description.textContent = detail;
       row.appendChild(heading);
       row.appendChild(description);
+      addChoice(row, kind, ref);
       results.appendChild(row);
     }
     directors.forEach(function (model) {
@@ -68,7 +91,7 @@ function refreshUnifiedModelAssessment() {
       });
       addRow(String(model.label || model.modelId || ref), 'Director · ' +
         (report ? 'Writing: ' + String(report.health || report.status || 'recorded') : 'Writing: unassessed') +
-        ' · Structured: ' + (matchingRuns.length ? matchingRuns.length + ' Lab run(s)' : 'not tested here'));
+        ' · Structured: ' + (matchingRuns.length ? matchingRuns.length + ' Lab run(s)' : 'not tested here'), 'director', ref);
     });
     vision.forEach(function (model) {
       var ref = String(model.modelRef || '');
@@ -76,8 +99,14 @@ function refreshUnifiedModelAssessment() {
         return !!(run.summary && run.summary.byModel && run.summary.byModel[ref]);
       });
       addRow(String(model.label || model.modelId || ref), 'Vision · ' +
-        (matchingRuns.length ? matchingRuns.length + ' Lab run(s)' : 'No saved Lab runs'));
+        (matchingRuns.length ? matchingRuns.length + ' Lab run(s)' : 'No saved Lab runs'), 'vision', ref);
     });
+    ['director', 'vision'].forEach(function (kind) {
+      diagnosticsAssessmentSelected[kind].forEach(function (ref) {
+        if (!present[kind].has(ref)) diagnosticsAssessmentSelected[kind].delete(ref);
+      });
+    });
+    refreshSelectionSummary();
   }).catch(function (error) {
     summary.textContent = 'Could not load assessment findings: ' + String(error.message || error);
     reportConsoleError('Model Assessment', error);

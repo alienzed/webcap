@@ -306,3 +306,24 @@ def test_capability_summaries_do_not_expose_model_text(monkeypatch):
     summaries = model_lab.capability_run_summaries()
     assert summaries[0]["models"]["local::writer"]["director_writing"]["status"] == "completed"
     assert "private test response" not in json.dumps(summaries)
+
+
+def test_deep_assessment_freezes_depth_and_expanded_sample(monkeypatch):
+    monkeypatch.setattr(model_lab, "_supported_media", lambda folder, values: list(values))
+    files = ["{:02d}.jpg".format(i) for i in range(24)]
+    base = {"folder": "set", "files": files, "directorModels": [_director()]}
+    quick = model_lab._new_run_payload(base)
+    deep = model_lab._new_run_payload(dict(base, depth="deep", sampleCount=16))
+    assert quick["depth"] == "quick"
+    assert deep["depth"] == "deep"
+    assert len(quick["files"]) == 8
+    assert len(deep["files"]) == 16
+    with pytest.raises(ValueError, match="depth"):
+        model_lab._new_run_payload(dict(base, depth="unexpected"))
+
+
+def test_deep_assessment_director_probe_budgets_exist():
+    source = (Path(__file__).resolve().parents[1] / "tool" / "server" / "model_lab.py").read_text(encoding="utf-8")
+    assert 'if run.get("depth") == "deep":' in source
+    assert "for budget in (1024, 4096):" in source
+    assert 'kind="director_writing_" + str(budget)' in source

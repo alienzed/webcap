@@ -142,3 +142,8 @@ Central Test session manifests at `output/test-generations` and `output/test-gen
 - Explorer requests are invalidated when leaving its workspace so late responses cannot append into an inactive view.
 - The scope remains central Test session media plus Generate results/references. Per-Set legacy sessions, Test reference media, Epoch Finder, Training and Storyboard still require owner-specific discovery audits; do not label coverage complete.
 - Source navigation and visual behavior still need executable runtime verification before merge.
+
+
+### Legacy-only Test discovery checkpoint (PR #408)
+
+Explicit full discovery now enumerates legacy Set-local `test-generations` directories using the same key directory exclusions as Storage Manager, without introducing a persisted index or scanning them when merely opening Explorer. For older `test.json` manifests without `ownerFolder`, the directory parent provides the Set owner, and the Test owner resolver must still confirm the session before it appears. A dedicated regression test covers a Set with no central Test record. Browser-side AbortController does not cancel an in-progress Python walk: cooperative server cancellation, incremental progress, and performance benchmarks remain outstanding. The Test manifest does not provide a universal collection of reference files; do not infer reference ownership from filenames. Runtime tests and visual QA have not been run.

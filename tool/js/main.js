@@ -321,6 +321,7 @@ function wireAllUi() {
   ui.editorEl.addEventListener('input', handleEditorInputAutosave);
 
   document.addEventListener('keydown', function (e) {
+    if (deriveShellNavigationState().activity === 'media') return;
     if (e.defaultPrevented || e.altKey || e.shiftKey) return;
     if (!(e.ctrlKey || e.metaKey)) return;
     if (String(e.key || '').toLowerCase() !== 'z') return;
@@ -335,6 +336,7 @@ function wireAllUi() {
   });
 
   document.addEventListener('keydown', function(e) {
+    if (deriveShellNavigationState().activity === 'media') return;
     if (e.key === 'F2' && document.activeElement !== ui.editorEl && state.currentItem) {
       var inOriginals = state.folder && state.folder.split(/[\/]/).pop() === 'originals';
       if (!inOriginals) {
@@ -344,6 +346,7 @@ function wireAllUi() {
     }
   });
   document.addEventListener('keydown', function (e) {
+    if (deriveShellNavigationState().activity === 'media') return;
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     if (!state.currentItem || !state.currentItem.fileName) return;
@@ -354,6 +357,7 @@ function wireAllUi() {
     }
   });
   document.addEventListener('keydown', function (e) {
+    if (deriveShellNavigationState().activity === 'media') return;
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.key !== 'Delete') return;
     if (mediaGridState.open) return;
@@ -371,6 +375,7 @@ function wireAllUi() {
     });
   });
   document.addEventListener('keydown', function (e) {
+    if (deriveShellNavigationState().activity === 'media') return;
     if (e.defaultPrevented || e.repeat || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (!state.currentItem || !state.currentItem.fileName) return;
     if (isEditableElement(document.activeElement)) return;

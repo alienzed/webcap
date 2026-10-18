@@ -66,6 +66,7 @@ function ensureContextMenu() {
     }
     // F2: Rename selected media item
     if (e.key === 'F2') {
+      if (deriveShellNavigationState().activity === 'media') return;
       e.preventDefault();
       if (state && state.currentItem && state.currentItem.fileName) {
         promptRenameMedia(state.currentItem);

@@ -163,3 +163,20 @@ Media Explorer now supports loaded-item Ctrl/Cmd multi-selection, Shift range se
 ### Owner-backed inspector action checkpoint
 
 Generate outputs now expose a 0–5 rating control in the Explorer inspector. It invokes the existing `/fs/generate/result/rating` owner endpoint, updates the loaded gallery card after success, and reports failures through the global Console. Saved Generate reference copies do not get rating controls. Test, Epoch Finder and Storyboard rating operations remain with their owners until their individual action semantics can be audited. No arbitrary media editing/deletion has been added. Regression tests are committed but have not been executed in this environment.
+
+
+## Release-focused completion plan — revised 2026-10-18
+
+Following the root `AGENTS.md` contract: no new service, database, global media index, event bus, or owner-bypassing media route. Work in PR #408 with small owner-specific changes.
+
+| Safe phase | Delivery / acceptance |
+| --- | --- |
+| A. Correctness first | Fix routing, source boundary bugs, incomplete discovery labels, stale requests and source navigation. Verify recent-vs-full behavior, legacy-only Test Sets, duplicate identities and missing source files. |
+| B. Finish source navigation and provenance | Wire verified owner APIs for existing Generate/Test/Epoch/Storyboard media and references; show source/usage only when the authoritative manifest supplies it. Add Training only after identifying specific owner-local media paths and a safe authenticated media route; never expose arbitrary run paths. |
+| C. Gallery usability | Stable selection, clear inspector, native video handling, comparison, keyboard focus and useful metadata; keep media prominent. Avoid speculative bulk actions and editing until file ownership and derivative lineage are settled. |
+| D. Performance | Profile complete scans with real volumes; only add a process-local snapshot if needed. Explicitly label counts and sort completeness. Browser abort is not server cancellation; implement server cooperative scan cancellation only with a measured need. |
+| E. Release gate | Run Python suite including `tests/test_media_explorer.py`, UI smoke tests for navigation and dialogs at narrow/wide widths, and regression checks for Generate/Test/Epoch/Storyboard/Storage and active queues. Review diffs against `AGENTS.md` and merge only if checks pass. |
+
+**Applied in this pass:** Test discovery no longer exits early if the central output directory is missing, allowing explicit full scans to discover legacy-only Sets. This preserves the existing owner's resolver and media route.
+
+**Gating concerns:** Training's supported media-serving contract and derivatives/lineage need evidence, not a user decision yet. Executable checkout and CI/browser validation remain unavailable here, so this branch stays unmerged. The design intentionally excludes arbitrary source Set datasets by default.

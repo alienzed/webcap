@@ -84,6 +84,7 @@
     var panel = el('media-explorer-selection');
     panel.classList.toggle('hidden', !selected.size);
     text(el('media-explorer-selected-count'), selected.size + ' selected (loaded items)');
+    text(el('media-explorer-selection-hint'), selected.size > 4 ? 'Compare supports up to 4 selected items' : selected.size < 2 ? 'Select 2–4 to compare' : 'Ready to compare');
     var chosen = items.filter(function (item) { return selected.has(item.id); });
     el('media-explorer-compare').disabled = chosen.length < 2 || chosen.length > 4;
     text(el('media-explorer-compare'), chosen.length > 2 && chosen.length <= 4 ? 'Survey' : 'Compare');
@@ -170,6 +171,9 @@
         relationships.appendChild(row);
       });
       host.appendChild(relationships);
+      if (item.source === 'storyboard' && uses.length > 1) {
+        text(relationshipsTitle, 'Choose owning scene · ' + uses.length);
+      }
     }
     if (item.source === 'generate' && item.role === 'generated' && item.storageId) {
       var ratingRow = document.createElement('div');
@@ -277,7 +281,7 @@
     if (item.source === 'storyboard' && item.storageId) {
       var storyBtn = document.createElement('button');
       storyBtn.type = 'button'; storyBtn.className = 'review-captions-btn';
-      text(storyBtn, (item.uses || []).length > 1 ? 'View Storyboard owners above' : 'Manage in Storyboard');
+      text(storyBtn, (item.uses || []).length > 1 ? 'Choose owning scene in Used by' : 'Manage in Storyboard');
       storyBtn.disabled = (item.uses || []).length !== 1;
       storyBtn.addEventListener('click', function () {
         var scene = item.uses && item.uses[0] && item.uses[0].storageId || '';
@@ -326,11 +330,13 @@
           .then(function () { selected.clear(); active = -1; artifact = ''; selectItem(-1); load(true); })
           .catch(report).finally(function () { deleteButton.disabled = false; });
       });
-      actions.appendChild(deleteButton);
+      var destructive = document.createElement('div'); destructive.className = 'media-explorer-danger-actions';
+      destructive.appendChild(deleteButton); host.appendChild(destructive);
     }
     var open = document.createElement('button'); open.type = 'button';
     open.className = 'review-captions-btn'; text(open, 'View full size');
     open.addEventListener('click', function () { openLoupe(); }); actions.appendChild(open);
+    if (typeof related !== 'undefined') actions.appendChild(related);
     inspector.classList.remove('hidden');
   }
   function openLoupe(index) {
@@ -413,8 +419,8 @@
       text(el('media-explorer-empty-action'), 'Try again'); return;
     }
     text(el('media-explorer-empty-title'), filtered ? 'No matching media' : 'Generated media, in one place');
-    text(el('media-explorer-empty-description'), filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Discover all for complete supported generation history.');
-    text(el('media-explorer-empty-action'), !full ? 'Discover all media' : filtered ? 'Clear filters' : 'Refresh library');
+    text(el('media-explorer-empty-description'), filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Scan full history for older generated media.');
+    text(el('media-explorer-empty-action'), !full ? 'Scan full history' : filtered ? 'Clear filters' : 'Refresh library');
   }
   function filterControls() {
     var chips = el('media-explorer-filter-chips'); chips.replaceChildren();
@@ -464,7 +470,7 @@
     emptyState();
     var controller = new AbortController(); activeRequest = controller;
     el('media-explorer-scan-all').disabled = full && loading;
-    el('media-explorer-status').textContent = full ? 'Scanning all recognized media sources…' : 'Discovering recent media…';
+    el('media-explorer-status').textContent = full ? 'Scanning full generated-media history…' : 'Discovering recent media…';
     el('media-explorer-status').dataset.state = 'loading';
     var qs = new URLSearchParams({limit:pageSize, offset:reset ? 0 : offset, role:role,
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),

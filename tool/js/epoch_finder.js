@@ -592,14 +592,16 @@
     // recommend the leading score and all exact ties, never the entire field.
     var completed = campaign.status === 'complete';
     var topScore = eligible.length ? Math.max.apply(null, eligible.map(function (row) { return row.score; })) : null;
-    var recommended = new Set(completed ?
-      eligible.filter(function (row) { return row.score === topScore; }).map(function (row) { return row.epoch; }) :
-      round > 1 ? (plan && plan.epochs) || [] : []);
+    var advanced = campaign.rounds.length > 1 && (completed || round > 1);
+    var finalField = campaign.rounds[campaign.rounds.length - 1];
+    var recommended = new Set(advanced ?
+      ((completed ? finalField : plan) || {epochs: []}).epochs :
+      completed ? eligible.filter(function (row) { return row.score === topScore; }).map(function (row) { return row.epoch; }) : []);
     var suggested = eligible.filter(function (entry) { return recommended.has(entry.epoch); });
     els('shortlist').textContent = suggested.length ?
       'Recommended for human review: ' + suggested.map(function (entry) {
         return 'Epoch ' + entry.epoch;
-      }).join(', ') + ' · ' + (completed ? 'top-scoring ties, pending human review' : 'survived previous round, provisional') +
+      }).join(', ') + ' · ' + (completed ? (advanced ? 'final retained field' : 'top-scoring ties') : 'survived previous round, provisional') +
       ' · existing VL retention, not a final winner' :
       'Recommendations appear after a completed cut, or when the campaign finishes.';
     var filter = els('rank-filter').value, sort = els('rank-sort').value;

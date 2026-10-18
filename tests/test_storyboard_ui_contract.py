@@ -1336,3 +1336,20 @@ def test_epoch_finder_does_not_poll_terminal_campaign_status():
     assert "['queued', 'running'].includes(campaignState.status)" in polling
     assert "mode === 'finder' && activeCampaign && campaignState" in polling
     assert "refreshStatus().catch(error)" in polling
+
+
+def test_storyboard_director_telemetry_remains_scoped_to_active_queue_job():
+    js = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    match = js.split("function directorActivityForTargetQueue(activity, queue)", 1)[1].split("\n  function ", 1)[0]
+    assert "String(queue.activeJobId || '') === jobId" in match
+    assert "runtimeMatchesJob ? activity : {}" in match
+    assert "jobStatus: jobStatus" in match
+
+
+def test_first_cut_card_exposes_real_pipeline_steps():
+    js = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    render = js.split("function renderStoryAction()", 1)[1].split("\n  function ", 1)[0]
+    for phase in ("Expanding Concept", "Defining Continuity", "Developing Scenes", "Refining Scenes", "Queuing First Takes"):
+        assert phase in render
+    assert "action.sceneCount" in render
+    assert "' scenes remaining'" in render

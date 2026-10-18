@@ -114,3 +114,36 @@ def test_training_suggestions_are_not_saved(monkeypatch):
     assert suggestions["evidenceLevel"] == "trained_not_validated"
     assert suggestions["promptOptions"] == {"Viewpoint": ["front", "rear"]}
     assert suggestions["captionSamples"] == ["rear view, outdoors"]
+
+
+def test_embedding_export_preserves_tensor_bytes(tmp_path):
+    from tool.server.model_epoch_profile import embed_profile_in_saved_copy
+    source = tmp_path / "original.safetensors"
+    exported = tmp_path / "saved.safetensors"
+    header = json.dumps({
+        "__metadata__": {"ss_epoch": "90"},
+        "tensor": {"dtype": "U8", "shape": [3], "data_offsets": [0, 3]},
+    }).encode("utf-8")
+    source.write_bytes(struct.pack("<Q", len(header)) + header + b"abc")
+    exported.write_bytes(source.read_bytes())
+    embed_profile_in_saved_copy(exported, {"description": "Example", "trainedWords": ["trigger"]})
+    with exported.open("rb") as handle:
+        length = struct.unpack("<Q", handle.read(8))[0]
+        metadata = json.loads(handle.read(length))
+        tensor_data = handle.read()
+    assert tensor_data == b"abc"
+    assert metadata["tensor"]["data_offsets"] == [0, 3]
+    assert json.loads(metadata["__metadata__"]["webcap.profile"])["enrichment"]["description"] == "Example"
+    assert embedded_metadata(source) == {"ss_epoch": "90"}
+    assert source.read_bytes().endswith(b"abc")
+
+
+def test_comfy_embedded_profile_requires_valid_schema(monkeypatch):
+    from tool.server import inference_runtime
+    monkeypatch.setattr(inference_runtime, "available_names", lambda *_: ["set/example.safetensors"])
+    monkeypatch.setattr(inference_runtime, "_read_json_response", lambda *_args, **_kwargs: {
+        "webcap.profile": json.dumps({"schemaVersion": 1, "enrichment": {
+            "description": "Test", "trainedWords": ["tag"], "promptOptions": {}}})
+    })
+    loaded = inference_runtime.lora_embedded_profile("set/example.safetensors")
+    assert loaded["modelProfile"]["enrichment"]["trainedWords"] == ["tag"]

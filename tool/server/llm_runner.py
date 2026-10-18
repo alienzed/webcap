@@ -594,8 +594,19 @@ def _execute_claimed(job_id, gpu_reserved):
         finally:
             with _revision_progress_lock:
                 _revision_progress.pop(job_id, None)
+        generated = 0
+        if context.get("generateFreshTakes") is True:
+            from .storyboard_generation import start_generation
+            # The revised Scenes are committed before Take submission.
+            # This handoff is server-owned and survives browser navigation.
+            with _revision_progress_lock:
+                _revision_progress[job_id] = {"completed": completed, "total": len(scene_ids), "phase": "Queuing fresh Takes"}
+            for scene_id in scene_ids:
+                start_generation(str(context["storyId"]), scene_id)
+                generated += 1
         return execution_finish_job_transient(job_id, status="completed", result={
             "storyId": context["storyId"], "revisedSceneCount": completed,
+            "freshTakesQueued": generated,
         })
     try:
         if client in {"chat", "caption"}:

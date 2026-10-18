@@ -5,7 +5,7 @@
   var source = '', pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
   var needsLoad = true;
   var routeInitialized = false;
-  var sourceNames = {generate: 'Generate', test: 'Test Generations', epoch: 'Epoch Finder', storyboard: 'Storyboard', set: 'Source Set'};
+  var sourceNames = {generate: 'Generate', test: 'Test Generations', epoch: 'Epoch Finder', storyboard: 'Storyboard', };
   var roleNames = {generated: 'Generated', reference: 'Reference', source: 'Source media'};
   var mediaFacts = new Map();
   var loupeReturn = null;
@@ -323,7 +323,7 @@
               throw new Error(payload && payload.error || 'Could not delete generated media.');
             return payload;
           }); })
-          .then(function () { selected.clear(); active = -1; load(true); })
+          .then(function () { selected.clear(); active = -1; artifact = ''; selectItem(-1); load(true); })
           .catch(report).finally(function () { deleteButton.disabled = false; });
       });
       actions.appendChild(deleteButton);

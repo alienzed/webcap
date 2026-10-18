@@ -372,6 +372,11 @@
   function populateModelSelector() {
     var select = el('generate-model');
     if (!select) return;
+    var previousModelId = select.value;
+    var draft = ['generate-prompt', 'generate-aspect', 'generate-dimensions', 'generate-megapixels', 'generate-duration', 'generate-seed'].map(function (id) {
+      var node = el(id);
+      return {node: node, value: node.value};
+    });
     select.innerHTML = generateState.models.map(function (model) {
       return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(model.label) + '</option>';
     }).join('');
@@ -382,6 +387,9 @@
     select.value = selected;
     if (selected !== getGenerateModelPreference()) setGenerateModelPreference(selected);
     renderModelForm();
+    if (previousModelId === selected) {
+      draft.forEach(function (field) { field.node.value = field.value; });
+    }
   }
 
   function fieldVisible(name) {
@@ -2295,7 +2303,6 @@
   function openGenerateActivity(target) {
     if (window.closeMediaExplorerActivity) window.closeMediaExplorerActivity();
     target = target && typeof target === 'object' ? target : {};
-    var wasOpen = generateState.open;
     var targetJobId = String(target.jobId || '');
     if (targetJobId) {
       trackGenerateJob(targetJobId);
@@ -2307,7 +2314,6 @@
     if (!frame || !workspace) throw new Error('Generate workspace markup is missing.');
     if (typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
     if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
-    if (!wasOpen) resetGeneratePromptScratch();
     generateState.open = true;
     generateState.director.modelId = getDirectorModelPreference('webcap.generate.directorModel');
     frame.classList.add('workspace-generate-open');
@@ -2579,6 +2585,7 @@
   window.openGenerateActivity = openGenerateActivity;
   window.closeGenerateActivity = closeGenerateActivity;
   bindUi();
+  resetGeneratePromptScratch();
   if (typeof window.getInferenceQueueSnapshot === 'function') {
     refreshTrackedGenerateJobs(window.getInferenceQueueSnapshot()).catch(function (err) {
       reportError(err, 'Generation queue sync failed');

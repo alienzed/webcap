@@ -34,6 +34,7 @@
 .app-frame.shell-immersive > .generate-workspace,
 .app-frame.shell-immersive > .test-generations-workspace,
 .app-frame.shell-immersive > .storyboard-workspace,
+.app-frame.shell-immersive > .media-explorer-workspace,
 .app-frame.shell-immersive > .storage-workspace {
   grid-area: workspace;
 }
@@ -597,6 +598,19 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
+}
+
+/* Explorer replaces the mounted working surface without resetting its state. */
+.app-frame.workspace-media-explorer-open > .app,
+.app-frame.workspace-media-explorer-open > .generate-workspace,
+.app-frame.workspace-media-explorer-open > .test-generations-workspace,
+.app-frame.workspace-media-explorer-open > .storyboard-workspace,
+.app-frame.workspace-media-explorer-open > .storage-workspace {
+  display: none;
+}
+
+.app-frame > .media-explorer-workspace {
+  grid-area: workspace;
 }
 
 .app-overlay-root {

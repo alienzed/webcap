@@ -179,6 +179,7 @@ function syncShellLocationRoute() {
   var folder = String(state && state.folder || '');
   if (folder && workspace !== 'storyboard' && workspace !== 'generate') params.set('folder', folder);
   if (workspace === 'training' && getTrainingWorkspaceEntryKind() === 'global') params.set('scope', 'global');
+  if (workspace === 'media') window.appendMediaExplorerRouteParams(params);
   var nextHash = '#/' + workspace + (params.toString() ? '?' + params.toString() : '');
   if (window.location.hash === nextHash) return;
   window.history.replaceState(null, '', window.location.pathname + window.location.search + nextHash);

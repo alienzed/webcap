@@ -359,6 +359,7 @@ function mediaGridRefreshFromCurrentFilters() {
 }
 
 function mediaGridHandleKeydown(e) {
+  if (deriveShellNavigationState().activity === 'media') return;
   if (e.defaultPrevented) return;
   if (!mediaGridState.open) return;
   if (mediaGridState.viewerKey) {

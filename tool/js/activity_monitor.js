@@ -156,7 +156,6 @@
       window.setWorkspaceSurface('reviewOutput');
       return window.setReviewDetailTab('qa');
     }
-    if (item.kind === 'model-lab') return window.openDiagnosticsModal('assessment');
     if (item.kind !== 'vocabulary-discovery' && item.kind !== 'vision-tag-assist') return openItem(item);
   }
 

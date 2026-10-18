@@ -1794,6 +1794,20 @@ def storyboard_director_route():
             operation,
             **contract_kwargs,
         )
+        if operation in {"write_prompt", "refine_prompt"}:
+            from .storyboard_store import resolve_scene_loras
+            from .model_epoch_profile import director_context_for_selected_loras
+            scene = (story.get("scenes") or {}).get(scene_id) or {}
+            selected_loras = resolve_scene_loras(story, scene)
+            if selected_loras:
+                try:
+                    knowledge = director_context_for_selected_loras(selected_loras)
+                except (ConnectionError, TimeoutError, RuntimeError, ValueError, OSError) as exc:
+                    # ComfyUI metadata is advisory; Director must still work offline.
+                    app.logger.warning("Story Director LoRA metadata unavailable: %s", exc)
+                    knowledge = ""
+                if knowledge:
+                    contract["prompt"] = str(contract["prompt"]) + "\n\n" + knowledge
         repair_base = None
         if operation == "repair_scenes":
             scene_order = list(story.get("sceneOrder") or [])

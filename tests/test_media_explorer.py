@@ -356,3 +356,31 @@ def test_owner_filter_limits_media_to_existing_producer_identity(monkeypatch, tm
     assert result["total"] == 1
     assert result["items"][0]["storageId"] == "two"
     assert media_explorer.list_media(source="generate", owner="missing")["total"] == 0
+
+
+def test_existing_owner_ratings_are_discovered_for_test_and_set_media(monkeypatch, tmp_path):
+    import json
+    from tool.server import epoch_test_bench
+    source = tmp_path / "sets" / "one"
+    source.mkdir(parents=True)
+    (source / "photo.png").write_bytes(b"image")
+    (source / ".webcap_state.json").write_text(json.dumps({"ratings_by_media": {"photo.png": 5}}))
+    monkeypatch.setattr(media_explorer.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: tmp_path / "output")
+    from tool.server import caption_ops
+    monkeypatch.setattr(caption_ops, "list_media_files", lambda folder: ["photo.png"])
+    set_items = media_explorer.list_media(source="set", full="1")["items"]
+    assert len(set_items) == 1
+    assert set_items[0]["rating"] == 5
+
+    session = tmp_path / "output" / "test-generations" / "sets" / "one" / "sessions" / "sess"
+    session.mkdir(parents=True)
+    (session / "result.png").write_bytes(b"image")
+    (session / "test.json").write_text(json.dumps({
+        "ownerFolder": "sets/one", "results": [{"mediaFile": "result.png"}]}))
+    monkeypatch.setattr(epoch_test_bench, "_session_directory", lambda owner, name: session)
+    monkeypatch.setattr(epoch_test_bench, "_session_rating_map", lambda directory: {"result.png": 3})
+    monkeypatch.setattr(epoch_test_bench, "_session_vision_state", lambda directory: {})
+    test_items = media_explorer.list_media(source="test")["items"]
+    assert len(test_items) == 1
+    assert test_items[0]["rating"] == 3

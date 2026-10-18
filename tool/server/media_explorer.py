@@ -77,7 +77,7 @@ def discover_generate(limit=500):
     return sorted(items.values(), key=lambda x: (x["createdAt"], x["id"]), reverse=True)
 
 
-def list_media(limit=60, offset=0, role="", kind="", search=""):
+def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest"):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     results = discover_generate()
@@ -89,6 +89,14 @@ def list_media(limit=60, offset=0, role="", kind="", search=""):
         query = search.casefold()
         results = [item for item in results if query in item["fileName"].casefold()
                    or query in item["model"].casefold()]
+    if sort == "oldest":
+        results.sort(key=lambda item: (item["createdAt"], item["id"]))
+    elif sort == "name":
+        results.sort(key=lambda item: (item["fileName"].casefold(), item["id"]))
+    elif sort == "rating":
+        results.sort(key=lambda item: (-(item["rating"] or 0), -item["createdAt"], item["id"]))
+    elif sort != "newest":
+        raise ValueError("Unknown media sort.")
     return {"ok": True, "items": results[offset:offset + limit],
             "total": len(results), "offset": offset, "limit": limit,
             "complete": False, "scope": "Generate (latest 500 results)"}

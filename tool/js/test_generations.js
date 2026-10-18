@@ -774,15 +774,20 @@
       attributes.length ? 'Select an attribute and approved training example.' :
         'This session has no scored wildcard attributes.';
     if (!dialog.open) dialog.showModal();
-    captionAssistRequestJson('/fs/epoch_finder', {
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:referenceCompare.folder,operation:'reference_vocabulary',criteria:{jobId:referenceCompare.jobId}})
-    }).then(function (response) {
-      if (!referenceCompare.jobId) return;
-      referenceCompare.vocabulary = response.vocabulary || [];
-      updateReferenceChoices();
-      drawReferenceResults();
-    }).catch(showError);
+    referenceCompare.vocabulary = [];
+    updateReferenceChoices();
+    drawReferenceResults();
+    if (referenceCompare.jobId) {
+      var initialJobId = referenceCompare.jobId;
+      captionAssistRequestJson('/fs/epoch_finder', {
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:referenceCompare.folder,operation:'reference_vocabulary',criteria:{jobId:initialJobId}})
+      }).then(function (response) {
+        if (referenceCompare.jobId !== initialJobId) return;
+        referenceCompare.vocabulary = response.vocabulary || [];
+        updateReferenceChoices();
+      }).catch(showError);
+    }
   }
 
   async function runReferenceComparison() {
@@ -797,7 +802,7 @@
     if (!attribute || !group || !option || !reference) throw new Error('Choose an attribute, option, and approved image.');
     var previews = (currentStatus.results || []).map(resultMediaFile).filter(Boolean);
     if (!previews.length) throw new Error('No previews are available.');
-    var folder = referenceCompare.folder, session = referenceCompare.session;
+    var folder = referenceCompare.folder, session = referenceCompare.session, jobId = referenceCompare.jobId;
     var button = el('test-generations-reference-run'), status = el('test-generations-reference-status');
     referenceCompare.busy = true;
     button.disabled = true;
@@ -809,7 +814,7 @@
         status.textContent = method.toUpperCase() + ' · ' + (i+1) + ' / ' + previews.length;
         var payload = await testReferenceRequest({
           folder:folder, session:session, action:'evaluate', method:method, media:previews[i], group:group,
-          option:option, reference:reference, jobId:referenceCompare.jobId, choices:attribute.options,
+          option:option, reference:reference, jobId:jobId, choices:attribute.options,
           model: method === 'rvn' ? getCaptionVisionModelId() : ''
         });
         if (method === 'rvn') {
@@ -822,7 +827,7 @@
           var selected = optionMatch ? Number(optionMatch[1]) : null;
           if (selected && selected > attribute.options.length) selected = null;
           await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:{
-            method:'rvn',group:group,option:option,reference:reference,jobId:referenceCompare.jobId,
+            method:'rvn',group:group,option:option,reference:reference,jobId:jobId,
             attribute:attribute.label || attribute.id,
             selected:selected,selectedText:selected == null ? '' : attribute.options[selected - 1],
             verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',

@@ -157,3 +157,11 @@ def test_unified_assessment_bulk_selection_is_wired():
     assert "function selectUnifiedAssessmentModels(select)" in script
     assert "selectUnifiedAssessmentModels(true)" in script
     assert "selectUnifiedAssessmentModels(false)" in script
+
+
+def test_assessment_launch_shows_synchronous_errors_and_active_run():
+    script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
+    assert "try {\n      Promise.resolve(runUnifiedModelAssessment())" in script
+    assert "Cannot start assessment:" in script
+    assert "var activeRun = labRuns.find" in script
+    assert "Running assessment " in script

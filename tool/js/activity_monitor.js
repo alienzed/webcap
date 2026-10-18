@@ -199,7 +199,7 @@
       if (state.autoOpenSeen[id]) return;
       state.autoOpenSeen[id] = true;
       // Never displace a workflow drawer for an automatically raised Activity panel.
-      var shortInteractive = lane === 'llm' || item.kind === 'director-diagnostics';
+      var shortInteractive = lane === 'llm' || item.kind === 'first-cut' || item.kind === 'director-diagnostics';
       if (!state.open && !competingDrawer && shortInteractive && !state.dismissedJobs[id]) setOpen(true);
     });
   }
@@ -527,6 +527,26 @@
         window.openStoryboardActivity(target);
       }
     }
+  }
+
+  function stopActivityItem(item) {
+    if (!item || !item.id) return;
+    var endpoint = item.kind === 'first-cut' ? '/fs/storyboard/first-cut' : '/fs/director/job';
+    var payload = item.kind === 'first-cut'
+      ? { operation: 'cancel', batchId: item.batchId }
+      : { operation: 'cancel_job', jobId: item.id };
+    return fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (response) {
+      return response.json().then(function (body) {
+        if (!response.ok || !body || body.ok === false) throw new Error(body && body.error || 'Could not stop Activity job.');
+        return refresh();
+      });
+    }).catch(function (error) {
+      window.reportConsoleError('Activity', error);
+    });
   }
 
   function activeCardKey(item) {
@@ -1004,6 +1024,25 @@
         existingStats.querySelector('svg').setAttribute('aria-label',
           speeds.length ? 'Recent token throughput samples' : 'Waiting for another token sample');
       } else if (existingStats) existingStats.remove();
+      var stopButton = primaryCard.querySelector('[data-activity-stop]');
+      var stoppable = (primary.kind === 'first-cut' || primary.kind === 'director' && primary.lane === 'llm') &&
+        ['running', 'starting', 'queued'].indexOf(primary.status) !== -1;
+      if (stoppable && !stopButton) {
+        stopButton = document.createElement('button');
+        stopButton.type = 'button';
+        stopButton.className = 'activity-monitor-open';
+        stopButton.setAttribute('data-activity-stop', '');
+        primaryCard.appendChild(stopButton);
+      }
+      if (stopButton) {
+        stopButton.hidden = !stoppable;
+        stopButton.textContent = 'Stop';
+        stopButton.onclick = stoppable ? function () {
+          stopButton.disabled = true;
+          stopButton.textContent = 'Stopping…';
+          stopActivityItem(primary);
+        } : null;
+      }
       var queueKey = activityLane(primary) === 'llm' ? 'director' : activityLane(primary);
       var queue = queues[queueKey] || {};
       var waiting = Number(queue.queued || 0);

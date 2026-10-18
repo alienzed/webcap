@@ -1780,6 +1780,7 @@ def storyboard_director_route():
                 context={
                     "storyId": story_id, "operation": operation,
                     "sceneIds": scene_ids, "sourceInstruction": instruction,
+                    "generateFreshTakes": data.get("generateFreshTakes") is True,
                 },
                 label="Story: Revise Scenes",
             )

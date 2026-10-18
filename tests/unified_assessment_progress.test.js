@@ -69,11 +69,16 @@ test('live probe metrics update existing cells without replacing interactive mod
   const speed = ctx.document.createElement('strong'); speed.setAttribute('data-assessment-speed', '');
   const output = ctx.document.createElement('strong'); output.setAttribute('data-assessment-output', '');
   row.appendChild(speed); row.appendChild(output);
+  for (const name of ['primary', 'state', 'provenance', 'capabilities']) {
+    const cell = ctx.document.createElement('span'); cell.setAttribute('data-assessment-' + name, ''); row.appendChild(cell);
+  }
   nodes['diagnostics-assessment-results'].querySelectorAll = () => [row];
-  ctx.diagnosticsUpdateAssessmentMetrics({attempts: [{role: 'vision', modelRef: 'local::vl', finishedAt: 'now',
+  ctx.diagnosticsUpdateAssessmentMetrics({id: 'new-run', status: 'running', attempts: [{role: 'vision', kind: 'vision_open', status: 'completed', modelRef: 'local::vl', finishedAt: 'now',
     result: {usage: {completion_tokens: 100}, requestSeconds: 5}}]});
   assert.equal(speed.textContent, '20.0 tok/s'); assert.equal(output.textContent, '100 tokens');
   assert.equal(row.children[0], speed);
+  assert.equal(row.querySelector('[data-assessment-primary]').textContent, 'Response received');
+  assert.match(row.querySelector('[data-assessment-provenance]').textContent, /new-run/);
 });
 
 test('stale browser running state cannot block admission, and an immediate server failure is not called running', async () => {

@@ -112,36 +112,37 @@ def discover_tests(full=False):
     if workspaces.is_dir() and not workspaces.is_symlink():
         for workspace in workspaces.iterdir():
             if workspace.is_dir() and not workspace.is_symlink():
-                for child in ("sessions", "test-sessions"):
+                for child in ("sessions",):
                     candidate = workspace / child
                     if candidate.is_dir() and not candidate.is_symlink():
                         roots.append(candidate)
-    # Owner folders from recorded central manifests also identify their legacy
-    # per-Set session roots. Do not recursively crawl arbitrary source Sets.
-    known_owners = set()
-    for root in roots:
-        for session in root.iterdir():
-            manifest = session / "test.json"
-            if not session.is_dir() or session.is_symlink() or not manifest.is_file() or manifest.is_symlink():
-                continue
-            try:
-                payload = json.loads(manifest.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                continue
-            if isinstance(payload, dict) and payload.get("ownerFolder"):
-                known_owners.add(str(payload["ownerFolder"]).strip("/"))
-    from .epoch_test_bench import _session_directory, _session_rating_map
-    for folder in known_owners:
-        owner = (Path(app_config.FS_ROOT) / folder).resolve()
-        try:
-            owner.relative_to(Path(app_config.FS_ROOT).resolve())
-        except ValueError:
-            continue
-        legacy = owner / "test-generations"
-        if legacy.is_dir() and not legacy.is_symlink():
-            roots.append(legacy)
+    # Normal browsing follows central records to known legacy owners.
+    # Full discovery walks legacy roots once instead; don't do both.
     if full:
         roots.extend(_legacy_test_roots())
+    else:
+        known_owners = set()
+        for root in roots:
+            for session in root.iterdir():
+                manifest = session / "test.json"
+                if not session.is_dir() or session.is_symlink() or not manifest.is_file():
+                    continue
+                try:
+                    payload = json.loads(manifest.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                if isinstance(payload, dict) and payload.get("ownerFolder"):
+                    known_owners.add(str(payload["ownerFolder"]).strip("/"))
+        for folder in known_owners:
+            owner = (Path(app_config.FS_ROOT) / folder).resolve()
+            try:
+                owner.relative_to(Path(app_config.FS_ROOT).resolve())
+            except ValueError:
+                continue
+            legacy = owner / "test-generations"
+            if legacy.is_dir() and not legacy.is_symlink():
+                roots.append(legacy)
+    from .epoch_test_bench import _session_directory, _session_rating_map
     results = []
     seen_sessions = set()
     for root in roots:

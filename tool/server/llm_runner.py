@@ -646,9 +646,21 @@ def _execute_claimed(job_id, gpu_reserved):
             # Keep the original error in the transient job receipt, not on disk.
             _logger.error("LLM ingest failed: client=%s operation=%s error_type=%s",
                           client, str(contract.get("operation") or ""), type(exc).__name__)
-            raise RuntimeError(
-                "WebCap ingest failed after a successful model response: " + str(exc)
-            ) from exc
+            # The model did finish. Keep its output available in the memory-only
+            # terminal receipt even when it cannot be safely applied to Set state.
+            # Do not turn an invalid structured result into an automatic mutation.
+            return execution_finish_job_transient(
+                job_id,
+                status="failed",
+                error="WebCap ingest failed after a successful model response: " + str(exc),
+                result={
+                    "rawText": str(llm_result.get("text") or ""),
+                    "model": str(llm_result.get("model") or model_id),
+                    "finishReason": llm_result.get("finishReason"),
+                    "usage": llm_result.get("usage"),
+                    "structureWarning": "Model output was retained but could not be applied.",
+                },
+            )
 
         return execution_finish_job_transient(job_id, status="completed", result=result)
 

@@ -13,7 +13,7 @@ def test_caption_wildcard_contract_reports_stable_and_variable_content():
     assert request["response_schema"]["required"] == ["wildcard", "stableTerms", "variationGroups"]
     assert "[count=2] mikeperson standing in a kitchen" in request["prompt"]
     assert "frequency metadata" in request["prompt"]
-    assert "black hair can be tested even when the captions mention only brown and blonde hair" in request["prompt"]
+    assert "Do not invent unseen values" in request["prompt"]
     assert "Each wildcard group must vary exactly one attribute" in request["prompt"]
 
 
@@ -101,7 +101,7 @@ def test_wildcard_vocabulary_supplies_independent_dimensions_without_closing_opt
     assert '"group": "BT Shape"' in prompt
     assert '"alias": "Bikini top shape"' in prompt
     assert '"terms": ["triangle", "teardrop"]' in prompt
-    assert "not a closed list of test values" in prompt
+    assert "not proof of training membership" in prompt
     assert "{brown|black|blonde|ginger} hair" in prompt
 
 
@@ -143,10 +143,9 @@ def test_cross_group_recombination_is_allowed():
     assert validate_group_compatibility(data, observations)
 
 
-def test_tag_values_without_group_identity_are_rejected():
+def test_natural_prompt_variation_without_group_identity_is_allowed():
     import pytest
     from tool.server.test_wildcard_contract import validate_group_compatibility
-    with pytest.raises(ValueError, match="annotationGroup"):
-        validate_group_compatibility({"wildcard":"{triangle|teardrop}", "variationGroups":[
-            {"label":"Shape", "options":["triangle","teardrop"]}
-        ]}, {"Shape":[["triangle"],["teardrop"]]})
+    assert validate_group_compatibility({"wildcard":"{triangle|teardrop}", "variationGroups":[
+        {"label":"Shape", "annotationGroup":"", "options":["triangle","teardrop"]}
+    ]}, {"Shape":[["triangle"],["teardrop"]]})

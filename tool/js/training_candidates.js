@@ -864,6 +864,19 @@ function openEpochProfile(epoch) {
   status.textContent = 'Reading checkpoint metadata…';
   epochProfileEditState = {folder: folder, jobId: jobId, epoch: Number(epoch)};
   epochProfileSuggestions = null;
+  trainingRunnerRequest('/fs/generate/director', {method: 'GET'}).then(function (payload) {
+    if (!epochProfileEditState || epochProfileEditState.epoch !== Number(epoch)) return;
+    var picker = document.getElementById('epoch-profile-director-model');
+    picker.innerHTML = '<option value="">Choose Director model</option>';
+    (payload.models || []).forEach(function (model) {
+      var option = document.createElement('option');
+      option.value = String(model.id || '');
+      option.textContent = String(model.label || model.name || model.id || '');
+      if (option.value) picker.appendChild(option);
+    });
+  }).catch(function (err) {
+    status.textContent = 'Director model discovery failed: ' + String(err.message || err);
+  });
   trainingRunnerRequest('/fs/training_candidates/profile', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(epochProfileEditState)
@@ -884,6 +897,53 @@ function openEpochProfile(epoch) {
     document.getElementById('epoch-profile-guidance').value = String(enrichment.guidance || '');
     status.textContent = payload.vocabularyWarning || 'Imported metadata is suggested; edits are stored separately in WebCap.';
   }).catch(function (err) { status.textContent = String(err.message || err); });
+}
+
+function enrichEpochProfile() {
+  if (!epochProfileEditState) return;
+  var modelId = document.getElementById('epoch-profile-director-model').value;
+  var status = document.getElementById('epoch-profile-status');
+  if (!modelId) { status.textContent = 'Choose a Director model first.'; return; }
+  var button = document.getElementById('epoch-profile-enrich');
+  var target = Object.assign({}, epochProfileEditState);
+  button.disabled = true;
+  status.textContent = 'Queueing profile enrichment…';
+  trainingRunnerRequest('/fs/training_candidates/profile/director', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(Object.assign({}, target, {directorModel: modelId}))
+  }).then(function (response) {
+    var job = response.job || {};
+    if (!job.jobId) throw new Error('Director returned no job ID.');
+    function poll() {
+      return trainingRunnerRequest('/fs/director/job?job=' + encodeURIComponent(job.jobId), {method: 'GET'})
+        .then(function (payload) {
+          var current = payload.job || {};
+          if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(current.status) !== -1) {
+            throw new Error(current.error || 'Director ' + current.status);
+          }
+          if (current.status === 'completed') {
+            if (!epochProfileEditState || epochProfileEditState.epoch !== target.epoch ||
+                epochProfileEditState.jobId !== target.jobId) return;
+            var suggestion = (current.result || {}).analysis;
+            if (!suggestion || typeof suggestion !== 'object') throw new Error('Director returned no profile suggestions.');
+            document.getElementById('epoch-profile-description').value = String(suggestion.description || '');
+            document.getElementById('epoch-profile-words').value = (suggestion.trainedWords || []).join('\\n');
+            document.getElementById('epoch-profile-options').value = JSON.stringify(suggestion.promptOptions || {}, null, 2);
+            document.getElementById('epoch-profile-guidance').value = String(suggestion.guidance || '');
+            status.textContent = 'Director suggestions loaded for review. Save Profile to keep them.';
+            return;
+          }
+          if (epochProfileEditState && epochProfileEditState.epoch === target.epoch &&
+              epochProfileEditState.jobId === target.jobId) {
+            status.textContent = 'Director ' + String(current.status || 'working') + '…';
+          }
+          return new Promise(function (resolve) { setTimeout(resolve, 2000); }).then(poll);
+        });
+    }
+    return poll();
+  }).catch(function (err) {
+    status.textContent = 'Profile enrichment failed: ' + String(err.message || err);
+  }).finally(function () { button.disabled = false; });
 }
 
 function saveEpochProfile() {
@@ -917,6 +977,7 @@ document.addEventListener('click', function (event) {
   if (open) { openEpochProfile(open.getAttribute('data-training-candidate-profile-epoch')); return; }
   if (event.target.closest('#epoch-profile-close, #epoch-profile-cancel')) { closeEpochProfile(); return; }
   if (event.target.closest('#epoch-profile-save')) saveEpochProfile();
+  if (event.target.closest('#epoch-profile-enrich')) enrichEpochProfile();
   if (event.target.closest('#epoch-profile-import-tags')) {
     if (!epochProfileSuggestions) { document.getElementById('epoch-profile-status').textContent = 'No captured vocabulary available.'; return; }
     var options = {};

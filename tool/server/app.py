@@ -2133,9 +2133,9 @@ def test_generations_wildcard_route():
 
         data = request.get_json(silent=True) or {}
         folder = str(data.get("folder") or "").strip()
-        from .epoch_reference import training_image_members
+        from .epoch_reference import training_wildcard_members
         job_id = str(data.get("jobId") or "").strip()
-        trained = training_image_members(folder, job_id)
+        trained = training_wildcard_members(folder, job_id)
         media = [name for name in list_media_files(folder) if name in trained]
         captions = [
             str(load_caption_text(folder, name).get("caption") or "").strip()
@@ -2182,9 +2182,9 @@ def test_generations_wildcard_validate_route():
         from .folder_state_store import read_folder_state
         from .test_wildcard_contract import observed_group_combinations, validate_group_compatibility
         annotations = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
-        from .epoch_reference import training_image_members
+        from .epoch_reference import training_wildcard_members
         job_id = str(data.get("jobId") or "").strip()
-        trained = training_image_members(folder, job_id)
+        trained = training_wildcard_members(folder, job_id)
         combinations = observed_group_combinations(
             annotations, [name for name in list_media_files(folder) if name in trained]
         )
@@ -2322,7 +2322,7 @@ def epoch_finder_propose_route():
         data = request.get_json(silent=True) or {}
         folder = str(data.get("folder") or "").strip()
         safe_join_fs_root(folder)
-        from .epoch_reference import training_image_members
+        from .epoch_reference import training_wildcard_members
         job_id = str(data.get("jobId") or "").strip()
         trained_images = training_image_members(folder, job_id)
         captions = [

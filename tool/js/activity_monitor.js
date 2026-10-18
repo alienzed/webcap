@@ -370,10 +370,16 @@
       snapshot.title = 'Model Assessment';
       snapshot.detail = activityDetail(item);
       snapshot.phase = String(item.phase || item.status || 'running').replace(/_/g, ' ');
-      snapshot.progressLabel = item.attemptCount + ' probes recorded · ' +
-        item.completed + ' completed · ' + item.failed + ' failed' +
-        (item.skipped ? ' · ' + item.skipped + ' skipped' : '') +
-        (item.interrupted ? ' · ' + item.interrupted + ' interrupted' : '');
+      // Some managed Activity sources supply only the compact work record.
+      // Missing counters are not evidence of failure or completed work.
+      var counts = ['attemptCount', 'completed', 'failed', 'skipped', 'interrupted'].map(function (key) {
+        var value = Number(item[key]);
+        return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+      });
+      snapshot.progressLabel = counts[0] + ' probes recorded · ' +
+        counts[1] + ' completed · ' + counts[2] + ' failed' +
+        (counts[3] ? ' · ' + counts[3] + ' skipped' : '') +
+        (counts[4] ? ' · ' + counts[4] + ' interrupted' : '');
       // Probe count is not a known total. An indeterminate bar is honest.
     } else if (item.kind === 'training') {
       var source = item.progress && typeof item.progress === 'object' ? item.progress : {};

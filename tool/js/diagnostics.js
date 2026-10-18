@@ -152,9 +152,18 @@ function refreshUnifiedModelAssessment() {
       var abilities = report && report.abilities || {};
       var output = Number(abilities.coherentOutputTokens || 0);
       var quality = kind === 'director' && report ? String(report.health || report.status || 'Recorded') : '—';
-      metric('Speed', speed, 'Measured from saved Director assessment probe, not a model-wide speed guarantee');
-      metric('Output observed', output > 0 ? output.toLocaleString() + ' tokens' : '—',
-        'Observed coherent output, not a verified maximum');
+      var probeMetrics = Object.keys(tests).map(function (key) { return tests[key]; });
+      var rates = probeMetrics.reduce(function (all, item) {
+        return all.concat(item.throughputSamples || []);
+      }, []).filter(function (value) { return Number(value) > 0; });
+      var outputs = probeMetrics.reduce(function (all, item) {
+        return all.concat(item.outputTokenSamples || []);
+      }, []).filter(function (value) { return Number(value) > 0; });
+      if (rates.length) speed = (rates.reduce(function (a, b) { return a + Number(b); }, 0) / rates.length).toFixed(1) + ' tok/s';
+      metric('Speed', speed, 'Mean of available measured probe throughput, not a model-wide guarantee');
+      metric('Output observed', outputs.length ? Math.max.apply(null, outputs).toLocaleString() + ' tokens' :
+        (output > 0 ? output.toLocaleString() + ' tokens' : '—'),
+        'Largest measured completion, not a verified maximum or context limit');
       var primary = findings[0] || 'Not tested';
       metric(kind === 'vision' ? 'Vision' : 'Writing', primary.split(': ').slice(1).join(': ') || 'Not tested');
       metric('Assessment', quality === '—' ? (latest ? latest.status || 'Recorded' : 'Not tested') : quality);

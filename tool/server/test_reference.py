@@ -43,7 +43,8 @@ def prepare(folder_path, criteria):
     group = str(criteria.get("group") or "").strip()
     term = str(criteria.get("option") or "").strip()
     ref_name = str(criteria.get("reference") or "")
-    approved = verified_reference(_folder_key(folder_path), group, term, ref_name)
+    job_id = str(criteria.get("jobId") or "").strip()
+    approved = verified_reference(_folder_key(folder_path), group, term, ref_name, job_id)
     reference = folder_path / approved["media"]
     choices = criteria.get("choices")
     if not isinstance(choices, list) or not 1 <= len(choices) <= 30 or any(not isinstance(c, str) or not c.strip() or len(c) > 120 for c in choices):
@@ -63,7 +64,7 @@ def prepare(folder_path, criteria):
             from .epoch_dino import compare_images
             cache = _location(folder_path, session).parent / "reference-embeddings"
             score = compare_images(reference, generated, cache)
-            assessment = {"method": mode, "group": group, "option": term,
+            assessment = {"method": mode, "group": group, "option": term, "jobId": job_id,
                           "reference": ref_name, "similarity": score, "at": time.time()}
             save(folder_path, session, media.name, assessment)
             return {"assessment": assessment}
@@ -73,7 +74,7 @@ def prepare(folder_path, criteria):
         messages = build_reference_comparison_messages(
             question, vision_resized_image_data_url(reference),
             vision_resized_image_data_url(generated))
-    return {"messages": messages, "reference": ref_name, "group": group,
+    return {"messages": messages, "reference": ref_name, "jobId": job_id, "group": group,
             "option": term, "choices": choices}
 
 
@@ -83,7 +84,7 @@ def save(folder_path, session, media_name, assessment):
         raise ValueError("Invalid reference assessment.")
     from .epoch_finder import _folder_key
     verified_reference(_folder_key(folder_path), assessment.get("group"),
-                       assessment.get("option"), assessment.get("reference"))
+                       assessment.get("option"), assessment.get("reference"), assessment.get("jobId"))
     # Bound persisted result sizes; raw output is evidence, not an unbounded transcript.
     if len(str(assessment)) > 12000:
         raise ValueError("Reference assessment is too large.")

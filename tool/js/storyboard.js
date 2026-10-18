@@ -2257,9 +2257,11 @@
       button.disabled = batch.status === 'stopping';
       overview.appendChild(line);
     });
+    // Active First Cuts need responsive updates; an empty queue only needs a
+    // lightweight heartbeat to discover batches started in another browser.
     storyState.storyActionTimer = setTimeout(function () {
       firstCutRequest().then(adoptFirstCutBatches).catch(reportError);
-    }, 2000);
+    }, activeBatches.length ? 2000 : 30000);
   }
 
   function cancelFirstCutBatch(id) {

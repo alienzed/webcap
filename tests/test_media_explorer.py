@@ -118,3 +118,25 @@ def test_legacy_session_discovered_for_known_owner(monkeypatch, tmp_path):
     assert found["total"] == 2
     assert any("sets/demo/test-generations/legacy/result.png" in item["id"]
                for item in found["items"])
+
+
+def test_full_scan_finds_legacy_only_set_without_owner_field(monkeypatch, tmp_path):
+    import json
+    output = tmp_path / "output"
+    output.mkdir()
+    legacy = tmp_path / "sets" / "only-legacy" / "test-generations" / "session-1"
+    legacy.mkdir(parents=True)
+    (legacy / "render.png").write_bytes(b"img")
+    (legacy / "test.json").write_text(json.dumps({
+        "startedAt": 42, "results": [{"mediaFile": "render.png"}]
+    }))
+    monkeypatch.setattr(media_explorer.app_config, "output_root", lambda: output)
+    monkeypatch.setattr(media_explorer.app_config, "FS_ROOT", tmp_path)
+    from tool.server import epoch_test_bench
+    monkeypatch.setattr(epoch_test_bench, "_session_directory",
+                        lambda owner, name: legacy if str(owner).endswith("only-legacy") else None)
+    monkeypatch.setattr(epoch_test_bench, "_session_rating_map", lambda path: {})
+    assert media_explorer.list_media(source="test")["total"] == 0
+    full = media_explorer.list_media(source="test", full="1")
+    assert full["total"] == 1
+    assert full["items"][0]["ownerFolder"] == "sets/only-legacy"

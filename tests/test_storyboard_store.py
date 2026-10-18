@@ -127,6 +127,27 @@ def test_duplicate_story_copies_authoring_but_not_generated_artifacts(storyboard
 
 
 
+
+def test_director_development_keeps_fewer_scenes_than_requested(storyboard_fs):
+    story = storyboard_store.create_story({
+        "title": "Best effort",
+        "targetSceneCount": 10,
+    })
+    plan = {"scenes": [
+        {
+            "title": "Scene " + str(i),
+            "summary": "A useful scene.",
+            "prompt": "A person walks through a room.",
+            "suggestedDurationSeconds": 8,
+        }
+        for i in range(9)
+    ]}
+    saved = storyboard_store.apply_developed_plan(story["id"], plan, model_id="director")
+    assert len(saved["sceneOrder"]) == 9
+    assert saved["targetSceneCount"] == 10
+
+
+
 def test_story_target_scene_count_can_be_auto(storyboard_fs):
     story = storyboard_store.create_story({
         "title": "Auto Story",

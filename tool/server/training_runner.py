@@ -1394,8 +1394,11 @@ def candidate_epoch_profile(folder, job_id, epoch):
     """Read metadata for a recorded checkpoint, without trusting client-supplied paths."""
     from .model_epoch_profile import read_sources
     checkpoint = _candidate_safetensors_path(folder, job_id, epoch)
+    from .model_epoch_profile import training_suggestions
+    sources = read_sources(checkpoint)
+    suggestions = training_suggestions(folder, job_id)
     return {"epoch": int(epoch), "checkpoint": checkpoint.name,
-            "sources": read_sources(checkpoint)}
+            "sources": sources, "suggestions": suggestions}
 
 
 def save_candidate_epoch_profile(folder, job_id, epoch, enrichment):

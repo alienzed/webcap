@@ -5493,6 +5493,7 @@
         var cards = sceneRoot && sceneRoot.querySelectorAll('.storyboard-take[data-take-id]');
         var card = cards && Array.prototype.find.call(cards, function (node) { return node.dataset.takeId === targetTakeId; });
         if (!card) throw new Error('Storyboard Take is not visible in scene: ' + targetTakeId);
+        card.setAttribute('tabindex', '-1');
         card.scrollIntoView({block: 'center'});
         card.focus();
       });

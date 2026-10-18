@@ -418,6 +418,37 @@
       if (['failed', 'cancelled', 'stopped', 'interrupted'].indexOf(status) !== -1) {
         var terminalError = new Error(current.error || ('Storyboard Director job ' + status + '.'));
         terminalError.jobStatus = status;
+        var recovered = current.result && String(current.result.rawText || '');
+        if (status === 'failed' && recovered) {
+          var dialog = document.createElement('dialog');
+          dialog.setAttribute('aria-label', 'Director output could not be applied');
+          dialog.style.cssText = 'width:min(760px,90vw);max-height:85vh;padding:20px;border-radius:10px;';
+          var heading = document.createElement('h3');
+          heading.textContent = 'Director output could not be applied';
+          var detail = document.createElement('p');
+          detail.textContent = terminalError.message + ' The generated text is available below until this dialog is closed.';
+          var output = document.createElement('textarea');
+          output.readOnly = true;
+          output.value = recovered;
+          output.setAttribute('aria-label', 'Recovered model output');
+          output.style.cssText = 'box-sizing:border-box;width:100%;height:45vh;resize:vertical;';
+          var copy = document.createElement('button');
+          copy.type = 'button';
+          copy.textContent = 'Copy output';
+          copy.onclick = function () {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(output.value).catch(function () { output.select(); });
+            } else output.select();
+          };
+          var close = document.createElement('button');
+          close.type = 'button';
+          close.textContent = 'Close';
+          close.onclick = function () { dialog.close(); };
+          dialog.append(heading, detail, output, copy, close);
+          dialog.addEventListener('close', function () { dialog.remove(); });
+          document.body.appendChild(dialog);
+          dialog.showModal();
+        }
         throw terminalError;
       }
       return new Promise(function (resolve) { setTimeout(resolve, directorJobPollDelay(current)); }).then(function () {

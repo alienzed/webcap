@@ -160,6 +160,7 @@
           existing.querySelector('.inference-queue-position').textContent = fresh.querySelector('.inference-queue-position').textContent;
           var oldTitle = oldCopy.querySelector('strong');
           oldTitle.textContent = newCopy.querySelector('strong').textContent;
+          oldTitle.title = newCopy.querySelector('strong').title;
           var oldDetails = oldCopy.querySelectorAll('small');
           var newDetails = newCopy.querySelectorAll('small');
           if (oldDetails.length !== newDetails.length) {

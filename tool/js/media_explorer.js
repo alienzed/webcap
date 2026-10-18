@@ -277,7 +277,7 @@
     if (item.source === 'storyboard' && item.storageId) {
       var storyBtn = document.createElement('button');
       storyBtn.type = 'button'; storyBtn.className = 'review-captions-btn';
-      text(storyBtn, 'Open Storyboard');
+      text(storyBtn, 'Manage in Storyboard');
       storyBtn.addEventListener('click', function () {
         var scene = item.uses && item.uses[0] && item.uses[0].storageId || '';
         window.openStoryboardActivity({storyId: item.storageId, sceneId: scene, takeId: item.uses && item.uses[0] && item.uses[0].takeId || ''});

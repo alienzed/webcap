@@ -115,7 +115,7 @@
       kind: 'director',
       title: activityTitle(item),
       status: item.status,
-      phase: String(item.status || 'queued').replace(/_/g, ' '),
+      phase: String(item.runtimePhase || item.status || 'queued').replace(/_/g, ' '),
       detail: activityDetail(item),
       startedAt: item.startedAt || item.createdAt,
       progress: null,
@@ -1218,6 +1218,12 @@
   window.publishActivityProgress = publishProgress;
   window.finishActivityProgress = finishProgress;
   window.recordActivityCompletion = rememberRecentCompletion;
+  window.focusActivityJob = function (jobId) {
+    var matching = currentActivityItems().find(function (item) { return item.kind === 'director' && String(item.id) === String(jobId); });
+    if (matching) state.selectedJobKey = activityJobKey(matching);
+    else state.selectedJobKey = 'llm:' + String(jobId || '');
+    setOpen(true);
+  };
   window.setActivityDrawerOpen = setOpen;
   window.refreshActivityMonitor = wake;
   bind();

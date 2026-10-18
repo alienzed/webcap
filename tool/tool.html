@@ -2232,6 +2232,37 @@
                 </footer>
             </section>
         </div>
+        <div id="training-run-delete-modal" class="keep-lora-modal hidden" aria-hidden="true">
+            <section class="keep-lora-dialog" role="dialog" aria-modal="true" aria-labelledby="training-run-delete-title" aria-describedby="training-run-delete-warning" style="max-width:600px">
+                <header class="keep-lora-header">
+                    <div>
+                        <h2 id="training-run-delete-title">Permanently delete training run?</h2>
+                        <p class="keep-lora-source" id="training-run-delete-warning">This cannot be undone. Review the exact run and files first.</p>
+                    </div>
+                    <button id="training-run-delete-close" type="button" class="training-review-modal-close" aria-label="Cancel training run deletion">&times;</button>
+                </header>
+                <div class="keep-lora-content">
+                    <div class="keep-lora-field">
+                        <label>Training run</label>
+                        <strong id="training-run-delete-identity" style="overflow-wrap:anywhere"></strong>
+                    </div>
+                    <div class="keep-lora-field">
+                        <label>Trainer output directory (permanently removed)</label>
+                        <div id="training-run-delete-path" class="keep-lora-path" style="overflow-wrap:anywhere;white-space:normal"></div>
+                    </div>
+                    <div id="training-run-delete-details" class="training-history-summary"></div>
+                    <label class="storyboard-develop-individual">
+                        <input id="training-run-delete-candidates" type="checkbox">
+                        Also permanently delete <strong id="training-run-delete-candidate-count"></strong> identified Test candidate copies
+                    </label>
+                    <div id="training-run-delete-status" class="keep-lora-status" aria-live="polite"></div>
+                </div>
+                <footer class="keep-lora-footer">
+                    <button id="training-run-delete-cancel" type="button" class="review-captions-btn">Cancel — keep everything</button>
+                    <button id="training-run-delete-confirm" type="button" class="training-btn" style="background:#a52c33;color:white;border-color:#a52c33">Permanently delete run</button>
+                </footer>
+            </section>
+        </div>
         <div id="training-archive-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="training-archive-close">
             <section class="keep-lora-dialog training-archive-dialog" role="dialog" aria-modal="true" aria-labelledby="training-archive-title">
                 <header class="keep-lora-header">

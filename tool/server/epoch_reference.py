@@ -60,6 +60,54 @@ def training_image_members(folder, job_id):
     return members
 
 
+
+def training_wildcard_members(folder, job_id):
+    """Exact captured media for wildcard mining, including videos."""
+    folder = str(folder or "").strip().replace(chr(92), "/").strip("/")
+    if not str(job_id or "").strip():
+        raise ValueError("Choose a training run before generating a wildcard.")
+    _path, run = _candidate_run_snapshot(folder, str(job_id).strip())
+    action_id = str(run.get("actionId") or "").strip()
+    stage = str(run.get("stages") or "").strip().lower()
+    if not action_id or stage not in {"hi", "lo", "krea2", "wan21", "h3"}:
+        raise ValueError("Training membership is unavailable for this run.")
+    root, action = read_action(action_id)
+    if str(action.get("folder") or "").strip().replace(chr(92), "/").strip("/") != folder:
+        raise ValueError("Training action belongs to another Set.")
+    raw_capture = str(run.get("inputPath") or "").strip()
+    if not raw_capture:
+        raise ValueError("This run has no recorded training capture.")
+    capture_base = (root / "captures").resolve()
+    capture = Path(raw_capture).resolve()
+    if not capture.is_relative_to(capture_base) or not capture.is_dir() or capture.is_symlink():
+        raise ValueError("Recorded training capture is invalid or missing.")
+    dataset = capture / ("dataset." + stage + ".toml")
+    if not dataset.is_file() or dataset.is_symlink():
+        raise FileNotFoundError("Captured training dataset is unavailable: " + str(dataset))
+    directories = (tomllib.loads(dataset.read_text(encoding="utf-8")).get("directory") or [])
+    if not isinstance(directories, list) or not directories:
+        raise ValueError("Captured training dataset has no directory entries.")
+    from .originals import MEDIA_ALL_EXTS
+    media_root = (capture / "media").resolve()
+    members = set()
+    for entry in directories:
+        if not isinstance(entry, dict) or str(entry.get("group") or "").lower() not in {"images", "videos"}:
+            continue
+        raw = str(entry.get("path") or "").replace(chr(92), "/").rstrip("/")
+        if "/media/" not in raw:
+            raise ValueError("Captured training directory cannot be resolved: " + raw)
+        subpath = raw.rsplit("/media/", 1)[1]
+        directory = (media_root / subpath).resolve()
+        if not directory.is_relative_to(media_root) or not directory.is_dir() or directory.is_symlink():
+            raise ValueError("Captured training media directory is unavailable: " + raw)
+        for file in directory.iterdir():
+            if file.is_file() and not file.is_symlink() and file.suffix.lower() in MEDIA_ALL_EXTS:
+                members.add(file.name)
+    if not members:
+        raise ValueError("The selected training run has no verifiable captured media.")
+    return members
+
+
 def reference_vocabulary(folder, job_id):
     root = _resolve_folder(folder)
     by_media = read_folder_state(root / ".webcap_state.json").get("caption_group_tags_by_media") or {}

@@ -718,7 +718,7 @@
     image.classList.add('hidden');
     media.innerHTML = '<option value="">Choose reference image…</option>';
     if (!group || !option) return;
-    var body = {folder: folder, operation:'reference_candidates', criteria:{group:group,term:option}};
+    var body = {folder: folder, operation:'reference_candidates', criteria:{group:group,term:option,jobId:referenceCompare.jobId}};
     captionAssistRequestJson('/fs/epoch_finder', {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
     }).then(function (payload) {
@@ -749,6 +749,16 @@
     if (!results.length) throw new Error('No Test previews are available for comparison.');
     referenceCompare.folder = owningSetFolder(launchFolder || (state && state.folder) || '');
     referenceCompare.session = status.session;
+    referenceCompare.jobId = '';
+    var runs = prepared && Array.isArray(prepared.candidateRuns) ? prepared.candidateRuns.filter(function (run) {
+      return run && run.jobId && run.folder === referenceCompare.folder;
+    }) : [];
+    var runPicker = el('test-generations-reference-training-run');
+    runPicker.innerHTML = '<option value="">Choose training run…</option>' + runs.map(function (run, i) {
+      return '<option value="' + escapeHtml(String(run.jobId)) + '">' + escapeHtml(candidateRunLabel(run, i)) + '</option>';
+    }).join('');
+    if (runs.length === 1) runPicker.value = String(runs[0].jobId);
+    referenceCompare.jobId = runPicker.value;
     var dialog = el('test-generations-reference-dialog');
     var method = el('test-generations-evaluator').value;
     el('test-generations-reference-title').textContent =
@@ -766,8 +776,9 @@
     if (!dialog.open) dialog.showModal();
     captionAssistRequestJson('/fs/epoch_finder', {
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:referenceCompare.folder,operation:'reference_vocabulary'})
+      body:JSON.stringify({folder:referenceCompare.folder,operation:'reference_vocabulary',criteria:{jobId:referenceCompare.jobId}})
     }).then(function (response) {
+      if (!referenceCompare.jobId) return;
       referenceCompare.vocabulary = response.vocabulary || [];
       updateReferenceChoices();
       drawReferenceResults();
@@ -781,6 +792,7 @@
     var group = el('test-generations-reference-group').value;
     var option = el('test-generations-reference-option').value;
     var reference = el('test-generations-reference-media').value;
+    if (!referenceCompare.jobId) throw new Error('Choose the source training run for the reference.');
     var attribute = (currentStatus.wildcardEvaluationGroups || []).find(function (x) { return String(x.id) === attributeId; });
     if (!attribute || !group || !option || !reference) throw new Error('Choose an attribute, option, and approved image.');
     var previews = (currentStatus.results || []).map(resultMediaFile).filter(Boolean);
@@ -797,7 +809,7 @@
         status.textContent = method.toUpperCase() + ' · ' + (i+1) + ' / ' + previews.length;
         var payload = await testReferenceRequest({
           folder:folder, session:session, action:'evaluate', method:method, media:previews[i], group:group,
-          option:option, reference:reference, choices:attribute.options,
+          option:option, reference:reference, jobId:referenceCompare.jobId, choices:attribute.options,
           model: method === 'rvn' ? getCaptionVisionModelId() : ''
         });
         if (method === 'rvn') {
@@ -810,7 +822,7 @@
           var selected = optionMatch ? Number(optionMatch[1]) : null;
           if (selected && selected > attribute.options.length) selected = null;
           await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:{
-            method:'rvn',group:group,option:option,reference:reference,
+            method:'rvn',group:group,option:option,reference:reference,jobId:referenceCompare.jobId,
             attribute:attribute.label || attribute.id,
             selected:selected,selectedText:selected == null ? '' : attribute.options[selected - 1],
             verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',
@@ -5206,6 +5218,21 @@
       } catch (err) { showError(err); }
     };
     el('test-generations-evaluator').onchange = syncTestVlControls;
+    el('test-generations-reference-training-run').onchange = function () {
+      referenceCompare.jobId = this.value;
+      referenceCompare.vocabulary = [];
+      updateReferenceChoices();
+      if (!referenceCompare.jobId) return;
+      var jobId = referenceCompare.jobId;
+      captionAssistRequestJson('/fs/epoch_finder', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:referenceCompare.folder,operation:'reference_vocabulary',criteria:{jobId:jobId}})
+      }).then(function (payload) {
+        if (referenceCompare.jobId !== jobId) return;
+        referenceCompare.vocabulary = payload.vocabulary || [];
+        updateReferenceChoices();
+      }).catch(showError);
+    };
     el('test-generations-reference-attribute').onchange = updateReferenceChoices;
     el('test-generations-reference-group').onchange = updateReferenceChoices;
     el('test-generations-reference-option').onchange = updateReferenceImages;

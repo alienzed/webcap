@@ -5496,7 +5496,7 @@
       closeSceneActionMenus();
     }, { passive: true });
     el('storyboard-director-view-activity').onclick = function () {
-      window.setActivityDrawerOpen(true);
+      window.focusActivityJob(el('storyboard-director-stop').dataset.directorJobId);
     };
     el('storyboard-director-stop').onclick = function () {
       stopDirectorJob();

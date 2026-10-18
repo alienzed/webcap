@@ -4027,12 +4027,14 @@
 
     setSaveState('Deleting...');
     flushPendingSaves().then(function () {
+      if ((storyState.firstCutBatches || []).some(function (batch) {
+        return batch.storyId === storyId && ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1;
+      })) throw new Error('Stop or remove this Story\'s First Cut before deleting it.');
       return request({
         operation: 'delete_story',
         storyId: storyId
       });
     }).then(function () {
-      removeQueuedFirstCut(storyId);
       if (deletedWasOpen) {
         storyState.story = null;
         storyState.sequenceExport = null;

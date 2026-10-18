@@ -589,7 +589,7 @@
     var eligible = ranking.filter(function (entry) { return entry.score != null; });
     // During a running campaign, only epochs surviving an actual completed cut
     // are recommendations. At completion, the final round makes no further cut:
-    // recommend the leading score and all exact ties, never the entire field.
+    // use the last retained field. Single-round campaigns have no cut, so show top ties.
     var completed = campaign.status === 'complete';
     var topScore = eligible.length ? Math.max.apply(null, eligible.map(function (row) { return row.score; })) : null;
     var advanced = campaign.rounds.length > 1 && (completed || round > 1);

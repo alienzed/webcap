@@ -303,13 +303,30 @@
     referenceIndex = 0;
     els('start').disabled = true;
     els('reference-options').innerHTML = '<p class="epoch-finder-muted">Finding tagged reference candidates…</p>';
-    return Promise.all(referenceItems.map(function (item) {
-      return api('reference_suggestions', {jobId:els('run').value, option:item.option}).then(function (response) {
-        item.candidates = response.references || [];
+    return api('reference_vocabulary', {jobId: els('run').value}).then(function (response) {
+      var vocabulary = response.vocabulary || [];
+      referenceItems.forEach(function (item) {
+        var dimension = dimensions.find(function (d) { return d.label === item.attribute && d.role === 'primary'; });
+        var matches = vocabulary.filter(function (group) {
+          var terms = (group.terms || []).map(function (term) { return term.term; });
+          return dimension && dimension.options.every(function (option) { return terms.includes(option); });
+        });
+        if (matches.length !== 1) {
+          throw new Error('Primary attribute "' + item.attribute + '" must use exact tags from one training annotation group. Found ' +
+            matches.length + ' matching groups. Edit the wildcard or mark this attribute Leakage/Vary.');
+        }
+        item.group = matches[0].group;
       });
-    })).then(function () {
+      return Promise.all(referenceItems.map(function (item) {
+        return api('reference_candidates', {jobId: els('run').value, group: item.group, term: item.option}).then(function (response) {
+          item.candidates = (response.references || []).map(function (candidate) {
+            return Object.assign({}, candidate, {tag:item.option});
+          });
+          if (!item.candidates.length) throw new Error('No trained reference for ' + item.group + ' / ' + item.option + '.');
+        });
+      }));
+    }).then(function () {
       if (version !== referenceGeneration) return;
-      referenceItems = referenceItems.filter(function (item) { return item.candidates.length; });
       referenceDraftChoices = {};
       referenceItems.forEach(function (item) {
         var saved = referenceSelections[item.key];

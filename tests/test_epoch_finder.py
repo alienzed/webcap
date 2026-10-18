@@ -329,3 +329,16 @@ def test_wizard_primary_wildcard_allows_descriptive_concatenated_tag_phrases():
     })
     assert proposal["variationGroups"][0]["options"][0] == "micro triangle simple string straps"
     assert proposal["variationGroups"][0]["role"] == "primary"
+
+
+def test_epoch_primary_prompt_instructions_require_exact_single_group_tags():
+    from tool.server.epoch_finder_plan import build_proposal
+    contract = build_proposal(
+        ["a triangle top with string straps"], set_name="Bikini",
+        vocabulary=[{"group": "BT Shape", "terms": ["triangle", "teardrop"]}],
+        reference_vocabulary=[{"group": "BT Shape", "terms": [
+            {"term": "triangle", "count": 3}, {"term": "teardrop", "count": 2}]}],
+    )
+    assert "exact text of one tag" in contract["prompt"]
+    assert "never combine, rephrase, or infer tags" in contract["prompt"]
+    assert "ACTUAL SET REFERENCE TAGS" in contract["prompt"]

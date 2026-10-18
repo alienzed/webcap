@@ -282,7 +282,19 @@ def create_campaign(folder_path, criteria):
     plans = _create_plan(selected_epochs, prompt, rounds, cases, keep_percent, settings, criteria.get("roundPlans"))
     for round_plan in plans:
         model.normalize_settings(template, lambda: 1, dict(round_plan["settings"], seed=1))
-    from .epoch_reference import verified_reference
+    from .epoch_reference import verified_reference, reference_vocabulary
+    scoped = reference_vocabulary(folder, job_id)
+    primary_groups = {}
+    for dimension in dimensions:
+        if dimension["role"] != "primary":
+            continue
+        matches = [group["group"] for group in scoped
+                   if all(option in {term["term"] for term in group["terms"]}
+                          for option in dimension["options"])]
+        if len(matches) != 1:
+            raise ValueError("Primary attribute " + dimension["label"] +
+                             " must match exact tags in one trained annotation group.")
+        primary_groups[dimension["label"]] = matches[0]
     reference_choices = criteria.get("referencePlan")
     if not isinstance(reference_choices, list):
         raise ValueError("Approve a training reference for every Primary wildcard option.")
@@ -298,17 +310,21 @@ def create_campaign(folder_path, criteria):
                 if _requires_reference(dimension["role"]) for option in dimension["options"]}
     if not set(approved).issubset(required):
         raise ValueError("Only Primary wildcard choices may have training references.")
+    evaluation = criteria.get("referenceEvaluation")
+    if not isinstance(evaluation, dict) or any(type(evaluation.get(k)) is not bool for k in ("rvn", "dino")):
+        raise ValueError("Select reference evaluation mechanisms explicitly.")
+    if (evaluation["rvn"] or evaluation["dino"]) and set(approved) != required:
+        raise ValueError("Approve an exact trained reference for every Primary wildcard option.")
     references = []
     for (attribute, option), entry in sorted(approved.items()):
+        if str(entry.get("group") or "") != primary_groups[attribute] or str(entry.get("tag") or option) != option:
+            raise ValueError("Primary reference must use its exact annotated group and tag.")
         group = str(entry.get("group") or "")
         media = str(entry.get("media") or "")
         tag = str(entry.get("tag") or option)
         reference = verified_reference(folder, group, tag, media, job_id)
         references.append({"attribute": attribute, "option": option, "group": group,
                            "tag": tag, **reference})
-    evaluation = criteria.get("referenceEvaluation")
-    if not isinstance(evaluation, dict) or any(type(evaluation.get(k)) is not bool for k in ("rvn", "dino")):
-        raise ValueError("Select reference evaluation mechanisms explicitly.")
     if evaluation["dino"]:
         from .epoch_dino import preflight as dino_preflight
         dino_preflight()

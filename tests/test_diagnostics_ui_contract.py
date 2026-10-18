@@ -108,3 +108,15 @@ def test_director_progress_stays_operation_scoped():
     assert 'totalIsUpperBound: true' in script
     assert 'completedModels' in script
     assert 'directorModelTestStopActivityClock()' in script
+
+
+def test_experimental_model_assessment_preserves_existing_diagnostics():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
+    assert 'data-diagnostics-tab="assessment"' in html
+    assert 'id="diagnostics-assessment-results"' in html
+    assert 'data-diagnostics-tab="models"' in html
+    assert 'data-diagnostics-tab="benchmark"' in html
+    assert 'data-diagnostics-tab="model-lab"' in html
+    assert "function refreshUnifiedModelAssessment()" in script
+    assert "setDiagnosticsTab('model-lab', true)" in script

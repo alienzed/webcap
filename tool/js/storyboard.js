@@ -3692,8 +3692,8 @@
       return String(item.name || '') + ' @ ' + String(item.strength == null ? 1 : item.strength);
     });
 
-    return '<details class="storyboard-take-effective-input">' +
-      '<summary>Effective H3 Input</summary>' +
+    return '<section class="storyboard-take-effective-input">' +
+      '<strong>Effective H3 Input</strong>' +
       '<div class="storyboard-take-effective-input-body">' +
         '<div class="storyboard-effective-input-meta">' + escapeHtml(facts.join(' · ')) + '</div>' +
         '<strong>Exact prompt sent to ComfyUI</strong>' +
@@ -3702,7 +3702,7 @@
         (requiredLoraLines.length ? '<strong>Required workflow LoRA</strong><pre>' + escapeHtml(requiredLoraLines.join('\n')) + '</pre>' : '') +
         (loraLines.length ? '<strong>Effective LoRAs</strong><pre>' + escapeHtml(loraLines.join('\n')) + '</pre>' : '') +
       '</div>' +
-    '</details>';
+    '</section>';
   }
 
   function takeCardHtml(storyId, sceneId, takeId, take, takeIndex, selectedTakeId) {
@@ -3724,12 +3724,17 @@
         '<div class="storyboard-take-identity" title="' + escapeHtml(take.sourceFilename || '') + '">' +
           '<strong>Take ' + String(takeIndex + 1).padStart(2, '0') + '</strong>' +
           '<span>' + escapeHtml(takeMetaLabel(take)) + '</span>' +
-          '<input type="text" maxlength="120" data-take-label="' + escapeHtml(takeId) + '" value="' + escapeHtml(take.label || '') + '" placeholder="Label this Take…" aria-label="Take label">' +
         '</div>' +
         ratingHtml +
         '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
       '</div>' +
-      takeEffectiveInputHtml(take) +
+      '<details class="storyboard-take-advanced">' +
+        '<summary>Advanced</summary>' +
+        '<div class="storyboard-take-advanced-body">' +
+          '<label class="storyboard-take-label-field"><span>Label</span><input type="text" maxlength="120" data-take-label="' + escapeHtml(takeId) + '" value="' + escapeHtml(take.label || '') + '" placeholder="Optional label" aria-label="Take label"></label>' +
+          takeEffectiveInputHtml(take) +
+        '</div>' +
+      '</details>' +
     '</article>';
   }
 

@@ -2265,8 +2265,10 @@
 
 .storyboard-take-footer {
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
+  column-gap: 10px;
+  row-gap: 3px;
   margin-top: 8px;
+  align-items: start;
 }
 
 .storyboard-take-pending-footer {
@@ -2284,6 +2286,55 @@
 .storyboard-take-identity span {
   font-size: 12px;
 }
+
+.storyboard-take-footer > .review-captions-btn { align-self: start; }
+
+.storyboard-take-advanced {
+  min-width: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  margin-top: 8px;
+}
+
+.storyboard-take-advanced > summary {
+  width: fit-content;
+  padding: 7px 2px 3px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.storyboard-take-advanced-body {
+  display: grid;
+  gap: 12px;
+  padding: 8px 0 3px;
+}
+
+.storyboard-take-label-field {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.storyboard-take-label-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--input-bg, var(--panel));
+  color: var(--text);
+  font: inherit;
+}
+
+.storyboard-take-effective-input > strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.storyboard-take-effective-input-body { padding: 0; }
+.storyboard-take-effective-input-body pre { max-height: 220px; }
 
 .storyboard-take-identity input {
   width: min(100%, 260px);
@@ -2450,7 +2501,7 @@
 
 @container (min-width: 1450px) {
   .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) {
-    grid-template-columns: minmax(0, 1fr) minmax(420px, 500px);
+    grid-template-columns: minmax(0, 1040px) minmax(420px, 1fr);
     grid-template-areas:
       "body takes";
     align-items: start;
@@ -2482,6 +2533,11 @@
     width: 100%;
     min-width: 0;
     max-width: none;
+  }
+
+  .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes[open]) .storyboard-scene-body {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    gap: 16px;
   }
 
   .storyboard-scenes-list.is-focus .storyboard-scene:has(> .storyboard-takes:not([open])) {

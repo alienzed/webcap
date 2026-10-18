@@ -1112,6 +1112,7 @@ def _staged_candidate_catalog(lora_files, model):
             "trainingVariant": str(run_summary.get("trainingVariant") or "") if stage == "h3" else "",
             "selected": bool(selected and int(selected.get("epoch") or 0) == epoch),
             "selectedEpoch": selected,
+            "modelProfile": provenance.get("modelProfile") if isinstance(provenance.get("modelProfile"), dict) else None,
         }
     return list(runs.values()), metadata
 

@@ -141,8 +141,8 @@
                     class="activity-rail-btn inference-queue-rail-btn"
                     data-inference-queue-toggle
                     data-inference-queue-rail
-                    title="Inference Queue"
-                    aria-label="Inference Queue"
+                    title="Job Queues"
+                    aria-label="Job Queues"
                     aria-expanded="false"
                     aria-controls="inference-queue-drawer"
                 >
@@ -1865,19 +1865,36 @@
                     </div>
                 </div>
             </aside>
-            <aside id="inference-queue-drawer" class="inference-queue-drawer hidden" aria-label="Inference Queue" aria-hidden="true">
+            <aside id="inference-queue-drawer" class="inference-queue-drawer hidden" aria-label="Job Queues" aria-hidden="true">
                 <header class="inference-queue-drawer-header">
                     <div class="inference-queue-header-copy">
-                        <strong>Inference Queue</strong>
+                        <strong>Job Queues</strong>
                         <span id="inference-queue-summary">No queued inference</span>
                     </div>
                     <div class="inference-queue-header-actions">
                         <button id="inference-queue-pause" type="button" class="review-captions-btn inference-queue-pause-toggle" title="Pause inference scheduling after the current job">Pause</button>
                         <button id="inference-queue-clear" type="button" class="review-captions-btn" title="Cancel all queued and backlogged inference">Clear all</button>
-                        <button id="inference-queue-close" type="button" class="inference-queue-close" aria-label="Close Inference Queue">×</button>
+                        <button id="inference-queue-close" type="button" class="inference-queue-close" aria-label="Close Job Queues">×</button>
                     </div>
                 </header>
-                <div id="inference-queue-list" class="inference-queue-list"></div>
+                <div class="job-queue-tabs" role="tablist" aria-label="Job queue lanes">
+                    <button type="button" role="tab" id="job-queue-tab-inference" data-job-queue-tab="inference" aria-selected="true" aria-controls="job-queue-panel-inference">Inference <span data-job-queue-count="inference"></span></button>
+                    <button type="button" role="tab" id="job-queue-tab-llm" data-job-queue-tab="llm" aria-selected="false" aria-controls="job-queue-panel-llm" tabindex="-1">LLM <span data-job-queue-count="llm"></span></button>
+                    <button type="button" role="tab" id="job-queue-tab-training" data-job-queue-tab="training" aria-selected="false" aria-controls="job-queue-panel-training" tabindex="-1">Training <span data-job-queue-count="training"></span></button>
+                </div>
+                <div id="job-queue-panel-inference" role="tabpanel" aria-labelledby="job-queue-tab-inference">
+                    <div id="inference-queue-list" class="inference-queue-list"></div>
+                </div>
+                <div id="job-queue-panel-llm" class="hidden" role="tabpanel" aria-labelledby="job-queue-tab-llm">
+                    <div class="job-queue-lane-summary" data-job-queue-summary="llm"></div>
+                    <div class="job-queue-lane-actions"><button type="button" class="review-captions-btn" data-job-queue-action="reset" data-job-queue-lane="llm">Stop / clear LLM</button></div>
+                    <div class="inference-queue-list" data-job-queue-list="llm"></div>
+                </div>
+                <div id="job-queue-panel-training" class="hidden" role="tabpanel" aria-labelledby="job-queue-tab-training">
+                    <div class="job-queue-lane-summary" data-job-queue-summary="training"></div>
+                    <div class="job-queue-lane-actions"><button type="button" class="review-captions-btn" data-job-queue-action="resume_queue" data-job-queue-lane="training">Resume queue</button></div>
+                    <div class="inference-queue-list" data-job-queue-list="training"></div>
+                </div>
             </aside>
             <div id="console-panel" class="hidden" aria-hidden="true">
                 <div class="console-panel-header">
@@ -3079,6 +3096,7 @@
         <script src="/static/js/director_chat.js"></script>
         <script src="/static/js/review_assistant.js"></script>
         <script src="/static/js/inference_queue.js"></script>
+            <script src="/static/js/job_queues.js"></script>
         <script src="/static/js/progress_card.js"></script>
         <script src="/static/js/activity_monitor.js"></script>
         <script src="/static/js/storage_manager.js"></script>

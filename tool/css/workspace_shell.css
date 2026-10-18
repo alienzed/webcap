@@ -2934,3 +2934,16 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .activity-monitor-details .activity-monitor-recent-row {
   align-items: center;
 }
+
+/* Unified job queue lanes */
+.job-queue-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; padding: 10px 12px 6px; }
+.job-queue-tabs button { border: 1px solid var(--border-color, #525860); border-radius: 7px; background: transparent; color: inherit; padding: 8px 4px; cursor: pointer; font: inherit; }
+.job-queue-tabs button[aria-selected="true"] { background: var(--surface-raised, rgba(120, 120, 120, .14)); border-color: currentColor; font-weight: 650; }
+.job-queue-tabs button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.job-queue-tabs span { font-size: .82em; opacity: .75; }
+.job-queue-lane-summary { padding: 7px 15px 10px; font-size: .9em; opacity: .82; }
+.job-queue-lane-actions { padding: 0 15px 8px; display: flex; justify-content: flex-end; }
+.job-queue-lane-actions.hidden, [role="tabpanel"].hidden { display: none !important; }
+.job-queue-row .inference-queue-position { min-width: 65px; text-transform: capitalize; }
+.job-queue-row .inference-queue-copy { min-width: 0; overflow-wrap: anywhere; }
+.job-queue-row .inference-queue-actions { flex-wrap: wrap; justify-content: flex-end; }

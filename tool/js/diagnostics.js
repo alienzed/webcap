@@ -225,11 +225,15 @@ function refreshUnifiedModelAssessment() {
         var entries = family.keys.filter(function (key) { return tests[key]; }).map(function (key) { return tests[key]; });
         var text = 'Not tested';
         if (entries.length) {
-          if (entries.some(function (item) { return item.status === 'failed'; })) text = 'Failed';
-          else if (entries.some(function (item) { return item.status === 'running'; })) text = 'Running';
-          else if (entries.some(function (item) { return item.status === 'skipped'; })) text = 'Skipped';
-          else if (entries.every(function (item) { return item.status === 'completed'; })) text = 'Response received';
-          else text = 'Incomplete';
+          var complete = entries.reduce(function (sum, item) { return sum + Number((item.counts || {}).completed || 0); }, 0);
+          var failed = entries.reduce(function (sum, item) { return sum + Number((item.counts || {}).failed || 0); }, 0);
+          var running = entries.reduce(function (sum, item) { return sum + Number((item.counts || {}).running || 0); }, 0);
+          var total = entries.reduce(function (sum, item) {
+            return sum + Object.keys(item.counts || {}).reduce(function (count, key) { return count + Number(item.counts[key] || 0); }, 0);
+          }, 0);
+          text = total ? complete + '/' + total + ' responses' : 'Not tested';
+          if (failed) text += ' · ' + failed + ' failed';
+          if (running) text += ' · ' + running + ' running';
         }
         findings.push(family.label + ': ' + text);
       });

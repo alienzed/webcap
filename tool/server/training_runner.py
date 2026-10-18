@@ -1381,6 +1381,36 @@ def select_candidate_epoch_response(folder, job_id, epoch):
         return {"ok": False, "error": str(exc)}, 400
 
 
+
+def candidate_epoch_profile(folder, job_id, epoch):
+    """Read metadata for a recorded checkpoint, without trusting client-supplied paths."""
+    from .model_epoch_profile import read_sources
+    checkpoint = _candidate_safetensors_path(folder, job_id, epoch)
+    return {"epoch": int(epoch), "checkpoint": checkpoint.name,
+            "sources": read_sources(checkpoint)}
+
+
+def save_candidate_epoch_profile(folder, job_id, epoch, enrichment):
+    """Edit only checkpoint-owned enrichment, leaving selection and provenance unchanged."""
+    from .model_epoch_profile import save_enrichment
+    checkpoint = _candidate_safetensors_path(folder, job_id, epoch)
+    return {"epoch": int(epoch), "checkpoint": checkpoint.name,
+            "modelProfile": save_enrichment(checkpoint, enrichment)}
+
+
+def candidate_epoch_profile_response(folder, job_id, epoch, enrichment=None, save=False):
+    try:
+        result = (save_candidate_epoch_profile(folder, job_id, epoch, enrichment)
+                  if save else candidate_epoch_profile(folder, job_id, epoch))
+        return {"ok": True, **result}, 200
+    except LookupError as exc:
+        return {"ok": False, "error": str(exc)}, 404
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": str(exc)}, 422
+    except (RuntimeError, ValueError, OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+
 def clear_candidate_epoch_selection(folder, job_id):
     raw_run_path, run = _candidate_run_snapshot(folder, job_id)
     run_dir = host_path_for_training_path(raw_run_path)

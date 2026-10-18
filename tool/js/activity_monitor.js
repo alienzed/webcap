@@ -128,6 +128,19 @@
     };
   }
 
+  function firstCutProgressSnapshot(item) {
+    var scenePhase = ['Refining Scenes', 'Queuing First Takes'].indexOf(item.phase) !== -1;
+    return {
+      id: item.id, kind: 'first-cut', title: 'Storyboard · First Cut',
+      status: item.status, phase: item.phase,
+      detail: scenePhase && item.sceneCount ? 'Scene ' + (Number(item.sceneCompleted || 0) + 1) + ' of ' + item.sceneCount : String(item.detail || ''),
+      startedAt: item.startedAt,
+      progressLabel: item.stageIndex >= 0 ? 'Stage ' + (item.stageIndex + 1) + ' of ' + item.stageCount : String(item.status || ''),
+      progress: scenePhase && item.sceneCount ? { completed: item.sceneCompleted, total: item.sceneCount } : null,
+      original: item
+    };
+  }
+
   function currentActivityItems() {
     return (Array.isArray(state.payload.active) ? state.payload.active : [])
       .filter(function (item) { return !isProgressChild(item); })
@@ -155,11 +168,12 @@
   }
 
   function itemProgress(item) {
-    return managedProgressSnapshot(item) || directorFollowerSnapshot(item) || item;
+    return (item.kind === 'first-cut' ? firstCutProgressSnapshot(item) : null) || managedProgressSnapshot(item) || directorFollowerSnapshot(item) || item;
   }
 
   function itemOpen(item) {
     if (item.original) return openItem(item.original);
+    if (item.kind === 'first-cut') return openItem(item);
     if (item.kind === 'test-batch') return openItem(item);
     if (item.kind === 'model-lab') return window.openDiagnosticsModal('assessment');
     if (item.kind === 'director-diagnostics') return window.openDiagnosticsModal(item.title === 'Director Benchmark' ? 'benchmark' : 'models');
@@ -303,6 +317,7 @@
 
   function kindLabel(item) {
     if (item.kind === 'model-lab') return 'Model Assessment';
+    if (item.kind === 'first-cut') return 'Storyboard · First Cut';
     if (item.kind === 'test-batch') return 'Batch Test + VL';
     if (item.kind === 'storyboard') return 'Storyboard';
     if (item.kind === 'test') return 'Test';

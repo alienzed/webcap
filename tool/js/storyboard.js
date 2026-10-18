@@ -5438,6 +5438,7 @@
     if (!modal || !input || !preset || !status) throw new Error('Director Tools modal markup is missing.');
     preset.value = '';
     input.value = '';
+    el('storyboard-director-tools-generate-takes').checked = false;
     status.textContent = '';
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
@@ -5456,6 +5457,7 @@
     var run = el('storyboard-director-tools-run');
     var status = el('storyboard-director-tools-status');
     if (!input || !run || !status) throw new Error('Director Tools modal markup is missing.');
+    var generateFreshTakes = el('storyboard-director-tools-generate-takes').checked;
     var instruction = String(input.value || '').trim();
     if (!instruction) {
       status.textContent = 'Enter a revision instruction or choose a preset.';
@@ -5466,12 +5468,23 @@
     status.textContent = 'Starting revision…';
     var storyId = storyState.story && storyState.story.id;
     var target = { kind: 'repair', storyId: storyId };
+    var sceneIds = storyState.story.sceneOrder.slice();
     var revision = reviseScenes(instruction, storyState.director.modelId);
     // The target is registered synchronously once the operation has started.
     // Dismiss the input modal now so its activity card is not obscured.
     var started = directorTargetPending(target);
     if (started) closeDirectorTools();
-    revision.catch(function (err) {
+    revision.then(function () {
+      if (!generateFreshTakes) return;
+      // The Director revision has completed successfully and committed the revised Scenes.
+      // Take requests resolve their settings from the server-side Story at enqueue time.
+      // Reuse the existing inference lane, without depending on which Story is now visible.
+      return sceneIds.reduce(function (pending, sceneId) {
+        return pending.then(function () {
+          return enqueueSceneGeneration(storyId, sceneId);
+        });
+      }, Promise.resolve());
+    }).catch(function (err) {
       if (!started) status.textContent = String(err && err.message ? err.message : err);
       reportError(err);
     }).finally(function () {

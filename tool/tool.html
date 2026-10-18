@@ -1144,10 +1144,6 @@
             </div>
             <section id="test-generations-workspace" class="test-generations-workspace" data-workspace-root="test" aria-label="Test workspace">
                 <section id="test-generations-pane" class="test-generations-pane hidden" aria-label="Test Generations">
-                    <nav class="epoch-finder-tabs" aria-label="Test Generations mode">
-                        <button id="epoch-finder-mode-tests" type="button" class="epoch-finder-tab active" aria-pressed="true">Test Generations</button>
-                        <button id="epoch-finder-mode-finder" type="button" class="epoch-finder-tab" aria-pressed="false">Epoch Finder</button>
-                    </nav>
                     <section id="epoch-finder-screen" class="epoch-finder-screen hidden" aria-label="Epoch Finder">
                         <div class="epoch-finder-intro">
                             <div><div class="epoch-finder-eyebrow">TEST GENERATIONS / EPOCH FINDER</div>
@@ -1157,6 +1153,10 @@
                         </div>
                         <div class="epoch-finder-layout">
                             <aside class="epoch-finder-sidebar">
+                                <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
+                                    <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="finder" aria-pressed="true">Epoch Finder</button>
+                                </nav>
                                 <section class="epoch-finder-panel">
                                     <h3>New campaign</h3>
                                     <nav class="epoch-finder-wizard-progress" aria-label="Campaign setup">
@@ -1251,6 +1251,10 @@
                     </section>
                     <div id="test-generations-body" class="test-generations-body">
                         <aside class="test-generations-rail">
+                            <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
+                                <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Tests</button>
+                                <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
+                            </nav>
                             <div id="test-generations-help" class="test-generations-help hidden">
                                 <strong>How Test Generations works</strong>
                                 <p>Each run freezes the selected model, prompt, generation settings, and seed across the Base render and every staged LoRA so the results are directly comparable.</p>

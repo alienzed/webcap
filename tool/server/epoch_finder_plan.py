@@ -82,9 +82,11 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_v
         "Treat background, setting, lighting, and camera as Vary by default; hair, pose, and general appearance as Leakage by default, unless the user focus explicitly targets those traits. " 
         "Reserve Primary for distinctive learned construction, shape, and key subject attributes. " 
         "Prefer precise independent construction/color/shape attributes to whole-product alternatives. "
-        "Build Primary choices from actual Set vocabulary, but allow natural phrases that combine multiple existing tags when meaningful. " 
-        "Do not invent untrained Primary features. WebCap will match option phrases to the Set tags automatically. " 
-        "Do not output reference tag mappings or ask the user to select annotation groups. " 
+        "Build each Primary variation group from one actual scoped annotation group in ACTUAL SET REFERENCE TAGS. "
+        "Each Primary option must be the exact text of one tag from that same group: never combine, rephrase, or infer tags. "
+        "If a concept has multiple independent tag groups, make separate wildcard dimensions. "
+        "Do not invent untrained Primary features or treat generalization-only values as learned Primary options. "
+        "Use Leakage or Vary for generalization and incidental variation; references are only for Primary choices. " 
         "Offer concrete values consistent with the Set vocabulary. "
         "Include meaningful independent variation in background, viewpoint, pose or appearance to probe generalization, not merely cosmetic duplicates. "
         "Where supported by real learned tags, probe independence of Primary shapes, colors and construction using different combinations. Do not claim unobserved combinations are verified. "
@@ -95,11 +97,7 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_v
 
 
 def normalize_proposal(data):
-    """Validate the proposed wildcard and its scoring roles, not tag spelling.
-
-    Training reference images are selected later from actual run annotations.
-    A natural wildcard option may describe more than one existing tag.
-    """
+    """Validate wildcard dimensions; exact trained-tag membership is checked by the wizard."""
     proposal = normalize_result(data)
     concept = str(data.get("concept") or "").strip() if isinstance(data, dict) else ""
     if not concept:

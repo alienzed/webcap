@@ -2293,6 +2293,7 @@
   }
 
   function openGenerateActivity(target) {
+    if (window.closeMediaExplorerActivity) window.closeMediaExplorerActivity();
     target = target && typeof target === 'object' ? target : {};
     var wasOpen = generateState.open;
     var targetJobId = String(target.jobId || '');

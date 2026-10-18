@@ -134,7 +134,7 @@ function runUnifiedModelAssessment() {
   if (diagnosticsEl('diagnostics-assessment-deep').checked) {
     throw new Error('Deep Assessment is not available yet. Uncheck it to run the standard suite.');
   }
-  if (directorModelTestState.running) throw new Error('Director assessment or benchmark is already running.');
+
   var catalog = diagnosticsAssessmentCatalog;
   var visions = (catalog.visions || []).filter(function (model) { return visionRefs.has(String(model.modelRef || '')); });
   var directors = selectedDirectors;
@@ -145,12 +145,12 @@ function runUnifiedModelAssessment() {
   var files = modelLabCurrentFiles();
   var canLab = !!sourceFolder && files.length >= 2;
   var status = diagnosticsEl('diagnostics-assessment-selection');
-  if (!canLab && !selectedDirectors.length) throw new Error('Vision testing requires a Set with at least two media items.');
+  if (!canLab) throw new Error('Open a Set with at least two media items to run the assessment.');
   status.textContent = 'Starting standard assessment…';
   var runButton = diagnosticsEl('diagnostics-assessment-run');
   runButton.disabled = true;
   return Promise.resolve().then(function () {
-    if (!canLab) return null;
+
     if (modelLabState.run && modelLabState.run.status === 'running') throw new Error('Model Lab is already running. Stop or complete that run first.');
     return modelLabPost({
       action: 'start',

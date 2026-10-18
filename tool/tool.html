@@ -1506,6 +1506,7 @@
                             <select id="generate-director-model" aria-label="Generate Prompt Assistant model"><option value="">Prompt Assistant unavailable</option></select>
                             <button id="generate-director-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
                             </div>
+                            <label class="generate-field-hint" style="display:flex;align-items:center;gap:8px;margin:5px 0 10px"><input id="generate-director-lora-enable" type="checkbox"> Let Director suggest LoRAs (review before applying)</label>
                             <div class="generate-prompt-assistant-actions">
                             <button id="generate-director-write" type="button" class="review-captions-btn" title="Turn the current idea into a polished model-ready prompt.">Expand Prompt</button>
                             <button id="generate-director-restore" type="button" class="review-captions-btn hidden">Restore Previous</button>
@@ -2204,6 +2205,30 @@
                         <div id="training-candidates-modal-content" class="training-candidates-modal-content"></div>
                     </section>
                 </div>
+        <div id="director-lora-review-modal" class="keep-lora-modal hidden" aria-hidden="true">
+            <section class="keep-lora-dialog" role="dialog" aria-modal="true" aria-labelledby="director-lora-review-title" style="max-width:720px">
+                <header class="keep-lora-header">
+                    <div>
+                        <h2 id="director-lora-review-title">Review Director LoRAs</h2>
+                        <p class="keep-lora-source">Nothing changes until you apply these suggestions.</p>
+                    </div>
+                    <button type="button" id="director-lora-review-close" class="training-review-modal-close" aria-label="Discard LoRA suggestions">&times;</button>
+                </header>
+                <div class="keep-lora-content">
+                    <div id="director-lora-review-summary" class="training-history-summary" aria-live="polite"></div>
+                    <div id="director-lora-review-list" style="display:grid;gap:10px;max-height:50vh;overflow:auto"></div>
+                    <div class="keep-lora-field">
+                        <label for="director-lora-review-add">Add another enriched LoRA</label>
+                        <select id="director-lora-review-add"><option value="">Choose from library…</option></select>
+                    </div>
+                    <div id="director-lora-review-error" class="training-history-summary" aria-live="polite"></div>
+                </div>
+                <footer class="keep-lora-footer">
+                    <button id="director-lora-review-cancel" type="button" class="review-captions-btn">Discard</button>
+                    <button id="director-lora-review-apply" type="button" class="training-btn">Apply selected LoRAs</button>
+                </footer>
+            </section>
+        </div>
         <div id="storyboard-director-tools-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-director-tools-close">
             <section class="keep-lora-dialog storyboard-director-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-director-tools-title">
                 <header class="keep-lora-header">
@@ -3268,6 +3293,7 @@
         <script src="/static/js/activity_monitor.js"></script>
         <script src="/static/js/storage_manager.js"></script>
         <script src="/static/js/media_explorer.js"></script>
+        <script src="/static/js/lora_review.js"></script>
         <script src="/static/js/generate.js"></script>
         <script src="/static/js/workflow_gate.js"></script>
         <script src="/static/js/test_generations.js"></script>

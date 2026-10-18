@@ -1,8 +1,8 @@
 # WebCap
 
-WebCap is a local-first media curation, captioning, dataset-configuration, and managed Diffusion Pipe training app.
+WebCap is a local-first workspace for media preparation, captioning, dataset review, managed Diffusion Pipe training, generation, LoRA evaluation, and storyboard authoring.
 
-It is intentionally file-based and direct: the media grid is the training selection, captions and set state live beside the media, destructive edits are explicit/reversible where expected, and failures are shown rather than silently worked around.
+It is intentionally file-based and direct: set media and captions remain user-owned, training captures the current visible selection, generated output and Storyboard projects are separate from source Sets, destructive edits are explicit/reversible where appropriate, and failures are shown rather than silently worked around.
 
 WebCap is built with Flask plus plain browser JavaScript. There is no database or hosted service.
 
@@ -21,6 +21,23 @@ WebCap is built with Flask plus plain browser JavaScript. There is no database o
 | **H3 calibration** | Test MiniMax H3 video bucket shapes on the configured training hardware and retain conclusive results. Verified safe ceilings affect only newly generated or reset H3 datasets; existing TOMLs and captured runs are left unchanged. | Open **App Settings** → **Training** → **H3 calibration**, choose an eligible source from the current folder, and select **Run calibration**. See [`docs/vram_bucket_calibration.md`](docs/vram_bucket_calibration.md). |
 | **Test Bench** | Compare staged MiniMax H3 or Krea2 LoRAs against a shared prompt/settings baseline. Queue multiple Test sessions, include or exclude the base model, use wildcard prompts (including the optional caption-driven LLM helper), revisit named/saved sessions and Recent Test Sets, switch between Grid and two-item Compare, open result folders, and rate generated items. | Choose a supported Test Base Model, stage checkpoints from Training, then open **Test** from the permanent activity rail. |
 | **App settings** | Configure the filesystem root, default caption template, optional local analysis, appearance, training runtime, Storyboard Director runtime, repeat-reference epochs, Copy-to-Test roots, enabled training models, diagnostics, and advanced JSON. | Open **App Settings** from the permanent activity rail. Use the **General**, **Training**, **Storyboard**, and **Advanced** tabs. |
+
+## Workspaces and shared controls
+
+WebCap's activity rail groups related workflows without turning them into one monolithic feature:
+
+| Workspace | Purpose |
+| --- | --- |
+| **Prep** | Browse, filter, annotate, edit, and organize source Sets. Review, Media Grid, and Focus are contextual Prep surfaces. |
+| **Generate** | Produce standalone image/video generations through configured ComfyUI workflows, with Director-assisted prompt tools where available. |
+| **Training** | Configure and launch captured Diffusion Pipe runs, inspect Training History/checkpoints, and stage candidate LoRAs. |
+| **Test** | Compare staged LoRAs and base-model results in Test sessions; use Ask VL/evaluation tools where configured. |
+| **Storyboard** | Develop Stories and Scenes, use optional Director assistance, generate/review Takes, and assemble selected results. Storyboard projects are not source Sets. |
+| **Storage** | Inspect and navigate WebCap-managed storage and derived artifacts; deletion remains governed by each artifact's ownership. |
+
+The **Activity** drawer shows current and recently finished work with navigation to its owner. The **Inference Queue** drawer is the scheduling command center for inference, LLM, and Training lanes, with lane-appropriate controls. The **Console** provides diagnostic messages rather than replacing feature-specific results/logs. These are shared shell surfaces, not separate copies of feature state.
+
+Training, inference (Generate, Test renditions, Storyboard Takes), and LLM/Director requests have different lifecycles and queue controls. They coordinate use of the local GPU without collapsing their domain-specific semantics. See [`docs/execution_queue.md`](docs/execution_queue.md) and [`docs/gpu_coordination_invariants.md`](docs/gpu_coordination_invariants.md).
 
 ## Supported training profiles
 
@@ -109,8 +126,8 @@ tool/config.json
 
 Start from [`tool/config.example.json`](tool/config.example.json). The important sections are:
 
-- `filesystem.root` — root containing the working sets and WebCap `output/` tree; required.
-- `filesystem.models` — optional model-root convenience path.
+- `filesystem.root` — source Set / training root; required. Generated output has a separate configured root (see Settings → Workspace → Storage).
+- `filesystem.models` — optional shared model root.
 - `training.diffusion_pipe_wsl` — Diffusion Pipe working directory inside WSL.
 - `training.wsl_distribution` — optional explicit WSL distribution.
 - `training.conda_executable` / `training.conda_environment` — optional Conda runtime pair.
@@ -201,13 +218,7 @@ config.*.toml          persistent training configs
 dataset.*.toml         persistent generated/editable datasets
 ```
 
-Global training state lives beneath:
-
-```text
-<filesystem.root>/.webcap_training/
-```
-
-This includes `queue.json`, lightweight `recent_runs.json` Training History metadata, runtime support files, and H3 probe artifacts. Training History rows are created only from recorded history metadata; existing output/log paths merely enrich known rows with availability and actions. These are operational files, not a database.
+App-private persistent state, including Training queue and lightweight Recent Runs metadata, belongs under the host-local WebCap app-data `state/` directory, rather than new hidden folders within the source Set root. Generated artifacts remain with their owning run, Story, or output. Training History rows come from recorded metadata, not a filesystem scan of output directories. See [`docs/filesystem_state_contract.md`](docs/filesystem_state_contract.md) for lifecycle and path ownership.
 
 ## Safety and behavior
 
@@ -254,6 +265,10 @@ The documentation directory intentionally contains both current references and p
 Start with [`docs/README.md`](docs/README.md) for the map.
 
 Current operational references include:
+
+- [`docs/execution_queue.md`](docs/execution_queue.md) — Inference, LLM, Training, Activity, and queue ownership.
+- [`docs/storyboard.md`](docs/storyboard.md) — Stories, Scenes, Takes, and Director workflow.
+- [`docs/filesystem_state_contract.md`](docs/filesystem_state_contract.md) — state and artifact lifecycle ownership.
 
 - [`docs/spec.md`](docs/spec.md) — shipped architecture/workflow contract.
 - [`docs/train.md`](docs/train.md) — capture, queue, logs, Resume, and manual handoff.

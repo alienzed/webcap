@@ -76,7 +76,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["label", "options", "annotationGroup"],
+                    "required": ["label", "options"],
                     "properties": {
                         "label": {"type": "string", "minLength": 1},
                         "annotationGroup": {"type": "string", "description": "Exact Set annotation group name when options are tags; empty for free prompt variation."},
@@ -122,7 +122,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "- Prefer independent, composable attributes over whole-phrase alternatives. "
         "For example, separate color, pattern, trim, top shape, and bottom shape rather than collapsing them into a single 'style' wildcard.\n"
         "- Set annotationGroup to the exact annotation group name for tag-grounded dimensions; use empty string for general prompt-only variation. " 
-        "Never guess an annotation group from similar words.\\n"
+        "Never guess an annotation group from similar words.\n"
         "- For tags in the SAME annotation group, only use joint combinations observed together in Set media. "
         "If a pair was never observed together in that group, treat it as mutually exclusive. "
         "Prefer one option from that group in each resolved caption unless an observed tag combination requires several. "

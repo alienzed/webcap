@@ -112,6 +112,7 @@ function modelLabSelectedModels(selector, models) {
 
 function modelLabAttemptLabel(kind) {
   var labels = {
+    director_writing: 'Writing',
     vision_open: 'Open Vision',
     vision_group_aware: 'Group-aware Vision',
     language_synthesis: 'Language synthesis',
@@ -139,9 +140,34 @@ function modelLabRunProgress(run) {
   return bits.join(' · ');
 }
 
-// The server owns Model Lab; this is only its existing run snapshot
-// projected into the browser's shared Activity presentation.
+function modelLabProgressSnapshot(run) {
+  var progress = run.progress || {};
+  var attempts = Array.isArray(run.attempts) ? run.attempts : [];
+  var current = attempts.find(function (attempt) { return attempt.status === 'running'; });
+  var start = Date.parse(run.startedAt || '');
+  var finish = Date.parse(run.finishedAt || '');
+  var status = String(run.status || '');
+  return {
+    id: 'model-lab:' + String(run.id), kind: 'model-lab', title: 'Model Assessment',
+    status: status === 'error' ? 'failed' : status,
+    phase: status === 'running'
+      ? [String(progress.phase || 'Running').replace(/_/g, ' '),
+        progress.currentKind ? modelLabAttemptLabel(progress.currentKind) : ''].filter(Boolean).join(' · ')
+      : status.charAt(0).toUpperCase() + status.slice(1),
+    detail: run.error || [progress.currentModelRef, progress.currentFile].filter(Boolean).join(' · '),
+    progressLabel: modelLabRunProgress(run),
+    // Probe count is not a known total; do not invent a percentage or ETA.
+    progress: null,
+    startedAt: isFinite(start) && start > 0 ? start / 1000 : 0,
+    finishedAt: isFinite(finish) && finish > 0 ? finish / 1000 : 0,
+    childJobId: String(current && current.jobId || '')
+  };
+}
+
+// The server owns Model Lab; both local Diagnostics and Activity consume the
+// same run snapshot, updated by the existing Model Lab polling cycle.
 function modelLabPublishProgress(run) {
+  if (run) diagnosticsRenderAssessmentProgress(run);
   var id = run && run.id ? 'model-lab:' + String(run.id) : '';
   var status = String(run && run.status || '');
   // Browsing history must not stop the active run. When a *new* run is
@@ -166,31 +192,7 @@ function modelLabPublishProgress(run) {
   }
   if (!id || status !== 'running') return;
 
-  var progress = run.progress || {};
-  var attempts = Array.isArray(run.attempts) ? run.attempts : [];
-  var current = attempts.find(function (attempt) { return attempt.status === 'running'; });
-  var summary = run.summary || {};
-  var completed = Number(summary.completed || 0);
-  var failed = Number(summary.failed || 0);
-  var skipped = Number(summary.skipped || 0);
-  var interrupted = Number(summary.interrupted || 0);
-  var counts = [completed + ' completed'];
-  if (failed) counts.push(failed + ' failed');
-  if (skipped) counts.push(skipped + ' skipped');
-  if (interrupted) counts.push(interrupted + ' interrupted');
-  var start = Date.parse(run.startedAt || '');
-  var detail = [progress.currentModelRef, progress.currentFile].filter(Boolean).join(' · ');
-  window.publishActivityProgress({
-    id: id, kind: 'model-lab', title: 'Model Lab',
-    status: 'running',
-    phase: [String(progress.phase || 'Running').replace(/_/g, ' '),
-      progress.currentKind ? modelLabAttemptLabel(progress.currentKind) : ''].filter(Boolean).join(' · '),
-    detail: detail,
-    progressLabel: counts.join(' · '),
-    progress: null,
-    startedAt: isFinite(start) && start > 0 ? start / 1000 : 0,
-    childJobId: String(current && current.jobId || '')
-  });
+  window.publishActivityProgress(modelLabProgressSnapshot(run));
   modelLabState.progressRunId = id;
 }
 
@@ -341,6 +343,7 @@ function modelLabSchedulePoll() {
         });
     request.catch(function (error) {
       reportConsoleError('Model Lab', error);
+      diagnosticsAssessmentProgressError(selectedActive ? selected.id : activeId, error);
     });
   }, 1500);
 }

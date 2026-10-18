@@ -2,12 +2,41 @@ var diagnosticsActiveTab = 'health';
 var diagnosticsLoadedConfig = null;
 var diagnosticsAssessmentSelected = { director: new Set(), vision: new Set() };
 var diagnosticsAssessmentCatalog = { directors: [], visions: [] };
+var diagnosticsAssessmentRunId = '';
+var diagnosticsAssessmentRunStatus = '';
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
 }
 
-function setDiagnosticsTab(tabName, focusTab) {
+function diagnosticsRenderAssessmentProgress(run) {
+  if (String(run.id) !== diagnosticsAssessmentRunId || diagnosticsActiveTab !== 'assessment' ||
+      diagnosticsEl('diagnostics-modal').classList.contains('hidden')) return;
+  var host = diagnosticsEl('diagnostics-assessment-activity');
+  var card = host.querySelector('[data-progress-card-id]');
+  if (!card) { card = ProgressCard.create(); host.replaceChildren(card); }
+  host.classList.remove('hidden');
+  ProgressCard.update(card, modelLabProgressSnapshot(run), {
+    className: 'model-assessment-progress-card',
+    onOpen: function () { setDiagnosticsTab('model-lab', true, run.id); }
+  });
+  card.querySelector('[data-progress-open]').textContent = 'View probes';
+  var wasRunning = diagnosticsAssessmentRunStatus === 'running';
+  diagnosticsAssessmentRunStatus = String(run.status);
+  diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running';
+  if (wasRunning && run.status !== 'running') refreshUnifiedModelAssessment().catch(function () {});
+}
+
+function diagnosticsAssessmentProgressError(runId, error) {
+  if (String(runId) !== diagnosticsAssessmentRunId || diagnosticsActiveTab !== 'assessment' ||
+      diagnosticsEl('diagnostics-modal').classList.contains('hidden')) return;
+  var card = diagnosticsEl('diagnostics-assessment-activity').querySelector('[data-progress-card-id]');
+  if (!card) return;
+  card.querySelector('[data-progress-phase]').textContent = 'Progress unavailable · Refresh to reconnect';
+  card.querySelector('[data-progress-detail]').textContent = String(error.message || error);
+}
+
+function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
   // Legacy deep links still open their specialist tool panels; only consolidated
   // primary destinations appear in the tab bar.
   var next = ['health', 'assessment', 'h3', 'models', 'benchmark', 'model-lab'].indexOf(tabName) !== -1 ? tabName : 'health';
@@ -31,7 +60,10 @@ function setDiagnosticsTab(tabName, focusTab) {
   if (next === 'assessment') refreshUnifiedModelAssessment();
   if (next === 'h3') refreshH3CalibrationSettings();
   if ((next === 'models' || next === 'benchmark') && !directorModelTestState.loaded) directorModelTestRefresh();
-  if (next === 'model-lab') modelLabRefresh();
+  if (next === 'model-lab') {
+    if (modelLabRunId) modelLabFetch(modelLabRunId).catch(function (error) { reportConsoleError('Model Lab', error); });
+    else modelLabRefresh();
+  }
   if (focusTab && selectedButton) selectedButton.focus();
 }
 
@@ -197,6 +229,17 @@ function refreshUnifiedModelAssessment() {
       });
     });
     refreshSelectionSummary();
+    var followed = activeRun || labRuns[0];
+    if (followed) {
+      if (diagnosticsAssessmentRunId !== String(followed.id)) diagnosticsAssessmentRunStatus = '';
+      diagnosticsAssessmentRunId = String(followed.id);
+      modelLabPublishProgress(followed);
+      modelLabSchedulePoll();
+    } else {
+      diagnosticsAssessmentRunId = ''; diagnosticsAssessmentRunStatus = '';
+      diagnosticsEl('diagnostics-assessment-activity').classList.add('hidden');
+      diagnosticsEl('diagnostics-assessment-run').disabled = false;
+    }
   }).catch(function (error) {
     summary.textContent = 'Could not load assessment findings: ' + String(error.message || error);
     reportConsoleError('Model Assessment', error);
@@ -252,11 +295,13 @@ function runUnifiedModelAssessment() {
         referenceDirector: directors.length ? directors[0] : null
       }
     }).then(function (payload) {
+      diagnosticsAssessmentRunId = String(payload.run.id);
+      diagnosticsAssessmentRunStatus = '';
       modelLabState.run = payload.run;
       modelLabState.runs = payload.runs || modelLabState.runs;
       modelLabRender();
       modelLabSchedulePoll();
-      diagnosticsEl('diagnostics-assessment-summary').textContent = 'Running assessment ' + payload.run.id + ' · refresh for progress';
+      diagnosticsEl('diagnostics-assessment-summary').textContent = 'Live assessment progress · findings update when the run finishes.';
       reportConsoleInfo('Model Assessment', 'Started persistent Model Lab run ' + payload.run.id + '.');
       return payload.run;
     });
@@ -269,7 +314,7 @@ function runUnifiedModelAssessment() {
     reportConsoleError('Model Assessment', error);
     throw error;
   }).finally(function () {
-    runButton.disabled = false;
+    runButton.disabled = diagnosticsAssessmentRunStatus === 'running';
   });
 }
 

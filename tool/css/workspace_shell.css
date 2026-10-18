@@ -1611,6 +1611,18 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   background: var(--accent);
 }
 
+.activity-monitor-progress.indeterminate span {
+  width: 30%;
+  animation: activity-progress-indeterminate 1.8s ease-in-out infinite;
+}
+@keyframes activity-progress-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-monitor-progress.indeterminate span { animation: none; transform: translateX(100%); }
+}
+
 .activity-monitor-open {
   align-self: center;
   min-height: 31px;

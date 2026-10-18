@@ -123,7 +123,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "- For tags in the SAME annotation group, only use joint combinations observed together in Set media. "
         "If a pair was never observed together in that group, treat it as mutually exclusive. "
         "Prefer one option from that group in each resolved caption unless an observed tag combination requires several. "
-        "Do not apply this restriction across DIFFERENT annotation groups; cross-group recombination tests generalization.\\n"
+        "Do not apply this restriction across DIFFERENT annotation groups; cross-group recombination tests generalization.\n"
         "- Recombine attributes across dimensions so tests exercise independently selectable properties, "
         "not merely replay complete caption fragments.\n"
         "- Annotation groups, aliases, and terms reveal the important dimensions and preferred terminology. "

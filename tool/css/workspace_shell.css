@@ -2991,6 +2991,12 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .job-queue-row .inference-queue-actions { flex-wrap: nowrap; }
 .job-queue-row .inference-queue-copy { overflow: hidden; }
 
+@media (min-width: 1100px) {
+  .activity-monitor-drawer {
+    width: min(880px, calc(100vw - 64px));
+    max-height: min(88vh, calc(100vh - var(--shell-status-height) - 30px));
+  }
+}
 /* Activity is the operational cockpit; Storyboard overlays remain contextual. */
 .activity-monitor-primary .progress-card {
   padding: 20px 22px;

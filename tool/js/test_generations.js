@@ -4702,7 +4702,7 @@
     el('test-generations-batch-heading').textContent = (batch.autoVl ? 'Batch Test + VL' : 'Batch Test') + ' · ' + batch.folder;
     var lines = [];
     lines.push(batch.phase + ' · ' + batch.sessions.length + '/' + batch.count + ' sessions submitted');
-    if (batch.phase === 'Generating + VL' || batch.phase === 'Evaluating') {
+    if (batch.phase === 'Generating + VL' || batch.phase === 'Generating' || batch.phase === 'Evaluating') {
       lines.push(batch.finished + '/' + batch.sessions.length + ' sessions finished');
       lines.push(batch.evaluated + '/' + batch.previews + ' previews evaluated');
     }
@@ -4711,8 +4711,8 @@
     el('test-generations-batch-progress').textContent = lines.join(' · ');
     if (batch.active) {
       var evaluatingOnly = batch.phase === 'Evaluating';
-      var completed = evaluatingOnly ? batch.evaluated : batch.phase === 'Generating + VL' ? batch.finished : batch.sessions.length;
-      var total = evaluatingOnly ? batch.previews : batch.phase === 'Generating + VL' ? batch.sessions.length : batch.count;
+      var completed = evaluatingOnly ? batch.evaluated : (batch.phase === 'Generating + VL' || batch.phase === 'Generating') ? batch.finished : batch.sessions.length;
+      var total = evaluatingOnly ? batch.previews : (batch.phase === 'Generating + VL' || batch.phase === 'Generating') ? batch.sessions.length : batch.count;
       window.publishActivityProgress({
         id: batch.activityId, kind: 'test-batch', lane: 'background', title: batch.autoVl ? 'Batch Test + VL' : 'Batch Test',
         status: 'running', phase: batch.phase, detail: batch.folder + (batch.detail ? ' · ' + batch.detail : ''),
@@ -5067,7 +5067,7 @@
         });
       }
       batch.phase = 'Complete';
-      batch.detail = !batch.autoVl ? 'Generation finished. Sessions are ready for review.' :
+      batch.detail = !batch.autoVl ? (batch.errors.length ? 'Generation finished with errors; see Console.' : 'Generation finished. Sessions are ready for review.') :
         batch.errors.length ? 'Completed with generation or assessment errors.' :
         batch.scores.some(function (row) { return row.count > 0; }) ? 'Ready for manual review.' :
         'No scoreable attributes. Use resolved wildcard choices to obtain VL percentages.';

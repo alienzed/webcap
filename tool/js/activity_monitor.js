@@ -115,10 +115,8 @@
       kind: 'director',
       title: activityTitle(item),
       status: item.status,
-      phase: String(item.status || 'queued').replace(/_/g, ' '),
       detail: activityDetail(item),
       startedAt: item.startedAt || item.createdAt,
-      progress: null,
       original: item,
       phase: item.revisionProgress && item.revisionProgress.total ? 'Revising Scene ' + (Number(item.revisionProgress.completed || 0) + 1) + ' of ' + item.revisionProgress.total : String(item.runtimePhase || item.status || 'queued'),
       progress: item.revisionProgress && item.revisionProgress.total ? item.revisionProgress : null,
@@ -1050,7 +1048,7 @@
         stopButton.onclick = stoppable ? function () {
           stopButton.disabled = true;
           stopButton.textContent = 'Stopping…';
-          stopActivityItem(primary);
+          stopActivityItem(primary).finally(function () { stopButton.disabled = false; });
         } : null;
       }
       var queueKey = activityLane(primary) === 'llm' ? 'director' : activityLane(primary);

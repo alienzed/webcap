@@ -112,18 +112,20 @@ function refreshUnifiedModelAssessment() {
       var tests = latest && latest.models[ref] || {};
       var families = kind === 'vision'
         ? [{label:'Open Vision', keys:['vision_open']}, {label:'Annotation-aware Vision', keys:['vision_group_aware']}]
-        : [{label:'Writing', keys:['director_writing']},
+        : [{label:'Writing', keys:['director_writing','director_writing_1024','director_writing_4096']},
            {label:'Structured synthesis', keys:['language_synthesis','set_vocabulary_synthesis']},
            {label:'Schema challenge', keys:['language_challenge','set_vocabulary_challenge']}];
       families.forEach(function (family) {
         var entries = family.keys.filter(function (key) { return tests[key]; }).map(function (key) { return tests[key]; });
         var text = 'Not tested';
         if (entries.length) {
-          if (entries.some(function (item) { return item.status === 'failed'; })) text = 'Failed';
-          else if (entries.some(function (item) { return item.status === 'running'; })) text = 'Running';
-          else if (entries.some(function (item) { return item.status === 'skipped'; })) text = 'Skipped';
-          else if (entries.every(function (item) { return item.status === 'completed'; })) text = 'Response received';
-          else text = 'Incomplete';
+          var complete = entries.reduce(function (sum, item) { return sum + Number(item.completed || 0); }, 0);
+          var failed = entries.reduce(function (sum, item) { return sum + Number(item.failed || 0); }, 0);
+          var running = entries.reduce(function (sum, item) { return sum + Number(item.running || 0); }, 0);
+          var total = entries.reduce(function (sum, item) { return sum + Number(item.samples || 0); }, 0);
+          text = total ? complete + '/' + total + ' responses' : 'Not tested';
+          if (failed) text += ' · ' + failed + ' failed';
+          if (running) text += ' · ' + running + ' running';
         }
         findings.push(family.label + ': ' + text);
       });
@@ -176,7 +178,10 @@ function refreshUnifiedModelAssessment() {
         var line = document.createElement('div');
         line.className = 'app-settings-help';
         var item = tests[key];
-        line.textContent = key + ': ' + item.status + (item.error ? ' · ' + item.error : '');
+        line.textContent = key.replace(/_/g, ' ') + ': ' + Number(item.completed || 0) + '/' +
+          Number(item.samples || 0) + ' responses' +
+          (item.failed ? ' · ' + item.failed + ' failed' : '') +
+          (item.errors && item.errors.length ? ' · ' + item.errors.join('; ') : '');
         details.appendChild(line);
       });
       row.appendChild(details);

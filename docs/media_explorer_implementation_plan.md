@@ -131,3 +131,7 @@ This is an **incremental implementation**, not the completed universal library. 
 - Full enumeration currently runs for each page/filter request in full mode. A reusable process-local snapshot and cooperative cancellation are potential next optimizations, but require measured costs and a clean lifecycle; do not introduce speculative caching.
 - Next build phase is source-specific Test Generations discovery and safe deep links, after its actual session/manifest shape is examined. This does not mark the universal Explorer complete.
 - Local clone/testing was unavailable in this execution environment (GitHub hostname not resolvable from the container). GitHub changes were committed through the connector; tests remain **not executed**.
+
+### Test Generations integration checkpoint
+
+Central Test session manifests at `output/test-generations` and `output/test-generations/sets/*/sessions` are now included through the existing owner/session resolver, with ratings read from session metadata and preview URLs served by `/fs/test_generations/media`. The source filter is exposed in the Explorer. Legacy Set-local sessions are not included yet. **Not yet delivered:** end-to-end source navigation, reference relationships for Test sessions, and verified runtime/browser tests. No source files or test results are modified.

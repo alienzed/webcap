@@ -40,3 +40,17 @@ def test_existing_mode_controller_owns_tabs_and_legacy_shell_is_not_default():
     assert "window.epochFinderShowMode('finder');" in tests
     assert "#test-generations-pane > .epoch-finder-screen > .epoch-finder-layout" in css
     assert "grid-template-columns:var(--test-workspace-sidebar-width) minmax(0,1fr)" in css
+
+
+def test_persistent_tabs_mask_scrolling_form_at_any_scroll_offset():
+    """A transparent tab strip lets labels and inputs bleed through while scrolling."""
+    import re
+    css = (ROOT / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    theme = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
+    nav = re.search(r"#test-workspace-main-tabs\s*\{([^}]*)\}", css)
+    assert nav, "Permanent Test tabs have no style block"
+    assert "position:absolute" in nav.group(1)
+    assert "z-index:6" in nav.group(1)
+    assert "background:var(--panel);" in nav.group(1)
+    assert "--panel: #ffffff" in theme
+    assert "--panel: #151b24" in theme

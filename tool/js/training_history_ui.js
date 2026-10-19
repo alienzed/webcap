@@ -748,6 +748,9 @@ function resumeTrainingHistoryJob(jobId) {
     });
   }
   startContinue(null).catch(function (err) {
+    setStatus('Could not continue captured run: ' + String(err && err.message ? err.message : err));
+    window.reportConsoleError('Training History Continue', err);
+  });
 }
 
 function openTrainingHistoryOutput(folder, jobId) {

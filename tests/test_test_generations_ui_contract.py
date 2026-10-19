@@ -1668,3 +1668,29 @@ def test_preview_sort_is_session_local_and_preserves_keyed_cards():
     compare = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
     assert "sortedTestPreviewRows(" in compare
     assert "sortTestPreviewCards(status);" in script.split("function renderResults(status)", 1)[1].split("function syncActiveRunControls", 1)[0]
+
+
+def test_batch_modal_never_navigates_instead_of_opening():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    dialog = script.split("function openTestBatchDialog()", 1)[1].split("function closeTestBatchDialog()", 1)[0]
+    assert "openTestBenchForSetFolder" not in dialog
+    assert "modal.classList.remove('hidden')" in dialog
+    assert "start').disabled = !!activeBatch" in dialog
+
+
+def test_batch_finishes_after_rating_refresh_and_can_be_restarted():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    complete = script.split("function runTestBatch(count)", 1)[1].split("function openTestBatchDialog()", 1)[0]
+    refresh = complete.index("requestForFolder(batch.folder, 'test_rating_summary'")
+    finish = complete.index("batch.phase = 'Complete'")
+    assert refresh < finish
+    assert "}).then(function () {\n      testBatchCheck(batch);\n      batch.phase = 'Complete';" in complete
+    assert "batch.active = false;" in complete
+
+
+def test_batch_stop_releases_polling_wait_and_session_navigation_is_always_visible():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    assert "if (testBatchWake) { var wake = testBatchWake; testBatchWake = null; wake(); }" in script
+    assert "button.dataset.testBatchSession = session;" in script
+    assessment = script.split("function testBatchEvaluateSession(batch, session)", 1)[1].split("function runTestBatch(count)", 1)[0]
+    assert assessment.index("batch.evaluated += 1;") < assessment.index("testBatchError(batch, err, session + ' · ' + file)")

@@ -4173,12 +4173,9 @@
       storyState.sequenceEncodingWarnings = [];
       storyState.sequenceWarningsVisible = false;
       storyState.newTakeCounts = {};
-      return refreshGenerationQueue(storyId).then(function () {
-        if (requestId !== storyState.openStoryRequestId) return null;
-        return reconcileDirectorJobs();
-      });
-    }).then(function () {
-      if (requestId !== storyState.openStoryRequestId) return null;
+      // The Story is already loaded. Monitoring failures cannot prevent navigation.
+      refreshGenerationQueue(storyId).catch(reportError);
+      reconcileDirectorJobs().catch(reportError);
       renderStory();
       syncDirectorToolsUi();
       if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();

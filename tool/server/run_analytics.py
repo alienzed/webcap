@@ -215,7 +215,7 @@ def report(folder_path, job_id="", session_name=""):
     if len(series) > 1:
         warnings.append("Campaign tests can differ. Compare scores within an individual campaign, not across campaigns by default.")
     if len(sessions) > 1:
-        warnings.append("Test session prompts and settings can differ. Pooled manual ratings and VL results are descriptive, not controlled comparisons.")
+        warnings.append("Multiple Test sessions present. Use comparable cohort filtering; pooled legacy values are descriptive only.")
     epochs = sorted(set(chosen["savedEpochs"]) | {p["epoch"] for c in series for p in c["points"]} |
                     {p["epoch"] for p in test_points} | {p["epoch"] for p in loss})
     return {
@@ -245,6 +245,9 @@ def report_selected(folder_path, job_ids, session_name=""):
                          "/" in session_name or chr(92) in session_name):
         raise ValueError("Invalid Test session filter.")
     reports = [report(folder_path, item, session_name) for item in job_ids]
+    for item in reports:
+        item["testCohorts"] = _test_cohorts(folder_path, item["jobId"], session_name)
+        item["roundPoints"] = _round_trajectories(folder_path, item["jobId"])
     all_sessions = sorted({session for item in reports for session in item["availableSessions"]})
     if session_name and session_name not in all_sessions:
         raise ValueError("Selected Test session does not contain identified results for these runs.")
@@ -256,13 +259,128 @@ def report_selected(folder_path, job_ids, session_name=""):
                 "modelId": campaign["modelId"], "visionModel": campaign["visionModel"],
                 "runs": []})
             entry["runs"].append(item["jobId"])
+    unique_campaigns = sorted(campaigns.values(), key=lambda entry: entry["id"])
     return {
         "jobIds": job_ids, "sessionFilter": session_name,
         "runs": reports[0]["runs"], "reports": reports,
         "availableSessions": all_sessions,
-        "campaigns": sorted(campaigns.values(), key=lambda entry: entry["id"]),
+        "campaigns": unique_campaigns,
+        "coverage": {"runs": len(reports), "campaigns": len(unique_campaigns),
+                     "testSessions": len({s for item in reports for s in item["sessions"]})},
         "warnings": sorted({warning for item in reports for warning in item["warnings"]}),
     }
+
+
+def _cohort_key(session):
+    """Frozen Test context; never compare pooled sessions as one controlled cohort."""
+    import hashlib
+    import json
+    payload = {key: session.get(key) for key in ("modelId", "sourcePrompt", "resolvedPrompt", "settings", "workflowSha256", "sweepWeights")}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
+
+
+def _test_cohorts(folder_path, job_id, session_name=""):
+    folder = _folder_key(folder_path)
+    cohorts = {}
+    for path in bench._session_directories(folder_path):
+        stored = bench._read_status(path) or {}
+        if stored.get("campaignStaging") or (session_name and path.name != session_name):
+            continue
+        signature = _cohort_key(stored)
+        model = str(stored.get("modelId") or "")
+        cohort = cohorts.setdefault(signature, {"id": signature, "modelId": model,
+            "sessions": set(), "points": {}, "settings": "Frozen Test prompt / workflow / settings cohort"})
+        ratings = bench._session_rating_map(path)
+        vision = bench._session_vision_state(path)
+        by_media = vision.get("byMedia") if isinstance(vision.get("byMedia"), dict) else {}
+        disabled = set(vision.get("disabledGroups") or [])
+        for result in stored.get("results") or []:
+            if not isinstance(result, dict) or result.get("kind") == "base":
+                continue
+            proof = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
+            if (str(proof.get("sourceJobId") or "") != job_id or
+                    str(proof.get("sourceFolder") or "").replace(chr(92), "/").strip("/") != folder or
+                    type(proof.get("sourceEpoch")) is not int):
+                continue
+            epoch = proof["sourceEpoch"]
+            item = cohort["points"].setdefault(epoch, {"epoch": epoch, "manualSum": 0,
+                "manualCount": 0, "vlMatches": 0, "vlCount": 0})
+            cohort["sessions"].add(path.name)
+            media = bench._result_media_file(result)
+            if media in ratings:
+                item["manualSum"] += ratings[media]
+                item["manualCount"] += 1
+            assessed = by_media.get(media)
+            if not isinstance(assessed, dict):
+                continue
+            ignored = set(assessed.get("ignoredGroups") or [])
+            for group in assessed.get("comparison") or []:
+                if not isinstance(group, dict) or group.get("id") in disabled | ignored:
+                    continue
+                if group.get("result") == "match":
+                    item["vlMatches"] += 1
+                    item["vlCount"] += 1
+                elif group.get("result") == "mismatch":
+                    item["vlMatches"] += bench._test_vl_partial_credit(group.get("expectedText"), group.get("selectedText"))
+                    item["vlCount"] += 1
+    output = []
+    for cohort in cohorts.values():
+        if not cohort["sessions"]:
+            continue
+        cohort["sessions"] = sorted(cohort["sessions"])
+        cohort["points"] = [{
+            "epoch": row["epoch"], "sessions": cohort["sessions"], "manual": row["manualSum"] / row["manualCount"] if row["manualCount"] else None,
+            "manualCount": row["manualCount"],
+            "testVl": row["vlMatches"] / row["vlCount"] if row["vlCount"] else None,
+            "testVlCount": row["vlCount"],
+        } for row in sorted(cohort["points"].values(), key=lambda row: row["epoch"])]
+        output.append(cohort)
+    return sorted(output, key=lambda row: row["id"])
+
+
+def _round_trajectories(folder_path, job_id):
+    output = []
+    for campaign in _campaigns(folder_path, []):
+        if not campaign.get("rounds"):
+            continue
+        mapping = campaign.get("candidateMap") or {}
+        for round_no in range(1, len(campaign["rounds"]) + 1):
+            for point in finder._rank(campaign, round_no):
+                identity = mapping.get(str(point["epoch"])) if mapping else None
+                source = identity.get("jobId") if identity else campaign.get("jobId")
+                if source != job_id:
+                    continue
+                epoch = identity.get("epoch") if identity else point["epoch"]
+                if type(epoch) is not int:
+                    continue
+                output.append({"campaignId": campaign["id"], "round": round_no, "epoch": epoch,
+                               "score": point["score"], "observations": point["count"]})
+    return output
+
+
+def _findings(snapshot, campaign_id):
+    findings = []
+    for report in snapshot["reports"]:
+        cohorts = report.get("testCohorts") or []
+        if len(cohorts) > 1:
+            findings.append(report["run"]["label"] + ": " + str(len(cohorts)) + " different Test protocols; scores are separated.")
+        selected = next((c for c in report["campaigns"] if c["id"] == campaign_id), None)
+        if not selected:
+            continue
+        ranked = sorted((p for p in selected["points"] if p["score"] is not None),
+                        key=lambda p: (-p["score"], -p["observations"], p["epoch"]))
+        if ranked:
+            best = ranked[0]
+            findings.append(report["run"]["label"] + ": epoch " + str(best["epoch"]) +
+                            " has the highest observed campaign VL score (" + f'{best["score"]:.1%}' +
+                            ", " + str(best["observations"]) + " weighted observations).")
+            if best["observations"] < 6:
+                findings.append("Limited evidence: leading checkpoint has fewer than six weighted observations.")
+            if len(ranked) > 1:
+                findings.append("Measured lead over runner-up: " +
+                                f'{(best["score"] - ranked[1]["score"]) * 100:.1f}' +
+                                " percentage points; not a significance estimate.")
+    return findings
 
 
 def director_facts(snapshot, campaign_id=""):
@@ -289,9 +407,17 @@ def director_facts(snapshot, campaign_id=""):
                             "weightedObservations": p["observations"], "renders": p["renders"]}
                            for p in c["points"][:120]],
             } for c in campaigns],
-            "test": [{"epoch": p["epoch"], "rating": p["manual"], "ratings": p["manualCount"],
-                      "vl": p["testVl"], "vlJudgments": p["testVlCount"]}
-                     for p in item["testPoints"][:120]],
+            "testCohorts": [{"cohortId": cohort["id"], "modelId": cohort["modelId"],
+                "sessionCount": len(cohort["sessions"]),
+                "points": [{"epoch": p["epoch"], "rating": p["manual"], "ratings": p["manualCount"],
+                            "vl": p["testVl"], "vlJudgments": p["testVlCount"]}
+                           for p in cohort["points"][:120]]}
+                           for cohort in item.get("testCohorts", [])[:12]],
+            "roundProgress": [{"campaignId": p["campaignId"], "round": p["round"],
+                               "epoch": p["epoch"], "score": p["score"],
+                               "weightedObservations": p["observations"]}
+                              for p in item.get("roundPoints", [])[:150]
+                              if not campaign_id or p["campaignId"] == campaign_id],
             "loss": [{"epoch": p["epoch"], "loss": p["loss"]}
                      for p in item["lossPoints"][:120]],
             "warnings": item["warnings"][:8],

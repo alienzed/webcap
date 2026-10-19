@@ -166,6 +166,10 @@ GPU training requirements are otherwise owned by Diffusion Pipe/the selected mod
 
 H3 calibration additionally requires working NVIDIA telemetry (`nvidia-smi`) in the training environment.
 
+### Run Analytics
+
+Open **Test Generations → Analytics** to compare recorded training runs using their archived loss, Test session evidence, and Epoch Finder campaign results. Choose runs, click **Analyze selected**, then optionally select one comparable campaign or Test session. **Interpret with Director** is always opt-in; preview its numerical evidence first. Scores are never combined across independent evaluation protocols. See [Run Analytics](docs/run_analytics.md) for complete usage, provenance and limitations.
+
 ### Test Generations
 
 The current Test Bench supports the app-owned MiniMax H3 and Krea2 Test workflows and expects a reachable ComfyUI API. On the current Windows/WSL topology WebCap can bridge to Windows ComfyUI through `curl.exe`; Test Generations otherwise uses the configured/local ComfyUI HTTP API directly.

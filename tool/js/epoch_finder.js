@@ -64,6 +64,7 @@
     if (references) window.testReferencesOpen();
     if (analytics) window.runAnalyticsOpen();
   }
+  window.epochFinderShowMode = showMode;
   function renderSecondsEstimate(modelId, durationSeconds, megapixels) {
     var key = [modelId, Number.isFinite(megapixels) ? String(megapixels) : String(document.getElementById('test-generations-dimensions')?.value || ''), String(durationSeconds)].join('|');
     var samples = timingProfiles[key] && timingProfiles[key].seconds;
@@ -1031,11 +1032,22 @@
     if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;
-  window.epochFinderInspectCampaign = function (campaignId) {
+  window.epochFinderInspectCampaign = function (campaignId, sourceEpoch, sourceJobId) {
     activeCampaign = String(campaignId);
     inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = '';
     showMode('finder');
-    refreshStatus().catch(error);
+    return refreshStatus().then(function () {
+      if (sourceEpoch == null || !campaignState || campaignState.id !== String(campaignId)) return;
+      var matched = Object.entries(campaignState.candidateMap || {}).find(function (entry) {
+        return entry[1].epoch === Number(sourceEpoch) && (!sourceJobId || entry[1].jobId === sourceJobId);
+      });
+      if (sourceJobId && Object.keys(campaignState.candidateMap || {}).length && !matched) {
+        throw new Error('Source checkpoint is not present in this campaign.');
+      }
+      inspectedEpoch = matched ? Number(matched[0]) : Number(sourceEpoch);
+      inspectedFrame = 0; lastFrameKey = '';
+      gallery(campaignState); inspectFrame(campaignState);
+    }).catch(error);
   };
   document.querySelectorAll('[data-test-workspace-mode]').forEach(function (button) {
     button.addEventListener('click', function () { showMode(button.dataset.testWorkspaceMode); });

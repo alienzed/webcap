@@ -5339,7 +5339,7 @@
       try { runTestBatch(count, true); } catch (err) { showError(err); }
     };
     el('test-generations-campaign-mode').onclick = function () {
-      window.epochFinderShowMode('finder');
+      window.testGenerationsUnifiedDestination('finder');
     };
     el('test-generations-batch-btn').onclick = openTestBatchDialog;
     el('test-generations-batch-history').onchange = function () {

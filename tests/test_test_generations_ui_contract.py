@@ -926,7 +926,7 @@ def test_test_generations_queue_contract():
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    assert "request('test_enqueue'" in script
+    assert "requestForFolder(folder, 'test_enqueue'" in script
     assert "request('test_queue', { modelId: modelId })" in script
     assert "request('test_queue_cancel'" in script
     assert "request('test_queue_clear', { modelId: currentTestModelId() })" in script
@@ -1352,7 +1352,7 @@ def test_primer_template_assistant_uses_existing_template_editor():
 def test_new_test_run_selects_returned_session_for_results_header():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    enqueue_block = script.split("request('test_enqueue'", 1)[1].split("function stopRun", 1)[0]
+    enqueue_block = script.split("requestForFolder(folder, 'test_enqueue'", 1)[1].split("function stopRun", 1)[0]
     assert "var startedStatus = payload && payload.latest ? payload.latest : null;" in enqueue_block
     assert "selectSessionStatus(startedStatus);" in enqueue_block
     assert "if (currentSession === String(startedStatus.session || '')) renderStatus(startedStatus);" not in enqueue_block
@@ -1678,7 +1678,7 @@ def test_repeat_launch_is_native_and_session_owned():
     assert 'id="test-generations-session-name"' not in html
     assert "criteria.repeat = repeat;" in script
     assert "criteria.autoVl = autoVl;" in script
-    assert "request('test_enqueue', criteria)" in script
+    assert "requestForFolder(folder, 'test_enqueue', criteria)" in script
     assert "def enqueue_repeated(folder_path, criteria):" in backend
     assert "def complete_test_auto_vl(context, answer, elapsed_ms):" in backend
     assert "def _queue_test_auto_vl(folder_path, session_name, media_file):" in backend

@@ -333,6 +333,7 @@ function refreshUnifiedModelAssessment() {
       var tested = cell('Last tested', validDate ? date.toLocaleDateString() : '—');
       tested.title = validDate ? date.toLocaleString() : 'No saved evidence';
       row.assessmentSort.tested = validDate ? date.getTime() : null;
+      row.appendChild(line);
       diagnosticsAssessmentCounts(row, tests);
 
       var allTests = Object.keys(tests).map(function (probe) { return tests[probe]; });
@@ -359,7 +360,6 @@ function refreshUnifiedModelAssessment() {
         outputCell.textContent = maxOutput.toLocaleString();
         row.assessmentSort.output = maxOutput;
       }
-      row.appendChild(line);
 
       var expanded = document.createElement('tr');
       expanded.className = 'model-assessment-evidence';

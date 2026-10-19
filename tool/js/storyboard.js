@@ -560,6 +560,7 @@
         }
         renderScenes();
         renderStoryReadiness();
+        if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
         setSaveState('Saved');
       } else if (operation === 'define_invariants') {
         storyState.story.invariants = canonical.invariants || [];
@@ -2513,6 +2514,7 @@
     if (storyState.sceneViewMode === 'focus') {
       clearSceneNewTakeCount(targetSceneId);
       renderScenes();
+      if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
       if (directorActivityActive()) positionDirectorActivity();
     }
   }
@@ -4144,6 +4146,7 @@
     renderSequencePreview();
     renderLibrary();
     renderStoryAction();
+    if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
   }
 
   function refreshLibrary() {
@@ -5552,6 +5555,8 @@
   }
 
   function closeStoryboardActivity() {
+    // An in-flight exact navigation must not choose a Scene after leaving Storyboard.
+    storyState.navigationRequestId += 1;
     var frame = el('app-frame');
     var workspace = el('storyboard-workspace');
     if (workspace) workspace.classList.add('hidden');

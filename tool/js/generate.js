@@ -2262,6 +2262,7 @@
     renderDirector();
     startDirectorActivity();
     var continueWithoutMatches = false;
+    var approvedPhrases = [];
     return postJson('/fs/lora_library/plan', {
       stage: stage,
       intent: [originalPrompt, operation === 'refine_prompt' ? originalInstruction : ''].filter(Boolean).join('\\n'),
@@ -2317,13 +2318,14 @@
               else selectedLoraList.push({name:name, strength:item.strength});
             });
           var phrases = choices.reduce(function (all, item) { return all.concat(item.phrases || []); }, []);
+          approvedPhrases = phrases.slice();
           var missing = phrases.filter(function (phrase) {
             return originalPrompt.toLowerCase().indexOf(phrase.toLowerCase()) === -1;
           });
           if (missing.length) el('generate-prompt').value = originalPrompt +
             (originalPrompt.trim() ? ', ' : '') + missing.join(', ');
           renderLoras();
-          return runDirector(operation, true);
+          return runDirector(operation, true, approvedPhrases);
           });
         }});
         setDirectorStatus('Review LoRA suggestions before applying.');
@@ -2340,7 +2342,7 @@
     });
   }
 
-  function runDirector(operation, skipPlanning) {
+  function runDirector(operation, skipPlanning, approvedVocabulary) {
     if (generateState.director.busy) return;
     if (!skipPlanning && el('generate-director-lora-enable').checked) return planGenerateLoras(operation);
     if (!generateState.director.modelId) throw new Error('Choose a Prompt Assistant model.');
@@ -2365,7 +2367,13 @@
         return !!(input && input.files && input.files[0]);
       })
     }).then(function (payload) {
-      promptNode.value = String(payload.result || '');
+      var rewritten = String(payload.result || '');
+      (approvedVocabulary || []).forEach(function (phrase) {
+        if (!rewritten.toLowerCase().includes(phrase.toLowerCase())) {
+          rewritten += (rewritten.trim() ? ', ' : '') + phrase;
+        }
+      });
+      promptNode.value = rewritten;
       generateState.director.previousPrompt = previousPrompt;
 
       if (operation === 'refine_prompt') el('generate-director-instruction').value = '';

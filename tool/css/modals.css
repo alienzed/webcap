@@ -3747,3 +3747,12 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-evidence td { background: var(--surface-alt, rgba(128,128,128,.07)); text-align: left !important; padding: 12px 24px; }
 .model-assessment-evidence td > div { margin: 4px 0; overflow-wrap: anywhere; }
 .model-assessment-evidence button { width: auto; margin-top: 8px; }
+
+/* Workflow qualifications: legible, named evidence states. */
+.model-assessment-judge { display: inline-flex; align-items: center; gap: 8px; margin: 8px 12px 8px 0; }
+.model-assessment-judge select { min-width: 200px; max-width: min(380px, 75vw); }
+.model-assessment-qualifications { min-width: 205px; }
+.model-assessment-qualification { display: inline-block; border-radius: 5px; padding: 3px 6px; margin: 2px; font-weight: 600; white-space: nowrap; }
+.model-assessment-passed { color: var(--text); background: rgba(37,146,90,.22); border: 1px solid rgba(37,146,90,.4); }
+.model-assessment-issues { color: var(--text); background: rgba(188,66,58,.18); border: 1px solid rgba(188,66,58,.35); }
+.model-assessment-untested { color: var(--muted); background: var(--surface-alt, rgba(128,128,128,.08)); border: 1px solid var(--border); }

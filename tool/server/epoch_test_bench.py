@@ -3030,6 +3030,9 @@ def enqueue_repeated(folder_path, criteria):
         try:
             submitted = enqueue(
                 folder_path, criteria.get("prompt"), settings=settings,
+                name=criteria.get("name"), seed=criteria.get("seed"),
+                aspect_ratio=criteria.get("aspectRatio"),
+                megapixels=criteria.get("megapixels"), duration=criteria.get("duration"),
                 selected_files=criteria.get("selectedFiles"),
                 candidate_strengths=criteria.get("candidateStrengths"),
                 include_base=criteria.get("includeBase"),

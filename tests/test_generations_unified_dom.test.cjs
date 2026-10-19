@@ -20,6 +20,8 @@ const html = `<!doctype html><html><body>
  </aside>
 </div>
 <section id="epoch-finder-screen"></section>
+<section id="test-references-screen"></section>
+<section id="run-analytics-screen"></section>
 <div id="test-unified-workspace" class="hidden">
  <aside class="test-unified-rail">${buttons}<div id="test-unified-list"></div></aside>
  <main><h2 id="test-unified-title"></h2><p id="test-unified-description"></p>
@@ -59,6 +61,10 @@ test('Explore, Build and Finder preserve original control nodes and image attrib
  d.getElementById('test-unified-finder').click();
  assert.ok(d.getElementById('test-unified-builder').contains(d.getElementById('epoch-finder-screen')));
  assert.ok(calls.includes('mode:finder'));
+ d.getElementById('test-unified-references').click();
+ assert.ok(d.getElementById('test-unified-builder').contains(d.getElementById('test-references-screen')));
+ d.getElementById('test-unified-analytics').click();
+ assert.ok(d.getElementById('test-unified-builder').contains(d.getElementById('run-analytics-screen')));
  d.getElementById('test-unified-explore').click();
  assert.ok(!d.getElementById('test-unified-builder').contains(d.getElementById('real-test-form')));
  assert.equal(d.querySelectorAll('.test-unified-card').length,2);

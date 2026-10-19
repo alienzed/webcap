@@ -5708,7 +5708,7 @@
     modal.setAttribute('aria-hidden', 'true');
   }
 
-  function showCoherenceReview(sceneId, original, improved, modelId) {
+  function showCoherenceReview(storyId, sceneId, original, improved, modelId) {
     var dialog = document.createElement('dialog');
     dialog.setAttribute('aria-label', 'Check Coherence result');
     dialog.style.cssText = 'width:min(900px,94vw);max-height:90vh;padding:20px;border-radius:10px;';
@@ -5732,14 +5732,16 @@
       apply.onclick = function () {
         apply.disabled = true;
         directorRequest({
-          operation: 'apply_coherence', storyId: storyState.story.id, sceneId: sceneId,
+          operation: 'apply_coherence', storyId: storyId, sceneId: sceneId,
           expectedPrompt: original, prompt: result.value, model: modelId
         }).then(function () {
           // Reload the canonical Scene; no unrelated fields are touched.
-          return request(null, 'story=' + encodeURIComponent(storyState.story.id));
+          return request(null, 'story=' + encodeURIComponent(storyId));
         }).then(function (payload) {
-          storyState.story = payload.story;
-          renderStory();
+          if (storyState.story && String(storyState.story.id) === String(storyId)) {
+            storyState.story = payload.story;
+            renderStory();
+          }
           dialog.close();
         }).catch(function (err) {
           apply.disabled = false;
@@ -5755,6 +5757,7 @@
   }
 
   function runDirectorToolsCoherence() {
+    var storyId = storyState.story.id;
     var sceneId = ensureActiveScene(storyState.story.sceneOrder);
     var scene = storyState.story.scenes[sceneId];
     var modelId = storyState.director.modelId;
@@ -5764,14 +5767,19 @@
     }
     var run = el('storyboard-director-tools-run');
     var status = el('storyboard-director-tools-status');
-    var original = String(scene.prompt);
+    var original = '';
     run.disabled = true;
     status.textContent = 'Checking Scene coherence…';
     flushPendingSaves().then(function () {
-      return directorRequest({storyId: storyState.story.id, sceneId: sceneId, operation: 'check_coherence', model: modelId});
+      return request(null, 'story=' + encodeURIComponent(storyId));
+    }).then(function (fresh) {
+      var savedScene = fresh.story && fresh.story.scenes && fresh.story.scenes[sceneId];
+      original = String(savedScene && savedScene.prompt || '');
+      if (!original.trim()) throw new Error('The selected Scene has no saved generation prompt.');
+      return directorRequest({storyId: storyId, sceneId: sceneId, operation: 'check_coherence', model: modelId});
     }).then(function (payload) {
       closeDirectorTools();
-      showCoherenceReview(sceneId, original, String(payload.result || ''), modelId);
+      showCoherenceReview(storyId, sceneId, original, String(payload.result || ''), modelId);
       return consumeDirectorJob(payload.jobId);
     }).catch(reportError).finally(syncDirectorToolsUi);
   }

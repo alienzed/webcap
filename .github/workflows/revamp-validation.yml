@@ -30,6 +30,6 @@ jobs:
       - name: Prepare isolated config
         run: cp tool/config.example.json tool/config.json
       - name: Install test essentials
-        run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client
+        run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
       - name: Unified gallery and no-feature-loss contracts
         run: python -m pytest -q tests/test_test_generations_unified_gallery.py tests/test_test_generations_unified_workspace.py tests/test_test_generations_revamp_parity.py tests/test_test_generations_perspective.py

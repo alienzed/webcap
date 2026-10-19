@@ -3393,25 +3393,36 @@ def finish_schedule_response(job_id, epoch=None, cancel=False):
         return {"ok": True, "job": _public_job(job)}, 200
 
 
-def reorder_response(job_id, direction):
-    if direction not in ("up", "down"):
+def reorder_response(job_id, direction, position=None):
+    if position is None and direction not in ("up", "down"):
         return {"ok": False, "error": "Queue direction must be up or down."}, 400
     with _lock:
         state = _read_state()
-        queued_indexes = [index for index, job in enumerate(state.get("jobs", [])) if job.get("status") in QUEUE_STATUSES]
-        current = next((index for index in queued_indexes if state["jobs"][index].get("id") == job_id), None)
+        jobs = state.get("jobs", [])
+        queued_indexes = [index for index, job in enumerate(jobs) if job.get("status") in QUEUE_STATUSES]
+        current = next((index for index in queued_indexes if jobs[index].get("id") == job_id), None)
         if current is None:
             return {"ok": False, "error": "Queued job not found."}, 404
         queue_position = queued_indexes.index(current)
-        target_position = queue_position - 1 if direction == "up" else queue_position + 1
+        if position is not None:
+            try:
+                target_position = max(0, min(len(queued_indexes) - 1, int(position)))
+            except (ValueError, TypeError):
+                return {"ok": False, "error": "Queue position must be an integer."}, 400
+        else:
+            target_position = queue_position - 1 if direction == "up" else queue_position + 1
         if target_position < 0 or target_position >= len(queued_indexes):
             return {"ok": False, "error": "Queue job cannot move further in the queue."}, 400
-        target = queued_indexes[target_position]
-        state["jobs"][current], state["jobs"][target] = state["jobs"][target], state["jobs"][current]
-        state["jobs"][current]["updatedAt"] = time.time()
-        state["jobs"][target]["updatedAt"] = time.time()
+        if queue_position == target_position:
+            return {"ok": True, "jobs": [_public_job(job) for job in jobs]}, 200
+        queued_jobs = [jobs[index] for index in queued_indexes]
+        moved = queued_jobs.pop(queue_position)
+        queued_jobs.insert(target_position, moved)
+        for index, queued_job in zip(queued_indexes, queued_jobs):
+            jobs[index] = queued_job
+        moved["updatedAt"] = time.time()
         _persist_reconciled_state(state)
-        return {"ok": True, "jobs": [_public_job(job) for job in state["jobs"]]}, 200
+        return {"ok": True, "jobs": [_public_job(job) for job in jobs]}, 200
 
 
 def resume_queue_response():

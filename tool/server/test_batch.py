@@ -265,6 +265,11 @@ def enqueue_batch(folder_path, folder, count, criteria, auto_vl, vl_model):
             "vlJobId": "", "cancelled": False,
         }
         _BATCHES.append(batch)
+        # Retain a small in-memory history; server restart discards it.
+        completed = [b for b in _BATCHES if b["status"] in {"complete", "stopped", "failed"}]
+        retained = {b["id"] for b in completed[-12:]}
+        _BATCHES[:] = [b for b in _BATCHES
+                       if b["status"] not in {"complete", "stopped", "failed"} or b["id"] in retained]
     threading.Thread(target=_run, args=(batch,), name="webcap-test-batch", daemon=True).start()
     return _public(batch)
 

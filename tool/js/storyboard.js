@@ -1247,7 +1247,8 @@
     var detail = el('storyboard-director-activity-detail');
     var stop = el('storyboard-director-stop');
     var copy = el('storyboard-director-prompt-copy');
-    if (!card || !phase || !detail || !stop || !copy) throw new Error('Storyboard Director activity markup is missing.');
+    var activityButton = el('storyboard-director-view-activity');
+    if (!card || !phase || !detail || !stop || !copy || !activityButton) throw new Error('Storyboard Director activity markup is missing.');
 
     var phaseName = String(activity && activity.phase || '');
     var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
@@ -1262,6 +1263,7 @@
     var jobStatus = String(activity && activity.jobStatus || '');
     var canStop = !!jobId && ['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(jobStatus) === -1;
     stop.dataset.directorJobId = jobId;
+    activityButton.dataset.directorJobId = jobId;
     stop.classList.toggle('hidden', !canStop);
     stop.disabled = jobStatus === 'stopping';
     stop.textContent = jobStatus === 'stopping' ? 'Stopping…' : 'Stop';
@@ -1273,17 +1275,6 @@
     copy.title = requestLabel ? 'Copy the exact messages WebCap sent to the LLM' : '';
     positionDirectorActivity();
     if (!visible) return;
-    var activityLink = card.querySelector('[data-view-activity]');
-    if (!activityLink) {
-      activityLink = document.createElement('button');
-      activityLink.type = 'button';
-      activityLink.textContent = 'View Activity';
-      activityLink.setAttribute('data-view-activity', '');
-      activityLink.onclick = function () {
-        window.setActivityDrawerOpen(true, 'manual-open');
-      };
-      card.appendChild(activityLink);
-    }
     // Activity owns operational telemetry; the overlay explains why editing is blocked.
     var targetKind = String(storyState.director.activityTarget && storyState.director.activityTarget.kind || '');
     var action = {concept: 'developing the Story', scenes: 'working on Scenes', repair: 'repairing Scenes', 'scene-prompt': 'revising this Scene'};
@@ -5802,7 +5793,7 @@
       closeSceneActionMenus();
     }, { passive: true });
     el('storyboard-director-view-activity').onclick = function () {
-      var jobId = String(el('storyboard-director-stop').dataset.directorJobId || '');
+      var jobId = String(this.dataset.directorJobId || '');
       if (jobId) window.focusActivityJob(jobId);
       else window.setActivityDrawerOpen(true);
     };

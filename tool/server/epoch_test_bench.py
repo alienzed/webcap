@@ -847,7 +847,10 @@ _VL_COLOR_NAMES = frozenset(
     "black white gray grey silver red burgundy maroon orange yellow gold green olive lime "
     "blue cyan teal turquoise navy purple violet lavender magenta pink peach coral mauve "
     "brown tan beige cream".split()
-)
+).union({
+    "light blue", "sky blue", "dark blue", "navy blue", "royal blue",
+    "dark green", "forest green", "olive green", "lime green", "light pink", "hot pink",
+})
 _VL_NEAR_COLORS = (
     ("peach", "coral"), ("coral", "pink"), ("blue", "cyan"), ("cyan", "teal"),
     ("teal", "turquoise"), ("light blue", "sky blue"), ("light blue", "cyan"),

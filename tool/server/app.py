@@ -126,6 +126,42 @@ def _request_bool_arg(name):
         return False
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
+@app.route("/app/diagnostics/gpu-consumers", methods=["GET"])
+def diagnostics_gpu_consumers():
+    """Read-only, on-demand NVIDIA CUDA process snapshot; never used for scheduling."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-compute-apps=pid,process_name,used_gpu_memory",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+        consumers = []
+        for line in result.stdout.splitlines():
+            fields = [field.strip() for field in line.split(",", 2)]
+            if len(fields) != 3 or not fields[0].isdigit():
+                raise ValueError("Unexpected nvidia-smi process row: " + line)
+            pid, process_name, memory = fields
+            command = ""
+            if sys.platform.startswith("linux"):
+                try:
+                    command = Path("/proc", pid, "cmdline").read_bytes().replace(b"\\0", b" ").decode("utf-8", "replace").lower()
+                except (OSError, ValueError):
+                    pass
+            identity = (process_name + " " + command).lower()
+            label = ("llama.cpp" if "llama-server" in identity or "llama_cpp" in identity
+                     else "ComfyUI" if "comfyui" in identity or "main.py --listen" in identity
+                     else "Ollama" if "ollama" in identity
+                     else Path(process_name).name or "Unknown")
+            consumers.append({
+                "pid": int(pid), "name": label,
+                "memoryMiB": int(memory) if memory.isdigit() else None,
+            })
+        return jsonify({"consumers": consumers})
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        app.logger.warning("GPU consumer snapshot unavailable: %s", exc)
+        return jsonify({"error": "GPU consumer snapshot unavailable: " + str(exc)}), 503
+
+
 @app.route("/fs/folder_state/rating", methods=["POST"])
 def folder_state_rating():
     data = request.get_json(silent=True) or {}

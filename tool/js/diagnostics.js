@@ -415,7 +415,10 @@ function refreshUnifiedModelAssessment() {
       }
 
       var allTests = Object.keys(tests).map(function (probe) { return tests[probe]; });
-      var rates = allTests.flatMap(function (entry) { return entry.throughputSamples || []; })
+      var decodeTests = allTests.filter(function (entry) { return !entry.speedBasis; });
+      var speedTests = decodeTests.some(function (entry) { return (entry.throughputSamples || []).length; })
+        ? decodeTests : allTests.filter(function (entry) { return entry.speedBasis; });
+      var rates = speedTests.flatMap(function (entry) { return entry.throughputSamples || []; })
         .filter(function (value) { return Number(value) > 0; });
       var outputs = allTests.flatMap(function (entry) { return entry.outputTokenSamples || []; })
         .filter(function (value) { return Number(value) > 0; });
@@ -424,8 +427,8 @@ function refreshUnifiedModelAssessment() {
       if (rates.length) {
         var rate = rates.reduce(function (a, b) { return a + Number(b); }, 0) / rates.length;
         speedCell.textContent = rate.toFixed(1);
-        speedCell.title = allTests.some(function (item) { return item.speedBasis; })
-          ? 'Effective throughput including request overhead for probes without runtime timing; compare on same hardware.'
+        speedCell.title = speedTests.some(function (item) { return item.speedBasis; })
+          ? 'Effective tokens/s including request overhead (decode timing unavailable); not directly comparable with decode-only rates.'
           : 'Runtime-reported tokens/s across saved probes; compare on same hardware.';
         row.assessmentSort.speed = rate;
       } else if (legacyRates.length) {

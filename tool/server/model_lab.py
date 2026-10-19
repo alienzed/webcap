@@ -167,25 +167,25 @@ def capability_run_summaries():
                 entry["error"] += (" · " if entry["error"] else "") + str(attempt["error"])
             entry.setdefault("throughputSamples", [])
             entry.setdefault("outputTokenSamples", [])
-            timings = result.get("timings") if isinstance(result.get("timings"), dict) else {}
-            usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
-            rate = timings.get("predicted_per_second")
-            tokens = usage.get("completion_tokens") or timings.get("predicted_n")
-            if not rate and isinstance(tokens, (int, float)) and tokens > 0:
-                seconds = result.get("requestSeconds")
-                if not isinstance(seconds, (int, float)) or seconds <= 0:
-                    try:
-                        seconds = (datetime.fromisoformat(attempt["finishedAt"].replace("Z", "+00:00")) -
-                                   datetime.fromisoformat(attempt["startedAt"].replace("Z", "+00:00"))).total_seconds()
-                    except (KeyError, ValueError, TypeError):
-                        seconds = 0
-                if seconds and seconds > 0:
-                    rate = float(tokens) / seconds
-                    entry["speedBasis"] = "effective throughput including overhead"
-            if isinstance(rate, (int, float)) and not isinstance(rate, bool) and 0 < rate < 10000000:
-                entry["throughputSamples"].append(round(float(rate), 2))
-            if isinstance(tokens, (int, float)) and not isinstance(tokens, bool) and 0 < tokens < 10000000:
-                entry["outputTokenSamples"].append(round(float(tokens), 2))
+            if status == "completed":
+                timings = result.get("timings") if isinstance(result.get("timings"), dict) else {}
+                usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
+                tokens = usage.get("completion_tokens") or timings.get("predicted_n")
+                decode_rate = timings.get("predicted_per_second")
+                if isinstance(decode_rate, (int, float)) and not isinstance(decode_rate, bool) and 0 < decode_rate < 10000000:
+                    entry.setdefault("_decodeSamples", []).append(round(float(decode_rate), 2))
+                elif isinstance(tokens, (int, float)) and not isinstance(tokens, bool) and tokens > 0:
+                    seconds = result.get("requestSeconds")
+                    if not isinstance(seconds, (int, float)) or seconds <= 0:
+                        try:
+                            seconds = (datetime.fromisoformat(attempt["finishedAt"].replace("Z", "+00:00")) -
+                                       datetime.fromisoformat(attempt["startedAt"].replace("Z", "+00:00"))).total_seconds()
+                        except (KeyError, ValueError, TypeError):
+                            seconds = 0
+                    if seconds and seconds > 0:
+                        entry.setdefault("_effectiveSamples", []).append(round(float(tokens) / seconds, 2))
+                if isinstance(tokens, (int, float)) and not isinstance(tokens, bool) and 0 < tokens < 10000000:
+                    entry["outputTokenSamples"].append(round(float(tokens), 2))
             if kind.startswith("director_writing") and status == "completed":
                 # A completed LLM job alone does not prove a long-form target.
                 # The calibration protocol owns real 8K/16K qualification.
@@ -194,6 +194,15 @@ def capability_run_summaries():
             entry["status"] = next((value for value in (
                 "failed", "running", "interrupted", "skipped", "completed"
             ) if entry["counts"].get(value)), status)
+        for by_kind in models.values():
+            for entry in by_kind.values():
+                decode_samples = entry.pop("_decodeSamples", [])
+                effective_samples = entry.pop("_effectiveSamples", [])
+                # Decode speed and whole-request throughput are different metrics.
+                # Never average them together or include unsuccessful probes.
+                entry["throughputSamples"] = decode_samples or effective_samples
+                if effective_samples and not decode_samples:
+                    entry["speedBasis"] = "effective throughput including overhead"
         summaries.append({
             "id": row["id"], "status": row.get("status"),
             "startedAt": row.get("startedAt"), "folder": row.get("folder"),

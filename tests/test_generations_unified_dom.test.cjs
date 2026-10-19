@@ -80,6 +80,7 @@ test('Explore, Build and Finder preserve original control nodes and image attrib
  d.querySelectorAll('.test-unified-card')[0].click();
  assert.match(d.getElementById('test-unified-details').textContent,/Source/);
  assert.match(d.getElementById('test-unified-details').textContent,/red outfit/);
+ assert.equal(d.querySelector('#test-unified-details .test-unified-inspect-media').tagName,'IMG');
  Array.from(d.querySelectorAll('#test-unified-details button')).find(b=>b.textContent.startsWith('Open source')).click();
  assert.ok(calls.includes('session:test-one'));
  assert.ok(d.getElementById('test-unified-workspace').classList.contains('hidden')); 

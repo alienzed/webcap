@@ -120,7 +120,7 @@
   }
   function load() {
     el('director-result').textContent='';el('director').disabled=true;
-    report=null;previewFacts=null;previewKey='';
+    report=null;previewGeneration++;previewFacts=null;previewKey='';
     var ids=Array.from(selection), token=++generation, origin=folder;
     if(!ids.length){el('coverage').textContent='Select at least one run.';return;}
     clearError();el('analyze').disabled=true;el('analyze').textContent='Reading saved evidence…';
@@ -157,7 +157,7 @@
   el('run-choices').onchange=function(event){
     var cb=event.target.closest('[data-analytics-run]');if(!cb)return;
     if(cb.checked)selection.add(cb.dataset.analyticsRun);else selection.delete(cb.dataset.analyticsRun);
-    generation++;report=null;previewFacts=null;previewKey='';el('director').disabled=true;el('coverage').textContent='Selection changed — Analyze selected to refresh.';el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';
+    generation++;report=null;previewGeneration++;previewFacts=null;previewKey='';el('director').disabled=true;el('analyze').disabled=false;el('analyze').textContent='Analyze selected';el('coverage').textContent='Selection changed — Analyze selected to refresh.';el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';
     if(selection.size>6){selection.delete(cb.dataset.analyticsRun);cb.checked=false;error(new Error('Select up to six runs.'));}
   };
   el('analyze').onclick=load;

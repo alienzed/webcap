@@ -39,6 +39,7 @@ def _catalog(folder_path, campaigns, warnings):
             if identifier:
                 indexed[identifier] = {
                     "jobId": identifier, "label": str(run.get("runName") or ("Run " + str(run.get("runSequence") or identifier))),
+                    "runSequence": run.get("runSequence"),
                     "stage": str(run.get("stage") or ""), "modelId": str(run.get("modelId") or ""),
                     "savedEpochs": [], "archive": None, "source": "training",
                 }

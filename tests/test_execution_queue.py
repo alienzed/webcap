@@ -426,7 +426,12 @@ def test_execution_queue_reorders_mixed_inference_client_jobs(queue_root):
     execution_queue.reorder_job(third["id"], position=0)
     snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
 
-    assert [job["id"] for job in snapshot["jobs"]] == [third["id"], second["id"], first["id"]]
+    assert [job["id"] for job in snapshot["jobs"]] == [third["id"], first["id"], second["id"]]
+    assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2, 3]
+
+    execution_queue.reorder_job(third["id"], position=2)
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+    assert [job["id"] for job in snapshot["jobs"]] == [first["id"], second["id"], third["id"]]
     assert [job["queuePosition"] for job in snapshot["jobs"]] == [1, 2, 3]
 
 

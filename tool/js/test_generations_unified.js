@@ -108,7 +108,7 @@
     var host=el('details'); host.replaceChildren();
     var original=mediaUrl(item);
     if (original && item.mediaAvailable !== false && !item.framePruned) {
-      var preview=document.createElement(item.source==='campaign' || /\\.(png|jpe?g|webp|gif|avif)$/i.test(item.mediaFile||'') || item.mediaKind==='image' ? 'img':'video');
+      var preview=document.createElement(item.source==='campaign' || /\.(png|jpe?g|webp|gif|avif)$/i.test(item.mediaFile||'') || item.mediaKind==='image' ? 'img':'video');
       preview.className='test-unified-inspect-media';
       preview.src=original;
       if(preview.tagName==='VIDEO') preview.controls=true;

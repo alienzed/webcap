@@ -2,6 +2,20 @@ import json
 from pathlib import Path
 
 from .h3_prompt_contract import mode_from_reference_roles
+from . import config as app_config
+
+
+def _model_limitations(model_id):
+    guidance = app_config.config.get("generation_model_guidance", {})
+    if not isinstance(guidance, dict):
+        return ""
+    return str(guidance.get(model_id) or "").strip()
+
+
+def _add_model_limitations(blocks, model_id):
+    guidance = _model_limitations(model_id)
+    if guidance:
+        blocks.append("[MODEL CAPABILITIES & LIMITATIONS]\nAccount for these model limitations while preserving creative intent.\n" + guidance)
 
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
@@ -258,6 +272,7 @@ def build_request(story, scene_id, operation, instruction="", development=None):
     director_context = _read_text(DIRECTOR_CONTEXT_PATH, "Storyboard director context")
     h3_runtime_context = _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context")
 
+    # Prompt-writing and planning tasks target MiniMax H3 in Storyboard.
     if operation == "define_invariants":
         concept = _clean(story.get("concept"))
         if not concept:
@@ -366,6 +381,7 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        _add_model_limitations(blocks, "minimax_h3")
         target_scene_count = story.get("targetSceneCount")
         scene_count_guidance = (
             "Create exactly " + str(int(target_scene_count)) + " Scenes. "
@@ -456,6 +472,7 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        _add_model_limitations(blocks, "minimax_h3")
         blocks.append("[COMPLETE SCENE OUTLINE]\n" + json.dumps(outline, indent=2, ensure_ascii=False))
         blocks.append(
             "[CURRENT PLANNED SCENE]\nScene "
@@ -512,6 +529,7 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        _add_model_limitations(blocks, "minimax_h3")
         blocks.append("[SCENE BEFORE]\n" + _scene_context(before_scene) + "\nGeneration prompt: " + _clean(before_scene.get("prompt")))
         blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene) + "\nGeneration prompt: " + _clean(after_scene.get("prompt")))
         blocks.append(
@@ -551,6 +569,7 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 WRITING RULES]\n" + h3_runtime_context)
+        _add_model_limitations(blocks, "minimax_h3")
         blocks.append("[CURRENT SCENE PLAN]\n" + json.dumps(scene_plan, indent=2, ensure_ascii=False))
         blocks.append(
             "[USER REPAIR INSTRUCTION]\n" + correction
@@ -600,6 +619,7 @@ def build_request(story, scene_id, operation, instruction="", development=None):
     if vocabulary:
         blocks.append(vocabulary)
     blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+    _add_model_limitations(blocks, "minimax_h3")
     blocks.append("[REFERENCE MODE]\n" + h3_mode)
 
     if operation == "write_prompt":

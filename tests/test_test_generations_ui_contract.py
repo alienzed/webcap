@@ -41,7 +41,7 @@ def test_base_model_selector_stays_available_and_reprepares_test_workspace():
     assert "modelSelect.disabled = navigation.activity === 'test'" not in shell
     assert "Select the Base Model for Test Generations" in shell
     assert "if (isOpen()) openPane();" in script
-    assert "Testing unavailable for selected Base Model." in script
+    assert "Test Generations is not available for the selected Base Model." in script
 
 
 def test_test_generations_guards_shared_working_model_dependency():
@@ -965,7 +965,7 @@ def test_test_generations_rail_is_candidate_focused_without_source_browser():
     assert "function refreshTestSourceBrowser()" not in script
     assert ".test-generations-source-folders" not in css
     assert "No staged candidates for this Set." in script
-    assert "candidate' + (count === 1 ? '' : 's')" in script
+    assert "countEl.textContent = String(count)" in script
 
 def test_historical_test_session_errors_do_not_claim_current_failure():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

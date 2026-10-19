@@ -1123,6 +1123,13 @@
     var pendingItems = window.isOperationsDrawerMounted ? [] : [].concat((state.payload.queues.inference || {}).jobs || [], (state.payload.queues.director || {}).jobs || []);
     var recent = sessionRecent();
     var queues = state.payload.queues || {};
+    if (window.isOperationsDrawerMounted) {
+      var waitingCount = ['inference', 'director', 'training'].reduce(function (sum, key) {
+        var q = queues[key] || {};
+        return sum + Number(q.queued || 0) + Number(q.backlog || 0);
+      }, 0);
+      window.updateOperationsCounts(active.length, waitingCount, recent.length);
+    }
     var drawer = el('activity-monitor-drawer');
     var host = el('activity-monitor-list');
     var summary = el('activity-monitor-summary');

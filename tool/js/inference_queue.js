@@ -266,6 +266,19 @@
       link.title = tooltip.join('\n');
     }
 
+    var focus = row.querySelector('[data-inference-activity-focus]');
+    if (active && !focus) {
+      focus = document.createElement('button');
+      focus.type = 'button';
+      focus.className = 'review-captions-btn';
+      focus.dataset.inferenceActivityFocus = '1';
+      focus.textContent = 'Activity ↗';
+      actions.appendChild(focus);
+    }
+    if (focus) {
+      focus.classList.toggle('hidden', !active);
+      focus.dataset.jobId = String(job.jobId || '');
+    }
     var preserveActions = row.dataset.inferenceQueueStatus === status;
     row.dataset.inferenceQueueStatus = status;
     if (actions && !preserveActions) {
@@ -595,6 +608,8 @@
     };
     clear.onclick = function () { action('clear_all'); };
     list.onclick = function (event) {
+      var focus = event.target.closest('[data-inference-activity-focus]');
+      if (focus) { window.focusActivityByJob(focus.dataset.jobId); return; }
       var actionButton = event.target.closest('[data-inference-queue-action]');
       if (actionButton) {
         action(actionButton.dataset.inferenceQueueAction, actionButton.dataset.jobId);

@@ -1,9 +1,26 @@
-name: Unified Test Generations validation
+name: Test Generations parity validation
 on:
+  pull_request:
+    paths:
+      - 'tool/tool.html'
+      - 'tool/js/test_generations*.js'
+      - 'tool/js/epoch_finder.js'
+      - 'tool/server/epoch_finder.py'
+      - 'tool/server/epoch_test_bench.py'
+      - 'tool/css/styles.css'
+      - 'tests/test_generations_unified_dom.test.cjs'
+      - 'tests/test_test_generations_unified_*.py'
   push:
     branches:
+      - main
       - feat/unified-test-generations-workspace
+    paths:
+      - 'tool/**'
+      - 'tests/**'
+      - '.github/workflows/revamp-validation.yml'
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   contracts:
     runs-on: ubuntu-latest

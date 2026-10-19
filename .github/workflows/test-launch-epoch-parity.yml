@@ -31,8 +31,7 @@ jobs:
           node --check tool/js/epoch_finder.js
           node --check tool/js/run_analytics.js
       - name: Install tests
-        run: python -m pip install pytest Flask Pillow
+        run: python -m pip install pytest
       - name: Focused regression
         run: |
-          cp tool/config.example.json tool/config.json
           python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py

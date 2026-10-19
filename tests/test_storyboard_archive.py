@@ -81,3 +81,26 @@ def test_archive_keeps_imported_and_referenced_media(archive_root):
     assert result["preview"]["purgeTakeCount"] == 1
     assert (archive_root / "storyboards" / story["id"] / imported["mediaPath"]).is_file()
     assert (archive_root / "storyboards" / story["id"] / reference["mediaPath"]).is_file()
+
+
+def test_archive_rejects_stale_export(archive_root):
+    story, scene, take = _story_with_export(archive_root)
+    story, replacement = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "replacement.mp4", io.BytesIO(b"new video")
+    )
+    storyboard_store.select_take(story["id"], scene["id"], replacement["id"])
+    with pytest.raises(ValueError, match="changed since export"):
+        storyboard_archive.archive_preview(story["id"])
+    assert (archive_root / "storyboards" / story["id"] / take["mediaPath"]).exists()
+
+
+def test_archive_is_idempotent_and_preserves_recipe_on_regular_edit(archive_root):
+    story, scene, take = _story_with_export(archive_root)
+    first = storyboard_archive.archive_story(story["id"])
+    second = storyboard_archive.archive_story(story["id"])
+    assert first["reclaimedBytes"] == 5
+    assert second["reclaimedBytes"] == 0
+    edited = storyboard_store.update_story(story["id"], {"title": "Finished Movie"})
+    assert edited["mediaArchivedAt"]
+    assert edited["scenes"][scene["id"]]["takes"][take["id"]]["mediaPurged"] is True
+    assert edited["scenes"][scene["id"]]["takes"][take["id"]]["seed"] == 42

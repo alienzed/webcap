@@ -7389,3 +7389,29 @@ html[data-theme="dark"] iframe {
 .test-unified-builder .test-generations-staged-list {max-height:360px;overflow-y:auto;}
 .test-unified-builder-actions button {width:auto;flex:0 1 auto;}
 @media(max-width:1100px) {.test-unified-workspace{grid-template-columns:196px minmax(0,1fr) 260px;}.test-unified-gallery{grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));}}
+
+/* The approved builder is a two-column composition, not a full-width stack of native panels. */
+.test-unified-builder:not(:has(> #epoch-finder-screen, > #test-references-screen, > #run-analytics-screen)) {
+  display:grid;
+  grid-template-columns:minmax(0,1.2fr) minmax(320px,1fr);
+  gap:12px 20px;
+  align-content:start;
+  align-items:start;
+}
+.test-unified-builder > h3,
+.test-unified-builder > p,
+.test-unified-builder > .test-unified-builder-actions,
+.test-unified-builder > #test-generations-batch-summary,
+.test-unified-builder > #test-generations-status,
+.test-unified-builder > #test-generations-error {grid-column:1/-1;}
+.test-unified-builder > .test-generations-next-run {grid-column:1;margin:0;min-width:0;}
+.test-unified-builder > .test-generations-staged-panel {grid-column:2;margin:0;min-width:0;}
+.test-unified-builder > .test-generations-staged-panel .test-generations-staged-list {max-height:min(56vh,520px);}
+.test-unified-builder:has(> #epoch-finder-screen, > #test-references-screen, > #run-analytics-screen) > #epoch-finder-screen,
+.test-unified-builder:has(> #epoch-finder-screen, > #test-references-screen, > #run-analytics-screen) > #test-references-screen,
+.test-unified-builder:has(> #epoch-finder-screen, > #test-references-screen, > #run-analytics-screen) > #run-analytics-screen {width:100%;min-width:0;}
+@media(max-width:1180px) {
+ .test-unified-builder:not(:has(> #epoch-finder-screen, > #test-references-screen, > #run-analytics-screen)) {grid-template-columns:minmax(0,1fr);}
+ .test-unified-builder > .test-generations-next-run,
+ .test-unified-builder > .test-generations-staged-panel {grid-column:1;}
+}

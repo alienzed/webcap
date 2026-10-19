@@ -24,6 +24,7 @@ from .storyboard_store import (
     resolve_scene_generation_defaults,
     resolve_scene_loras,
     storyboard_root,
+    _mutation_lock,
 )
 
 
@@ -417,23 +418,21 @@ def reconcile_startup():
 
 def start_generation(story_id, scene_id):
     reconcile_startup()
-    story = load_story(story_id)
-    scene_id = str(scene_id or "").strip()
-    scene = (story.get("scenes") or {}).get(scene_id)
-    if not isinstance(scene, dict):
-        raise FileNotFoundError("Scene does not exist.")
-
-    settings = _scene_settings(scene, story)
-    request = _storyboard_request(settings)
-    from .inference_runner import enqueue_storyboard
-    job = enqueue_storyboard(
-        request,
-        story_id,
-        scene_id,
-        label=str(scene.get("title") or "Storyboard Take"),
-    )
+    with _mutation_lock:
+        story = load_story(story_id)
+        if story.get("status") == "archived":
+            raise ValueError("Restore this Story's recipe before generating new Takes.")
+        scene_id = str(scene_id or "").strip()
+        scene = (story.get("scenes") or {}).get(scene_id)
+        if not isinstance(scene, dict):
+            raise FileNotFoundError("Scene does not exist.")
+        settings = _scene_settings(scene, story)
+        request = _storyboard_request(settings)
+        from .inference_runner import enqueue_storyboard
+        job = enqueue_storyboard(
+            request, story_id, scene_id, label=str(scene.get("title") or "Storyboard Take"),
+        )
     return generation_status(job["jobId"])
-
 
 
 def regenerate_take(story_id, scene_id, take_id):

@@ -99,6 +99,15 @@ def _active_record(run_id):
 
 def _reconcile_interrupted(payload):
     run_id = str(payload.get("id") or "")
+    changed_reviews = False
+    for review in (payload.get("qualityReviews") or {}).values():
+        if isinstance(review, dict) and review.get("status") == "running" and not _active_record("quality:" + run_id):
+            review["status"] = "interrupted"
+            review["finishedAt"] = review.get("finishedAt") or _now_iso()
+            review["error"] = "Quality review interrupted by restart; run it again explicitly."
+            changed_reviews = True
+    if changed_reviews:
+        _write(_run_path(run_id), payload)
     if payload.get("status") != "running" or _active_record(run_id):
         return payload
 

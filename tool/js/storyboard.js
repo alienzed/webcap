@@ -3097,7 +3097,7 @@
     });
   }
 
-  function positionStoryActionMenu(menu) {
+  function positionStoryActionMenu(menu, pointer) {
     if (!menu || !menu.open) return;
     var summary = menu.querySelector('summary');
     var popover = menu.querySelector('.storyboard-story-menu-popover');
@@ -3118,6 +3118,11 @@
       ? below
       : above;
 
+    // Keep three-dot menus anchored; right-click opens at the pointer.
+    if (pointer) {
+      left = Math.min(Math.max(margin, pointer.x), Math.max(margin, window.innerWidth - width - margin));
+      top = Math.min(Math.max(margin, pointer.y), Math.max(margin, window.innerHeight - height - margin));
+    }
     popover.style.left = Math.round(left) + 'px';
     popover.style.top = Math.round(Math.max(margin, top)) + 'px';
   }
@@ -3128,7 +3133,7 @@
     });
   }
 
-  function positionSceneActionMenu(menu) {
+  function positionSceneActionMenu(menu, pointer) {
     if (!menu || !menu.open) return;
     var summary = menu.querySelector('summary');
     var popover = menu.querySelector('.storyboard-scene-menu-popover');
@@ -3149,6 +3154,11 @@
       ? below
       : above;
 
+    // Keep three-dot menus anchored; right-click opens at the pointer.
+    if (pointer) {
+      left = Math.min(Math.max(margin, pointer.x), Math.max(margin, window.innerWidth - width - margin));
+      top = Math.min(Math.max(margin, pointer.y), Math.max(margin, window.innerHeight - height - margin));
+    }
     popover.style.left = Math.round(left) + 'px';
     popover.style.top = Math.round(Math.max(margin, top)) + 'px';
   }
@@ -5997,6 +6007,17 @@
       }
       if (event.target.closest('[data-scene-progress-add]')) addScene();
     });
+    sceneProgression.addEventListener('contextmenu', function (event) {
+      var card = event.target.closest('.storyboard-scene-progress-card[data-scene-id]');
+      if (!card || event.target.closest('.storyboard-scene-menu-popover')) return;
+      var menu = card.querySelector('.storyboard-scene-progress-menu');
+      if (!menu) throw new Error('Scene actions menu is missing.');
+      event.preventDefault();
+      closeStoryActionMenus();
+      closeSceneActionMenus(menu);
+      menu.open = true;
+      positionSceneActionMenu(menu, { x: event.clientX, y: event.clientY });
+    });
     sceneProgression.addEventListener('scroll', function () {
       closeSceneActionMenus();
     }, { passive: true });
@@ -6112,6 +6133,17 @@
       }
       if (event.target.closest('[data-story-open]')) openStory(storyId).catch(reportError);
     };
+    storyLibraryList.addEventListener('contextmenu', function (event) {
+      var row = event.target.closest('.storyboard-story-row[data-story-id]');
+      if (!row || event.target.closest('.storyboard-story-menu-popover')) return;
+      var menu = row.querySelector('.storyboard-story-menu');
+      if (!menu) throw new Error('Story actions menu is missing.');
+      event.preventDefault();
+      closeSceneActionMenus();
+      closeStoryActionMenus(menu);
+      menu.open = true;
+      positionStoryActionMenu(menu, { x: event.clientX, y: event.clientY });
+    });
     storyLibraryList.addEventListener('scroll', function () {
       closeStoryActionMenus();
     });

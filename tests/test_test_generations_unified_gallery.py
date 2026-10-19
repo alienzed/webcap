@@ -22,6 +22,7 @@ def test_unified_gallery_links_recorded_test_and_campaign_epoch(tmp_path, monkey
     monkeypatch.setattr(epoch_test_bench, "_with_session_vision", lambda directory, payload: payload)
     monkeypatch.setattr(epoch_test_bench, "_relative_set_folder", lambda folder: "set-one")
     monkeypatch.setattr(epoch_finder, "_root", lambda folder: campaign_root)
+    monkeypatch.setattr(epoch_finder, "_runs", lambda folder: [])
     monkeypatch.setattr(epoch_finder, "_load", lambda folder, name: {
         "id": name, "name": "Finder test", "modelId": "h3",
         "jobId": "other-run", "candidateMap": {"0": {
@@ -49,6 +50,7 @@ def test_unified_gallery_filters_by_model_without_mutating_sessions(tmp_path, mo
         "modelId": "krea2", "results": [{"mediaFile": "frame.png"}],
     })
     monkeypatch.setattr(epoch_finder, "_root", lambda folder: tmp_path / "no-campaigns")
+    monkeypatch.setattr(epoch_finder, "_runs", lambda folder: [])
     assert epoch_finder.workspace_gallery(tmp_path, "h3") == {
-        "sessions": [], "campaigns": [], "media": [],
+        "sessions": [], "campaigns": [], "media": [], "runs": [], "warnings": [],
     }

@@ -35,16 +35,18 @@
     }).catch(function (error) { if (folder === currentFolder && token === loadCounter) report(error); });
   }
   function changeSelection(operation, item, after) {
-    if (!loaded || pending) { if (!loaded) report(new Error('Training references have not loaded; selection was not saved.')); return; }
+    if (!loaded || pending) { report(new Error(pending ? 'A reference save is still in progress. Try again when it completes.' : 'Training references have not loaded; selection was not saved.')); return; }
     pending = true;
-    var saveFolder = folder;
+    var saveFolder = folder, saveRun = runId;
+    el('status').textContent = 'Saving reference…';
     resetError();
     api(operation, item).then(function () {
       if (saveFolder !== folder) return;
       if (operation === 'reference_selection_remove') delete selected[JSON.stringify([item.runId, item.group, item.term])];
       else selected[JSON.stringify([item.runId, item.group, item.term])] = item;
       drawGallery();
-      if (after) after();
+      if (after && saveRun === runId) after();
+      else el('status').textContent = 'Reference saved.';
     }).catch(function (error) { if (saveFolder === folder) report(error); }).finally(function () { pending = false; });
   }
   function mediaUrl(name) { return '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(name); }

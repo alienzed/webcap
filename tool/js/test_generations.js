@@ -4804,7 +4804,12 @@
         button.dataset.testBatchSession = session;
         sessionsHost.appendChild(button);
       }
-      button.textContent = (index + 1) + '/' + batch.count + ' · ' + sessionLabel(session) + ' · ' + (status ? status.status || 'unknown' : 'queued');
+      var state = String(status ? status.status || 'queued' : 'queued').toLowerCase();
+      button.dataset.batchState = /fail|error/.test(state) ? 'failed'
+        : /complete|success|finish|done/.test(state) ? 'completed'
+        : /run|progress|process/.test(state) ? 'running' : 'queued';
+      button.title = sessionLabel(session) + ' · ' + state;
+      button.textContent = (index + 1) + '/' + batch.count + ' · ' + state;
     });
     var previousTable = resultHost.querySelector('table');
     if (previousTable) previousTable.remove();

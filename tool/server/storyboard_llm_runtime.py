@@ -1378,6 +1378,7 @@ def _assessment_signal(model_ref):
             "structuredOutputTokens": max(0, int(abilities.get("structuredOutputTokens") or 0)),
             "coherentOutputTokens": coherent_output,
         },
+        "thinking": report.get("thinking") is True,
         "updatedAt": str(report.get("updatedAt") or ""),
     }
 

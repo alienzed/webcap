@@ -499,6 +499,20 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
+    if operation == "check_coherence":
+        data = llm_result.get("data")
+        if not isinstance(data, dict) or not str(data.get("prompt") or "").strip():
+            raise ValueError("Check Coherence returned an empty or invalid prompt.")
+        return {
+            "storyId": story_id,
+            "sceneId": str(context.get("sceneId") or ""),
+            "result": data["prompt"],
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if operation in {"write_prompt", "refine_prompt"}:
         scene_id = str(context.get("sceneId") or "").strip()
         if not scene_id:
@@ -861,7 +875,7 @@ def _storyboard_target(context, operation):
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
     if operation in {"repair_scenes", "revise_scenes_sequence"}:
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}
-    if operation in {"write_prompt", "refine_prompt"} and scene_id:
+    if operation in {"write_prompt", "refine_prompt", "check_coherence"} and scene_id:
         return {"kind": "scene-prompt", "storyId": story_id, "sceneId": scene_id}
     return None
 

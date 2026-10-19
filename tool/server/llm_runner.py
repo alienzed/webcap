@@ -667,7 +667,7 @@ def _execute_claimed(job_id, gpu_reserved):
                 **chat_kwargs,
             )
         else:
-            llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True)
+            llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True if client == "storyboard" else None)
     except Exception as exc:
         # Full failure detail remains in the transient job receipt / live Console.
         # Never persist contract content or exception text in server logs.

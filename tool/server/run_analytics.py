@@ -242,7 +242,7 @@ def report_selected(folder_path, job_ids, session_name=""):
         raise ValueError("Choose 1–6 distinct training runs in this Set.")
     session_name = str(session_name or "").strip()
     if session_name and (Path(session_name).name != session_name or
-                         "/" in session_name or "\\\\" in session_name):
+                         "/" in session_name or chr(92) in session_name):
         raise ValueError("Invalid Test session filter.")
     reports = [report(folder_path, item, session_name) for item in job_ids]
     all_sessions = sorted({session for item in reports for session in item["availableSessions"]})

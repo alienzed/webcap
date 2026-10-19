@@ -61,7 +61,7 @@
   }
   function api() {
     return fetch('/fs/epoch_finder', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{modelId:model,limit:pageSize,offset:loadedOffset}})})
+      body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{modelId:model,limit:pageSize,offset:loadedOffset,collectionId:perspective==='experiments'?selection:'',checkpoints:perspective==='checkpoints'?(checkpointSelection.size?Array.from(checkpointSelection):(selection?[selection]:[])):[]}})})
       .then(function(response) { return response.json().then(function(data) {
         if (!response.ok || !data.ok) throw new Error(data.error || 'Could not load generated results.');
         return data;
@@ -144,7 +144,7 @@
         selection = perspective==='checkpoints'
           ? (checkpointSelection.has(item.id) ? item.id : (checkpointSelection.values().next().value || ''))
           : item.id;
-        renderList();renderGallery();
+        refresh();
       });
       host.appendChild(btn);
     });
@@ -331,8 +331,8 @@
   el('explore').onclick=function(){builder(false);if(folder)refresh();};
   el('build').onclick=function(){builder(true);};
   el('new').onclick=function(){builder(true);};
-  el('experiments').onclick=function(){perspective='experiments';selection='';checkpointSelection.clear();renderList();renderGallery();};
-  el('checkpoints').onclick=function(){perspective='checkpoints';selection='';checkpointSelection.clear();renderList();renderGallery();};
+  el('experiments').onclick=function(){perspective='experiments';selection='';checkpointSelection.clear();refresh();};
+  el('checkpoints').onclick=function(){perspective='checkpoints';selection='';checkpointSelection.clear();refresh();};
   el('reload').onclick=refresh;
   window.addEventListener('webcap:test-preview-updated', function () {
     if (!root.classList.contains('hidden') && el('builder').classList.contains('hidden')) refresh();

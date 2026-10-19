@@ -96,6 +96,7 @@
     el('director-result').textContent='';el('director-status').textContent='';
   }
   function load() {
+    el('director-result').textContent='';el('director').disabled=true;
     var ids=Array.from(selection), token=++generation, origin=folder;
     if(!ids.length){el('coverage').textContent='Select at least one run.';return;}
     clearError();el('analyze').disabled=true;el('analyze').textContent='Reading saved evidence…';
@@ -137,6 +138,48 @@
   el('analyze').onclick=load;
   el('session').onchange=function(){sessionFilter=this.value;load();};
   el('campaign').onchange=renderCampaign;
-  el('director').onclick=function(){if(!report)return;el('director-status').textContent='Director integration requires a verified backend contract.';};
+  el('director').onclick=function(){
+    if(!report || directorJob)return;
+    var model=getDirectorModelPreference('webcap.director.model');
+    if(!model){error(new Error('Select a Director model in the app header.'));return;}
+    var ids=report.jobIds.slice(),session=report.sessionFilter,campaign=el('campaign').value;
+    var source=folder,token=generation;
+    el('director-result').textContent='';el('director-status').textContent='Preparing numerical evidence…';
+    el('director').disabled=true;el('director-stop').classList.remove('hidden');
+    fetch('/fs/run_analytics/interpret',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:source,jobIds:ids,session:session,campaignId:campaign,directorModel:model})})
+      .then(function(response){return response.json().then(function(data){if(!response.ok||!data.ok)throw new Error(data.error||'Director request failed.');return data.job;});})
+      .then(function(job){
+        if(!job||!job.jobId)throw new Error('Director did not return a job.');
+        directorJob=job.jobId;trackTransientLlmJob(job);
+        function poll(){
+          return fetch('/fs/director/job?job='+encodeURIComponent(job.jobId)+'&consume=1')
+            .then(function(response){return response.json();}).then(function(body){
+              var value=body.job||{};
+              if(value.status==='completed')return value.result;
+              if(['failed','interrupted','stopped','cancelled'].includes(value.status))throw new Error(value.error||'Director '+value.status);
+              if(source===folder&&token===generation)el('director-status').textContent=
+                value.status==='queued'?'Queued in Director lane…':'Analyzing evidence…';
+              return new Promise(function(resolve){setTimeout(resolve,1500);}).then(poll);
+            });
+        }
+        return poll();
+      }).then(function(result){
+        if(source!==folder||token!==generation)return;
+        var analysis=result&&result.analysis;
+        if(!analysis)throw new Error('Director produced no structured analysis.');
+        el('director-status').textContent='Interpretation complete · model-derived, not a verified score.';
+        el('director-result').innerHTML=['observed','hypotheses','tryNext','limits'].map(function(key){
+          var names={observed:'Observed',hypotheses:'Hypotheses',tryNext:'Try next',limits:'Limits'};
+          return '<h4>'+names[key]+'</h4><p>'+esc(analysis[key]||'')+'</p>';
+        }).join('');
+      }).catch(function(exc){if(source===folder&&token===generation){el('director-status').textContent='Director failed.';error(exc);}})
+        .finally(function(){directorJob='';el('director-stop').classList.add('hidden');el('director').disabled=!report;});
+  };
+  el('director-stop').onclick=function(){
+    if(!directorJob)return;
+    cancelCaptionAssistJob(directorJob).catch(error);
+    el('director-status').textContent='Stop requested…';
+  };
   el('table').onclick=function(event){var btn=event.target.closest('[data-inspect-campaign]');if(btn)window.epochFinderInspectCampaign(btn.dataset.inspectCampaign);};
 })();

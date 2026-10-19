@@ -1382,8 +1382,20 @@
   window.focusActivityByJob = function (jobId) {
     var matching = currentActivityItems().find(function (item) { return String(item.id) === String(jobId); });
     if (matching) state.selectedJobKey = activityJobKey(matching);
+    else state.selectedJobKey = '';
     if (window.isOperationsDrawerMounted) window.selectOperationsSection('activity');
     else setOpen(true);
+    // A queue snapshot can lead Activity's next poll. Resolve the requested
+    // job after refreshing instead of silently retaining the previous focus.
+    if (!matching) wake().then(function () {
+      var found = currentActivityItems().find(function (item) { return String(item.id) === String(jobId); });
+      if (found) {
+        state.selectedJobKey = activityJobKey(found);
+        render();
+      } else if (typeof window.reportConsoleError === 'function') {
+        window.reportConsoleError('Activity', 'Running job is not available in Activity: ' + String(jobId));
+      }
+    });
   };
   window.setActivityDrawerOpen = setOpen;
   window.refreshActivityMonitor = wake;

@@ -384,6 +384,9 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
     assert "operation: 'expand_concept'" in storyboard
     assert "applyDirectorResultToVisibleStory" in storyboard
     assert "previousConcept" in storyboard
+    expand = storyboard.split("function expandConcept()", 1)[1].split("\n  function ", 1)[0]
+    assert "Restore the original concept before expanding again." not in expand
+    assert "el('storyboard-expand-concept-btn').classList.toggle('hidden', hasExpandedConcept)" not in storyboard
 
 
 def test_storyboard_director_captures_unsaved_target_before_locking_it():

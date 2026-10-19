@@ -975,22 +975,23 @@ textarea#editor {
 }
 
 /* Buttons */
+/* Neutral by default: only explicitly emphasized actions use the accent color. */
 button {
   padding: 8px 10px;
-  border: none;
-  background: var(--accent);
-  color: #fff;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  color: var(--text);
   border-radius: 3px;
   cursor: pointer;
   transition: 0.15s;
 }
 
 button:hover {
-  background: var(--accent-soft);
+  background: var(--hover);
 }
 
 button:active {
-  background: var(--accent-dark);
+  background: var(--border-soft);
 }
 
 button:focus {
@@ -7294,6 +7295,13 @@ html[data-theme="dark"] iframe {
 .test-generations-batch-progress {color:var(--muted); overflow-wrap:anywhere; margin-top:8px;}
 .test-generations-batch-actions {display:flex; justify-content:flex-end; gap:8px; margin-top:8px;}
 .test-generations-batch-results {overflow:auto; margin-top:8px;}
+.test-generations-batch-results [data-test-batch-sessions] {display:flex; flex-wrap:wrap; gap:4px;}
+.test-generations-batch-results [data-test-batch-session] {background:var(--panel-soft); color:var(--muted); border:1px solid var(--border); padding:5px 8px; border-radius:5px; font:inherit; text-align:left;}
+.test-generations-batch-results [data-test-batch-session]:hover {background:var(--hover); color:var(--text);}
+.test-generations-batch-results [data-test-batch-session]:focus-visible {outline:2px solid var(--accent); outline-offset:2px;}
+.test-generations-batch-results [data-test-batch-session][data-batch-state="running"] {color:var(--text); border-left:3px solid var(--accent);}
+.test-generations-batch-results [data-test-batch-session][data-batch-state="completed"] {border-left:3px solid #16a34a; color:var(--text);}
+.test-generations-batch-results [data-test-batch-session][data-batch-state="failed"] {border-left:3px solid #dc2626; color:var(--text);}
 .test-generations-batch-results table {width:100%; border-collapse:collapse; font-size:12px;}
 .test-generations-batch-results th,.test-generations-batch-results td {padding:5px 4px; border-bottom:1px solid var(--border); text-align:left;}
 .test-generations-batch-results th button {background:transparent; border:0; color:var(--text); cursor:pointer; font:inherit; font-weight:600;}

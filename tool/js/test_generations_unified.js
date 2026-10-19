@@ -62,6 +62,11 @@
     return Array.from(map.values()).sort(function(a,b) {return a.name.localeCompare(b.name,undefined,{numeric:true});});
   }
   function renderList() {
+    ['experiments','checkpoints'].forEach(function(name) {
+      var active=perspective===name;
+      el(name).classList.toggle('active',active);
+      el(name).setAttribute('aria-pressed',String(active));
+    });
     var host=el('list');host.replaceChildren();
     collections().forEach(function(item) {
       var btn=document.createElement('button');btn.type='button';btn.className='test-unified-item';
@@ -239,6 +244,10 @@
     mounted = enabled;
   }
   function builder(enabled) {
+    el('build').classList.toggle('active',enabled);
+    el('explore').classList.toggle('active',!enabled);
+    el('build').setAttribute('aria-pressed',String(enabled));
+    el('explore').setAttribute('aria-pressed',String(!enabled));
     if (activeAdvanced) mountAdvanced('');
     if (enabled) highlightBuildMode('normal');
     mountExistingControls(enabled);

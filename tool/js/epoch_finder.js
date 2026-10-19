@@ -1154,7 +1154,7 @@
     if (event.target.closest('[data-view-epoch-media]')) {
       var mapped=(campaignState.candidateMap||{})[String(inspectedEpoch)];
       window.runAnalyticsViewEpoch(mapped ? mapped.jobId : campaignState.jobId,
-        mapped ? mapped.epoch : inspectedEpoch);
+        mapped ? mapped.epoch : inspectedEpoch,'finder');
       return;
     }
     if (event.target.closest('[data-copy-epoch-to-test]')) {

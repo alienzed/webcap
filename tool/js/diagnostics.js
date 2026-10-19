@@ -187,16 +187,23 @@ function diagnosticsRenderAssessmentProgress(run) {
   var card = host.querySelector('[data-progress-card-id]');
   if (!card) { card = ProgressCard.create(); host.replaceChildren(card); }
   host.classList.remove('hidden');
+  var terminal = ['completed', 'failed', 'error', 'stopped', 'interrupted', 'cancelled'].indexOf(String(run.status)) !== -1;
   ProgressCard.update(card, modelLabProgressSnapshot(run), {
+    compact: terminal,
     className: 'model-assessment-progress-card',
     onOpen: function () { setDiagnosticsTab('model-lab', true, run.id); }
   });
+  card.querySelector('[data-progress-dot]').className = 'activity-monitor-dot ' +
+    (run.status === 'completed' ? 'assessment-finished' :
+      terminal ? 'assessment-terminal' : 'active');
   card.querySelector('[data-progress-open]').textContent = 'View probes';
   var wasRunning = diagnosticsAssessmentRunStatus === 'running';
   diagnosticsAssessmentRunStatus = String(run.status);
   diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running';
   if (run.status !== 'running' && diagnosticsAssessmentStoppingId === String(run.id)) diagnosticsAssessmentStoppingId = '';
   var stop = diagnosticsEl('diagnostics-assessment-stop');
+  stop.classList.toggle('hidden', run.status !== 'running');
+  stop.hidden = run.status !== 'running';
   stop.disabled = run.status !== 'running' || diagnosticsAssessmentStoppingId === String(run.id);
   stop.textContent = diagnosticsAssessmentStoppingId === String(run.id) ? 'Stopping…' : 'Stop Assessment';
   diagnosticsUpdateAssessmentMetrics(run);
@@ -577,6 +584,8 @@ function refreshUnifiedModelAssessment() {
       diagnosticsEl('diagnostics-assessment-activity').classList.add('hidden');
       diagnosticsEl('diagnostics-assessment-run').disabled = false;
       diagnosticsEl('diagnostics-assessment-stop').disabled = true;
+      diagnosticsEl('diagnostics-assessment-stop').hidden = true;
+      diagnosticsEl('diagnostics-assessment-stop').classList.add('hidden');
     }
   }).catch(function (error) {
     summary.textContent = 'Could not load assessment findings: ' + String(error.message || error);

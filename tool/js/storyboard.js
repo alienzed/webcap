@@ -322,10 +322,10 @@
     scheduleStorySave();
   }
 
-  function reportError(err) {
+  function reportError(err, showStatus) {
     var message = String(err && err.message ? err.message : err || 'Storyboard request failed.');
     var status = el('storyboard-save-state');
-    if (status) status.textContent = 'Error: ' + message;
+    if (status && showStatus !== false) status.textContent = 'Error: ' + message;
     if (typeof reportConsoleError === 'function') reportConsoleError('Storyboard', err);
     else if (window.console && console.error) console.error('[Storyboard] ' + message, err);
   }
@@ -2766,7 +2766,7 @@
         '<span class="storyboard-sequence-working-indicator" aria-hidden="true"></span>' +
         '<div><strong>' + (pending.encode ? 'Encoding sequence' : 'Exporting sequence') + '</strong>' +
         '<span>' + (pending.encode ? 'Preparing Takes, normalizing video, and assembling the sequence' : 'Preparing and assembling selected Takes') +
-        ' · <span data-sequence-elapsed>' + sequenceExportElapsed(pending.startedAt) + '</span></span></div></div>' : '') +
+        ' · <span data-sequence-elapsed aria-live="off">' + sequenceExportElapsed(pending.startedAt) + '</span></span></div></div>' : '') +
       (exportError ? '<div class="storyboard-sequence-error" role="alert"><strong>Sequence export failed</strong><span>' +
         escapeHtml(exportError) + '</span></div>' : '') +
       '<div class="storyboard-sequence-body' + (storyState.sequenceCollapsed ? ' hidden' : '') + '">' +
@@ -2840,7 +2840,7 @@
       }
     }).catch(function (err) {
       storyState.sequenceExportErrors[storyId] = String(err && err.message ? err.message : err);
-      reportError(err);
+      reportError(err, !!storyState.story && storyState.story.id === storyId);
     }).finally(function () {
       delete storyState.sequenceExportPending[storyId];
       if (!Object.keys(storyState.sequenceExportPending).length && sequenceExportElapsedTimer) {

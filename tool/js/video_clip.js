@@ -559,6 +559,7 @@ function setVideoClipBusy(isBusy) {
 }
 
 function isVideoClipInSrcVideosFolder() {
+  if (videoClipStoryboardSource) return false;
   var folder = (typeof state !== 'undefined' && state.folder) ? String(state.folder) : '';
   return /\bsrc_videos(\\|\/|$)/i.test(folder);
 }

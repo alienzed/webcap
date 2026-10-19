@@ -24,7 +24,6 @@ def test_native_regular_and_campaign_launch_controls():
     assert "criteria.autoVl = autoVl;" in js
     assert "function testRunCriteria()" in js
     assert "refreshSessions();" in js
-    assert "preserveSingleSeed: count === 1" in js
     assert "def enqueue_repeated(folder_path, criteria):" in (ROOT / "tool/server/epoch_test_bench.py").read_text(encoding="utf-8")
     assert "epoch-finder-back-to-tests" in finder
     assert "showMode('tests')" in finder

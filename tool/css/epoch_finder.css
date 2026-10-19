@@ -346,3 +346,7 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 @media(max-width:1050px) {
   #test-generations-pane {--test-workspace-sidebar-width:390px;}
 }
+
+/* The permanent tabs replace old mode shortcuts, without removing wired controls. */
+#test-generations-pane #test-generations-campaign-mode,
+#test-generations-pane #epoch-finder-back-to-tests {display:none;}

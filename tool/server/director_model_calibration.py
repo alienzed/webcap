@@ -288,6 +288,7 @@ def normalize_report(report):
         "abilities": _report_abilities(normalized_attempts, context_mode, context_size, max_tokens, assessment_kind),
         "updatedAt": _now_iso(),
         "attempts": normalized_attempts,
+        "thinking": report.get("thinking") is True,
     }
 
     if report.get("importedFrom"):

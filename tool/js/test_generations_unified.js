@@ -234,9 +234,14 @@
     }
   }
   function renderGallery() {
-    var host=el('gallery');host.replaceChildren();
-    previewVersion++;pendingPreviews.length=0;
-    if(previewObserver)previewObserver.disconnect();
+    var host=el('gallery');
+    // Reconcile by stable media identity; keep already-loaded media elements alive.
+    var existing = new Map();
+    host.querySelectorAll('[data-test-gallery-id]').forEach(function(node) {
+      existing.set(node.dataset.testGalleryId, node);
+    });
+    var retained = new Set();
+    var desired = [];
     var records=selectedMedia();
     if(!selection) records.sort(function(a,b){return recordedTime(b)-recordedTime(a);});
     if(chosen && !records.some(function(item){return item.id===chosen;})) {
@@ -253,10 +258,22 @@
       if (perspective==='checkpoints' && checkpointSelection.size>1 && checkpoint!==previousCheckpoint) {
         var heading=document.createElement('h3');heading.className='test-unified-group-title';
         heading.textContent=(item.runName||'Run '+item.jobId.slice(-8))+' · Epoch '+item.epoch;
-        host.appendChild(heading);
+        heading.dataset.testGalleryId='heading:'+checkpoint;
+        var existingHeading=existing.get(heading.dataset.testGalleryId);
+        desired.push(existingHeading || heading);
+        retained.add(heading.dataset.testGalleryId);
         previousCheckpoint=checkpoint;
       }
+      var key='media:'+String(item.id);
+      var signature=JSON.stringify([item.mediaFile,item.mediaAvailable,item.framePruned,item.error,item.runName,item.epoch,item.rating,item.source,item.mediaKind]);
+      var cached=existing.get(key);
+      if(cached && cached.dataset.testGallerySignature===signature) {
+        cached.classList.toggle('active',chosen===item.id);
+        desired.push(cached);retained.add(key);return;
+      }
       var card=document.createElement('button');card.type='button';card.className='test-unified-card';
+      card.dataset.testGalleryId=key;
+      card.dataset.testGallerySignature=signature;
       var src=mediaUrl(item);
       var isImage=item.source==='campaign' || /\.(png|jpe?g|webp|gif|avif)$/i.test(item.mediaFile||'') || item.mediaKind==='image';
       if(src && item.mediaAvailable !== false && !item.framePruned) {
@@ -266,14 +283,19 @@
       } else {var blank=document.createElement('span');blank.textContent=item.error || (item.framePruned?'Frame pruned':item.mediaAvailable===false?'Media missing':'No retained frame');card.appendChild(blank);}
       var title=document.createElement('span');title.textContent=(item.runName ? item.runName+' · ':'')+(item.epoch==null?'Unattributed':'Epoch '+item.epoch)+(item.rating?' · ★ '+item.rating:'');
       card.appendChild(title);card.classList.toggle('active',chosen===item.id);
-      card.addEventListener('click',function(){inspect(item);host.querySelectorAll('.test-unified-card').forEach(function(node){node.classList.toggle('active',node===card);});});host.appendChild(card);
+      card.addEventListener('click',function(){inspect(item);host.querySelectorAll('.test-unified-card').forEach(function(node){node.classList.toggle('active',node===card);});});desired.push(card);retained.add(key);
     });
-    if(!records.length) {var p=document.createElement('p');p.textContent='No matching results in the loaded page. Load more to continue browsing.';host.appendChild(p);}
+    if(!records.length) {var p=document.createElement('p');p.textContent='No matching results in the loaded page. Load more to continue browsing.';p.dataset.testGalleryId='empty';desired.push(p);retained.add('empty');}
     if ((payload.media || []).length < Number(payload.total || 0)) {
       var more=document.createElement('button');more.type='button';more.className='review-captions-btn test-unified-load-more';
       more.textContent='Load more results ('+(payload.media || []).length+' / '+payload.total+')';
-      more.addEventListener('click',loadMore);host.appendChild(more);
+      more.addEventListener('click',loadMore);more.dataset.testGalleryId='load-more';desired.push(more);retained.add('load-more');
     }
+    existing.forEach(function(node,key) {if(!retained.has(key))node.remove();});
+    desired.forEach(function(node,index) {
+      var at=host.children[index];
+      if(at!==node)host.insertBefore(node,at||null);
+    });
   }
   var advancedScreens = {
     finder: document.getElementById('epoch-finder-screen'),

@@ -4742,10 +4742,10 @@
     el('test-generations-batch-heading').textContent = (batch.autoVl ? 'Batch Test + VL' : 'Batch Test') + ' · ' + batch.folder;
     var lines = [];
     lines.push(batch.phase + ' · ' + batch.sessions.length + '/' + batch.count + ' sessions submitted');
-    if (batch.sessions.length) lines.push(batch.finished + ' sessions terminal');
+    if (batch.sessions.length) lines.push(batch.finished + '/' + batch.sessions.length + ' sessions finished or stopped');
     if (batch.phase === 'Generating + VL' || batch.phase === 'Generating' || batch.phase === 'Evaluating') {
       lines.push(batch.finished + '/' + batch.sessions.length + ' sessions finished');
-      if (batch.autoVl) lines.push(batch.evaluated + '/' + batch.previews + ' previews evaluated');
+      if (batch.autoVl) lines.push(batch.evaluated + '/' + batch.previews + ' previews assessed successfully');
     }
     if (batch.detail) lines.push(batch.detail);
     if (batch.errors.length) lines.push(batch.errors.length + ' error(s); see Console.');

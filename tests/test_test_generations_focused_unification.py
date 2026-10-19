@@ -12,12 +12,13 @@ def test_native_regular_and_campaign_launch_controls():
                 "test-generations-campaign-mode", "epoch-finder-back-to-tests",
                 "test-generations-prompt", "test-generations-aspect",
                 "test-generations-megapixels", "test-generations-duration",
-                "test-generations-seed", "test-generations-base-include",
+                "test-generations-seed",
                 "test-generations-master-select", "test-generations-sweep-mode",
                 "test-generations-batch-btn", "epoch-finder-run-choices",
                 "epoch-finder-epoch-picker", "epoch-finder-reference-workspace",
                 "epoch-finder-start", "epoch-finder-back", "epoch-finder-next"):
         assert 'id="' + key + '"' in html, key
+    assert "test-generations-base-include" in js  # dynamically rendered by native candidate controller
     assert "if (count === 1 && !autoVl) return startRun();" in js
     assert "runTestBatch(count)" in js
     assert "el('test-generations-batch-auto-vl').checked = autoVl;" in js

@@ -716,161 +716,88 @@
     }).catch(showError);
   }
 
-  function updateReferenceChoices() {
-    var attribute = el('test-generations-reference-attribute');
-    var tagGroup = el('test-generations-reference-group');
-    var option = el('test-generations-reference-option');
-    var chosen = (currentStatus.wildcardEvaluationGroups || []).find(function (row) {
-      return String(row.id) === attribute.value;
-    });
-    var options = chosen && Array.isArray(chosen.options) ? chosen.options : [];
-    var eligible = referenceCompare.vocabulary.filter(function (row) {
-      return (row.terms || []).some(function (term) { return options.includes(term.term); });
-    });
-    var previous = tagGroup.value;
-    tagGroup.innerHTML = '<option value="">Select tagged group…</option>' + eligible.map(function (g) {
-      return '<option value="' + escapeHtml(g.group) + '">' + escapeHtml(g.group) + '</option>';
-    }).join('');
-    if (eligible.some(function (g) { return g.group === previous; })) tagGroup.value = previous;
-    var target = eligible.find(function (g) { return g.group === tagGroup.value; });
-    var accepted = target ? options.filter(function (v) {
-      return target.terms.some(function (t) { return t.term === v; });
-    }) : [];
-    option.innerHTML = '<option value="">Select expected option…</option>' + accepted.map(function (x) {
-      return '<option value="' + escapeHtml(x) + '">' + escapeHtml(x) + '</option>';
-    }).join('');
-    updateReferenceImages();
-  }
-
-  function updateReferenceImages() {
-    var folder = referenceCompare.folder, session = referenceCompare.session;
-    var group = el('test-generations-reference-group').value;
-    var option = el('test-generations-reference-option').value;
-    var media = el('test-generations-reference-media');
-    var image = el('test-generations-reference-preview');
-    var selected = media.value;
-    image.classList.add('hidden');
-    media.innerHTML = '<option value="">Choose reference image…</option>';
-    if (!group || !option) return;
-    var body = {folder: folder, operation:'reference_candidates', criteria:{group:group,term:option,jobId:referenceCompare.jobId}};
-    captionAssistRequestJson('/fs/epoch_finder', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-    }).then(function (payload) {
-      if (referenceCompare.folder !== folder || referenceCompare.session !== session ||
-          el('test-generations-reference-group').value !== group ||
-          el('test-generations-reference-option').value !== option) return;
-      media.innerHTML = '<option value="">Choose reference image…</option>' +
-        (payload.references || []).map(function (entry) {
-          return '<option value="' + escapeHtml(entry.media) + '">' + escapeHtml(entry.media) + '</option>';
-        }).join('');
-      if ([].some.call(media.options, function (entry) { return entry.value === selected; })) media.value = selected;
-      drawReferenceImage();
-    }).catch(showError);
-  }
-
-  function drawReferenceImage() {
-    var name = el('test-generations-reference-media').value;
-    var image = el('test-generations-reference-preview');
-    image.classList.toggle('hidden', !name);
-    if (name) image.src = '/caption/media?folder=' + encodeURIComponent(referenceCompare.folder) +
-      '&media=' + encodeURIComponent(name);
-    else image.removeAttribute('src');
-  }
-
   function openReferenceDialog() {
     var status = currentStatus;
-    var results = (status.results || []).filter(function (r) { return !!resultMediaFile(r); });
-    if (!results.length) throw new Error('No Test previews are available for comparison.');
+    if (!(status.results || []).some(function (r) { return !!resultMediaFile(r); }))
+      throw new Error('No Test previews are available for comparison.');
     referenceCompare.folder = owningSetFolder(launchFolder || (state && state.folder) || '');
     referenceCompare.session = status.session;
-    referenceCompare.jobId = '';
-    var runs = prepared && Array.isArray(prepared.candidateRuns) ? prepared.candidateRuns.filter(function (run) {
-      return run && run.jobId && run.folder === referenceCompare.folder;
-    }) : [];
-    var runPicker = el('test-generations-reference-training-run');
-    runPicker.innerHTML = '<option value="">Choose training run…</option>' + runs.map(function (run, i) {
-      return '<option value="' + escapeHtml(String(run.jobId)) + '">' + escapeHtml(candidateRunLabel(run, i)) + '</option>';
-    }).join('');
-    if (runs.length === 1) runPicker.value = String(runs[0].jobId);
-    referenceCompare.jobId = runPicker.value;
+    var all = typeof window.testReferencesSelections === 'function'
+      ? window.testReferencesSelections(referenceCompare.folder) : [];
+    var attributes = (status.wildcardEvaluationGroups || []).filter(function (g) { return g.options && g.options.length; });
+    // Only references corresponding to a scored option can be assessed.
+    var seen = new Set();
+    referenceCompare.plan = all.map(function (choice) {
+      var matches = attributes.filter(function (g) { return g.options.includes(choice.term); });
+      var resultKey = JSON.stringify([choice.group, choice.term]);
+      if (matches.length !== 1 || seen.has(resultKey)) return null;
+      seen.add(resultKey); // Saved comparisons are keyed by method/group/option, not source run.
+      return {choice:choice, attribute:matches[0]};
+    }).filter(Boolean);
     var dialog = el('test-generations-reference-dialog');
     var method = el('test-generations-evaluator').value;
     el('test-generations-reference-title').textContent =
-      method === 'dino' ? 'DINOv2 · Training Reference' : 'VL Compare · Training Reference';
-    var attributes = (status.wildcardEvaluationGroups || []).filter(function (g) {
-      return g.options && g.options.length;
-    });
-    var picker = el('test-generations-reference-attribute');
-    picker.innerHTML = '<option value="">Choose an attribute…</option>' + attributes.map(function (group) {
-      return '<option value="' + escapeHtml(group.id) + '">' + escapeHtml(group.label || group.id) + '</option>';
-    }).join('');
-    el('test-generations-reference-status').textContent =
-      attributes.length ? 'Select an attribute and approved training example.' :
-        'This session has no scored wildcard attributes.';
+      method === 'dino' ? 'DINOv2 · Training References' : 'VL Compare · Training References';
+    var statusLine = el('test-generations-reference-status');
+    statusLine.textContent = referenceCompare.plan.length
+      ? referenceCompare.plan.length + ' compatible selected references · ' +
+        (status.results || []).filter(function (r) { return !!resultMediaFile(r); }).length +
+        ' previews · ' + method.toUpperCase() + '.'
+      : all.length
+        ? 'No selected Training References match the scored options in this session.'
+        : 'No Training References selected. Choose references in the References workspace first.';
+    el('test-generations-reference-run').disabled = !referenceCompare.plan.length;
     if (!dialog.open) dialog.showModal();
-    referenceCompare.vocabulary = [];
-    updateReferenceChoices();
     drawReferenceResults();
-    if (referenceCompare.jobId) {
-      var initialJobId = referenceCompare.jobId;
-      captionAssistRequestJson('/fs/epoch_finder', {
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({folder:referenceCompare.folder,operation:'reference_vocabulary',criteria:{jobId:initialJobId}})
-      }).then(function (response) {
-        if (referenceCompare.jobId !== initialJobId) return;
-        referenceCompare.vocabulary = response.vocabulary || [];
-        updateReferenceChoices();
-      }).catch(showError);
-    }
   }
 
   async function runReferenceComparison() {
     if (referenceCompare.busy) return;
     var method = el('test-generations-evaluator').value;
-    var attributeId = el('test-generations-reference-attribute').value;
-    var group = el('test-generations-reference-group').value;
-    var option = el('test-generations-reference-option').value;
-    var reference = el('test-generations-reference-media').value;
-    if (!referenceCompare.jobId) throw new Error('Choose the source training run for the reference.');
-    var attribute = (currentStatus.wildcardEvaluationGroups || []).find(function (x) { return String(x.id) === attributeId; });
-    if (!attribute || !group || !option || !reference) throw new Error('Choose an attribute, option, and approved image.');
+    var plan = (referenceCompare.plan || []).slice();
+    if (!plan.length) throw new Error('Select compatible training references in References first.');
     var previews = (currentStatus.results || []).map(resultMediaFile).filter(Boolean);
     if (!previews.length) throw new Error('No previews are available.');
-    var folder = referenceCompare.folder, session = referenceCompare.session, jobId = referenceCompare.jobId;
+    var folder = referenceCompare.folder, session = referenceCompare.session;
     var button = el('test-generations-reference-run'), status = el('test-generations-reference-status');
     referenceCompare.busy = true;
     button.disabled = true;
     el('test-generations-evaluator').disabled = true;
     try {
-      for (var i=0; i<previews.length; i++) {
-        if (referenceCompare.folder !== folder || referenceCompare.session !== session)
-          throw new Error('Session changed; stopped further comparisons.');
-        status.textContent = method.toUpperCase() + ' · ' + (i+1) + ' / ' + previews.length;
-        var payload = await testReferenceRequest({
-          folder:folder, session:session, action:'evaluate', method:method, media:previews[i], group:group,
-          option:option, reference:reference, jobId:jobId, choices:attribute.options,
-          model: method === 'rvn' ? getCaptionVisionModelId() : ''
-        });
-        if (method === 'rvn') {
-          if (!payload.job || !payload.job.jobId) throw new Error('Reference VL did not return a job.');
-          trackTransientLlmJob(payload.job);
-          var completion = await waitForCaptionAssistJob(payload.job);
-          var raw = String(completion && completion.result && completion.result.text || '');
-          var optionMatch = raw.match(/^OPTION\s*:\s*(\d+)/im);
-          var verdictMatch = raw.match(/^VERDICT\s*:\s*(MATCH|PARTIAL|MISMATCH|UNCLEAR)/im);
-          var selected = optionMatch ? Number(optionMatch[1]) : null;
-          if (selected && selected > attribute.options.length) selected = null;
-          await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:{
-            method:'rvn',group:group,option:option,reference:reference,jobId:jobId,
-            attribute:attribute.label || attribute.id,
-            selected:selected,selectedText:selected == null ? '' : attribute.options[selected - 1],
-            verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',
-            response:raw,modelId:getCaptionVisionModelId(),at:Date.now()/1000
-          }});
+      var done = 0, total = plan.length * previews.length;
+      for (var p = 0; p < plan.length; p++) {
+        var row = plan[p], choice = row.choice, attribute = row.attribute;
+        for (var i = 0; i < previews.length; i++) {
+          if (referenceCompare.folder !== folder || referenceCompare.session !== session)
+            throw new Error('Session changed; stopped further comparisons.');
+          status.textContent = method.toUpperCase() + ' · ' + (++done) + ' / ' + total +
+            ' · ' + choice.group + ': ' + choice.term;
+          var payload = await testReferenceRequest({
+            folder:folder, session:session, action:'evaluate', method:method, media:previews[i],
+            group:choice.group, option:choice.term, reference:choice.media, jobId:choice.runId,
+            choices:attribute.options, model:method === 'rvn' ? getCaptionVisionModelId() : ''
+          });
+          if (method === 'rvn') {
+            if (!payload.job || !payload.job.jobId) throw new Error('Reference VL did not return a job.');
+            trackTransientLlmJob(payload.job);
+            var completion = await waitForCaptionAssistJob(payload.job);
+            var raw = String(completion && completion.result && completion.result.text || '');
+            var optionMatch = raw.match(/^OPTION\s*:\s*(\d+)/im);
+            var verdictMatch = raw.match(/^VERDICT\s*:\s*(MATCH|PARTIAL|MISMATCH|UNCLEAR)/im);
+            var selected = optionMatch ? Number(optionMatch[1]) : null;
+            if (selected && selected > attribute.options.length) selected = null;
+            await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:{
+              method:'rvn',group:choice.group,option:choice.term,reference:choice.media,jobId:choice.runId,
+              attribute:attribute.label || attribute.id,
+              selected:selected,selectedText:selected == null ? '' : attribute.options[selected - 1],
+              verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',
+              response:raw,modelId:getCaptionVisionModelId(),at:Date.now()/1000
+            }});
+          }
+          drawReferenceResults();
         }
-        drawReferenceResults();
       }
-      status.textContent = 'Finished ' + previews.length + ' preview comparisons. Results saved.';
+      status.textContent = 'Finished ' + total + ' preview comparisons. Results saved.';
     } catch (err) {
       status.textContent = 'Comparison stopped after error: ' + String(err.message || err);
       reportConsoleError('Test Generations reference evaluation',err);
@@ -5501,25 +5428,6 @@
       } catch (err) { showError(err); }
     };
     el('test-generations-evaluator').onchange = syncTestVlControls;
-    el('test-generations-reference-training-run').onchange = function () {
-      referenceCompare.jobId = this.value;
-      referenceCompare.vocabulary = [];
-      updateReferenceChoices();
-      if (!referenceCompare.jobId) return;
-      var jobId = referenceCompare.jobId;
-      captionAssistRequestJson('/fs/epoch_finder', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({folder:referenceCompare.folder,operation:'reference_vocabulary',criteria:{jobId:jobId}})
-      }).then(function (payload) {
-        if (referenceCompare.jobId !== jobId) return;
-        referenceCompare.vocabulary = payload.vocabulary || [];
-        updateReferenceChoices();
-      }).catch(showError);
-    };
-    el('test-generations-reference-attribute').onchange = updateReferenceChoices;
-    el('test-generations-reference-group').onchange = updateReferenceChoices;
-    el('test-generations-reference-option').onchange = updateReferenceImages;
-    el('test-generations-reference-media').onchange = drawReferenceImage;
     el('test-generations-reference-run').onclick = function () {
       runReferenceComparison().catch(showError);
     };

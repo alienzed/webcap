@@ -142,6 +142,12 @@
     if (controls.children.length) node.appendChild(controls);
     return node;
   }
+  function trainingWaitLabel(owner) {
+    if (!owner) return '';
+    if (owner === 'llm' || owner.indexOf('director') !== -1) return 'Waiting for LLM to release the GPU';
+    if (owner === 'inference') return 'Waiting for inference to release the GPU';
+    return 'Waiting for GPU (' + owner + ')';
+  }
   function render(which) {
     var panel = document.getElementById('job-queue-panel-' + which);
     var jobs = jobsFor(which);
@@ -153,7 +159,7 @@
     if (!payload) { message.textContent = 'Loading ' + which + ' queue…'; return; }
     message.textContent = which === 'llm'
       ? payload.pauseReason || payload.waitReason || (count(jobs) + ' requests')
-      : payload.queuePauseReason || payload.runnerNotice || (count(jobs) + ' jobs');
+      : payload.queuePauseReason || payload.runnerNotice || trainingWaitLabel(payload.waitingGpuOwner) || (count(jobs) + ' jobs');
     var controls = panel.querySelector('.job-queue-lane-actions');
     controls.classList.toggle('hidden', which === 'training' ? (!payload.queuePaused || jobs.some(active)) : !jobs.length);
     var previous = new Map();

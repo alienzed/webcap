@@ -243,6 +243,7 @@ function refreshTrainingRunnerStatus() {
       trainingWorkspaceState.runnerQueuePaused = !!payload.queuePaused;
       trainingWorkspaceState.runnerQueuePauseReason = String(payload.queuePauseReason || '');
       trainingWorkspaceState.runnerNotice = String(payload.runnerNotice || '');
+      trainingWorkspaceState.runnerWaitingGpuOwner = String(payload.waitingGpuOwner || '');
       renderTrainingRunner();
       refreshFolderQueueStatusBadges();
       var terminalOutcome = trainingWorkspaceState.runnerJobs.some(function (job) {
@@ -882,6 +883,13 @@ function buildTrainingRunnerProgressHtml(job) {
     '</div>';
 }
 
+function trainingGpuWaitLabel(owner) {
+  if (!owner) return '';
+  if (owner === 'llm' || owner.indexOf('director') !== -1) return 'Waiting for LLM to release the GPU';
+  if (owner === 'inference') return 'Waiting for inference to release the GPU';
+  return 'Waiting for GPU (' + owner + ')';
+}
+
 function trainingQueueHoldLabel() {
   return trainingWorkspaceState.runnerQueuePauseReason === 'Queue waiting for manual start after WebCap restarted.'
     ? 'Queue waiting for manual start'
@@ -983,7 +991,7 @@ function renderTrainingRunner() {
   if (!job) {
     var noJobMessage = trainingWorkspaceState.runnerQueuePaused
       ? trainingQueueHoldLabel()
-      : queuedCount ? 'No active training job.' : 'No managed training jobs.';
+      : queuedCount ? (trainingGpuWaitLabel(trainingWorkspaceState.runnerWaitingGpuOwner) || 'Waiting to start training.') : 'No managed training jobs.';
     els.runnerSummary.innerHTML = '<div>' + escapeHtml(noJobMessage) + '</div>' +
       (trainingWorkspaceState.runnerNotice
         ? '<div class="training-runner-detail is-warning">' + escapeHtml(trainingWorkspaceState.runnerNotice) + '</div>'

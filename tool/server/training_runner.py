@@ -3175,9 +3175,16 @@ def passive_status_snapshot():
     jobs = state.get("jobs") if isinstance(state.get("jobs"), list) else []
     active_jobs = [job for job in jobs if job.get("status") in ACTIVE_STATUSES]
     active_job_id = str(active_jobs[0].get("id") or "") if active_jobs else ""
+    # Read-only diagnostic: do not alter scheduling or GPU ownership.
+    waiting_owner = ""
+    if not active_jobs and not state.get("queuePaused") and any(job.get("status") in QUEUE_STATUSES for job in jobs):
+        owner = execution_resource_owner()
+        if owner and owner != TRAINING_RESOURCE_OWNER:
+            waiting_owner = str(owner)
     return {
         "ok": True,
         "activeJobId": active_job_id,
+        "waitingGpuOwner": waiting_owner,
         "queuePaused": bool(state.get("queuePaused")),
         "queuePauseReason": str(state.get("queuePauseReason") or ""),
         "runnerNotice": str(state.get("runnerNotice") or ""),

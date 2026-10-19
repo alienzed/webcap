@@ -4,6 +4,7 @@
   var legacy = document.getElementById('test-generations-body');
   var folder = '', model = '', payload = {sessions:[],campaigns:[],media:[]};
   var perspective = 'experiments', selection = '', chosen = '', serial = 0;
+  var checkpointSelection = new Set();
   function el(id) { return document.getElementById('test-unified-' + id); }
   function text(node, value) { node.textContent = String(value == null ? '' : value); }
   function label(item) { return item.name || item.id; }
@@ -37,6 +38,14 @@
       return {id:'campaign:'+item.id,name:item.name,status:item.status};
     }));
     var map = new Map();
+    (payload.runs || []).forEach(function(run) {
+      if (model && run.modelId !== model) return;
+      (run.epochs || []).forEach(function(epoch) {
+        if (!Number.isInteger(epoch)) return;
+        var id = run.jobId + ':' + epoch;
+        if (!map.has(id)) map.set(id,{id:id,name:(run.runName || 'Run '+String(run.jobId).slice(-8))+' · Epoch '+epoch});
+      });
+    });
     payload.media.forEach(function(item) {
       if (!item.jobId || !Number.isInteger(item.epoch)) return;
       var id = item.jobId + ':' + item.epoch;
@@ -48,9 +57,17 @@
     var host=el('list');host.replaceChildren();
     collections().forEach(function(item) {
       var btn=document.createElement('button');btn.type='button';btn.className='test-unified-item';
-      btn.classList.toggle('active',item.id===selection);
+      btn.classList.toggle('active',item.id===selection || (perspective==='checkpoints' && checkpointSelection.has(item.id)));
       btn.textContent=label(item)+(item.status?' · '+item.status:'');
-      btn.addEventListener('click',function() { selection=item.id; renderList();renderGallery(); });
+      btn.addEventListener('click',function(event) {
+        if (perspective==='checkpoints') {
+          if(event.ctrlKey || event.metaKey || event.shiftKey) {
+            if(checkpointSelection.has(item.id)) checkpointSelection.delete(item.id);
+            else checkpointSelection.add(item.id);
+          } else {checkpointSelection.clear(); checkpointSelection.add(item.id);}
+        }
+        selection=item.id;renderList();renderGallery();
+      });
       host.appendChild(btn);
     });
   }
@@ -58,7 +75,8 @@
     return (payload.media||[]).filter(function(item) {
       if (!selection) return true;
       return perspective==='experiments' ? item.collectionId===selection
-        : item.jobId+':'+item.epoch===selection;
+        : checkpointSelection.size ? checkpointSelection.has(item.jobId+':'+item.epoch)
+          : item.jobId+':'+item.epoch===selection;
     });
   }
   function mediaUrl(item) {
@@ -91,9 +109,19 @@
   }
   function renderGallery() {
     var host=el('gallery');host.replaceChildren();
-    var records=selectedMedia(); text(el('title'),selection ? (collections().find(function(x){return x.id===selection;})||{}).name || 'Results' : 'All generated results');
+    var records=selectedMedia();
+    if(perspective==='checkpoints' && checkpointSelection.size>1) records.sort(function(a,b){return (a.jobId+':'+a.epoch).localeCompare(b.jobId+':'+b.epoch,undefined,{numeric:true});});
+    text(el('title'),selection ? (collections().find(function(x){return x.id===selection;})||{}).name || 'Results' : 'All generated results');
     text(el('description'),records.length+' recorded results · '+(perspective==='experiments'?'Experiments':'Checkpoints'));
+    var previousCheckpoint = '';
     records.forEach(function(item) {
+      var checkpoint = item.jobId+':'+item.epoch;
+      if (perspective==='checkpoints' && checkpointSelection.size>1 && checkpoint!==previousCheckpoint) {
+        var heading=document.createElement('h3');heading.className='test-unified-group-title';
+        heading.textContent=(item.runName||'Run '+item.jobId.slice(-8))+' · Epoch '+item.epoch;
+        host.appendChild(heading);
+        previousCheckpoint=checkpoint;
+      }
       var card=document.createElement('button');card.type='button';card.className='test-unified-card';
       var src=mediaUrl(item);
       var isImage=item.source==='campaign' || /\.(png|jpe?g|webp|gif|avif)$/i.test(item.mediaFile||'') || item.mediaKind==='image';
@@ -162,8 +190,8 @@
   el('explore').onclick=function(){builder(false);};
   el('build').onclick=function(){builder(true);};
   el('new').onclick=function(){builder(true);};
-  el('experiments').onclick=function(){perspective='experiments';selection='';renderList();renderGallery();};
-  el('checkpoints').onclick=function(){perspective='checkpoints';selection='';renderList();renderGallery();};
+  el('experiments').onclick=function(){perspective='experiments';selection='';checkpointSelection.clear();renderList();renderGallery();};
+  el('checkpoints').onclick=function(){perspective='checkpoints';selection='';checkpointSelection.clear();renderList();renderGallery();};
   el('reload').onclick=refresh;
   el('legacy').onclick=function(){if(finderMounted)mountFinder(false);mountExistingControls(false);show(false);};
   el('normal').onclick=function(){legacyMode('tests');};

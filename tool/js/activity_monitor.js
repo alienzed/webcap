@@ -1090,8 +1090,11 @@
     // One chart, owned by the local job. Never attach machine telemetry to remote work.
     var graph = el('activity-monitor-trend');
     var localIndex = featured.findIndex(isLocalGpuActivity);
-    if (localIndex >= 0) cards[localIndex].after(graph);
-    else host.appendChild(graph);
+    if (localIndex >= 0) {
+      if (graph.previousElementSibling !== cards[localIndex]) cards[localIndex].after(graph);
+    } else if (graph.parentElement !== host || graph !== host.lastElementChild) {
+      host.appendChild(graph);
+    }
     graph.classList.toggle('hidden', localIndex < 0);
   }
 

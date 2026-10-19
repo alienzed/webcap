@@ -4732,8 +4732,12 @@
 
   function renderTestBatch() {
     var card = el('test-generations-batch-summary');
-    var batch = viewedTestBatch || testBatch;
-    card.classList.toggle('hidden', !batch || batch.dismissed || String(launchFolder) !== batch.folder);
+    var availableBatches = [testBatch].concat(testBatchHistory).filter(Boolean).filter(function (entry) {
+      return entry.folder === String(launchFolder) && !entry.dismissed;
+    });
+    var batch = viewedTestBatch && availableBatches.indexOf(viewedTestBatch) !== -1
+      ? viewedTestBatch : availableBatches[0];
+    card.classList.toggle('hidden', !batch);
     if (!batch) return;
     var startButton = el('test-generations-batch-start');
     if (!el('test-generations-batch-modal').classList.contains('hidden')) {
@@ -4741,7 +4745,7 @@
       openTestBatchDialogSummary();
     }
     var historySelect = el('test-generations-batch-history');
-    var choices = [testBatch].concat(testBatchHistory).filter(Boolean).filter(function (entry) { return entry.folder === String(launchFolder); });
+    var choices = availableBatches;
     var existingOptions = Array.from(historySelect.options);
     if (existingOptions.length !== choices.length || choices.some(function (entry, index) {
       return !existingOptions[index] || existingOptions[index].value !== entry.activityId;
@@ -5477,7 +5481,10 @@
       try { runTestBatch(count); } catch (err) { showError(err); }
     };
     el('test-generations-batch-stop').onclick = stopTestBatch;
-    el('test-generations-batch-dismiss').onclick = function () { if (testBatch) { testBatch.dismissed = true; renderTestBatch(); } };
+    el('test-generations-batch-dismiss').onclick = function () {
+      var batch = viewedTestBatch || testBatch;
+      if (batch) { batch.dismissed = true; viewedTestBatch = null; renderTestBatch(); }
+    };
     el('test-generations-batch-results').onclick = function (event) {
       var sort = event.target.closest('[data-test-batch-sort]');
       if (sort) { testBatchSort = sort.dataset.testBatchSort; renderTestBatch(); return; }

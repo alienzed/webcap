@@ -206,6 +206,32 @@
         else window.openTestBenchAnalyticsSession(item.session);
       }
     });host.appendChild(open);
+    if(item.source==='test' && item.session) {
+      var section=document.createElement('section'),name=document.createElement('strong');
+      name.textContent='Saved assessments';
+      var evidence=document.createElement('pre');
+      evidence.textContent='Loading saved rating and VL evidence…';
+      section.append(name,evidence);host.appendChild(section);
+      var inspectedId=item.id;
+      fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:folder,operation:'test_open_session',criteria:{session:item.session}})})
+        .then(function(response){return response.json().then(function(data){
+          if(!response.ok||!data.ok)throw new Error(data.error||'Session unavailable.');
+          return data;
+        });}).then(function(data){
+          if(chosen!==inspectedId||!evidence.isConnected)return;
+          var result=(data.results||[]).find(function(entry){
+            return String(entry.mediaFile||entry.outputVideo||'')===item.mediaFile;
+          });
+          var byMedia=(data.testVision||{}).byMedia||{};
+          evidence.textContent=JSON.stringify({
+            rating:result&&result.rating, vl:byMedia[item.mediaFile]||null
+          },null,2);
+        }).catch(function(error) {
+          if(chosen===inspectedId&&evidence.isConnected)
+            evidence.textContent='Saved assessment unavailable: '+String(error.message||error);
+        });
+    }
   }
   function renderGallery() {
     var host=el('gallery');host.replaceChildren();

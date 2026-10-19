@@ -20,7 +20,7 @@ def test_storyboard_lora_plan_preserves_existing_and_stale_guard(monkeypatch):
     monkeypatch.setattr(storyboard_store, "_utc_now", lambda: "v2")
     from tool.server import lora_library
     monkeypatch.setattr(lora_library, "catalogue", lambda: [
-        {"stage": "h3", "name": "new.safetensors", "enriched": True},
+        {"stage": "h3", "name": "new.safetensors", "enriched": True, "enrichment": {"trainedWords": []}},
     ])
     updated = storyboard_store.apply_lora_plan.__wrapped__ if hasattr(
         storyboard_store.apply_lora_plan, "__wrapped__") else storyboard_store.apply_lora_plan

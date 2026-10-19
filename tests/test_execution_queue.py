@@ -679,6 +679,8 @@ def test_ephemeral_llm_recent_history_is_bounded_and_forgets_on_reset(queue_root
     assert recent[-1]["metadata"]["modelId"] == "remote"
     assert recent[0]["startedAt"] <= recent[0]["finishedAt"]
     assert all("payload" not in row for row in recent)
+    assert all("content" not in row["result"] for row in recent)
+    assert all("private" not in json.dumps(row) for row in recent)
     queue.clear()
     assert queue.recent_snapshot() == []
 

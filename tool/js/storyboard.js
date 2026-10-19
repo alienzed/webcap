@@ -1942,6 +1942,10 @@
         scheduleStorySave();
       }
       setRepairStatus('Revised ' + String(sceneIds.length) + ' Scenes.');
+      if (storyState.story && storyState.story.id === storyId &&
+          storyState.story.directorLoraPlanning === true) {
+        suggestStoryboardLoras().catch(reportError);
+      }
       return { text: 'Revised ' + String(sceneIds.length) + ' Scenes.' };
     }).catch(function (err) {
       if (directorWasStopped(err)) setRepairStatus('Revise Scenes stopped.');
@@ -2183,6 +2187,10 @@
         'Developed ' + String(actualCount) + ' Scenes with ' + String(payload.model || modelId) +
         (individual ? ' · one at a time.' : '.') + countWarning
       );
+      if (storyState.story && storyState.story.id === storyId &&
+          storyState.story.directorLoraPlanning === true) {
+        suggestStoryboardLoras().catch(reportError);
+      }
     }).catch(function (err) {
       if (directorWasStopped(err)) setDevelopStatus('Story development stopped. Existing Scenes were left unchanged.');
       else {

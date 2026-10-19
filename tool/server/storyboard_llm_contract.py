@@ -10,7 +10,7 @@ H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
 SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"
-VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "repair_scenes", "write_prompt", "refine_prompt"}
+VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "repair_scenes", "write_prompt", "refine_prompt", "check_coherence"}
 
 
 def _read_text(path, label):
@@ -254,6 +254,28 @@ def build_request(story, scene_id, operation, instruction="", development=None):
     operation = _clean(operation).lower()
     if operation not in VALID_OPERATIONS:
         raise ValueError("Unsupported Storyboard LLM operation.")
+
+    if operation == "check_coherence":
+        scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+        scene = scenes.get(_clean(scene_id))
+        if not isinstance(scene, dict):
+            raise FileNotFoundError("Scene does not exist.")
+        original = _clean(scene.get("prompt"))
+        if not original:
+            raise ValueError("Scene generation prompt is required for Check Coherence.")
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": (
+                "[EXISTING H3 PROMPT]\n" + original
+                + "\n\n[CURRENT TASK]\n"
+                "Review this H3 text-to-video prompt for coherence. "
+                "Favor details that can be conveyed visually or audibly. "
+                "Consolidate repeated descriptions. Preserve the existing structure and creative intent. "
+                "Return the complete improved prompt, or the original unchanged if no meaningful improvement is needed."
+            ),
+            "response_schema": _prompt_response_schema(),
+        }
 
     director_context = _read_text(DIRECTOR_CONTEXT_PATH, "Storyboard director context")
     h3_runtime_context = _read_text(H3_RUNTIME_CONTEXT_PATH, "MiniMax H3 runtime context")

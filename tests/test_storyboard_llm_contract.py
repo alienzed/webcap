@@ -371,3 +371,19 @@ def test_existing_relationship_context_remains_available():
     })["prompt"]
     assert "PREVIOUS FULL H3 PROMPT" in prompt
     assert '"suggestedDurationSeconds": 12' in prompt
+
+
+def test_check_coherence_only_sees_existing_prompt():
+    story = _story()
+    prompt = storyboard_llm_contract.build_request(story, "scene-2", "check_coherence")
+    text = prompt["prompt"]
+    assert "Review this H3 text-to-video prompt for coherence." in text
+    assert "Favor details that can be conveyed visually or audibly." in text
+    assert "Consolidate repeated descriptions." in text
+    assert "original unchanged if no meaningful improvement is needed" in text
+    assert "STORY CONCEPT" not in text
+    assert "STORY INVARIANTS" not in text
+    assert "PREVIOUS SCENE" not in text
+    assert "OLD FIRST PROMPT" not in text
+    assert "EXISTING SECOND PROMPT" in text
+    assert prompt["response_schema"]["required"] == ["prompt"]

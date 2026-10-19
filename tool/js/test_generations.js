@@ -5768,6 +5768,10 @@
   window.openTestBenchActivityMenu = openTestBenchActivityMenu;
   window.openTestBenchForFolder = openTestBenchForSetFolder;
   window.openTestBenchForCurrentFolder = openPane;
+  window.openTestBenchAnalyticsSession = function (sessionId) {
+    window.epochFinderShowMode("tests");
+    openSession(String(sessionId));
+  };
   window.closeTestBenchActivity = closePane;
   window.refreshTestBenchActivity = refreshActivityButton;
   bindUi();

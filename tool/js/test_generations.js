@@ -4652,10 +4652,7 @@
   var testBatch = null;
   var testBatchHistory = [];
   var viewedTestBatch = null;
-  var testBatchTimer = 0;
-  var testBatchWake = null;
   var testBatchSort = 'vl';
-  var testBatchSequence = 0;
   setInterval(function () { if (typeof launchFolder !== 'undefined' && launchFolder) refreshServerTestBatches(); }, 4000);
   refreshServerTestBatches();
 
@@ -4881,91 +4878,6 @@
     });
   }
 
-  function testBatchCheck(batch) {
-    if (testBatch !== batch || !batch.active) throw new Error('Test batch stopped.');
-  }
-
-  function testBatchWait(batch) {
-    return new Promise(function (resolve) {
-      testBatchWake = function () { testBatchWake = null; resolve(); };
-      testBatchTimer = setTimeout(function () { testBatchTimer = 0; testBatchWake = null; resolve(); }, 5000);
-    });
-  }
-
-  function testBatchError(batch, err, detail) {
-    var message = String(detail || '') + ': ' + String(err && err.message ? err.message : err);
-    batch.errors.push(message);
-    reportConsoleError('Test batch · ' + (detail || 'operation'), err);
-    batch.detail = message;
-    renderTestBatch();
-  }
-
-  function testBatchReadSessions(batch) {
-    return Promise.all(batch.sessions.map(function (session) {
-      return requestForFolder(batch.folder, 'test_open_session', { session: session }).then(function (status) {
-        batch.statuses[session] = status;
-      }).catch(function (err) {
-        // A user can delete a pending session while a batch is running.
-        // Preserve earlier VL results and continue with other sessions.
-        if (/404|does not exist|not found|no such session/i.test(String(err && err.message || err))) {
-          if (!batch.statuses[session] || batch.statuses[session].status !== 'missing') {
-            testBatchError(batch, err, session + ' removed');
-          }
-          batch.statuses[session] = { status: 'missing', results: [], testVision: {} };
-          return;
-        }
-        testBatchError(batch, err, session);
-        throw err;
-      });
-    }));
-  }
-
-  function testBatchPoll(batch) {
-    testBatchCheck(batch);
-    return testBatchReadSessions(batch).then(function () {
-      testBatchCheck(batch);
-      var terminal = { complete: true, stopped: true, failed: true, interrupted: true, missing: true };
-      batch.finished = batch.sessions.filter(function (id) {
-        return !!terminal[String(batch.statuses[id].status || '')];
-      }).length;
-
-      // Each terminal session joins the serial VL chain exactly once. Polling
-      // continues while that chain works, so completed sessions are assessed
-      // without waiting for the rest of the inference queue.
-      batch.sessions.forEach(function (session) {
-        var status = batch.statuses[session];
-        if (!terminal[String(status.status || '')] || batch.scheduledSessions.has(session)) return;
-        batch.scheduledSessions.add(session);
-        batch.previews += (status.results || []).filter(function (result) {
-          return !!resultMediaFile(result);
-        }).length;
-        var failures = Array.isArray(status.failures) ? status.failures : [];
-        var failed = Number(status.failed || 0);
-        if (failures.length || failed || status.status === 'failed' || status.status === 'interrupted') {
-          var reason = failures.map(function (failure) {
-            return String(failure.sourceLoRA || failure.candidateFile || 'Generation') + ': ' +
-              String(failure.error || 'failed');
-          }).join('; ') || String(status.error || failed + ' failed generation(s)');
-          testBatchError(batch, new Error(reason), sessionLabel(session) + ' generation');
-        }
-        if (batch.autoVl) {
-          batch.evaluationQueue = batch.evaluationQueue.then(function () {
-            return testBatchEvaluateSession(batch, session);
-          }).catch(function (err) {
-            if (batch.active) testBatchError(batch, err, sessionLabel(session) + ' evaluation');
-          });
-        }
-      });
-
-      batch.phase = batch.finished === batch.sessions.length
-        ? (batch.autoVl ? 'Evaluating' : 'Complete')
-        : (batch.autoVl ? 'Generating + VL' : 'Generating');
-      renderTestBatch();
-      if (batch.finished === batch.sessions.length) return batch.evaluationQueue;
-      return testBatchWait(batch).then(function () { return testBatchPoll(batch); });
-    });
-  }
-
   function testBatchRecalculate(batch) {
     var totals = Object.create(null);
     batch.sessions.forEach(function (session) {
@@ -5004,55 +4916,6 @@
       return item;
     });
     renderTestBatch();
-  }
-
-  function testBatchEvaluateSession(batch, session) {
-    testBatchCheck(batch);
-    var status = batch.statuses[session];
-    var question = testVlQuestion(status);
-    var groups = Array.isArray(status.wildcardEvaluationGroups) ? status.wildcardEvaluationGroups : [];
-    var results = (status.results || []).filter(function (result) {
-      return !!resultMediaFile(result);
-    });
-    return results.reduce(function (chain, result) {
-      return chain.then(function () {
-        testBatchCheck(batch);
-        var file = resultMediaFile(result);
-        batch.detail = sessionLabel(session) + ' · ' + file;
-        renderTestBatch();
-        var vlStartedAt = Date.now();
-        return askVlForTestPreview(batch.folder, session, file, batch.vlModel, question, function (jobId) {
-          batch.vlJobId = jobId;
-          return batch.active;
-        }).then(function (job) {
-          testBatchCheck(batch);
-          var text = String(job && job.result && job.result.text || '').trim() || '(empty response)';
-          return requestForFolder(batch.folder, 'test_vision_update', {
-            session: session, mediaFile: file,
-            assessment: { text: text, question: question, comparison: testVlCompare(text, groups),
-              modelId: batch.vlModel, elapsedMs: Math.max(0, Date.now() - vlStartedAt) }
-          });
-        }).then(function (payload) {
-          testBatchCheck(batch);
-          var stored = batch.statuses[session].testVision || (batch.statuses[session].testVision = {});
-          stored.byMedia = payload.testVision.byMedia;
-          stored.disabledGroups = payload.testVision.disabledGroups;
-          if (prepared && String(launchFolder) === batch.folder && String(prepared.modelId || '') === String(batch.criteria.modelId)) {
-            prepared.candidateVisionScores = payload.candidateVisionScores || {};
-            syncTestVlCandidateRows();
-          }
-          testBatchRecalculate(batch);
-        }).then(function () {
-          batch.evaluated += 1;
-        }).catch(function (err) {
-          if (!batch.active) throw err;
-          testBatchError(batch, err, session + ' · ' + file);
-        }).then(function () {
-          batch.vlJobId = '';
-          renderTestBatch();
-        });
-      });
-    }, Promise.resolve());
   }
 
   function runTestBatch(count) {

@@ -1363,10 +1363,11 @@ def test_storyboard_sequence_encode_has_inline_pending_elapsed_and_error_feedbac
     assert "if (storyState.sequenceExportPending[storyId]) return;" in storyboard
     assert "data-sequence-encode' + (pending ? ' disabled' : '')" in storyboard
     assert "data-sequence-export' + (pending ? ' disabled' : '')" in storyboard
-    assert 'data-sequence-elapsed' in storyboard
+    assert 'data-sequence-elapsed aria-live="off"' in storyboard
     assert 'role="status" aria-live="polite"' in storyboard
     assert 'role="alert"' in storyboard
     assert "window.clearInterval(sequenceExportElapsedTimer)" in storyboard
-    assert "reportError(err)" in storyboard
+    assert "reportError(err, !!storyState.story && storyState.story.id === storyId)" in storyboard
+    assert "if (status && showStatus !== false)" in storyboard
     assert ".storyboard-sequence-processing" in css
     assert ".storyboard-sequence-error" in css

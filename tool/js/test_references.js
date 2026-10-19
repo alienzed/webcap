@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var folder = '', runId = '', vocabulary = [], candidates = [], version = 0, selected = {};
+  var folder = '', runId = '', vocabulary = [], candidates = [], version = 0, selected = {}, positions = {};
   function el(name) { return document.getElementById('test-references-' + name); }
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
@@ -23,6 +23,38 @@
   function mediaUrl(name) { return '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(name); }
   function key(group, term) { return JSON.stringify([runId, group, term]); }
   function currentChoice() { return {group:el('group').value, term:el('option').value}; }
+  function terms() {
+    var group = vocabulary.find(function (entry) { return entry.group === el('group').value; });
+    return group ? group.terms.filter(function (entry) { return Number(entry.count || 0) > 0; }) : [];
+  }
+  function showTerm(term) {
+    el('option').value = term;
+    positions[runId + '/' + el('group').value] = term;
+    loadCandidates();
+  }
+  function advance(step) {
+    var choices = terms(), current = el('option').value;
+    if (!choices.length) return;
+    var index = choices.findIndex(function (entry) { return entry.term === current; });
+    var next = index + step;
+    if (next >= 0 && next < choices.length) showTerm(choices[next].term);
+    else { el('status').textContent = step > 0 ? 'End of this group. Choose another tag or group.' : 'Already at the first tag.'; }
+  }
+  function drawTags() {
+    var choices = terms(), current = currentChoice(), position = choices.findIndex(function (entry) { return entry.term === current.term; });
+    el('tag-progress').textContent = choices.length ? (position + 1) + ' / ' + choices.length + ' tags · ' +
+      choices.filter(function (entry) { return !!selected[key(current.group, entry.term)]; }).length + ' chosen' : '';
+    el('tags').innerHTML = choices.map(function (entry) {
+      var active = entry.term === current.term, chosen = !!selected[key(current.group, entry.term)];
+      return '<button type="button" class="test-references-tag' + (active ? ' active' : '') +
+        (chosen ? ' chosen' : '') + '" data-reference-term="' + esc(entry.term) +
+        '" aria-pressed="' + active + '">' + (chosen ? '✓ ' : '') + esc(entry.term) +
+        ' <small>' + Number(entry.count || 0) + '</small></button>';
+    }).join('');
+    el('previous').disabled = position <= 0;
+    el('next').disabled = position < 0 || position >= choices.length - 1;
+    el('skip').disabled = position < 0 || position >= choices.length - 1;
+  }
   function drawSelections() {
     var keys = Object.keys(selected).filter(function (value) { return selected[value].runId === runId; });
     el('selected-count').textContent = keys.length + ' chosen';
@@ -49,6 +81,7 @@
         '<button type="button" data-preview-reference="' + i + '">Preview</button></div></div>';
     }).join('');
     drawSelections();
+    drawTags();
   }
   function loadCandidates() {
     var choice = currentChoice(), token = ++version, currentFolder = folder, currentRun = runId;
@@ -72,6 +105,10 @@
         return '<option value="' + esc(entry.term) + '">' + esc(entry.term) + ' (' + Number(entry.count || 0) + ')</option>';
       }).join('');
     el('option').disabled = !group;
+    var choices = terms(), saved = positions[runId + '/' + el('group').value];
+    var firstOpen = choices.find(function (entry) { return !selected[key(el('group').value, entry.term)]; });
+    el('option').value = choices.some(function (entry) { return entry.term === saved; }) ? saved :
+      (firstOpen || choices[0] || {}).term || '';
     loadCandidates();
   }
   function loadVocabulary() {
@@ -116,7 +153,7 @@
   }
   window.testReferencesPrepare = function (nextFolder) {
     if (folder === nextFolder) return;
-    folder = nextFolder; runId = ''; selected = {}; version++;
+    folder = nextFolder; runId = ''; selected = {}; positions = {}; version++;
     el('run').innerHTML = '<option value="">Choose source training run…</option>';
     el('group').innerHTML = '<option value="">Select a run first</option>';
     el('option').innerHTML = '<option value="">Select a group first</option>';
@@ -130,7 +167,16 @@
   el('refresh').onclick = refresh;
   el('run').onchange = loadVocabulary;
   el('group').onchange = loadOptions;
-  el('option').onchange = loadCandidates;
+  el('option').onchange = function () {
+    positions[runId + '/' + el('group').value] = el('option').value;
+    loadCandidates();
+  };
+  el('previous').onclick = function () { advance(-1); };
+  el('next').onclick = el('skip').onclick = function () { advance(1); };
+  el('tags').onclick = function (event) {
+    var button = event.target.closest('[data-reference-term]');
+    if (button) showTerm(button.dataset.referenceTerm);
+  };
   el('gallery').onclick = function (event) {
     var pick = event.target.closest('[data-select-reference]');
     var preview = event.target.closest('[data-preview-reference]');
@@ -143,6 +189,7 @@
       var choice = currentChoice();
       selected[key(choice.group, choice.term)] = {runId:runId,group:choice.group,term:choice.term,media:candidate.media};
       drawGallery();
+      advance(1);
     } else {
       el('preview-image').src = mediaUrl(candidate.media);
       el('preview-image').alt = candidate.media;

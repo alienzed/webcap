@@ -265,3 +265,18 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .run-analytics-table-wrap table{width:100%;border-collapse:collapse;text-align:left;font-size:12px}
 .run-analytics-table-wrap th,.run-analytics-table-wrap td{padding:9px 11px;white-space:nowrap;border-bottom:1px solid var(--border-color,#384653);font-variant-numeric:tabular-nums}
 .run-analytics-table-wrap th{position:sticky;top:0;background:var(--panel-bg,#1b2530)}
+
+/* Training References: a wide curation surface with directly navigable tags. */
+.test-references-screen .epoch-finder-layout{grid-template-columns:minmax(250px,300px) minmax(0,1fr)}
+.test-references-screen .epoch-finder-reference-workspace .epoch-finder-reference-gallery{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));max-height:none;overflow:visible}
+.test-references-workflow-heading,.test-references-nav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0 12px}
+.test-references-nav button{flex:1}
+.test-references-workflow-heading button,.test-references-nav button{padding:7px 10px;cursor:pointer}
+.test-references-workflow-heading button:disabled,.test-references-nav button:disabled{opacity:.45;cursor:default}
+.test-references-tags{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 15px;max-height:180px;overflow:auto}
+.test-references-tag{padding:6px 10px;border:1px solid var(--border-color,#384653);border-radius:18px;background:transparent;color:inherit;cursor:pointer}
+.test-references-tag.active{border-color:var(--accent-color,#e99b16);background:var(--panel-bg,#1b2530);font-weight:700}
+.test-references-tag.chosen{border-color:var(--accent-color,#e99b16)}
+.test-references-tag small{opacity:.7;margin-left:4px}
+.test-references-screen .epoch-finder-reference-tile img{height:225px}
+@media(max-width:850px){.test-references-screen .epoch-finder-layout{grid-template-columns:1fr}.test-references-screen .epoch-finder-reference-workspace .epoch-finder-reference-gallery{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}.test-references-screen .epoch-finder-reference-tile img{height:165px}}

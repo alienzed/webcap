@@ -658,6 +658,29 @@ function openLoraLibraryProfile(item) {
   });
 }
 
+window.openLoraMetadataEditor = function (name, stage) {
+  name = String(name || '').replace(/\\\\/g, '/').trim();
+  if (!name) throw new Error('Select a LoRA before opening its metadata.');
+  openAppSettingsModal();
+  setAppSettingsTab('models', false);
+  return loraLibraryRequest('GET').then(function (data) {
+    var matches = (data.items || []).filter(function (item) {
+      return (!stage || item.stage === stage) &&
+        (item.name.toLowerCase() === name.toLowerCase() ||
+         item.path.toLowerCase() === name.toLowerCase());
+    });
+    if (matches.length !== 1) {
+      throw new Error(matches.length ? 'LoRA name is ambiguous across configured roots.' :
+        'LoRA is not present in the configured model roots.');
+    }
+    return openLoraLibraryProfile(matches[0]);
+  }).catch(function (error) {
+    document.getElementById('lora-library-status').textContent = String(error.message || error);
+    if (typeof window.reportConsoleError === 'function')
+      window.reportConsoleError('LoRA Metadata', String(error.message || error));
+  });
+};
+
 function saveLoraLibraryProfile() {
   if (!loraLibrarySelected) return;
   var status = document.getElementById('lora-library-status');

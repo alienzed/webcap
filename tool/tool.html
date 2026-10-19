@@ -2060,7 +2060,7 @@
                         <label class="test-generations-batch-count-label">Test sessions <input id="test-generations-batch-count" type="number" min="1" max="20" step="1" value="5"></label>
                         <label class="test-generations-batch-count-label"><input id="test-generations-batch-auto-vl" type="checkbox" checked> Automatically evaluate completed previews with Ask VL</label>
                         <div id="test-generations-batch-config-summary" class="keep-lora-source"></div>
-                        <p class="keep-lora-source">Keep this tab open until all sessions are submitted and any requested VL assessments finish. Closing the tab stops browser orchestration; already submitted Test sessions continue independently. Stopping Batch does not cancel accepted Test sessions. VL percentages require resolved wildcard attributes.</p>
+                        <p class="keep-lora-source">Batch submission and automatic VL continue on the server when this tab closes. Stopping Batch halts further submissions and its VL assessments; accepted Test sessions continue independently. VL percentages require resolved wildcard attributes.</p>
                     </div>
                     <footer class="keep-lora-header test-generations-batch-dialog-actions"><button id="test-generations-batch-cancel" type="button" class="review-captions-btn">Cancel</button><button id="test-generations-batch-start" type="button" class="training-btn">Queue Sessions</button></footer>
                 </section>

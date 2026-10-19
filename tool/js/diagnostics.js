@@ -223,7 +223,7 @@ function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
   var selectedButton = null;
 
   Array.prototype.forEach.call(document.querySelectorAll('[data-diagnostics-tab]'), function (button) {
-    var active = button.getAttribute('data-diagnostics-tab') === (next === 'models' || next === 'benchmark' ? 'assessment' : next);
+    var active = button.getAttribute('data-diagnostics-tab') === (next === 'models' || next === 'benchmark' || next === 'model-lab' ? 'assessment' : next);
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', active ? 'true' : 'false');
     button.tabIndex = active ? 0 : -1;
@@ -307,7 +307,7 @@ function refreshUnifiedModelAssessment() {
     var header = document.createElement('tr');
     [{key: '', name: 'Select'}, {key: 'model', name: 'Model'}, {key: 'role', name: 'Role'},
       {key: 'size', name: 'Size'}, {key: 'result', name: 'Qualified for'},
-      {key: 'speed', name: 'tok/s'}, {key: 'output', name: 'Output observed'},
+      {key: 'thinking', name: 'Thinking'}, {key: 'speed', name: 'tok/s'}, {key: 'output', name: 'Output observed'},
       {key: 'quality', name: 'Quality review'}, {key: 'tested', name: 'Last tested'}].forEach(function (column) {
       var th = document.createElement('th');
       th.scope = 'col';
@@ -319,7 +319,7 @@ function refreshUnifiedModelAssessment() {
         button.title = 'Sort by ' + column.name;
         button.addEventListener('click', function () {
           if (diagnosticsAssessmentSort.key === column.key) diagnosticsAssessmentSort.descending = !diagnosticsAssessmentSort.descending;
-          else diagnosticsAssessmentSort = { key: column.key, descending: ['speed','output','tested','result','size','quality'].indexOf(column.key) !== -1 };
+          else diagnosticsAssessmentSort = { key: column.key, descending: ['thinking','speed','output','tested','result','size','quality'].indexOf(column.key) !== -1 };
           diagnosticsAssessmentSortAndFilter();
         });
         th.appendChild(button);
@@ -343,7 +343,7 @@ function refreshUnifiedModelAssessment() {
       var row = document.createElement('tbody');
       row.dataset.assessmentModel = key;
       row.dataset.assessmentSearch = (title + ' ' + ref + ' ' + kind).toLowerCase();
-      row.assessmentSort = { model: title.toLowerCase(), role: kind, size: null, speed: null, output: null, quality: null, result: 1, tested: null };
+      row.assessmentSort = { model: title.toLowerCase(), role: kind, size: null, thinking: null, speed: null, output: null, quality: null, result: 1, tested: null };
       row.assessmentReport = report;
       var line = document.createElement('tr');
       var selection = document.createElement('td');
@@ -387,6 +387,8 @@ function refreshUnifiedModelAssessment() {
       row.assessmentSort.size = size > 0 ? size : null;
       var qualification = cell('Qualified for', '', 'qualification');
       qualification.className = 'model-assessment-qualifications';
+      var thinkingCell = cell('Thinking', kind === 'director' ? 'No' : '—', 'thinking');
+      thinkingCell.title = kind === 'director' ? 'No positive thinking support recorded yet.' : 'Thinking applies to Director models.';
       var speedCell = cell('Speed', '—', 'speed');
       speedCell.title = 'Runtime-reported generation throughput when available; different probes and runtimes may not be directly comparable.';
       var outputCell = cell('Output', '—', 'output');
@@ -399,6 +401,13 @@ function refreshUnifiedModelAssessment() {
         });
       })[0];
       var tests = evidence && evidence.models[ref] || {};
+      var thinking = tests.director_thinking;
+      if (kind === 'director') {
+        var supported = thinking ? thinking.supported === true : !!(report && report.thinking);
+        thinkingCell.textContent = supported ? 'Yes' : 'No';
+        thinkingCell.title = thinking ? 'Unified thinking probe: ' + (supported ? 'reasoning observed' : 'not verified') : 'Saved Director assessment result';
+        row.assessmentSort.thinking = supported ? 1 : 0;
+      }
       var testedAt = evidence && evidence.startedAt || (report && report.finishedAt) || '';
       var date = testedAt ? new Date(testedAt) : null;
       var validDate = date && !isNaN(date.getTime());
@@ -445,7 +454,7 @@ function refreshUnifiedModelAssessment() {
       expanded.className = 'model-assessment-evidence';
       expanded.hidden = !diagnosticsAssessmentExpanded.has(key);
       var panel = document.createElement('td');
-      panel.colSpan = 9;
+      panel.colSpan = 10;
       var provenance = document.createElement('div');
       provenance.dataset.assessmentProvenance = '';
       provenance.textContent = evidence ? 'Model Lab run: ' + evidence.id + ' · ' + (evidence.status || 'unknown') +
@@ -1117,7 +1126,7 @@ function wireDiagnosticsUi() {
       setDiagnosticsTab(button.getAttribute('data-diagnostics-tab'), false);
     };
     button.onkeydown = function (event) {
-      var tabs = ['health', 'assessment', 'h3', 'model-lab'];
+      var tabs = ['health', 'assessment', 'h3'];
       var current = tabs.indexOf(button.getAttribute('data-diagnostics-tab'));
       var next = current;
       if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;

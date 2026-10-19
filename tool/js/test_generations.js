@@ -14,6 +14,7 @@
   var currentSessionFolder = '';
   var currentSessionModel = '';
   var currentStatus = {};
+  var lastPublishedPreviewKey = '';
   var resultsView = 'grid';
   var previewSort = 'original';
   var compareIndex = 0;
@@ -4349,6 +4350,17 @@
     syncVisibleSessionProgress(status || {});
     renderResults(status || {});
     syncTestVlCards();
+    var evidenceKey = JSON.stringify([
+      String(status && status.session || ''),
+      (status && Array.isArray(status.results) ? status.results : []).map(function (item) {
+        return String(item.mediaFile || item.outputVideo || '');
+      }),
+      String(status && status.status || '')
+    ]);
+    if (evidenceKey !== lastPublishedPreviewKey) {
+      lastPublishedPreviewKey = evidenceKey;
+      window.dispatchEvent(new CustomEvent('webcap:test-preview-updated'));
+    }
   }
 
   function testStatusHasPendingWork(status) {

@@ -654,7 +654,8 @@
     var duration = formatJobDuration(item.startedAt, item.finishedAt);
     var wait = formatJobDuration(item.createdAt, item.startedAt);
     var metadata = activityDetail(item);
-    detail.textContent = [metadata, duration ? 'Ran ' + duration : '', wait ? 'Queued ' + wait : ''].filter(Boolean).join(' · ')
+    detail.textContent = [metadata, item.error ? 'Error: ' + item.error : '',
+      duration ? 'Ran ' + duration : '', wait ? 'Queued ' + wait : ''].filter(Boolean).join(' · ')
       || String(item.status || '').replace(/_/g, ' ');
     copy.appendChild(title);
     copy.appendChild(detail);

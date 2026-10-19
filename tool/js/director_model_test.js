@@ -1432,12 +1432,16 @@ function directorModelTestCalibrateOne(model, modelNumber) {
       }).then(function (payload) {
         var id = String(payload.job && payload.job.jobId || '');
         if (!id) throw new Error('Thinking assessment received no job ID.');
-        return directorModelTestWaitForJob(id, {phase: '', phaseStartedAt: 0, phases: {}, observedContextSize: 0});
+        directorModelTestState.currentJobId = id;
+        return directorModelTestWaitForJob(id, {phase: '', phaseStartedAt: 0, phases: {}, observedContextSize: 0}).then(function (job) {
+          return directorModelTestConsumeJob(id).then(function () { return job; });
+        });
       }).then(function (job) {
         var result = job && job.result || {};
         thinkingVerified = job.status === 'completed' && !!String(result.reasoning || '').trim();
       });
     }).catch(function (error) {
+      if (directorModelTestState.stopRequested) throw error;
       reportConsoleError('Director Thinking Check', error);
       thinkingVerified = false;
     });

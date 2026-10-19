@@ -2594,6 +2594,26 @@
     return '/fs/storyboard/media?story=' + encodeURIComponent(storyId) + '&path=' + encodeURIComponent(mediaPath);
   }
 
+  function openStoryboardVideoClip(mediaPath) {
+    if (!storyState.story) throw new Error('Open a Story before editing video.');
+    var path = String(mediaPath || '');
+    if (!/\\.(mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(path)) {
+      throw new Error('Clip is only available for video Takes.');
+    }
+    if (typeof openVideoClipModal !== 'function') throw new Error('Clip editor is unavailable.');
+    openVideoClipModal(
+      { fileName: path.split('/').pop() },
+      { storyId: storyState.story.id, mediaPath: path }
+    );
+  }
+
+  window.refreshStoryboardClipSource = function (storyId) {
+    if (storyState.story && storyState.story.id === storyId) {
+      renderScenes();
+      refreshSequenceExport(storyId).catch(reportError);
+    }
+  };
+
   function takePreviewHtml(storyId, sceneId, take) {
     if (take && take.mediaPurged) {
       return '<div class="storyboard-takes-empty">Media reclaimed · recipe retained</div>';
@@ -2756,7 +2776,8 @@
         '&path=' + encodeURIComponent(assembly.mediaPath || ('exports/' + assembly.media));
       outputHtml = '<div class="storyboard-sequence-output">' +
         '<div class="storyboard-sequence-output-label">Export preview</div>' +
-        '<video src="' + escapeHtml(outputUrl) + '" controls preload="metadata"></video></div>';
+        '<video src="' + escapeHtml(outputUrl) + '" controls preload="metadata"></video>' +
+        '<button type="button" class="review-captions-btn" data-sequence-clip>Open in Clip</button></div>';
     }
 
     host.innerHTML = '<header class="storyboard-sequence-header"><div class="storyboard-sequence-heading-copy"><strong>Selected sequence</strong><span>' +
@@ -3615,6 +3636,8 @@
         ratingHtml +
         (take.mediaPurged && take.generated ? '<button type="button" class="review-captions-btn" data-take-action="regenerate" data-take-id="' + escapeHtml(takeId) + '">Regenerate</button>' : '') +
         '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
+        (/\\.(mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(String(take.mediaPath || '')) ?
+          '<button type="button" class="review-captions-btn" data-take-clip="' + escapeHtml(takeId) + '">Open in Clip</button>' : '') +
       '</div>' +
       '<details class="storyboard-take-advanced">' +
         '<summary>Advanced</summary>' +
@@ -5684,6 +5707,12 @@
     };
 
     el('storyboard-sequence-preview').addEventListener('click', function (event) {
+      if (event.target.closest('[data-sequence-clip]')) {
+        var current = storyState.sequenceExport;
+        if (!current || !current.mediaPath) throw new Error('Export the Sequence before opening Clip.');
+        openStoryboardVideoClip(current.mediaPath);
+        return;
+      }
       if (event.target.closest('[data-sequence-export]')) {
         exportSelectedSequence(false);
         return;
@@ -6037,6 +6066,15 @@
       var executionAction = event.target.closest('[data-generation-action]');
       if (executionAction) {
         generationAction(executionAction.dataset.generationAction, executionAction.dataset.jobId);
+        return;
+      }
+      var clipTake = event.target.closest('[data-take-clip]');
+      if (clipTake) {
+        var takeSceneRoot = clipTake.closest('.storyboard-scene[data-scene-id]');
+        var clipScene = takeSceneRoot && storyState.story && storyState.story.scenes[takeSceneRoot.dataset.sceneId];
+        var clipMedia = clipScene && clipScene.takes && clipScene.takes[clipTake.dataset.takeClip];
+        if (!clipMedia) throw new Error('Storyboard video Take is missing.');
+        openStoryboardVideoClip(clipMedia.mediaPath);
         return;
       }
       var takeRating = event.target.closest('[data-take-rating][data-rating-value]');

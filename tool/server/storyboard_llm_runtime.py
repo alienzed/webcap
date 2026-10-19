@@ -1681,7 +1681,7 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
     )
 
 
-def chat(model_ref, messages, response_schema=None, max_tokens=None, context_size=None, gpu_reserved=False, sampling=None, allow_truncated=False, assessment_evidence=False, thinking=False):
+def chat(model_ref, messages, response_schema=None, max_tokens=None, context_size=None, gpu_reserved=False, sampling=None, allow_truncated=False, assessment_evidence=False, thinking=None):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director messages are required.")
 
@@ -1717,7 +1717,7 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             if requested_max_tokens <= 0:
                 raise ValueError("Director max_tokens override must be greater than zero.")
             payload["max_tokens"] = requested_max_tokens
-        if settings.get("mode", "local") == "remote" and _remote_is_ollama():
+        if settings.get("mode", "local") == "remote" and _remote_is_ollama() and (thinking is not None or assessment_evidence):
             payload["reasoning_effort"] = "high" if thinking else "none"
         if settings.get("mode", "local") == "local":
             payload["reasoning_effort"] = "high" if thinking else "none"
@@ -1902,7 +1902,7 @@ def normalize_freeform_messages(messages, allow_image_data_urls=False):
         normalized.append({"role": role, "content": content})
     return normalized
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None, allow_image_data_urls=False, thinking=False):
+def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None, allow_image_data_urls=False, thinking=None):
     normalized = normalize_freeform_messages(messages, allow_image_data_urls=allow_image_data_urls)
 
     operation = "freeform_chat"
@@ -1965,7 +1965,7 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, c
             raise
 
 
-def run_contract(model_id, contract, gpu_reserved=False, thinking=False):
+def run_contract(model_id, contract, gpu_reserved=False, thinking=None):
     if not isinstance(contract, dict):
         raise ValueError("Director contract must be an object.")
     prompt = str(contract.get("prompt") or "").strip()

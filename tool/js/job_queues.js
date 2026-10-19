@@ -342,7 +342,7 @@
   drawer.addEventListener('dragleave', function (event) {
     if (event.relatedTarget && drawer.contains(event.relatedTarget)) return;
     drawer.querySelectorAll('[data-queue-drop]').forEach(function (item) {
-      item.classList.remove('queue-drop-before', 'queue-drop-after');
+      item.removeAttribute('data-queue-drop');
     });
   });
   drawer.addEventListener('click', function (event) {

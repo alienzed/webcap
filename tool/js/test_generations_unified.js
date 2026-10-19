@@ -39,12 +39,16 @@
       window.reportConsoleError('Test Generations Explore', error);
     });
   }
+  function recordedTime(item) {
+    var n=Number(item && item.startedAt || 0);
+    return n>1e11 ? n/1000 : n;
+  }
   function collections() {
     if (perspective === 'experiments') return payload.sessions.map(function(item) {
-      return {id:'test:'+item.id, name:item.name, status:item.status};
+      return {id:'test:'+item.id, name:item.name, status:item.status, startedAt:item.startedAt};
     }).concat(payload.campaigns.map(function(item) {
-      return {id:'campaign:'+item.id,name:item.name,status:item.status};
-    }));
+      return {id:'campaign:'+item.id,name:item.name,status:item.status,startedAt:item.startedAt};
+    })).sort(function(a,b){return recordedTime(b)-recordedTime(a);});
     var map = new Map();
     (payload.runs || []).forEach(function(run) {
       if (model && run.modelId !== model) return;
@@ -148,6 +152,7 @@
   function renderGallery() {
     var host=el('gallery');host.replaceChildren();
     var records=selectedMedia();
+    if(!selection) records.sort(function(a,b){return recordedTime(b)-recordedTime(a);});
     if(chosen && !records.some(function(item){return item.id===chosen;})) {
       chosen='';text(el('details'),'Select an image to inspect its generation settings and assessments.');
     }

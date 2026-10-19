@@ -194,10 +194,17 @@ def _prune_terminal(lane, keep=200):
     lane["jobs"] = [job for job in lane.get("jobs", []) if job.get("id") not in remove_ids]
 
 
-def _record_recent(lane, job, keep=80):
+def _record_recent(lane, job, keep=80, summary_only=False):
     receipt = _public_job(job)
     if not isinstance(receipt, dict):
         return
+    if summary_only:
+        result = receipt.get("result") if isinstance(receipt.get("result"), dict) else {}
+        receipt["result"] = {
+            key: copy.deepcopy(result[key])
+            for key in ("usage", "finishReason") if key in result
+        }
+        receipt["details"] = {}
     recent = lane.setdefault("recent", [])
     recent.append(receipt)
     if len(recent) > keep:
@@ -467,7 +474,7 @@ class EphemeralExecutionQueue:
             if lane.get("activeJobId") == job["id"]:
                 lane["activeJobId"] = ""
             _refresh_positions(lane)
-            _record_recent(lane, job)
+            _record_recent(lane, job, summary_only=True)
             _remember_transient_receipt(receipt)
             return receipt
 
@@ -489,7 +496,7 @@ class EphemeralExecutionQueue:
                 receipt = _public_job(job)
                 lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
                 _refresh_positions(lane)
-                _record_recent(lane, job)
+                _record_recent(lane, job, summary_only=True)
                 _remember_transient_receipt(receipt)
                 return receipt
             if status in ACTIVE_STATUSES:
@@ -514,7 +521,7 @@ class EphemeralExecutionQueue:
                     job["finishedAt"] = now
                     job["updatedAt"] = now
                     job["requestedAction"] = ""
-                    _record_recent(lane, job)
+                    _record_recent(lane, job, summary_only=True)
                     _remember_transient_receipt(_public_job(job))
                     continue
                 if active_id and str(job.get("id") or "") == active_id and status in ACTIVE_STATUSES:

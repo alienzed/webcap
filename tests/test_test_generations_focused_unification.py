@@ -24,9 +24,9 @@ def test_native_regular_and_campaign_launch_controls():
     assert "el('test-generations-batch-auto-vl').checked = autoVl;" in js
     assert "preserveSingleSeed: !!preserveSingleSeed && count === 1" in js
     assert "preserveSingleSeed" in (ROOT / "tool/server/test_batch.py").read_text(encoding="utf-8")
-    assert "window.testGenerationsUnifiedDestination('finder')" in js
+    assert "window.epochFinderShowMode('finder')" in js
     assert "epoch-finder-back-to-tests" in finder
-    assert "window.testGenerationsUnifiedDestination('build')" in finder
+    assert "showMode('tests')" in finder
     assert "window.epochFinderShowMode = showMode" in finder
 
 

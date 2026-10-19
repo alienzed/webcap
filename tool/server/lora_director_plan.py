@@ -26,9 +26,15 @@ def shortlist(stage, intent, scenes=None, existing=None, max_chars=14000):
     existing = existing if isinstance(existing, dict) else {}
     query = _terms(intent + " " + " ".join(str(s.get("summary") or s.get("title") or "")
                                                for s in scenes if isinstance(s, dict)))
-    assigned = {str(x.get("name") or "") for group in (existing.get("storyWide") or [], existing.get("scenes") or [])
-                for x in (group.get("assign", []) if isinstance(group, dict) else [group])
-                if isinstance(x, dict)}
+    assigned = {
+        str(item.get("name") or "")
+        for item in (existing.get("storyWide") or [])
+        if isinstance(item, dict)
+    }
+    for group in existing.get("scenes") or []:
+        if isinstance(group, dict):
+            assigned.update(str(item.get("name") or "") for item in group.get("assign") or []
+                            if isinstance(item, dict))
     candidates = []
     for entry in catalogue():
         if entry["stage"] != stage or not entry["enriched"]:

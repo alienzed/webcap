@@ -3505,10 +3505,10 @@
     lora = lora || {};
     override = override || {};
     var storyEnabled = lora.enabled !== false;
-    var enabled = override.enabled !== false;
+    var enabled = override.enabled === true || (storyEnabled && override.enabled !== false);
     var defaultStrength = Number(lora.strength == null ? 1 : lora.strength);
     var strength = override.strength == null ? defaultStrength : Number(override.strength);
-    var disabledAttr = storyEnabled ? '' : ' disabled';
+    var disabledAttr = '';
     return '<div class="storyboard-lora-row storyboard-lora-row-inherited' + (storyEnabled ? '' : ' storyboard-lora-row-story-disabled') +
       '" data-story-lora-inherited-row data-lora-name="' +
       escapeHtml(lora.name || '') + '" data-story-default-strength="' + escapeHtml(defaultStrength) + '">' +

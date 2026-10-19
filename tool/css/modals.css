@@ -3792,3 +3792,20 @@ html[data-theme="dark"] .app-settings-environment-check {
   box-shadow: none;
   animation: none;
 }
+
+/* Model Assessment: one compact control/filter region; legacy tools follow evidence. */
+#diagnostics-panel-assessment > .app-settings-section { display: flex; flex-direction: column; gap: 10px; }
+#diagnostics-panel-assessment .model-assessment-toolbar { gap: 8px; }
+.model-assessment-transfer-menu { position: relative; margin-left: auto; }
+.model-assessment-transfer-menu > summary { cursor: pointer; padding: 7px 10px; border: 1px solid var(--border); border-radius: 5px; }
+.model-assessment-transfer-menu[open] > .model-assessment-toolbar { padding: 9px 0 0; }
+.model-assessment-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; }
+.model-assessment-filters > label { display: inline-flex; align-items: center; gap: 7px; margin: 0; }
+.model-assessment-filters .model-assessment-search { flex: 1 1 260px; }
+.model-assessment-filters .model-assessment-search input { min-width: 120px; width: 100%; }
+.model-assessment-feedback { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; }
+.model-assessment-feedback > .app-settings-help { margin: 0; }
+#diagnostics-panel-assessment .model-assessment-tools { margin: 8px 0 0; }
+#diagnostics-panel-assessment .model-assessment-table { font-size: 13px; }
+#diagnostics-panel-assessment .model-assessment-table td { padding-top: 11px; padding-bottom: 11px; }
+#diagnostics-panel-assessment .model-assessment-expand { font-size: inherit; }

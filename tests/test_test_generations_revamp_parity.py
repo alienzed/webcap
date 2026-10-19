@@ -34,7 +34,8 @@ def test_unified_revamp_preserves_server_execution_ownership():
     finder = (ROOT / "tool" / "js" / "epoch_finder.js").read_text(encoding="utf-8")
     analytics = (ROOT / "tool" / "js" / "run_analytics.js").read_text(encoding="utf-8")
     assert "/fs/test_generations" in tests
-    assert "return runTestBatch(count, autoVl);" in tests
+    assert "criteria.repeat = repeat;" in tests
+    assert "criteria.autoVl = autoVl;" in tests
     assert "/fs/epoch_finder" in finder
     assert "pause" in finder and "resume" in finder
     assert "/fs/run_analytics/interpret" in analytics

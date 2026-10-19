@@ -2479,6 +2479,11 @@ def run_analytics_interpret_route():
         facts = director_facts(snapshot, data.get("campaignId"))
         if bool(data.get("previewOnly")):
             return jsonify({"ok": True, "facts": facts})
+        import json
+        reviewed = data.get("reviewedFacts")
+        if (not isinstance(reviewed, str) or len(reviewed) > 180000 or
+                reviewed != json.dumps(facts, indent=2, ensure_ascii=False)):
+            raise ValueError("The reviewed Analytics evidence changed. Preview the latest facts before running Director.")
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(),
             director_contract(facts), context={}, label="Run Analytics: interpret evidence",

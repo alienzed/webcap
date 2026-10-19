@@ -2301,18 +2301,21 @@
           if (generateState.modelId !== originalModelId || el('generate-prompt').value !== originalPrompt) {
             throw new Error('Generation context changed; request new suggestions.');
           }
-          var available = (currentModel() && currentModel().loras) || [];
-          choices.forEach(function (item) {
-            if (available.indexOf(item.name) === -1) {
-              throw new Error('LoRA is not loadable in the selected ComfyUI workflow: ' + item.name);
+          return postJson('/fs/lora_library/resolve', {
+            stage:stage, names:choices.map(function (item) { return item.name; })
+          }).then(function (resolved) {
+            if (generateState.modelId !== originalModelId ||
+                el('generate-prompt').value !== originalPrompt) {
+              throw new Error('Generate context changed during LoRA resolution.');
             }
-          });
-          var selectedLoraList = selectedLoras(originalModelId);
-          choices.forEach(function (item) {
-            var found = selectedLoraList.find(function (current) { return current.name === item.name; });
-            if (found) found.strength = item.strength;
-            else selectedLoraList.push({name:item.name, strength:item.strength});
-          });
+            var selectedLoraList = selectedLoras(originalModelId);
+            choices.forEach(function (item) {
+              var name = resolved.names[item.name];
+              if (!name) throw new Error('ComfyUI did not resolve LoRA: ' + item.name);
+              var found = selectedLoraList.find(function (current) { return current.name === name; });
+              if (found) found.strength = item.strength;
+              else selectedLoraList.push({name:name, strength:item.strength});
+            });
           var phrases = choices.reduce(function (all, item) { return all.concat(item.phrases || []); }, []);
           var missing = phrases.filter(function (phrase) {
             return originalPrompt.toLowerCase().indexOf(phrase.toLowerCase()) === -1;
@@ -2321,6 +2324,7 @@
             (originalPrompt.trim() ? ', ' : '') + missing.join(', ');
           renderLoras();
           return runDirector(operation, true);
+          });
         }});
         setDirectorStatus('Review LoRA suggestions before applying.');
       });

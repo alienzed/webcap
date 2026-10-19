@@ -7,6 +7,7 @@ var diagnosticsAssessmentRunStatus = '';
 var diagnosticsAssessmentStoppingId = '';
 var diagnosticsAssessmentSort = { key: 'speed', descending: true };
 var diagnosticsAssessmentExpanded = new Set();
+var diagnosticsAssessmentReviewRefresh = 0;
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
@@ -48,10 +49,15 @@ function diagnosticsAssessmentCounts(row, tests) {
         else problems += count;
       });
     });
+    var requiredKinds = families[family].filter(function (kind) {
+      return kind === 'director_writing' || kind === 'language_synthesis' || kind === 'language_challenge' ||
+        kind === 'vision_open' || kind === 'vision_group_aware';
+    });
+    var coverage = requiredKinds.every(function (kind) { return (tests[kind] || {}).counts && Number((tests[kind].counts || {}).completed || 0) > 0; });
     if (!total) missing += 1;
     else if (problems) bad += 1;
     else if (active) running += 1;
-    else if (completed === total) good += 1;
+    else if (completed === total && coverage) good += 1;
     else missing += 1;
   });
   var state = bad ? 'Issues' : running ? 'Running' : missing ? 'Not qualified' : 'Passed';
@@ -209,6 +215,10 @@ function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
   // primary destinations appear in the tab bar.
   var next = ['health', 'assessment', 'h3', 'models', 'benchmark', 'model-lab'].indexOf(tabName) !== -1 ? tabName : 'health';
   diagnosticsActiveTab = next;
+  if (next !== 'assessment' && diagnosticsAssessmentReviewRefresh) {
+    window.clearTimeout(diagnosticsAssessmentReviewRefresh);
+    diagnosticsAssessmentReviewRefresh = 0;
+  }
   diagnosticsEl('diagnostics-modal').classList.toggle('diagnostics-assessment-wide', next === 'assessment');
   var selectedButton = null;
 
@@ -414,7 +424,9 @@ function refreshUnifiedModelAssessment() {
       if (rates.length) {
         var rate = rates.reduce(function (a, b) { return a + Number(b); }, 0) / rates.length;
         speedCell.textContent = rate.toFixed(1);
-        speedCell.title = 'Average runtime-reported decode tokens/s across saved probes; comparisons depend on hardware and workloads.';
+        speedCell.title = allTests.some(function (item) { return item.speedBasis; })
+          ? 'Effective throughput including request overhead for probes without runtime timing; compare on same hardware.'
+          : 'Runtime-reported tokens/s across saved probes; compare on same hardware.';
         row.assessmentSort.speed = rate;
       } else if (legacyRates.length) {
         var legacyRate = Number(legacyRates[legacyRates.length - 1].tokensPerSecond);
@@ -508,6 +520,19 @@ function refreshUnifiedModelAssessment() {
     });
     results.replaceChildren(table);
     diagnosticsAssessmentSortAndFilter();
+    if (diagnosticsAssessmentReviewRefresh) window.clearTimeout(diagnosticsAssessmentReviewRefresh);
+    diagnosticsAssessmentReviewRefresh = 0;
+    var reviewsRunning = capabilityRuns.some(function (run) {
+      return Object.keys(run.qualityReviews || {}).some(function (ref) {
+        return run.qualityReviews[ref].status === 'running';
+      });
+    });
+    if (reviewsRunning && diagnosticsActiveTab === 'assessment') {
+      diagnosticsAssessmentReviewRefresh = window.setTimeout(function () {
+        diagnosticsAssessmentReviewRefresh = 0;
+        refreshUnifiedModelAssessment().catch(function () {});
+      }, 3000);
+    }
     refreshSelectionSummary();
     var followed = activeRun || labRuns[0];
     if (followed) {

@@ -1088,7 +1088,7 @@ def workspace_gallery(folder_path, model_id=""):
             source_job = str(provenance.get("sourceJobId") or "")
             source_folder = str(provenance.get("sourceFolder") or "").replace(chr(92), "/").strip("/")
             epoch = provenance.get("sourceEpoch")
-            if source_folder != str(bench._relative_set_folder(folder_path)).replace(chr(92), "/").strip("/") or type(epoch) is not int:
+            if not source_job or source_folder != str(bench._relative_set_folder(folder_path)).replace(chr(92), "/").strip("/") or type(epoch) is not int:
                 source_job, epoch = "", None
             media.append({
                 "id": "test:" + session_name + ":" + media_file,
@@ -1129,7 +1129,7 @@ def workspace_gallery(folder_path, model_id=""):
             for index, unit in enumerate(campaign.get("units") or []):
                 candidate = unit.get("epoch")
                 origin = candidate_map.get(str(candidate))
-                job_id = str(origin.get("jobId") if origin else campaign.get("jobId") or "")
+                job_id = str((origin.get("jobId") if origin else campaign.get("jobId")) or "")
                 epoch = origin.get("epoch") if origin else candidate
                 if type(epoch) is not int:
                     job_id, epoch = "", None

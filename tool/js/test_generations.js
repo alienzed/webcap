@@ -4738,19 +4738,26 @@
     var startButton = el('test-generations-batch-start');
     if (!el('test-generations-batch-modal').classList.contains('hidden')) {
       startButton.disabled = !!(testBatch && testBatch.active);
-      if (!(testBatch && testBatch.active)) el('test-generations-batch-config-summary').textContent =
-        selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session';
+      openTestBatchDialogSummary();
     }
     var historySelect = el('test-generations-batch-history');
     var choices = [testBatch].concat(testBatchHistory).filter(Boolean).filter(function (entry) { return entry.folder === String(launchFolder); });
-    historySelect.replaceChildren();
-    choices.forEach(function (entry) {
-      var option = document.createElement('option');
-      option.value = entry.activityId;
-      option.textContent = (entry === testBatch ? 'Latest · ' : 'Earlier · ') + new Date(entry.startedAt * 1000).toLocaleTimeString() + ' · ' + entry.phase;
-      historySelect.appendChild(option);
+    var existingOptions = Array.from(historySelect.options);
+    if (existingOptions.length !== choices.length || choices.some(function (entry, index) {
+      return !existingOptions[index] || existingOptions[index].value !== entry.activityId;
+    })) {
+      historySelect.replaceChildren();
+      choices.forEach(function (entry) {
+        var option = document.createElement('option');
+        option.value = entry.activityId;
+        historySelect.appendChild(option);
+      });
+    }
+    choices.forEach(function (entry, index) {
+      historySelect.options[index].textContent = (entry === testBatch ? 'Latest · ' : 'Earlier · ') +
+        new Date(entry.startedAt * 1000).toLocaleTimeString() + ' · ' + entry.phase;
     });
-    historySelect.value = batch.activityId;
+    if (historySelect.value !== batch.activityId) historySelect.value = batch.activityId;
     historySelect.classList.toggle('hidden', choices.length < 2);
     el('test-generations-batch-heading').textContent = (batch.autoVl ? 'Batch Test + VL' : 'Batch Test') + ' · ' + batch.folder;
     var lines = [];

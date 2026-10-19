@@ -297,3 +297,37 @@ def director_facts(snapshot, campaign_id=""):
             "warnings": item["warnings"][:8],
         })
     return facts
+
+def director_contract(facts):
+    """Bounded schema-based interpretation, not another assessment or rating."""
+    import json
+    return {
+        "operation": "interpret_run_analytics",
+        "prompt": (
+            "Review only the numerical evidence below. Never assume a causal effect from "
+            "loss, learning rate, epoch count, or sample size. Distinguish direct observations "
+            "from hypotheses and experiments. Do not fabricate comparisons where campaign "
+            "settings or evaluation protocols differ. Mention small denominators. "
+            "Reply with four concise sections: Observed, Hypotheses, Try next, Limits.\n"
+            + json.dumps(facts, ensure_ascii=False, separators=(",", ":"))
+        ),
+        "response_schema": {
+            "type": "object", "additionalProperties": False,
+            "required": ["observed", "hypotheses", "tryNext", "limits"],
+            "properties": {
+                "observed": {"type": "string"},
+                "hypotheses": {"type": "string"},
+                "tryNext": {"type": "string"},
+                "limits": {"type": "string"}
+            }
+        }
+    }
+
+
+def normalize_director_response(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("Director Analytics response must be structured.")
+    fields = ("observed", "hypotheses", "tryNext", "limits")
+    if any(not isinstance(payload.get(field), str) for field in fields):
+        raise ValueError("Director Analytics response is missing a required section.")
+    return {field: payload[field][:3000] for field in fields}

@@ -64,7 +64,7 @@ def test_archive_retains_movie_recipe_and_reclaims_generated_media(archive_root)
 
 
 def test_archive_keeps_imported_and_referenced_media(archive_root):
-    story, scene, take = _story_with_export(archive_root, None)
+    story, scene, take = _story_with_export(archive_root)
     story, imported = storyboard_store.add_take_upload(
         story["id"], scene["id"], "import.png", io.BytesIO(b"original"))
     story, source_image = storyboard_store.add_take_upload(

@@ -5232,7 +5232,7 @@
       if (count === 1 && !autoVl) return startRun();
       el('test-generations-batch-count').value = String(count);
       el('test-generations-batch-auto-vl').checked = autoVl;
-      try { runTestBatch(count); } catch (err) { showError(err); }
+      try { runTestBatch(count, true); } catch (err) { showError(err); }
     };
     el('test-generations-campaign-mode').onclick = function () {
       window.epochFinderShowMode('finder');

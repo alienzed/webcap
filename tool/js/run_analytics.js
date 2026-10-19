@@ -34,7 +34,7 @@
     function x(v) {return pad+(v-minX)/(maxX-minX||1)*(width-2*pad);}
     function y(v) {return height-pad-(v-minY)/(maxY-minY)*(height-2*pad);}
     var ordered=observed.slice().sort(function(a,b){return a.epoch-b.epoch;});
-    var segments=ordered.map(function(p,i) {return (i?'L':'M')+x(p.epoch).toFixed(1)+','+y(p[key]).toFixed(1);}).join(' ');
+    var segments=ordered.map(function(p,i) {return (i && p.epoch===ordered[i-1].epoch+1?'L':'M')+x(p.epoch).toFixed(1)+','+y(p[key]).toFixed(1);}).join(' ');
     var markers=ordered.map(function(p){return '<circle cx="'+x(p.epoch)+'" cy="'+y(p[key])+'" r="5"><title>Epoch '+p.epoch+' · '+formatter(p[key])+'</title></circle>';}).join('');
     return '<div class="run-analytics-chart"><strong>'+esc(title)+'</strong><svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="'+esc(title)+' by epoch">' +
       '<path d="M'+pad+' '+pad+'V'+(height-pad)+'H'+(width-pad)+'" class="run-analytics-axis"/>' +
@@ -81,7 +81,7 @@
   }
   function load() {
     var jobId=el('run').value, token=++generation, source=folder;
-    if (!jobId) {report=null;return;}
+    if (!jobId) {report=null;el('coverage').textContent='Select a training run first.';return;}
     clearError();el('analyze').disabled=true;el('analyze').textContent='Analyzing saved evidence…';
     api(jobId).then(function(payload){if(token!==generation||source!==folder)return;report=payload;render();})
       .catch(function(exc){if(token===generation)error(exc);})

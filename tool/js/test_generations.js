@@ -328,8 +328,7 @@
     if (!button || !progress) throw new Error('Test VL controls are missing.');
     var results = currentStatus && Array.isArray(currentStatus.results) ? currentStatus.results : [];
     button.disabled = !testVl.running && (!currentSession || !results.some(function (r) { return !!resultMediaFile(r); }));
-    var method = el('test-generations-evaluator').value;
-    button.textContent = method === 'original' ? (testVl.running ? 'Stop VL' : 'Ask VL') : 'Compare';
+    button.textContent = testVl.running ? 'Stop VL' : 'Evaluate ▾';
     var sameScope = testVl.scope === testVlScope(currentStatus);
     progress.textContent = !sameScope ? '' : testVl.running ? (testVl.done + ' / ' + testVl.total) :
       (testVl.total ? (testVl.done + ' / ' + testVl.total + ' processed') : '');
@@ -739,8 +738,9 @@
       return {choice:choice, attribute:matches[0]};
     }).filter(Boolean);
     var dialog = el('test-generations-reference-dialog');
-    var method = el('test-generations-evaluator').value;
+    var method = referenceCompare.runAll ? 'all' : el('test-generations-evaluator').value;
     el('test-generations-reference-title').textContent =
+      method === 'all' ? 'Evaluate All · Training References' :
       method === 'dino' ? 'DINOv2 · Training References' : 'VL Compare · Training References';
     var statusLine = el('test-generations-reference-status');
     statusLine.textContent = referenceCompare.plan.length
@@ -768,7 +768,10 @@
     button.disabled = true;
     el('test-generations-evaluator').disabled = true;
     try {
-      var done = 0, total = plan.length * previews.length;
+      var methods = referenceCompare.runAll ? ['rvn', 'dino'] : [method];
+      var done = 0, total = plan.length * previews.length * methods.length;
+      for (var m = 0; m < methods.length; m++) {
+        method = methods[m];
       for (var p = 0; p < plan.length; p++) {
         var row = plan[p], choice = row.choice, attribute = row.attribute;
         for (var i = 0; i < previews.length; i++) {
@@ -801,12 +804,21 @@
           drawReferenceResults();
         }
       }
+      }
       status.textContent = 'Finished ' + total + ' preview comparisons. Results saved.';
+      if (referenceCompare.runAll) {
+        if (currentStatus.session !== session) throw new Error('Session changed; stopped before Ask VL.');
+        if (testVlRuns[testVlScope(currentStatus)]) throw new Error('Ask VL already running for this session.');
+        runTestVlBatch();
+        status.textContent += ' Ask VL queued for this session.';
+      }
     } catch (err) {
       status.textContent = 'Comparison stopped after error: ' + String(err.message || err);
       reportConsoleError('Test Generations reference evaluation',err);
+      throw err;
     } finally {
       referenceCompare.busy = false;
+      referenceCompare.runAll = false;
       button.disabled = false;
       el('test-generations-evaluator').disabled = false;
       if (referenceCompare.folder !== folder || referenceCompare.session !== session)
@@ -5365,13 +5377,39 @@
         openTestBenchForSetFolder((viewedTestBatch || testBatch).folder);
       }
     };
-    el('test-generations-ask-vl').onclick = function () {
+
+    var evaluateButton = el('test-generations-ask-vl');
+    var evaluateMenu = el('test-generations-evaluate-menu');
+    function closeEvaluateMenu() {
+      evaluateMenu.classList.add('hidden');
+      evaluateButton.setAttribute('aria-expanded', 'false');
+    }
+    evaluateButton.onclick = function () {
+      if (testVl.running) { try { stopTestVl(); } catch (err) { showError(err); } return; }
+      var opening = evaluateMenu.classList.contains('hidden');
+      evaluateMenu.classList.toggle('hidden', !opening);
+      evaluateButton.setAttribute('aria-expanded', String(opening));
+    };
+    evaluateMenu.onclick = function (event) {
+      var item = event.target.closest('[data-test-evaluate]');
+      if (!item) return;
+      closeEvaluateMenu();
+      var method = item.dataset.testEvaluate;
+      referenceCompare.runAll = method === 'all';
       try {
-        if (el('test-generations-evaluator').value === 'original') runTestVlBatch();
-        else openReferenceDialog();
+        if (method === 'original') runTestVlBatch();
+        else {
+          el('test-generations-evaluator').value = method === 'all' ? 'rvn' : method;
+          openReferenceDialog();
+        }
       } catch (err) { showError(err); }
     };
-    el('test-generations-evaluator').onchange = syncTestVlControls;
+    document.addEventListener('click', function (event) {
+      if (!event.target.closest('.test-evaluate-control')) closeEvaluateMenu();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') closeEvaluateMenu();
+    });
     el('test-generations-reference-run').onclick = function () {
       runReferenceComparison().catch(showError);
     };

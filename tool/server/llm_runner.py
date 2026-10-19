@@ -599,7 +599,7 @@ def _execute_claimed(job_id, gpu_reserved):
                             error="Revise Scenes stopped after " + str(completed) + " Scenes.")
                 story = load_story(str(context.get("storyId") or ""))
                 scene_contract = build_request(story, scene_id, "refine_prompt", instruction=instruction)
-                result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved))
+                result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True)
                 with _enqueue_lock:
                     if execution_get_job(job_id).get("status") == "stopping":
                         return execution_finish_job_transient(job_id, status="stopped",
@@ -637,6 +637,8 @@ def _execute_claimed(job_id, gpu_reserved):
             chat_kwargs = {"gpu_reserved": bool(gpu_reserved)}
             if context.get("assessmentEvidence"):
                 chat_kwargs["assessment_evidence"] = True
+            if context.get("thinking") is True:
+                chat_kwargs["thinking"] = True
             if "maxTokens" in overrides:
                 chat_kwargs["max_tokens"] = overrides["maxTokens"]
             if "contextSize" in overrides:
@@ -665,7 +667,7 @@ def _execute_claimed(job_id, gpu_reserved):
                 **chat_kwargs,
             )
         else:
-            llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
+            llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True if client == "storyboard" else None)
     except Exception as exc:
         # Full failure detail remains in the transient job receipt / live Console.
         # Never persist contract content or exception text in server logs.

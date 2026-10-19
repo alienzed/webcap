@@ -767,6 +767,7 @@ function directorModelAssessmentModelRow(model, report, profile, previousSelecti
   var modelRef = String(model.id || '');
   var state = directorModelAssessmentModelState(report, profile);
   var capability = directorModelAssessmentCapability(report, profile);
+  var thinkingLabel = report && report.thinking === true ? 'Yes' : 'No';
   var previous = previousSelection[modelRef] || null;
   var checked = previous ? !!previous.checked : false;
   if (previous && previous.state !== 'assessed' && state === 'assessed') checked = false;
@@ -806,6 +807,7 @@ function directorModelAssessmentModelRow(model, report, profile, previousSelecti
         '<strong>' + escapeHtml(label) + '</strong>' +
         '<span title="' + escapeHtml(runtimeTitle) + '">' + escapeHtml(meta) + '</span>' +
       '</span>' +
+      '<span class="director-model-assessment-thinking" title="Controllable thinking"><strong>Thinking</strong> ' + thinkingLabel + '</span>' +
       (capability.label || capability.copy
         ? '<span class="director-model-assessment-capability">' +
             (capability.label ? '<span class="director-model-verdict director-model-verdict-' + escapeHtml(capability.tone) + '">' + escapeHtml(capability.label) + '</span>' : '') +
@@ -1012,7 +1014,7 @@ function directorModelTestUpdateAssessment(assessmentId, attempts, summary, stat
   });
 }
 
-function directorModelTestSaveCalibrationReport(model, contextMode, contextSize, maxTokens, attempts, status, error) {
+function directorModelTestSaveCalibrationReport(model, contextMode, contextSize, maxTokens, attempts, status, error, thinking) {
   return directorModelTestPost({
     action: 'save_calibration_report',
     report: {
@@ -1022,6 +1024,7 @@ function directorModelTestSaveCalibrationReport(model, contextMode, contextSize,
       modelId: model.modelId,
       label: model.label,
       assessmentKind: "confirmation",
+      thinking: thinking === true,
       contextMode: contextMode,
       contextSize: contextSize,
       maxTokens: maxTokens,
@@ -1402,6 +1405,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   var contextSize = 0;
   // A successful reply does not prove that the model can use its entire advertised context.
   var contextMode = 'runtime';
+  var thinkingVerified = false;
 
   directorModelTestState.currentModelLabel = String(model.label || model.modelId || model.modelRef || 'Model');
   directorModelTestState.currentModelNumber = modelNumber;
@@ -1409,10 +1413,37 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   if (!target) throw new Error('No supported Director probe fits the published output recommendation for ' + model.label + '.');
 
   function record(status, error, final) {
-    return directorModelTestSaveCalibrationReport(model, contextMode, contextSize, maxTokens, attempts, status, error).then(function (report) {
+    return directorModelTestSaveCalibrationReport(model, contextMode, contextSize, maxTokens, attempts, status, error, thinkingVerified).then(function (report) {
       return directorModelTestUpdateAssessment(assessmentId, attempts, report || {}, status, error, final).then(function () {
         return report;
       });
+    });
+  }
+
+  function verifyThinking() {
+    return directorModelTestPost({action: 'thinking_metadata', modelRef: model.modelRef}).then(function (meta) {
+      if (meta.thinking === true) {
+        thinkingVerified = true;
+        return;
+      }
+      return directorModelTestPost({
+        action: 'enqueue_calibration', modelRef: model.modelRef,
+        kind: 'thinking', target: 128
+      }).then(function (payload) {
+        var id = String(payload.job && payload.job.jobId || '');
+        if (!id) throw new Error('Thinking assessment received no job ID.');
+        directorModelTestState.currentJobId = id;
+        return directorModelTestWaitForJob(id, {phase: '', phaseStartedAt: 0, phases: {}, observedContextSize: 0}).then(function (job) {
+          return directorModelTestConsumeJob(id).then(function () { return job; });
+        });
+      }).then(function (job) {
+        var result = job && job.result || {};
+        thinkingVerified = job.status === 'completed' && !!String(result.reasoning || '').trim();
+      });
+    }).catch(function (error) {
+      if (directorModelTestState.stopRequested) throw error;
+      reportConsoleError('Director Thinking Check', error);
+      thinkingVerified = false;
     });
   }
 
@@ -1437,7 +1468,7 @@ function directorModelTestCalibrateOne(model, modelNumber) {
   return directorModelTestStartAssessment(model).then(function (assessment) {
     assessmentId = String(assessment && assessment.id || '');
     if (!assessmentId) throw new Error('Director assessment did not receive an assessment ID.');
-    return run(target);
+    return verifyThinking().then(function () { return run(target); });
   }).then(function (first) {
     // A runtime error, a control failure or deliberate Stop is not evidence that
     // a smaller output allowance will help. Only retry a clean capacity exhaustion.

@@ -1843,6 +1843,7 @@ def storyboard_director_route():
                     "storyId": story_id, "operation": operation,
                     "sceneIds": scene_ids, "sourceInstruction": instruction,
                     "generateFreshTakes": data.get("generateFreshTakes") is True,
+                    "thinking": data.get("thinking") is True,
                 },
                 label="Story: Revise Scenes",
             )
@@ -1921,6 +1922,7 @@ def storyboard_director_route():
                 "operation": operation,
                 "replaceExisting": replace_existing,
                 "sourceInstruction": instruction,
+                "thinking": data.get("thinking") is True,
                 **({"deferredApply": True} if operation in {"develop_story_outline", "develop_story_scene"} else {}),
                 **({"repairBase": repair_base} if repair_base is not None else {}),
             },

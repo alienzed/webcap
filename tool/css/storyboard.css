@@ -3908,3 +3908,13 @@
   padding: 4px 10px;
   white-space: nowrap;
 }
+
+.storyboard-thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 19px;
+}
+.storyboard-thinking-toggle.hidden { display: none; }
+.storyboard-thinking-toggle input { margin: 0; }

@@ -213,6 +213,7 @@ def _report_with_derived_fields(report):
         max_tokens = 0
     status = str(value.get("status") or "incomplete").strip()
     value["assessmentKind"] = str(value.get("assessmentKind") or "calibration")
+    value["thinking"] = value.get("thinking") is True
 
     value["health"] = _report_health(attempts, context_mode, context_size, max_tokens, status, value["assessmentKind"])
     value["pathologies"] = _report_pathologies(attempts)
@@ -288,6 +289,7 @@ def normalize_report(report):
         "abilities": _report_abilities(normalized_attempts, context_mode, context_size, max_tokens, assessment_kind),
         "updatedAt": _now_iso(),
         "attempts": normalized_attempts,
+        "thinking": report.get("thinking") is True,
     }
 
     if report.get("importedFrom"):

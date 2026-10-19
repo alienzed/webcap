@@ -662,6 +662,11 @@
   }
 
   function directorRequest(payload) {
+    if (payload && !payload.previewOnly && payload.model && selectedDirectorModel() &&
+        String(payload.model) === String(storyState.director.modelId)) {
+      var brain = el('storyboard-director-thinking');
+      payload.thinking = !!(brain && brain.checked && !brain.disabled);
+    }
     var options = payload
       ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
       : {};
@@ -761,6 +766,12 @@
     } else {
       select.title = '';
     }
+    var brain = el('storyboard-director-thinking');
+    if (!brain) throw new Error('Storyboard Thinking control is missing.');
+    var supported = !!(selectedAssessment && selectedAssessment.thinking);
+    brain.parentElement.classList.toggle('hidden', !supported);
+    brain.disabled = !supported;
+    if (!supported) brain.checked = false;
     syncIndividualDevelopStrategy(previousModelId !== selected);
   }
 
@@ -5835,6 +5846,7 @@
       storyState.director.modelId = this.value;
       storyState.director.developIndividuallyOverride = null;
       storyState.director.developStrategyModelId = this.value;
+      renderDirectorSelector();
       syncIndividualDevelopStrategy(true);
       setDirectorModelPreference('webcap.storyboard.directorModel', this.value);
     });
@@ -5851,6 +5863,7 @@
       var modelSelect = el('storyboard-director-model');
       if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) {
         modelSelect.value = selected;
+        renderDirectorSelector();
       }
       syncIndividualDevelopStrategy(true);
     });

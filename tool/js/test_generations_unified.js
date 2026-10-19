@@ -266,6 +266,7 @@
         heading.textContent=(item.runName||'Run '+item.jobId.slice(-8))+' · Epoch '+item.epoch;
         heading.dataset.testGalleryId='heading:'+checkpoint;
         var existingHeading=existing.get(heading.dataset.testGalleryId);
+        if (existingHeading) existingHeading.textContent=heading.textContent;
         desired.push(existingHeading || heading);
         retained.add(heading.dataset.testGalleryId);
         previousCheckpoint=checkpoint;
@@ -274,6 +275,7 @@
       var signature=JSON.stringify([item.mediaFile,item.mediaAvailable,item.framePruned,item.error,item.runName,item.epoch,item.rating,item.source,item.mediaKind]);
       var cached=existing.get(key);
       if(cached && cached.dataset.testGallerySignature===signature) {
+        cached.onclick=function(){inspect(item);host.querySelectorAll('.test-unified-card').forEach(function(node){node.classList.toggle('active',node===cached);});};
         cached.classList.toggle('active',chosen===item.id);
         desired.push(cached);retained.add(key);return;
       }
@@ -289,7 +291,7 @@
       } else {var blank=document.createElement('span');blank.textContent=item.error || (item.framePruned?'Frame pruned':item.mediaAvailable===false?'Media missing':'No retained frame');card.appendChild(blank);}
       var title=document.createElement('span');title.textContent=(item.runName ? item.runName+' · ':'')+(item.epoch==null?'Unattributed':'Epoch '+item.epoch)+(item.rating?' · ★ '+item.rating:'');
       card.appendChild(title);card.classList.toggle('active',chosen===item.id);
-      card.addEventListener('click',function(){inspect(item);host.querySelectorAll('.test-unified-card').forEach(function(node){node.classList.toggle('active',node===card);});});desired.push(card);retained.add(key);
+      card.onclick=function(){inspect(item);host.querySelectorAll('.test-unified-card').forEach(function(node){node.classList.toggle('active',node===card);});};desired.push(card);retained.add(key);
     });
     if(!records.length) {var p=document.createElement('p');p.textContent='No matching results in the loaded page. Load more to continue browsing.';p.dataset.testGalleryId='empty';desired.push(p);retained.add('empty');}
     if ((payload.media || []).length < Number(payload.total || 0)) {

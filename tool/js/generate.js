@@ -2325,6 +2325,8 @@
           if (missing.length) el('generate-prompt').value = originalPrompt +
             (originalPrompt.trim() ? ', ' : '') + missing.join(', ');
           renderLoras();
+          generateState.director.busy = false;
+          renderDirector();
           return runDirector(operation, true, approvedPhrases);
           });
         }});

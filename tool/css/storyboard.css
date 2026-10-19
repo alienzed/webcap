@@ -3351,7 +3351,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 10px;
 }
 
@@ -3462,12 +3462,13 @@
 .storyboard-story-heading-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
 }
 .storyboard-story-heading-actions > #storyboard-story-toggle {
+  width: auto;
   min-height: 34px;
   flex: 0 0 auto;
 }

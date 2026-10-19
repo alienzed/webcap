@@ -597,6 +597,70 @@ def _execute_claimed(job_id, gpu_reserved):
         )
 
     from .storyboard_llm_runtime import run_contract, run_freeform_chat
+    if client == "storyboard" and context.get("operation") == "check_coherence_sequence":
+        from .storyboard_store import load_story
+        from .storyboard_llm_contract import build_request
+        scene_ids = list(context.get("sceneIds") or [])
+        reviewed = []
+        with _revision_progress_lock:
+            _revision_progress[job_id] = {
+                "completed": 0, "total": len(scene_ids), "phase": "Checking Coherence",
+            }
+        try:
+            for scene_id in scene_ids:
+                with _enqueue_lock:
+                    if execution_get_job(job_id).get("status") == "stopping":
+                        return execution_finish_job_transient(
+                            job_id, status="stopped",
+                            error="Check Coherence stopped after " + str(len(reviewed)) + " Scenes.",
+                        )
+                story = load_story(str(context.get("storyId") or ""))
+                scene = (story.get("scenes") or {}).get(scene_id)
+                if not isinstance(scene, dict):
+                    raise FileNotFoundError("Scene no longer exists: " + str(scene_id))
+                original = str(scene.get("prompt") or "")
+                scene_contract = build_request(story, scene_id, "check_coherence")
+                result = run_contract(
+                    model_id, scene_contract, gpu_reserved=bool(gpu_reserved),
+                    thinking=context.get("thinking") is True,
+                )
+                with _enqueue_lock:
+                    if execution_get_job(job_id).get("status") == "stopping":
+                        return execution_finish_job_transient(
+                            job_id, status="stopped",
+                            error="Check Coherence stopped after " + str(len(reviewed)) + " Scenes.",
+                        )
+                data = result.get("data")
+                if not isinstance(data, dict) or not str(data.get("prompt") or "").strip():
+                    raise ValueError("Director returned an empty or invalid coherence prompt for Scene " + str(scene_id))
+                reviewed.append({
+                    "sceneId": scene_id,
+                    "title": str(scene.get("title") or ""),
+                    "originalPrompt": original,
+                    "prompt": str(data["prompt"]),
+                })
+                with _revision_progress_lock:
+                    _revision_progress[job_id] = {
+                        "completed": len(reviewed), "total": len(scene_ids),
+                        "phase": "Checking Coherence",
+                    }
+        except Exception as exc:
+            raise RuntimeError(
+                "Check Coherence failed after " + str(len(reviewed)) + " of "
+                + str(len(scene_ids)) + " Scenes: " + str(exc)
+            ) from exc
+        finally:
+            with _revision_progress_lock:
+                _revision_progress.pop(job_id, None)
+        return execution_finish_job_transient(job_id, status="completed", result={
+            "storyId": context["storyId"], "scenes": reviewed,
+            "reviewedSceneCount": len(reviewed),
+            "changedSceneCount": sum(
+                entry["originalPrompt"].strip() != entry["prompt"].strip()
+                for entry in reviewed
+            ),
+        })
+
     if client == "storyboard" and context.get("operation") == "revise_scenes_sequence":
         from .storyboard_store import load_story
         from .storyboard_llm_contract import build_request
@@ -873,7 +937,7 @@ def _storyboard_target(context, operation):
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
     if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene"}:
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
-    if operation in {"repair_scenes", "revise_scenes_sequence"}:
+    if operation in {"repair_scenes", "revise_scenes_sequence", "check_coherence_sequence"}:
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}
     if operation in {"write_prompt", "refine_prompt", "check_coherence"} and scene_id:
         return {"kind": "scene-prompt", "storyId": story_id, "sceneId": scene_id}

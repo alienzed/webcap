@@ -1953,7 +1953,7 @@
   white-space: nowrap;
 }
 
-.storyboard-scene-progress-director-complete {
+.storyboard-scene-progress-step .storyboard-scene-progress-director-complete {
   flex: 0 0 auto;
   color: #22c55e;
   font-size: 13px;

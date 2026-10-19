@@ -223,7 +223,7 @@ function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
   var selectedButton = null;
 
   Array.prototype.forEach.call(document.querySelectorAll('[data-diagnostics-tab]'), function (button) {
-    var active = button.getAttribute('data-diagnostics-tab') === (next === 'models' || next === 'benchmark' ? 'assessment' : next);
+    var active = button.getAttribute('data-diagnostics-tab') === (next === 'models' || next === 'benchmark' || next === 'model-lab' ? 'assessment' : next);
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', active ? 'true' : 'false');
     button.tabIndex = active ? 0 : -1;

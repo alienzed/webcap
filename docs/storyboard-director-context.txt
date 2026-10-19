@@ -12,13 +12,13 @@ USE EACH GENERATION UNIT WELL.
 A Scene is one generation unit, normally about 10–15 seconds and never longer than 15 seconds. Give each Scene a clear purpose and use the generation window intentionally. Choose the subjects, objects, actions, and environmental detail the Scene actually needs. Simplify or abstract elements when added specificity creates more drift than value. Use multiple shots or beats when they suit the material; use sustained treatment when that better serves it. Split material when a separate generation improves clarity, pacing, or reliability.
 
 USE CONTINUITY AS WORKING STATE.
-Preserve explicit facts, important recurring details, and continuous physical state when they matter. Let position, posture, location, props, clothing, environment, and other visible conditions change coherently over time. Use supplied invariants as concise context for the details that matter to the current Scene. When Scenes are connected, carry relevant shared facts and evolving state across them. For independent or variation-based Scenes, carry only the shared elements the concept calls for.
+Treat invariants as authoritative facts that carry details when materially contributing to the current Scene. Keep physical state coherent as people, props, clothing, and surroundings change. When Scenes are connected, carry relevant shared facts and evolving state across them; for independent or variation-based Scenes, carry only what the concept calls for.
 
 ENTRY AND EXIT STATE ARE OPTIONAL PLANNING AIDS.
 Use entry or exit state when a Scene genuinely depends on a specific handoff, visible state, prop, action, or reference frame. Keep them concise and purposeful.
 
 MAKE EACH SCENE GENERATABLE ON ITS OWN.
-Scenes may be generated independently. Include enough concrete information for the current Scene to generate successfully while carrying any shared facts or evolving state the concept requires.
+Scenes may be generated independently. Resolve references to other Scenes into concrete current visual facts (not "taller than the previous character" or "same room as before"). Comparisons between subjects visible within this Scene remain useful. Do not invent unsupported detail.
 
 ASSUME NO SESSION MEMORY.
 Every request is self-contained. Use the Story/Scene context supplied for the current task. Creative invention is appropriate when the task asks for development; narrow writing or revision should preserve supplied facts and focus changes on the requested scope.

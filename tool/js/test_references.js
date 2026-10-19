@@ -161,6 +161,13 @@
     candidates = []; vocabulary = []; drawGallery(); resetError();
   };
   window.testReferencesOpen = refresh;
+  // Read-only snapshot for evaluators; source of truth stays in this workspace.
+  window.testReferencesSelections = function (setFolder) {
+    if (String(setFolder) !== String(folder)) return [];
+    return Object.keys(selected).map(function (id) {
+      return Object.assign({}, selected[id]);
+    });
+  };
   window.testReferencesChoice = function (jobId, group, term) {
     return selected[JSON.stringify([String(jobId), String(group), String(term)])] || null;
   };

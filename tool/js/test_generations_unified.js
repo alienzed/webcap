@@ -108,6 +108,25 @@
     });
     if(!records.length) {var p=document.createElement('p');p.textContent='No recorded images for this selection.';host.appendChild(p);}
   }
+  var finderScreen = document.getElementById('epoch-finder-screen');
+  if (!finderScreen) throw new Error('Epoch Finder original workspace is missing.');
+  var finderMarker = document.createComment('Epoch Finder original position');
+  finderScreen.parentNode.insertBefore(finderMarker, finderScreen);
+  var finderMounted = false;
+  function mountFinder(enabled) {
+    if (finderMounted === enabled) return;
+    if (enabled) {
+      el('builder').appendChild(finderScreen);
+      window.epochFinderShowMode('finder');
+      legacy.classList.add('hidden');
+    } else {
+      finderMarker.parentNode.insertBefore(finderScreen, finderMarker.nextSibling);
+      window.epochFinderShowMode('tests');
+      legacy.classList.add('hidden');
+    }
+    root.classList.toggle('test-unified-finder-building', enabled);
+    finderMounted = enabled;
+  }
   var mounted = false;
   var movable = [
     '.test-generations-next-run',
@@ -132,22 +151,23 @@
     mounted = enabled;
   }
   function builder(enabled) {
+    if (finderMounted) mountFinder(false);
     mountExistingControls(enabled);
     el('builder').classList.toggle('hidden',!enabled);
     el('gallery').classList.toggle('hidden',enabled);
     el('inspector').classList.toggle('hidden',enabled);
     el('new').classList.toggle('hidden',enabled);
   }
-  function legacyMode(mode) {mountExistingControls(false);show(false);window.epochFinderShowMode(mode);}
+  function legacyMode(mode) {if(finderMounted)mountFinder(false);mountExistingControls(false);show(false);window.epochFinderShowMode(mode);}
   el('explore').onclick=function(){builder(false);};
   el('build').onclick=function(){builder(true);};
   el('new').onclick=function(){builder(true);};
   el('experiments').onclick=function(){perspective='experiments';selection='';renderList();renderGallery();};
   el('checkpoints').onclick=function(){perspective='checkpoints';selection='';renderList();renderGallery();};
   el('reload').onclick=refresh;
-  el('legacy').onclick=function(){mountExistingControls(false);show(false);};
+  el('legacy').onclick=function(){if(finderMounted)mountFinder(false);mountExistingControls(false);show(false);};
   el('normal').onclick=function(){legacyMode('tests');};
-  el('finder').onclick=function(){legacyMode('finder');};
+  el('finder').onclick=function(){mountExistingControls(false);mountFinder(true);};
   el('references').onclick=function(){legacyMode('references');};
   el('analytics').onclick=function(){legacyMode('analytics');};
   var prepare=window.epochFinderPrepare;

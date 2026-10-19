@@ -243,8 +243,8 @@ function restoreInitialShellLocationRoute() {
     openMediaGridSurface();
   } else if (route.workspace === 'generate' && typeof window.openGenerateActivity === 'function') {
     window.openGenerateActivity();
-  } else if (route.workspace === 'test' && typeof window.openTestBenchForCurrentFolder === 'function') {
-    window.openTestBenchForCurrentFolder();
+  } else if (route.workspace === 'test') {
+    openTestGenerationsFromShell();
   } else if (route.workspace === 'media' && typeof window.openMediaExplorerActivity === 'function') {
     window.openMediaExplorerActivity();
   } else if (route.workspace === 'storage' && typeof window.openStorageActivity === 'function') {
@@ -958,7 +958,123 @@ function syncApplicationShellContext() {
   }
 }
 
+
+var testGenerationsSetGuide = null;
+
+function closeTestGenerationsSetGuide() {
+  var guide = testGenerationsSetGuide;
+  if (!guide) return;
+  testGenerationsSetGuide = null;
+  document.removeEventListener('keydown', guide.onKeyDown, true);
+  window.removeEventListener('resize', guide.position);
+  window.removeEventListener('scroll', guide.position, true);
+  guide.root.remove();
+}
+
+function showTestGenerationsSetGuide() {
+  if (testGenerationsSetGuide) return;
+  var target = document.getElementById('media-list-wrapper');
+  if (!target) throw new Error('Prep media list is unavailable for Test Generations Set selection.');
+  var root = document.createElement('div');
+  root.id = 'test-generations-set-guide';
+  root.className = 'test-generations-set-guide';
+  root.innerHTML =
+    '<div class="test-generations-set-guide-shade"></div>'.repeat(4) +
+    '<div class="test-generations-set-guide-highlight" aria-hidden="true"></div>' +
+    '<section class="test-generations-set-guide-note" role="status" aria-live="polite">' +
+      '<strong>Please select a Set</strong>' +
+      '<p>Open a folder containing media to continue to Test Generations.</p>' +
+      '<button type="button" class="review-captions-btn">Cancel</button>' +
+    '</section>';
+  document.body.appendChild(root);
+  var shades = Array.from(root.querySelectorAll('.test-generations-set-guide-shade'));
+  var highlight = root.querySelector('.test-generations-set-guide-highlight');
+  var note = root.querySelector('.test-generations-set-guide-note');
+
+  function setBounds(element, x, y, width, height) {
+    element.style.left = x + 'px';
+    element.style.top = y + 'px';
+    element.style.width = Math.max(0, width) + 'px';
+    element.style.height = Math.max(0, height) + 'px';
+  }
+
+  function position() {
+    var rect = target.getBoundingClientRect();
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var left = Math.max(0, Math.min(vw, rect.left - 5));
+    var right = Math.max(left, Math.min(vw, rect.right + 5));
+    var top = Math.max(0, Math.min(vh, rect.top - 5));
+    var bottom = Math.max(top, Math.min(vh, rect.bottom + 5));
+    setBounds(shades[0], 0, 0, vw, top);
+    setBounds(shades[1], 0, bottom, vw, vh - bottom);
+    setBounds(shades[2], 0, top, left, bottom - top);
+    setBounds(shades[3], right, top, vw - right, bottom - top);
+    setBounds(highlight, left, top, right - left, bottom - top);
+
+    var noteWidth = Math.min(290, vw - 24);
+    var placement = 'right';
+    var x = right + 20;
+    if (x + noteWidth > vw - 12) {
+      placement = 'left';
+      x = left - noteWidth - 20;
+    }
+    if (x < 12) {
+      placement = 'above';
+      x = Math.max(12, (vw - noteWidth) / 2);
+    }
+    var y = placement === 'above'
+      ? (top > 145 ? top - 132 : Math.max(12, vh - 142))
+      : Math.max(12, Math.min(top + 24, vh - 142));
+    note.dataset.placement = placement;
+    note.style.width = noteWidth + 'px';
+    note.style.left = x + 'px';
+    note.style.top = y + 'px';
+  }
+
+  function onKeyDown(event) {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeTestGenerationsSetGuide();
+  }
+
+  testGenerationsSetGuide = { root: root, position: position, onKeyDown: onKeyDown };
+  shades.forEach(function (shade) {
+    shade.onclick = closeTestGenerationsSetGuide;
+  });
+  note.querySelector('button').onclick = closeTestGenerationsSetGuide;
+  document.addEventListener('keydown', onKeyDown, true);
+  window.addEventListener('resize', position);
+  window.addEventListener('scroll', position, true);
+  position();
+}
+
+function openTestGenerationsFromShell() {
+  if (isFocusedCaptionOpen() && !stopFocusedCaption('Focus Caption ended.')) return;
+  if (!state.folderStateWritable || !isSetFolderContext(state.folder, state.items)) {
+    openPrepActivity();
+    showTestGenerationsSetGuide();
+    return;
+  }
+  closeTestGenerationsSetGuide();
+  if (typeof window.closeMediaExplorerActivity === 'function') window.closeMediaExplorerActivity();
+  if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') stopFocusedAnnotation();
+  if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
+  if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
+  if (typeof window.closeStorageActivity === 'function') window.closeStorageActivity();
+  if (typeof window.openTestBenchActivity !== 'function') throw new Error('Test Bench activity is not available.');
+  window.openTestBenchActivity();
+}
+
+function completePendingTestGenerationsSetGuide() {
+  if (!testGenerationsSetGuide) return;
+  if (!state.folderStateWritable || !isSetFolderContext(state.folder, state.items)) return;
+  openTestGenerationsFromShell();
+}
+
 function openPrepActivity() {
+  closeTestGenerationsSetGuide();
   if (typeof window.closeMediaExplorerActivity === 'function') window.closeMediaExplorerActivity();
   if (typeof window !== 'undefined' && typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
   if (typeof window !== 'undefined' && typeof window.closeTestBenchActivity === 'function') window.closeTestBenchActivity();
@@ -1363,16 +1479,10 @@ function wireWorkspaceHeaderUi() {
   if (testActivityBtn && !testActivityBtn.__workspaceWired) {
     testActivityBtn.__workspaceWired = true;
     testActivityBtn.onclick = function () {
-      if (typeof window.closeMediaExplorerActivity === 'function') window.closeMediaExplorerActivity();
-      if (isFocusedCaptionOpen() && !stopFocusedCaption('Focus Caption ended.')) return;
-      if (normalizeWorkspaceSurface(workspaceState.surface) === 'focus') {
-        stopFocusedAnnotation();
-      }
-      if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
-      if (typeof window.closeStoryboardActivity === 'function') window.closeStoryboardActivity();
-      if (typeof window.closeStorageActivity === 'function') window.closeStorageActivity();
-      if (typeof window.openTestBenchActivity !== 'function') throw new Error('Test Bench activity is not available.');
-      window.openTestBenchActivity();
+      // Explicit navigation supersedes an unfinished bookmarked workspace restore.
+      initialShellLocationRestored = true;
+      initialShellLocationRoute = null;
+      openTestGenerationsFromShell();
     };
   }
   var storyboardActivityBtn = document.getElementById('activity-storyboard-btn');
@@ -1469,6 +1579,7 @@ function wireWorkspaceHeaderUi() {
   syncWorkspaceSurfaceUi();
 }
 
+window.completePendingTestGenerationsSetGuide = completePendingTestGenerationsSetGuide;
 window.getWorkspaceViewMode = getWorkspaceViewMode;
 window.setWorkspaceSurface = setWorkspaceSurface;
 window.exitWorkspaceSurface = exitWorkspaceSurface;

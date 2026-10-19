@@ -4,16 +4,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_one_persistent_three_tab_control_outside_native_screens():
+def test_one_persistent_four_tab_control_outside_native_screens():
     html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
     start = html.index('<nav id="test-workspace-main-tabs"')
     first_screen = html.index('<section id="epoch-finder-screen"')
     assert html.index('<section id="test-generations-pane"') < start < first_screen
     tabs = html[start:html.index("</nav>", start)]
-    assert tabs.count('data-test-workspace-mode=') == 3
-    for mode in ("tests", "finder", "analytics"):
+    assert tabs.count('data-test-workspace-mode=') == 4
+    for mode in ("tests", "finder", "references", "analytics"):
         assert f'data-test-workspace-mode="{mode}"' in tabs
-    assert 'data-test-workspace-mode="references"' not in tabs
+    assert tabs.index('data-test-workspace-mode="tests"') < tabs.index('data-test-workspace-mode="finder"') < tabs.index('data-test-workspace-mode="references"') < tabs.index('data-test-workspace-mode="analytics"')
 
 
 def test_original_left_and_right_owners_remain_intact():
@@ -25,8 +25,7 @@ def test_original_left_and_right_owners_remain_intact():
                    'id="epoch-finder-run-choices"', 'id="epoch-finder-campaigns"',
                    'class="epoch-finder-dashboard"', 'id="epoch-finder-frames"',
                    'id="run-analytics-run-choices"', 'id="run-analytics-table"',
-                   'id="test-references-gallery"', 'id="test-workspace-manage-references"',
-                   'id="test-workspace-back-to-campaigns"'):
+                   'id="test-references-gallery"'):
         assert marker in html, marker
 
 
@@ -37,7 +36,8 @@ def test_existing_mode_controller_owns_tabs_and_legacy_shell_is_not_default():
     assert "document.querySelectorAll('#test-workspace-main-tabs [data-test-workspace-mode]')" in finder
     assert "window.epochFinderShowMode = showMode;" in finder
     assert "window.epochFinderShowMode('tests');" in tests
-    assert "window.epochFinderShowMode('finder');" in tests
+    assert "var active = button.dataset.testWorkspaceMode === next;" in finder
+    assert "showMode(button.dataset.testWorkspaceMode);" in finder
     assert "#test-generations-pane > .epoch-finder-screen > .epoch-finder-layout" in css
     assert "grid-template-columns:var(--test-workspace-sidebar-width) minmax(0,1fr)" in css
 
@@ -54,3 +54,17 @@ def test_persistent_tabs_mask_scrolling_form_at_any_scroll_offset():
     assert "background:var(--panel);" in nav.group(1)
     assert "--panel: #ffffff" in theme
     assert "--panel: #151b24" in theme
+
+
+def test_references_is_a_shared_tab_and_regular_form_starts_with_prompt():
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    test_js = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    nav = html.split('<nav id="test-workspace-main-tabs"', 1)[1].split('</nav>', 1)[0]
+    form = html.split('<section class="test-generations-next-run"', 1)[1].split('</section>', 1)[0]
+    assert 'data-test-workspace-mode="references"' in nav
+    assert '<div class="training-run-option test-generations-prompt">' in form
+    assert 'test-generations-form-heading' not in form
+    for retired in ('test-generations-summary', 'test-generations-info-btn', 'test-generations-campaign-mode', 'test-workspace-back-to-campaigns', 'test-workspace-manage-references'):
+        assert f'id="{retired}"' not in html
+        assert f"el('{retired}')" not in test_js
+    assert 'id="test-generations-files-count"' in html

@@ -343,11 +343,9 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
   min-height:0;overflow-y:auto;padding:16px 20px 30px;
 }
 .test-workspace-campaign-tools {display:flex;gap:7px;flex-wrap:wrap;margin:8px 0;}
-.test-workspace-context-back {margin-bottom:12px;}
 @media(max-width:1050px) {
   #test-generations-pane {--test-workspace-sidebar-width:390px;}
 }
 
 /* The permanent tabs replace old mode shortcuts, without removing wired controls. */
-#test-generations-pane #test-generations-campaign-mode,
 #test-generations-pane #epoch-finder-back-to-tests {display:none;}

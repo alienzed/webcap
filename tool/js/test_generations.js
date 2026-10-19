@@ -2176,14 +2176,7 @@
 
   function syncStagedSummary(payload) {
     var count = Number(payload && payload.count || 0);
-    var summary = el('test-generations-summary');
     var countEl = el('test-generations-files-count');
-    if (summary) {
-      var runCount = payload && Array.isArray(payload.candidateRuns) ? payload.candidateRuns.length : 0;
-      summary.textContent = (String(payload && payload.modelLabel || '').trim() ? String(payload.modelLabel).trim() + ' · ' : '') +
-        count + ' candidate' + (count === 1 ? '' : 's') +
-        (runCount ? ' · ' + runCount + ' run' + (runCount === 1 ? '' : 's') : '');
-    }
     if (countEl) countEl.textContent = String(count);
   }
 
@@ -4564,7 +4557,6 @@
     if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
     var node = pane();
     var frame = el('app-frame');
-    var summary = el('test-generations-summary');
     var list = el('test-generations-files');
     var errorEl = el('test-generations-error');
     if (!node || !frame) throw new Error('Test Generations requires the app frame and Test workspace.');
@@ -4635,7 +4627,6 @@
     }
     preparedContext = context;
     preparedFingerprint = '';
-    if (summary) summary.textContent = 'Loading Test folder...';
     if (list) list.textContent = '';
     if (errorEl) {
       errorEl.textContent = '';
@@ -4675,7 +4666,6 @@
     }
     refreshActivityButton();
     if (!isTestModelSupported()) {
-      if (summary) summary.textContent = 'Testing unavailable for selected Base Model.';
       if (errorEl) {
         errorEl.textContent = 'Test Generations is not available for the selected Base Model.';
         errorEl.classList.remove('hidden');
@@ -4742,7 +4732,6 @@
       }).catch(showError);
     }).catch(function (err) {
       if (generation !== openGeneration || !isOpen()) return;
-      if (summary) summary.textContent = 'Test Generations is unavailable.';
       showError(err);
     });
   }
@@ -5339,9 +5328,6 @@
       el('test-generations-batch-auto-vl').checked = autoVl;
       try { runTestBatch(count, true); } catch (err) { showError(err); }
     };
-    el('test-generations-campaign-mode').onclick = function () {
-      window.epochFinderShowMode('finder');
-    };
     el('test-generations-batch-btn').onclick = openTestBatchDialog;
     el('test-generations-batch-history').onchange = function () {
       var id = this.value;
@@ -5735,9 +5721,6 @@
         saveTestBenchState();
       });
     });
-    el('test-generations-info-btn').onclick = function () {
-      el('test-generations-help').classList.toggle('hidden');
-    };
     el('test-generations-session-info-btn').onclick = function () {
       var details = el('test-generations-session-details');
       var button = el('test-generations-session-info-btn');

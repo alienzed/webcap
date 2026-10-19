@@ -72,3 +72,27 @@ def test_cancellation_leaves_accepted_sessions_intact(monkeypatch, tmp_path):
         time.sleep(0.01)
     assert test_batch.snapshot()["batches"][0]["status"] == "stopped"
     assert sessions["session-0"]["status"] == "running"
+
+
+def test_single_validated_session_preserves_explicit_seed(monkeypatch, tmp_path):
+    submitted = []
+    def fake_request(folder, operation, criteria):
+        assert operation == "test_enqueue"
+        submitted.append(dict(criteria.get("settings") or {}))
+        return {"job": {"id": "single-test"}}
+    monkeypatch.setattr(test_batch, "handle_request", fake_request)
+    monkeypatch.setattr(test_batch, "open_session", lambda folder, session: {"status": "complete", "results": []})
+    monkeypatch.setattr(test_batch, "list_vision_models", lambda: [{"id": "vision"}])
+    with test_batch._LOCK:
+        test_batch._BATCHES.clear()
+    batch = test_batch.enqueue_batch(
+        tmp_path, "test-set", 1, {"modelId": "model", "prompt": "prompt",
+                                 "selectedFiles": ["a"], "settings": {"seed": "12345"}},
+        True, "vision", preserve_single_seed=True)
+    for _ in range(100):
+        snapshot = next(b for b in test_batch.snapshot()["batches"] if b["id"] == batch["id"])
+        if snapshot["status"] not in {"queued", "running"}:
+            break
+        time.sleep(0.01)
+    assert snapshot["status"] == "complete"
+    assert submitted == [{"seed": "12345"}]

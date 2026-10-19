@@ -65,6 +65,7 @@
     if (analytics) window.runAnalyticsOpen();
   }
   window.epochFinderShowMode = showMode;
+  document.getElementById('epoch-finder-back-to-tests').onclick = function () { showMode('tests'); };
   function renderSecondsEstimate(modelId, durationSeconds, megapixels) {
     var key = [modelId, Number.isFinite(megapixels) ? String(megapixels) : String(document.getElementById('test-generations-dimensions')?.value || ''), String(durationSeconds)].join('|');
     var samples = timingProfiles[key] && timingProfiles[key].seconds;
@@ -833,7 +834,7 @@
     node.innerHTML = '<div class="epoch-finder-inspect-top"><strong>' + escape(candidateLabel(campaign, unit.epoch)) +
       ' · Round ' + unit.round + ' / Test ' + (unit.case+1) + '</strong><span>' +
       (inspectedFrame+1) + ' / ' + units.length + '</span></div>' +
-      '<div class="epoch-finder-inspect-actions"><button type="button" data-copy-epoch-to-test>Copy ' + escape(candidateLabel(campaign, unit.epoch)) + ' to Test Generations</button></div>' +
+      '<div class="epoch-finder-inspect-actions"><button type="button" data-copy-epoch-to-test>Copy ' + escape(candidateLabel(campaign, unit.epoch)) + ' to Test Generations</button><button type="button" data-view-epoch-media>View all epoch media ↗</button></div>' +
       (src ? '<button type="button" data-inspect-zoom title="Open original image"><img src="' + escape(src) +
       '" alt="' + escape(candidateLabel(campaign, unit.epoch)) + ' enlarged preview"></button>' :
       '<p>Frame ' + (unit.framePruned ? 'pruned after scoring' : unit.error ? 'unavailable due to error' : 'not yet captured') + '</p>') +
@@ -1150,6 +1151,12 @@
   els('inspector').onclick = function (event) {
     if (!campaignState || inspectedEpoch == null) return;
     if (event.target.closest('[data-load-cross-evidence]')) { loadCrossEvidence(); return; }
+    if (event.target.closest('[data-view-epoch-media]')) {
+      var mapped=(campaignState.candidateMap||{})[String(inspectedEpoch)];
+      window.runAnalyticsViewEpoch(mapped ? mapped.jobId : campaignState.jobId,
+        mapped ? mapped.epoch : inspectedEpoch,'finder');
+      return;
+    }
     if (event.target.closest('[data-copy-epoch-to-test]')) {
       var button = event.target.closest('[data-copy-epoch-to-test]');
       var origin = (campaignState.candidateMap || {})[String(inspectedEpoch)];

@@ -3342,6 +3342,17 @@
     if (!opts.failed) {
       var rating = buildResultRating(result, opts.sessionName);
       if (rating) secondaryRow.appendChild(rating);
+      var provenance = result && result.provenance;
+      if (provenance && String(provenance.sourceJobId || '') && Number.isInteger(provenance.sourceEpoch)) {
+        var browse = document.createElement('button');
+        browse.type = 'button';
+        browse.className = 'review-captions-btn test-generations-epoch-link';
+        browse.dataset.testEpochMediaJob = String(provenance.sourceJobId);
+        browse.dataset.testEpochMediaEpoch = String(provenance.sourceEpoch);
+        browse.textContent = 'Epoch ' + provenance.sourceEpoch + ' · All results';
+        browse.title = 'See all recorded results for this training checkpoint';
+        secondaryRow.appendChild(browse);
+      }
     }
     if (secondaryRow.childNodes.length) copy.appendChild(secondaryRow);
 
@@ -4930,7 +4941,7 @@
     renderTestBatch();
   }
 
-  function runTestBatch(count) {
+  function runTestBatch(count, preserveSingleSeed) {
     if (testBatch && testBatch.active) throw new Error('A Test batch is already active.');
     if (!isTestModelSupported()) throw new Error('Test model is unavailable.');
     var prompt = String(el('test-generations-prompt').value || '').trim();
@@ -4959,6 +4970,8 @@
       prompt: prompt, settings: settings
     };
     if (sweepMode) criteria.sweepWeights = parseSweepWeights(sweepWeights);
+    if (preserveSingleSeed && count === 1 && declared.indexOf('seed') !== -1)
+      settings.seed = String(el('test-generations-seed').value || '').trim();
     var autoVl = el('test-generations-batch-auto-vl').checked;
     el('test-generations-batch-modal').classList.add('hidden');
     el('test-generations-batch-modal').setAttribute('aria-hidden', 'true');
@@ -4971,7 +4984,8 @@
       return captionAssistRequestJson('/fs/test_generations/batches', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({operation:'enqueue', folder:String(launchFolder), count:count,
-                              criteria:criteria, autoVl:autoVl, vlModel:vlModel})
+                              criteria:criteria, autoVl:autoVl, vlModel:vlModel,
+                              preserveSingleSeed: !!preserveSingleSeed && count === 1})
       });
     }).then(function () { return refreshServerTestBatches(); }).catch(function (err) {
       reportConsoleError('Test batch enqueue', err);
@@ -5221,7 +5235,33 @@
     });
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
-    el('test-generations-run-btn').onclick = startRun;
+    function syncInlineLaunch() {
+      var count=Number(el('test-generations-inline-count').value);
+      var valid=Number.isInteger(count)&&count>=1&&count<=20;
+      var autoVl=el('test-generations-inline-auto-vl').checked;
+      el('test-generations-run-btn').textContent=!valid?'Run Tests':count>1?'Queue '+count+' sessions':autoVl?'Run Tests + VL':'Run Tests';
+      el('test-generations-inline-launch-summary').textContent=!valid?'Choose 1–20 sessions'
+        :count>1?count+' sessions · fresh seed each'+(autoVl?' · automatic VL':'')
+        :'1 session · selected seed'+(autoVl?' · automatic VL':'');
+    }
+    ['test-generations-inline-count','test-generations-inline-auto-vl'].forEach(function(id){
+      el(id).addEventListener('input',syncInlineLaunch);
+      el(id).addEventListener('change',syncInlineLaunch);
+    });
+    syncInlineLaunch();
+    el('test-generations-run-btn').onclick = function () {
+      var count = Number(el('test-generations-inline-count').value);
+      if (!Number.isInteger(count) || count < 1 || count > 20)
+        return showError(new Error('Choose 1–20 Test sessions.'));
+      var autoVl = el('test-generations-inline-auto-vl').checked;
+      if (count === 1 && !autoVl) return startRun();
+      el('test-generations-batch-count').value = String(count);
+      el('test-generations-batch-auto-vl').checked = autoVl;
+      try { runTestBatch(count, true); } catch (err) { showError(err); }
+    };
+    el('test-generations-campaign-mode').onclick = function () {
+      window.epochFinderShowMode('finder');
+    };
     el('test-generations-batch-btn').onclick = openTestBatchDialog;
     el('test-generations-batch-history').onchange = function () {
       var id = this.value;
@@ -5535,6 +5575,11 @@
       if (row) openSession(row.dataset.sessionName);
     };
     el('test-generations-results').onclick = function (event) {
+      var epoch = event.target.closest('[data-test-epoch-media-job]');
+      if (epoch) {
+        window.runAnalyticsViewEpoch(epoch.dataset.testEpochMediaJob,Number(epoch.dataset.testEpochMediaEpoch),'tests');
+        return;
+      }
       var vl = event.target.closest('[data-test-vl-result]');
       if (vl) { showTestVlResult(vl.dataset.testVlResult); return; }
       var rating = event.target.closest('[data-test-rating]');
@@ -5549,6 +5594,11 @@
       }
     };
     el('test-generations-compare').onclick = function (event) {
+      var epoch = event.target.closest('[data-test-epoch-media-job]');
+      if (epoch) {
+        window.runAnalyticsViewEpoch(epoch.dataset.testEpochMediaJob,Number(epoch.dataset.testEpochMediaEpoch),'tests');
+        return;
+      }
       var vl = event.target.closest('[data-test-vl-result]');
       if (vl) { showTestVlResult(vl.dataset.testVlResult); return; }
       var rating = event.target.closest('[data-test-rating]');

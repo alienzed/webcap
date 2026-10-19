@@ -165,9 +165,15 @@ def _run(batch):
         _stage(batch, "Queuing")
         for index in range(batch["count"]):
             _check(batch)
-            seed = secrets.randbits(32)
-            while seed in used:
+            pinned_seed = str((criteria.get("settings") or {}).get("seed") or "").strip()
+            if batch["count"] == 1 and batch.get("preserveSingleSeed") and pinned_seed:
+                seed = int(pinned_seed)
+                if not 0 <= seed <= 4294967295:
+                    raise ValueError("Seed must be between 0 and 4294967295.")
+            else:
                 seed = secrets.randbits(32)
+                while seed in used:
+                    seed = secrets.randbits(32)
             used.add(seed)
             named = dict(criteria)
             settings = dict(criteria.get("settings") or {})
@@ -242,7 +248,7 @@ def _run(batch):
             batch["vlJobId"] = ""
 
 
-def enqueue_batch(folder_path, folder, count, criteria, auto_vl, vl_model):
+def enqueue_batch(folder_path, folder, count, criteria, auto_vl, vl_model, preserve_single_seed=False):
     if not isinstance(criteria, dict):
         raise ValueError("Batch Test criteria are required.")
     if not 1 <= count <= 20:
@@ -260,6 +266,7 @@ def enqueue_batch(folder_path, folder, count, criteria, auto_vl, vl_model):
             "id": uuid.uuid4().hex, "folder": folder, "folderPath": folder_path,
             "count": count, "criteria": copy.deepcopy(criteria),
             "autoVl": bool(auto_vl), "vlModel": vl_model if auto_vl else "",
+            "preserveSingleSeed": bool(preserve_single_seed) and count == 1,
             "sessions": [], "finished": 0, "previews": 0, "evaluated": 0,
             "errors": [], "status": "queued", "phase": "Queued", "detail": "",
             "queuedAt": time.time(), "startedAt": 0, "finishedAt": 0,
@@ -306,7 +313,7 @@ def register_routes(app, safe_join_fs_root):
                 folder_path = safe_join_fs_root(folder)
                 batch = enqueue_batch(folder_path, folder, int(data.get("count") or 0),
                                       data.get("criteria"), bool(data.get("autoVl")),
-                                      str(data.get("vlModel") or ""))
+                                      str(data.get("vlModel") or ""), bool(data.get("preserveSingleSeed")) )
             elif operation == "cancel":
                 batch = cancel_batch(str(data.get("batchId") or ""))
             else:

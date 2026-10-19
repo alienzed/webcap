@@ -220,7 +220,13 @@ function restoreInitialShellLocationRoute() {
       initialShellLocationRestoring = false;
       initialShellLocationRestored = true;
       initialShellLocationRoute = null;
-      syncShellLocationRoute();
+      var selected = window.getStoryboardRouteTarget();
+      // Do not silently replace a missing Story/Scene link with the first Story.
+      // The Storyboard owner already reports the concrete navigation failure.
+      if ((!route.storyId || selected.storyId === route.storyId) &&
+          (!route.sceneId || selected.sceneId === route.sceneId)) {
+        syncShellLocationRoute();
+      }
     });
   }
   initialShellLocationRestored = true;

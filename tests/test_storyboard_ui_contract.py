@@ -1422,3 +1422,21 @@ def test_story_and_scene_right_click_use_the_existing_action_menus():
     assert "positionSceneActionMenu(menu, { x: event.clientX, y: event.clientY })" in js
     assert "positionStoryActionMenu(menu, { x: event.clientX, y: event.clientY })" in js
     assert "menu.open = true;" in js
+
+def test_storyboard_prompt_take_status_compares_original_prompt_on_live_editor_changes():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+    status = storyboard.split("function syncPromptTakeStatus(sceneId)", 1)[1].split("\n  function ", 1)[0]
+    editor = storyboard.split("function handleSceneInput(event)", 1)[1].split("\n  function ", 1)[0]
+
+    assert 'data-prompt-take-status' in storyboard
+    assert 'Updated since Take ' in status
+    assert "scene.selectedTakeId" in status
+    assert "take.sourcePrompt" in status
+    assert "!take.generated && typeof take.prompt === 'string'" in status
+    assert "editor.value.trim() !== sourcePrompt.trim()" in status
+    assert "badge.classList.toggle('hidden', !changed)" in status
+    assert "syncPromptTakeStatus(sceneId)" in editor
+    assert "if (focusedSceneId) syncPromptTakeStatus(focusedSceneId)" in storyboard
+    assert "syncPromptTakeStatus(sceneId);" in storyboard.split("function syncSceneTakeDom(sceneId)", 1)[1].split("\n  function ", 1)[0]
+    assert "storyboard-prompt-take-status" in css

@@ -1117,7 +1117,7 @@ function wireDiagnosticsUi() {
       setDiagnosticsTab(button.getAttribute('data-diagnostics-tab'), false);
     };
     button.onkeydown = function (event) {
-      var tabs = ['health', 'assessment', 'h3', 'model-lab'];
+      var tabs = ['health', 'assessment', 'h3'];
       var current = tabs.indexOf(button.getAttribute('data-diagnostics-tab'));
       var next = current;
       if (event.key === 'ArrowRight') next = (current + 1) % tabs.length;

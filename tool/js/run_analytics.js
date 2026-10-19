@@ -242,7 +242,7 @@
     if (!epochMediaScope || epochMediaLoading) return;
     var scope=epochMediaScope, serial=epochMediaSerial;
     epochMediaLoading=true;
-    el('epoch-media-status').textContent='Loading recorded checkpoint results…';
+    el('epoch-media-status').textContent=more?'Loading more recorded results…':'Loading recorded checkpoint results…';
     fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{
         limit:8,offset:more?epochMediaOffset:0,checkpoints:[scope.jobId+':'+scope.epoch]
@@ -281,7 +281,13 @@
         });
         epochMediaOffset += (data.media||[]).length;
         epochMediaTotal=Number(data.total||0);
-        el('epoch-media-status').textContent=epochMediaOffset+' / '+epochMediaTotal+' recorded results';
+        el('epoch-media-status').textContent=epochMediaTotal?epochMediaOffset+' of '+epochMediaTotal+' recorded results':'No recorded media for this checkpoint.';
+        if (!epochMediaTotal && !more) {
+          var empty=document.createElement('p');
+          empty.className='epoch-finder-muted';
+          empty.textContent='No test sessions or campaign frames were recorded for this checkpoint. Try another epoch or return to Analytics.';
+          el('epoch-media-grid').appendChild(empty);
+        }
         el('epoch-media-more').classList.toggle('hidden',epochMediaOffset>=epochMediaTotal);
       }).catch(function(err){
         if(serial!==epochMediaSerial)return;
@@ -300,6 +306,8 @@
     epochMediaLoading=false;
     epochMediaScope={jobId:id,epoch:num};
     epochMediaOffset=0;
+    el('epoch-media-grid').replaceChildren();
+    el('epoch-media-more').classList.add('hidden');
     el('epoch-media-title').textContent='Epoch '+num+' · combined generated results';
     el('epoch-media-dialog').showModal();
     epochMediaLoad(false);

@@ -4575,6 +4575,10 @@
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     if (warmReturn) {
+      if (pendingActivityCampaign) {
+        window.epochFinderInspectCampaign(pendingActivityCampaign);
+        pendingActivityCampaign = '';
+      }
       // The hidden workspace DOM is still alive. Keep previews, controls,
       // selections and scroll intact while synchronizing server changes.
       refreshActivityButton();
@@ -4594,7 +4598,10 @@
       var sessionToOpen = String(pendingActivitySession || '');
       pendingActivitySession = '';
       var warmStatus = sessionToOpen
-        ? request('test_open_session', { session: sessionToOpen }).then(selectSessionStatus)
+        ? request('test_open_session', { session: sessionToOpen }).then(function (status) {
+            if (generation !== openGeneration || !isOpen()) return;
+            selectSessionStatus(status);
+          })
         : currentSession
           ? request('test_open_session', { session: currentSession }).then(function (status) {
               if (generation !== openGeneration || !isOpen()) return;
@@ -4719,6 +4726,7 @@
         if ((payload.latest && (payload.latest.status === 'running' || payload.latest.status === 'stopping')) || queuedTestJobs.length) pollStatus();
       }).catch(showError);
     }).catch(function (err) {
+      if (generation !== openGeneration || !isOpen()) return;
       if (summary) summary.textContent = 'Test Generations is unavailable.';
       showError(err);
     });

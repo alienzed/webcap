@@ -133,11 +133,11 @@
       var card=document.createElement('button');card.type='button';card.className='test-unified-card';
       var src=mediaUrl(item);
       var isImage=item.source==='campaign' || /\.(png|jpe?g|webp|gif|avif)$/i.test(item.mediaFile||'') || item.mediaKind==='image';
-      if(src) {
+      if(src && item.mediaAvailable !== false && !item.framePruned) {
         var media=document.createElement(isImage?'img':'video');media.src=src;
         if(isImage) {media.loading='lazy';media.alt='Generated result';} else {media.preload='metadata';media.muted=true;}
         card.appendChild(media);
-      } else {var blank=document.createElement('span');blank.textContent=item.error || (item.framePruned?'Frame pruned':'No retained frame');card.appendChild(blank);}
+      } else {var blank=document.createElement('span');blank.textContent=item.error || (item.framePruned?'Frame pruned':item.mediaAvailable===false?'Media missing':'No retained frame');card.appendChild(blank);}
       var title=document.createElement('span');title.textContent=(item.runName ? item.runName+' · ':'')+(item.epoch==null?'Unattributed':'Epoch '+item.epoch)+(item.rating?' · ★ '+item.rating:'');
       card.appendChild(title);card.classList.toggle('active',chosen===item.id);
       card.addEventListener('click',function(){inspect(item);host.querySelectorAll('.test-unified-card').forEach(function(node){node.classList.toggle('active',node===card);});});host.appendChild(card);

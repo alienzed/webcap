@@ -2787,6 +2787,16 @@
                             <p class="app-settings-help">Local models come from <code>&lt;Models Root&gt;/text_encoders</code>. Director model selection remains shared across Director-enabled workspaces.</p>
                             <p class="app-settings-help">Use <strong>Save + Reboot</strong> after changing Director runtime settings.</p>
                         </section>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Generation Model Capabilities &amp; Limitations</div>
+                                <div class="app-settings-section-copy">Optional advice for Director when planning or writing for each target model. Not appended directly to generation prompts.</div>
+                            </div>
+                            <div class="app-settings-form-grid">
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">MiniMax H3</span><textarea id="app-settings-model-guidance-minimax_h3" rows="4" placeholder="A few practical limitations and preferred workarounds"></textarea></label>
+                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Krea 2</span><textarea id="app-settings-model-guidance-krea2_raw" rows="3" placeholder="Optional model-specific guidance"></textarea></label>
+                            </div>
+                        </section>
                         <section class="app-settings-section" id="caption-assist-settings">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">Caption Assist</div>

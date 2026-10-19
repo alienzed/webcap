@@ -248,23 +248,12 @@ function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
 }
 
 function selectUnifiedAssessmentModels(select) {
-  var selected = diagnosticsAssessmentSelected;
-  ['director', 'vision'].forEach(function (kind) {
-    selected[kind].clear();
-    if (select) {
-      var models = diagnosticsAssessmentCatalog[kind === 'director' ? 'directors' : 'visions'] || [];
-      models.forEach(function (model) {
-        var ref = String(kind === 'director' ? model.id || '' : model.modelRef || '');
-        if (ref) selected[kind].add(ref);
-      });
+  document.querySelectorAll('#diagnostics-assessment-results tbody[data-assessment-model]:not([hidden]) input[data-assessment-select]').forEach(function (input) {
+    if (input.checked !== select) {
+      input.checked = select;
+      input.dispatchEvent(new Event('change'));
     }
   });
-  document.querySelectorAll('#diagnostics-assessment-results tbody[data-assessment-model]:not([hidden]) input[data-assessment-select]').forEach(function (input) {
-    input.checked = select;
-    input.dispatchEvent(new Event('change'));
-  });
-  diagnosticsEl('diagnostics-assessment-selection').textContent =
-    (selected.director.size + selected.vision.size) + ' model(s) selected · Run Selected Tests starts the server-owned suite.';
   diagnosticsAssessmentSyncHeaderSelection();
 }
 
@@ -368,8 +357,8 @@ function refreshUnifiedModelAssessment() {
       var key = kind + ':' + ref;
       var row = document.createElement('tbody');
       row.dataset.assessmentModel = key;
-      row.dataset.assessmentRuntime = String(ref).startsWith('local::') ? 'local' : 'remote';
-      row.dataset.assessmentSearch = (title + ' ' + ref + ' ' + kind).toLowerCase();
+      row.dataset.assessmentRuntime = String((kind === 'director' ? directors : vision).find(function (model) { return String(model.id || model.modelRef || '') === ref; })?.runtimeId || '').toLowerCase() === 'local' ? 'local' : 'remote';
+      row.dataset.assessmentSearch = (title + ' ' + ref + ' ' + (supportsDirector ? 'director ' : '') + (supportsVision ? 'vision ' : '')).toLowerCase();
       row.assessmentSort = { model: title.toLowerCase(), role: kind, size: null, thinking: null, speed: null, output: null, quality: null, result: 1, tested: null };
       row.assessmentReport = report;
       var line = document.createElement('tr');
@@ -417,7 +406,7 @@ function refreshUnifiedModelAssessment() {
       row.assessmentSort.size = size > 0 ? size : null;
       var qualification = cell('Qualified for', '', 'qualification');
       qualification.className = 'model-assessment-qualifications';
-      var thinkingCell = cell('Thinking', kind === 'director' ? 'No' : '—', 'thinking');
+      var thinkingCell = cell('Thinking', supportsDirector ? 'No' : '—', 'thinking');
       thinkingCell.title = kind === 'director' ? 'No positive thinking support recorded yet.' : 'Thinking applies to Director models.';
       var speedCell = cell('Speed', '—', 'speed');
       speedCell.title = 'Runtime-reported generation throughput when available; different probes and runtimes may not be directly comparable.';
@@ -427,12 +416,12 @@ function refreshUnifiedModelAssessment() {
       var evidence = capabilityRuns.filter(function (run) {
         return run.models && run.models[ref] && Object.keys(run.models[ref]).some(function (probe) {
           var isVision = ['vision_open', 'vision_group_aware', 'vision_model_error'].indexOf(probe) !== -1;
-          return kind === 'vision' ? isVision : !isVision;
+          return supportsVision && isVision || supportsDirector && !isVision;
         });
       })[0];
       var tests = evidence && evidence.models[ref] || {};
       var thinking = tests.director_thinking;
-      if (kind === 'director') {
+      if (supportsDirector) {
         var supported = thinking ? thinking.supported === true : !!(report && report.thinking);
         thinkingCell.textContent = supported ? 'Yes' : 'No';
         thinkingCell.title = thinking ? 'Unified thinking probe: ' + (supported ? 'reasoning observed' : 'not verified') : 'Saved Director assessment result';
@@ -516,7 +505,7 @@ function refreshUnifiedModelAssessment() {
           panel.appendChild(detail);
         });
       }
-      if (kind === 'director' && evidence && evidence.status === 'completed') {
+      if (supportsDirector && evidence && evidence.status === 'completed') {
         var judgeButton = document.createElement('button');
         judgeButton.type = 'button';
         judgeButton.className = 'review-captions-btn';

@@ -54,6 +54,13 @@ def test_results_only_epoch_index_reuses_gallery_and_preserves_legacy_payload(tm
     assert epoch_finder.workspace_gallery(
         tmp_path, "h3", checkpoints=["job-a:10"], include_epoch_index=True
     )["resultEpochs"] == []
+    rendered = epoch_finder.workspace_gallery(tmp_path, "h3", generated_only=True)
+    assert rendered["total"] == original["total"] - 1
+    assert all(item.get("frame") or item.get("framePruned") or item.get("source") == "test"
+               for item in rendered["media"])
+    assert epoch_finder.command(tmp_path, "workspace_gallery", {
+        "modelId": "h3", "generatedOnly": True
+    })["total"] == rendered["total"]
     assert epoch_finder.command(tmp_path, "workspace_gallery", {
         "modelId": "h3", "limit": 1, "includeEpochIndex": True
     })["resultEpochs"] == indexed["resultEpochs"]
@@ -65,6 +72,7 @@ def test_analytics_epoch_navigator_is_additive():
     script = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
     assert 'id="run-analytics-result-epochs"' in html
     assert "includeEpochIndex:true" in script
+    assert "generatedOnly:true" in script
     assert "discoverResultEpochs();" in script
     assert "window.runAnalyticsViewEpoch(button.dataset.resultEpochJob" in script
     assert "el('result-epochs').textContent='Open Analytics to discover results.'" in script

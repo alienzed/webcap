@@ -28,7 +28,7 @@ function harness(active, owner, local = []) {
     el: () => null,
   };
   vm.runInNewContext(source.slice(start, end) +
-    '\nthis.choose = currentPrimaryItem; this.autoOpen = maybeAutoOpen;', sandbox);
+    '\nthis.choose = currentPrimaryItem; this.autoOpen = maybeAutoOpen; this.featured = () => featuredActivityItems(currentActivityItems(), currentPrimaryItem());', sandbox);
   return { ...sandbox, opened };
 }
 
@@ -37,6 +37,39 @@ test('local GPU owner wins primary placement over newer remote Director work', (
   const remote = { id: 'd1', kind: 'director', lane: 'llm' };
   const h = harness([training, remote], 'training');
   assert.equal(h.choose().id, 't1');
+});
+
+test('concurrent local and remote activity both get full cards, even when remote is focused', () => {
+  const active = [
+    { id: 't1', kind: 'training', lane: 'training' },
+    { id: 'd1', kind: 'director', lane: 'llm', modelId: 'ollama::model-7b', runtimeMode: 'remote' },
+  ];
+  const h = harness(active, 'training');
+  assert.deepEqual(h.featured().map(item => item.id), ['t1', 'd1']);
+  h.state.selectedJobKey = 'llm:d1';
+  assert.deepEqual(h.featured().map(item => item.id), ['d1', 't1']);
+});
+
+test('remote First Cut qualifies, but a remote-only activity gets one card', () => {
+  const remote = { id: 'first-cut:1', kind: 'first-cut', lane: 'background', modelId: 'ollama::model-7b' };
+  assert.equal(harness([remote], 'none').featured().length, 1);
+  const h = harness([remote, { id: 'i1', kind: 'generate', lane: 'inference' }], 'inference');
+  assert.deepEqual(h.featured().map(item => item.id), ['i1', 'first-cut:1']);
+});
+
+test('Activity hardware graph is anchored to local GPU work, never remote', () => {
+  assert.ok(source.includes('cards[localIndex].after(graph)'));
+  assert.ok(source.includes("graph.classList.toggle('hidden', localIndex < 0)"));
+  assert.ok(source.includes('directorJob && !isRemoteDirector(item) && Number.isFinite(generated)'));
+  assert.ok(source.includes('renderFeaturedCards(primaryHost, featured)'));
+  assert.ok(!source.includes('primaryHost.replaceChildren()'));
+});
+
+test('Activity audit keeps stable cards and correct disclosure and queue state', () => {
+  assert.ok(source.includes("mounted.join('\\n') !== ordered.join('\\n')"));
+  assert.ok(source.includes("detailsToggle.classList.toggle('hidden', !primary || otherCount === 0)"));
+  assert.ok(source.includes("if (backlog) queueParts.push(String(backlog) + ' backlog')"));
+  assert.ok(source.includes("className: isRemoteDirector(item) ? 'activity-remote-card' : ''"));
 });
 
 test('when GPU is idle, active non-GPU work may be primary', () => {

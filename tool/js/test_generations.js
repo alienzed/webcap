@@ -4875,7 +4875,6 @@
 
   function testRunCriteria() {
     if (!isTestModelSupported()) throw new Error('Test Generations is not available for the selected Base Model.');
-    var name = String(el('test-generations-session-name').value || '').trim();
     var prompt = String(el('test-generations-prompt').value || '').trim();
     var selectedFiles = selectedCandidateFiles();
     var declared = prepared && Array.isArray(prepared.settings) ? prepared.settings : [];
@@ -4901,7 +4900,7 @@
       strengths[file] = weight;
     });
     var criteria = {
-      name: name, selectedFiles: selectedFiles, modelId: currentTestModelId(),
+      selectedFiles: selectedFiles, modelId: currentTestModelId(),
       candidateStrengths: strengths,
       includeBase: el('test-generations-base-include').checked,
       prompt: prompt, settings: settings
@@ -4935,7 +4934,6 @@
       if (folder === launchFolder && modelId === currentTestModelId()) {
         pendingBatchSelection = { id: payload.batch.id, folder: folder, modelId: modelId, previousSession: previousSession };
         el('test-generations-seed').value = String(randomSeed());
-        el('test-generations-session-name').value = '';
       }
       return refreshServerTestBatches().then(function () {
         return refreshSessions();
@@ -4967,7 +4965,6 @@
         selectSessionStatus(startedStatus);
       }
       el('test-generations-seed').value = String(randomSeed());
-      el('test-generations-session-name').value = '';
       return refreshSessions();
     }).then(function () { pollStatus(); }).catch(function (err) {
       syncActiveRunControls(currentStatus);

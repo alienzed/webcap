@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   var folder = '', runId = '', vocabulary = [], candidates = [], version = 0, selected = {}, positions = {};
+  var loaded = false, pending = false, loadCounter = 0;
   function el(name) { return document.getElementById('test-references-' + name); }
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
@@ -20,6 +21,30 @@
     else console.error('[Training References]', error);
   }
   function resetError() { el('error').classList.add('hidden'); el('error').textContent = ''; }
+  function loadSelections() {
+    var currentFolder = folder, token = ++loadCounter;
+    loaded = false;
+    return api('reference_selection_list').then(function (response) {
+      if (folder !== currentFolder || token !== loadCounter) return;
+      selected = {};
+      (response.selections || []).forEach(function (item) {
+        selected[JSON.stringify([item.runId, item.group, item.term])] = item;
+      });
+      loaded = true;
+      drawGallery();
+    }).catch(function (error) { if (folder === currentFolder && token === loadCounter) report(error); });
+  }
+  function changeSelection(operation, item, after) {
+    if (!loaded || pending) return;
+    pending = true;
+    resetError();
+    api(operation, item).then(function () {
+      if (operation === 'reference_selection_remove') delete selected[JSON.stringify([item.runId, item.group, item.term])];
+      else selected[JSON.stringify([item.runId, item.group, item.term])] = item;
+      drawGallery();
+      if (after) after();
+    }).catch(report).finally(function () { pending = false; });
+  }
   function mediaUrl(name) { return '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(name); }
   function key(group, term) { return JSON.stringify([runId, group, term]); }
   function currentChoice() { return {group:el('group').value, term:el('option').value}; }
@@ -92,9 +117,7 @@
       if (token !== version || folder !== currentFolder || runId !== currentRun) return;
       candidates = response.references || [];
       var chosen = selected[key(choice.group, choice.term)];
-      if (chosen && !candidates.some(function (item) { return item.media === chosen.media; })) {
-        delete selected[key(choice.group, choice.term)];
-      }
+      // Missing candidates retain their saved choice until the user explicitly clears it.
       drawGallery();
     }).catch(function (error) { if (token === version) report(error); });
   }
@@ -153,17 +176,18 @@
   }
   window.testReferencesPrepare = function (nextFolder) {
     if (folder === nextFolder) return;
-    folder = nextFolder; runId = ''; selected = {}; positions = {}; version++;
+    folder = nextFolder; runId = ''; selected = {}; positions = {}; loaded = false; version++; loadCounter++;
     el('run').innerHTML = '<option value="">Choose source training run…</option>';
     el('group').innerHTML = '<option value="">Select a run first</option>';
     el('option').innerHTML = '<option value="">Select a group first</option>';
     el('group').disabled = true; el('option').disabled = true;
     candidates = []; vocabulary = []; drawGallery(); resetError();
+    if (folder) loadSelections();
   };
-  window.testReferencesOpen = refresh;
+  window.testReferencesOpen = function () { if (!loaded) loadSelections(); refresh(); };
   // Read-only snapshot for evaluators; source of truth stays in this workspace.
   window.testReferencesSelections = function (setFolder) {
-    if (String(setFolder) !== String(folder)) return [];
+    if (String(setFolder) !== String(folder) || !loaded) return [];
     return Object.keys(selected).map(function (id) {
       return Object.assign({}, selected[id]);
     });
@@ -194,9 +218,7 @@
     if (!candidate) throw new Error('Reference candidate no longer exists.');
     if (pick) {
       var choice = currentChoice();
-      selected[key(choice.group, choice.term)] = {runId:runId,group:choice.group,term:choice.term,media:candidate.media};
-      drawGallery();
-      advance(1);
+      changeSelection('reference_selection_save', {runId:runId,group:choice.group,term:choice.term,media:candidate.media}, function () { advance(1); });
     } else {
       el('preview-image').src = mediaUrl(candidate.media);
       el('preview-image').alt = candidate.media;
@@ -208,7 +230,7 @@
   el('selections').onclick = function (event) {
     var button = event.target.closest('[data-remove-reference]');
     if (!button) return;
-    delete selected[button.dataset.removeReference];
-    drawGallery();
+    var item = selected[button.dataset.removeReference];
+    if (item) changeSelection('reference_selection_remove', item);
   };
 })();

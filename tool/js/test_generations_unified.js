@@ -78,7 +78,7 @@
     var open=document.createElement('button');open.type='button';open.className='review-captions-btn';
     open.textContent='Open source '+(item.source==='campaign'?'campaign':'session');
     open.addEventListener('click',function() {
-      show(false);
+      mountExistingControls(false);show(false);
       if (item.source==='campaign') window.epochFinderInspectCampaign(item.campaignId,item.epoch,item.jobId);
       else {
         window.epochFinderShowMode('tests');
@@ -108,20 +108,44 @@
     });
     if(!records.length) {var p=document.createElement('p');p.textContent='No recorded images for this selection.';host.appendChild(p);}
   }
+  var mounted = false;
+  var movable = [
+    '.test-generations-next-run',
+    '.test-generations-staged-panel',
+    '#test-generations-batch-summary',
+    '#test-generations-status',
+    '#test-generations-error'
+  ].map(function(selector) {
+    var node = document.querySelector(selector);
+    if (!node || !node.parentNode) throw new Error('Missing original Test control: ' + selector);
+    var marker = document.createComment('Test control original position');
+    node.parentNode.insertBefore(marker, node);
+    return {node:node,marker:marker};
+  });
+  function mountExistingControls(enabled) {
+    if (mounted === enabled) return;
+    if (enabled) {
+      movable.forEach(function(item) { el('builder').appendChild(item.node); });
+    } else {
+      movable.forEach(function(item) { item.marker.parentNode.insertBefore(item.node, item.marker.nextSibling); });
+    }
+    mounted = enabled;
+  }
   function builder(enabled) {
+    mountExistingControls(enabled);
     el('builder').classList.toggle('hidden',!enabled);
     el('gallery').classList.toggle('hidden',enabled);
     el('inspector').classList.toggle('hidden',enabled);
     el('new').classList.toggle('hidden',enabled);
   }
-  function legacyMode(mode) {show(false);window.epochFinderShowMode(mode);}
+  function legacyMode(mode) {mountExistingControls(false);show(false);window.epochFinderShowMode(mode);}
   el('explore').onclick=function(){builder(false);};
   el('build').onclick=function(){builder(true);};
   el('new').onclick=function(){builder(true);};
   el('experiments').onclick=function(){perspective='experiments';selection='';renderList();renderGallery();};
   el('checkpoints').onclick=function(){perspective='checkpoints';selection='';renderList();renderGallery();};
   el('reload').onclick=refresh;
-  el('legacy').onclick=function(){show(false);};
+  el('legacy').onclick=function(){mountExistingControls(false);show(false);};
   el('normal').onclick=function(){legacyMode('tests');};
   el('finder').onclick=function(){legacyMode('finder');};
   el('references').onclick=function(){legacyMode('references');};

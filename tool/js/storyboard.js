@@ -5728,9 +5728,9 @@
       apply.textContent = 'Apply Prompt';
       apply.onclick = function () {
         apply.disabled = true;
-        request({
-          operation: 'update_scene', storyId: storyState.story.id, sceneId: sceneId,
-          scene: {prompt: result.value}
+        directorRequest({
+          operation: 'apply_coherence', storyId: storyState.story.id, sceneId: sceneId,
+          expectedPrompt: original, prompt: result.value, model: modelId
         }).then(function () {
           // Reload the canonical Scene; no unrelated fields are touched.
           return request(null, 'story=' + encodeURIComponent(storyState.story.id));

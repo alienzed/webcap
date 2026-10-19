@@ -3108,7 +3108,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .operations-toggle{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:40px;margin:0 0 7px;padding:9px 12px;border:1px solid var(--border);border-radius:7px;background:var(--panel-soft);color:var(--text);font:inherit;font-weight:650;text-align:left;cursor:pointer}
 .operations-toggle[aria-expanded=true]{border-color:var(--accent)}
 .operations-content{display:none;min-height:0;padding-bottom:8px}.operations-content.operations-expanded{display:block}
-.operations-content > .activity-monitor-drawer,.operations-content > .inference-queue-drawer{position:static!important;z-index:auto;width:100%;max-height:none;min-height:0;border:0;box-shadow:none;backdrop-filter:none;background:transparent;display:flex;overflow:visible}
+.operations-content > .activity-monitor-drawer:not(.hidden),.operations-content > .inference-queue-drawer:not(.hidden){position:static!important;z-index:auto;width:100%;max-height:none;min-height:0;border:0;box-shadow:none;backdrop-filter:none;background:transparent;display:flex;overflow:visible}
 .operations-content .activity-monitor-drawer-header{display:none}
 .operations-content .inference-queue-drawer-header{min-height:0;padding:5px 8px 8px;background:transparent;border:0}
 .operations-content .inference-queue-header-copy,.operations-content .inference-queue-close{display:none}
@@ -3116,6 +3116,7 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .operations-content .activity-monitor-primary{overflow:visible}
 .operations-content .activity-monitor-primary-queue{display:none}
 .operations-content .activity-monitor-details-toggle{display:none}
+#operations-history .activity-monitor-section[data-activity-section='now'],#operations-history .activity-monitor-section[data-activity-section='pending']{display:none}
 #operations-history .activity-monitor-details{display:block;max-height:none;overflow:visible}
 #operations-history .activity-monitor-details.hidden{display:none}
 #operations-history .activity-monitor-list{overflow:visible}

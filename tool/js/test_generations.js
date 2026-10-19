@@ -5241,8 +5241,8 @@
       var autoVl=el('test-generations-inline-auto-vl').checked;
       el('test-generations-run-btn').textContent=!valid?'Run Tests':count>1?'Queue '+count+' sessions':autoVl?'Run Tests + VL':'Run Tests';
       el('test-generations-inline-launch-summary').textContent=!valid?'Choose 1–20 sessions'
-        :count>1?count+' sessions · fresh seed each'+(autoVl?' · automatic VL':'')
-        :'1 session · selected seed'+(autoVl?' · automatic VL':'');
+        :count>1?count+' sessions, with a fresh seed for each'+(autoVl?' · VL assessment after generation':'')
+        :'One session using the selected seed'+(autoVl?' · VL assessment after generation':'');
     }
     ['test-generations-inline-count','test-generations-inline-auto-vl'].forEach(function(id){
       el(id).addEventListener('input',syncInlineLaunch);

@@ -835,8 +835,41 @@ function runEnvironmentCheck() {
     });
 }
 
+function refreshDiagnosticsGpuConsumers() {
+  var button = diagnosticsEl('diagnostics-gpu-refresh');
+  var status = diagnosticsEl('diagnostics-gpu-status');
+  var host = diagnosticsEl('diagnostics-gpu-consumers');
+  button.disabled = true;
+  status.textContent = 'Checking GPU processes…';
+  host.replaceChildren();
+  return fetch('/app/diagnostics/gpu-consumers')
+    .then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok) throw new Error(payload.error || 'GPU consumer query failed.');
+        return payload;
+      });
+    })
+    .then(function (payload) {
+      var consumers = payload.consumers || [];
+      status.textContent = consumers.length ? consumers.length + ' CUDA process(es) detected.' : 'No CUDA processes reported.';
+      consumers.forEach(function (consumer) {
+        var row = document.createElement('div');
+        row.className = 'app-settings-environment-result';
+        row.textContent = consumer.name + ' · PID ' + consumer.pid + ' · ' +
+          (consumer.memoryMiB === null ? 'VRAM unavailable' : consumer.memoryMiB + ' MiB VRAM');
+        host.appendChild(row);
+      });
+    })
+    .catch(function (error) {
+      status.textContent = 'Unavailable: ' + error.message;
+      reportConsoleError('GPU Consumers', error);
+    })
+    .finally(function () { button.disabled = false; });
+}
+
 function wireDiagnosticsUi() {
   diagnosticsEl('shell-diagnostics-btn').onclick = function () { openDiagnosticsModal(); };
+  diagnosticsEl('diagnostics-gpu-refresh').onclick = refreshDiagnosticsGpuConsumers;
   diagnosticsEl('diagnostics-close-btn').onclick = closeDiagnosticsModal;
   diagnosticsEl('app-settings-environment-run-btn').onclick = runEnvironmentCheck;
   diagnosticsEl('app-settings-environment-install-btn').onclick = installPythonRequirements;

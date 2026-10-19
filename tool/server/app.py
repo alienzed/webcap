@@ -2702,7 +2702,9 @@ def training_runner_finish_schedule_route():
 @app.route("/fs/training_runner/reorder", methods=["POST"])
 def training_runner_reorder_route():
     data = request.get_json(silent=True) or {}
-    payload, status = training_runner_reorder_response(data.get("jobId", ""), str(data.get("direction") or ""))
+    payload, status = training_runner_reorder_response(
+        data.get("jobId", ""), str(data.get("direction") or ""), position=data.get("position")
+    )
     return jsonify(payload), status
 
 

@@ -19,14 +19,18 @@
   document.getElementById('app-overlay-root').appendChild(root);
   document.getElementById('operations-activity').appendChild(activity);
   document.getElementById('operations-queues').appendChild(queues);
+  window.isOperationsDrawerMounted = true;
   var section = '';
+  // Keep Recent owned by Activity; reparent only its stable DOM host.
+  document.getElementById('operations-history').appendChild(document.getElementById('activity-monitor-details'));
   function show(next) {
     section = next;
     root.classList.remove('hidden');
     root.setAttribute('aria-hidden', 'false');
     // Keep each existing presenter alive while the shared shell is open.
-    window.setActivityDrawerOpen(true, false, true);
-    window.setInferenceQueueOpen(true, true);
+    if (activity.classList.contains('hidden')) window.setActivityDrawerOpen(true, false, true);
+    if (queues.classList.contains('hidden')) window.setInferenceQueueOpen(true, true);
+    document.getElementById('activity-monitor-details').classList.toggle('hidden', next !== 'history');
     root.querySelectorAll('[data-operations-section]').forEach(function (button) {
       var expanded = button.dataset.operationsSection === section;
       button.setAttribute('aria-expanded', String(expanded));
@@ -43,6 +47,7 @@
     window.setActivityDrawerOpen(false, !!manual, true);
     window.setInferenceQueueOpen(false, true);
   }
+  window.isOperationsDrawerVisible = function () { return !root.classList.contains('hidden'); };
   window.openOperationsDrawer = function (next) {
     if (['activity', 'queues', 'history'].indexOf(next) === -1) throw new Error('Invalid operations section: ' + next);
     // Auto-opening an already visible drawer must never replace the user's section.

@@ -8,6 +8,7 @@ var diagnosticsAssessmentStoppingId = '';
 var diagnosticsAssessmentSort = { key: 'speed', descending: true };
 var diagnosticsAssessmentExpanded = new Set();
 var diagnosticsAssessmentReviewRefresh = 0;
+var diagnosticsAssessmentRuntime = 'local';
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
@@ -34,8 +35,8 @@ function diagnosticsAssessmentCounts(row, tests) {
     structured: ['language_synthesis', 'language_challenge'],
     vision: ['vision_open', 'vision_group_aware']
   };
-  var role = row.dataset.assessmentModel.split(':')[0];
-  var needed = role === 'director' ? ['writing', 'structured'] : ['vision'];
+  var role = row.dataset.assessmentRole;
+  var needed = role === 'both' ? ['writing', 'structured', 'vision'] : role === 'director' ? ['writing', 'structured'] : ['vision'];
   var good = 0, bad = 0, running = 0, missing = 0;
   needed.forEach(function (family) {
     var total = 0, completed = 0, problems = 0, active = 0;
@@ -71,13 +72,13 @@ function diagnosticsAssessmentCounts(row, tests) {
     span.title = hint;
     host.appendChild(span);
   }
-  mark(role === 'director' ? 'Director ' + state : 'Vision ' + state,
+  mark((role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') + state,
     state === 'Passed' ? 'passed' : state === 'Issues' ? 'issues' : 'untested',
-    role === 'director' ? 'Requires successful writing and structured synthesis/challenge probes; this is a technical sanity check, not a quality score.' : 'Requires completed open and group-aware Vision probes; this is not caption-accuracy grading.');
+    role === 'both' ? 'Requires Director writing and structured probes plus open and group-aware Vision probes.' : role === 'director' ? 'Requires successful writing and structured synthesis/challenge probes; this is a technical sanity check, not a quality score.' : 'Requires completed open and group-aware Vision probes; this is not caption-accuracy grading.');
   var report = row.assessmentReport;
   var abilities = report && report.abilities || {};
   var longform = Number(abilities.coherentOutputTokens || 0);
-  if (role === 'director' && report && report.assessmentKind !== 'confirmation') {
+  if (role !== 'vision' && report && report.assessmentKind !== 'confirmation') {
     if (longform >= 16384) mark('16K proven', 'passed', 'A 16K-target prose calibration passed its explicit completeness checks.');
     else if (longform >= 8192) mark('8K proven', 'passed', 'An 8K-target prose calibration passed its explicit completeness checks.');
     else if (longform >= 4096) mark('4K proven', 'passed', 'A 4K-target prose calibration passed.');
@@ -127,9 +128,10 @@ function diagnosticsAssessmentSortAndFilter() {
     return diagnosticsAssessmentSort.descending ? -cmp : cmp;
   });
   bodies.forEach(function (body) {
-    body.hidden = !!query && !body.dataset.assessmentSearch.includes(query);
+    body.hidden = (diagnosticsAssessmentRuntime !== 'all' && body.dataset.assessmentRuntime !== diagnosticsAssessmentRuntime) || (!!query && !body.dataset.assessmentSearch.includes(query));
     table.appendChild(body); // Move paired main/evidence rows together; never recreate interactive DOM.
   });
+  diagnosticsAssessmentSyncHeaderSelection();
   table.querySelectorAll('thead th[data-assessment-sort]').forEach(function (heading) {
     heading.setAttribute('aria-sort', heading.dataset.assessmentSort === diagnosticsAssessmentSort.key
       ? diagnosticsAssessmentSort.descending ? 'descending' : 'ascending' : 'none');
@@ -247,29 +249,19 @@ function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
 }
 
 function selectUnifiedAssessmentModels(select) {
-  var selected = diagnosticsAssessmentSelected;
-  ['director', 'vision'].forEach(function (kind) {
-    selected[kind].clear();
-    if (select) {
-      var models = diagnosticsAssessmentCatalog[kind === 'director' ? 'directors' : 'visions'] || [];
-      models.forEach(function (model) {
-        var ref = String(kind === 'director' ? model.id || '' : model.modelRef || '');
-        if (ref) selected[kind].add(ref);
-      });
+  document.querySelectorAll('#diagnostics-assessment-results tbody[data-assessment-model]:not([hidden]) input[data-assessment-select]').forEach(function (input) {
+    if (input.checked !== select) {
+      input.checked = select;
+      input.dispatchEvent(new Event('change'));
     }
   });
-  document.querySelectorAll('#diagnostics-assessment-results input[data-assessment-select]').forEach(function (input) {
-    input.checked = select;
-  });
-  diagnosticsEl('diagnostics-assessment-selection').textContent =
-    (selected.director.size + selected.vision.size) + ' model(s) selected · Run Selected Tests starts the server-owned suite.';
   diagnosticsAssessmentSyncHeaderSelection();
 }
 
 function diagnosticsAssessmentSyncHeaderSelection() {
   var header = diagnosticsEl('diagnostics-assessment-select-all');
   if (!header) return;
-  var inputs = Array.from(document.querySelectorAll('#diagnostics-assessment-results input[data-assessment-select]'));
+  var inputs = Array.from(document.querySelectorAll('#diagnostics-assessment-results tbody[data-assessment-model]:not([hidden]) input[data-assessment-select]'));
   var checked = inputs.filter(function (input) { return input.checked; }).length;
   header.checked = inputs.length > 0 && checked === inputs.length;
   header.indeterminate = checked > 0 && checked < inputs.length;
@@ -349,17 +341,27 @@ function refreshUnifiedModelAssessment() {
     table.appendChild(head);
 
     var present = { director: new Set(), vision: new Set() };
+    var seenModels = new Set();
     function refreshSelectionSummary() {
+      var selectedModels = new Set([...diagnosticsAssessmentSelected.director, ...diagnosticsAssessmentSelected.vision]);
       diagnosticsEl('diagnostics-assessment-selection').textContent =
-        (diagnosticsAssessmentSelected.director.size + diagnosticsAssessmentSelected.vision.size) +
-        ' model(s) selected · Run Selected Tests starts the server-owned suite.';
+        selectedModels.size + ' model(s) selected · Run Selected Tests starts the server-owned suite.';
+      diagnosticsAssessmentSyncHeaderSelection();
     }
     function addRow(title, kind, ref, report) {
-      present[kind].add(ref);
-      var key = kind + ':' + ref;
+      if (seenModels.has(ref)) return;
+      seenModels.add(ref);
+      var supportsVision = vision.some(function (entry) { return String(entry.modelRef || '') === ref; });
+      var supportsDirector = directors.some(function (entry) { return String(entry.id || '') === ref; });
+      if (supportsVision) present.vision.add(ref);
+      if (supportsDirector) present.director.add(ref);
+      var key = ref;
       var row = document.createElement('tbody');
       row.dataset.assessmentModel = key;
-      row.dataset.assessmentSearch = (title + ' ' + ref + ' ' + kind).toLowerCase();
+      row.dataset.assessmentRole = supportsDirector && supportsVision ? 'both' : supportsDirector ? 'director' : 'vision';
+      var runtimeModel = (kind === 'director' ? directors : vision).find(function (model) { return String(model.id || model.modelRef || '') === ref; }) || {};
+      row.dataset.assessmentRuntime = String(runtimeModel.runtimeId || '').toLowerCase() === 'local' || ref.startsWith('local::') ? 'local' : 'remote';
+      row.dataset.assessmentSearch = (title + ' ' + ref + ' ' + (supportsDirector ? 'director ' : '') + (supportsVision ? 'vision ' : '')).toLowerCase();
       row.assessmentSort = { model: title.toLowerCase(), role: kind, size: null, thinking: null, speed: null, output: null, quality: null, result: 1, tested: null };
       row.assessmentReport = report;
       var line = document.createElement('tr');
@@ -367,11 +369,14 @@ function refreshUnifiedModelAssessment() {
       var checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.dataset.assessmentSelect = '';
-      checkbox.checked = diagnosticsAssessmentSelected[kind].has(ref);
-      checkbox.setAttribute('aria-label', 'Select ' + kind + ' model ' + ref);
+      checkbox.checked = diagnosticsAssessmentSelected.director.has(ref) || diagnosticsAssessmentSelected.vision.has(ref);
+      checkbox.setAttribute('aria-label', 'Select model ' + ref);
       checkbox.addEventListener('change', function () {
-        if (checkbox.checked) diagnosticsAssessmentSelected[kind].add(ref);
-        else diagnosticsAssessmentSelected[kind].delete(ref);
+        ['director', 'vision'].forEach(function (role) {
+          if (!((role === 'director' && supportsDirector) || (role === 'vision' && supportsVision))) return;
+          if (checkbox.checked) diagnosticsAssessmentSelected[role].add(ref);
+          else diagnosticsAssessmentSelected[role].delete(ref);
+        });
         refreshSelectionSummary();
       });
       selection.appendChild(checkbox);
@@ -395,7 +400,7 @@ function refreshUnifiedModelAssessment() {
       expand.setAttribute('aria-expanded', String(diagnosticsAssessmentExpanded.has(key)));
       name.appendChild(expand);
       line.appendChild(name);
-      cell('Role', kind === 'vision' ? 'Vision' : 'Director');
+      cell('Role', supportsDirector && supportsVision ? 'Director · Vision' : supportsVision ? 'Vision' : 'Director');
       var model = (kind === 'director' ? directors : vision).find(function (entry) {
         return String(kind === 'director' ? entry.id || '' : entry.modelRef || '') === ref;
       }) || {};
@@ -404,7 +409,7 @@ function refreshUnifiedModelAssessment() {
       row.assessmentSort.size = size > 0 ? size : null;
       var qualification = cell('Qualified for', '', 'qualification');
       qualification.className = 'model-assessment-qualifications';
-      var thinkingCell = cell('Thinking', kind === 'director' ? 'No' : '—', 'thinking');
+      var thinkingCell = cell('Thinking', supportsDirector ? 'No' : '—', 'thinking');
       thinkingCell.title = kind === 'director' ? 'No positive thinking support recorded yet.' : 'Thinking applies to Director models.';
       var speedCell = cell('Speed', '—', 'speed');
       speedCell.title = 'Runtime-reported generation throughput when available; different probes and runtimes may not be directly comparable.';
@@ -414,12 +419,12 @@ function refreshUnifiedModelAssessment() {
       var evidence = capabilityRuns.filter(function (run) {
         return run.models && run.models[ref] && Object.keys(run.models[ref]).some(function (probe) {
           var isVision = ['vision_open', 'vision_group_aware', 'vision_model_error'].indexOf(probe) !== -1;
-          return kind === 'vision' ? isVision : !isVision;
+          return supportsVision && isVision || supportsDirector && !isVision;
         });
       })[0];
       var tests = evidence && evidence.models[ref] || {};
       var thinking = tests.director_thinking;
-      if (kind === 'director') {
+      if (supportsDirector) {
         var supported = thinking ? thinking.supported === true : !!(report && report.thinking);
         thinkingCell.textContent = supported ? 'Yes' : 'No';
         thinkingCell.title = thinking ? 'Unified thinking probe: ' + (supported ? 'reasoning observed' : 'not verified') : 'Saved Director assessment result';
@@ -503,7 +508,7 @@ function refreshUnifiedModelAssessment() {
           panel.appendChild(detail);
         });
       }
-      if (kind === 'director' && evidence && evidence.status === 'completed') {
+      if (supportsDirector && evidence && evidence.status === 'completed') {
         var judgeButton = document.createElement('button');
         judgeButton.type = 'button';
         judgeButton.className = 'review-captions-btn';
@@ -546,6 +551,7 @@ function refreshUnifiedModelAssessment() {
     });
     results.replaceChildren(table);
     diagnosticsAssessmentSortAndFilter();
+    diagnosticsAssessmentSyncHeaderSelection();
     if (diagnosticsAssessmentReviewRefresh) window.clearTimeout(diagnosticsAssessmentReviewRefresh);
     diagnosticsAssessmentReviewRefresh = 0;
     var reviewsRunning = capabilityRuns.some(function (run) {
@@ -1122,6 +1128,11 @@ function wireDiagnosticsUi() {
         'Cannot start assessment: ' + String(error.message || error);
       reportConsoleError('Model Assessment', error);
     }
+  };
+  diagnosticsEl('diagnostics-assessment-runtime').onchange = function () {
+    diagnosticsAssessmentRuntime = this.value;
+    diagnosticsAssessmentSortAndFilter();
+    diagnosticsAssessmentSyncHeaderSelection();
   };
   diagnosticsEl('diagnostics-assessment-refresh').onclick = function () { refreshUnifiedModelAssessment().catch(function () {}); };
   diagnosticsEl('diagnostics-assessment-stop').onclick = stopUnifiedModelAssessment;

@@ -35,6 +35,15 @@ def test_unified_gallery_links_recorded_test_and_campaign_epoch(tmp_path, monkey
     assert len(evidence["campaigns"]) == 1
     assert len(evidence["media"]) == 3
     assert evidence["total"] == 3
+    first = epoch_finder.workspace_gallery(tmp_path, "h3", limit=1, offset=0)
+    second = epoch_finder.workspace_gallery(tmp_path, "h3", limit=1, offset=1)
+    assert first["total"] == second["total"] == 3
+    assert len(first["media"]) == len(second["media"]) == 1
+    assert first["media"][0]["id"] != second["media"][0]["id"]
+    assert epoch_finder.workspace_gallery(tmp_path, "h3", collection_id="test:session-1")["total"] == 2
+    filtered = epoch_finder.workspace_gallery(tmp_path, "h3", checkpoints=["run-a:75"])
+    assert filtered["total"] == 2
+    assert {entry["source"] for entry in filtered["media"]} == {"test", "campaign"}
     linked = [m for m in evidence["media"] if m["id"] == "test:session-1:linked.png"][0]
     campaign = [m for m in evidence["media"] if m["source"] == "campaign"][0]
     unknown = [m for m in evidence["media"] if m.get("mediaFile") == "unknown.png"][0]

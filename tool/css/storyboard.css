@@ -3788,16 +3788,6 @@
 .storyboard-director-activity #storyboard-director-activity-phase {
   font-size: 21px;
 }
-.storyboard-director-activity [data-view-activity] {
-  grid-area: action;
-  justify-self: start;
-  padding: 8px 12px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
-}
 /* Storyboard overlays explain a blocking operation; Activity owns detailed telemetry. */
 #storyboard-director-activity-trend,
 #storyboard-director-model-load,
@@ -3808,12 +3798,37 @@
 .storyboard-director-activity.is-workspace-overlay,
 .storyboard-director-activity.is-structure-overlay {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "label" "phase" "detail" "activity" "stop";
+  grid-template-areas: "label" "phase" "detail" "action" "stop";
   row-gap: 8px;
   align-items: start;
   min-height: 0;
 }
-#storyboard-director-view-activity { grid-area: activity; pointer-events: auto; justify-self: start; }
+#storyboard-director-view-activity {
+  grid-area: action;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+}
+#storyboard-director-view-activity:hover {
+  background: var(--panel);
+  border-color: var(--muted);
+}
+#storyboard-director-view-activity:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 #storyboard-director-stop { grid-area: stop; pointer-events: auto; justify-self: start; }
 
 /* Reuse the Test wildcard wand motion for active Scene refinements. */

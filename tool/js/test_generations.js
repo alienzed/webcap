@@ -3342,6 +3342,17 @@
     if (!opts.failed) {
       var rating = buildResultRating(result, opts.sessionName);
       if (rating) secondaryRow.appendChild(rating);
+      var provenance = result && result.provenance;
+      if (provenance && String(provenance.sourceJobId || '') && Number.isInteger(provenance.sourceEpoch)) {
+        var browse = document.createElement('button');
+        browse.type = 'button';
+        browse.className = 'review-captions-btn test-generations-epoch-link';
+        browse.dataset.testEpochMediaJob = String(provenance.sourceJobId);
+        browse.dataset.testEpochMediaEpoch = String(provenance.sourceEpoch);
+        browse.textContent = 'Epoch ' + provenance.sourceEpoch + ' · All results';
+        browse.title = 'See all recorded results for this training checkpoint';
+        secondaryRow.appendChild(browse);
+      }
     }
     if (secondaryRow.childNodes.length) copy.appendChild(secondaryRow);
 
@@ -5564,6 +5575,11 @@
       if (row) openSession(row.dataset.sessionName);
     };
     el('test-generations-results').onclick = function (event) {
+      var epoch = event.target.closest('[data-test-epoch-media-job]');
+      if (epoch) {
+        window.runAnalyticsViewEpoch(epoch.dataset.testEpochMediaJob,Number(epoch.dataset.testEpochMediaEpoch),'tests');
+        return;
+      }
       var vl = event.target.closest('[data-test-vl-result]');
       if (vl) { showTestVlResult(vl.dataset.testVlResult); return; }
       var rating = event.target.closest('[data-test-rating]');
@@ -5578,6 +5594,11 @@
       }
     };
     el('test-generations-compare').onclick = function (event) {
+      var epoch = event.target.closest('[data-test-epoch-media-job]');
+      if (epoch) {
+        window.runAnalyticsViewEpoch(epoch.dataset.testEpochMediaJob,Number(epoch.dataset.testEpochMediaEpoch),'tests');
+        return;
+      }
       var vl = event.target.closest('[data-test-vl-result]');
       if (vl) { showTestVlResult(vl.dataset.testVlResult); return; }
       var rating = event.target.closest('[data-test-rating]');

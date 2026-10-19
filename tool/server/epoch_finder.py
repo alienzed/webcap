@@ -1050,7 +1050,7 @@ def status(folder_path, campaign_id):
 
 
 
-def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0):
+def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collection_id="", checkpoints=None):
     """Read-only visual index over existing Test sessions and Finder campaigns.
 
     Each result retains its native execution identity. Only recorded run/epoch
@@ -1060,6 +1060,8 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0):
 
     selected_model = str(model_id or "").strip()
     limit = max(1, min(96, int(limit)))
+    collection_id = str(collection_id or "")
+    checkpoint_ids = set(str(x) for x in (checkpoints or []) if isinstance(x, str))
     offset = max(0, int(offset))
     media = []
     sessions = []
@@ -1091,6 +1093,10 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0):
             epoch = provenance.get("sourceEpoch")
             if not source_job or source_folder != str(bench._relative_set_folder(folder_path)).replace(chr(92), "/").strip("/") or type(epoch) is not int:
                 source_job, epoch = "", None
+            if collection_id and collection_id != "test:" + session_name:
+                continue
+            if checkpoint_ids and source_job + ":" + str(epoch) not in checkpoint_ids:
+                continue
             total += 1
             if total <= offset or len(media) >= limit:
                 continue
@@ -1137,6 +1143,10 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0):
                 epoch = origin.get("epoch") if origin else candidate
                 if type(epoch) is not int:
                     job_id, epoch = "", None
+                if collection_id and collection_id != "campaign:" + campaign["id"]:
+                    continue
+                if checkpoint_ids and job_id + ":" + str(epoch) not in checkpoint_ids:
+                    continue
                 total += 1
                 if total <= offset or len(media) >= limit:
                     continue
@@ -1173,7 +1183,7 @@ def command(folder_path, operation, criteria=None):
     if operation == "list":
         return list_campaigns(folder_path)
     if operation == "workspace_gallery":
-        return workspace_gallery(folder_path, criteria.get("modelId"), limit=criteria.get("limit", 48), offset=criteria.get("offset", 0))
+        return workspace_gallery(folder_path, criteria.get("modelId"), limit=criteria.get("limit", 48), offset=criteria.get("offset", 0), collection_id=criteria.get("collectionId"), checkpoints=criteria.get("checkpoints"))
     if operation == "checkpoint_evidence":
         return checkpoint_evidence(folder_path, criteria.get("jobId"))
     if operation == "run_analytics":

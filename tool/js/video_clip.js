@@ -228,7 +228,7 @@ function updateVideoClipExactFrameUi() {
   backBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem || (videoClipExactFrame && Number(videoClipExactFrame.frameIndex) <= 0);
   forwardBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
   extractBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
-  extractBtn.classList.toggle('hidden', videoClipFrameExtractionOpen && !!videoClipExactFrame);
+  extractBtn.classList.toggle('hidden', !!videoClipStoryboardSource || (videoClipFrameExtractionOpen && !!videoClipExactFrame));
   extractConfirmEl.classList.toggle('hidden', !videoClipFrameExtractionOpen || !videoClipExactFrame);
   if (videoClipExactFrameRequestPending) {
     noteEl.textContent = 'Resolving exact frame...';

@@ -74,3 +74,33 @@ def test_legacy_staging_still_uses_original_epoch(tmp_path, monkeypatch):
     assert captured == [("old-run", 40)]
     assert name.endswith("/epoch40.safetensors")
     epoch_finder._clean_staging(tmp_path, campaign)
+
+
+def test_candidates_curve_lists_available_queue_and_history_runs_without_saved_epochs(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "sets/subject")
+    monkeypatch.setattr(epoch_finder, "passive_status_snapshot", lambda: ({
+        "ok": True, "jobs": [
+            {"id": "run-live", "folder": "sets/subject", "stages": "h3", "runName": "Live"},
+            {"id": "wrong-set", "folder": "sets/other", "stages": "h3"},
+        ],
+    }, 200))
+    monkeypatch.setattr(epoch_finder, "all_history_payload", lambda **_kwargs: {"jobs": [
+        {"id": "run-live", "folder": "sets/subject", "stages": "h3"},
+        {"id": "run-old", "folder": "sets/subject", "stages": "h3", "runName": "Older"},
+    ]})
+    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot", lambda _folder, job_id: (
+        "/training/" + job_id, {"stages": "h3", "runName": job_id, "runSequence": "1"},
+    ))
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key", lambda _: SimpleNamespace(
+        PROFILE_ID="minimax_h3", STAGING_KEY="h3",
+    ))
+    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda _folder, job_id: "/training/" + job_id)
+    monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run", lambda _path: [])
+
+    assert epoch_finder._runs("set-folder") == []
+    result = epoch_finder.candidate_runs("set-folder")
+    assert [(run["folder"], run["jobId"]) for run in result] == [
+        ("sets/subject", "run-live"), ("sets/subject", "run-old"),
+    ]

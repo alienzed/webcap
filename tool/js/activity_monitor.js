@@ -225,7 +225,7 @@
   }
 
   function maybeAutoOpen() {
-    var competingDrawer = (window.isOperationsDrawerMounted && !document.getElementById('operations-drawer').classList.contains('hidden')) || ['director-chat-drawer', 'inference-queue-drawer'].some(function (id) {
+    var competingDrawer = ['director-chat-drawer'].concat(window.isOperationsDrawerMounted ? [] : ['inference-queue-drawer']).some(function (id) {
       var drawer = el(id);
       return drawer && !drawer.classList.contains('hidden');
     });
@@ -236,7 +236,7 @@
       state.autoOpenSeen[id] = true;
       // Never displace a workflow drawer for an automatically raised Activity panel.
       var shortInteractive = lane === 'llm' || item.kind === 'first-cut' || item.kind === 'director-diagnostics';
-      if (!state.open && !competingDrawer && shortInteractive && !state.dismissedJobs[id]) {
+      if (!(window.isOperationsDrawerMounted && window.isOperationsDrawerVisible()) && !state.open && !competingDrawer && shortInteractive && !state.dismissedJobs[id]) {
         state.selectedJobKey = id;
         setOpen(true);
       }
@@ -1129,7 +1129,7 @@
     if (!drawer || !host || !summary) throw new Error('Activity panel markup missing.');
 
     var primary = currentPrimaryItem();
-    var featured = featuredActivityItems(active, primary);
+    var featured = window.isOperationsDrawerMounted ? (primary ? [primary].concat(active.filter(function (item) { return activityJobKey(item) !== activityJobKey(primary); })) : []) : featuredActivityItems(active, primary);
     var primaryHost = el('activity-monitor-primary');
     var primaryQueue = el('activity-monitor-primary-queue');
     var details = el('activity-monitor-details');
@@ -1369,7 +1369,14 @@
     var matching = currentActivityItems().find(function (item) { return item.kind === 'director' && String(item.id) === String(jobId); });
     if (matching) state.selectedJobKey = activityJobKey(matching);
     else state.selectedJobKey = 'llm:' + String(jobId || '');
-    setOpen(true);
+    if (window.isOperationsDrawerMounted) window.selectOperationsSection('activity');
+    else setOpen(true);
+  };
+  window.focusActivityByJob = function (jobId) {
+    var matching = currentActivityItems().find(function (item) { return String(item.id) === String(jobId); });
+    if (matching) state.selectedJobKey = activityJobKey(matching);
+    if (window.isOperationsDrawerMounted) window.selectOperationsSection('activity');
+    else setOpen(true);
   };
   window.setActivityDrawerOpen = setOpen;
   window.refreshActivityMonitor = wake;

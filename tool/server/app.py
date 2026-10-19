@@ -1820,10 +1820,10 @@ def storyboard_director_route():
                         phrases.extend(terms)
             if phrases:
                 contract["prompt"] += (
-                    "\\n\\n[APPROVED LORA VOCABULARY]\\n"
+                    "\n\n[APPROVED LORA VOCABULARY]\n"
                     "Preserve these user-approved phrases wherever they fit the Scene intent: "
                     + ", ".join(dict.fromkeys(phrases)) +
-                    "\\nThese are textual phrases, not <lora:...> loader syntax."
+                    "\nThese are textual phrases, not <lora:...> loader syntax."
                 )
         repair_base = None
         if operation == "repair_scenes":

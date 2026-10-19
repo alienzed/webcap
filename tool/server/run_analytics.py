@@ -220,7 +220,7 @@ def report(folder_path, job_id="", session_name="", campaigns=None, catalog=None
         warnings.append("Archiving can clear Test sessions. Deleted per-image Test evidence cannot be reconstructed from aggregate ratings.")
     if unlinked:
         warnings.append(str(unlinked) + " Test preview(s) without usable recorded run provenance were left unlinked.")
-    if not series and not test_points:
+    if not series and not any(p["manualCount"] or p["testVlCount"] for p in test_points):
         warnings.append("No surviving per-epoch evaluation evidence for this run.")
     if len(series) > 1:
         warnings.append("Campaign tests can differ. Compare scores within an individual campaign, not across campaigns by default.")

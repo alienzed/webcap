@@ -440,10 +440,12 @@ def resolve_scene_loras(story, scene):
 
     resolved = []
     for item in story_loras:
-        if item.get("enabled") is False:
-            continue
         override = overrides.get(item["name"].casefold(), {})
         if override.get("enabled") is False:
+            continue
+        # A Scene may explicitly enable a globally disabled Story LoRA
+        # without enabling it in any other Scene.
+        if item.get("enabled") is False and override.get("enabled") is not True:
             continue
         resolved.append({
             "name": item["name"],

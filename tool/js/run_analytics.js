@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var folder = '', runs = [], report = null, generation = 0, previewGeneration = 0, selection = new Set(), sessionFilter = '', directorJob = ''; 
+  var folder = '', runs = [], report = null, generation = 0, previewGeneration = 0, selection = new Set(), sessionFilter = '', directorJob = '', directorContext = '', selectedCohort = '', previewFacts = null, previewKey = ''; 
   function el(id) { return document.getElementById('run-analytics-' + id); }
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
@@ -51,34 +51,40 @@
     var previousSession=el('session').value;
     el('session').innerHTML='<option value="">All sessions (descriptive only)</option>'+(report.availableSessions||[]).map(function(name){return '<option value="'+esc(name)+'">'+esc(name)+'</option>';}).join('');
     if((report.availableSessions||[]).includes(previousSession))el('session').value=previousSession;
+    var cohorts=[].concat.apply([],report.reports.map(function(r){return r.testCohorts||[];}));
+    var oldCohort=selectedCohort;
+    el('cohort').innerHTML='<option value="">Automatic (only if comparable)</option>'+cohorts.map(function(c){return '<option value="'+esc(c.id)+'">'+esc((c.modelId||'Test')+' · strength '+(c.strength==null?'default':c.strength)+' · '+(c.vlModelId||'manual')+' · '+c.id.slice(0,6))+'</option>';}).join('');
+    el('cohort').value=cohorts.some(function(c){return c.id===oldCohort;})?oldCohort:'';selectedCohort=el('cohort').value;
     var c=Object.assign({},report.coverage||{});
     (report.reports||[]).forEach(function(item){Object.keys(item.coverage||{}).forEach(function(key){if(key!=='campaigns'&&key!=='testSessions')c[key]=(c[key]||0)+Number(item.coverage[key]||0);});});
     var fields=[['Saved epochs',c.savedEpochs],['Evaluated epochs',c.observedEpochs],['Campaigns',c.campaigns],['Test sessions',c.testSessions],['Campaign VL renders',c.campaignVlRenders],['Manual ratings',c.manualRatings],['Test VL judgments',c.testVlJudgments]];
     el('coverage').innerHTML='<div class="run-analytics-stat-grid">'+fields.map(function(entry) {return '<div><strong>'+Number(entry[1]||0)+'</strong><span>'+esc(entry[0])+'</span></div>';}).join('')+'</div>';
     renderCampaign();
     el('director').disabled=!!directorJob;
-    refreshDirectorPreview();
     var warnings=report.warnings || [];
     el('warnings').innerHTML=warnings.map(function(w){return '<p class="epoch-finder-error">'+esc(w)+'</p>';}).join('');
   }
   function refreshDirectorPreview() {
     if(!report)return;
     var token=++previewGeneration, source=folder;
+    var key=JSON.stringify([report.jobIds,report.sessionFilter,el('campaign').value]);
+    previewFacts=null;previewKey='';
     el('director-preview').textContent='Preparing selected evidence preview…';
     fetch('/fs/run_analytics/interpret',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder:source,jobIds:report.jobIds,session:report.sessionFilter,campaignId:el('campaign').value,previewOnly:true})})
       .then(function(r){return r.json().then(function(data){if(!r.ok||!data.ok)throw new Error(data.error||'Preview unavailable');return data;});})
-      .then(function(data){if(source===folder&&token===previewGeneration)el('director-preview').textContent=JSON.stringify(data.facts,null,2);})
+      .then(function(data){if(source===folder&&token===previewGeneration){previewFacts=data.facts;previewKey=key;el('director-preview').textContent=JSON.stringify(data.facts,null,2);}})
       .catch(function(exc){if(token===previewGeneration)error(exc);});
   }
   function renderCampaign() {
     if (!report || !report.reports) return;
     var campaignId=el('campaign').value;
     var campaign=chosenCampaign();
-    var rows=[], views=[], findings=[];
+    var rows=[], views=[], findings=(report.findings||[]).slice();
     (report.reports||[]).forEach(function(r) {
       var c=(r.campaigns||[]).find(function(item){return item.id===campaignId;});
       var cohorts=r.testCohorts||[];
-      var tests=cohorts.length===1?cohorts[0].points:[];
+      var activeCohort=cohorts.find(function(group){return group.id===selectedCohort;});
+      var tests=activeCohort?activeCohort.points:(cohorts.length===1?cohorts[0].points:[]);
       if(cohorts.length>1)findings.push(r.run.label+': '+cohorts.length+' independent Test cohorts; select one session for a controlled view.');
       var trajectory=(r.roundPoints||[]).filter(function(p){return p.campaignId===campaignId;});
       views.push('<h4>'+esc(r.run.label)+'</h4>'+
@@ -109,10 +115,12 @@
     el('table').innerHTML='<div class="run-analytics-table-wrap"><table><thead><tr><th>Run</th><th>Epoch</th><th>Campaign VL</th><th>Observations</th><th>Manual</th><th>Ratings</th><th>Test VL</th><th>Loss</th><th></th></tr></thead><tbody>'+rows.join('')+'</tbody></table></div>';
     el('findings').innerHTML=findings.length?findings.map(function(text){return '<p>'+esc(text)+'</p>';}).join(''):
       '<p class="epoch-finder-muted">No comparable scored campaign evidence in this selection. Missing observations remain missing.</p>';
-    el('director-result').textContent='';el('director-status').textContent='';refreshDirectorPreview();
+    el('director-result').textContent='';el('director-status').textContent='';
+    previewGeneration++;previewFacts=null;previewKey='';el('director-preview').textContent='Expand to review the numerical facts.';
   }
   function load() {
     el('director-result').textContent='';el('director').disabled=true;
+    report=null;previewFacts=null;previewKey='';
     var ids=Array.from(selection), token=++generation, origin=folder;
     if(!ids.length){el('coverage').textContent='Select at least one run.';return;}
     clearError();el('analyze').disabled=true;el('analyze').textContent='Reading saved evidence…';
@@ -143,27 +151,33 @@
     el('run-choices').innerHTML='';el('coverage').textContent='Choose a run to begin.';
     el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';el('warnings').innerHTML='';
     el('campaign').innerHTML='<option value="">No campaign</option>';el('session').innerHTML='<option value="">All sessions</option>';
-    el('director').disabled=true;el('director-result').textContent='';el('director-status').textContent='';clearError();
+    el('director').disabled=true;previewGeneration++;previewFacts=null;previewKey='';el('director-result').textContent='';el('director-status').textContent='';clearError();
   };
   window.runAnalyticsOpen=discover;
   el('run-choices').onchange=function(event){
     var cb=event.target.closest('[data-analytics-run]');if(!cb)return;
     if(cb.checked)selection.add(cb.dataset.analyticsRun);else selection.delete(cb.dataset.analyticsRun);
+    generation++;report=null;previewFacts=null;previewKey='';el('director').disabled=true;el('coverage').textContent='Selection changed — Analyze selected to refresh.';el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';
     if(selection.size>6){selection.delete(cb.dataset.analyticsRun);cb.checked=false;error(new Error('Select up to six runs.'));}
   };
   el('analyze').onclick=load;
   el('session').onchange=function(){sessionFilter=this.value;load();};
-  el('campaign').onchange=renderCampaign;
+  el('cohort').onchange=function(){selectedCohort=this.value;renderCampaign();};
+  el('campaign').onchange=function(){renderCampaign();};
+  el('director-preview').closest('details').addEventListener('toggle',function(){if(this.open&&report)refreshDirectorPreview();});
   el('director').onclick=function(){
     if(!report || directorJob)return;
     var model=getDirectorModelPreference('webcap.director.model');
     if(!model){error(new Error('Select a Director model in the app header.'));return;}
     var ids=report.jobIds.slice(),session=report.sessionFilter,campaign=el('campaign').value;
-    var source=folder,token=generation;
+    if(!previewFacts||previewKey!==JSON.stringify([ids,session,campaign])){error(new Error('Open the evidence preview before sending it to Director.'));return;}
+    var reviewed=JSON.stringify(previewFacts);
+    var source=folder,token=generation, context=JSON.stringify([folder,ids,session,campaign]);
+    directorContext=context;
     el('director-result').textContent='';el('director-status').textContent='Preparing numerical evidence…';
     el('director').disabled=true;el('director-stop').classList.remove('hidden');
     fetch('/fs/run_analytics/interpret',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:source,jobIds:ids,session:session,campaignId:campaign,directorModel:model})})
+      body:JSON.stringify({folder:source,jobIds:ids,session:session,campaignId:campaign,directorModel:model,reviewedFacts:reviewed})})
       .then(function(response){return response.json().then(function(data){if(!response.ok||!data.ok)throw new Error(data.error||'Director request failed.');return data.job;});})
       .then(function(job){
         if(!job||!job.jobId)throw new Error('Director did not return a job.');
@@ -181,7 +195,7 @@
         }
         return poll();
       }).then(function(result){
-        if(source!==folder||token!==generation)return;
+        if(source!==folder||token!==generation||context!==JSON.stringify([folder,report&&report.jobIds,report&&report.sessionFilter,el('campaign').value]))return;
         var analysis=result&&result.analysis;
         if(!analysis)throw new Error('Director produced no structured analysis.');
         el('director-status').textContent='Interpretation complete · model-derived, not a verified score.';

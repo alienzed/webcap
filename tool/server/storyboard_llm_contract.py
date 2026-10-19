@@ -208,11 +208,6 @@ def _repair_scene_plan(story):
     return result
 
 
-def _relationship_scene(scene):
-    """Compact authored context; prior H3 prompt text is not a continuity fact."""
-    return {key: scene[key] for key in ("title", "summary", "entryState", "exitState", "durationSeconds", "suggestedDurationSeconds") if scene.get(key) not in (None, "")}
-
-
 def _previous_scene_context(story, scene_id):
     order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
     if scene_id not in order:
@@ -228,6 +223,7 @@ def _previous_scene_context(story, scene_id):
         ("Summary / intent", scene.get("summary")),
         ("Entry state", scene.get("entryState")),
         ("Exit state", scene.get("exitState")),
+        ("Generation prompt", scene.get("prompt")),
     )
     return "\n".join(
         label + ": " + _clean(value)
@@ -460,7 +456,7 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
-        blocks.append("[COMPLETE SCENE OUTLINE]\n" + json.dumps([_relationship_scene(item) for item in outline["scenes"]], ensure_ascii=False))
+        blocks.append("[COMPLETE SCENE OUTLINE]\n" + json.dumps(outline, indent=2, ensure_ascii=False))
         blocks.append(
             "[CURRENT PLANNED SCENE]\nScene "
             + str(scene_index + 1)
@@ -472,7 +468,7 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         if isinstance(previous_scene, dict):
             blocks.append(
                 "[PREVIOUS AUTHORED SCENE - RELATIONSHIP CONTEXT]\n"
-                + json.dumps(_relationship_scene(previous_scene), ensure_ascii=False)
+                + json.dumps(previous_scene, indent=2, ensure_ascii=False)
                 + "\n\nUse the previous authored Scene to preserve continuity when appropriate and keep this Scene meaningfully distinct."
             )
         blocks.append(
@@ -516,8 +512,8 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
-        blocks.append("[SCENE BEFORE]\n" + _scene_context(before_scene))
-        blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene))
+        blocks.append("[SCENE BEFORE]\n" + _scene_context(before_scene) + "\nGeneration prompt: " + _clean(before_scene.get("prompt")))
+        blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene) + "\nGeneration prompt: " + _clean(after_scene.get("prompt")))
         blocks.append(
             "[CURRENT TASK]\nCreate exactly one new Scene to insert between these two existing Scenes. "
             "Use the complete concept to decide what belongs in this gap. Treat the adjacent Scenes as relationship and contrast context. "

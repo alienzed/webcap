@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var folder = '', runs = [], report = null, generation = 0, previewGeneration = 0, selection = new Set(), sessionFilter = '', directorJob = '', directorContext = '', selectedCohort = '', previewFacts = null, previewKey = ''; 
+  var folder = '', runs = [], report = null, generation = 0, previewGeneration = 0, resultEpochGeneration = 0, selection = new Set(), sessionFilter = '', directorJob = '', directorContext = '', selectedCohort = '', previewFacts = null, previewKey = ''; 
   function el(id) { return document.getElementById('run-analytics-' + id); }
   function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
@@ -137,7 +137,51 @@
       .catch(function(exc){if(token===generation)error(exc);})
       .finally(function(){if(token===generation){el('analyze').textContent='Analyze selected';updateScopeUi();}});
   }
+  function discoverResultEpochs() {
+    var token=++resultEpochGeneration, origin=folder;
+    el('result-epochs').textContent='Finding saved generated results…';
+    fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:origin,operation:'workspace_gallery',criteria:{
+        limit:1,includeEpochIndex:true
+      }})}).then(function(response){return response.json().then(function(data){
+        if(!response.ok||!data.ok)throw new Error(data.error||'Result discovery failed.');
+        return data;
+      });}).then(function(data){
+        if(token!==resultEpochGeneration||origin!==folder)return;
+        var index=data.resultEpochs||[], groups=new Map();
+        index.forEach(function(entry){
+          if(!entry.jobId||!Number.isInteger(entry.epoch)||!entry.count)return;
+          if(!groups.has(entry.jobId))groups.set(entry.jobId,[]);
+          groups.get(entry.jobId).push(entry);
+        });
+        var names=new Map((runs||[]).map(function(run){return [run.jobId,run.label||''];}));
+        if(!groups.size) {
+          el('result-epochs').textContent='No epochs with recorded generated results in this Set.';
+          return;
+        }
+        var html=[];
+        groups.forEach(function(entries,id){
+          entries.sort(function(a,b){return a.epoch-b.epoch;});
+          var run=runs.find(function(item){return item.jobId===id;});
+          var label=(run && run.runSequence!=null ? 'Run '+run.runSequence : '') ||
+            names.get(id) || entries[0].runName || 'Run '+id.slice(-8);
+          html.push('<div class="run-analytics-result-run"><strong>'+esc(label)+'</strong><small>ID '+esc(id.slice(-8))+'</small><div class="run-analytics-result-epochs">'+
+            entries.map(function(entry){
+              var types=[entry.testCount?entry.testCount+' Test':'',entry.campaignCount?entry.campaignCount+' Campaign':''].filter(Boolean).join(' · ');
+              return '<button type="button" data-result-epoch-job="'+esc(entry.jobId)+'" data-result-epoch="'+entry.epoch+'"><span>Epoch '+entry.epoch+'</span><small>'+entry.count+' results'+(types?' · '+esc(types):'')+'</small></button>';
+            }).join('')+'</div></div>');
+        });
+        el('result-epochs').innerHTML=html.join('');
+        if(data.warnings&&data.warnings.length)el('result-epochs-note').textContent=data.warnings.join(' · ');
+        else el('result-epochs-note').textContent='';
+      }).catch(function(exc){
+        if(token!==resultEpochGeneration||origin!==folder)return;
+        el('result-epochs').textContent='Could not discover saved results.';
+        error(exc);
+      });
+  }
   function discover() {
+    discoverResultEpochs();
     var token=++generation, origin=folder;
     clearError();el('coverage').textContent='Finding recorded runs…';
     api('').then(function(data){
@@ -161,13 +205,18 @@
     }).catch(function(exc){if(token===generation)error(exc);});
   }
   window.runAnalyticsPrepare=function(next){
-    if(next===folder)return;folder=next;generation++;runs=[];selection=new Set();report=null;sessionFilter='';
-    el('run-choices').innerHTML='';el('coverage').textContent='Choose a run to begin.';
+    if(next===folder)return;folder=next;generation++;resultEpochGeneration++;runs=[];selection=new Set();report=null;sessionFilter='';
+    el('run-choices').innerHTML='';el('result-epochs').textContent='Open Analytics to discover results.';el('result-epochs-note').textContent='';el('coverage').textContent='Choose a run to begin.';
     el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';el('warnings').innerHTML='';
     el('campaign').innerHTML='<option value="">No campaign</option>';el('session').innerHTML='<option value="">All sessions</option>';
     el('director').disabled=true;updateScopeUi();previewGeneration++;previewFacts=null;previewKey='';el('director-result').textContent='';el('director-status').textContent='';clearError();
   };
   window.runAnalyticsOpen=discover;
+  el('result-epochs').onclick=function(event){
+    var button=event.target.closest('[data-result-epoch-job]');
+    if(!button)return;
+    window.runAnalyticsViewEpoch(button.dataset.resultEpochJob,Number(button.dataset.resultEpoch));
+  };
   el('run-choices').onchange=function(event){
     var cb=event.target.closest('[data-analytics-run]');if(!cb)return;
     if(cb.checked)selection.add(cb.dataset.analyticsRun);else selection.delete(cb.dataset.analyticsRun);
@@ -245,7 +294,7 @@
     el('epoch-media-status').textContent=more?'Loading more recorded results…':'Loading recorded checkpoint results…';
     fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{
-        limit:8,offset:more?epochMediaOffset:0,checkpoints:[scope.jobId+':'+scope.epoch]
+        limit:8,offset:more?epochMediaOffset:0,checkpoints:[scope.jobId+':'+scope.epoch],generatedOnly:true
       }})}).then(function(response){return response.json().then(function(data){
         if(!response.ok||!data.ok)throw new Error(data.error||'Checkpoint results unavailable');
         return data;

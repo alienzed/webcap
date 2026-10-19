@@ -1050,7 +1050,7 @@ def status(folder_path, campaign_id):
 
 
 
-def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collection_id="", checkpoints=None):
+def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collection_id="", checkpoints=None, include_epoch_index=False, generated_only=False):
     """Read-only visual index over existing Test sessions and Finder campaigns.
 
     Each result retains its native execution identity. Only recorded run/epoch
@@ -1067,6 +1067,23 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
     sessions = []
     campaigns = []
     total = 0
+    result_epochs = {}
+
+    def record_generated_epoch(job_id, epoch, source, run_name=""):
+        if not include_epoch_index or not job_id or type(epoch) is not int or epoch < 0:
+            return
+        key = (job_id, epoch)
+        if key not in result_epochs:
+            result_epochs[key] = {
+                "jobId": job_id, "epoch": epoch, "runName": str(run_name or ""),
+                "count": 0, "testCount": 0, "campaignCount": 0,
+            }
+        entry = result_epochs[key]
+        if not entry["runName"] and run_name:
+            entry["runName"] = str(run_name)
+        entry["count"] += 1
+        entry["testCount" if source == "test" else "campaignCount"] += 1
+
     for directory in bench._session_directories(folder_path):
         payload = bench._read_status(directory) or {}
         if not payload or payload.get("campaignStaging"):
@@ -1097,6 +1114,7 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
                 continue
             if checkpoint_ids and source_job + ":" + str(epoch) not in checkpoint_ids:
                 continue
+            record_generated_epoch(source_job, epoch, "test", provenance.get("sourceRunName"))
             total += 1
             if total <= offset or len(media) >= limit:
                 continue
@@ -1147,6 +1165,13 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
                     continue
                 if checkpoint_ids and job_id + ":" + str(epoch) not in checkpoint_ids:
                     continue
+                # Units exist before rendering. Only captured/pruned frames are generated results.
+                generated = bool(unit.get("frame") or unit.get("framePruned") or unit.get("captured"))
+                if generated_only and not generated:
+                    continue
+                if generated:
+                    record_generated_epoch(job_id, epoch, "campaign",
+                                           origin.get("runName") if origin else campaign.get("runName"))
                 total += 1
                 if total <= offset or len(media) >= limit:
                     continue
@@ -1173,9 +1198,13 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
     except (OSError, RuntimeError, ValueError) as exc:
         runs = []
         warnings.append("Saved checkpoint listing unavailable: " + str(exc))
-    return {"sessions": sessions, "campaigns": campaigns, "media": media,
-            "total": total, "offset": offset, "limit": limit,
-            "runs": runs, "warnings": warnings}
+    response = {"sessions": sessions, "campaigns": campaigns, "media": media,
+                "total": total, "offset": offset, "limit": limit,
+                "runs": runs, "warnings": warnings}
+    if include_epoch_index:
+        response["resultEpochs"] = sorted(result_epochs.values(),
+                                          key=lambda item: (item["jobId"], item["epoch"]))
+    return response
 
 
 def command(folder_path, operation, criteria=None):
@@ -1183,7 +1212,7 @@ def command(folder_path, operation, criteria=None):
     if operation == "list":
         return list_campaigns(folder_path)
     if operation == "workspace_gallery":
-        return workspace_gallery(folder_path, criteria.get("modelId"), limit=criteria.get("limit", 48), offset=criteria.get("offset", 0), collection_id=criteria.get("collectionId"), checkpoints=criteria.get("checkpoints"))
+        return workspace_gallery(folder_path, criteria.get("modelId"), limit=criteria.get("limit", 48), offset=criteria.get("offset", 0), collection_id=criteria.get("collectionId"), checkpoints=criteria.get("checkpoints"), include_epoch_index=bool(criteria.get("includeEpochIndex")), generated_only=bool(criteria.get("generatedOnly")))
     if operation == "checkpoint_evidence":
         return checkpoint_evidence(folder_path, criteria.get("jobId"))
     if operation == "run_analytics":

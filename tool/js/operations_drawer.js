@@ -47,6 +47,7 @@
     window.setActivityDrawerOpen(false, !!manual, true);
     window.setInferenceQueueOpen(false, true);
   }
+  window.operationsSectionIsHistory = function () { return section === 'history'; };
   window.isOperationsDrawerVisible = function () { return !root.classList.contains('hidden'); };
   window.openOperationsDrawer = function (next) {
     if (['activity', 'queues', 'history'].indexOf(next) === -1) throw new Error('Invalid operations section: ' + next);

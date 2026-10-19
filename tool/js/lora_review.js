@@ -117,10 +117,17 @@
     if (event.target.closest('#director-lora-review-apply')) apply();
     else if (event.target.closest('#director-lora-review-cancel,#director-lora-review-close')) hide();
   });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && active && !applying) {
+      event.preventDefault();
+      hide();
+    }
+  });
   document.addEventListener('change', function (event) {
     if (event.target.id !== 'director-lora-review-add' || !active) return;
     var name = event.target.value;
-    if (!name || active.items.some(function (item) { return item.name === name; })) return;
+    if (!name) return;
+    if (!active.scenes.length && active.items.some(function (item) { return item.name === name; })) return;
     active.items.push({name:name, strength:.9, phrases:[], sceneId:'', reason:'Manually added', enabled:true});
     render();
     event.target.value = '';

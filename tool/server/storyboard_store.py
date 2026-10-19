@@ -1128,12 +1128,15 @@ def apply_director_prompt(
     operation="",
     duration_override=None,
     scene_fields=None,
+    expected_prompt=None,
 ):
     story = load_story(story_id)
     scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
     current = scenes.get(scene_id)
     if not isinstance(current, dict):
         raise FileNotFoundError("Director target Scene does not exist.")
+    if expected_prompt is not None and str(current.get("prompt") or "") != expected_prompt:
+        raise RuntimeError("Scene prompt changed since Check Coherence. Rerun before applying.")
     generated = str(prompt or "")
     if not generated.strip():
         raise ValueError("Storyboard Director returned an empty Scene prompt.")

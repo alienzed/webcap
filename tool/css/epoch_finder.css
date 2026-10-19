@@ -301,3 +301,9 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 @media(max-width:1100px){#run-analytics-screen .epoch-finder-dashboard{grid-template-columns:1fr}
 #run-analytics-screen .epoch-finder-dashboard>.epoch-finder-panel{grid-column:1/-1!important}}
 @media(max-width:400px){.test-workspace-pane-switcher{flex-wrap:wrap}.test-workspace-pane-btn{flex:1 1 46%}}
+
+/* Run Analytics: compact choices with visible identities and comfortable click targets. */
+#run-analytics-screen .epoch-finder-run-choices{gap:4px}
+#run-analytics-screen .run-analytics-run-choice{padding:5px 8px;min-height:36px;gap:9px}
+#run-analytics-screen .run-analytics-run-choice strong{font-size:12px;line-height:1.2}
+#run-analytics-screen .run-analytics-run-choice small{font-size:10px;margin-top:2px;line-height:1.2}

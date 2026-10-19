@@ -80,3 +80,15 @@ class RunAnalyticsNextTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_run_analytics_picker_distinguishes_runs_and_uses_compact_rows():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    frontend = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    backend = (root / "tool/server/run_analytics.py").read_text(encoding="utf-8")
+    css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    assert '"runSequence": run.get("runSequence")' in backend
+    assert "ID ' + shortId" in frontend
+    assert "run-analytics-run-choice" in frontend
+    assert "#run-analytics-screen .run-analytics-run-choice" in css

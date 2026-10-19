@@ -139,9 +139,16 @@
       runs=data.runs||[];
       selection=new Set(Array.from(selection).filter(function(id){return runs.some(function(run){return run.jobId===id;});}));
       el('run-choices').innerHTML=runs.map(function(run){
-        return '<label class="epoch-finder-run-choice"><input type="checkbox" data-analytics-run="'+esc(run.jobId)+'"'+
-          (selection.has(run.jobId)?' checked':'')+'><span><strong>'+esc(run.label)+'</strong><small>'+
-          esc((run.stage||run.source)+(run.archive?' · archived':''))+'</small></span></label>';
+        var sequence = run.runSequence != null && String(run.runSequence).trim() ? 'Run ' + run.runSequence : '';
+        var label = String(run.label || '').trim();
+        var identity = [sequence, label && label.toLowerCase() !== 'run train' ? label : ''].filter(Boolean).join(' · ');
+        if (!identity) identity = label || 'Training run';
+        var shortId = String(run.jobId || '').slice(-8);
+        var details = [run.stage || run.modelId || run.source, (run.savedEpochs || []).length + ' checkpoints',
+          run.archive ? 'archived' : '', shortId ? 'ID ' + shortId : ''].filter(Boolean);
+        return '<label class="epoch-finder-run-choice run-analytics-run-choice"><input type="checkbox" data-analytics-run="'+esc(run.jobId)+'"'+
+          (selection.has(run.jobId)?' checked':'')+'><span><strong>'+esc(identity)+'</strong><small>'+
+          esc(details.join(' · '))+'</small></span></label>';
       }).join('')||'<p class="epoch-finder-muted">No recorded runs in this Set.</p>';
       el('coverage').textContent='Select runs and Analyze.';
     }).catch(function(exc){if(token===generation)error(exc);});

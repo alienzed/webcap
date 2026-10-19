@@ -33,3 +33,6 @@ jobs:
         run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
       - name: Unified gallery and no-feature-loss contracts
         run: python -m pytest -q tests/test_test_generations_unified_gallery.py tests/test_test_generations_unified_workspace.py tests/test_test_generations_revamp_parity.py tests/test_test_generations_perspective.py
+      - name: Existing Test Batch Finder and Analytics regression suite
+        run: |
+          python -m pytest -q tests/test_test_generations_ui_contract.py tests/test_test_generations_route.py tests/test_test_generations_ask_vl_navigation_contract.py tests/test_test_batch.py tests/test_epoch_finder.py tests/test_epoch_finder_multirun.py tests/test_run_analytics_next.py

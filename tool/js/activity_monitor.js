@@ -1120,7 +1120,7 @@
 
   function render() {
     var active = currentActivityItems();
-    var pendingItems = [].concat((state.payload.queues.inference || {}).jobs || [], (state.payload.queues.director || {}).jobs || []);
+    var pendingItems = window.isOperationsDrawerMounted ? [] : [].concat((state.payload.queues.inference || {}).jobs || [], (state.payload.queues.director || {}).jobs || []);
     var recent = sessionRecent();
     var queues = state.payload.queues || {};
     var drawer = el('activity-monitor-drawer');
@@ -1140,7 +1140,7 @@
       state.open = false;
       storeLastSeen(Date.now() / 1000);
     }
-    var detailsVisible = (window.operationsSectionIsHistory && window.operationsSectionIsHistory()) || state.detailsOpen || (!primary && (pendingItems.length || recent.length));
+    var detailsVisible = window.isOperationsDrawerMounted ? window.operationsSectionIsHistory() : (state.detailsOpen || (!primary && (pendingItems.length || recent.length)));
     drawer.classList.toggle('hidden', !state.open);
     details.classList.toggle('hidden', !detailsVisible);
     detailsToggle.setAttribute('aria-expanded', detailsVisible ? 'true' : 'false');
@@ -1176,7 +1176,7 @@
     var nowSection = ensureActivitySection(host, 'now', 'Other active', active.length > featured.length ? String(active.length - featured.length) + ' active' : '');
     var featuredKeys = featured.map(activityJobKey);
     var otherActive = active.filter(function (item) { return featuredKeys.indexOf(activityJobKey(item)) === -1; });
-    nowSection.classList.toggle('hidden', !otherActive.length);
+    nowSection.classList.toggle('hidden', window.isOperationsDrawerMounted || !otherActive.length);
     var existingActive = Object.create(null);
     Array.prototype.forEach.call(nowSection.querySelectorAll('[data-activity-active-line]'), function (row) {
       existingActive[row.getAttribute('data-activity-active-line')] = row;
@@ -1198,7 +1198,7 @@
     reconcileActivityRows(nowSection, nowRows);
 
     var pendingSection = ensureActivitySection(host, 'pending', 'Queued', pendingItems.length ? String(pendingItems.length) + ' waiting' : '');
-    pendingSection.classList.toggle('hidden', !pendingItems.length);
+    pendingSection.classList.toggle('hidden', window.isOperationsDrawerMounted || !pendingItems.length);
     var existingPending = Object.create(null);
     Array.prototype.forEach.call(pendingSection.querySelectorAll('[data-activity-pending-key]'), function (node) {
       existingPending[node.getAttribute('data-activity-pending-key')] = node;
@@ -1329,7 +1329,7 @@
     if (state.open) {
       // Reopening Activity does not reset per-job dismissal decisions.
       if (!wasOpen) state.openedAt = Date.now() / 1000;
-      if (typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
+      if (!internal && typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
       if (!internal && typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
     } else if (wasOpen) {
       if (manualClose) {
@@ -1350,7 +1350,7 @@
     close.onclick = function () { setOpen(false, true); };
     el('activity-monitor-details-toggle').onclick = function () { state.detailsOpen = !state.detailsOpen; render(); };
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || (window.isOperationsDrawerMounted && event.target.closest('#operations-drawer')) || drawer.contains(event.target) ||
+      if (window.isOperationsDrawerMounted || !state.open || drawer.contains(event.target) ||
           event.target.closest('.shell-workload-indicator')) return;
       setOpen(false, true);
     });

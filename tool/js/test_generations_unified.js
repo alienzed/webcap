@@ -299,6 +299,11 @@
     exitToNative();
     return inspectCampaign.apply(this, arguments);
   };
+  var openActivity = window.openTestBenchActivity;
+  window.openTestBenchActivity = function(target) {
+    if(target && (target.sessionId || target.campaignId)) exitToNative();
+    return openActivity.apply(this, arguments);
+  };
   var openAnalyticsSession = window.openTestBenchAnalyticsSession;
   window.openTestBenchAnalyticsSession = function () {
     exitToNative();

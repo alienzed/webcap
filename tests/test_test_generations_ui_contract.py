@@ -1307,7 +1307,7 @@ def test_test_generation_default_weight_inherits_unless_candidate_overridden():
     assert "input.value = String(defaultCandidateStrength);" in script
     assert ": String(defaultCandidateStrength);" in script
     assert "if (strengthValue === defaultCandidateStrength) delete candidateStrengths[strengthFile];" in script
-    assert "Object.prototype.hasOwnProperty.call(candidateStrengths || {}, strengthFile)" in script
+    assert "Object.prototype.hasOwnProperty.call(candidateStrengths || {}, file)" in script
     assert "strengths[file] = weight;" in script
     assert "Default weight must be between -2 and 2." in script
 

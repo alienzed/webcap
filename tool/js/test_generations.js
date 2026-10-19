@@ -778,8 +778,8 @@
             trackTransientLlmJob(payload.job);
             var completion = await waitForCaptionAssistJob(payload.job);
             var raw = String(completion && completion.result && completion.result.text || '');
-            var optionMatch = raw.match(/^OPTION\\s*:\\s*(\\d+)/im);
-            var verdictMatch = raw.match(/^VERDICT\\s*:\\s*(MATCH|PARTIAL|MISMATCH|UNCLEAR)/im);
+            var optionMatch = raw.match(/^OPTION\s*:\s*(\d+)/im);
+            var verdictMatch = raw.match(/^VERDICT\s*:\s*(MATCH|PARTIAL|MISMATCH|UNCLEAR)/im);
             var selected = optionMatch ? Number(optionMatch[1]) : null;
             if (selected && selected > attribute.options.length) selected = null;
             await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:{

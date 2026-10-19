@@ -2340,10 +2340,12 @@
     var authoring = el('storyboard-story-authoring');
     var editor = el('storyboard-editor-content');
     var toggleButton = el('storyboard-story-toggle');
+    var showButton = el('storyboard-story-show');
     authoring.classList.toggle('hidden', storyState.storyCollapsed);
     editor.classList.toggle('story-collapsed', storyState.storyCollapsed);
-    toggleButton.textContent = storyState.storyCollapsed ? 'Show Story' : 'Hide Story';
     toggleButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
+    showButton.classList.toggle('hidden', !storyState.storyCollapsed);
+    showButton.setAttribute('aria-expanded', storyState.storyCollapsed ? 'false' : 'true');
   }
 
   function ensureActiveScene(order) {
@@ -2551,7 +2553,13 @@
       var active = storyState.sceneViewMode === item[1];
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      button.classList.toggle('hidden', item[1] === 'focus'
+        ? storyState.sceneViewMode === 'focus'
+        : storyState.sceneViewMode === 'sequence');
     });
+    var sequenceMode = storyState.sceneViewMode === 'sequence';
+    el('storyboard-generate-scenes-btn').classList.toggle('hidden', sequenceMode);
+    el('storyboard-director-tools-btn').classList.toggle('hidden', sequenceMode);
     var modeTitle = el('storyboard-workspace-mode-title');
     if (modeTitle) modeTitle.textContent = storyState.sceneViewMode === 'sequence' ? 'Sequence' : 'Scenes';
     var progression = el('storyboard-scene-progression');
@@ -5482,8 +5490,11 @@
       this.blur();
     };
     el('storyboard-new-btn').onclick = createStory;
-    el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(!storyState.storyCollapsed); };
-    el('storyboard-scenes-overview-btn').onclick = function () { setSceneViewMode('overview'); };
+    el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(true); };
+    el('storyboard-story-show').onclick = function () { setStoryCollapsed(false); };
+    el('storyboard-scenes-overview-btn').onclick = function () {
+      setSceneViewMode(storyState.sceneViewMode === 'overview' ? 'focus' : 'overview');
+    };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-generate-scenes-btn').onclick = generateScenes;

@@ -1050,7 +1050,7 @@ def status(folder_path, campaign_id):
 
 
 
-def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collection_id="", checkpoints=None, include_epoch_index=False):
+def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collection_id="", checkpoints=None, include_epoch_index=False, generated_only=False):
     """Read-only visual index over existing Test sessions and Finder campaigns.
 
     Each result retains its native execution identity. Only recorded run/epoch
@@ -1166,7 +1166,10 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
                 if checkpoint_ids and job_id + ":" + str(epoch) not in checkpoint_ids:
                     continue
                 # Units exist before rendering. Only captured/pruned frames are generated results.
-                if unit.get("frame") or unit.get("framePruned") or unit.get("captured"):
+                generated = bool(unit.get("frame") or unit.get("framePruned") or unit.get("captured"))
+                if generated_only and not generated:
+                    continue
+                if generated:
                     record_generated_epoch(job_id, epoch, "campaign",
                                            origin.get("runName") if origin else campaign.get("runName"))
                 total += 1
@@ -1209,7 +1212,7 @@ def command(folder_path, operation, criteria=None):
     if operation == "list":
         return list_campaigns(folder_path)
     if operation == "workspace_gallery":
-        return workspace_gallery(folder_path, criteria.get("modelId"), limit=criteria.get("limit", 48), offset=criteria.get("offset", 0), collection_id=criteria.get("collectionId"), checkpoints=criteria.get("checkpoints"), include_epoch_index=bool(criteria.get("includeEpochIndex")))
+        return workspace_gallery(folder_path, criteria.get("modelId"), limit=criteria.get("limit", 48), offset=criteria.get("offset", 0), collection_id=criteria.get("collectionId"), checkpoints=criteria.get("checkpoints"), include_epoch_index=bool(criteria.get("includeEpochIndex")), generated_only=bool(criteria.get("generatedOnly")))
     if operation == "checkpoint_evidence":
         return checkpoint_evidence(folder_path, criteria.get("jobId"))
     if operation == "run_analytics":

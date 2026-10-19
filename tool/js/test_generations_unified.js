@@ -107,7 +107,7 @@
       host.appendChild(link);
     }
     var name=document.createElement('h4');name.textContent=item.candidate || (item.epoch==null?'Unattributed result':'Epoch '+item.epoch);host.appendChild(name);
-    [['Source',item.source],['Run',item.runName||item.jobId],['Epoch',item.epoch],['Session',item.session],['Campaign',item.campaignId],['Round',item.round],['Seed',item.seed],['Rating',item.rating],['Prompt',item.prompt],['Settings',item.settings],['VL assessment',item.assessment],['Reference comparisons',item.referenceAssessments],['DINO evidence',item.dinoAssessments],['Error',item.error]].forEach(function(pair) {
+    [['Source',item.source],['Run',item.runName||item.jobId],['Epoch',item.epoch],['Candidate',item.candidateFile],['Type',item.kind],['Strength',item.strength],['Session',item.session],['Campaign',item.campaignId],['Round',item.round],['Case',item.case],['Seed',item.seed],['Rating',item.rating],['Render time (s)',item.renderSeconds],['VL time (s)',item.visionWallSeconds],['Elapsed (ms)',item.elapsedMs],['Prompt',item.prompt],['Settings',item.settings],['VL assessment',item.assessment],['Reference comparisons',item.referenceAssessments],['DINO evidence',item.dinoAssessments],['Error',item.error]].forEach(function(pair) {
       if (pair[1]===undefined || pair[1]===null || pair[1]==='')return;
       var section=document.createElement('section'),label=document.createElement('strong'),value=document.createElement('pre');
       label.textContent=pair[0];value.textContent=typeof pair[1]==='object'?JSON.stringify(pair[1],null,2):String(pair[1]);

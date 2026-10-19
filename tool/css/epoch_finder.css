@@ -307,3 +307,42 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .run-analytics-run-choice{padding:5px 8px;min-height:36px;gap:9px}
 #run-analytics-screen .run-analytics-run-choice strong{font-size:12px;line-height:1.2}
 #run-analytics-screen .run-analytics-run-choice small{font-size:10px;margin-top:2px;line-height:1.2}
+
+/* One permanent Test workspace navigation: never moved or recreated on tab changes. */
+#test-generations-pane { position:relative; --test-workspace-sidebar-width:clamp(430px,23vw,560px); }
+#test-workspace-main-tabs {
+  position:absolute;top:0;left:0;z-index:6;
+  display:flex;align-items:center;gap:4px;
+  width:var(--test-workspace-sidebar-width);height:51px;
+  padding:7px 12px;box-sizing:border-box;
+  background:var(--panel-bg,var(--surface));
+  border-right:1px solid var(--border-color,var(--border));
+  border-bottom:1px solid var(--border-color,var(--border));
+}
+#test-workspace-main-tabs .test-workspace-pane-btn {height:35px;font-size:13px;}
+#test-generations-pane .test-workspace-pane-switcher,
+#test-generations-pane .test-generations-perspective {display:none;}
+#test-generations-pane #test-generations-body:not(.test-generations-rail-collapsed) {
+  grid-template-columns:var(--test-workspace-sidebar-width) minmax(0,1fr);
+}
+#test-generations-pane #test-generations-body .test-generations-rail {padding-top:51px;}
+#test-generations-pane > .epoch-finder-screen {
+  padding:0;overflow:hidden;
+}
+#test-generations-pane > .epoch-finder-screen > .epoch-finder-intro {display:none;}
+#test-generations-pane > .epoch-finder-screen > .epoch-finder-layout {
+  display:grid;grid-template-columns:var(--test-workspace-sidebar-width) minmax(0,1fr);
+  gap:0;height:100%;min-height:0;align-items:stretch;
+}
+#test-generations-pane > .epoch-finder-screen > .epoch-finder-layout > .epoch-finder-sidebar {
+  min-height:0;overflow-y:auto;padding:61px 14px 18px;
+  border-right:1px solid var(--border-color,var(--border));
+}
+#test-generations-pane > .epoch-finder-screen > .epoch-finder-layout > .epoch-finder-dashboard {
+  min-height:0;overflow-y:auto;padding:16px 20px 30px;
+}
+.test-workspace-campaign-tools {display:flex;gap:7px;flex-wrap:wrap;margin:8px 0;}
+.test-workspace-context-back {margin-bottom:12px;}
+@media(max-width:1050px) {
+  #test-generations-pane {--test-workspace-sidebar-width:390px;}
+}

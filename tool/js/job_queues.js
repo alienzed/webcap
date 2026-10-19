@@ -108,7 +108,9 @@
     var details = detail(job, which);
     if (which === 'llm') heading.querySelector('strong').title = [job.client, job.operation].filter(Boolean).join(' · ');
     if (details) copy.appendChild(textNode('small', '', details));
-    if (active(job)) copy.appendChild(textNode('small', '', elapsed(job)));
+    if (active(job)) {
+      copy.appendChild(textNode('small', '', elapsed(job)));
+    }
     if (which === 'training' && job.status === 'queued') {
       var handle = textNode('span', 'job-queue-drag-handle', '\u283f');
       handle.title = 'Drag to reorder queued training';
@@ -136,6 +138,7 @@
         }
       }
     }
+    if (active(job)) controls.appendChild(actionButton('Activity ↗', which, 'view_activity', job));
     if (controls.children.length) node.appendChild(controls);
     return node;
   }
@@ -254,6 +257,10 @@
     return pendingRefresh;
   }
   function perform(which, operation, id) {
+    if (operation === 'view_activity') {
+      window.focusActivityByJob(id);
+      return Promise.resolve();
+    }
     if (which === 'llm') {
       if (operation === 'reset' && !window.confirm('Stop the active LLM request and clear all queued requests?')) return;
       return post('/fs/director/job', { operation: operation, jobId: id }).then(function () { return refresh(); });

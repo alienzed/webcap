@@ -225,7 +225,7 @@
   }
 
   function maybeAutoOpen() {
-    var competingDrawer = ['director-chat-drawer', 'inference-queue-drawer'].some(function (id) {
+    var competingDrawer = ['director-chat-drawer'].concat(window.isOperationsDrawerMounted ? [] : ['inference-queue-drawer']).some(function (id) {
       var drawer = el(id);
       return drawer && !drawer.classList.contains('hidden');
     });
@@ -236,7 +236,7 @@
       state.autoOpenSeen[id] = true;
       // Never displace a workflow drawer for an automatically raised Activity panel.
       var shortInteractive = lane === 'llm' || item.kind === 'first-cut' || item.kind === 'director-diagnostics';
-      if (!state.open && !competingDrawer && shortInteractive && !state.dismissedJobs[id]) {
+      if (!(window.isOperationsDrawerMounted && window.isOperationsDrawerVisible()) && !state.open && !competingDrawer && shortInteractive && !state.dismissedJobs[id]) {
         state.selectedJobKey = id;
         setOpen(true);
       }
@@ -293,6 +293,11 @@
   }
 
   function toggleProgressFollower() {
+    if (window.isOperationsDrawerMounted) {
+      if (window.isOperationsDrawerVisible()) window.selectOperationsSection('activity');
+      else window.openOperationsDrawer('activity');
+      return;
+    }
     setOpen(!state.open, state.open ? true : 'manual-open');
   }
 
@@ -1115,27 +1120,34 @@
 
   function render() {
     var active = currentActivityItems();
-    var pendingItems = [].concat((state.payload.queues.inference || {}).jobs || [], (state.payload.queues.director || {}).jobs || []);
+    var pendingItems = window.isOperationsDrawerMounted ? [] : [].concat((state.payload.queues.inference || {}).jobs || [], (state.payload.queues.director || {}).jobs || []);
     var recent = sessionRecent();
     var queues = state.payload.queues || {};
+    if (window.isOperationsDrawerMounted) {
+      var waitingCount = ['inference', 'director', 'training'].reduce(function (sum, key) {
+        var q = queues[key] || {};
+        return sum + Number(q.queued || 0) + Number(q.backlog || 0);
+      }, 0);
+      window.updateOperationsCounts(active.length, waitingCount, recent.length);
+    }
     var drawer = el('activity-monitor-drawer');
     var host = el('activity-monitor-list');
     var summary = el('activity-monitor-summary');
     if (!drawer || !host || !summary) throw new Error('Activity panel markup missing.');
 
     var primary = currentPrimaryItem();
-    var featured = featuredActivityItems(active, primary);
+    var featured = window.isOperationsDrawerMounted ? (primary ? [primary].concat(active.filter(function (item) { return activityJobKey(item) !== activityJobKey(primary); })) : []) : featuredActivityItems(active, primary);
     var primaryHost = el('activity-monitor-primary');
     var primaryQueue = el('activity-monitor-primary-queue');
     var details = el('activity-monitor-details');
     var detailsToggle = el('activity-monitor-details-toggle');
     var detailsCount = el('activity-monitor-details-count');
     if (!primaryHost || !primaryQueue || !details || !detailsToggle || !detailsCount) throw new Error('Activity panel markup missing.');
-    if (state.open && !active.length && !pendingItems.length && !recent.length) {
+    if (state.open && !window.isOperationsDrawerMounted && !active.length && !pendingItems.length && !recent.length) {
       state.open = false;
       storeLastSeen(Date.now() / 1000);
     }
-    var detailsVisible = state.detailsOpen || (!primary && (pendingItems.length || recent.length));
+    var detailsVisible = window.isOperationsDrawerMounted ? window.operationsSectionIsHistory() : (state.detailsOpen || (!primary && (pendingItems.length || recent.length)));
     drawer.classList.toggle('hidden', !state.open);
     details.classList.toggle('hidden', !detailsVisible);
     detailsToggle.setAttribute('aria-expanded', detailsVisible ? 'true' : 'false');
@@ -1171,7 +1183,7 @@
     var nowSection = ensureActivitySection(host, 'now', 'Other active', active.length > featured.length ? String(active.length - featured.length) + ' active' : '');
     var featuredKeys = featured.map(activityJobKey);
     var otherActive = active.filter(function (item) { return featuredKeys.indexOf(activityJobKey(item)) === -1; });
-    nowSection.classList.toggle('hidden', !otherActive.length);
+    nowSection.classList.toggle('hidden', window.isOperationsDrawerMounted || !otherActive.length);
     var existingActive = Object.create(null);
     Array.prototype.forEach.call(nowSection.querySelectorAll('[data-activity-active-line]'), function (row) {
       existingActive[row.getAttribute('data-activity-active-line')] = row;
@@ -1193,7 +1205,7 @@
     reconcileActivityRows(nowSection, nowRows);
 
     var pendingSection = ensureActivitySection(host, 'pending', 'Queued', pendingItems.length ? String(pendingItems.length) + ' waiting' : '');
-    pendingSection.classList.toggle('hidden', !pendingItems.length);
+    pendingSection.classList.toggle('hidden', window.isOperationsDrawerMounted || !pendingItems.length);
     var existingPending = Object.create(null);
     Array.prototype.forEach.call(pendingSection.querySelectorAll('[data-activity-pending-key]'), function (node) {
       existingPending[node.getAttribute('data-activity-pending-key')] = node;
@@ -1313,14 +1325,19 @@
     });
   }
 
-  function setOpen(open, manualClose) {
+  function setOpen(open, manualClose, internal) {
+    if (window.isOperationsDrawerMounted && !internal) {
+      if (open) window.openOperationsDrawer('activity');
+      else window.closeOperationsDrawer(manualClose);
+      return;
+    }
     var wasOpen = state.open;
     state.open = !!open;
     if (state.open) {
       // Reopening Activity does not reset per-job dismissal decisions.
       if (!wasOpen) state.openedAt = Date.now() / 1000;
-      if (typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
-      if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
+      if (!internal && typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
+      if (!internal && typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
     } else if (wasOpen) {
       if (manualClose) {
         var item = currentPrimaryItem();
@@ -1340,12 +1357,12 @@
     close.onclick = function () { setOpen(false, true); };
     el('activity-monitor-details-toggle').onclick = function () { state.detailsOpen = !state.detailsOpen; render(); };
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || drawer.contains(event.target) ||
+      if (window.isOperationsDrawerMounted || !state.open || drawer.contains(event.target) ||
           event.target.closest('.shell-workload-indicator')) return;
       setOpen(false, true);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open) setOpen(false, true);
+      if (event.key === 'Escape' && state.open && !window.isOperationsDrawerMounted) setOpen(false, true);
     });
     window.addEventListener('webcap:inference-queue-changed', wake);
   }
@@ -1359,7 +1376,26 @@
     var matching = currentActivityItems().find(function (item) { return item.kind === 'director' && String(item.id) === String(jobId); });
     if (matching) state.selectedJobKey = activityJobKey(matching);
     else state.selectedJobKey = 'llm:' + String(jobId || '');
-    setOpen(true);
+    if (window.isOperationsDrawerMounted) window.selectOperationsSection('activity');
+    else setOpen(true);
+  };
+  window.focusActivityByJob = function (jobId) {
+    var matching = currentActivityItems().find(function (item) { return String(item.id) === String(jobId); });
+    if (matching) state.selectedJobKey = activityJobKey(matching);
+    else state.selectedJobKey = '';
+    if (window.isOperationsDrawerMounted) window.selectOperationsSection('activity');
+    else setOpen(true);
+    // A queue snapshot can lead Activity's next poll. Resolve the requested
+    // job after refreshing instead of silently retaining the previous focus.
+    if (!matching) wake().then(function () {
+      var found = currentActivityItems().find(function (item) { return String(item.id) === String(jobId); });
+      if (found) {
+        state.selectedJobKey = activityJobKey(found);
+        render();
+      } else if (typeof window.reportConsoleError === 'function') {
+        window.reportConsoleError('Activity', 'Running job is not available in Activity: ' + String(jobId));
+      }
+    });
   };
   window.setActivityDrawerOpen = setOpen;
   window.refreshActivityMonitor = wake;

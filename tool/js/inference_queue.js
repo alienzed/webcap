@@ -327,6 +327,19 @@
         actions.appendChild(stop);
       }
     }
+    var focus = row.querySelector('[data-inference-activity-focus]');
+    if (active && !focus) {
+      focus = document.createElement('button');
+      focus.type = 'button';
+      focus.className = 'review-captions-btn';
+      focus.dataset.inferenceActivityFocus = '1';
+      focus.textContent = 'Activity ↗';
+      actions.appendChild(focus);
+    }
+    if (focus) {
+      focus.classList.toggle('hidden', !active);
+      focus.dataset.jobId = String(job.jobId || '');
+    }
     // Membership changes can change the boundary buttons without changing
     // this row's status. Keep its actual buttons (and pointer focus) intact.
     if (actions && preserveActions && status === 'queued') {
@@ -506,12 +519,17 @@
     }, state.open ? 2000 : (hasActiveQueueWork() ? 4000 : 15000));
   }
 
-  function setOpen(open) {
+  function setOpen(open, internal) {
+    if (window.isOperationsDrawerMounted && !internal) {
+      if (open) window.openOperationsDrawer('queues');
+      else window.closeOperationsDrawer(false);
+      return;
+    }
     var wasOpen = state.open;
     state.open = !!open;
     if (state.open && !wasOpen) window.dispatchEvent(new Event('webcap:job-queues-opened'));
-    if (state.open && typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
-    if (state.open && typeof window.setActivityDrawerOpen === 'function') {
+    if (state.open && !internal && typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
+    if (state.open && !internal && typeof window.setActivityDrawerOpen === 'function') {
       window.setActivityDrawerOpen(false);
     }
     if (state.open) {
@@ -577,7 +595,12 @@
     if (!toggles.length || !drawer || !close || !pause || !clear || !list) return;
 
     Array.prototype.forEach.call(toggles, function (toggle) {
-      toggle.onclick = function () { setOpen(!state.open); };
+      toggle.onclick = function () {
+        if (window.isOperationsDrawerMounted) {
+          if (window.isOperationsDrawerVisible()) window.selectOperationsSection('queues');
+          else window.openOperationsDrawer('queues');
+        } else setOpen(!state.open);
+      };
     });
     close.onclick = function () { setOpen(false); };
     pause.onclick = function () {
@@ -585,6 +608,8 @@
     };
     clear.onclick = function () { action('clear_all'); };
     list.onclick = function (event) {
+      var focus = event.target.closest('[data-inference-activity-focus]');
+      if (focus) { window.focusActivityByJob(focus.dataset.jobId); return; }
       var actionButton = event.target.closest('[data-inference-queue-action]');
       if (actionButton) {
         action(actionButton.dataset.inferenceQueueAction, actionButton.dataset.jobId);
@@ -594,13 +619,13 @@
       if (link) openJobScreen(link);
     };
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || drawer.contains(event.target)) return;
+      if (window.isOperationsDrawerMounted || !state.open || drawer.contains(event.target)) return;
       var toggle = event.target.closest('[data-inference-queue-toggle]');
       if (toggle) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open) setOpen(false);
+      if (event.key === 'Escape' && state.open && !window.isOperationsDrawerMounted) setOpen(false);
     });
   }
 

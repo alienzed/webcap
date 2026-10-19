@@ -108,6 +108,8 @@ def validate_plan(raw, catalogue_entries, scenes=None):
     valid_scenes = {str(item.get("id") or "") for item in (scenes or []) if isinstance(item, dict)}
     result = {"reason": str(raw.get("reason") or ""), "storyWide": [], "scenes": []}
     seen_story = set()
+    if not isinstance(raw.get("storyWide", []), list) or not isinstance(raw.get("scenes", []), list):
+        raise ValueError("Director LoRA assignments must be arrays.")
 
     def decode(entry):
         if not isinstance(entry, dict):
@@ -116,7 +118,10 @@ def validate_plan(raw, catalogue_entries, scenes=None):
         item = codes.get(code)
         if item is None:
             raise ValueError("Unknown LoRA code: " + code)
-        strength = float(entry.get("strength", 1))
+        try:
+            strength = float(entry.get("strength", 1))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("Invalid LoRA strength.") from exc
         if not (-100 < strength < 100):
             raise ValueError("Invalid LoRA strength.")
         phrases = entry.get("phrases", [])
@@ -138,6 +143,8 @@ def validate_plan(raw, catalogue_entries, scenes=None):
         result["storyWide"].append(item)
     seen_scenes = set()
     for proposed in raw.get("scenes") or []:
+        if not isinstance(proposed, dict) or not isinstance(proposed.get("assign", []), list):
+            raise ValueError("Director Scene assignment must contain an array.")
         scene_id = str(proposed.get("sceneId") or "")
         if scene_id not in valid_scenes or scene_id in seen_scenes:
             raise ValueError("Unknown or duplicate Scene.")

@@ -1061,6 +1061,9 @@ def command(folder_path, operation, criteria=None):
     if operation == "run_analytics_selected":
         from .run_analytics import report_selected
         return report_selected(folder_path, criteria.get("jobIds"), criteria.get("session"))
+    if operation in ("reference_selection_list", "reference_selection_save", "reference_selection_remove"):
+        from .training_reference_selections import command as selection_command
+        return selection_command(_folder_key(folder_path), operation, criteria)
     if operation == "reference_runs":
         return {"runs": candidate_runs(folder_path)}
     if operation == "reference_vocabulary":

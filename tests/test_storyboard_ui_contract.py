@@ -755,27 +755,24 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    assert 'class="storyboard-story-panel-heading"' in html
-    assert "<strong>Story Overview</strong>" in html
-    assert ">Hide Story</button>" in html
-    assert "storyState.storyCollapsed ? 'Show Story' : 'Hide Story'" in storyboard
+    story_heading = html.split('class="storyboard-story-panel-heading"', 1)[1].split('</div>\n\n                                <details', 1)[0]
     scenes_heading = html.split('class="storyboard-scenes-heading"', 1)[1].split('</div>\n                            <div id="storyboard-scene-progression"', 1)[0]
-    assert 'id="storyboard-story-toggle"' in scenes_heading
+    assert "<strong>Story Overview</strong>" in story_heading
+    assert 'id="storyboard-story-toggle"' in story_heading
+    assert '>Hide Story</button>' in story_heading
+    assert 'id="storyboard-story-toggle"' not in scenes_heading
+    assert 'id="storyboard-story-show"' in scenes_heading
     assert 'aria-controls="storyboard-story-authoring"' in scenes_heading
-    assert 'id="app-header-workspace-actions"' not in html
+    assert "showButton.classList.toggle('hidden', !storyState.storyCollapsed);" in storyboard
     assert 'id="storyboard-director-model"' in scenes_heading
     assert 'id="storyboard-scenes-overview-btn"' in scenes_heading
+    assert 'aria-label="Scene grid overview"' in scenes_heading
     assert 'id="storyboard-scenes-focus-btn"' in scenes_heading
+    assert 'id="storyboard-scenes-sequence-btn"' in scenes_heading
     assert 'data-inference-queue-toggle' not in scenes_heading
-    assert 'id="inference-queue-rail-btn"' in html
-    assert "storyboard-scene-progress-work" in storyboard
-    assert "generationJobsForScene(sceneId)" in storyboard
     assert "button.setAttribute('aria-pressed', active ? 'true' : 'false');" in storyboard
-    assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);" in css
-    assert ".storyboard-view-toggle .review-captions-btn.active" in css
-    assert "box-shadow: inset 0 -2px 0 var(--accent);" in css
-    assert ".storyboard-story-panel-heading" in css
-    assert ".storyboard-story-panel-heading > strong" in css
+    assert ".storyboard-scenes-grid-btn.active" in css
+    assert ".storyboard-story-heading-actions" in css
     assert ".storyboard-scene-progress-work" in css
 
 

@@ -189,6 +189,24 @@
     });
   }
 
+  // Only clear neighboring shade names get partial credit. Do not relabel the VL's
+  // choice, infer color from pixels, or equate arbitrary colors in the same family.
+  function testVlNearColorMatch(expected, observed) {
+    var a = String(expected || '').trim().toLowerCase();
+    var b = String(observed || '').trim().toLowerCase();
+    if (!a || !b || a === b) return false;
+    var neighbors = [
+      ['peach', 'coral'], ['coral', 'pink'],
+      ['blue', 'cyan'], ['cyan', 'teal'], ['teal', 'turquoise'],
+      ['light blue', 'sky blue'], ['light blue', 'cyan'],
+      ['purple', 'violet'], ['purple', 'mauve'],
+      ['red', 'burgundy'], ['burgundy', 'maroon']
+    ];
+    return neighbors.some(function (pair) {
+      return (a === pair[0] && b === pair[1]) || (a === pair[1] && b === pair[0]);
+    });
+  }
+
   // Session-only scoring: neither the VL observation nor counting overrides are persisted.
   function testVlPartialCredit(expected, observed) {
     var a = String(expected || '').toLowerCase().match(/[a-z0-9]+/g) || [];
@@ -217,6 +235,7 @@
         score.count += 1;
       } else if (group.result === 'mismatch') {
         var partial = testVlPartialCredit(group.expectedText, group.selectedText);
+        if (!partial && testVlNearColorMatch(group.expectedText, group.selectedText)) partial = 0.5;
         score.matches += partial;
         score.mismatches += 1 - partial;
         score.count += 1;
@@ -491,7 +510,12 @@
     });
     var entryScore = testVlScore(groups, entry.ignoredGroups);
     var matches = groups.filter(function (g) { return g.result === 'match'; });
-    var mismatches = groups.filter(function (g) { return g.result === 'mismatch'; });
+    var nearMatches = groups.filter(function (g) {
+      return g.result === 'mismatch' && testVlNearColorMatch(g.expectedText, g.selectedText);
+    });
+    var mismatches = groups.filter(function (g) {
+      return g.result === 'mismatch' && !testVlNearColorMatch(g.expectedText, g.selectedText);
+    });
     var unclear = groups.filter(function (g) { return g.result === 'unclear'; });
 
     summary.textContent = groups.length
@@ -502,8 +526,9 @@
     // Only differences and unresolved observations demand immediate attention.
     var visible = '';
     if (mismatches.length) visible += '<strong>Differences</strong>' + testVlComparisonTable(mismatches, groups, entry);
+    if (nearMatches.length) visible += '<strong>Related colors · half credit</strong>' + testVlComparisonTable(nearMatches, groups, entry);
     if (unclear.length) visible += '<strong>Unclear</strong>' + testVlComparisonTable(unclear, groups, entry);
-    if (groups.length && !mismatches.length && !unclear.length) visible = '<p>No differences reported.</p>';
+    if (groups.length && !mismatches.length && !nearMatches.length && !unclear.length) visible = '<p>No differences reported.</p>';
     comparison.innerHTML = visible;
     comparison.classList.toggle('hidden', !groups.length);
     el('test-generations-vl-agreements-label').textContent = 'Show ' + matches.length + ' agreeing attribute' + (matches.length === 1 ? '' : 's');

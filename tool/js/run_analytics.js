@@ -34,11 +34,11 @@
     function x(v) {return pad+(v-minX)/(maxX-minX||1)*(width-2*pad);}
     function y(v) {return height-pad-(v-minY)/(maxY-minY)*(height-2*pad);}
     var ordered=observed.slice().sort(function(a,b){return a.epoch-b.epoch;});
-    var segments=ordered.map(function(p,i) {return (i && p.epoch===ordered[i-1].epoch+1?'L':'M')+x(p.epoch).toFixed(1)+','+y(p[key]).toFixed(1);}).join(' ');
+    var segments=ordered.map(function(p,i) {return (i?'L':'M')+x(p.epoch).toFixed(1)+','+y(p[key]).toFixed(1);}).join(' ');
     var markers=ordered.map(function(p){return '<circle cx="'+x(p.epoch)+'" cy="'+y(p[key])+'" r="5"><title>Epoch '+p.epoch+' · '+formatter(p[key])+'</title></circle>';}).join('');
     return '<div class="run-analytics-chart"><strong>'+esc(title)+'</strong><svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="'+esc(title)+' by epoch">' +
       '<path d="M'+pad+' '+pad+'V'+(height-pad)+'H'+(width-pad)+'" class="run-analytics-axis"/>' +
-      '<path d="'+segments+'" class="run-analytics-line"/>'+markers+'</svg><small>Epoch '+minX+' – '+maxX+' · '+observed.length+' measured points; no interpolation across missing epochs</small></div>';
+      '<path d="'+segments+'" class="run-analytics-line"/>'+markers+'</svg><small>Epoch '+minX+' – '+maxX+' · '+observed.length+' observed checkpoints. Line connects only recorded measurements.</small></div>';
   }
   function render() {
     if (!report || !report.reports) return;
@@ -99,7 +99,7 @@
       tests.forEach(function(p){indexed[p.epoch].test=p;});
       (r.lossPoints||[]).forEach(function(p){indexed[p.epoch].loss=p.loss;});
       var ranks=(c?c.points:[]).filter(function(p){return p.score!=null;}).sort(function(a,b){return b.score-a.score;});
-      if(ranks.length){findings.push(r.run.label+': leading measured epoch '+ranks[0].epoch+' at '+pct(ranks[0].score)+' ('+ranks[0].observations+' weighted observations).');}
+      if(ranks.length){findings.push(r.run.label+': leading measured epoch '+ranks[0].epoch+' at '+pct(ranks[0].score)+' ('+ranks[0].observations+' weighted observations).');if(ranks[0].observations<6)findings.push('Limited evidence: leading checkpoint has fewer than six weighted observations.');}
       Object.keys(indexed).map(Number).sort(function(a,b){return a-b;}).forEach(function(epoch){
         var p=indexed[epoch], cp=p.campaign||{},t=p.test||{};
         rows.push('<tr><td>'+esc(r.run.label)+'</td><td>'+epoch+'</td><td>'+pct(cp.score)+'</td><td>'+

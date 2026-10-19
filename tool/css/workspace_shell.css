@@ -3156,3 +3156,58 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .operations-group .job-queue-lane-actions .review-captions-btn{min-height:28px;padding:4px 8px;font-size:12px}
 .operations-group .activity-monitor-trend{margin:8px 8px}
 .operations-group .activity-monitor-primary .progress-card{margin-top:7px}
+
+/* Temporary guided handoff: shade everything except the interactive Prep folder list. */
+.test-generations-set-guide {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+.test-generations-set-guide-shade {
+  position: absolute;
+  background: rgba(9, 17, 30, .58);
+  pointer-events: auto;
+}
+.test-generations-set-guide-highlight {
+  position: absolute;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 0 0 4px rgba(217, 119, 24, .16);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.test-generations-set-guide-note {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: 0 16px 46px rgba(0, 0, 0, .26);
+  pointer-events: auto;
+}
+.test-generations-set-guide-note::before {
+  content: '➜';
+  position: absolute;
+  left: -30px;
+  top: 22px;
+  font-size: 27px;
+  color: var(--accent);
+  transform: rotate(180deg);
+}
+.test-generations-set-guide-note[data-placement="left"]::before {
+  left: auto;
+  right: -30px;
+  transform: none;
+}
+.test-generations-set-guide-note[data-placement="above"]::before {
+  left: 45%;
+  top: auto;
+  bottom: -35px;
+  transform: rotate(90deg);
+}
+.test-generations-set-guide-note strong { font-size: 16px; }
+.test-generations-set-guide-note p { margin: 8px 0 14px; color: var(--muted); }
+.test-generations-set-guide-note button { cursor: pointer; }

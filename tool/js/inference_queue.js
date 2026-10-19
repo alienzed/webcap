@@ -515,7 +515,7 @@
     var wasOpen = state.open;
     state.open = !!open;
     if (state.open && !wasOpen) window.dispatchEvent(new Event('webcap:job-queues-opened'));
-    if (state.open && typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
+    if (state.open && !internal && typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
     if (state.open && !internal && typeof window.setActivityDrawerOpen === 'function') {
       window.setActivityDrawerOpen(false);
     }
@@ -604,7 +604,7 @@
       if (link) openJobScreen(link);
     };
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || drawer.contains(event.target) || (window.isOperationsDrawerMounted && event.target.closest('#operations-drawer'))) return;
+      if (window.isOperationsDrawerMounted || !state.open || drawer.contains(event.target)) return;
       var toggle = event.target.closest('[data-inference-queue-toggle]');
       if (toggle) return;
       setOpen(false);

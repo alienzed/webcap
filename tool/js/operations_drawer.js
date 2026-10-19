@@ -9,9 +9,9 @@
   root.innerHTML =
     '<header class="operations-header"><div><strong>Activity &amp; Queues</strong><small>Current work and this session</small></div><button type="button" id="operations-close" aria-label="Close Activity and Queues">×</button></header>' +
     '<div class="operations-sections">' +
-    '<button type="button" class="operations-toggle" data-operations-section="activity" aria-expanded="false">Activity <span aria-hidden="true">⌄</span></button><div id="operations-activity" class="operations-content"></div>' +
-    '<button type="button" class="operations-toggle" data-operations-section="queues" aria-expanded="false">Job Queues <span aria-hidden="true">⌄</span></button><div id="operations-queues" class="operations-content"></div>' +
-    '<button type="button" class="operations-toggle" data-operations-section="history" aria-expanded="false">Recent <span aria-hidden="true">⌄</span></button><div id="operations-history" class="operations-content"></div>' +
+    '<button type="button" class="operations-toggle" data-operations-section="activity" aria-expanded="false">Activity <small id="operations-activity-count"></small><span aria-hidden="true">⌄</span></button><div id="operations-activity" class="operations-content"></div>' +
+    '<button type="button" class="operations-toggle" data-operations-section="queues" aria-expanded="false">Job Queues <small id="operations-queue-count"></small><span aria-hidden="true">⌄</span></button><div id="operations-queues" class="operations-content"></div>' +
+    '<button type="button" class="operations-toggle" data-operations-section="history" aria-expanded="false">Recent <small id="operations-recent-count"></small><span aria-hidden="true">⌄</span></button><div id="operations-history" class="operations-content"></div>' +
     '</div>';
   var activity = document.getElementById('activity-monitor-drawer');
   var queues = document.getElementById('inference-queue-drawer');
@@ -24,6 +24,11 @@
   var enabled = false;
   // Keep Recent owned by Activity; reparent only its stable DOM host.
   document.getElementById('operations-history').appendChild(document.getElementById('activity-monitor-details'));
+  window.updateOperationsCounts = function (active, queued, recent) {
+    root.querySelector('#operations-activity-count').textContent = active ? active + ' running' : 'Idle';
+    root.querySelector('#operations-queue-count').textContent = queued ? queued + ' waiting' : 'Empty';
+    root.querySelector('#operations-recent-count').textContent = recent ? recent + ' recent' : 'Empty';
+  };
   function show(next) {
     section = next;
     if (!enabled) {

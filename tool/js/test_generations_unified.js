@@ -4,6 +4,7 @@
   var legacy = document.getElementById('test-generations-body');
   var folder = '', model = '', payload = {sessions:[],campaigns:[],media:[]};
   var perspective = 'experiments', selection = '', chosen = '', serial = 0;
+  var loadedOffset = 0, pageSize = 48, loadingMore = false;
   var checkpointSelection = new Set();
   function el(id) { return document.getElementById('test-unified-' + id); }
   function text(node, value) { node.textContent = String(value == null ? '' : value); }
@@ -19,7 +20,7 @@
   }
   function api() {
     return fetch('/fs/epoch_finder', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{modelId:model}})})
+      body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{modelId:model,limit:pageSize,offset:loadedOffset}})})
       .then(function(response) { return response.json().then(function(data) {
         if (!response.ok || !data.ok) throw new Error(data.error || 'Could not load generated results.');
         return data;
@@ -27,7 +28,8 @@
   }
   function refresh() {
     var version = ++serial;
-    text(el('description'), 'Loading recorded Test and Finder results…');
+    loadedOffset = 0;
+    text(el('description'), 'Loading first 48 results…');
     return api().then(function(result) {
       if (version !== serial) return;
       payload = result;
@@ -38,6 +40,21 @@
       console.error('[Test Generations Explore]', error);
       window.reportConsoleError('Test Generations Explore', error);
     });
+  }
+  function loadMore() {
+    if (loadingMore || (payload.media || []).length >= Number(payload.total || 0)) return;
+    loadingMore = true;
+    loadedOffset = (payload.media || []).length;
+    var version = serial;
+    api().then(function(result) {
+      if(version !== serial) return;
+      payload.media = (payload.media || []).concat(result.media || []);
+      payload.total = result.total;
+      renderGallery();
+    }).catch(function(error) {
+      window.reportConsoleError('Test Generations load more',error);
+      text(el('description'),'More results unavailable: '+String(error.message || error));
+    }).finally(function(){loadingMore=false;});
   }
   function recordedTime(item) {
     var n=Number(item && item.startedAt || 0);
@@ -159,7 +176,7 @@
     if(perspective==='checkpoints' && checkpointSelection.size>1) records.sort(function(a,b){return (a.jobId+':'+a.epoch).localeCompare(b.jobId+':'+b.epoch,undefined,{numeric:true});});
     text(el('title'),selection ? (collections().find(function(x){return x.id===selection;})||{}).name || 'Results' : 'All generated results');
     var warningText=(payload.warnings||[]).filter(Boolean).join(' · ');
-    text(el('description'),records.length+' recorded results · '+(perspective==='experiments'?'Experiments':'Checkpoints')+(warningText?' · '+warningText:''));
+    text(el('description'),records.length+' shown of '+Number(payload.total || records.length)+' results · '+(perspective==='experiments'?'Experiments':'Checkpoints')+(warningText?' · '+warningText:''));
     el('description').classList.toggle('is-warning',!!warningText);
     var previousCheckpoint = '';
     records.forEach(function(item) {
@@ -182,7 +199,12 @@
       card.appendChild(title);card.classList.toggle('active',chosen===item.id);
       card.addEventListener('click',function(){inspect(item);host.querySelectorAll('.test-unified-card').forEach(function(node){node.classList.toggle('active',node===card);});});host.appendChild(card);
     });
-    if(!records.length) {var p=document.createElement('p');p.textContent='No recorded images for this selection.';host.appendChild(p);}
+    if(!records.length) {var p=document.createElement('p');p.textContent='No matching results in the loaded page. Load more to continue browsing.';host.appendChild(p);}
+    if ((payload.media || []).length < Number(payload.total || 0)) {
+      var more=document.createElement('button');more.type='button';more.className='review-captions-btn test-unified-load-more';
+      more.textContent='Load more results ('+(payload.media || []).length+' / '+payload.total+')';
+      more.addEventListener('click',loadMore);host.appendChild(more);
+    }
   }
   var advancedScreens = {
     finder: document.getElementById('epoch-finder-screen'),

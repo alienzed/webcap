@@ -210,7 +210,7 @@
   // A recognized color choice has less influence than shape, pose, or structure.
   function testVlColorAttribute(group) {
     var colors = 'black white gray grey silver red burgundy maroon orange yellow gold green olive lime blue cyan teal turquoise navy purple violet lavender magenta pink peach coral mauve brown tan beige cream';
-    var names = new Set(colors.split(' '));
+    var names = new Set(colors.split(' ').concat(['light blue', 'sky blue', 'dark blue', 'navy blue', 'royal blue', 'dark green', 'forest green', 'olive green', 'lime green', 'light pink', 'hot pink']));
     return [group.expectedText, group.selectedText].some(function (value) {
       return names.has(String(value || '').trim().toLowerCase());
     });

@@ -2423,7 +2423,16 @@ def test_generations_route():
             # offer same-Set training runs with no staged Test candidates.
             if payload.get("modelId"):
                 seen = {(run["folder"], run["jobId"]) for run in available}
-                for run in discover_test_candidate_runs(folder_path):
+                try:
+                    discovered = discover_test_candidate_runs(folder_path)
+                except (OSError, RuntimeError) as exc:
+                    # Run discovery is optional to preparing Test candidates.
+                    # A broken Training queue must not disable normal Test work.
+                    warning = "Could not discover additional Training runs: " + str(exc)
+                    app.logger.warning("TEST RUN DISCOVERY FAILED: %s", exc)
+                    payload.setdefault("warnings", []).append(warning)
+                    discovered = []
+                for run in discovered:
                     if run["modelId"] != payload["modelId"]:
                         continue
                     key = (run["folder"], run["jobId"])

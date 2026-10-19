@@ -4659,24 +4659,42 @@
   setInterval(function () { if (typeof launchFolder !== 'undefined' && launchFolder) refreshServerTestBatches(); }, 4000);
   refreshServerTestBatches();
 
+  var testBatchCompletedActivity = new Set();
+  var testBatchDismissedIds = new Set();
+  var testBatchSnapshotKeys = Object.create(null);
   function refreshServerTestBatches() {
     return captionAssistRequestJson('/fs/test_generations/batches').then(function (payload) {
       var batches = payload.batches || [];
       var folder = String(launchFolder || '');
       var available = batches.filter(function (b) { return b.folder === folder; });
-      available.sort(function (a,b) {return b.queuedAt-a.queuedAt;});
-      var currentId = testBatch && testBatch.id;
+      available.sort(function (a,b) { return b.queuedAt-a.queuedAt; });
       testBatch = available.find(function (b) { return b.status === 'queued' || b.status === 'running' || b.status === 'stopping'; }) ||
                   available[0] || null;
-      testBatchHistory = available.filter(function (b) {return b !== testBatch;});
+      testBatchHistory = available.filter(function (b) { return b !== testBatch; });
       available.forEach(function (b) {
         b.active = b.status === 'queued' || b.status === 'running' || b.status === 'stopping';
         b.activityId = 'test-batch:' + b.id;
         b.startedAt = b.startedAt || b.queuedAt;
-        b.statuses = b.statuses || {};
         b.scores = b.scores || [];
+        b.dismissed = testBatchDismissedIds.has(b.id);
+        b.activityFinished = testBatchCompletedActivity.has(b.id);
       });
       if (viewedTestBatch) viewedTestBatch = available.find(function (b) { return b.id === viewedTestBatch.id; }) || null;
+      var selected = viewedTestBatch || testBatch;
+      var key = selected && [selected.sessions.length,selected.finished,selected.evaluated,selected.status].join(':');
+      if (selected && key !== testBatchSnapshotKeys[selected.id]) {
+        testBatchSnapshotKeys[selected.id] = key;
+        return Promise.all(selected.sessions.map(function (session) {
+          return requestForFolder(selected.folder, 'test_open_session', {session:session}).then(function (status) {
+            selected.statuses[session] = status;
+          }).catch(function (err) {
+            reportConsoleError('Batch session refresh · ' + session, err);
+          });
+        })).then(function () {
+          testBatchRecalculate(selected);
+          renderTestBatch();
+        });
+      }
       renderTestBatch();
     }).catch(function (err) { reportConsoleError('Test batch status', err); });
   }
@@ -4741,6 +4759,7 @@
       window.finishActivityProgress(completedBatch.activityId, completedBatch.phase === 'Failed' ? 'failed' : completedBatch.phase === 'Stopped' ? 'stopped' : 'completed');
       if (!completedBatch.activityFinished) {
         completedBatch.activityFinished = true;
+        testBatchCompletedActivity.add(completedBatch.id);
         window.recordActivityCompletion({ id: completedBatch.activityId, kind: 'test-batch', lane: 'background',
           title: completedBatch.autoVl ? 'Batch Test + VL' : 'Batch Test', status: completedBatch.phase === 'Failed' ? 'failed' : completedBatch.phase === 'Stopped' ? 'stopped' : 'completed',
           folder: completedBatch.folder, modelId: completedBatch.criteria.modelId, detail: completedBatch.detail, finishedAt: Date.now() / 1000 });

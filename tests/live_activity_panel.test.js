@@ -165,4 +165,5 @@ test('Activity includes server-session history without replaying pre-refresh not
   assert.ok(source.includes("recent.slice(0, 50)"));
   assert.ok(source.includes("function formatJobDuration(start, end)"));
   assert.ok(source.includes("Queued ' + wait"));
+  assert.ok(source.includes("item.error ? 'Error: ' + item.error"));
 });

@@ -2674,10 +2674,9 @@
 
   function syncSceneViewControls(order) {
     order = Array.isArray(order) ? order : [];
-    if (['overview', 'focus', 'sequence'].indexOf(storyState.sceneViewMode) === -1) storyState.sceneViewMode = 'focus';
+    if (['focus', 'sequence'].indexOf(storyState.sceneViewMode) === -1) storyState.sceneViewMode = 'focus';
     ensureActiveScene(order);
     [
-      ['storyboard-scenes-overview-btn', 'overview'],
       ['storyboard-scenes-focus-btn', 'focus'],
       ['storyboard-scenes-sequence-btn', 'sequence']
     ].forEach(function (item) {
@@ -2702,7 +2701,7 @@
   }
 
   function setSceneViewMode(mode, sceneId) {
-    if (['overview', 'focus', 'sequence'].indexOf(mode) === -1) throw new Error('Unknown Storyboard Scene view.');
+    if (['focus', 'sequence'].indexOf(mode) === -1) throw new Error('Unknown Storyboard Scene view.');
     var previousMode = storyState.sceneViewMode;
     return flushPendingSaves().then(function () {
       storyState.sceneViewMode = mode;
@@ -3856,34 +3855,12 @@
 
     syncSceneViewControls(order);
     if (storyState.sceneViewMode === 'sequence') {
-      host.classList.remove('is-focus', 'is-overview');
+      host.classList.remove('is-focus');
       host.classList.add('is-sequence');
       host.innerHTML = '';
       return;
     }
     host.classList.remove('is-sequence');
-    if (storyState.sceneViewMode === 'overview') {
-      host.classList.remove('is-focus');
-      host.classList.add('is-overview');
-      var overviewHtml = order.map(function (sceneId, index) {
-        var scene = scenes[sceneId] || {};
-        var takeCount = Array.isArray(scene.takeOrder) ? scene.takeOrder.length : 0;
-        var pendingTakeCount = generationJobsForScene(sceneId).length;
-        return '<button type="button" class="storyboard-scene-overview-card' + (scene.selectedTakeId ? ' has-selected-take' : '') + '" data-scene-open="' + escapeHtml(sceneId) + '">' +
-          '<span class="storyboard-scene-overview-number">Scene ' + String(index + 1).padStart(2, '0') + '</span>' +
-          '<strong>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
-          '<span class="storyboard-scene-overview-summary">' + escapeHtml(scene.summary || 'No Scene intent yet.') + '</span>' +
-          '<span class="storyboard-scene-overview-meta">' + String(takeCount) + ' Take' + (takeCount === 1 ? '' : 's') +
-            (pendingTakeCount ? ' · ' + String(pendingTakeCount) + ' pending' : '') +
-            (scene.selectedTakeId ? ' · selected' : '') + '</span>' +
-        '</button>';
-      }).join('');
-      overviewHtml += removedScenesHtml(removedScenes);
-      host.innerHTML = overviewHtml || '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
-      return;
-    }
-
-    host.classList.remove('is-overview');
     host.classList.add('is-focus');
     var focusedSceneId = ensureActiveScene(order);
     var renderOrder = focusedSceneId ? [focusedSceneId] : [];
@@ -5718,9 +5695,6 @@
     el('storyboard-new-btn').onclick = createStory;
     el('storyboard-story-toggle').onclick = function () { setStoryCollapsed(true); };
     el('storyboard-story-show').onclick = function () { setStoryCollapsed(false); };
-    el('storyboard-scenes-overview-btn').onclick = function () {
-      setSceneViewMode(storyState.sceneViewMode === 'overview' ? 'focus' : 'overview');
-    };
     el('storyboard-scenes-focus-btn').onclick = function () { setSceneViewMode('focus'); };
     el('storyboard-scenes-sequence-btn').onclick = function () { setSceneViewMode('sequence'); };
     el('storyboard-generate-scenes-btn').onclick = generateScenes;

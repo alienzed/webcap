@@ -247,11 +247,7 @@ def calibration_prompt(kind, target):
         target = int(target)
     except (TypeError, ValueError) as exc:
         raise ValueError("Director calibration target must be an integer.") from exc
-    if kind == "thinking":
-        messages = [{"role": "user", "content": "Think briefly: what is 7 + 5? Answer with the number."}]
-        overrides = {"maxTokens": 128}
-        label = "Director Thinking Check"
-    elif kind == "context":
+    if kind == "context":
         if target not in CONTEXT_STEPS:
             raise ValueError("Unsupported Director context calibration target.")
         return "Reply with exactly: CONTEXT_OK"
@@ -299,7 +295,11 @@ def enqueue_calibration_run(model_ref, kind, target, context_size=None):
     if model is None:
         raise FileNotFoundError("Director calibration model is not available: " + model_ref)
 
-    if kind == "context":
+    if kind == "thinking":
+        messages = [{"role": "user", "content": "Think briefly: what is 7 + 5? Answer with the number."}]
+        overrides = {"maxTokens": 128}
+        label = "Director Thinking Check"
+    elif kind == "context":
         if str(model.get("runtimeId") or "") != "local":
             raise ValueError("Context calibration is available only for the local llama.cpp runtime.")
         if target not in CONTEXT_STEPS:

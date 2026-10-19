@@ -394,6 +394,10 @@
     }
     if(folder) refresh();
   };
+  window.testGenerationsUnifiedNativeRoute=function() {
+    // Restores all original DOM ownership and hides the experimental workspace.
+    exitToNative();
+  };
   window.testGenerationsUnifiedOpen=function() {
     model=String(window.getWorkingModelProfileId()||'');show(true);builder(false);
     if(folder)refresh();

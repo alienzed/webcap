@@ -4881,7 +4881,13 @@
         button.dataset.testBatchSession = session;
         sessionsHost.appendChild(button);
       }
-      button.textContent = (index + 1) + '/' + batch.count + ' · ' + sessionLabel(session) + ' · ' + (status ? status.status || 'unknown' : 'queued');
+      var sessionStatus = String(status && status.status || 'queued').toLowerCase();
+      button.dataset.batchState = /fail|error/.test(sessionStatus) ? 'failed'
+        : /complet|success|finish|done/.test(sessionStatus) ? 'completed'
+        : /run|progress|process|start/.test(sessionStatus) ? 'running' : 'queued';
+      button.title = sessionLabel(session) + ' · ' + sessionStatus;
+      button.setAttribute('aria-label', 'Session ' + (index + 1) + ' of ' + batch.count + ': ' + sessionLabel(session) + ' · ' + sessionStatus);
+      button.textContent = (index + 1) + '/' + batch.count + ' · ' + sessionStatus;
     });
     var errorsHost = resultHost.querySelector('[data-test-batch-errors]');
     if (!errorsHost) {

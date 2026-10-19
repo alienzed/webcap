@@ -560,6 +560,7 @@
             if (currentCorrection) currentCorrection.value = '';
           }
           syncSceneDirectorRestore(sceneId);
+          syncPromptTakeStatus(sceneId);
           syncSceneRefineState(sceneId);
           updateSceneDirectorStatus(sceneId, 'Director completed.');
         }
@@ -1449,6 +1450,29 @@
     button.classList.toggle('hidden', !scene || typeof scene.previousPrompt !== 'string');
   }
 
+  // A Take freezes the Scene's source prompt; compiled H3 input can be different.
+  function syncPromptTakeStatus(sceneId) {
+    var root = sceneElement(sceneId);
+    if (!root) return;
+    var badge = root.querySelector('[data-prompt-take-status]');
+    var label = badge && badge.querySelector('[data-prompt-take-status-label]');
+    var editor = root.querySelector('[data-scene-field="prompt"]');
+    if (!badge || !label || !editor) throw new Error('Storyboard prompt Take status markup is missing.');
+
+    var scene = storyState.story.scenes[sceneId] || {};
+    var takeId = scene.selectedTakeId;
+    var take = takeId && scene.takes && scene.takes[takeId];
+    var sourcePrompt = take && (typeof take.sourcePrompt === 'string'
+      ? take.sourcePrompt
+      : (!take.generated && typeof take.prompt === 'string' ? take.prompt : null));
+    var changed = typeof sourcePrompt === 'string' && editor.value.trim() !== sourcePrompt.trim();
+    badge.classList.toggle('hidden', !changed);
+    if (!changed) return;
+    var takeIndex = (scene.takeOrder || []).indexOf(takeId);
+    if (takeIndex < 0) throw new Error('Selected Take is missing from the Scene take order.');
+    label.textContent = 'Updated since Take ' + String(takeIndex + 1).padStart(2, '0');
+  }
+
   function syncSceneRefineState(sceneId) {
     syncSceneProgressionCard(sceneId);
     var root = sceneElement(sceneId);
@@ -1494,6 +1518,7 @@
       if (prompt) prompt.value = payload.scene.prompt || '';
       if (duration) duration.value = payload.scene.durationSeconds == null ? '' : payload.scene.durationSeconds;
       syncSceneDirectorRestore(sceneId);
+      syncPromptTakeStatus(sceneId);
       syncSceneRefineState(sceneId);
       updateSceneDirectorStatus(sceneId, 'Previous prompt restored.');
       setSaveState('Saved');
@@ -4055,9 +4080,14 @@
             '<label class="storyboard-field storyboard-scene-intent"><span>Scene intent</span><textarea data-scene-field="summary" rows="2" placeholder="Describe what happens in this Scene.">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>' +
             '<div class="storyboard-prompt-block">' +
               '<div class="storyboard-prompt-heading">' +
-                '<span' +
-                  (promptDirectorModel ? ' title="Last populated by Director model ' + escapeHtml(promptDirectorModel) + '"' : '') +
-                '>Generation prompt</span>' +
+                '<span class="storyboard-prompt-label">' +
+                  '<span' +
+                    (promptDirectorModel ? ' title="Last populated by Director model ' + escapeHtml(promptDirectorModel) + '"' : '') +
+                  '>Generation prompt</span>' +
+                  '<span class="storyboard-prompt-take-status hidden" data-prompt-take-status title="The current prompt differs from the selected Take&#39;s original prompt.">' +
+                    '<span aria-hidden="true">✧</span><span data-prompt-take-status-label></span>' +
+                  '</span>' +
+                '</span>' +
                 '<div class="storyboard-prompt-actions">' +
                   '<button type="button" class="review-captions-btn storyboard-director-action" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
                   '<button type="button" class="review-captions-btn' +
@@ -4172,6 +4202,7 @@
     if (!activeHtml) activeHtml = '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
 
     host.innerHTML = activeHtml + removedScenesHtml(removedScenes);
+    if (focusedSceneId) syncPromptTakeStatus(focusedSceneId);
     syncDirectorPendingControls();
     if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
   }
@@ -5316,6 +5347,7 @@
 
     var generateButton = root.querySelector('[data-scene-generate]');
     if (generateButton) generateButton.textContent = (takeOrder.length || jobs.length) ? 'Generate Another Take' : 'Generate Take';
+    syncPromptTakeStatus(sceneId);
   }
 
   function mergeFetchedSceneTakeState(storyId, sceneId, latestStory) {
@@ -5615,6 +5647,7 @@
       progressTitle.textContent = field.value.trim() || 'Untitled Scene';
     }
     if (field.dataset.sceneField === 'prompt') {
+      syncPromptTakeStatus(sceneId);
       var promptScene = storyState.story && storyState.story.scenes
         ? storyState.story.scenes[sceneId]
         : null;

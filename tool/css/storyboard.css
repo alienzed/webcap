@@ -1540,10 +1540,40 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
+}
+
+.storyboard-prompt-label {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.storyboard-prompt-take-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid #93b8ff;
+  border-radius: 5px;
+  background: color-mix(in srgb, #3b82f6 11%, var(--panel));
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+html[data-theme="dark"] .storyboard-prompt-take-status {
+  border-color: #4f81d6;
+  background: color-mix(in srgb, #3b82f6 18%, var(--panel));
+  color: #a5c9ff;
 }
 
 .storyboard-prompt-actions {

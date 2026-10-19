@@ -467,6 +467,7 @@ class EphemeralExecutionQueue:
             if lane.get("activeJobId") == job["id"]:
                 lane["activeJobId"] = ""
             _refresh_positions(lane)
+            _record_recent(lane, job)
             _remember_transient_receipt(receipt)
             return receipt
 
@@ -488,6 +489,7 @@ class EphemeralExecutionQueue:
                 receipt = _public_job(job)
                 lane["jobs"] = [item for item in lane.get("jobs", []) if item is not job]
                 _refresh_positions(lane)
+                _record_recent(lane, job)
                 _remember_transient_receipt(receipt)
                 return receipt
             if status in ACTIVE_STATUSES:
@@ -512,6 +514,7 @@ class EphemeralExecutionQueue:
                     job["finishedAt"] = now
                     job["updatedAt"] = now
                     job["requestedAction"] = ""
+                    _record_recent(lane, job)
                     _remember_transient_receipt(_public_job(job))
                     continue
                 if active_id and str(job.get("id") or "") == active_id and status in ACTIVE_STATUSES:

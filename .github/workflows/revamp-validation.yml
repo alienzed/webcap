@@ -47,6 +47,8 @@ jobs:
         run: cp tool/config.example.json tool/config.json
       - name: Install test essentials
         run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Recovered Evaluate All behavior
+        run: node --test tests/test_generations_evaluate_all.test.cjs
       - name: Recovery Python syntax and focused behavior
         run: |
           python -m compileall -q tool/server/training_runner.py tool/server/storyboard_store.py tool/server/execution_queue.py

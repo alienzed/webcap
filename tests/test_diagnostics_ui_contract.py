@@ -202,3 +202,15 @@ def test_assessment_table_preserves_selection_and_evidence_contract():
     assert 'diagnosticsAssessmentCounts(row, tests)' in script
     assert 'table.appendChild(body)' in script
     assert '.diagnostics-assessment-wide .diagnostics-dialog' in css
+
+def test_workflow_qualification_judge_and_advanced_limits():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool" / "server" / "model_lab.py").read_text(encoding="utf-8")
+    assert 'id="diagnostics-assessment-judge-model"' in html
+    assert '16K probes' in html
+    assert "diagnosticsAssessmentJudge" in script
+    assert "diagnosticsAssessmentSize" in script
+    assert "qualityReviews" in backend
+    assert "action == \"judge\"" in backend
+    assert "(4096, 8192, 16384)" in backend

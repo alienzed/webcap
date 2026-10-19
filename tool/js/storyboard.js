@@ -3446,6 +3446,7 @@
           ' aria-label="Enable Story LoRA ' + escapeHtml(name) + '">' +
       '</label>' +
       '<select data-story-lora-name>' + loraOptions(name) + '</select>' +
+      '<button type="button" class="review-captions-btn" data-story-lora-profile title="Open LoRA metadata">ⓘ</button>' +
       '<input type="number" step="0.05" data-story-lora-strength value="' + escapeHtml(strength) + '" aria-label="Story LoRA strength">' +
       '<button type="button" class="review-captions-btn" data-story-lora-remove title="Remove Story LoRA">×</button>' +
     '</div>';
@@ -3473,6 +3474,7 @@
     var strength = lora.strength == null ? 1 : lora.strength;
     return '<div class="storyboard-lora-row" data-scene-lora-row>' +
       '<select data-scene-lora-name>' + loraOptions(name) + '</select>' +
+      '<button type="button" class="review-captions-btn" data-scene-lora-profile title="Open LoRA metadata">ⓘ</button>' +
       '<input type="number" step="0.05" data-scene-lora-strength value="' + escapeHtml(strength) + '" aria-label="Scene LoRA strength">' +
       '<button type="button" class="review-captions-btn" data-scene-lora-remove title="Remove Scene LoRA">×</button>' +
     '</div>';
@@ -5854,6 +5856,11 @@
     });
 
     el('storyboard-story-lora-list').addEventListener('click', function (event) {
+      var profile = event.target.closest('[data-story-lora-profile]');
+      if (profile) {
+        window.openLoraMetadataEditor(profile.closest('[data-story-lora-row]').querySelector('[data-story-lora-name]').value, 'h3');
+        return;
+      }
       var remove = event.target.closest('[data-story-lora-remove]');
       if (!remove) return;
       var row = remove.closest('[data-story-lora-row]');
@@ -5961,6 +5968,11 @@
     });
 
     el('storyboard-scenes-list').addEventListener('click', function (event) {
+      var profile = event.target.closest('[data-scene-lora-profile]');
+      if (profile) {
+        window.openLoraMetadataEditor(profile.closest('[data-scene-lora-row]').querySelector('[data-scene-lora-name]').value, 'h3');
+        return;
+      }
       var refreshLoras = event.target.closest('[data-storyboard-lora-refresh]');
       if (refreshLoras) {
         refreshStoryboardLoraCatalog();

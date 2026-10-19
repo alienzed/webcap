@@ -322,31 +322,23 @@ def test_insert_director_scene_after_requires_existing_gap(storyboard_fs):
 
 
 def test_concept_restore_keeps_initial_prompt_as_fixed_baseline(storyboard_fs):
-    story = storyboard_store.create_story({
-        "title": "Story",
-        "concept": "Original concept.",
-    })
-    first_expansion = storyboard_store.apply_concept_expansion(story["id"], "First expanded concept.")
+    story = storyboard_store.create_story({"title": "Story", "concept": "Original concept."})
+    first = storyboard_store.apply_concept_expansion(story["id"], "First expanded concept.")
+    assert first["previousConcept"] == "Original concept."
 
-    assert first_expansion["concept"] == "First expanded concept."
-    assert first_expansion["previousConcept"] == "Original concept."
-
-    storyboard_store.update_story(story["id"], {"concept": "Manual rewrite after expansion."})
-    later_expansion = storyboard_store.apply_concept_expansion(story["id"], "Later expanded concept.")
-    assert later_expansion["concept"] == "Later expanded concept."
-    assert later_expansion["previousConcept"] == "Original concept."
+    edited = storyboard_store.update_story(story["id"], {"concept": "Manual rewrite after expansion."})
+    assert edited["previousConcept"] == "Original concept."
+    with pytest.raises(ValueError, match="already expanded"):
+        storyboard_store.apply_concept_expansion(story["id"], "Unexpected second expansion.")
 
     restored = storyboard_store.restore_previous_concept(story["id"])
     assert restored["concept"] == "Original concept."
-    assert restored["previousConcept"] == "Original concept."
+    assert restored["previousConcept"] is None
+    assert storyboard_store.load_story(story["id"])["previousConcept"] is None
 
-    reloaded = storyboard_store.load_story(story["id"])
-    assert reloaded["concept"] == "Original concept."
-    assert reloaded["previousConcept"] == "Original concept."
-
-    restored_again = storyboard_store.restore_previous_concept(story["id"])
-    assert restored_again["concept"] == "Original concept."
-    assert restored_again["previousConcept"] == "Original concept."
+    again = storyboard_store.apply_concept_expansion(story["id"], "New expansion after restoration.")
+    assert again["concept"] == "New expansion after restoration."
+    assert again["previousConcept"] == "Original concept."
 
 
 def test_director_prompt_restore_is_durable_and_revertable(storyboard_fs):

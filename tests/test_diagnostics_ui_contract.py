@@ -144,9 +144,10 @@ def test_unified_model_assessment_uses_compact_rows_and_toolbar():
     css = (ROOT / "tool" / "css" / "modals.css").read_text(encoding="utf-8")
     assert 'class="model-assessment-toolbar"' in html
     assert 'class="model-assessment-tools"' in html
-    assert "row.className = 'model-assessment-row';" in js
-    assert "head.className = 'model-assessment-row-head';" in js
-    assert ".model-assessment-row-head input" in css
+    assert "row.className = 'model-assessment-row';" not in js
+    assert "model-assessment-table" in js
+    assert "diagnosticsAssessmentSortAndFilter" in js
+    assert ".model-assessment-table" in css
 
 
 def test_unified_assessment_bulk_selection_is_wired():
@@ -171,12 +172,12 @@ def test_assessment_launch_shows_synchronous_errors_and_active_run():
 def test_unified_assessment_compact_comparison_uses_real_evidence():
     script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "modals.css").read_text(encoding="utf-8")
-    assert "model-assessment-metrics" in script
-    assert "attempt.tokensPerSecond" in script
-    assert "abilities.coherentOutputTokens" in script
+    assert "diagnosticsAssessmentCounts" in script
+    assert "tokensPerSecond" in script
+    assert "coherentOutputTokens" in script
     assert "Context limit: not established" in script
-    assert "More capabilities, limits and evidence" in script
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
+    assert "Probe completion is not a semantic quality grade" in script
+    assert ".model-assessment-table" in css
 
 
 def test_specialist_model_tools_are_preserved_without_duplicate_top_level_tabs():
@@ -188,3 +189,16 @@ def test_specialist_model_tools_are_preserved_without_duplicate_top_level_tabs()
     assert 'id="diagnostics-panel-benchmark"' in html
     assert "setDiagnosticsTab('models', true)" in script
     assert "setDiagnosticsTab('benchmark', true)" in script
+
+def test_assessment_table_preserves_selection_and_evidence_contract():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "modals.css").read_text(encoding="utf-8")
+    assert 'id="diagnostics-assessment-filter"' in html
+    assert 'diagnosticsAssessmentExpanded = new Set()' in script
+    assert 'tbody[data-assessment-model]' in script
+    assert 'data-assessment-select' in script
+    assert 'row.assessmentSort' in script
+    assert 'diagnosticsAssessmentCounts(row, tests)' in script
+    assert 'table.appendChild(body)' in script
+    assert '.diagnostics-assessment-wide .diagnostics-dialog' in css

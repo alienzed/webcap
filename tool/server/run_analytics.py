@@ -407,9 +407,17 @@ def director_facts(snapshot, campaign_id=""):
                             "weightedObservations": p["observations"], "renders": p["renders"]}
                            for p in c["points"][:120]],
             } for c in campaigns],
-            "test": [{"epoch": p["epoch"], "rating": p["manual"], "ratings": p["manualCount"],
-                      "vl": p["testVl"], "vlJudgments": p["testVlCount"]}
-                     for p in item["testPoints"][:120]],
+            "testCohorts": [{"cohortId": cohort["id"], "modelId": cohort["modelId"],
+                "sessionCount": len(cohort["sessions"]),
+                "points": [{"epoch": p["epoch"], "rating": p["manual"], "ratings": p["manualCount"],
+                            "vl": p["testVl"], "vlJudgments": p["testVlCount"]}
+                           for p in cohort["points"][:120]]}
+                           for cohort in item.get("testCohorts", [])[:12]],
+            "roundProgress": [{"campaignId": p["campaignId"], "round": p["round"],
+                               "epoch": p["epoch"], "score": p["score"],
+                               "weightedObservations": p["observations"]}
+                              for p in item.get("roundPoints", [])[:150]
+                              if not campaign_id or p["campaignId"] == campaign_id],
             "loss": [{"epoch": p["epoch"], "loss": p["loss"]}
                      for p in item["lossPoints"][:120]],
             "warnings": item["warnings"][:8],

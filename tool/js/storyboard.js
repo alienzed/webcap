@@ -72,6 +72,9 @@
   };
 
   var DIRECTOR_PASS_PRESETS = {
+    coherence: {
+      instruction: 'Review this H3 text-to-video prompt for coherence. Favor details that can be conveyed visually or audibly. Consolidate repeated descriptions. Preserve the existing structure and creative intent. Return the complete improved prompt, or the original unchanged if no meaningful improvement is needed.'
+    },
     continuity: {
       instruction: 'Review this Scene against the Story overview, visual atmosphere, continuity invariants, and the preceding Scene. Repair meaningful continuity gaps, contradictions, missing generation-critical context, or prompt omissions while preserving the Scene\'s intended action, chronology, and narrative purpose. If it is already coherent and complete, leave it unchanged.'
     }
@@ -5702,7 +5705,79 @@
     modal.setAttribute('aria-hidden', 'true');
   }
 
+  function showCoherenceReview(sceneId, original, improved, modelId) {
+    var dialog = document.createElement('dialog');
+    dialog.setAttribute('aria-label', 'Check Coherence result');
+    dialog.style.cssText = 'width:min(900px,94vw);max-height:90vh;padding:20px;border-radius:10px;';
+    var title = document.createElement('h3');
+    title.textContent = original === improved ? 'Check Coherence — no changes needed' : 'Review coherence changes';
+    var result = document.createElement('textarea');
+    result.value = improved;
+    result.readOnly = original === improved;
+    result.style.cssText = 'box-sizing:border-box;width:100%;height:55vh;resize:vertical;';
+    var actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;margin-top:12px;';
+    var discard = document.createElement('button');
+    discard.type = 'button';
+    discard.textContent = 'Close / Discard';
+    discard.onclick = function () { dialog.close(); };
+    actions.appendChild(discard);
+    if (original !== improved) {
+      var apply = document.createElement('button');
+      apply.type = 'button';
+      apply.textContent = 'Apply Prompt';
+      apply.onclick = function () {
+        apply.disabled = true;
+        request({
+          operation: 'update_scene', storyId: storyState.story.id, sceneId: sceneId,
+          scene: {prompt: result.value}
+        }).then(function () {
+          // Reload the canonical Scene; no unrelated fields are touched.
+          return request(null, 'story=' + encodeURIComponent(storyState.story.id));
+        }).then(function (payload) {
+          storyState.story = payload.story;
+          renderStory();
+          dialog.close();
+        }).catch(function (err) {
+          apply.disabled = false;
+          reportError(err);
+        });
+      };
+      actions.appendChild(apply);
+    }
+    dialog.append(title, result, actions);
+    dialog.addEventListener('close', function () { dialog.remove(); });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  }
+
+  function runDirectorToolsCoherence() {
+    var sceneId = ensureActiveScene(storyState.story.sceneOrder);
+    var scene = storyState.story.scenes[sceneId];
+    var modelId = storyState.director.modelId;
+    if (!modelId || !scene || !String(scene.prompt || '').trim()) {
+      reportError(new Error('Choose a Director model and a Scene with an H3 prompt.'));
+      return;
+    }
+    var run = el('storyboard-director-tools-run');
+    var status = el('storyboard-director-tools-status');
+    var original = String(scene.prompt);
+    run.disabled = true;
+    status.textContent = 'Checking Scene coherence…';
+    flushPendingSaves().then(function () {
+      return directorRequest({storyId: storyState.story.id, sceneId: sceneId, operation: 'check_coherence', model: modelId});
+    }).then(function (payload) {
+      closeDirectorTools();
+      showCoherenceReview(sceneId, original, String(payload.result || ''), modelId);
+      return consumeDirectorJob(payload.jobId);
+    }).catch(reportError).finally(syncDirectorToolsUi);
+  }
+
   function runDirectorToolsRevision() {
+    if (el('storyboard-director-tools-preset').value === 'coherence') {
+      runDirectorToolsCoherence();
+      return;
+    }
     var input = el('storyboard-director-tools-instruction');
     var run = el('storyboard-director-tools-run');
     var status = el('storyboard-director-tools-status');
@@ -5756,6 +5831,7 @@
       var input = el('storyboard-director-tools-instruction');
       if (!input) return;
       if (this.value === 'continuity') input.value = DIRECTOR_PASS_PRESETS.continuity.instruction;
+      if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
       input.focus();
     };
     el('storyboard-director-tools-run').onclick = runDirectorToolsRevision;

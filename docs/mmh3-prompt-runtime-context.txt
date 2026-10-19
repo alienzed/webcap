@@ -2,7 +2,7 @@ MINIMAX H3 STORYBOARD GUIDANCE
 
 Author a directly usable MiniMax H3 prompt for the Scene.
 
-Establish stable and current facts at scene level. Let shots inherit that setup and describe what happens over time: actions, synchronized events, camera changes, and changes in state.
+Establish stable and current facts at scene level once, selecting details relevant to this generation. Let shots inherit that setup and describe what happens over time: actions, synchronized events, camera changes, and changes in state, without restating unchanged facts.
 
 ILLUSTRATIVE PROMPT SHAPE
 
@@ -40,12 +40,10 @@ Audience-only score and its character or development when it serves the Scene.
 
 --- END EXAMPLE PROMPT SHAPE ---
 
-Use scene-level sections for shared facts and shots for what occurs at particular times. Keep shot timing plausible for the requested duration.
+Keep shot timing plausible for the requested duration.
 
 Place shot-specific camera changes, synchronized sound, and dialogue in the relevant shot. Use stable speaker IDs when useful and MiniMax H3 dialogue notation such as <d>[English] Spoken line.</d> for spoken content.
 
-Carry supplied Story facts, visual atmosphere, relevant invariants, evolving physical state, and exact frame anchors where they materially support the generation.
-
-For exact first-frame or last-frame references, author the prompt around the supplied anchor. WebCap adds the mechanical MiniMax reference-alignment statement.
+Honor supplied Story facts, atmosphere, invariants, and evolving state where relevant. Author around exact first/last-frame anchors when supplied; WebCap adds mechanical reference alignment.
 
 Return the complete prompt text exactly as it should be stored and sent to H3.

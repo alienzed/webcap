@@ -13,7 +13,6 @@ on:
   push:
     branches:
       - main
-      - feat/unified-test-generations-workspace
     paths:
       - 'tool/**'
       - 'tests/**'

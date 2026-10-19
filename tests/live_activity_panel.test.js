@@ -65,6 +65,13 @@ test('Activity hardware graph is anchored to local GPU work, never remote', () =
   assert.ok(!source.includes('primaryHost.replaceChildren()'));
 });
 
+test('Activity audit keeps stable cards and correct disclosure and queue state', () => {
+  assert.ok(source.includes("mounted.join('\\n') !== ordered.join('\\n')"));
+  assert.ok(source.includes("detailsToggle.classList.toggle('hidden', !primary || otherCount === 0)"));
+  assert.ok(source.includes("if (backlog) queueParts.push(String(backlog) + ' backlog')"));
+  assert.ok(source.includes("className: isRemoteDirector(item) ? 'activity-remote-card' : ''"));
+});
+
 test('when GPU is idle, active non-GPU work may be primary', () => {
   const h = harness([{ id: 'd1', kind: 'director', lane: 'llm' }], 'none');
   assert.equal(h.choose().id, 'd1');

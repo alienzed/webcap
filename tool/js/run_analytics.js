@@ -100,7 +100,7 @@
           (cp.observations==null?'—':Number(cp.observations).toFixed(1))+'</td><td>'+
           (t.manual==null?'—':Number(t.manual).toFixed(2))+'</td><td>'+(t.manualCount||0)+'</td><td>'+pct(t.testVl)+'</td><td>'+
           (p.loss==null?'—':Number(p.loss).toFixed(4))+'</td><td>'+
-          (c&&cp.observations!=null?'<button type="button" data-inspect-campaign="'+esc(c.id)+'" data-epoch="'+epoch+'">Inspect epoch</button>':'')+(t.sessions&&t.sessions.length?'<button type="button" data-open-session="'+esc(t.sessions[0])+'">Test session</button>':'')+'</td></tr>');
+          (c&&cp.observations!=null?'<button type="button" data-inspect-campaign="'+esc(c.id)+'" data-epoch="'+epoch+'" data-job-id="'+esc(r.jobId)+'">Inspect epoch</button>':'')+(t.sessions&&t.sessions.length?'<button type="button" data-open-session="'+esc(t.sessions[0])+'">Test session</button>':'')+'</td></tr>');
       });
     });
     el('chart-note').textContent=campaign?'Same-campaign comparison · '+campaign.name+' · '+campaign.visionModel:
@@ -199,7 +199,7 @@
   };
   el('table').onclick=function(event){
     var btn=event.target.closest('[data-inspect-campaign]');
-    if(btn){window.epochFinderInspectCampaign(btn.dataset.inspectCampaign,Number(btn.dataset.epoch));return;}
+    if(btn){window.epochFinderInspectCampaign(btn.dataset.inspectCampaign,Number(btn.dataset.epoch),btn.dataset.jobId);return;}
     var session=event.target.closest('[data-open-session]');
     if(session)window.openTestBenchAnalyticsSession(session.dataset.openSession);
   };

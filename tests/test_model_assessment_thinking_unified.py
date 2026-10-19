@@ -48,3 +48,11 @@ def test_unified_assessment_deduplicates_multimodal_models_and_scopes_runtimes()
     assert "diagnosticsAssessmentSyncHeaderSelection();" in source
     assert 'id="diagnostics-assessment-runtime"' in html
     assert 'value="local"' in html and 'value="remote"' in html
+
+
+def test_assessment_completed_receipt_hides_stop_and_is_compact():
+    source = Path("tool/js/diagnostics.js").read_text(encoding="utf-8")
+    html = Path("tool/tool.html").read_text(encoding="utf-8")
+    assert "compact: terminal" in source
+    assert "stop.hidden = run.status !== 'running'" in source
+    assert 'id="diagnostics-assessment-stop" type="button" class="review-captions-btn hidden" hidden disabled' in html

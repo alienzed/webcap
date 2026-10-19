@@ -55,14 +55,13 @@
       byKey[recentIdentity(item)] = item;
     });
     (Array.isArray(items) ? items : []).forEach(function (item) {
-      if (finishedAt(item) < sessionStartedAt) return;
       byKey[recentIdentity(item)] = Object.assign({}, item);
     });
     state.recentCompletions = Object.keys(byKey).map(function (key) {
       return byKey[key];
     }).sort(function (a, b) {
       return finishedAt(b) - finishedAt(a);
-    }).slice(0, 24);
+    }).slice(0, 50);
   }
 
   function publishProgress(snapshot) {
@@ -285,7 +284,7 @@
 
   function unseenCount() {
     return sessionRecent().filter(function (item) {
-      return finishedAt(item) > state.lastSeen;
+      return finishedAt(item) > Math.max(state.lastSeen, sessionStartedAt);
     }).length;
   }
 
@@ -302,6 +301,16 @@
     if (minutes < 60) return String(minutes) + 'm';
     var hours = Math.floor(minutes / 60);
     return String(hours) + 'h ' + String(minutes % 60) + 'm';
+  }
+
+  function formatJobDuration(start, end) {
+    var a = Number(start);
+    var b = Number(end);
+    if (!isFinite(a) || !isFinite(b) || a <= 0 || b < a) return '';
+    var seconds = Math.round(b - a);
+    if (seconds < 60) return seconds + 's';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + String(seconds % 60) + 's';
+    return Math.floor(seconds / 3600) + 'h ' + String(Math.floor(seconds % 3600 / 60)) + 'm';
   }
 
   function formatAge(timestamp) {
@@ -642,7 +651,12 @@
     var title = document.createElement('strong');
     title.textContent = activityTitle(item) + ' ' + recentStatusLabel(item.status);
     var detail = document.createElement('small');
-    detail.textContent = item.error || activityDetail(item) || String(item.status || '').replace(/_/g, ' ');
+    var duration = formatJobDuration(item.startedAt, item.finishedAt);
+    var wait = formatJobDuration(item.createdAt, item.startedAt);
+    var metadata = activityDetail(item);
+    detail.textContent = [metadata, item.error ? 'Error: ' + item.error : '',
+      duration ? 'Ran ' + duration : '', wait ? 'Queued ' + wait : ''].filter(Boolean).join(' · ')
+      || String(item.status || '').replace(/_/g, ' ');
     copy.appendChild(title);
     copy.appendChild(detail);
 
@@ -713,6 +727,7 @@
       var key = recentKey(item);
       if (state.notified[key]) return;
       state.notified[key] = true;
+      if (finishedAt(item) < sessionStartedAt) return;
       toastRecent(item);
 
       var message = activityTitle(item) + ' ' + recentStatusLabel(item.status);
@@ -928,7 +943,7 @@
   function render() {
     var active = currentActivityItems();
     var pendingItems = [].concat((state.payload.queues.inference || {}).jobs || [], (state.payload.queues.director || {}).jobs || []);
-    var recent = sessionRecent().filter(function (item) { return Date.now() / 1000 - finishedAt(item) <= 1800; });
+    var recent = sessionRecent();
     var queues = state.payload.queues || {};
     var drawer = el('activity-monitor-drawer');
     var host = el('activity-monitor-list');
@@ -958,7 +973,7 @@
     syncActivityRailWork(active, unseen);
     summary.textContent = active.length
       ? String(active.length) + ' active · ' + (unseen ? String(unseen) + ' new' : 'up to date')
-      : (unseen ? String(unseen) + ' new this session' : 'Current work and this session');
+      : (unseen ? String(unseen) + ' new' : String(recent.length) + ' recent jobs');
 
     if (primary) {
       var snapshot = itemProgress(primary);
@@ -1149,7 +1164,7 @@
       Array.prototype.forEach.call(recentSection.querySelectorAll('[data-activity-recent-key]'), function (row) {
         existingRecent[row.getAttribute('data-activity-recent-key')] = row;
       });
-      recent.slice(0, 12).forEach(function (item) {
+      recent.slice(0, 50).forEach(function (item) {
         var key = recentKey(item);
         var row = existingRecent[key] || createRecentRow(item);
         row.setAttribute('data-activity-recent-key', key);
@@ -1165,7 +1180,7 @@
   function refresh() {
     if (state.pending) return state.pendingPromise || Promise.resolve(state.payload);
     state.pending = true;
-    state.pendingPromise = requestJson('/fs/activity?limit=24&since=' + encodeURIComponent(String(sessionStartedAt))).then(function (payload) {
+    state.pendingPromise = requestJson('/fs/activity?limit=50').then(function (payload) {
       state.payload = payload;
       pruneProgressChildren();
       captureRecent(payload.recent);

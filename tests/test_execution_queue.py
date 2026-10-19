@@ -663,3 +663,33 @@ def test_ephemeral_llm_targeted_stop_marks_only_active_job(queue_root):
     snapshot = queue.lane_snapshot(include_terminal=False)
     assert [job["id"] for job in snapshot["jobs"]] == [active["id"], queued["id"]]
     assert snapshot["jobs"][1]["status"] == "queued"
+
+
+def test_ephemeral_llm_recent_history_is_bounded_and_forgets_on_reset(queue_root):
+    queue = execution_queue.ephemeral_lane("llm")
+    for index in range(85):
+        job = queue.enqueue({"prompt": f"private-{index}"}, metadata={"client": "chat", "modelId": "remote"})
+        queue.claim_next(expected_job_id=job["id"])
+        queue.finish_job_transient(job["id"], result={"usage": {"completion_tokens": 12}, "content": "private answer"})
+        # Delivery can be consumed independently from Activity history.
+        execution_queue.transient_receipt(job["id"], consume=True)
+
+    recent = queue.recent_snapshot(limit=80)
+    assert len(recent) == 80
+    assert recent[-1]["metadata"]["modelId"] == "remote"
+    assert recent[0]["startedAt"] <= recent[0]["finishedAt"]
+    assert all("payload" not in row for row in recent)
+    assert all("content" not in row["result"] for row in recent)
+    assert all("private" not in json.dumps(row) for row in recent)
+    queue.clear()
+    assert queue.recent_snapshot() == []
+
+
+def test_ephemeral_llm_cancellation_creates_recent_activity(queue_root):
+    queue = execution_queue.ephemeral_lane("llm")
+    job = queue.enqueue({"prompt": "private"}, metadata={"client": "chat"})
+    queue.cancel_or_stop(job["id"])
+    recent = queue.recent_snapshot()
+    assert len(recent) == 1
+    assert recent[0]["status"] == "cancelled"
+    assert recent[0]["startedAt"] is None

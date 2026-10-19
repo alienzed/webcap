@@ -1,0 +1,141 @@
+(function () {
+  'use strict';
+  var root = document.getElementById('test-unified-workspace');
+  var legacy = document.getElementById('test-generations-body');
+  var folder = '', model = '', payload = {sessions:[],campaigns:[],media:[]};
+  var perspective = 'experiments', selection = '', chosen = '', serial = 0;
+  function el(id) { return document.getElementById('test-unified-' + id); }
+  function text(node, value) { node.textContent = String(value == null ? '' : value); }
+  function label(item) { return item.name || item.id; }
+  function show(enabled) { root.classList.toggle('hidden', !enabled); legacy.classList.toggle('hidden', enabled); }
+  function api() {
+    return fetch('/fs/epoch_finder', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{modelId:model}})})
+      .then(function(response) { return response.json().then(function(data) {
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Could not load generated results.');
+        return data;
+      }); });
+  }
+  function refresh() {
+    var version = ++serial;
+    text(el('description'), 'Loading recorded Test and Finder results…');
+    return api().then(function(result) {
+      if (version !== serial) return;
+      payload = result;
+      renderList(); renderGallery();
+    }).catch(function(error) {
+      if (version !== serial) return;
+      text(el('description'), 'Unable to load results: ' + String(error.message || error));
+      console.error('[Test Generations Explore]', error);
+      window.reportConsoleError('Test Generations Explore', error);
+    });
+  }
+  function collections() {
+    if (perspective === 'experiments') return payload.sessions.map(function(item) {
+      return {id:'test:'+item.id, name:item.name, status:item.status};
+    }).concat(payload.campaigns.map(function(item) {
+      return {id:'campaign:'+item.id,name:item.name,status:item.status};
+    }));
+    var map = new Map();
+    payload.media.forEach(function(item) {
+      if (!item.jobId || !Number.isInteger(item.epoch)) return;
+      var id = item.jobId + ':' + item.epoch;
+      if (!map.has(id)) map.set(id,{id:id,name:(item.runName || 'Run ' + item.jobId.slice(-8))+' · Epoch '+item.epoch});
+    });
+    return Array.from(map.values()).sort(function(a,b) {return a.name.localeCompare(b.name,undefined,{numeric:true});});
+  }
+  function renderList() {
+    var host=el('list');host.replaceChildren();
+    collections().forEach(function(item) {
+      var btn=document.createElement('button');btn.type='button';btn.className='test-unified-item';
+      btn.classList.toggle('active',item.id===selection);
+      btn.textContent=label(item)+(item.status?' · '+item.status:'');
+      btn.addEventListener('click',function() { selection=item.id; renderList();renderGallery(); });
+      host.appendChild(btn);
+    });
+  }
+  function selectedMedia() {
+    return (payload.media||[]).filter(function(item) {
+      if (!selection) return true;
+      return perspective==='experiments' ? item.collectionId===selection
+        : item.jobId+':'+item.epoch===selection;
+    });
+  }
+  function mediaUrl(item) {
+    if (item.source==='campaign') return item.frame ? '/fs/epoch_finder/frame?folder='+encodeURIComponent(folder)+'&campaign='+encodeURIComponent(item.campaignId)+'&frame='+encodeURIComponent(item.frame) : '';
+    return item.mediaFile ? '/fs/test_generations/media?folder='+encodeURIComponent(folder)+'&session='+encodeURIComponent(item.session)+'&media='+encodeURIComponent(item.mediaFile) : '';
+  }
+  function inspect(item) {
+    chosen=item.id;
+    var host=el('details'); host.replaceChildren();
+    var name=document.createElement('h4');name.textContent=item.candidate || (item.epoch==null?'Unattributed result':'Epoch '+item.epoch);host.appendChild(name);
+    [['Source',item.source],['Run',item.runName||item.jobId],['Epoch',item.epoch],['Session',item.session],['Campaign',item.campaignId],['Round',item.round],['Seed',item.seed],['Rating',item.rating],['Prompt',item.prompt],['Settings',item.settings],['VL assessment',item.assessment],['Reference comparisons',item.referenceAssessments],['DINO evidence',item.dinoAssessments],['Error',item.error]].forEach(function(pair) {
+      if (pair[1]===undefined || pair[1]===null || pair[1]==='')return;
+      var section=document.createElement('section'),label=document.createElement('strong'),value=document.createElement('pre');
+      label.textContent=pair[0];value.textContent=typeof pair[1]==='object'?JSON.stringify(pair[1],null,2):String(pair[1]);
+      section.append(label,value);host.appendChild(section);
+    });
+    var open=document.createElement('button');open.type='button';open.className='review-captions-btn';
+    open.textContent='Open source '+(item.source==='campaign'?'campaign':'session');
+    open.addEventListener('click',function() {
+      show(false);
+      if (item.source==='campaign') window.epochFinderInspectCampaign(item.campaignId,item.epoch,item.jobId);
+      else {
+        window.epochFinderShowMode('tests');
+        var target=document.querySelector('[data-session-name]');
+        target=Array.from(document.querySelectorAll('[data-session-name]')).find(function(e) {return e.dataset.sessionName===item.session;});
+        if (target) target.click();
+        else window.openTestBenchAnalyticsSession(item.session);
+      }
+    });host.appendChild(open);
+  }
+  function renderGallery() {
+    var host=el('gallery');host.replaceChildren();
+    var records=selectedMedia(); text(el('title'),selection ? (collections().find(function(x){return x.id===selection;})||{}).name || 'Results' : 'All generated results');
+    text(el('description'),records.length+' recorded results · '+(perspective==='experiments'?'Experiments':'Checkpoints'));
+    records.forEach(function(item) {
+      var card=document.createElement('button');card.type='button';card.className='test-unified-card';
+      var src=mediaUrl(item);
+      var isImage=item.source==='campaign' || /\.(png|jpe?g|webp|gif|avif)$/i.test(item.mediaFile||'') || item.mediaKind==='image';
+      if(src) {
+        var media=document.createElement(isImage?'img':'video');media.src=src;
+        if(isImage) {media.loading='lazy';media.alt='Generated result';} else {media.preload='metadata';media.muted=true;}
+        card.appendChild(media);
+      } else {var blank=document.createElement('span');blank.textContent=item.error || (item.framePruned?'Frame pruned':'No retained frame');card.appendChild(blank);}
+      var title=document.createElement('span');title.textContent=(item.runName ? item.runName+' · ':'')+(item.epoch==null?'Unattributed':'Epoch '+item.epoch)+(item.rating?' · ★ '+item.rating:'');
+      card.appendChild(title);card.classList.toggle('active',chosen===item.id);
+      card.addEventListener('click',function(){inspect(item);renderGallery();});host.appendChild(card);
+    });
+    if(!records.length) {var p=document.createElement('p');p.textContent='No recorded images for this selection.';host.appendChild(p);}
+  }
+  function builder(enabled) {
+    el('builder').classList.toggle('hidden',!enabled);
+    el('gallery').classList.toggle('hidden',enabled);
+    el('inspector').classList.toggle('hidden',enabled);
+    el('new').classList.toggle('hidden',enabled);
+  }
+  function legacyMode(mode) {show(false);window.epochFinderShowMode(mode);}
+  el('explore').onclick=function(){builder(false);};
+  el('build').onclick=function(){builder(true);};
+  el('new').onclick=function(){builder(true);};
+  el('experiments').onclick=function(){perspective='experiments';selection='';renderList();renderGallery();};
+  el('checkpoints').onclick=function(){perspective='checkpoints';selection='';renderList();renderGallery();};
+  el('reload').onclick=refresh;
+  el('legacy').onclick=function(){show(false);};
+  el('normal').onclick=function(){legacyMode('tests');};
+  el('finder').onclick=function(){legacyMode('finder');};
+  el('references').onclick=function(){legacyMode('references');};
+  el('analytics').onclick=function(){legacyMode('analytics');};
+  var prepare=window.epochFinderPrepare;
+  window.epochFinderPrepare=function(nextFolder) {
+    folder=String(nextFolder||'');model=String(window.getWorkingModelProfileId()||'');
+    prepare(nextFolder); if(folder && !root.classList.contains('hidden'))refresh();
+  };
+  window.testGenerationsUnifiedOpen=function() {
+    model=String(window.getWorkingModelProfileId()||'');show(true);builder(false);
+    if(folder)refresh();
+  };
+  var existing=document.querySelector('[data-test-generations-perspective="explore"]');
+  if(!existing)throw new Error('Existing Explore entry is missing.');
+  existing.addEventListener('click',function(){window.testGenerationsUnifiedOpen();});
+})();

@@ -20,6 +20,12 @@
   }
   function clearError() {el('error').classList.add('hidden');el('error').textContent='';}
   function pct(value) {return value == null ? '—' : (Number(value)*100).toFixed(1)+'%';}
+  function updateScopeUi() {
+    el('selection-count').textContent = selection.size + ' / 6 runs selected';
+    el('analyze').disabled = !selection.size;
+    ['campaign','session','cohort'].forEach(function (name) { el(name).disabled = !report; });
+    el('director').disabled = !report || !!directorJob;
+  }
   function chosenCampaign() {return (report && report.campaigns || []).find(function(c) {return c.id === el('campaign').value;});}
   function chart(series, key, title, formatter, max) {
     var observed = series.filter(function(p) {return Number.isFinite(p[key]);});
@@ -60,7 +66,7 @@
     var fields=[['Saved epochs',c.savedEpochs],['Evaluated epochs',c.observedEpochs],['Campaigns',c.campaigns],['Test sessions',c.testSessions],['Campaign VL renders',c.campaignVlRenders],['Manual ratings',c.manualRatings],['Test VL judgments',c.testVlJudgments]];
     el('coverage').innerHTML='<div class="run-analytics-stat-grid">'+fields.map(function(entry) {return '<div><strong>'+Number(entry[1]||0)+'</strong><span>'+esc(entry[0])+'</span></div>';}).join('')+'</div>';
     renderCampaign();
-    el('director').disabled=!!directorJob;
+    updateScopeUi();
     var warnings=report.warnings || [];
     el('warnings').innerHTML=warnings.map(function(w){return '<p class="epoch-finder-error">'+esc(w)+'</p>';}).join('');
   }
@@ -112,17 +118,17 @@
     el('chart-note').textContent=campaign?'Same-campaign comparison · '+campaign.name+' · '+campaign.visionModel:
       'Select a campaign to show comparable VL fidelity. Manual ratings and loss remain independent descriptive evidence.';
     el('chart').innerHTML=views.join('');
-    el('table').innerHTML='<div class="run-analytics-table-wrap"><table><thead><tr><th>Run</th><th>Epoch</th><th>Campaign VL</th><th>Observations</th><th>Manual</th><th>Ratings</th><th>Test VL</th><th>Loss</th><th></th></tr></thead><tbody>'+rows.join('')+'</tbody></table></div>';
+    el('table').innerHTML=rows.length ? '<div class="run-analytics-table-wrap"><table><thead><tr><th>Run</th><th>Epoch</th><th>Campaign VL</th><th>Observations</th><th>Manual</th><th>Ratings</th><th>Test VL</th><th>Loss</th><th></th></tr></thead><tbody>'+rows.join('')+'</tbody></table></div>' : '<p class="epoch-finder-muted">No checkpoint observations match the current evidence filters. Choose a campaign or Test cohort, or check evidence coverage.</p>';
     el('findings').innerHTML=findings.length?findings.map(function(text){return '<p>'+esc(text)+'</p>';}).join(''):
       '<p class="epoch-finder-muted">No comparable scored campaign evidence in this selection. Missing observations remain missing.</p>';
     el('director-result').textContent='';el('director-status').textContent='';
-    previewGeneration++;previewFacts=null;previewKey='';el('director-preview').textContent='Expand to review the numerical facts.';
+    previewGeneration++;previewFacts=null;previewKey='';el('director-preview').textContent='Expand to load and review the numerical facts before interpreting.';
   }
   function load() {
     el('director-result').textContent='';el('director').disabled=true;
     report=null;previewGeneration++;previewFacts=null;previewKey='';
     var ids=Array.from(selection), token=++generation, origin=folder;
-    if(!ids.length){el('coverage').textContent='Select at least one run.';return;}
+    if(!ids.length){el('coverage').textContent='Select at least one run.';updateScopeUi();return;}
     clearError();el('analyze').disabled=true;el('analyze').textContent='Reading saved evidence…';
     fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({folder:folder,operation:'run_analytics_selected',criteria:{jobIds:ids,session:sessionFilter}})})
@@ -150,7 +156,8 @@
           (selection.has(run.jobId)?' checked':'')+'><span><strong>'+esc(identity)+'</strong><small>'+
           esc(details.join(' · '))+'</small></span></label>';
       }).join('')||'<p class="epoch-finder-muted">No recorded runs in this Set.</p>';
-      el('coverage').textContent='Select runs and Analyze.';
+      el('coverage').textContent='Select runs and Analyze to read saved evidence.';
+      updateScopeUi();
     }).catch(function(exc){if(token===generation)error(exc);});
   }
   window.runAnalyticsPrepare=function(next){
@@ -158,7 +165,7 @@
     el('run-choices').innerHTML='';el('coverage').textContent='Choose a run to begin.';
     el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';el('warnings').innerHTML='';
     el('campaign').innerHTML='<option value="">No campaign</option>';el('session').innerHTML='<option value="">All sessions</option>';
-    el('director').disabled=true;previewGeneration++;previewFacts=null;previewKey='';el('director-result').textContent='';el('director-status').textContent='';clearError();
+    el('director').disabled=true;updateScopeUi();previewGeneration++;previewFacts=null;previewKey='';el('director-result').textContent='';el('director-status').textContent='';clearError();
   };
   window.runAnalyticsOpen=discover;
   el('run-choices').onchange=function(event){
@@ -166,8 +173,10 @@
     if(cb.checked)selection.add(cb.dataset.analyticsRun);else selection.delete(cb.dataset.analyticsRun);
     generation++;report=null;previewGeneration++;previewFacts=null;previewKey='';el('director').disabled=true;el('analyze').disabled=false;el('analyze').textContent='Analyze selected';el('coverage').textContent='Selection changed — Analyze selected to refresh.';el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';
     if(selection.size>6){selection.delete(cb.dataset.analyticsRun);cb.checked=false;error(new Error('Select up to six runs.'));}
+    updateScopeUi();
   };
   el('analyze').onclick=load;
+  updateScopeUi();
   el('session').onchange=function(){sessionFilter=this.value;load();};
   el('cohort').onchange=function(){selectedCohort=this.value;renderCampaign();};
   el('campaign').onchange=function(){renderCampaign();};

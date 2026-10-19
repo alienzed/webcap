@@ -3876,3 +3876,20 @@
   .storyboard-scenes-heading { display: flex; }
   .storyboard-scenes-heading-actions { justify-self: auto; }
 }
+
+/* Scenes header: no clipped Sequence action or full-width Director Tools button. */
+.storyboard-scenes-heading { flex-wrap: wrap; }
+.storyboard-scenes-heading-left { flex: 1 1 220px; }
+.storyboard-scenes-heading-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  overflow: visible;
+  scrollbar-width: auto;
+}
+.storyboard-scenes-heading-actions > .review-captions-btn {
+  width: auto;
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}

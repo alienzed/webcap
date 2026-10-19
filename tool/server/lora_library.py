@@ -65,6 +65,34 @@ def catalogue():
     return sorted(result, key=lambda item: (item["stage"], item["path"].casefold()))
 
 
+
+def resolve_for_inference(stage, names):
+    """Resolve enriched catalogue names to the selectable ComfyUI loader names.
+
+    Reuse the existing model capability and name-resolution contracts. Do not
+    persist a separate name map or silently substitute an ambiguous basename.
+    """
+    from .generate_generation import _public_model
+    from .inference_models import get_inference_model
+    from . import inference_runtime
+
+    model_ids = {"h3": "minimax_h3", "krea2": "krea2_raw"}
+    if stage not in model_ids:
+        raise ValueError("LoRA inference is not supported for stage: " + str(stage))
+    if not isinstance(names, list) or any(not isinstance(name, str) or not name.strip() for name in names):
+        raise ValueError("LoRA selections must be nonempty names in an array.")
+    if not names:
+        return {}
+
+    eligible = {item["name"] for item in catalogue() if item["stage"] == stage and item["enriched"]}
+    for name in names:
+        if name not in eligible:
+            raise ValueError("LoRA is not enriched in the configured " + stage + " root: " + name)
+
+    # Includes the workflow's required/base LoRA exclusions.
+    selectable = _public_model(get_inference_model(model_ids[stage]))["loras"]
+    return {name: inference_runtime.resolve_name(name, selectable, "LoRA") for name in names}
+
 def profile(stage, relative, enrichment=None):
     path = _checkpoint(stage, relative)
     if enrichment is not None:

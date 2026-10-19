@@ -118,7 +118,7 @@
       detail: activityDetail(item),
       startedAt: item.startedAt || item.createdAt,
       original: item,
-      phase: item.revisionProgress && item.revisionProgress.total ? 'Revising Scene ' + (Number(item.revisionProgress.completed || 0) + 1) + ' of ' + item.revisionProgress.total : String(item.runtimePhase || item.status || 'queued'),
+      phase: (isRemoteDirector(item) ? 'Remote · ' : 'Local · ') + (item.revisionProgress && item.revisionProgress.total ? 'Revising Scene ' + (Number(item.revisionProgress.completed || 0) + 1) + ' of ' + item.revisionProgress.total : String(item.runtimePhase || item.status || 'queued')),
       progress: item.revisionProgress && item.revisionProgress.total ? item.revisionProgress : null,
       progressLabel: item.revisionProgress && item.revisionProgress.total ? String(item.revisionProgress.completed || 0) + ' scenes complete' : '',
       liveTokens: item.liveTokens,
@@ -137,7 +137,7 @@
     var scenePhase = ['Refining Scenes', 'Queuing First Takes'].indexOf(item.phase) !== -1;
     return {
       id: item.id, kind: 'first-cut', title: 'Storyboard · First Cut',
-      status: item.status, phase: item.phase,
+      status: item.status, phase: (isRemoteDirector(item) ? 'Remote · ' : '') + String(item.phase || item.status || ''),
       detail: scenePhase && item.sceneCount ? 'Scene ' + (Number(item.sceneCompleted || 0) + 1) + ' of ' + item.sceneCount : String(item.detail || ''),
       startedAt: item.startedAt,
       progressLabel: item.stageIndex >= 0 ? 'Stage ' + (item.stageIndex + 1) + ' of ' + item.stageCount : String(item.status || ''),
@@ -175,6 +175,36 @@
       if (matching.length) return matching[0];
     }
     return items.length ? items[items.length - 1] : null;
+  }
+
+  function isRemoteDirector(item) {
+    if (!item || (item.kind !== 'director' && item.kind !== 'first-cut')) return false;
+    var model = String(item.modelId || '');
+    var runtimeId = model.indexOf('::') > 0 ? model.split('::', 1)[0] : 'local';
+    return item.runtimeMode === 'remote' || runtimeId !== 'local';
+  }
+
+  function isLocalGpuActivity(item) {
+    if (!item) return false;
+    if (item.lane === 'training' || item.lane === 'inference') return true;
+    return (item.kind === 'first-cut' || (item.kind === 'director' && item.lane === 'llm')) &&
+      !isRemoteDirector(item);
+  }
+
+  function featuredActivityItems(active, primary) {
+    if (!primary) return [];
+    var featured = [primary];
+    var local = active.find(isLocalGpuActivity);
+    var remote = active.find(isRemoteDirector);
+    // Promote only a genuine simultaneous local/remote pair; other jobs stay in details.
+    if (local && remote) {
+      [local, remote].forEach(function (item) {
+        if (!featured.some(function (shown) { return activityJobKey(shown) === activityJobKey(item); })) {
+          featured.push(item);
+        }
+      });
+    }
+    return featured;
   }
 
   function itemProgress(item) {
@@ -925,6 +955,139 @@
     window.setShellManagedActivity(active, state.payload.gpuOwner, { open: state.open, unseen: unseen });
   }
 
+  function syncFeaturedCard(card, item) {
+    var snapshot = itemProgress(item);
+    ProgressCard.update(card, snapshot, { onOpen: function () { itemOpen(snapshot); } });
+    // Keep a short, per-job in-memory token history. No new network polling.
+    var existingStats = card.querySelector('[data-director-live-stats]');
+    var directorJob = (snapshot.kind === 'director' || snapshot.kind === 'first-cut') && snapshot.original;
+    var generated = directorJob && directorJob.liveTokens != null ? Number(directorJob.liveTokens) : NaN;
+    if (directorJob) {
+      var labels = [];
+      if (Number(directorJob.queuePosition) > 0 && snapshot.status === 'queued') labels.push('Queue #' + directorJob.queuePosition);
+      if (Number(directorJob.promptTokensLive || directorJob.promptTokens) > 0) labels.push('Prompt ' + Number(directorJob.promptTokensLive || directorJob.promptTokens).toLocaleString() + ' tokens');
+      if (Number(directorJob.outputTokens) > 0) labels.push('Output ' + Number(directorJob.outputTokens).toLocaleString() + ' tokens');
+      if (directorJob.finishReason) labels.push('Finish: ' + directorJob.finishReason);
+      snapshot.progressLabel = labels.join(' · ');
+      ProgressCard.update(card, snapshot, { onOpen: function () { itemOpen(snapshot); } });
+    }
+    if (directorJob && !isRemoteDirector(item) && Number.isFinite(generated) && generated >= 0) {
+      if (!existingStats) {
+        existingStats = document.createElement('div');
+        existingStats.className = 'activity-director-live-stats';
+        existingStats.setAttribute('data-director-live-stats', '');
+        card.querySelector('[data-progress-copy]').appendChild(existingStats);
+        var metrics = document.createElement('div');
+        metrics.className = 'activity-director-metrics';
+        existingStats.appendChild(metrics);
+        var heading = document.createElement('strong');
+        heading.textContent = 'Live token throughput';
+        existingStats.appendChild(heading);
+        var graph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        graph.setAttribute('viewBox', '0 0 300 90');
+        graph.setAttribute('preserveAspectRatio', 'none');
+        graph.setAttribute('role', 'img');
+        graph.setAttribute('aria-label', 'Live token generation rate');
+        var plot = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        plot.setAttribute('fill', 'none');
+        plot.setAttribute('stroke', 'currentColor');
+        plot.setAttribute('stroke-width', '3');
+        graph.appendChild(plot);
+        existingStats.appendChild(graph);
+      }
+      var key = activityJobKey(directorJob);
+      if (!state.directorSamples) state.directorSamples = Object.create(null);
+      var samples = state.directorSamples[key] || (state.directorSamples[key] = []);
+      var now = Date.now();
+      var previous = samples[samples.length - 1];
+      // First Cut starts a new LLM request at each stage; token counters reset.
+      if (previous && generated < previous.tokens) {
+        samples.length = 0;
+        previous = null;
+      }
+      if (!previous || generated !== previous.tokens) {
+        samples.push({ time: now, tokens: generated });
+        if (samples.length > 30) samples.shift();
+      }
+      var latest = samples[samples.length - 1];
+      var priorSample = samples.length > 1 ? samples[samples.length - 2] : null;
+      var rate = priorSample && latest.tokens >= priorSample.tokens && latest.time > priorSample.time
+        ? (latest.tokens - priorSample.tokens) * 1000 / (latest.time - priorSample.time) : null;
+      var metricsNode = existingStats.querySelector('.activity-director-metrics');
+      metricsNode.replaceChildren();
+      [
+        [generated.toLocaleString(), 'Tokens generated'],
+        [rate != null ? rate.toFixed(1) : '—', 'Tokens/sec'],
+        [directorJob.contextSize ? Number(directorJob.contextSize).toLocaleString() : '—', 'Context window']
+      ].forEach(function (metric) {
+        var tile = document.createElement('div');
+        var value = document.createElement('b');
+        value.textContent = metric[0];
+        var label = document.createElement('small');
+        label.textContent = metric[1];
+        tile.appendChild(value);
+        tile.appendChild(label);
+        metricsNode.appendChild(tile);
+      });
+      var speeds = samples.slice(1).map(function (sample, i) {
+        var prior = samples[i];
+        return Math.max(0, (sample.tokens - prior.tokens) * 1000 / Math.max(1, sample.time - prior.time));
+      });
+      var maximum = Math.max(1, ...speeds);
+      var points = speeds.map(function (speed, i) {
+        return (speeds.length === 1 ? 150 : i * 300 / (speeds.length - 1)).toFixed(1) + ',' +
+          (85 - speed / maximum * 75).toFixed(1);
+      });
+      existingStats.querySelector('polyline').setAttribute('points', points.join(' '));
+      existingStats.querySelector('svg').setAttribute('aria-label',
+        speeds.length ? 'Recent token throughput samples' : 'Waiting for another token sample');
+    } else if (existingStats) existingStats.remove();
+    var stopButton = card.querySelector('[data-activity-stop]');
+    var stoppable = (item.kind === 'first-cut' || item.kind === 'director' && item.lane === 'llm') &&
+      ['running', 'starting', 'queued'].indexOf(item.status) !== -1;
+    if (stoppable && !stopButton) {
+      stopButton = document.createElement('button');
+      stopButton.type = 'button';
+      stopButton.className = 'activity-monitor-open';
+      stopButton.setAttribute('data-activity-stop', '');
+      card.appendChild(stopButton);
+    }
+    if (stopButton) {
+      stopButton.hidden = !stoppable;
+      stopButton.textContent = 'Stop';
+      stopButton.onclick = stoppable ? function () {
+        stopButton.disabled = true;
+        stopButton.textContent = 'Stopping…';
+        stopActivityItem(item).finally(function () { stopButton.disabled = false; });
+      } : null;
+    }
+  }
+
+  function renderFeaturedCards(host, featured) {
+    var existing = Object.create(null);
+    Array.prototype.forEach.call(host.querySelectorAll('[data-progress-card-id]'), function (card) {
+      existing[card.getAttribute('data-progress-card-id')] = card;
+    });
+    var retained = Object.create(null);
+    var cards = featured.map(function (item) {
+      var key = String(itemProgress(item).id);
+      var card = existing[key] || ProgressCard.create();
+      syncFeaturedCard(card, item);
+      host.appendChild(card);
+      retained[key] = true;
+      return card;
+    });
+    Object.keys(existing).forEach(function (key) {
+      if (!retained[key]) existing[key].remove();
+    });
+    // One chart, owned by the local job. Never attach machine telemetry to remote work.
+    var graph = el('activity-monitor-trend');
+    var localIndex = featured.findIndex(isLocalGpuActivity);
+    if (localIndex >= 0) cards[localIndex].after(graph);
+    else host.appendChild(graph);
+    graph.classList.toggle('hidden', localIndex < 0);
+  }
+
   function render() {
     var active = currentActivityItems();
     var pendingItems = [].concat((state.payload.queues.inference || {}).jobs || [], (state.payload.queues.director || {}).jobs || []);
@@ -936,6 +1099,7 @@
     if (!drawer || !host || !summary) throw new Error('Activity panel markup missing.');
 
     var primary = currentPrimaryItem();
+    var featured = featuredActivityItems(active, primary);
     var primaryHost = el('activity-monitor-primary');
     var primaryQueue = el('activity-monitor-primary-queue');
     var details = el('activity-monitor-details');
@@ -950,9 +1114,8 @@
     drawer.classList.toggle('hidden', !state.open);
     details.classList.toggle('hidden', !detailsVisible);
     detailsToggle.setAttribute('aria-expanded', detailsVisible ? 'true' : 'false');
-    detailsCount.textContent = '(' + String(active.length - (primary ? 1 : 0) + pendingItems.length + recent.length) + ')';
+    detailsCount.textContent = '(' + String(active.length - featured.length + pendingItems.length + recent.length) + ')';
     detailsToggle.classList.toggle('hidden', !primary || !active.length && !pendingItems.length && !recent.length);
-    el('activity-monitor-trend').classList.toggle('hidden', !primary);
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     var unseen = unseenCount();
     syncActivityRailWork(active, unseen);
@@ -960,134 +1123,28 @@
       ? String(active.length) + ' active · ' + (unseen ? String(unseen) + ' new' : 'up to date')
       : (unseen ? String(unseen) + ' new this session' : 'Current work and this session');
 
+    renderFeaturedCards(primaryHost, featured);
     if (primary) {
-      var snapshot = itemProgress(primary);
-      var primaryCard = primaryHost.querySelector('[data-progress-card-id]');
-      if (!primaryCard || primaryCard.getAttribute('data-progress-card-id') !== String(snapshot.id)) {
-        primaryCard = ProgressCard.create();
-        primaryHost.replaceChildren(primaryCard);
-      }
-      ProgressCard.update(primaryCard, snapshot, { onOpen: function () { itemOpen(snapshot); } });
-      // Keep a short, per-job in-memory token history. No new network polling.
-      var existingStats = primaryCard.querySelector('[data-director-live-stats]');
-      var directorJob = (snapshot.kind === 'director' || snapshot.kind === 'first-cut') && snapshot.original;
-      var generated = directorJob && directorJob.liveTokens != null ? Number(directorJob.liveTokens) : NaN;
-      if (directorJob) {
-        var labels = [];
-        if (Number(directorJob.queuePosition) > 0 && snapshot.status === 'queued') labels.push('Queue #' + directorJob.queuePosition);
-        if (Number(directorJob.promptTokensLive || directorJob.promptTokens) > 0) labels.push('Prompt ' + Number(directorJob.promptTokensLive || directorJob.promptTokens).toLocaleString() + ' tokens');
-        if (Number(directorJob.outputTokens) > 0) labels.push('Output ' + Number(directorJob.outputTokens).toLocaleString() + ' tokens');
-        if (directorJob.finishReason) labels.push('Finish: ' + directorJob.finishReason);
-        snapshot.progressLabel = labels.join(' · ');
-        ProgressCard.update(primaryCard, snapshot, { onOpen: function () { itemOpen(snapshot); } });
-      }
-      if (directorJob && Number.isFinite(generated) && generated >= 0) {
-        if (!existingStats) {
-          existingStats = document.createElement('div');
-          existingStats.className = 'activity-director-live-stats';
-          existingStats.setAttribute('data-director-live-stats', '');
-          primaryCard.querySelector('[data-progress-copy]').appendChild(existingStats);
-          var metrics = document.createElement('div');
-          metrics.className = 'activity-director-metrics';
-          existingStats.appendChild(metrics);
-          var heading = document.createElement('strong');
-          heading.textContent = 'Live token throughput';
-          existingStats.appendChild(heading);
-          var graph = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          graph.setAttribute('viewBox', '0 0 300 90');
-          graph.setAttribute('preserveAspectRatio', 'none');
-          graph.setAttribute('role', 'img');
-          graph.setAttribute('aria-label', 'Live token generation rate');
-          var plot = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-          plot.setAttribute('fill', 'none');
-          plot.setAttribute('stroke', 'currentColor');
-          plot.setAttribute('stroke-width', '3');
-          graph.appendChild(plot);
-          existingStats.appendChild(graph);
-        }
-        var key = activityJobKey(directorJob);
-        if (!state.directorSamples) state.directorSamples = Object.create(null);
-        var samples = state.directorSamples[key] || (state.directorSamples[key] = []);
-        var now = Date.now();
-        var previous = samples[samples.length - 1];
-        // First Cut starts a new LLM request at each stage; token counters reset.
-        if (previous && generated < previous.tokens) {
-          samples.length = 0;
-          previous = null;
-        }
-        if (!previous || generated !== previous.tokens) {
-          samples.push({ time: now, tokens: generated });
-          if (samples.length > 30) samples.shift();
-        }
-        var latest = samples[samples.length - 1];
-        var priorSample = samples.length > 1 ? samples[samples.length - 2] : null;
-        var rate = priorSample && latest.tokens >= priorSample.tokens && latest.time > priorSample.time
-          ? (latest.tokens - priorSample.tokens) * 1000 / (latest.time - priorSample.time) : null;
-        var metricsNode = existingStats.querySelector('.activity-director-metrics');
-        metricsNode.replaceChildren();
-        [
-          [generated.toLocaleString(), 'Tokens generated'],
-          [rate != null ? rate.toFixed(1) : '—', 'Tokens/sec'],
-          [directorJob.contextSize ? Number(directorJob.contextSize).toLocaleString() : '—', 'Context window']
-        ].forEach(function (metric) {
-          var tile = document.createElement('div');
-          var value = document.createElement('b');
-          value.textContent = metric[0];
-          var label = document.createElement('small');
-          label.textContent = metric[1];
-          tile.appendChild(value);
-          tile.appendChild(label);
-          metricsNode.appendChild(tile);
-        });
-        var speeds = samples.slice(1).map(function (sample, i) {
-          var prior = samples[i];
-          return Math.max(0, (sample.tokens - prior.tokens) * 1000 / Math.max(1, sample.time - prior.time));
-        });
-        var maximum = Math.max(1, ...speeds);
-        var points = speeds.map(function (speed, i) {
-          return (speeds.length === 1 ? 150 : i * 300 / (speeds.length - 1)).toFixed(1) + ',' +
-            (85 - speed / maximum * 75).toFixed(1);
-        });
-        existingStats.querySelector('polyline').setAttribute('points', points.join(' '));
-        existingStats.querySelector('svg').setAttribute('aria-label',
-          speeds.length ? 'Recent token throughput samples' : 'Waiting for another token sample');
-      } else if (existingStats) existingStats.remove();
-      var stopButton = primaryCard.querySelector('[data-activity-stop]');
-      var stoppable = (primary.kind === 'first-cut' || primary.kind === 'director' && primary.lane === 'llm') &&
-        ['running', 'starting', 'queued'].indexOf(primary.status) !== -1;
-      if (stoppable && !stopButton) {
-        stopButton = document.createElement('button');
-        stopButton.type = 'button';
-        stopButton.className = 'activity-monitor-open';
-        stopButton.setAttribute('data-activity-stop', '');
-        primaryCard.appendChild(stopButton);
-      }
-      if (stopButton) {
-        stopButton.hidden = !stoppable;
-        stopButton.textContent = 'Stop';
-        stopButton.onclick = stoppable ? function () {
-          stopButton.disabled = true;
-          stopButton.textContent = 'Stopping…';
-          stopActivityItem(primary).finally(function () { stopButton.disabled = false; });
-        } : null;
-      }
       var queueKey = activityLane(primary) === 'llm' ? 'director' : activityLane(primary);
       var queue = queues[queueKey] || {};
       var waiting = Number(queue.queued || 0);
       var backlog = Number(queue.backlog || 0);
       var nextJob = Array.isArray(queue.jobs) ? queue.jobs[0] : null;
-      primaryQueue.textContent = (waiting ? String(waiting) + ' waiting' : 'No jobs waiting') +
-        (nextJob ? ' · Next: ' + activityTitle(nextJob) : '') +
-        (backlog ? ' · ' + String(backlog) + ' backlog' : '') +
-        (queue.paused ? ' · paused' : '');
+      var queueLabel = queueKey === 'director' ? 'Director' : queueKey === 'inference' ? 'Inference' : 'Training';
+      primaryQueue.textContent = waiting || backlog || queue.paused
+        ? queueLabel + ' queue · ' + (waiting ? String(waiting) + ' waiting' : 'Paused') +
+          (nextJob ? ' · Next: ' + activityTitle(nextJob) : '') +
+          (backlog ? ' · ' + String(backlog) + ' backlog' : '') +
+          (queue.paused ? ' · paused' : '')
+        : '';
     } else {
-      primaryHost.replaceChildren();
       primaryQueue.textContent = '';
     }
     renderSystemTrend();
 
-    var nowSection = ensureActivitySection(host, 'now', 'Other active', active.length > 1 ? String(active.length - 1) + ' active' : '');
-    var otherActive = active.filter(function (item) { return activityJobKey(item) !== (primary && activityJobKey(primary)); });
+    var nowSection = ensureActivitySection(host, 'now', 'Other active', active.length > featured.length ? String(active.length - featured.length) + ' active' : '');
+    var featuredKeys = featured.map(activityJobKey);
+    var otherActive = active.filter(function (item) { return featuredKeys.indexOf(activityJobKey(item)) === -1; });
     nowSection.classList.toggle('hidden', !otherActive.length);
     var existingActive = Object.create(null);
     Array.prototype.forEach.call(nowSection.querySelectorAll('[data-activity-active-line]'), function (row) {

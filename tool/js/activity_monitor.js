@@ -293,6 +293,11 @@
   }
 
   function toggleProgressFollower() {
+    if (window.isOperationsDrawerMounted) {
+      if (window.isOperationsDrawerVisible()) window.selectOperationsSection('activity');
+      else window.openOperationsDrawer('activity');
+      return;
+    }
     setOpen(!state.open, state.open ? true : 'manual-open');
   }
 
@@ -1135,7 +1140,7 @@
       state.open = false;
       storeLastSeen(Date.now() / 1000);
     }
-    var detailsVisible = state.detailsOpen || (!primary && (pendingItems.length || recent.length));
+    var detailsVisible = (window.operationsSectionIsHistory && window.operationsSectionIsHistory()) || state.detailsOpen || (!primary && (pendingItems.length || recent.length));
     drawer.classList.toggle('hidden', !state.open);
     details.classList.toggle('hidden', !detailsVisible);
     detailsToggle.setAttribute('aria-expanded', detailsVisible ? 'true' : 'false');

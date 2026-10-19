@@ -302,6 +302,15 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .epoch-finder-dashboard>.epoch-finder-panel{grid-column:1/-1!important}}
 @media(max-width:400px){.test-workspace-pane-switcher{flex-wrap:wrap}.test-workspace-pane-btn{flex:1 1 46%}}
 
+/* Analytics: results-only epoch navigation; independent of optional report selection. */
+#run-analytics-screen .run-analytics-result-run{padding:8px 0;border-bottom:1px solid var(--border-color,#384653)}
+#run-analytics-screen .run-analytics-result-run>strong{display:block;font-size:13px}
+#run-analytics-screen .run-analytics-result-run>small{opacity:.65;font-size:11px}
+#run-analytics-screen .run-analytics-result-epochs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+#run-analytics-screen .run-analytics-result-epochs button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:94px;padding:7px 9px;border:1px solid var(--border-color,#384653);border-radius:7px;background:transparent;color:inherit;cursor:pointer;text-align:left}
+#run-analytics-screen .run-analytics-result-epochs button:hover{border-color:var(--accent-color,#6ba4de)}
+#run-analytics-screen .run-analytics-result-epochs button small{font-size:10px;opacity:.75}
+
 /* Run Analytics: compact choices with visible identities and comfortable click targets. */
 #run-analytics-screen .epoch-finder-run-choices{gap:4px}
 #run-analytics-screen .run-analytics-run-choice{padding:5px 8px;min-height:36px;gap:9px}

@@ -2609,13 +2609,6 @@
     max-width: 760px;
   }
 
-  .storyboard-invariant-row {
-    grid-template-columns: 110px minmax(140px, 1fr) auto;
-  }
-
-  .storyboard-invariant-row textarea {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 760px) {
@@ -2628,14 +2621,6 @@
     flex-direction: column;
   }
 
-  .storyboard-invariant-row {
-    grid-template-columns: 1fr auto;
-  }
-
-  .storyboard-invariant-row input,
-  .storyboard-invariant-row textarea {
-    grid-column: 1 / -1;
-  }
 }
 
 
@@ -2737,6 +2722,21 @@
 .storyboard-invariants-actions .review-captions-btn {
   width: auto;
   white-space: nowrap;
+}
+
+/* Keep Continuity controls usable in the narrow Story context column. */
+.storyboard-continuity-summary {
+  flex-wrap: wrap;
+}
+
+.storyboard-continuity-summary .storyboard-invariants-actions {
+  flex: 1 1 100%;
+  margin-left: 18px;
+  flex-wrap: wrap;
+}
+
+.storyboard-continuity-summary .storyboard-invariants-actions .review-captions-btn {
+  min-height: 30px;
 }
 
 .storyboard-story-section-summary-copy > strong {
@@ -3075,14 +3075,6 @@
   padding: 14px;
 }
 
-.storyboard-invariant-row {
-  grid-template-columns: 92px minmax(0, 1fr) auto;
-}
-
-.storyboard-invariant-row textarea {
-  grid-column: 1 / -1;
-  min-height: 78px;
-}
 
 .storyboard-invariant-remove {
   width: 34px;

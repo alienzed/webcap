@@ -4930,7 +4930,7 @@
     renderTestBatch();
   }
 
-  function runTestBatch(count) {
+  function runTestBatch(count, preserveSingleSeed) {
     if (testBatch && testBatch.active) throw new Error('A Test batch is already active.');
     if (!isTestModelSupported()) throw new Error('Test model is unavailable.');
     var prompt = String(el('test-generations-prompt').value || '').trim();
@@ -4959,6 +4959,8 @@
       prompt: prompt, settings: settings
     };
     if (sweepMode) criteria.sweepWeights = parseSweepWeights(sweepWeights);
+    if (preserveSingleSeed && count === 1 && declared.indexOf('seed') !== -1)
+      settings.seed = String(el('test-generations-seed').value || '').trim();
     var autoVl = el('test-generations-batch-auto-vl').checked;
     el('test-generations-batch-modal').classList.add('hidden');
     el('test-generations-batch-modal').setAttribute('aria-hidden', 'true');
@@ -4971,7 +4973,8 @@
       return captionAssistRequestJson('/fs/test_generations/batches', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({operation:'enqueue', folder:String(launchFolder), count:count,
-                              criteria:criteria, autoVl:autoVl, vlModel:vlModel})
+                              criteria:criteria, autoVl:autoVl, vlModel:vlModel,
+                              preserveSingleSeed: !!preserveSingleSeed && count === 1})
       });
     }).then(function () { return refreshServerTestBatches(); }).catch(function (err) {
       reportConsoleError('Test batch enqueue', err);

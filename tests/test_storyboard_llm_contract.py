@@ -371,3 +371,16 @@ def test_existing_relationship_context_remains_available():
     })["prompt"]
     assert "PREVIOUS FULL H3 PROMPT" in prompt
     assert '"suggestedDurationSeconds": 12' in prompt
+
+
+def test_model_guidance_only_for_h3_authoring(monkeypatch):
+    from tool.server import config as app_config
+    monkeypatch.setitem(app_config.config, "generation_model_guidance", {"minimax_h3": "Prefer simple staging."})
+    story = _story()
+    for operation in ("develop_story", "develop_story_outline", "repair_scenes"):
+        instruction = "Adjust staging." if operation == "repair_scenes" else ""
+        prompt = storyboard_llm_contract.build_request(story, "", operation, instruction)["prompt"]
+        assert "Prefer simple staging." in prompt if operation != "develop_story_outline" else "Prefer simple staging." not in prompt
+    for operation in ("write_prompt", "refine_prompt"):
+        prompt = storyboard_llm_contract.build_request(story, "scene-2", operation, "Adjust staging.")["prompt"]
+        assert prompt.count("Prefer simple staging.") == 1

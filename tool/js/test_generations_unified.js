@@ -244,6 +244,7 @@
     mounted = enabled;
   }
   function builder(enabled) {
+    root.classList.toggle('test-unified-building',enabled);
     el('build').classList.toggle('active',enabled);
     el('explore').classList.toggle('active',!enabled);
     el('build').setAttribute('aria-pressed',String(enabled));

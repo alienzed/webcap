@@ -43,3 +43,13 @@ def test_generate_non_h3_director_remains_plain_text():
     assert request["output"] == "text"
     assert "response_schema" not in request
     assert "result_renderer" not in request
+
+
+def test_generation_model_specific_guidance(monkeypatch):
+    from tool.server import config as app_config
+    monkeypatch.setitem(app_config.config, "generation_model_guidance", {
+        "minimax_h3": "Prefer simple staging.", "krea2_raw": "Keep fine texture."})
+    h3 = generation_director_contract.build_request("minimax_h3", "write_prompt", prompt="A dancer.")["prompt"]
+    krea = generation_director_contract.build_request("krea2_raw", "write_prompt", prompt="A dancer.")["prompt"]
+    assert "Prefer simple staging." in h3 and "Keep fine texture." not in h3
+    assert "Keep fine texture." in krea and "Prefer simple staging." not in krea

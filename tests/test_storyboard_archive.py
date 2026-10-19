@@ -12,7 +12,7 @@ def archive_root(tmp_path, monkeypatch):
     return tmp_path / "output"
 
 
-def _story_with_export(root, monkeypatch):
+def _story_with_export(root):
     story = storyboard_store.create_story({"title": "Movie"})
     story, scene = storyboard_store.add_scene(story["id"], {"title": "Opening", "prompt": "A storm"})
     story, take = storyboard_store.add_take_upload(
@@ -44,7 +44,7 @@ def test_archive_requires_export(archive_root):
 
 
 def test_archive_retains_movie_recipe_and_reclaims_generated_media(archive_root):
-    story, scene, take = _story_with_export(archive_root, None)
+    story, scene, take = _story_with_export(archive_root)
     preview = storyboard_archive.archive_preview(story["id"])
     assert preview["reclaimableBytes"] == 5
     assert preview["purgeTakeCount"] == 1
@@ -67,15 +67,17 @@ def test_archive_keeps_imported_and_referenced_media(archive_root):
     story, scene, take = _story_with_export(archive_root, None)
     story, imported = storyboard_store.add_take_upload(
         story["id"], scene["id"], "import.png", io.BytesIO(b"original"))
+    story, source_image = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "generated.png", io.BytesIO(b"image"),
+        generated_provenance={"seed": 19, "workflowProfile": "minimax_h3_inference_v1"},
+    )
     story, another = storyboard_store.add_scene(story["id"], {"prompt": "Next"})
     story, reference = storyboard_store.set_scene_reference_from_take(
-        story["id"], another["id"], "first_frame", scene["id"], take["id"], "first"
+        story["id"], another["id"], "first_frame", scene["id"], source_image["id"], "first"
     )
-    # The video-boundary extractor is exercised separately. Use an existing
-    # reference file here to cover archive ownership independently.
-    assert reference["mediaPath"]
     result = storyboard_archive.archive_story(story["id"])
     assert result["preview"]["retainedImportedCount"] == 1
+    assert result["preview"]["retainedReferencedTakeCount"] == 1
     assert result["preview"]["purgeTakeCount"] == 1
     assert (archive_root / "storyboards" / story["id"] / imported["mediaPath"]).is_file()
     assert (archive_root / "storyboards" / story["id"] / reference["mediaPath"]).is_file()

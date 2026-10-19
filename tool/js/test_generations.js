@@ -4596,13 +4596,19 @@
       var warmStatus = sessionToOpen
         ? request('test_open_session', { session: sessionToOpen }).then(selectSessionStatus)
         : currentSession
-          ? request('test_open_session', { session: currentSession }).then(renderStatus)
+          ? request('test_open_session', { session: currentSession }).then(function (status) {
+              if (generation !== openGeneration || !isOpen()) return;
+              if (JSON.stringify(status || {}) !== JSON.stringify(currentStatus || {})) renderStatus(status);
+            })
           : request('test_status', { modelId: requestedModelId }).then(function (status) {
+              if (generation !== openGeneration || !isOpen()) return;
+              if (JSON.stringify(status || {}) === JSON.stringify(currentStatus || {})) return;
               if (status && status.session) selectSessionStatus(status);
               else renderStatus(status || { status: 'idle' });
             });
       warmStatus.then(function () {
-        if (generation === openGeneration && isOpen()) pollStatus();
+        if (generation === openGeneration && isOpen() &&
+            (testStatusHasPendingWork(currentStatus) || queuedTestJobs.length)) pollStatus();
       }).catch(showError);
       return;
     }

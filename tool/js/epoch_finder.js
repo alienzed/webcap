@@ -50,16 +50,19 @@
     mode = next;
     var finder = next === 'finder';
     var references = next === 'references';
+    var analytics = next === 'analytics';
     document.querySelectorAll('[data-test-workspace-mode]').forEach(function (button) {
       var active = button.dataset.testWorkspaceMode === next;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
     });
     els('screen').classList.toggle('hidden', !finder);
-    document.getElementById('test-generations-body').classList.toggle('hidden', finder || references);
+    document.getElementById('test-generations-body').classList.toggle('hidden', finder || references || analytics);
     document.getElementById('test-references-screen').classList.toggle('hidden', !references);
+    document.getElementById('run-analytics-screen').classList.toggle('hidden', !analytics);
     if (finder) refresh();
     if (references) window.testReferencesOpen();
+    if (analytics) window.runAnalyticsOpen();
   }
   function renderSecondsEstimate(modelId, durationSeconds, megapixels) {
     var key = [modelId, Number.isFinite(megapixels) ? String(megapixels) : String(document.getElementById('test-generations-dimensions')?.value || ''), String(durationSeconds)].join('|');
@@ -1024,6 +1027,7 @@
     currentFolder = folder;
     if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
+    window.runAnalyticsPrepare(folder);
     if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;

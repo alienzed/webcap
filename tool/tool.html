@@ -1157,6 +1157,7 @@
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
                                     <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="finder" aria-pressed="true">Epoch Finder</button>
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
                                 </nav>
                                 <section class="epoch-finder-panel">
                                     <h3>New campaign</h3>
@@ -1263,6 +1264,7 @@
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
                                     <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="references" aria-pressed="true">References</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
                                 </nav>
                                 <section class="epoch-finder-panel">
                                     <h3>Find training examples</h3>
@@ -1294,12 +1296,36 @@
                             <a id="test-references-preview-original" target="_blank" rel="noopener noreferrer">Open original image ↗</a>
                         </dialog>
                     </section>
+                    <section id="run-analytics-screen" class="epoch-finder-screen hidden" aria-label="Run Analytics">
+                        <div class="epoch-finder-intro"><div><div class="epoch-finder-eyebrow">TEST GENERATIONS / ANALYTICS</div><h2>Run Analytics</h2><p>Read-only evidence across saved campaigns, Test sessions and training archives.</p></div></div>
+                        <div class="epoch-finder-layout">
+                          <aside class="epoch-finder-sidebar">
+                            <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
+                              <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
+                              <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
+                              <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
+                              <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="analytics" aria-pressed="true">Analytics</button>
+                            </nav>
+                            <section class="epoch-finder-panel"><h3>Evidence scope</h3><p class="epoch-finder-muted">Choose up to six runs from this Set. Campaign results are comparable only when they come from the same campaign.</p><div id="run-analytics-run-choices" class="epoch-finder-run-choices"></div><button id="run-analytics-analyze" class="training-btn training-launch-btn" type="button">Analyze selected</button></section>
+                            <section class="epoch-finder-panel"><h3>Evidence filters</h3><label>Campaign<select id="run-analytics-campaign"><option value="">No campaign (independent signals)</option></select></label><label>Test session<select id="run-analytics-session"><option value="">All sessions (descriptive only)</option></select></label><p class="epoch-finder-muted">Changing filters never starts inference.</p></section>
+                          </aside>
+                          <main class="epoch-finder-dashboard">
+                            <section class="epoch-finder-panel"><h3>Evidence coverage</h3><div id="run-analytics-coverage">Choose a training run to begin.</div></section>
+                            <section class="epoch-finder-panel"><h3>Checkpoint trajectory</h3><p id="run-analytics-chart-note" class="epoch-finder-muted"></p><div id="run-analytics-chart"></div></section>
+                            <section class="epoch-finder-panel"><h3>Checkpoints</h3><div id="run-analytics-table"></div></section>
+                            <section class="epoch-finder-panel"><h3>Findings and limits</h3><div id="run-analytics-findings"></div><div id="run-analytics-warnings"></div></section>
+                            <section class="epoch-finder-panel"><h3>Director interpretation</h3><p class="epoch-finder-muted">Optional analysis of the visible numeric evidence only. No captions, prompts, images or raw logs are sent.</p><button id="run-analytics-director" type="button" class="review-captions-btn" disabled>Interpret with Director</button><button id="run-analytics-director-stop" type="button" class="review-captions-btn hidden">Stop</button><p id="run-analytics-director-status" aria-live="polite"></p><div id="run-analytics-director-result"></div></section>
+                            <p id="run-analytics-error" class="epoch-finder-error hidden" role="alert"></p>
+                          </main>
+                        </div>
+                    </section>
                     <div id="test-generations-body" class="test-generations-body">
                         <aside class="test-generations-rail">
                             <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
                                 <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Tests</button>
                                 <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
                                 <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
                             </nav>
                             <div id="test-generations-help" class="test-generations-help hidden">
                                 <strong>How Test Generations works</strong>
@@ -3302,6 +3328,7 @@
         <script src="/static/js/test_generations.js"></script>
         <script src="/static/js/epoch_finder.js"></script>
         <script src="/static/js/test_references.js"></script>
+        <script src="/static/js/run_analytics.js"></script>
         <script src="/static/js/storyboard.js"></script>
         <script src="/static/js/main.js"></script>
     </body>

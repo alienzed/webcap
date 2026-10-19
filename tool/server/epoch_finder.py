@@ -1055,6 +1055,12 @@ def command(folder_path, operation, criteria=None):
         return list_campaigns(folder_path)
     if operation == "checkpoint_evidence":
         return checkpoint_evidence(folder_path, criteria.get("jobId"))
+    if operation == "run_analytics":
+        from .run_analytics import report
+        return report(folder_path, criteria.get("jobId"))
+    if operation == "run_analytics_selected":
+        from .run_analytics import report_selected
+        return report_selected(folder_path, criteria.get("jobIds"), criteria.get("session"))
     if operation == "reference_runs":
         return {"runs": candidate_runs(folder_path)}
     if operation == "reference_vocabulary":

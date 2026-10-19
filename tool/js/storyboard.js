@@ -1052,11 +1052,8 @@
     if (target.kind === 'concept') {
       return el('storyboard-story-overview');
     }
-    if (
-      target.kind === 'scene-prompt' ||
-      target.kind === 'scenes' ||
-      target.kind === 'repair'
-    ) {
+    if (target.kind === 'scene-prompt') return sceneElement(target.sceneId);
+    if (target.kind === 'scenes' || target.kind === 'repair') {
       return document.querySelector('.storyboard-scene-workspace');
     }
     return document.querySelector('.storyboard-scene-workspace');
@@ -1072,13 +1069,9 @@
 
     var detachedTarget = !!kind && !target;
     var hidden = card.classList.contains('hidden');
-    var fillsWorkspace = (
-      kind === 'scene-prompt' ||
-      kind === 'scenes' ||
-      kind === 'repair'
-    );
+    var fillsWorkspace = kind === 'scenes' || kind === 'repair';
     var fillsOverview = kind === 'concept';
-    var fillsRegion = fillsWorkspace || fillsOverview;
+    var fillsRegion = fillsWorkspace || fillsOverview || kind === 'scene-prompt';
     if (sceneWorkspace) {
       sceneWorkspace.classList.toggle('director-active', fillsWorkspace && !detachedTarget && !hidden);
     }
@@ -1706,7 +1699,13 @@
       return;
     }
     if (target.kind === 'scene-prompt') {
-      setDirectorRegionProtected(sceneElement(target.sceneId), protectedState);
+      if (!storyState.story.scenes || !storyState.story.scenes[target.sceneId]) {
+        throw new Error('Storyboard Director Scene target is missing: ' + target.sceneId);
+      }
+      // Focus/Overview do not mount every Scene. Offscreen targets stay pending,
+      // but must not block the Scene currently visible.
+      var sceneRegion = sceneElement(target.sceneId);
+      if (sceneRegion) setDirectorRegionProtected(sceneRegion, protectedState);
       return;
     }
     if (target.kind === 'repair') {
@@ -1727,6 +1726,9 @@
     setDirectorRegionProtected(el('storyboard-story-authoring'), false);
     setDirectorRegionProtected(el('storyboard-story-overview'), false);
     setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), false);
+    document.querySelectorAll('#storyboard-scenes-list .storyboard-scene.director-protected').forEach(function (scene) {
+      setDirectorRegionProtected(scene, false);
+    });
     if (selector) selector.disabled = !storyState.director.available || !(storyState.director.models || []).length;
 
     setDirectorTargetProtected(conceptTarget, directorTargetPending(conceptTarget));

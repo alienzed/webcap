@@ -3926,3 +3926,7 @@
 }
 .storyboard-thinking-toggle.hidden { display: none; }
 .storyboard-thinking-toggle input { margin: 0; }
+
+.storyboard-director-scene-progress {grid-area:scene-progress;display:grid;gap:7px;width:100%;font-size:13px;color:var(--muted);}
+.storyboard-director-scene-progress.hidden {display:none;}
+.storyboard-director-scene-progress progress {display:block;width:100%;height:9px;accent-color:var(--accent);}

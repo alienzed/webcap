@@ -3518,6 +3518,8 @@ def open_in_vscode():
     rel_path = data.get("path", "").strip()
     return open_in_vscode_response(rel_path)
     
+register_test_batch_routes(app, safe_join_fs_root)
+
 if __name__ == "__main__":
     try:
         recover_invalid_startup_state()
@@ -3536,6 +3538,3 @@ if __name__ == "__main__":
     # Only bind to localhost for desktop/offline use.
     # Disable Flask debug mode for a production-like local runtime.
     app.run(host="127.0.0.1", port=4200, debug=False)
-
-# Route registrations that require the filesystem root resolver.
-register_test_batch_routes(app, safe_join_fs_root)

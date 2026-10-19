@@ -1175,9 +1175,10 @@
       }
       if (target.kind === 'repair') {
         return candidateTarget
-          && candidateTarget.kind === 'scene-prompt'
           && String(candidateTarget.storyId || '') === String(target.storyId || '')
-          && candidate.operation === 'refine_prompt';
+          && ((candidateTarget.kind === 'repair' &&
+            ['revise_scenes_sequence', 'check_coherence_sequence'].includes(candidate.operation))
+            || (candidateTarget.kind === 'scene-prompt' && candidate.operation === 'refine_prompt'));
       }
       return candidateTarget && directorTargetKey(candidateTarget) === targetKey;
     });
@@ -1195,7 +1196,8 @@
           operation: job.operation || '',
           startedAt: job.startedAt || job.createdAt,
           jobId: jobId,
-          jobStatus: jobStatus
+          jobStatus: jobStatus,
+          revisionProgress: job.revisionProgress || null
         };
       }
       // The queue identifies the job; only matching runtime activity owns live
@@ -1209,7 +1211,8 @@
         operation: job.operation || '',
         startedAt: job.startedAt || job.createdAt,
         jobId: jobId,
-        jobStatus: jobStatus
+        jobStatus: jobStatus,
+        revisionProgress: job.revisionProgress || null
       });
     }
 
@@ -1233,7 +1236,8 @@
       waitOwner: waitOwner,
       waitReason: waitReason,
       jobId: jobId,
-      jobStatus: jobStatus
+      jobStatus: jobStatus,
+      revisionProgress: job.revisionProgress || null
     };
   }
 
@@ -1269,11 +1273,14 @@
   function renderDirectorActivity(activity, system) {
     var card = el('storyboard-director-activity');
     var phase = el('storyboard-director-activity-phase');
+    var sceneProgress = el('storyboard-director-scene-progress');
+    var sceneProgressText = el('storyboard-director-scene-progress-text');
+    var sceneProgressBar = el('storyboard-director-scene-progress-bar');
     var detail = el('storyboard-director-activity-detail');
     var stop = el('storyboard-director-stop');
     var copy = el('storyboard-director-prompt-copy');
     var activityButton = el('storyboard-director-view-activity');
-    if (!card || !phase || !detail || !stop || !copy || !activityButton) throw new Error('Storyboard Director activity markup is missing.');
+    if (!card || !phase || !sceneProgress || !sceneProgressText || !sceneProgressBar || !detail || !stop || !copy || !activityButton) throw new Error('Storyboard Director activity markup is missing.');
 
     var phaseName = String(activity && activity.phase || '');
     var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
@@ -1304,6 +1311,26 @@
     var targetKind = String(storyState.director.activityTarget && storyState.director.activityTarget.kind || '');
     var action = {concept: 'developing the Story', scenes: 'working on Scenes', repair: 'repairing Scenes', 'scene-prompt': 'revising this Scene'};
     phase.textContent = terminal ? directorPhaseLabel(phaseName) : 'Director is ' + (action[targetKind] || 'working') + '…';
+    var progress = activity && activity.revisionProgress;
+    var total = Number(progress && progress.total);
+    var completed = Number(progress && progress.completed);
+    var operation = String(activity && activity.operation || '');
+    var isScenePass = !terminal && targetKind === 'repair'
+      && ['revise_scenes_sequence', 'check_coherence_sequence'].includes(operation)
+      && Number.isInteger(total) && total > 0
+      && Number.isInteger(completed) && completed >= 0 && completed <= total;
+    sceneProgress.classList.toggle('hidden', !isScenePass);
+    if (isScenePass) {
+      var checking = operation === 'check_coherence_sequence';
+      var queuingTakes = String(progress.phase || '') === 'Queuing fresh Takes';
+      if (queuingTakes) phase.textContent = 'Director is queuing fresh Takes…';
+      else if (completed < total) phase.textContent = 'Director is ' +
+        (checking ? 'checking' : 'revising') + ' Scene ' + (completed + 1) + ' of ' + total + '…';
+      else phase.textContent = 'Director finished ' + (checking ? 'checking' : 'revising') + ' ' + total + ' Scenes…';
+      sceneProgressText.textContent = completed + ' of ' + total + ' Scenes ' + (checking ? 'checked' : 'revised');
+      sceneProgressBar.max = total;
+      sceneProgressBar.value = completed;
+    }
     detail.textContent = terminal ? 'Review the result in Storyboard.' : 'Editing is temporarily unavailable here.';
   }
 

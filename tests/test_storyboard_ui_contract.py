@@ -1394,3 +1394,18 @@ def test_storyboard_sequence_encode_has_inline_pending_elapsed_and_error_feedbac
     assert "if (status && showStatus !== false)" in storyboard
     assert ".storyboard-sequence-processing" in css
     assert ".storyboard-sequence-error" in css
+
+
+def test_storyboard_repair_progress_uses_recorded_scene_counts():
+    js = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+    assert "candidateTarget.kind === 'repair'" in js
+    assert "revisionProgress: job.revisionProgress || null" in js
+    for marker in ("storyboard-director-scene-progress", "storyboard-director-scene-progress-bar",
+                   "storyboard-director-scene-progress-text"):
+        assert f'id="{marker}"' in html
+    assert "sceneProgressBar.value = completed" in js
+    assert "sceneProgressBar.max = total" in js
+    assert "completed + 1" in js
+    assert ".storyboard-director-scene-progress progress" in css

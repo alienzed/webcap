@@ -2482,7 +2482,7 @@ def run_analytics_interpret_route():
         import json
         reviewed = data.get("reviewedFacts")
         if (not isinstance(reviewed, str) or len(reviewed) > 180000 or
-                reviewed != json.dumps(facts, indent=2, ensure_ascii=False)):
+                json.loads(reviewed) != facts):
             raise ValueError("The reviewed Analytics evidence changed. Preview the latest facts before running Director.")
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(),

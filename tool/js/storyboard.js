@@ -2070,6 +2070,14 @@
       }
       return waitForDirectorJob(batch.payload.job).then(function (result) {
         var proposal = result.proposal || {};
+        var totalSuggestions = (proposal.storyWide || []).length +
+          (proposal.scenes || []).reduce(function (count, group) {
+            return count + (group.assign || []).length;
+          }, 0);
+        if (!totalSuggestions) {
+          status.textContent = 'Director found no useful LoRAs to add.';
+          return;
+        }
         var items = (proposal.storyWide || []).map(function (item) {
           return Object.assign({sceneId:''},item);
         });

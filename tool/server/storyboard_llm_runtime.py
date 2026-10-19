@@ -1380,6 +1380,14 @@ def _assessment_signal(model_ref):
     # Short workload confirmation never establishes a model's maximum output.
     limited = (not confirmation and not serious and report.get("status") == "complete"
                and health in {"healthy", "limited"} and 0 < coherent_output < 8192)
+    thinking = report.get("thinking") is True
+    # Unified Model Assessment is authoritative when it has a completed thinking probe.
+    from .model_lab import capability_run_summaries
+    for run in capability_run_summaries():
+        probe = ((run.get("models") or {}).get(model_ref) or {}).get("director_thinking")
+        if probe and probe.get("status") in {"completed", "failed"}:
+            thinking = probe.get("supported") is True
+            break
     return {
         "status": str(report.get("status") or ""),
         "health": health,
@@ -1394,7 +1402,7 @@ def _assessment_signal(model_ref):
             "structuredOutputTokens": max(0, int(abilities.get("structuredOutputTokens") or 0)),
             "coherentOutputTokens": coherent_output,
         },
-        "thinking": report.get("thinking") is True,
+        "thinking": thinking,
         "updatedAt": str(report.get("updatedAt") or ""),
     }
 

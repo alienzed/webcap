@@ -121,3 +121,81 @@ def test_queued_clip_reserves_non_overwrite_output_path(tmp_path, monkeypatch):
     assert first.status_code == 202
     assert second.status_code == 409
     assert second.get_json()["outputName"] == "same.mp4"
+
+
+def test_storyboard_clip_opens_registered_take_and_sequence(tmp_path, monkeypatch):
+    from io import BytesIO
+    from tool.server import storyboard_store
+    from tool.server.video_frame_ops import resolve_storyboard_clip_source
+
+    monkeypatch.setattr(storyboard_store.app_config, "output_root", lambda: tmp_path / "output")
+    story = storyboard_store.create_story({"title": "Clip sources"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "source.mp4", BytesIO(b"video")
+    )
+    payload = {
+        "storyId": story["id"],
+        "mediaPath": take["mediaPath"],
+        "fileName": Path(take["mediaPath"]).name,
+    }
+    source = resolve_storyboard_clip_source(payload)
+    assert source.read_bytes() == b"video"
+
+    exports = source.parents[2] / "exports"
+    exports.mkdir(exist_ok=True)
+    sequence = exports / "selected-sequence.mp4"
+    sequence.write_bytes(b"joined")
+    assert resolve_storyboard_clip_source({
+        "storyId": story["id"], "mediaPath": "exports/selected-sequence.mp4",
+        "fileName": "selected-sequence.mp4",
+    }) == sequence
+
+    with pytest.raises(RuntimeError, match="not registered"):
+        resolve_storyboard_clip_source({
+            "storyId": story["id"], "mediaPath": "takes/" + scene["id"] + "/unregistered.mp4",
+        })
+    with pytest.raises(RuntimeError, match="supports Storyboard"):
+        resolve_storyboard_clip_source({
+            "storyId": story["id"], "mediaPath": "../other.mp4",
+        })
+
+
+def test_storyboard_clip_queues_validated_overwrite_and_save_as(tmp_path, monkeypatch):
+    from io import BytesIO
+    from tool.server import storyboard_store
+
+    monkeypatch.setattr(storyboard_store.app_config, "output_root", lambda: tmp_path / "output")
+    story = storyboard_store.create_story({"title": "Clip queue"})
+    story, scene = storyboard_store.add_scene(story["id"], {"title": "Scene"})
+    story, take = storyboard_store.add_take_upload(
+        story["id"], scene["id"], "source.mp4", BytesIO(b"video")
+    )
+    monkeypatch.setattr(video_clip_ops, "probe_media_metadata", lambda _path: {"resolution": "320x240", "duration": 10.0})
+    monkeypatch.setattr(video_clip_ops, "_ensure_clip_worker_started", lambda: None)
+    with video_clip_ops._video_clip_lock:
+        video_clip_ops._video_clip_jobs.clear()
+        video_clip_ops._video_clip_signatures.clear()
+
+    original = Path(take["mediaPath"]).name
+    request = {
+        "storyId": story["id"],
+        "mediaPath": take["mediaPath"],
+        "fileName": original,
+        "outputName": original,
+        "startSec": 1,
+        "durationSec": 2,
+        "crop": {"x": 0, "y": 0, "width": 320, "height": 240},
+        "overwriteSource": True,
+    }
+    client = app_module.app.test_client()
+    overwrite = client.post("/media/video_clip", json=request)
+    assert overwrite.status_code == 202
+    assert overwrite.get_json()["overwriteSource"] is True
+
+    named = client.post("/media/video_clip", json={
+        **request, "outputName": "alternate.mp4", "overwriteSource": False,
+    })
+    assert named.status_code == 202
+    assert named.get_json()["outputName"] == "alternate.mp4"
+    assert not (tmp_path / "output" / "storyboards" / story["id"] / "takes" / scene["id"] / "alternate.mp4").exists()

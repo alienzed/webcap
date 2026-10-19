@@ -214,6 +214,36 @@ def _set_media_folder(source_folder):
     return source_folder.parent if source_folder.name.lower() == "src_videos" else source_folder
 
 
+def resolve_storyboard_clip_source(data):
+    """Resolve an explicitly selected Storyboard Take or exported Sequence."""
+    story_id = str(data.get("storyId") or "").strip()
+    media_path = str(data.get("mediaPath") or "").strip().replace("\\", "/")
+    if not story_id or not media_path or data.get("folder"):
+        raise RuntimeError("Storyboard Clip requires a Story ID and media path, without a training folder.")
+
+    # Keep Clip scoped to the two Storyboard media types it is opened from.
+    parts = Path(media_path).parts
+    from .storyboard_store import load_story, resolve_story_media
+    if len(parts) == 3 and parts[0] == "takes":
+        story = load_story(story_id)
+        scene = (story.get("scenes") or {}).get(parts[1]) or {}
+        if not any(
+            isinstance(take, dict) and take.get("mediaPath") == media_path
+            for take in (scene.get("takes") or {}).values()
+        ):
+            raise RuntimeError("Storyboard Take is not registered in this Story.")
+    elif media_path != "exports/selected-sequence.mp4":
+        raise RuntimeError("Clip supports Storyboard Takes and the exported Sequence only.")
+
+    source = resolve_story_media(story_id, media_path)
+    if source.suffix.lower() not in VIDEO_EXTS:
+        raise RuntimeError("Clip is only available for video files.")
+    requested_name = data.get("fileName")
+    if requested_name and _safe_media_name(requested_name) != source.name:
+        raise RuntimeError("Storyboard Clip source filename does not match the media path.")
+    return source
+
+
 def extract_video_frame(source_path, frame_index, source_fingerprint, output_path):
     resolved = resolve_exact_start(source_path, frame_index, source_fingerprint)
     output_path = Path(output_path)
@@ -241,13 +271,16 @@ def extract_video_frame(source_path, frame_index, source_fingerprint, output_pat
 def inspect_video_frame_response(data):
     data = data or {}
     folder = str(data.get("folder") or "").strip()
-    if not folder:
+    if not folder and not (data.get("storyId") or data.get("mediaPath")):
         return jsonify({"error": "Missing folder"}), 400
     try:
-        source_folder = app_config.safe_join_fs_root(folder)
-        if not source_folder.exists() or not source_folder.is_dir():
-            return jsonify({"error": "Source folder does not exist"}), 404
-        source_path = source_folder / _safe_media_name(data.get("fileName") or data.get("media") or "")
+        if data.get("storyId") or data.get("mediaPath"):
+            source_path = resolve_storyboard_clip_source(data)
+        else:
+            source_folder = app_config.safe_join_fs_root(folder)
+            if not source_folder.exists() or not source_folder.is_dir():
+                return jsonify({"error": "Source folder does not exist"}), 404
+            source_path = source_folder / _safe_media_name(data.get("fileName") or data.get("media") or "")
         if "frameIndex" in data:
             frame = inspect_video_frame(source_path, frame_index=data.get("frameIndex"))
         else:

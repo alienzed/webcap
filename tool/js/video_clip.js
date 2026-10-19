@@ -1,4 +1,5 @@
 var videoClipTargetItem = null;
+var videoClipStoryboardSource = null;
 var videoClipCropBusy = false;
 var videoClipCropRatio = null;
 var videoClipSourceResolution = null;
@@ -29,6 +30,20 @@ function clearVideoClipStatusPoll() {
 
 function getVideoClipEl(id) {
   return document.getElementById(id);
+}
+
+function videoClipSourceFields() {
+  return videoClipStoryboardSource
+    ? { storyId: videoClipStoryboardSource.storyId, mediaPath: videoClipStoryboardSource.mediaPath }
+    : { folder: state.folder || '' };
+}
+
+function videoClipRefreshSource() {
+  if (videoClipStoryboardSource && typeof window.refreshStoryboardClipSource === 'function') {
+    window.refreshStoryboardClipSource(videoClipStoryboardSource.storyId);
+  } else {
+    refreshCurrentDirectory();
+  }
 }
 
 function formatVideoClipSeconds(value) {
@@ -182,7 +197,7 @@ function updateVideoClipHeaderMeta() {
   if (!metaEl || !videoEl) throw new Error('Video clip source metadata elements are missing');
   var width = Number(videoEl.videoWidth || 0);
   var height = Number(videoEl.videoHeight || 0);
-  var metadata = videoClipTargetItem ? getMetadataForMedia(videoClipTargetItem.fileName) : null;
+  var metadata = videoClipStoryboardSource ? null : (videoClipTargetItem ? getMetadataForMedia(videoClipTargetItem.fileName) : null);
   var fps = Number(metadata && metadata.fps);
   var duration = Number(videoEl.duration || 0);
   var parts = [];
@@ -213,7 +228,7 @@ function updateVideoClipExactFrameUi() {
   backBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem || (videoClipExactFrame && Number(videoClipExactFrame.frameIndex) <= 0);
   forwardBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
   extractBtn.disabled = videoClipExactFrameRequestPending || !videoClipTargetItem;
-  extractBtn.classList.toggle('hidden', videoClipFrameExtractionOpen && !!videoClipExactFrame);
+  extractBtn.classList.toggle('hidden', !!videoClipStoryboardSource || (videoClipFrameExtractionOpen && !!videoClipExactFrame));
   extractConfirmEl.classList.toggle('hidden', !videoClipFrameExtractionOpen || !videoClipExactFrame);
   if (videoClipExactFrameRequestPending) {
     noteEl.textContent = 'Resolving exact frame...';
@@ -269,9 +284,9 @@ function requestVideoClipExactFrame(request, onResolved, options) {
   videoClipExactFrameRequestPending = true;
   updateVideoClipExactFrameUi();
   var payload = {
-    folder: state.folder || '',
     fileName: videoClipTargetItem.fileName
   };
+  Object.assign(payload, videoClipSourceFields());
   if (request && request.frameIndex !== undefined) payload.frameIndex = request.frameIndex;
   else payload.approximateTimeSec = Number(videoEl.currentTime || 0);
   HttpModule.postJson('/media/video_clip_frame', payload, function (status, responseText) {
@@ -367,7 +382,7 @@ function saveVideoClipExtractedFrame() {
     resetVideoClipFrameExtraction();
     updateVideoClipExactFrameUi();
     if (response.destinationIsCurrentFolder) state.pendingSelectFileName = response.outputName;
-    refreshCurrentDirectory();
+    videoClipRefreshSource();
     var success = response.destinationIsCurrentFolder
       ? ('Extracted frame added to this folder: ' + response.outputName)
       : ('Extracted frame added to set folder: ' + response.outputName);
@@ -544,6 +559,7 @@ function setVideoClipBusy(isBusy) {
 }
 
 function isVideoClipInSrcVideosFolder() {
+  if (videoClipStoryboardSource) return false;
   var folder = (typeof state !== 'undefined' && state.folder) ? String(state.folder) : '';
   return /\bsrc_videos(\\|\/|$)/i.test(folder);
 }
@@ -577,10 +593,10 @@ function parseResolutionText(value) {
 }
 
 function getVideoClipResolution(fileName) {
-  var text = getResolutionForMedia(fileName);
+  var text = videoClipStoryboardSource ? '' : getResolutionForMedia(fileName);
   var parsed = parseResolutionText(text);
   if (parsed) return parsed;
-  var row = (typeof getMetadataForMedia === 'function') ? getMetadataForMedia(fileName) : null;
+  var row = !videoClipStoryboardSource && typeof getMetadataForMedia === 'function' ? getMetadataForMedia(fileName) : null;
   if (row && row.resolution) {
     parsed = parseResolutionText(row.resolution);
     if (parsed) return parsed;
@@ -910,6 +926,7 @@ function closeVideoClipModal() {
   stopVideoClipLoopPreview();
   videoClipCropEditActive = false;
   videoClipTargetItem = null;
+  videoClipStoryboardSource = null;
   videoClipSourceResolution = null;
   videoClipOverwriteSourceMode = false;
   videoClipLastExportSignature = '';
@@ -954,7 +971,7 @@ function closeVideoClipModal() {
   updateVideoClipCropButtons();
 }
 
-function openVideoClipModal(mediaItem) {
+function openVideoClipModal(mediaItem, storyboardSource) {
   if (!mediaItem || !mediaItem.fileName || !isVideoFileName(mediaItem.fileName)) {
     setVideoClipStatus('Clip is only available for video files.', { kind: 'error' });
     setStatus('Clip is only available for video files.');
@@ -973,6 +990,9 @@ function openVideoClipModal(mediaItem) {
   }
 
   videoClipTargetItem = mediaItem;
+  videoClipStoryboardSource = storyboardSource || null;
+  var extractFrameButton = getVideoClipEl('video-clip-extract-frame-btn');
+  if (extractFrameButton) extractFrameButton.classList.toggle('hidden', !!videoClipStoryboardSource);
   var sourceMetaEl = getVideoClipEl('video-clip-source-meta');
   if (!sourceMetaEl) throw new Error('Video clip source metadata is missing');
   sourceMetaEl.textContent = '';
@@ -1010,7 +1030,9 @@ function openVideoClipModal(mediaItem) {
   modal.setAttribute('aria-hidden', 'false');
   focusFirstModalTextField(modal);
 
-  var src = '/caption/media?folder=' + encodeURIComponent(state.folder || '') + '&media=' + encodeURIComponent(mediaItem.fileName) + '&t=' + Date.now();
+  var src = videoClipStoryboardSource
+    ? '/fs/storyboard/media?story=' + encodeURIComponent(videoClipStoryboardSource.storyId) + '&path=' + encodeURIComponent(videoClipStoryboardSource.mediaPath) + '&t=' + Date.now()
+    : '/caption/media?folder=' + encodeURIComponent(state.folder || '') + '&media=' + encodeURIComponent(mediaItem.fileName) + '&t=' + Date.now();
   videoEl.src = src;
   videoEl.onloadedmetadata = function () {
     var d = Number(videoEl.duration);
@@ -1097,7 +1119,6 @@ function getVideoClipPayload(overwrite) {
   }
 
   var payload = {
-    folder: state.folder || '',
     fileName: videoClipTargetItem.fileName,
     outputName: outputName,
     startSec: range.start,
@@ -1106,6 +1127,7 @@ function getVideoClipPayload(overwrite) {
     overwrite: !!overwrite,
     overwriteSource: !!videoClipOverwriteSourceMode
   };
+  Object.assign(payload, videoClipSourceFields());
   if (videoClipExactStart) {
     payload.exactStart = {
       frameIndex: videoClipExactStart.frameIndex,
@@ -1150,22 +1172,22 @@ function finalizeVideoClipJob(payload, status, message) {
   if (status === 'completed') {
     rememberVideoClipExportPayload(payload);
     updateVideoClipTimelineUi();
-    if (payload && payload.overwriteSource && payload.fileName) {
+    if (!videoClipStoryboardSource && payload && payload.overwriteSource && payload.fileName) {
       markMediaMutated(payload.fileName, 'best_effort');
       bumpMediaCacheBustToken(payload.fileName);
       state.pendingSelectFileName = payload.fileName;
     }
     setStatus(payload && payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.');
-    if (payload && payload.overwriteSource && payload.fileName) {
+    if (!videoClipStoryboardSource && payload && payload.overwriteSource && payload.fileName) {
       Promise.resolve(saveFolderStateForCurrentRoot()).catch(function (err) {
         if (window.console && console.warn) {
           console.warn('[VideoClip] Could not persist clip mutation state:', err);
         }
       }).then(function () {
-        refreshCurrentDirectory();
+        videoClipRefreshSource();
       });
     } else {
-      refreshCurrentDirectory();
+      videoClipRefreshSource();
     }
     setVideoClipStatus(payload && payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.', { kind: 'success' });
     if (payload && payload.overwriteSource) {
@@ -1363,7 +1385,7 @@ function applyVideoClip(overwrite, skipRepeatConfirm) {
       setStatus(status === 202
         ? (payload.overwriteSource ? 'In-place clip queued.' : 'Clip queued.')
         : (payload.overwriteSource ? 'In-place clip exported.' : 'Clip exported.'));
-      refreshCurrentDirectory();
+      videoClipRefreshSource();
       if (status === 200 && payload.overwriteSource) {
         closeVideoClipModal();
         setStatus('In-place clip exported.');

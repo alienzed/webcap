@@ -133,7 +133,7 @@
         owner = item.storageId; source = item.source; role = ''; artifact = '';
         el('media-explorer-search').value = '';
         facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
-    el('media-explorer-storyboard-type').value = '';
+        el('media-explorer-storyboard-type').value = '';
         sourceButtons.forEach(function (button) {
           button.classList.toggle('active', button.dataset.mediaSource === source);
         });
@@ -667,6 +667,7 @@
   el('media-explorer-clear-filters').addEventListener('click', function () {
     el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
     facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
+    el('media-explorer-storyboard-type').value = '';
     sourceButtons[0].click();
   });
   el('media-explorer-empty-action').addEventListener('click', function () {

@@ -21,6 +21,7 @@
     sequenceEncodingWarnings: [],
     sequenceWarningsVisible: false,
     sequenceCollapsed: false,
+    clipMediaRevision: 0,
     sceneViewMode: 'focus',
     activeSceneId: '',
     openStoryRequestId: 0,
@@ -2591,7 +2592,7 @@
 
   function takeMediaUrl(storyId, sceneId, take) {
     var mediaPath = String(take && take.mediaPath ? take.mediaPath : '');
-    return '/fs/storyboard/media?story=' + encodeURIComponent(storyId) + '&path=' + encodeURIComponent(mediaPath) + '&t=' + encodeURIComponent(String(take && take.mediaRefreshToken || ''));
+    return '/fs/storyboard/media?story=' + encodeURIComponent(storyId) + '&path=' + encodeURIComponent(mediaPath) + '&t=' + encodeURIComponent(String(storyState.clipMediaRevision));
   }
 
   function openStoryboardVideoClip(mediaPath) {
@@ -2609,6 +2610,7 @@
 
   window.refreshStoryboardClipSource = function (storyId) {
     if (storyState.story && storyState.story.id === storyId) {
+      storyState.clipMediaRevision += 1;
       renderScenes();
       refreshSequenceExport(storyId).catch(reportError);
     }
@@ -2773,7 +2775,7 @@
     var outputHtml = '';
     if (assemblyCurrent) {
       var outputUrl = '/fs/storyboard/media?story=' + encodeURIComponent(assembly.storyId) +
-        '&path=' + encodeURIComponent(assembly.mediaPath || ('exports/' + assembly.media));
+        '&path=' + encodeURIComponent(assembly.mediaPath || ('exports/' + assembly.media)) + '&t=' + storyState.clipMediaRevision;
       outputHtml = '<div class="storyboard-sequence-output">' +
         '<div class="storyboard-sequence-output-label">Export preview</div>' +
         '<video src="' + escapeHtml(outputUrl) + '" controls preload="metadata"></video>' +
@@ -3636,7 +3638,7 @@
         ratingHtml +
         (take.mediaPurged && take.generated ? '<button type="button" class="review-captions-btn" data-take-action="regenerate" data-take-id="' + escapeHtml(takeId) + '">Regenerate</button>' : '') +
         '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
-        (/\.(mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(String(take.mediaPath || '')) ?
+        (!take.mediaPurged && /\.(mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(String(take.mediaPath || '')) ?
           '<button type="button" class="review-captions-btn" data-take-clip="' + escapeHtml(takeId) + '">Open in Clip</button>' : '') +
       '</div>' +
       '<details class="storyboard-take-advanced">' +

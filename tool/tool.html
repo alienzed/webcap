@@ -2910,11 +2910,14 @@
                                 <button id="diagnostics-assessment-stop" type="button" class="review-captions-btn hidden" hidden disabled>Stop Assessment</button>
                                 <button id="diagnostics-assessment-refresh" type="button" class="review-captions-btn">Refresh</button>
                                 <label class="model-assessment-deep" title="16 Set samples; Director long-form 4K, 8K and 16K probes — slower"><input id="diagnostics-assessment-deep" type="checkbox"> Deep assessment <small>(16 samples · 4K/8K/16K)</small></label>
-                                <details class="model-assessment-transfer-menu">
-                                    <summary>Import / Export</summary>
+                                <details class="model-assessment-tools">
+                                    <summary>More</summary>
                                     <div class="model-assessment-toolbar">
                                         <button id="diagnostics-assessment-export" type="button" class="review-captions-btn">Export Results</button>
                                         <button id="diagnostics-assessment-import" type="button" class="review-captions-btn">Import Results</button>
+                                        <button id="diagnostics-assessment-director" type="button" class="review-captions-btn">Director Calibration</button>
+                                        <button id="diagnostics-assessment-lab" type="button" class="review-captions-btn">Detailed Probes &amp; History</button>
+                                        <button id="diagnostics-assessment-benchmark" type="button" class="review-captions-btn">Custom Prompt Benchmark</button>
                                     </div>
                                 </details>
                                 <input id="diagnostics-assessment-file" type="file" accept=".json,application/json" hidden>
@@ -2938,14 +2941,6 @@
                                 <div id="diagnostics-assessment-summary" class="app-settings-help" aria-live="polite">Open this tab to load available findings.</div>
                             </div>
                             <div id="diagnostics-assessment-results" class="app-settings-environment-results"></div>
-                            <details class="model-assessment-tools">
-                                <summary>Legacy tools &amp; history</summary>
-                                <div class="model-assessment-toolbar">
-                                    <button id="diagnostics-assessment-director" type="button">Director Calibration</button>
-                                    <button id="diagnostics-assessment-lab" type="button">Detailed Probes &amp; History</button>
-                                    <button id="diagnostics-assessment-benchmark" type="button">Custom Prompt Benchmark</button>
-                                </div>
-                            </details>
                         </section>
                     </div>
                     <div id="diagnostics-panel-h3" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="h3" role="tabpanel" aria-labelledby="diagnostics-tab-h3" hidden>

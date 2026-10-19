@@ -3710,6 +3710,19 @@
         minute: '2-digit'
       }));
     }
+    if (take && take.generated) {
+      var input = take.effectiveInput || {};
+      var mp = Number(input.megapixels);
+      if (input.megapixels !== undefined && input.megapixels !== null && input.megapixels !== '' &&
+          Number.isFinite(mp) && mp > 0) {
+        parts.push(String(Number(mp.toFixed(2))) + ' MP');
+      }
+      var width = Number(input.width);
+      var height = Number(input.height);
+      if (Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0) {
+        parts.push(width + '×' + height);
+      }
+    }
     if (take && take.generated && take.seed !== undefined && take.seed !== null && take.seed !== '') {
       parts.push('Seed ' + String(take.seed));
     }

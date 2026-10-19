@@ -69,6 +69,7 @@ from .storyboard_archive import archive_preview as storyboard_archive_preview, a
 from .storyboard_store import _mutation_lock as storyboard_mutation_lock
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_first_cut import register_routes as register_storyboard_first_cut_routes
+from .test_batch import register_routes as register_test_batch_routes
 from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .media_explorer import list_media as media_explorer_list_media
@@ -99,6 +100,7 @@ app = Flask(__name__, static_folder=None)
 register_director_model_test_routes(app)
 register_model_lab_routes(app)
 register_storyboard_first_cut_routes(app)
+
 
 
 @app.errorhandler(TrainingStateError)
@@ -3516,6 +3518,8 @@ def open_in_vscode():
     rel_path = data.get("path", "").strip()
     return open_in_vscode_response(rel_path)
     
+register_test_batch_routes(app, safe_join_fs_root)
+
 if __name__ == "__main__":
     try:
         recover_invalid_startup_state()

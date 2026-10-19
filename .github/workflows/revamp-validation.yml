@@ -1,0 +1,29 @@
+name: Unified Test Generations validation
+on:
+  push:
+    branches:
+      - feat/unified-test-generations-workspace
+  workflow_dispatch:
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: JavaScript syntax
+        run: |
+          node --check tool/js/test_generations_unified.js
+          node --check tool/js/test_generations_perspective.js
+          node --check tool/js/epoch_finder.js
+          node --check tool/js/test_generations.js
+      - name: Python syntax
+        run: python -m compileall -q tool/server/epoch_finder.py tool/server/epoch_test_bench.py tests/test_test_generations_unified_gallery.py
+      - name: Install test essentials
+        run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client
+      - name: Unified gallery and no-feature-loss contracts
+        run: python -m pytest -q tests/test_test_generations_unified_gallery.py tests/test_test_generations_unified_workspace.py tests/test_test_generations_revamp_parity.py tests/test_test_generations_perspective.py

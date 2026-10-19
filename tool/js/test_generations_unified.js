@@ -74,7 +74,10 @@
             else checkpointSelection.add(item.id);
           } else {checkpointSelection.clear(); checkpointSelection.add(item.id);}
         }
-        selection=item.id;renderList();renderGallery();
+        selection = perspective==='checkpoints'
+          ? (checkpointSelection.has(item.id) ? item.id : (checkpointSelection.values().next().value || ''))
+          : item.id;
+        renderList();renderGallery();
       });
       host.appendChild(btn);
     });

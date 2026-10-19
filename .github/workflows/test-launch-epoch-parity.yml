@@ -8,6 +8,9 @@ on:
       - 'tool/js/run_analytics.js'
       - 'tool/css/styles.css'
       - 'tests/test_test_generations_focused_unification.py'
+      - 'tests/test_test_repeat.py'
+      - 'tool/server/epoch_test_bench.py'
+      - 'tool/server/llm_runner.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,4 +33,4 @@ jobs:
       - name: Install tests
         run: python -m pip install pytest
       - name: Focused regression
-        run: python -m pytest -q tests/test_test_generations_focused_unification.py
+        run: python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py

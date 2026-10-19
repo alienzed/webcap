@@ -56,6 +56,7 @@
       activityTarget: null,
       dismissedActivityTargetKey: '',
       sceneCompletions: {},
+      inspectedRefinements: {},
       activityErrorReported: false,
       activitySlotSample: null,
       requestByJobId: {},
@@ -504,7 +505,7 @@
     var sceneId = String(job && job.sceneId || '');
     var operation = String(job && job.operation || '');
     if (!storyId) return Promise.resolve();
-    if ((operation === 'write_prompt' || operation === 'refine_prompt') && sceneId && job.clearCorrection === true) {
+    if (operation === 'write_prompt' && sceneId && job.clearCorrection === true) {
       markSceneDirectorCompletion(storyId, sceneId, operation);
     }
 
@@ -2535,14 +2536,38 @@
     return 'Director update completed while you were elsewhere.';
   }
 
+  function sceneRefinementReviewRevision(sceneId) {
+    var scene = storyState.story && storyState.story.scenes && storyState.story.scenes[sceneId];
+    if (!scene || !scene.refineComplete) return '';
+    return String(scene.promptDirectorJobId || 'refined');
+  }
+
+  function sceneRefinementNeedsReview(sceneId) {
+    var revision = sceneRefinementReviewRevision(sceneId);
+    return !!revision && storyState.director.inspectedRefinements[
+      sceneDirectorCompletionKey(storyState.story.id, sceneId)
+    ] !== revision;
+  }
+
+  function inspectSceneRefinement(storyId, sceneId) {
+    if (!storyState.story || String(storyState.story.id || '') !== String(storyId || '')) return;
+    var revision = sceneRefinementReviewRevision(sceneId);
+    if (!revision) return;
+    var key = sceneDirectorCompletionKey(storyId, sceneId);
+    if (storyState.director.inspectedRefinements[key] === revision) return;
+    storyState.director.inspectedRefinements[key] = revision;
+    syncSceneProgressionCard(sceneId);
+  }
+
   function sceneDirectorCompletionHtml(sceneId) {
     var notice = sceneDirectorCompletionNotice(sceneId);
-    var refined = notice && notice.operation === 'refine_prompt';
-    var description = notice ? sceneDirectorCompletionDescription(notice) : '';
+    var refined = sceneRefinementNeedsReview(sceneId);
+    var description = refined ? 'Refined with Director — open Scene to inspect.' :
+      (notice ? sceneDirectorCompletionDescription(notice) : '');
     return '<span class="storyboard-scene-progress-director-complete' +
-      (refined ? ' is-refine' : '') + (notice ? '' : ' hidden') +
+      (refined ? ' is-refine' : '') + (description ? '' : ' hidden') +
       '" data-scene-director-completion' +
-      (notice
+      (description
         ? ' title="' + escapeHtml(description) + '" aria-label="' + escapeHtml(description) + '"'
         : ' aria-hidden="true"') +
       '>' + (refined ? '✦' : '✓') + '</span>';
@@ -2646,7 +2671,6 @@
           '</span>' +
           '<div class="storyboard-scene-progress-title-row">' +
             '<strong data-scene-progress-title>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
-
           '</div>' +
         '</button>' +
         '<details class="storyboard-scene-menu storyboard-scene-progress-menu">' +
@@ -2699,7 +2723,10 @@
       if (mode === 'focus') {
         var order = storyState.story && Array.isArray(storyState.story.sceneOrder) ? storyState.story.sceneOrder : [];
         clearSceneNewTakeCount(ensureActiveScene(order));
-        if (sceneId && storyState.story) clearSceneDirectorCompletion(storyState.story.id, sceneId);
+        if (sceneId && storyState.story) {
+          clearSceneDirectorCompletion(storyState.story.id, sceneId);
+          inspectSceneRefinement(storyState.story.id, sceneId);
+        }
       }
       renderScenes();
       renderSequencePreview();
@@ -6030,6 +6057,7 @@
       var focusedScene = event.target.closest('.storyboard-scene[data-scene-id]');
       if (focusedScene && storyState.story) {
         clearSceneDirectorCompletion(storyState.story.id, focusedScene.dataset.sceneId);
+        inspectSceneRefinement(storyState.story.id, focusedScene.dataset.sceneId);
       }
       var inheritedMegapixels = event.target.closest('[data-scene-field="megapixels"]');
       if (inheritedMegapixels) seedInheritedSceneMegapixels(inheritedMegapixels);

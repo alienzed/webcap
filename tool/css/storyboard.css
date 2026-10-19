@@ -3731,16 +3731,15 @@
 }
 
 @media (max-width: 1180px) {
+  /* On stacked layouts, the workspace itself scrolls. */
   .storyboard-story-authoring {
-    grid-template-rows: minmax(0, 1fr) auto;
-    overflow: hidden;
+    grid-template-rows: auto auto;
+    overflow: visible;
   }
 
   .storyboard-story-overview-surface {
-    min-height: 0;
-    overflow-y: auto;
+    overflow: visible;
   }
-
 }
 
 

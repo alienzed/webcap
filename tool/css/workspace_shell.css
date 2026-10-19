@@ -3070,6 +3070,6 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .inference-queue-row:has(> .job-queue-drag-handle.hidden) {
   grid-template-columns: minmax(0, 1fr) auto;
 }
-.inference-queue-row.is-dragging { opacity: .5; }
-.inference-queue-row.queue-drop-before { box-shadow: inset 0 3px 0 var(--accent); }
-.inference-queue-row.queue-drop-after { box-shadow: inset 0 -3px 0 var(--accent); }
+.inference-queue-row[data-queue-dragging] { opacity: .5; }
+.inference-queue-row[data-queue-drop="before"] { box-shadow: inset 0 3px 0 var(--accent); }
+.inference-queue-row[data-queue-drop="after"] { box-shadow: inset 0 -3px 0 var(--accent); }

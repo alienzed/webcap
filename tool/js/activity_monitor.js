@@ -15,12 +15,10 @@
     reportedErrors: Object.create(null),
     localProgress: Object.create(null),
     progressChildIds: Object.create(null),
-    dismissedJobs: Object.create(null),
     selectedJobKey: '',
     detailsOpen: false,
     systemHistory: [],
-    lastSystemSampleAt: 0,
-    autoOpenSeen: Object.create(null)
+    lastSystemSampleAt: 0
   };
 
   function el(id) { return document.getElementById(id); }
@@ -70,8 +68,7 @@
     if (snapshot.childJobId) {
       state.progressChildIds[String(snapshot.childJobId)] = { owner: String(snapshot.id), expiresAt: 0 };
     }
-    if (state.open) render();
-    else { maybeAutoOpen(); render(); }
+    render();
   }
 
   function finishProgress(id, status) {
@@ -222,25 +219,6 @@
       return window.setReviewDetailTab('qa');
     }
     if (item.kind !== 'vocabulary-discovery' && item.kind !== 'vision-tag-assist') return openItem(item);
-  }
-
-  function maybeAutoOpen() {
-    var competingDrawer = ['director-chat-drawer'].concat(window.isOperationsDrawerMounted ? [] : ['inference-queue-drawer']).some(function (id) {
-      var drawer = el(id);
-      return drawer && !drawer.classList.contains('hidden');
-    });
-    currentActivityItems().forEach(function (item) {
-      var lane = activityLane(item);
-      var id = activityJobKey(item);
-      if (state.autoOpenSeen[id]) return;
-      state.autoOpenSeen[id] = true;
-      // Never displace a workflow drawer for an automatically raised Activity panel.
-      var shortInteractive = lane === 'llm' || item.kind === 'first-cut' || item.kind === 'director-diagnostics';
-      if (!(window.isOperationsDrawerMounted && window.isOperationsDrawerVisible()) && !state.open && !competingDrawer && shortInteractive && !state.dismissedJobs[id]) {
-        state.selectedJobKey = id;
-        setOpen(true);
-      }
-    });
   }
 
   function updateSystemHistory(sample) {
@@ -1278,7 +1256,6 @@
         if (!activeErrorKeys[key]) delete state.reportedErrors[key];
       });
       notifyRecent(sessionRecent());
-      maybeAutoOpen();
       render();
       return payload;
     }).catch(function (err) {
@@ -1339,10 +1316,6 @@
       if (!internal && typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
       if (!internal && typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
     } else if (wasOpen) {
-      if (manualClose) {
-        var item = currentPrimaryItem();
-        if (item) state.dismissedJobs[activityJobKey(item)] = true;
-      }
       storeLastSeen(Date.now() / 1000);
       state.openedAt = 0;
     }

@@ -207,6 +207,15 @@
     });
   }
 
+  // A recognized color choice has less influence than shape, pose, or structure.
+  function testVlColorAttribute(group) {
+    var colors = 'black white gray grey silver red burgundy maroon orange yellow gold green olive lime blue cyan teal turquoise navy purple violet lavender magenta pink peach coral mauve brown tan beige cream';
+    var names = new Set(colors.split(' '));
+    return [group.expectedText, group.selectedText].some(function (value) {
+      return names.has(String(value || '').trim().toLowerCase());
+    });
+  }
+
   // Session-only scoring: neither the VL observation nor counting overrides are persisted.
   function testVlPartialCredit(expected, observed) {
     var a = String(expected || '').toLowerCase().match(/[a-z0-9]+/g) || [];
@@ -230,15 +239,14 @@
     (comparison || []).forEach(function (group) {
       if (testVl.disabledGroups.has(group.id) || (ignoredGroups && ignoredGroups.has(group.id))) {
         score.excluded += 1;
-      } else if (group.result === 'match') {
-        score.matches += 1;
-        score.count += 1;
-      } else if (group.result === 'mismatch') {
-        var partial = testVlPartialCredit(group.expectedText, group.selectedText);
+      } else if (group.result === 'match' || group.result === 'mismatch') {
+        var weight = testVlColorAttribute(group) ? 0.5 : 1;
+        var partial = group.result === 'match' ? 1 :
+          testVlPartialCredit(group.expectedText, group.selectedText);
         if (!partial && testVlNearColorMatch(group.expectedText, group.selectedText)) partial = 0.5;
-        score.matches += partial;
-        score.mismatches += 1 - partial;
-        score.count += 1;
+        score.matches += weight * partial;
+        score.mismatches += weight * (1 - partial);
+        score.count += weight;
       } else {
         score.unclear += 1;
       }
@@ -526,7 +534,7 @@
     // Only differences and unresolved observations demand immediate attention.
     var visible = '';
     if (mismatches.length) visible += '<strong>Differences</strong>' + testVlComparisonTable(mismatches, groups, entry);
-    if (nearMatches.length) visible += '<strong>Related colors · half credit</strong>' + testVlComparisonTable(nearMatches, groups, entry);
+    if (nearMatches.length) visible += '<strong>Related colors · partial credit</strong>' + testVlComparisonTable(nearMatches, groups, entry);
     if (unclear.length) visible += '<strong>Unclear</strong>' + testVlComparisonTable(unclear, groups, entry);
     if (groups.length && !mismatches.length && !nearMatches.length && !unclear.length) visible = '<p>No differences reported.</p>';
     comparison.innerHTML = visible;

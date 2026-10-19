@@ -1086,9 +1086,9 @@ def workspace_gallery(folder_path, model_id=""):
                 continue
             provenance = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
             source_job = str(provenance.get("sourceJobId") or "")
-            source_folder = str(provenance.get("sourceFolder") or "").replace("\\\\", "/").strip("/")
+            source_folder = str(provenance.get("sourceFolder") or "").replace(chr(92), "/").strip("/")
             epoch = provenance.get("sourceEpoch")
-            if source_folder != str(bench._relative_set_folder(folder_path)).replace("\\\\", "/").strip("/") or type(epoch) is not int:
+            if source_folder != str(bench._relative_set_folder(folder_path)).replace(chr(92), "/").strip("/") or type(epoch) is not int:
                 source_job, epoch = "", None
             media.append({
                 "id": "test:" + session_name + ":" + media_file,

@@ -756,7 +756,7 @@ def test_test_generations_can_skip_the_base_rendition_for_one_batch():
     assert "baseInclude.id = 'test-generations-base-include';" in script
     assert "baseInclude.checked = includeBase;" in script
     assert "baseInclude.disabled = true;" not in script
-    assert "includeBase: includeBase" in script
+    assert "includeBase: el('test-generations-base-include').checked" in script
 
 
 def test_rendered_test_status_resynchronizes_run_controls():
@@ -882,7 +882,7 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     assert "baseDetail.textContent = 'Reference comparison';" in script
     assert "baseInclude.checked = includeBase;" in script
     assert "baseInclude.disabled = true;" not in script
-    assert "includeBase: includeBase" in script
+    assert "includeBase: el('test-generations-base-include').checked" in script
     assert "var allSelected = !!files.length && files.every" in script
     assert "selectedCandidates = allSelected ? new Set() : new Set(files);" in script
     assert "name: name" in script
@@ -1284,7 +1284,7 @@ def test_test_generations_strength_control_is_per_candidate_row():
     assert "strength.max = '2';" in script
     assert "strength.step = '0.05';" in script
     assert "strength.title = 'Override weight (blank uses default)';" in script
-    assert "candidateStrengths: selectedStrengths" in script
+    assert "candidateStrengths: strengths" in script
     assert "Strength must be between -2 and 2." in script
     assert ".test-generations-candidate-strength" in css
 
@@ -1308,7 +1308,7 @@ def test_test_generation_default_weight_inherits_unless_candidate_overridden():
     assert ": String(defaultCandidateStrength);" in script
     assert "if (strengthValue === defaultCandidateStrength) delete candidateStrengths[strengthFile];" in script
     assert "Object.prototype.hasOwnProperty.call(candidateStrengths || {}, strengthFile)" in script
-    assert "selectedStrengths[strengthFile] = strengthValue;" in script
+    assert "strengths[file] = weight;" in script
     assert "Default weight must be between -2 and 2." in script
 
 def test_global_director_model_control_lives_in_header():
@@ -1417,7 +1417,7 @@ def test_test_generations_sweep_is_opt_in_and_avoids_destructive_result_actions(
     assert 'id="test-generations-sweep-mode"' in html
     assert 'id="test-generations-sweep-weights"' in html
     assert "var sweepMode = false;" in script
-    assert "if (weights) criteria.sweepWeights = weights;" in script
+    assert "if (sweepMode) criteria.sweepWeights = parseSweepWeights(sweepWeights);" in script
     assert "sweepMode = false;" in script
     assert "if (result && result.strength !== undefined && result.strength !== null) return null;" in script
     assert "identity.primary += ' · Weight ' + String(result.strength);" in script
@@ -1670,13 +1670,13 @@ def test_preview_sort_is_session_local_and_preserves_keyed_cards():
     assert "sortTestPreviewCards(status);" in script.split("function renderResults(status)", 1)[1].split("function syncActiveRunControls", 1)[0]
 
 
-def test_batch_modal_never_navigates_instead_of_opening():
+def test_multisession_submission_uses_native_sessions_without_modal_navigation():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    dialog = script.split("function openTestBatchDialog()", 1)[1].split("function closeTestBatchDialog()", 1)[0]
-    assert "openTestBenchForSetFolder" not in dialog
-    assert "modal.classList.remove('hidden')" in dialog
-    assert "start').disabled = !!activeBatch" in dialog
-
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    assert "function runTestBatch(count, autoVl)" in script
+    assert "return refreshSessions();" in script
+    assert "pendingBatchSelection" in script
+    assert 'id="test-generations-batch-modal"' not in html
 
 def test_batch_finishes_after_rating_refresh_and_can_be_restarted():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -1707,9 +1707,11 @@ def test_batch_ux_has_live_workload_summary_and_recent_sessions():
     assert "viewedTestBatch || testBatch" in script
 
 
-def test_batch_ux_surfaces_failures_and_keeps_live_activity_on_history_view():
+def test_multisession_errors_and_activity_are_visible_without_batch_panel():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    assert "data-test-batch-errors" in script
-    assert "batch.errors.forEach(function (error)" in script
-    assert "var activityBatch = testBatch;" in script
-    assert "id: activityBatch.activityId" in script
+    assert "reportConsoleError('Test sessions', new Error(message))" in script
+    assert "function publishTestBatchActivity(batch)" in script
+    assert "window.publishActivityProgress" in script
+    assert "window.finishActivityProgress" in script
+    assert "window.recordActivityCompletion" in script
+

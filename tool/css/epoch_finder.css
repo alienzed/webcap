@@ -315,7 +315,8 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
   display:flex;align-items:center;gap:4px;
   width:var(--test-workspace-sidebar-width);height:51px;
   padding:7px 12px;box-sizing:border-box;
-  background:var(--panel-bg,var(--surface));
+  /* The persistent tabs cover content scrolling behind them; both themes define --panel. */
+  background:var(--panel);
   border-right:1px solid var(--border-color,var(--border));
   border-bottom:1px solid var(--border-color,var(--border));
 }

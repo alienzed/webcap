@@ -177,6 +177,11 @@ def capability_run_summaries():
                 entry["throughputSamples"].append(round(float(rate), 2))
             if isinstance(tokens, (int, float)) and not isinstance(tokens, bool) and 0 < tokens < 10000000:
                 entry["outputTokenSamples"].append(round(float(tokens), 2))
+            if kind.startswith("director_writing") and status == "completed":
+                # A completed LLM job alone does not prove a long-form target.
+                # The calibration protocol owns real 8K/16K qualification.
+                entry["maxRequestedTokens"] = max(entry.get("maxRequestedTokens", 0),
+                    int(kind.rsplit("_", 1)[-1]) if kind.rsplit("_", 1)[-1].isdigit() else 2048)
             entry["status"] = next((value for value in (
                 "failed", "running", "interrupted", "skipped", "completed"
             ) if entry["counts"].get(value)), status)
@@ -977,7 +982,7 @@ def _run_director_model(run, model):
         ),
     )
     if run.get("depth") == "deep":
-        for budget in (1024, 4096):
+        for budget in (4096, 8192, 16384):
             _probe_job(
                 run,
                 kind="director_writing_" + str(budget),

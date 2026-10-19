@@ -727,8 +727,8 @@
     var attributes = (status.wildcardEvaluationGroups || []).filter(function (g) { return g.options && g.options.length; });
     // Only references corresponding to a scored option can be assessed.
     referenceCompare.plan = all.map(function (choice) {
-      var attribute = attributes.find(function (g) { return g.options.includes(choice.term); });
-      return attribute ? {choice:choice, attribute:attribute} : null;
+      var matches = attributes.filter(function (g) { return g.options.includes(choice.term); });
+      return matches.length === 1 ? {choice:choice, attribute:matches[0]} : null;
     }).filter(Boolean);
     var dialog = el('test-generations-reference-dialog');
     var method = el('test-generations-evaluator').value;

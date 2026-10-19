@@ -421,6 +421,7 @@
           throw new Error((body && body.error) || 'Storyboard Director job request failed.');
         }
         trackTransientLlmJob(body.job);
+        followRevisionProgress(body.job);
         if (['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(String(body.job.status || '')) !== -1) {
           reportTransientLlmTiming(body.job);
         }
@@ -2509,7 +2510,15 @@
     return storyState.activeSceneId;
   }
 
-  function followVisibleWorkingScene(storyId, sceneId) {
+  function followRevisionProgress(job) {
+    if (!job || job.client !== 'storyboard' || job.operation !== 'revise_scenes_sequence' ||
+        job.status !== 'running') return;
+    var progress = job.revisionProgress;
+    if (!progress || progress.phase !== 'Revising Scenes' || !progress.sceneId) return;
+    followVisibleWorkingScene(job.storyId, progress.sceneId, true);
+  }
+
+  function followVisibleWorkingScene(storyId, sceneId, visualOnly) {
     var workspace = el('storyboard-workspace');
     var currentStory = storyState.story;
     var targetStoryId = String(storyId || '');
@@ -2528,9 +2537,9 @@
     storyState.activeSceneId = targetSceneId;
 
     if (storyState.sceneViewMode === 'focus') {
-      clearSceneNewTakeCount(targetSceneId);
+      if (!visualOnly) clearSceneNewTakeCount(targetSceneId);
       renderScenes();
-      if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+      if (!visualOnly && typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
       if (directorActivityActive()) positionDirectorActivity();
     }
   }

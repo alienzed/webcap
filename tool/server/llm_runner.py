@@ -675,6 +675,11 @@ def _execute_claimed(job_id, gpu_reserved):
                     if execution_get_job(job_id).get("status") == "stopping":
                         return execution_finish_job_transient(job_id, status="stopped",
                             error="Revise Scenes stopped after " + str(completed) + " Scenes.")
+                with _revision_progress_lock:
+                    _revision_progress[job_id] = {
+                        "completed": completed, "total": len(scene_ids),
+                        "phase": "Revising Scenes", "sceneId": scene_id,
+                    }
                 story = load_story(str(context.get("storyId") or ""))
                 scene_contract = build_request(story, scene_id, "refine_prompt", instruction=instruction)
                 result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True)
@@ -688,7 +693,10 @@ def _execute_claimed(job_id, gpu_reserved):
                     }, result, job_id=job_id, frozen_contract=scene_contract)
                 completed += 1
                 with _revision_progress_lock:
-                    _revision_progress[job_id] = {"completed": completed, "total": len(scene_ids), "phase": "Revising Scenes"}
+                    _revision_progress[job_id] = {
+                        "completed": completed, "total": len(scene_ids),
+                        "phase": "Revising Scenes", "sceneId": scene_id,
+                    }
         except Exception as exc:
             raise RuntimeError("Revise Scenes failed after " + str(completed) +
                 " of " + str(len(scene_ids)) + " Scenes: " + str(exc)) from exc

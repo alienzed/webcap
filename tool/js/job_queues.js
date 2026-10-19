@@ -276,8 +276,8 @@
   var drag = null;
   var moving = false;
   function clearDrag() {
-    drawer.querySelectorAll('.queue-drop-before, .queue-drop-after, .is-dragging')
-      .forEach(function (row) { row.classList.remove('queue-drop-before', 'queue-drop-after', 'is-dragging'); });
+    drawer.querySelectorAll('[data-queue-drop], [data-queue-dragging]')
+      .forEach(function (row) { row.removeAttribute('data-queue-drop'); row.removeAttribute('data-queue-dragging'); });
     drag = null;
   }
   function queueRows(which) {
@@ -296,7 +296,7 @@
     var which = row.dataset.queueDragLane;
     if (which === 'llm' || queueRows(which).length < 2) { event.preventDefault(); return; }
     drag = { lane: which, id: row.dataset.queueDragId };
-    row.classList.add('is-dragging');
+    row.dataset.queueDragging = 'true';
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', drag.id);
   });
@@ -306,11 +306,11 @@
     if (!row || row.dataset.queueDragLane !== drag.lane || !row.classList.contains('status-queued')) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    drawer.querySelectorAll('.queue-drop-before, .queue-drop-after').forEach(function (item) {
-      item.classList.remove('queue-drop-before', 'queue-drop-after');
+    drawer.querySelectorAll('[data-queue-drop]').forEach(function (item) {
+      item.removeAttribute('data-queue-drop');
     });
     var rect = row.getBoundingClientRect();
-    row.classList.add(event.clientY < rect.top + rect.height / 2 ? 'queue-drop-before' : 'queue-drop-after');
+    row.dataset.queueDrop = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
   });
   drawer.addEventListener('drop', function (event) {
     if (!drag) return;
@@ -318,7 +318,7 @@
     var row = event.target.closest('[data-queue-drag-lane]');
     var source = drag;
     var target = row && row.dataset.queueDragLane === source.lane && row.classList.contains('status-queued') ? row : null;
-    var after = target && target.classList.contains('queue-drop-after');
+    var after = target && target.dataset.queueDrop === 'after';
     var beforeRows = queueRows(source.lane);
     clearDrag();
     if (!target || moving) return;
@@ -341,7 +341,7 @@
   drawer.addEventListener('dragend', clearDrag);
   drawer.addEventListener('dragleave', function (event) {
     if (event.relatedTarget && drawer.contains(event.relatedTarget)) return;
-    drawer.querySelectorAll('.queue-drop-before, .queue-drop-after').forEach(function (item) {
+    drawer.querySelectorAll('[data-queue-drop]').forEach(function (item) {
       item.classList.remove('queue-drop-before', 'queue-drop-after');
     });
   });

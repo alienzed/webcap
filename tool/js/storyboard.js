@@ -2530,20 +2530,22 @@
 
   function sceneDirectorCompletionDescription(notice) {
     var operation = String(notice && notice.operation || '');
-    if (operation === 'refine_prompt') return 'Refine completed while you were elsewhere.';
-    if (operation === 'write_prompt') return 'Write with Director completed while you were elsewhere.';
+    if (operation === 'refine_prompt') return 'Refined with Director — open Scene to review.';
+    if (operation === 'write_prompt') return 'Written with Director — open Scene to review.';
     return 'Director update completed while you were elsewhere.';
   }
 
   function sceneDirectorCompletionHtml(sceneId) {
     var notice = sceneDirectorCompletionNotice(sceneId);
+    var refined = notice && notice.operation === 'refine_prompt';
     var description = notice ? sceneDirectorCompletionDescription(notice) : '';
-    return '<span class="storyboard-scene-progress-director-complete' + (notice ? '' : ' hidden') +
+    return '<span class="storyboard-scene-progress-director-complete' +
+      (refined ? ' is-refine' : '') + (notice ? '' : ' hidden') +
       '" data-scene-director-completion' +
       (notice
         ? ' title="' + escapeHtml(description) + '" aria-label="' + escapeHtml(description) + '"'
         : ' aria-hidden="true"') +
-      '>✓</span>';
+      '>' + (refined ? '✦' : '✓') + '</span>';
   }
 
   function sceneDirectorCompletionVisible(storyId, sceneId) {
@@ -2609,24 +2611,9 @@
     card.classList.toggle('has-selected-take', !!scene.selectedTakeId);
     var indicators = card.querySelector('.storyboard-scene-progress-indicators');
     var title = card.querySelector('[data-scene-progress-title]');
-    var directorCompletion = card.querySelector('[data-scene-director-completion]');
-    var refined = card.querySelector('[data-scene-refined]');
-    if (!indicators || !title || !directorCompletion || !refined) throw new Error('Storyboard Scene progression card markup is missing.');
-    refined.classList.toggle('hidden', !scene.refineComplete);
-    indicators.innerHTML = sceneProgressionIndicatorsHtml(sceneId);
+    if (!indicators || !title) throw new Error('Storyboard Scene progression card markup is missing.');
+    indicators.innerHTML = sceneProgressionIndicatorsHtml(sceneId) + sceneDirectorCompletionHtml(sceneId);
     title.textContent = scene.title || 'Untitled Scene';
-    var notice = sceneDirectorCompletionNotice(sceneId);
-    directorCompletion.classList.toggle('hidden', !notice);
-    if (notice) {
-      var description = sceneDirectorCompletionDescription(notice);
-      directorCompletion.title = description;
-      directorCompletion.setAttribute('aria-label', description);
-      directorCompletion.removeAttribute('aria-hidden');
-    } else {
-      directorCompletion.removeAttribute('title');
-      directorCompletion.removeAttribute('aria-label');
-      directorCompletion.setAttribute('aria-hidden', 'true');
-    }
   }
 
   function markSceneNewTake(sceneId) {
@@ -2654,13 +2641,12 @@
           '<span class="storyboard-scene-progress-kicker"' +
             (planDirectorModel ? ' title="Scene plan originated from Director model ' + escapeHtml(planDirectorModel) + '"' : '') +
           '>Scene ' + String(index + 1).padStart(2, '0') +
-            '<span class="storyboard-scene-progress-indicators">' + sceneProgressionIndicatorsHtml(sceneId) + '</span>' +
+            '<span class="storyboard-scene-progress-indicators">' +
+              sceneProgressionIndicatorsHtml(sceneId) + sceneDirectorCompletionHtml(sceneId) + '</span>' +
           '</span>' +
           '<div class="storyboard-scene-progress-title-row">' +
             '<strong data-scene-progress-title>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
-            '<span class="storyboard-scene-progress-refined' + (scene.refineComplete ? '' : ' hidden') +
-              '" data-scene-refined title="Refined with Director" role="img" aria-label="Refined with Director">🪄</span>' +
-            sceneDirectorCompletionHtml(sceneId) +
+
           '</div>' +
         '</button>' +
         '<details class="storyboard-scene-menu storyboard-scene-progress-menu">' +

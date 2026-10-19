@@ -1192,14 +1192,15 @@ def reorder_job(job_id, direction=None, position=None):
             raise ValueError("Execution queue job cannot move further.")
         if target == current:
             return lane_snapshot(lane_name)
-        other = queued[target]
+        # Position means insertion, not swapping two distant jobs. Preserve
+        # non-queued slots (running, backlog, terminal) in the lane.
         jobs = lane["jobs"]
-        a = jobs.index(job)
-        b = jobs.index(other)
-        jobs[a], jobs[b] = jobs[b], jobs[a]
-        now = time.time()
-        job["updatedAt"] = now
-        other["updatedAt"] = now
+        queued_indexes = [index for index, item in enumerate(jobs) if item.get("status") == "queued"]
+        queued.pop(current)
+        queued.insert(target, job)
+        for index, queued_job in zip(queued_indexes, queued):
+            jobs[index] = queued_job
+        job["updatedAt"] = time.time()
         _refresh_positions(lane)
         _write_state(state)
         return lane_snapshot(lane_name)

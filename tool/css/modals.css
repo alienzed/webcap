@@ -3724,3 +3724,26 @@ html[data-theme="dark"] .app-settings-environment-check {
 
 /* Specialist calibration and benchmark panels remain accessible from Assessment only. */
 #diagnostics-tab-models, #diagnostics-tab-benchmark { display: none; }
+
+/* Sortable model evidence comparison; only Assessment uses the expanded dialog. */
+.diagnostics-assessment-wide .diagnostics-dialog { width: min(1660px, calc(100vw - 30px)); }
+#diagnostics-panel-assessment { overflow-x: auto; }
+#diagnostics-assessment-results { display: block; overflow-x: auto; }
+.model-assessment-search { display: inline-flex; align-items: center; gap: 8px; margin: 7px 0; color: var(--muted); }
+.model-assessment-search input { min-width: min(340px, 66vw); }
+.model-assessment-table { width: 100%; min-width: 1130px; border-collapse: collapse; font-size: 12px; }
+.model-assessment-table thead th { position: sticky; top: 0; z-index: 1; background: var(--surface, #161c24); text-align: left; color: var(--muted); padding: 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.model-assessment-table thead th button { width: auto; padding: 2px 4px; margin: 0; color: inherit; background: transparent; border: 0; cursor: pointer; font: inherit; font-weight: 600; }
+.model-assessment-table thead th[aria-sort="ascending"] button::after { content: " ↑"; }
+.model-assessment-table thead th[aria-sort="descending"] button::after { content: " ↓"; }
+.model-assessment-table td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; font-variant-numeric: tabular-nums; }
+.model-assessment-table tbody[hidden], .model-assessment-evidence[hidden] { display: none; }
+.model-assessment-table tbody:hover > tr:first-child { background: var(--surface-alt, rgba(128,128,128,.07)); }
+.model-assessment-table td:first-child { width: 48px; text-align: center; }
+.model-assessment-table .model-assessment-name { min-width: 260px; max-width: 460px; font-variant-numeric: normal; overflow-wrap: anywhere; }
+.model-assessment-expand { width: 100%; padding: 0; border: 0; background: none; color: var(--text); font-weight: 650; text-align: left; cursor: pointer; }
+.model-assessment-expand::before { content: "▸ "; color: var(--muted); }
+.model-assessment-expand[aria-expanded="true"]::before { content: "▾ "; }
+.model-assessment-evidence td { background: var(--surface-alt, rgba(128,128,128,.07)); text-align: left !important; padding: 12px 24px; }
+.model-assessment-evidence td > div { margin: 4px 0; overflow-wrap: anywhere; }
+.model-assessment-evidence button { width: auto; margin-top: 8px; }

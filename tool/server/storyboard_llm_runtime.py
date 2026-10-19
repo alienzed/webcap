@@ -1169,7 +1169,14 @@ def advertised_thinking(model_ref):
     with _use_runtime(runtime_id):
         if _director_config().get("mode") != "remote" or not _remote_is_ollama():
             return False
-        return "thinking" in _ollama_model_capabilities(model_id)
+        payload = _remote_native_http_json("/api/show", timeout=5, method="POST", payload={"model": model_id})
+        advertised = payload.get("thinking") if isinstance(payload, dict) else None
+        if isinstance(advertised, dict):
+            values = advertised.get("values")
+            if isinstance(values, list):
+                return True in values and False in values
+        capabilities = payload.get("capabilities") if isinstance(payload, dict) else []
+        return isinstance(capabilities, list) and "thinking" in capabilities
 
 
 def list_vision_models(reload=False):

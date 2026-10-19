@@ -1330,6 +1330,10 @@
                     </section>
                     <div id="test-generations-body" class="test-generations-body">
                         <aside class="test-generations-rail">
+                            <div class="test-generations-perspective" role="group" aria-label="Test Generations view">
+                                <button type="button" data-test-generations-perspective="build" aria-pressed="true">Build</button>
+                                <button type="button" data-test-generations-perspective="explore" aria-pressed="false">Explore</button>
+                            </div>
                             <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
                                 <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Tests</button>
                                 <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
@@ -3379,6 +3383,7 @@
         <script src="/static/js/workflow_gate.js"></script>
         <script src="/static/js/test_generations.js"></script>
         <script src="/static/js/epoch_finder.js"></script>
+        <script src="/static/js/test_generations_perspective.js"></script>
         <script src="/static/js/test_references.js"></script>
         <script src="/static/js/run_analytics.js"></script>
         <script src="/static/js/storyboard.js"></script>

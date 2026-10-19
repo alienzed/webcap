@@ -23,7 +23,7 @@ def test_native_regular_and_campaign_launch_controls():
     assert "return runTestBatch(count, autoVl);" in js
     assert "function testRunCriteria()" in js
     assert "refreshSessions();" in js
-    assert "preserveSingleSeed: !!preserveSingleSeed && count === 1" in js
+    assert "preserveSingleSeed: count === 1" in js
     assert "preserveSingleSeed" in (ROOT / "tool/server/test_batch.py").read_text(encoding="utf-8")
     assert "epoch-finder-back-to-tests" in finder
     assert "showMode('tests')" in finder

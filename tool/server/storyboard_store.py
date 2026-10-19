@@ -599,6 +599,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "generationDefaults": generation_defaults,
         "tags": _normalize_tags(payload.get("tags", current.get("tags", []))),
         "status": status,
+        "mediaArchivedAt": current.get("mediaArchivedAt"),
         "pinned": bool(payload.get("pinned", current.get("pinned", False))),
         "createdAt": current.get("createdAt") or now,
         "updatedAt": now,

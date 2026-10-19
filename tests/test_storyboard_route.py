@@ -779,3 +779,28 @@ def test_individual_development_outline_freezes_source_revision(monkeypatch):
 
     assert response.status_code == 202
     assert response.get_json()["sourceUpdatedAt"] == "source-revision"
+
+
+def test_storyboard_archive_route_blocks_pending_take_work(monkeypatch):
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: {"id": story_id})
+    monkeypatch.setattr(app_module, "llm_storyboard_story_busy", lambda *_args: False)
+    monkeypatch.setattr(app_module, "storyboard_generation_queue", lambda story_id: {
+        "jobs": [{"status": "running", "storyId": story_id}]
+    })
+    response = app_module.app.test_client().post("/fs/storyboard", json={
+        "operation": "archive_story", "storyId": "story-1"
+    })
+    assert response.status_code == 400
+    assert "Take generation" in response.get_json()["error"]
+
+
+def test_storyboard_archive_preview_route_is_nondestructive(monkeypatch):
+    monkeypatch.setattr(app_module, "storyboard_load_story", lambda story_id: {"id": story_id})
+    monkeypatch.setattr(app_module, "storyboard_archive_preview", lambda story_id: {
+        "storyId": story_id, "reclaimableBytes": 100, "purgeTakeCount": 3,
+    })
+    response = app_module.app.test_client().post("/fs/storyboard", json={
+        "operation": "archive_preview", "storyId": "story-1"
+    })
+    assert response.status_code == 200
+    assert response.get_json()["preview"]["reclaimableBytes"] == 100

@@ -24,6 +24,7 @@ from .storyboard_store import (
     resolve_scene_generation_defaults,
     resolve_scene_loras,
     storyboard_root,
+    _mutation_lock,
 )
 
 
@@ -417,21 +418,56 @@ def reconcile_startup():
 
 def start_generation(story_id, scene_id):
     reconcile_startup()
+    with _mutation_lock:
+        story = load_story(story_id)
+        if story.get("status") == "archived":
+            raise ValueError("Restore this Story's recipe before generating new Takes.")
+        scene_id = str(scene_id or "").strip()
+        scene = (story.get("scenes") or {}).get(scene_id)
+        if not isinstance(scene, dict):
+            raise FileNotFoundError("Scene does not exist.")
+        settings = _scene_settings(scene, story)
+        request = _storyboard_request(settings)
+        from .inference_runner import enqueue_storyboard
+        job = enqueue_storyboard(
+            request, story_id, scene_id, label=str(scene.get("title") or "Storyboard Take"),
+        )
+    return generation_status(job["jobId"])
+
+
+def regenerate_take(story_id, scene_id, take_id):
+    """Queue a fresh Take from the frozen recipe, not editable Scene defaults."""
+    reconcile_startup()
     story = load_story(story_id)
-    scene_id = str(scene_id or "").strip()
-    scene = (story.get("scenes") or {}).get(scene_id)
+    scene = (story.get("scenes") or {}).get(str(scene_id or ""))
     if not isinstance(scene, dict):
         raise FileNotFoundError("Scene does not exist.")
-
-    settings = _scene_settings(scene, story)
+    original = (scene.get("takes") or {}).get(str(take_id or ""))
+    if not isinstance(original, dict) or not original.get("generated"):
+        raise ValueError("Only generated Takes have reproducible generation recipes.")
+    if original.get("workflowProfile") != "minimax_h3_inference_v1":
+        raise ValueError("This Take's workflow profile is not supported for regeneration.")
+    if original.get("seed") is None:
+        raise ValueError("This Take did not record a generation seed.")
+    settings = {
+        "prompt": str(original.get("sourcePrompt") or original.get("prompt") or ""),
+        "sourcePrompt": str(original.get("sourcePrompt") or original.get("prompt") or ""),
+        "duration": original.get("durationSeconds"),
+        "aspectRatio": original.get("aspectRatio"),
+        "megapixels": original.get("megapixels"),
+        "seed": original.get("seed"),
+        "seedMode": "fixed",
+        "loras": copy.deepcopy(original.get("loras") or []),
+        "references": copy.deepcopy(original.get("references") or []),
+        "entryState": str(original.get("entryState") or ""),
+        "exitState": str(original.get("exitState") or ""),
+    }
+    for reference in settings["references"]:
+        if isinstance(reference, dict) and reference.get("mediaPath"):
+            _resolve_story_reference_path(story_id, reference["mediaPath"])
     request = _storyboard_request(settings)
     from .inference_runner import enqueue_storyboard
-    job = enqueue_storyboard(
-        request,
-        story_id,
-        scene_id,
-        label=str(scene.get("title") or "Storyboard Take"),
-    )
+    job = enqueue_storyboard(request, story_id, scene_id, label=str(scene.get("title") or "Storyboard Take") + " · Regenerate")
     return generation_status(job["jobId"])
 
 

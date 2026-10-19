@@ -63,8 +63,10 @@ from .permissions import normalize_path_permissions, run_with_directory_repair
 from .folder_state_store import FolderStateReadError, FolderStateUnsafeWriteError, read_folder_state, reject_wholesale_state_map_clear, set_media_annotation_state, set_media_rating, write_folder_state_atomic
 from .storage_manager import clear_set_generated_sight as storage_clear_set_generated_sight, cancel_scan as storage_cancel_scan, measure as storage_measure, open_path as storage_open_path, overview as storage_overview, purge as storage_purge, scan_status as storage_scan_status, start_scan as storage_start_scan
 from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload as storyboard_add_take_upload, apply_developed_plan as storyboard_apply_developed_plan, clear_scene_reference as storyboard_clear_scene_reference, create_story as storyboard_create_story, delete_scene as storyboard_delete_scene, delete_story as storyboard_delete_story, delete_take as storyboard_delete_take, duplicate_scene as storyboard_duplicate_scene, duplicate_story as storyboard_duplicate_story, list_stories as storyboard_list_stories, load_story as storyboard_load_story, label_take as storyboard_label_take, rate_take as storyboard_rate_take, remove_take as storyboard_remove_take, reorder_scenes as storyboard_reorder_scenes, resolve_story_media as storyboard_resolve_media, restore_previous_concept as storyboard_restore_previous_concept, restore_previous_prompt as storyboard_restore_previous_prompt, restore_scene as storyboard_restore_scene, restore_scene_repairs as storyboard_restore_scene_repairs, restore_take as storyboard_restore_take, select_take as storyboard_select_take, set_scene_reference_from_take as storyboard_set_scene_reference_from_take, set_scene_reference_upload as storyboard_set_scene_reference_upload, update_scene as storyboard_update_scene, update_story as storyboard_update_story
-from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation
+from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation, regenerate_take as storyboard_regenerate_take
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
+from .storyboard_archive import archive_preview as storyboard_archive_preview, archive_story as storyboard_archive_story
+from .storyboard_store import _mutation_lock as storyboard_mutation_lock
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_first_cut import register_routes as register_storyboard_first_cut_routes
 from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status
@@ -1231,6 +1233,21 @@ def storyboard_route():
             stop_storyboard_jobs(story_id)
             deleted_story_id = storyboard_delete_story(story_id)
             return jsonify({"ok": True, "storyId": deleted_story_id})
+        if operation in {"archive_preview", "archive_story"}:
+            storyboard_load_story(story_id)
+            if operation == "archive_preview":
+                return jsonify({"ok": True, "preview": storyboard_archive_preview(story_id)})
+            with storyboard_mutation_lock:
+                if llm_storyboard_story_busy(story_id):
+                    raise ValueError("Wait for or cancel this Story's Director work before archiving.")
+                pending = [
+                    job for job in storyboard_generation_queue(story_id).get("jobs", [])
+                    if job.get("status") in {"backlog", "queued", "starting", "running", "stopping"}
+                ]
+                if pending:
+                    raise ValueError("Wait for or cancel this Story's Take generation before archiving.")
+                result = storyboard_archive_story(story_id)
+            return jsonify({"ok": True, **result})
         if operation == "update_story":
             story_payload = data.get("story") or {}
             if "concept" in story_payload and llm_storyboard_target_busy(story_id, "concept"):
@@ -1413,6 +1430,13 @@ def storyboard_generation_route():
                 "ok": True,
                 "queue": storyboard_generation_queue(story_id),
             })
+        if operation == "regenerate_take":
+            story_id = str(data.get("storyId") or "").strip()
+            if llm_storyboard_target_busy(story_id, "scenes"):
+                raise ValueError("Story Scenes have pending Director work.")
+            return jsonify({"ok": True, "job": storyboard_regenerate_take(
+                story_id, str(data.get("sceneId") or "").strip(), str(data.get("takeId") or "").strip()
+            )})
         if operation:
             return jsonify({
                 "ok": True,

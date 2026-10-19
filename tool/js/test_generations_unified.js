@@ -264,6 +264,27 @@
     folder=String(nextFolder||'');model=String(window.getWorkingModelProfileId()||'');
     prepare(nextFolder); if(folder && !root.classList.contains('hidden'))refresh();
   };
+  var lastRouteKey = '';
+  window.testGenerationsUnifiedRoute = function(info) {
+    info = info || {};
+    var context = String(info.folder || '') + '|' + String(info.modelId || '');
+    if(context !== lastRouteKey) {
+      lastRouteKey = context;
+      perspective = 'experiments';
+      checkpointSelection.clear();
+      selection = info.rememberedSession ? 'test:' + String(info.rememberedSession) : '';
+      chosen = '';
+    }
+    if(info.activitySession || info.activityCampaign) {
+      exitToNative();
+      return;
+    }
+    if(root.classList.contains('hidden')) {
+      show(true);
+      builder(false);
+    }
+    if(folder) refresh();
+  };
   window.testGenerationsUnifiedOpen=function() {
     model=String(window.getWorkingModelProfileId()||'');show(true);builder(false);
     if(folder)refresh();

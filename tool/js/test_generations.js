@@ -4587,6 +4587,13 @@
     renderStatus({ status: 'idle' });
     renderTestBatch();
     window.epochFinderPrepare(launchFolder);
+    window.testGenerationsUnifiedRoute({
+      folder: launchFolder,
+      modelId: requestedModelId,
+      activitySession: String(pendingActivitySession || ''),
+      activityCampaign: String(pendingActivityCampaign || ''),
+      rememberedSession: rememberedSession
+    });
     if (pendingActivityCampaign) {
       window.epochFinderInspectCampaign(pendingActivityCampaign); pendingActivityCampaign = '';
     }

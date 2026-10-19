@@ -37,14 +37,14 @@ const comparison = [
   { id: 'G5', expectedText: 'absent', selectedText: 'red', result: 'mismatch' }
 ];
 const score = sandbox.testVlScore(comparison);
-assert.strictEqual(score.matches, 2, 'two related colors yield one agreement credit');
-assert.strictEqual(score.mismatches, 3, 'genuine differences still count');
-assert.strictEqual(score.count, 5);
+assert.strictEqual(score.matches, 1, 'two related colors plus one exact color yield one weighted credit');
+assert.strictEqual(score.mismatches, 1.5, 'all color differences have reduced weight');
+assert.strictEqual(score.count, 2.5);
 assert.strictEqual(comparison[0].result, 'mismatch', 'VL observations remain unchanged');
 sandbox.testVl.disabledGroups.add('G1');
-assert.strictEqual(sandbox.testVlScore(comparison).matches, 1.5,
+assert.strictEqual(sandbox.testVlScore(comparison).matches, 0.75,
   'session exclusion still applies to color near-matches');
 
-assert(script.includes('<strong>Related colors · half credit</strong>'),
+assert(script.includes('<strong>Related colors · partial credit</strong>'),
   'near color rows must be identified separately from full differences');
 console.log('Test VL near-color agreement checks passed.');

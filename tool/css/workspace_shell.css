@@ -3124,3 +3124,14 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .operations-content .job-queue-row.status-running,.operations-content .job-queue-row.status-starting,.operations-content .job-queue-row.status-stopping{background:color-mix(in srgb,var(--panel) 80%,var(--accent) 20%);border-color:var(--accent);min-height:44px}
 .operations-content .job-queue-row.status-running .inference-queue-copy small,.operations-content .job-queue-row.status-starting .inference-queue-copy small{font-size:11px}
 @media(max-width:720px){.operations-drawer{right:6px;width:calc(100vw - 52px);max-height:85vh}}
+
+/* Keep the three destinations reachable without imposing nested queue scrolling. */
+.operations-toggle{position:sticky;top:0;z-index:2}
+.operations-toggle small{margin-left:auto;font-size:11px;font-weight:500;color:var(--muted)}
+.operations-sections .activity-monitor-primary{padding:4px 8px 0}
+.operations-sections .activity-monitor-primary .progress-card{padding:13px 14px}
+.operations-sections .activity-monitor-primary .activity-monitor-copy > strong{font-size:clamp(15px,1.25vw,20px)}
+.operations-sections .activity-monitor-primary .activity-monitor-copy > span,
+.operations-sections .activity-monitor-primary .activity-monitor-copy > small{font-size:12px}
+.operations-sections .activity-director-metrics{gap:6px}
+.operations-sections .activity-director-metrics > div{padding:8px}

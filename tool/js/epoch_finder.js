@@ -49,14 +49,17 @@
   function showMode(next) {
     mode = next;
     var finder = next === 'finder';
+    var references = next === 'references';
     document.querySelectorAll('[data-test-workspace-mode]').forEach(function (button) {
       var active = button.dataset.testWorkspaceMode === next;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
     });
     els('screen').classList.toggle('hidden', !finder);
-    document.getElementById('test-generations-body').classList.toggle('hidden', finder);
+    document.getElementById('test-generations-body').classList.toggle('hidden', finder || references);
+    document.getElementById('test-references-screen').classList.toggle('hidden', !references);
     if (finder) refresh();
+    if (references) window.testReferencesOpen();
   }
   function renderSecondsEstimate(modelId, durationSeconds, megapixels) {
     var key = [modelId, Number.isFinite(megapixels) ? String(megapixels) : String(document.getElementById('test-generations-dimensions')?.value || ''), String(durationSeconds)].join('|');
@@ -348,6 +351,11 @@
       referenceDraftChoices = {};
       referenceItems.forEach(function (item) {
         var saved = referenceSelections[item.key];
+        if (!saved) {
+          var chosen = window.testReferencesChoice(els('run').value, item.group, item.option);
+          if (chosen) saved = {attribute:item.attribute, option:item.option,
+            group:item.group, tag:item.option, media:chosen.media};
+        }
         var valid = item.candidates.some(function (candidate) {
           return saved && candidate.media === saved.media && candidate.group === saved.group && candidate.tag === saved.tag;
         });
@@ -1015,6 +1023,7 @@
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
     if (changed) { activeCampaign = ''; runs = []; campaigns = []; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    window.testReferencesPrepare(folder);
     if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;

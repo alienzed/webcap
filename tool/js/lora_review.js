@@ -2,8 +2,10 @@
 (function () {
   'use strict';
   var active = null;
+  var applying = false;
   function el(id) { return document.getElementById(id); }
   function hide() {
+    if (applying) return;
     active = null;
     el('director-lora-review-modal').classList.add('hidden');
     el('director-lora-review-modal').setAttribute('aria-hidden', 'true');
@@ -92,15 +94,24 @@
     var callback = active.apply;
     var button = el('director-lora-review-apply');
     button.disabled = true;
+    applying = true;
+    el('director-lora-review-cancel').disabled = true;
+    el('director-lora-review-close').disabled = true;
     Promise.resolve().then(function () {
       return callback(selected.map(function (item) {
         return {name:item.name,strength:item.strength,phrases:item.phrases,sceneId:item.sceneId || ''};
       }));
     }).then(function () {
+      applying = false;
       hide();
     }).catch(function (error) {
       el('director-lora-review-error').textContent = String(error.message || error);
-    }).finally(function () { button.disabled = false; });
+    }).finally(function () {
+      applying = false;
+      button.disabled = false;
+      el('director-lora-review-cancel').disabled = false;
+      el('director-lora-review-close').disabled = false;
+    });
   }
   document.addEventListener('click', function (event) {
     if (event.target.closest('#director-lora-review-apply')) apply();

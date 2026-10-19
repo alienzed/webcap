@@ -179,6 +179,21 @@
     model=String(window.getWorkingModelProfileId()||'');show(true);builder(false);
     if(folder)refresh();
   };
+  function exitToNative() {
+    if (finderMounted) mountFinder(false);
+    mountExistingControls(false);
+    show(false);
+  }
+  var inspectCampaign = window.epochFinderInspectCampaign;
+  window.epochFinderInspectCampaign = function () {
+    exitToNative();
+    return inspectCampaign.apply(this, arguments);
+  };
+  var openAnalyticsSession = window.openTestBenchAnalyticsSession;
+  window.openTestBenchAnalyticsSession = function () {
+    exitToNative();
+    return openAnalyticsSession.apply(this, arguments);
+  };
   var existing=document.querySelector('[data-test-generations-perspective="explore"]');
   if(!existing)throw new Error('Existing Explore entry is missing.');
   existing.addEventListener('click',function(){window.testGenerationsUnifiedOpen();});

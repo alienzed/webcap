@@ -19,6 +19,7 @@ var trainingWorkspaceState = {
   runnerQueuePaused: false,
   runnerQueuePauseReason: '',
   runnerNotice: '',
+  runnerWaitingGpuOwner: '',
   entryMode: 'global',
   workspaceRequestVersion: 0,
   history: null,

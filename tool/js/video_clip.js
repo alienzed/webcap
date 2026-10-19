@@ -42,7 +42,7 @@ function videoClipRefreshSource() {
   if (videoClipStoryboardSource && typeof window.refreshStoryboardClipSource === 'function') {
     window.refreshStoryboardClipSource(videoClipStoryboardSource.storyId);
   } else {
-    videoClipRefreshSource();
+    refreshCurrentDirectory();
   }
 }
 

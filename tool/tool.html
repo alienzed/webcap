@@ -1323,8 +1323,8 @@
                             <section class="epoch-finder-panel"><h3>Checkpoint trajectory</h3><p id="run-analytics-chart-note" class="epoch-finder-muted"></p><div id="run-analytics-chart"></div></section>
                             <section class="epoch-finder-panel"><h3>Checkpoints</h3><div id="run-analytics-table"></div></section>
                             <dialog id="run-analytics-epoch-media-dialog" class="run-analytics-epoch-media-dialog" aria-label="Generated results for checkpoint">
-                                <div class="run-analytics-epoch-media-head"><div><h3 id="run-analytics-epoch-media-title">Checkpoint results</h3><p id="run-analytics-epoch-media-status" aria-live="polite"></p></div><button id="run-analytics-epoch-media-close" type="button" class="review-captions-btn">← Back to Analytics</button></div>
-                                <div id="run-analytics-epoch-media-grid" class="run-analytics-epoch-media-grid"></div>
+                                <div class="run-analytics-epoch-media-head"><div><h3 id="run-analytics-epoch-media-title">Checkpoint results</h3><p class="run-analytics-epoch-media-description">Generated tests and campaign frames recorded for this checkpoint.</p><p id="run-analytics-epoch-media-status" role="status" aria-live="polite"></p></div><button id="run-analytics-epoch-media-close" type="button" class="review-captions-btn">← Back to Analytics</button></div>
+                                <div id="run-analytics-epoch-media-grid" class="run-analytics-epoch-media-grid" aria-live="polite"></div>
                                 <button id="run-analytics-epoch-media-more" class="review-captions-btn hidden" type="button">Load 8 more</button>
                               </dialog>
                             <section class="epoch-finder-panel"><h3>Findings and limits</h3><div id="run-analytics-findings"></div><div id="run-analytics-warnings"></div></section>
@@ -1371,7 +1371,7 @@
                                 <section class="test-generations-next-run" aria-label="Next Test run">
                                     <div class="test-generations-form-heading">
                                         <div class="test-generations-form-title">
-                                            <strong>Next run</strong><button id="test-generations-campaign-mode" type="button" class="review-captions-btn" title="Configure saved-run checkpoint campaigns with the guided wizard">Campaign / Epoch Finder →</button>
+                                            <strong>Regular tests</strong><button id="test-generations-campaign-mode" type="button" class="review-captions-btn" title="Switch to the guided checkpoint campaign wizard">Switch to campaign setup →</button>
                                             <button id="test-generations-info-btn" type="button" class="mini-info-btn" title="How Test Generations works" aria-label="How Test Generations works">i</button>
                                         </div>
                                         <span id="test-generations-summary" class="test-generations-summary">Loading Test folder...</span>
@@ -1398,9 +1398,9 @@
                                             <label id="test-generations-seed-field" class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="4294967295" step="1"></label>
                                         </div>
                                         <div class="test-generations-launch-options">
-                                            <label>Sessions <input id="test-generations-inline-count" type="number" min="1" max="20" value="1" aria-label="Sessions to generate"></label>
-                                            <label class="test-generations-inline-vl"><input id="test-generations-inline-auto-vl" type="checkbox"> Ask VL after generation</label>
-                                            <span id="test-generations-inline-launch-summary" class="test-generations-inline-launch-summary" aria-live="polite">1 session · selected seed</span>
+                                            <label for="test-generations-inline-count">Sessions <input id="test-generations-inline-count" type="number" min="1" max="20" value="1" aria-describedby="test-generations-inline-launch-summary"></label>
+                                            <label class="test-generations-inline-vl"><input id="test-generations-inline-auto-vl" type="checkbox"> Assess generated results with VL</label>
+                                            <span id="test-generations-inline-launch-summary" class="test-generations-inline-launch-summary" aria-live="polite">One session using the selected seed</span>
                                         </div>
                                         <div class="test-generations-actions">
                                             <label class="test-generations-session-name">

@@ -395,9 +395,28 @@
   });
   el('legacy').onclick=function(){if(activeAdvanced)mountAdvanced('');mountExistingControls(false);show(false);};
   el('normal').onclick=function(){builder(true);};
-  el('finder').onclick=function(){mountExistingControls(false);mountAdvanced('finder');};
-  el('references').onclick=function(){mountExistingControls(false);mountAdvanced('references');};
-  el('analytics').onclick=function(){mountExistingControls(false);mountAdvanced('analytics');};
+  el('finder').onclick=function(){window.testGenerationsUnifiedDestination('finder');};
+  el('references').onclick=function(){window.testGenerationsUnifiedDestination('references');};
+  el('analytics').onclick=function(){window.testGenerationsUnifiedDestination('analytics');};
+  // One explicit handoff for feature-owned navigation. The original controllers
+  // keep their DOM and operations; only the visible destination is coordinated.
+  window.testGenerationsUnifiedDestination=function(destination) {
+    if (['explore','build','finder','references','analytics'].indexOf(destination)===-1)
+      throw new Error('Unknown Test Generations destination: '+destination);
+    if(root.classList.contains('hidden'))show(true);
+    if(destination==='explore') {builder(false);if(folder)refresh();return;}
+    if(destination==='build') {builder(true);return;}
+    mountExistingControls(false);
+    el('builder').classList.remove('hidden');
+    el('gallery').classList.add('hidden');
+    el('inspector').classList.add('hidden');
+    root.classList.add('test-unified-building');
+    el('build').classList.add('active');
+    el('explore').classList.remove('active');
+    el('build').setAttribute('aria-pressed','true');
+    el('explore').setAttribute('aria-pressed','false');
+    mountAdvanced(destination);
+  };
   var prepare=window.epochFinderPrepare;
   window.epochFinderPrepare=function(nextFolder) {
     folder=String(nextFolder||'');model=String(window.getWorkingModelProfileId()||'');
@@ -429,8 +448,7 @@
     exitToNative();
   };
   window.testGenerationsUnifiedOpen=function() {
-    model=String(window.getWorkingModelProfileId()||'');show(true);builder(false);
-    if(folder)refresh();
+    model=String(window.getWorkingModelProfileId()||'');window.testGenerationsUnifiedDestination('explore');
   };
   function exitToNative() {
     if (activeAdvanced) mountAdvanced('');

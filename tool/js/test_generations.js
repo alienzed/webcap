@@ -4666,9 +4666,10 @@
     renderStatus({ status: 'idle' });
     renderTestBatch();
     window.epochFinderPrepare(launchFolder);
-    window.testGenerationsUnifiedNativeRoute();
-    // Keep the proven Test/Finder/References/Analytics surfaces as the default.
-    // Unified Explore remains available on demand, never the landing route.
+    // Default to the same real Regular form in Build; exact Activity routes
+    // continue to the proven native session/campaign review destinations.
+    if (pendingActivityCampaign || pendingActivitySession) window.testGenerationsUnifiedNativeRoute();
+    else window.testGenerationsUnifiedDestination('build');
     if (pendingActivityCampaign) {
       window.epochFinderInspectCampaign(pendingActivityCampaign); pendingActivityCampaign = '';
     }
@@ -5339,7 +5340,7 @@
       try { runTestBatch(count, true); } catch (err) { showError(err); }
     };
     el('test-generations-campaign-mode').onclick = function () {
-      window.epochFinderShowMode('finder');
+      window.testGenerationsUnifiedDestination('finder');
     };
     el('test-generations-batch-btn').onclick = openTestBatchDialog;
     el('test-generations-batch-history').onchange = function () {

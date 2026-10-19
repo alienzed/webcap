@@ -1336,7 +1336,7 @@
                     <div id="test-unified-workspace" class="test-unified-workspace hidden" aria-label="Unified Test Generations">
                         <aside class="test-unified-rail">
                             <h3>Test Generations</h3>
-                            <div class="test-unified-switch"><button id="test-unified-explore" type="button">Explore</button><button id="test-unified-build" type="button">Build</button></div>
+                            <div class="test-unified-switch"><button id="test-unified-explore" type="button">Explore</button><button id="test-unified-build" type="button">Build</button><button id="test-unified-analytics" type="button">Analytics</button></div>
                             <div class="test-unified-switch"><button id="test-unified-experiments" type="button">Experiments</button><button id="test-unified-checkpoints" type="button">Checkpoints</button></div>
                             <div id="test-unified-list" class="test-unified-list"></div>
                             <button id="test-unified-reload" class="review-captions-btn" type="button">Refresh results</button>
@@ -1345,7 +1345,7 @@
                         <main class="test-unified-main">
                             <header class="test-unified-header"><div><h2 id="test-unified-title">Generated results</h2><p id="test-unified-description">Browse experiments or checkpoints</p></div><button id="test-unified-new" class="training-btn training-launch-btn" type="button">New tests</button></header>
                             <div id="test-unified-gallery" class="test-unified-gallery"></div>
-                            <div id="test-unified-builder" class="test-unified-builder hidden"><h3>Experiment Builder</h3><p>The existing generation, Batch, and Finder tools remain available with all their controls.</p><div class="test-unified-builder-actions"><button type="button" id="test-unified-normal" class="review-captions-btn">Normal tests and Batch</button><button type="button" id="test-unified-finder" class="review-captions-btn">Checkpoint campaigns</button><button type="button" id="test-unified-references" class="review-captions-btn">Training references</button><button type="button" id="test-unified-analytics" class="review-captions-btn">Run Analytics</button></div></div>
+                            <div id="test-unified-builder" class="test-unified-builder hidden"><h3>Build tests</h3><p>Choose a workflow; original settings and controls remain available.</p><div class="test-unified-builder-actions"><button type="button" id="test-unified-normal" class="review-captions-btn">Regular</button><button type="button" id="test-unified-finder" class="review-captions-btn">Campaign</button><button type="button" id="test-unified-references" class="review-captions-btn">Manage references</button></div></div>
                         </main>
                         <aside id="test-unified-inspector" class="test-unified-inspector"><h3>Inspector</h3><div id="test-unified-details">Select a result to inspect its prompt, settings, provenance and assessment.</div></aside>
                     </div>
@@ -1383,8 +1383,7 @@
                                                 <span id="test-generations-wildcard-status" class="test-generations-wildcard-status" aria-live="polite"></span>
                                                 <button id="test-generations-recent-prompts-btn" type="button" class="review-captions-btn" title="Reuse a recent prompt">Recent</button>
                                                 <button id="test-generations-wildcard-btn" type="button" class="review-captions-btn test-generations-wildcard-wand" title="Generate a wildcard prompt from this Set's captions" aria-label="Generate wildcard prompt">&#10024;</button>
-                                                <span class="test-generations-batch-divider" aria-hidden="true"></span>
-                                                <button id="test-generations-batch-btn" type="button" class="review-captions-btn" title="Legacy detailed Batch setup">Batch…</button>
+                                                <details class="test-generations-extra-launch"><summary title="Optional detailed Batch setup">More</summary><button id="test-generations-batch-btn" type="button" class="review-captions-btn" title="Detailed Batch setup, using the same server Batch execution">Detailed Batch setup…</button></details>
                                             </div>
                                         </div>
                                         <textarea id="test-generations-prompt" rows="5"></textarea>

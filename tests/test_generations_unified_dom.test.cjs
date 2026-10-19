@@ -59,7 +59,11 @@ test('Explore, Build and Finder preserve original control nodes and image attrib
  d.getElementById('test-unified-build').click();
  assert.ok(d.getElementById('test-unified-builder').contains(d.getElementById('real-test-form')));
  assert.ok(d.getElementById('test-unified-builder').contains(d.getElementById('real-candidates')));
- d.getElementById('test-unified-finder').click();
+ w.testGenerationsUnifiedDestination('finder');
+ assert.ok(d.getElementById('test-unified-builder').contains(d.getElementById('epoch-finder-screen')));
+ w.testGenerationsUnifiedDestination('build');
+ assert.ok(d.getElementById('test-unified-builder').contains(d.getElementById('real-test-form')));
+ w.testGenerationsUnifiedDestination('finder');
  assert.ok(d.getElementById('test-unified-builder').contains(d.getElementById('epoch-finder-screen')));
  assert.ok(calls.includes('mode:finder'));
  d.getElementById('test-unified-references').click();

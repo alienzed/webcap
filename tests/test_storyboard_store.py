@@ -328,8 +328,10 @@ def test_concept_restore_keeps_initial_prompt_as_fixed_baseline(storyboard_fs):
 
     edited = storyboard_store.update_story(story["id"], {"concept": "Manual rewrite after expansion."})
     assert edited["previousConcept"] == "Original concept."
-    with pytest.raises(ValueError, match="already expanded"):
-        storyboard_store.apply_concept_expansion(story["id"], "Unexpected second expansion.")
+    second = storyboard_store.apply_concept_expansion(story["id"], "Second expanded concept.")
+    assert second["concept"] == "Second expanded concept."
+    assert second["previousConcept"] == "Original concept."
+    assert storyboard_store.load_story(story["id"])["concept"] == "Second expanded concept."
 
     restored = storyboard_store.restore_previous_concept(story["id"])
     assert restored["concept"] == "Original concept."

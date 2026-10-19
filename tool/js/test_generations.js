@@ -4724,6 +4724,7 @@
   // outlive this controller, which deliberately does not survive a tab reload.
   var testBatch = null;
   var testBatchTimer = 0;
+  var testBatchWake = null;
   var testBatchSort = 'vl';
   var testBatchSequence = 0;
 
@@ -4732,12 +4733,18 @@
     card.classList.toggle('hidden', !testBatch || testBatch.dismissed || String(launchFolder) !== testBatch.folder);
     if (!testBatch) return;
     var batch = testBatch;
+    var startButton = el('test-generations-batch-start');
+    if (!el('test-generations-batch-modal').classList.contains('hidden')) {
+      startButton.disabled = !!batch.active;
+      if (!batch.active) el('test-generations-batch-config-summary').textContent =
+        selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session';
+    }
     el('test-generations-batch-heading').textContent = (batch.autoVl ? 'Batch Test + VL' : 'Batch Test') + ' · ' + batch.folder;
     var lines = [];
     lines.push(batch.phase + ' · ' + batch.sessions.length + '/' + batch.count + ' sessions submitted');
-    if (batch.phase === 'Generating + VL' || batch.phase === 'Generating' || batch.phase === 'Evaluating') {
-      lines.push(batch.finished + '/' + batch.sessions.length + ' sessions finished');
-      if (batch.autoVl) lines.push(batch.evaluated + '/' + batch.previews + ' previews evaluated');
+    if (batch.sessions.length) lines.push(batch.finished + '/' + batch.sessions.length + ' sessions terminal');
+    if (batch.autoVl && batch.previews) {
+      lines.push(batch.evaluated + '/' + batch.previews + ' previews assessed successfully');
     }
     if (batch.detail) lines.push(batch.detail);
     if (batch.errors.length) lines.push(batch.errors.length + ' error(s); see Console.');
@@ -4765,14 +4772,48 @@
     el('test-generations-batch-stop').classList.toggle('hidden', !batch.active);
     el('test-generations-batch-dismiss').classList.toggle('hidden', batch.active);
     var resultHost = el('test-generations-batch-results');
-    resultHost.classList.toggle('hidden', !batch.scores.length);
-    if (!batch.scores.length) { resultHost.textContent = ''; return; }
+    resultHost.classList.toggle('hidden', !batch.scores.length && !batch.sessions.length);
+    if (!batch.scores.length && !batch.sessions.length) { resultHost.textContent = ''; return; }
+    resultHost.classList.remove('hidden');
+    var sessionsHost = resultHost.querySelector('[data-test-batch-sessions]');
+    if (!sessionsHost) {
+      resultHost.textContent = '';
+      sessionsHost = document.createElement('div');
+      sessionsHost.dataset.testBatchSessions = '';
+      resultHost.appendChild(sessionsHost);
+    }
+    var heading = sessionsHost.querySelector('[data-test-batch-sessions-heading]');
+    if (!heading) {
+      heading = document.createElement('div');
+      heading.dataset.testBatchSessionsHeading = '';
+      sessionsHost.appendChild(heading);
+    }
+    heading.textContent = 'Sessions (' + batch.sessions.length + ')';
+    var expected = new Set(batch.sessions);
+    sessionsHost.querySelectorAll('[data-test-batch-session]').forEach(function (button) {
+      if (!expected.has(button.dataset.testBatchSession)) button.remove();
+    });
+    batch.sessions.forEach(function (session, index) {
+      var status = batch.statuses[session];
+      var button = Array.from(sessionsHost.querySelectorAll('[data-test-batch-session]')).find(function (item) {
+        return item.dataset.testBatchSession === session;
+      });
+      if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.testBatchSession = session;
+        sessionsHost.appendChild(button);
+      }
+      button.textContent = (index + 1) + '/' + batch.count + ' · ' + sessionLabel(session) + ' · ' + (status ? status.status || 'unknown' : 'queued');
+    });
+    var previousTable = resultHost.querySelector('table');
+    if (previousTable) previousTable.remove();
+    if (!batch.scores.length) return;
     var rows = batch.scores.slice().sort(function (a, b) {
       if (testBatchSort === 'stars') return (b.starCount ? b.stars : -1) - (a.starCount ? a.stars : -1) || b.vl - a.vl;
       if (testBatchSort === 'name') return a.name.localeCompare(b.name);
       return b.vl - a.vl;
     });
-    resultHost.innerHTML = '';
     var table = document.createElement('table');
     var head = document.createElement('thead');
     var header = document.createElement('tr');
@@ -4820,6 +4861,7 @@
     batch.detail = 'Accepted Test sessions continue in the backend.';
     if (testBatchTimer) clearTimeout(testBatchTimer);
     testBatchTimer = 0;
+    if (testBatchWake) { var wake = testBatchWake; testBatchWake = null; wake(); }
     if (batch.vlJobId) cancelCaptionAssistJob(batch.vlJobId).catch(function (err) {
       reportConsoleError('Test batch VL cancellation', err);
     });
@@ -4832,7 +4874,8 @@
 
   function testBatchWait(batch) {
     return new Promise(function (resolve) {
-      testBatchTimer = setTimeout(function () { testBatchTimer = 0; resolve(); }, 5000);
+      testBatchWake = function () { testBatchWake = null; resolve(); };
+      testBatchTimer = setTimeout(function () { testBatchTimer = 0; testBatchWake = null; resolve(); }, 5000);
     });
   }
 
@@ -4986,12 +5029,13 @@
             syncTestVlCandidateRows();
           }
           testBatchRecalculate(batch);
+        }).then(function () {
+          batch.evaluated += 1;
         }).catch(function (err) {
           if (!batch.active) throw err;
           testBatchError(batch, err, session + ' · ' + file);
         }).then(function () {
           batch.vlJobId = '';
-          batch.evaluated += 1;
           renderTestBatch();
         });
       });
@@ -5099,6 +5143,8 @@
           syncTestVlCandidateRows();
         });
       }
+    }).then(function () {
+      testBatchCheck(batch);
       batch.phase = 'Complete';
       batch.detail = !batch.autoVl ? (batch.errors.length ? 'Generation finished with errors; see Console.' : 'Generation finished. Sessions are ready for review.') :
         batch.errors.length ? 'Completed with generation or assessment errors.' :
@@ -5120,15 +5166,14 @@
   }
 
   function openTestBatchDialog() {
-    if (testBatch && testBatch.active) {
-      openTestBenchForSetFolder(testBatch.folder);
-      return;
-    }
     var modal = el('test-generations-batch-modal');
     var count = el('test-generations-batch-count');
+    var activeBatch = testBatch && testBatch.active;
     count.value = '5';
-    el('test-generations-batch-config-summary').textContent =
-      selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session';
+    el('test-generations-batch-config-summary').textContent = activeBatch
+      ? 'A Test batch is already running for ' + testBatch.folder + '. Stop or finish that batch before starting another.'
+      : selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session';
+    el('test-generations-batch-start').disabled = !!activeBatch;
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
   }

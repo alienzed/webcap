@@ -110,9 +110,6 @@
     if (details) copy.appendChild(textNode('small', '', details));
     if (active(job)) {
       copy.appendChild(textNode('small', '', elapsed(job)));
-      var view = actionButton('Activity ↗', which, 'view_activity', job);
-      view.title = 'View this running job in Activity';
-      node.dataset.activityJobId = String(job.jobId || job.id || '');
     }
     if (which === 'training' && job.status === 'queued') {
       var handle = textNode('span', 'job-queue-drag-handle', '\u283f');

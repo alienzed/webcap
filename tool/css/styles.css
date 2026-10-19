@@ -7436,3 +7436,5 @@ html[data-theme="dark"] iframe {
 .run-analytics-epoch-media-card button,.run-analytics-epoch-media-card a {display:inline-block;font-size:12px;margin:5px 6px 5px 0;}
 #run-analytics-epoch-media-more {display:block;width:auto;margin:16px auto 0;}
 #run-analytics-epoch-media-more.hidden {display:none;}
+
+.test-generations-inline-launch-summary {font-size:11px;color:var(--muted);flex:1 1 140px;text-align:right;}

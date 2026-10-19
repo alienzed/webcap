@@ -154,3 +154,13 @@ test('Model Assessment Activity counters never stringify missing fields', () => 
   assert.ok(source.includes("Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0"));
   assert.ok(!source.includes("item.completed + ' completed'"));
 });
+
+test('Activity includes server-session history without replaying pre-refresh notifications', () => {
+  assert.ok(source.includes("requestJson('/fs/activity?limit=50')"));
+  assert.ok(!source.includes("finishedAt(item) < sessionStartedAt) return;"));
+  assert.ok(source.includes("if (finishedAt(item) < sessionStartedAt) return;"));
+  assert.ok(source.includes("var recent = sessionRecent();"));
+  assert.ok(source.includes("recent.slice(0, 50)"));
+  assert.ok(source.includes("function formatJobDuration(start, end)"));
+  assert.ok(source.includes("Queued ' + wait"));
+});

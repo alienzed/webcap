@@ -127,6 +127,7 @@ def _training_recent(limit, since=0.0):
             "label": str(job.get("runName") or job.get("profileLabel") or job.get("stages") or "Training"),
             "folder": str(job.get("folder") or ""),
             "stage": str(job.get("stage") or job.get("stages") or ""),
+            "startedAt": job.get("startedAt"),
             "finishedAt": job.get("finishedAt"),
             "updatedAt": job.get("updatedAt"),
             "error": str(job.get("error") or ""),
@@ -305,8 +306,7 @@ def activity_snapshot(limit=20, since=0):
             "bytesScanned": int(scan.get("bytesScanned") or 0),
         })
 
-    # Recent is a client-session view. Persisted receipts are filtered to the
-    # caller's session start rather than becoming durable Activity history.
+    # Recent receipts are bounded by their owners. Activity does not persist history.
     inference_recent = []
     if not inference.get("unavailable"):
         try:

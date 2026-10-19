@@ -21,6 +21,10 @@ jobs:
           node --check tool/js/test_generations_perspective.js
           node --check tool/js/epoch_finder.js
           node --check tool/js/test_generations.js
+      - name: Install DOM test dependency
+        run: npm install --no-save --no-package-lock jsdom
+      - name: Browser DOM lifecycle smoke
+        run: node --test tests/test_generations_unified_dom.test.cjs
       - name: Python syntax
         run: python -m compileall -q tool/server/epoch_finder.py tool/server/epoch_test_bench.py tests/test_test_generations_unified_gallery.py
       - name: Prepare isolated config

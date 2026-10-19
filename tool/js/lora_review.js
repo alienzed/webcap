@@ -34,6 +34,15 @@
       phrases.addEventListener('input', function () {
         item.phrases = phrases.value.split(',').map(function (text) { return text.trim(); }).filter(Boolean);
       });
+      if (active.scenes && active.scenes.length) {
+        var target = document.createElement('select');
+        target.setAttribute('aria-label', 'Apply ' + item.name + ' to');
+        target.add(new Option('Story-wide', ''));
+        active.scenes.forEach(function (scene) { target.add(new Option(scene.title || scene.id, scene.id)); });
+        target.value = item.sceneId || '';
+        target.addEventListener('change', function () { item.sceneId = target.value; });
+        row.appendChild(target);
+      }
       row.appendChild(check); row.appendChild(name); row.appendChild(explanation);
       row.appendChild(label); row.appendChild(phrases); list.appendChild(row);
     });
@@ -45,8 +54,8 @@
     active = {
       items: (args.items || []).map(function (item) {
         return {name: item.name, strength: item.strength, reason: item.reason,
-          phrases: (item.phrases || []).slice(), enabled: true};
-      }), catalogue: args.catalogue || [], apply: args.apply
+          phrases: (item.phrases || []).slice(), sceneId:item.sceneId || '', enabled: true};
+      }), catalogue: args.catalogue || [], scenes:args.scenes || [], apply: args.apply
     };
     var add = el('director-lora-review-add');
     add.replaceChildren(new Option('Choose from library…', ''));
@@ -82,7 +91,7 @@
     }
     var callback = active.apply;
     try {
-      callback(selected.map(function (item) { return {name: item.name, strength: item.strength, phrases: item.phrases}; }));
+      callback(selected.map(function (item) { return {name: item.name, strength: item.strength, phrases: item.phrases, sceneId:item.sceneId || ''}; }));
       hide();
     } catch (error) {
       el('director-lora-review-error').textContent = String(error.message || error);
@@ -96,7 +105,7 @@
     if (event.target.id !== 'director-lora-review-add' || !active) return;
     var name = event.target.value;
     if (!name || active.items.some(function (item) { return item.name === name; })) return;
-    active.items.push({name:name, strength:.9, phrases:[], reason:'Manually added', enabled:true});
+    active.items.push({name:name, strength:.9, phrases:[], sceneId:'', reason:'Manually added', enabled:true});
     render();
     event.target.value = '';
   });

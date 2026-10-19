@@ -1,0 +1,33 @@
+name: Focused Test Launch and Epoch Results
+on:
+  pull_request:
+    paths:
+      - 'tool/tool.html'
+      - 'tool/js/test_generations.js'
+      - 'tool/js/epoch_finder.js'
+      - 'tool/js/run_analytics.js'
+      - 'tool/css/styles.css'
+      - 'tests/test_test_generations_focused_unification.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify JS
+        run: |
+          node --check tool/js/test_generations.js
+          node --check tool/js/epoch_finder.js
+          node --check tool/js/run_analytics.js
+      - name: Install tests
+        run: python -m pip install pytest
+      - name: Focused regression
+        run: python -m pytest -q tests/test_test_generations_focused_unification.py

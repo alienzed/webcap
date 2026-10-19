@@ -66,6 +66,7 @@ from .storyboard_store import add_scene as storyboard_add_scene, add_take_upload
 from .storyboard_generation import generation_action as storyboard_generation_action, generation_capabilities as storyboard_generation_capabilities, generation_queue as storyboard_generation_queue, generation_status as storyboard_generation_status, start_generation as storyboard_start_generation, regenerate_take as storyboard_regenerate_take
 from .storyboard_assembly import current_export as storyboard_current_export, export_selected_sequence as storyboard_export_selected_sequence
 from .storyboard_archive import archive_preview as storyboard_archive_preview, archive_story as storyboard_archive_story
+from .storyboard_store import _mutation_lock as storyboard_mutation_lock
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_first_cut import register_routes as register_storyboard_first_cut_routes
 from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status
@@ -1236,15 +1237,16 @@ def storyboard_route():
             storyboard_load_story(story_id)
             if operation == "archive_preview":
                 return jsonify({"ok": True, "preview": storyboard_archive_preview(story_id)})
-            if llm_storyboard_story_busy(story_id):
-                raise ValueError("Wait for or cancel this Story's Director work before archiving.")
-            pending = [
-                job for job in storyboard_generation_queue(story_id).get("jobs", [])
-                if job.get("status") in {"backlog", "queued", "starting", "running", "stopping"}
-            ]
-            if pending:
-                raise ValueError("Wait for or cancel this Story's Take generation before archiving.")
-            result = storyboard_archive_story(story_id)
+            with storyboard_mutation_lock:
+                if llm_storyboard_story_busy(story_id):
+                    raise ValueError("Wait for or cancel this Story's Director work before archiving.")
+                pending = [
+                    job for job in storyboard_generation_queue(story_id).get("jobs", [])
+                    if job.get("status") in {"backlog", "queued", "starting", "running", "stopping"}
+                ]
+                if pending:
+                    raise ValueError("Wait for or cancel this Story's Take generation before archiving.")
+                result = storyboard_archive_story(story_id)
             return jsonify({"ok": True, **result})
         if operation == "update_story":
             story_payload = data.get("story") or {}

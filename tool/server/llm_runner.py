@@ -637,6 +637,8 @@ def _execute_claimed(job_id, gpu_reserved):
             chat_kwargs = {"gpu_reserved": bool(gpu_reserved)}
             if context.get("assessmentEvidence"):
                 chat_kwargs["assessment_evidence"] = True
+            if context.get("thinking") is True:
+                chat_kwargs["thinking"] = True
             if "maxTokens" in overrides:
                 chat_kwargs["max_tokens"] = overrides["maxTokens"]
             if "contextSize" in overrides:

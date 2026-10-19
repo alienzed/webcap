@@ -842,6 +842,30 @@ def _test_vl_partial_credit(expected, observed):
     return 0.0
 
 
+
+_VL_COLOR_NAMES = frozenset(
+    "black white gray grey silver red burgundy maroon orange yellow gold green olive lime "
+    "blue cyan teal turquoise navy purple violet lavender magenta pink peach coral mauve "
+    "brown tan beige cream".split()
+)
+_VL_NEAR_COLORS = (
+    ("peach", "coral"), ("coral", "pink"), ("blue", "cyan"), ("cyan", "teal"),
+    ("teal", "turquoise"), ("light blue", "sky blue"), ("light blue", "cyan"),
+    ("purple", "violet"), ("purple", "mauve"), ("red", "burgundy"), ("burgundy", "maroon"),
+)
+
+
+def _test_vl_color_weight(expected, observed):
+    return 0.5 if any(str(value or "").strip().lower() in _VL_COLOR_NAMES
+                      for value in (expected, observed)) else 1.0
+
+
+def _test_vl_near_color(expected, observed):
+    a, b = str(expected or "").strip().lower(), str(observed or "").strip().lower()
+    return a != b and any((a == left and b == right) or (a == right and b == left)
+                          for left, right in _VL_NEAR_COLORS)
+
+
 def _candidate_vision_scores(folder_path, model_id=None, session_snapshot=None, include_saved=True):
     """Aggregate saved VL agreements across sessions, like manual candidate ratings."""
     selected_model_id = str(model_id or "").strip()
@@ -879,11 +903,16 @@ def _candidate_vision_scores(folder_path, model_id=None, session_snapshot=None, 
                     continue
                 if group.get("result") not in ("match", "mismatch"):
                     continue
-                counted += 1
+                expected, observed = group.get("expectedText"), group.get("selectedText")
+                weight = _test_vl_color_weight(expected, observed)
+                counted += weight
                 if group["result"] == "match":
-                    matches += 1
+                    matches += weight
                 else:
-                    matches += _test_vl_partial_credit(group.get("expectedText"), group.get("selectedText"))
+                    credit = _test_vl_partial_credit(expected, observed)
+                    if not credit and _test_vl_near_color(expected, observed):
+                        credit = 0.5
+                    matches += weight * credit
             if not counted:
                 continue
             total = totals.setdefault(candidate, {"matches": 0, "count": 0, "previews": 0})

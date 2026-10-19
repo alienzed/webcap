@@ -3101,9 +3101,6 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 /* Unified operational presentation; existing Activity and Queue controllers retain ownership. */
 .operations-drawer{position:absolute;z-index:120;top:42px;right:10px;width:min(620px,calc(100vw - 62px));max-height:min(82vh,calc(100vh - 55px));display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border);border-radius:10px;background:var(--panel);box-shadow:0 20px 54px #0006}
 .operations-drawer.hidden{display:none}
-.operations-header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 15px;background:var(--panel-soft);border-bottom:1px solid var(--border)}
-.operations-header strong{display:block;font-size:15px}.operations-header small{display:block;color:var(--muted);margin-top:3px}
-#operations-close{border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer}
 .operations-sections{overflow-y:auto;min-height:0;padding:9px;overscroll-behavior:contain}
 .operations-toggle{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:40px;margin:0 0 7px;padding:9px 12px;border:1px solid var(--border);border-radius:7px;background:var(--panel-soft);color:var(--text);font:inherit;font-weight:650;text-align:left;cursor:pointer}
 .operations-toggle[aria-expanded=true]{border-color:var(--accent)}

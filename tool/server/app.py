@@ -2150,6 +2150,20 @@ def generate_director_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/lora_library/story/apply", methods=["POST"])
+def lora_library_story_apply_route():
+    from .storyboard_store import apply_lora_plan
+    try:
+        data = request.get_json(silent=True) or {}
+        story = apply_lora_plan(
+            str(data.get("storyId") or ""), str(data.get("expectedUpdatedAt") or ""),
+            data.get("storyWide"), data.get("scenes"))
+        return jsonify({"ok": True, "story": story})
+    except (ValueError, RuntimeError, OSError) as exc:
+        app.logger.error("LORA PLAN APPLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 409
+
+
 @app.route("/fs/lora_library/plan", methods=["POST"])
 def lora_library_plan_route():
     """Review-only coded LoRA planning via the existing Generate LLM lane."""

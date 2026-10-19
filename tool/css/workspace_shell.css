@@ -2844,7 +2844,15 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 
 /* One temporary, readable Activity panel; existing Director graph styling is reused. */
 .activity-monitor-primary {
+  min-height: 0;
+  overflow-y: auto;
   padding: 4px 13px 0;
+}
+.activity-monitor-primary .activity-monitor-trend {
+  margin: 10px 0 8px;
+}
+.activity-monitor-trend.hidden {
+  display: none;
 }
 .activity-monitor-primary .progress-card {
   margin-top: 10px;

@@ -234,3 +234,17 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-run-choice small{font-weight:400;opacity:.72;margin-top:3px}
 .epoch-finder-run-epochs{border-top:1px solid var(--border-color,#384653);padding-top:10px;margin-top:10px}
 .epoch-finder-run-epochs>strong{display:block;font-size:12px;margin-bottom:7px}
+
+/* Standalone training reference browser: retain existing gallery and sidebar geometry. */
+.test-references-screen .epoch-finder-reference-workspace{min-height:260px}
+.test-references-screen .epoch-finder-reference-gallery{max-height:min(72vh,800px)}
+.test-references-screen .epoch-finder-reference-tile span{overflow-wrap:anywhere}
+.test-references-screen #test-references-refresh{margin-top:12px}
+.test-references-selections{display:grid;gap:6px}
+.test-references-selection{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px;border:1px solid var(--border-color,#384653);border-radius:7px}
+.test-references-selection img{width:42px;height:46px;object-fit:contain;background:#1118}
+.test-references-selection span{min-width:0;overflow-wrap:anywhere}
+.test-references-selection strong,.test-references-selection small{display:block;font-size:11px}
+.test-references-selection small{opacity:.7;font-size:10px;margin-top:3px}
+.test-references-selection button{background:transparent;border:0;color:inherit;cursor:pointer;font-size:20px;padding:4px 7px}
+.test-references-screen #test-references-preview-original{display:block;text-align:center;margin:8px}

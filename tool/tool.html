@@ -1156,6 +1156,7 @@
                                 <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
                                     <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="finder" aria-pressed="true">Epoch Finder</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
                                 </nav>
                                 <section class="epoch-finder-panel">
                                     <h3>New campaign</h3>
@@ -1249,11 +1250,56 @@
                             </main>
                         </div>
                     </section>
+                    <section id="test-references-screen" class="epoch-finder-screen test-references-screen hidden" aria-label="Training References">
+                        <div class="epoch-finder-intro">
+                            <div><div class="epoch-finder-eyebrow">TEST GENERATIONS / REFERENCES</div>
+                                <h2>Training references</h2>
+                                <p>Explore exact Set tags within a training run, inspect whole images, and choose examples for upcoming Epoch Finder campaigns.</p>
+                            </div>
+                        </div>
+                        <div class="epoch-finder-layout">
+                            <aside class="epoch-finder-sidebar">
+                                <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
+                                    <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="references" aria-pressed="true">References</button>
+                                </nav>
+                                <section class="epoch-finder-panel">
+                                    <h3>Find training examples</h3>
+                                    <label>Source training run<select id="test-references-run"><option value="">Loading runs…</option></select></label>
+                                    <label>Scoped Set group<select id="test-references-group" disabled><option value="">Select a run first</option></select></label>
+                                    <label>Tagged option<select id="test-references-option" disabled><option value="">Select a group first</option></select></label>
+                                    <button id="test-references-refresh" type="button" class="review-captions-btn">Refresh references</button>
+                                    <p class="epoch-finder-muted">Only images actually included in the selected run and carrying this exact annotation are shown. A tag is not proof that a feature is visible.</p>
+                                </section>
+                                <section class="epoch-finder-panel">
+                                    <div class="epoch-finder-panel-heading"><h3>Chosen examples</h3><span id="test-references-selected-count"></span></div>
+                                    <div id="test-references-selections" class="test-references-selections epoch-finder-muted">Choose an example to use for its tag.</div>
+                                    <p class="epoch-finder-muted">Choices are temporary until a campaign is launched. Its approved references are then stored with that campaign.</p>
+                                </section>
+                            </aside>
+                            <main class="epoch-finder-dashboard">
+                                <section class="epoch-finder-reference-workspace">
+                                    <div class="epoch-finder-panel-heading"><h3>Matching images</h3><span id="test-references-count"></span></div>
+                                    <p id="test-references-status" class="epoch-finder-muted" aria-live="polite">Select a training run to explore its references.</p>
+                                    <div id="test-references-gallery" class="epoch-finder-reference-gallery"></div>
+                                </section>
+                                <p id="test-references-error" class="epoch-finder-error hidden" role="alert"></p>
+                            </main>
+                        </div>
+                        <dialog id="test-references-preview" class="epoch-finder-reference-preview" aria-label="Training image preview">
+                            <form method="dialog"><button type="submit" class="review-captions-btn">Close ×</button></form>
+                            <img id="test-references-preview-image" alt="">
+                            <p id="test-references-preview-caption"></p>
+                            <a id="test-references-preview-original" target="_blank" rel="noopener noreferrer">Open original image ↗</a>
+                        </dialog>
+                    </section>
                     <div id="test-generations-body" class="test-generations-body">
                         <aside class="test-generations-rail">
                             <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
                                 <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Tests</button>
                                 <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
+                                <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
                             </nav>
                             <div id="test-generations-help" class="test-generations-help hidden">
                                 <strong>How Test Generations works</strong>
@@ -3255,6 +3301,7 @@
         <script src="/static/js/workflow_gate.js"></script>
         <script src="/static/js/test_generations.js"></script>
         <script src="/static/js/epoch_finder.js"></script>
+        <script src="/static/js/test_references.js"></script>
         <script src="/static/js/storyboard.js"></script>
         <script src="/static/js/main.js"></script>
     </body>

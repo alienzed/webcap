@@ -1163,6 +1163,15 @@ def _ollama_model_capabilities(model_id, refresh=False):
     return normalized
 
 
+def advertised_thinking(model_ref):
+    """Return True when the current provider explicitly advertises thinking."""
+    runtime_id, model_id = _split_model_ref(model_ref)
+    with _use_runtime(runtime_id):
+        if _director_config().get("mode") != "remote" or not _remote_is_ollama():
+            return False
+        return "thinking" in _ollama_model_capabilities(model_id)
+
+
 def list_vision_models(reload=False):
     models = []
     warnings = []

@@ -2008,7 +2008,6 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   position: absolute;
   right: 6px;
   bottom: 5px;
-  z-index: 2;
 }
 
 .storyboard-scene-progress-add {

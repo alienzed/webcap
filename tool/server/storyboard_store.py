@@ -760,6 +760,12 @@ def apply_lora_plan(story_id, expected_updated_at, story_wide, scenes):
         raise ValueError("Invalid reviewed LoRA assignments.")
     eligible = {item["name"]: item["enrichment"] for item in catalogue()
                 if item["stage"] == "h3" and item["enriched"]}
+    from .lora_library import resolve_for_inference
+    approved_names = [entry.get("name") for entry in story_wide]
+    for group in scenes:
+        if isinstance(group, dict):
+            approved_names.extend(entry.get("name") for entry in group.get("assign") or [])
+    resolved_names = resolve_for_inference("h3", approved_names) if approved_names else {}
 
     def verified(entries):
         result = _normalize_loras(entries)
@@ -775,6 +781,8 @@ def apply_lora_plan(story_id, expected_updated_at, story_wide, scenes):
                 allowed.update(values)
             if any(word not in allowed for word in choices):
                 raise ValueError("Approved LoRA phrase is not in its enriched metadata.")
+        for item in result:
+            item["name"] = resolved_names[item["name"]]
         return result
 
     updated = copy.deepcopy(current)

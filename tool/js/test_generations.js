@@ -5120,15 +5120,14 @@
   }
 
   function openTestBatchDialog() {
-    if (testBatch && testBatch.active) {
-      openTestBenchForSetFolder(testBatch.folder);
-      return;
-    }
     var modal = el('test-generations-batch-modal');
     var count = el('test-generations-batch-count');
+    var activeBatch = testBatch && testBatch.active;
     count.value = '5';
-    el('test-generations-batch-config-summary').textContent =
-      selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session';
+    el('test-generations-batch-config-summary').textContent = activeBatch
+      ? 'A Test batch is already running for ' + testBatch.folder + '. Stop or finish that batch before starting another.'
+      : selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session';
+    el('test-generations-batch-start').disabled = !!activeBatch;
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
   }

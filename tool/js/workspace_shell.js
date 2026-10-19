@@ -155,7 +155,11 @@ function parseShellLocationRoute() {
   var params = new URLSearchParams(queryIndex >= 0 ? body.slice(queryIndex + 1) : '');
   var folder = String(params.get('folder') || '').replace(/^[/\\]+|[/\\]+$/g, '');
   var scope = params.get('scope') === 'global' ? 'global' : 'set';
-  return { workspace: workspace, folder: folder, scope: scope };
+  return {
+    workspace: workspace, folder: folder, scope: scope,
+    storyId: String(params.get('story') || ''),
+    sceneId: String(params.get('scene') || '')
+  };
 }
 
 function currentShellRouteWorkspace() {
@@ -180,6 +184,11 @@ function syncShellLocationRoute() {
   if (folder && workspace !== 'storyboard' && workspace !== 'generate') params.set('folder', folder);
   if (workspace === 'training' && getTrainingWorkspaceEntryKind() === 'global') params.set('scope', 'global');
   if (workspace === 'media') window.appendMediaExplorerRouteParams(params);
+  if (workspace === 'storyboard') {
+    var storyTarget = window.getStoryboardRouteTarget();
+    if (storyTarget.storyId) params.set('story', storyTarget.storyId);
+    if (storyTarget.storyId && storyTarget.sceneId) params.set('scene', storyTarget.sceneId);
+  }
   var nextHash = '#/' + workspace + (params.toString() ? '?' + params.toString() : '');
   if (window.location.hash === nextHash) return;
   window.history.replaceState(null, '', window.location.pathname + window.location.search + nextHash);
@@ -217,7 +226,9 @@ function restoreInitialShellLocationRoute() {
   } else if (route.workspace === 'test' && typeof window.openTestBenchForCurrentFolder === 'function') {
     window.openTestBenchForCurrentFolder();
   } else if (route.workspace === 'storyboard' && typeof window.openStoryboardActivity === 'function') {
-    window.openStoryboardActivity();
+    window.openStoryboardActivity({ storyId: route.storyId, sceneId: route.sceneId });
+    // Story selection is asynchronous; do not overwrite the deep link before it resolves.
+    return;
   } else if (route.workspace === 'media' && typeof window.openMediaExplorerActivity === 'function') {
     window.openMediaExplorerActivity();
   } else if (route.workspace === 'storage' && typeof window.openStorageActivity === 'function') {

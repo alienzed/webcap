@@ -5863,6 +5863,7 @@
       var modelSelect = el('storyboard-director-model');
       if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) {
         modelSelect.value = selected;
+        renderDirectorSelector();
       }
       syncIndividualDevelopStrategy(true);
     });

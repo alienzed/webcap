@@ -232,6 +232,22 @@ def _previous_scene_context(story, scene_id):
     )
 
 
+def approved_lora_vocabulary(story, scene_id):
+    if story.get("directorLoraPlanning") is not True:
+        return ""
+    from .storyboard_store import resolve_scene_loras
+    scene = (story.get("scenes") or {}).get(scene_id) or {}
+    active = {item["name"].casefold() for item in resolve_scene_loras(story, scene)}
+    chosen = []
+    for selections in (story.get("directorLoraPhrases") or {}, scene.get("directorLoraPhrases") or {}):
+        for name, phrases in selections.items():
+            if name.casefold() in active:
+                chosen.extend(phrases)
+    chosen = list(dict.fromkeys(chosen))
+    return ("[APPROVED LORA VOCABULARY]\nPreserve these approved phrases where consistent "
+            "with the Scene: " + ", ".join(chosen) + "\nNever write loader syntax.") if chosen else ""
+
+
 def build_request(story, scene_id, operation, instruction="", development=None):
     if not isinstance(story, dict):
         raise ValueError("Story data must be an object.")
@@ -562,6 +578,7 @@ def build_request(story, scene_id, operation, instruction="", development=None):
     style = _clean(story.get("style"))
     story_invariants = _story_invariants_text(story)
     scene_context = _scene_context(scene)
+    vocabulary = approved_lora_vocabulary(story, scene_id)
     h3_mode = mode_from_reference_roles(_reference_roles(scene))
 
     blocks = [
@@ -580,6 +597,8 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         )
     if scene_context:
         blocks.append("[SCENE]\n" + scene_context)
+    if vocabulary:
+        blocks.append(vocabulary)
     blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
     blocks.append("[REFERENCE MODE]\n" + h3_mode)
 

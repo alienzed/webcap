@@ -479,6 +479,7 @@
       ? items.map(function (item, index) {
           return '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
             '<span title="' + escapeHtml(item.name) + '">' + escapeHtml(item.name) + '</span>' +
+            '<button type="button" class="review-captions-btn" data-generate-lora-profile="' + index + '" title="Open LoRA metadata">ⓘ</button>' +
             (function () {
               var entry = generateState.loraProfileCache[item.name];
               var enriched = entry && entry.profile && entry.profile.enrichment;
@@ -2244,8 +2245,108 @@
     renderDirector();
   }
 
-  function runDirector(operation) {
+  function stageForGenerateModel(modelId) {
+    if (modelId === 'minimax_h3') return 'h3';
+    if (modelId === 'krea2_raw') return 'krea2';
+    return '';
+  }
+
+  function planGenerateLoras(operation) {
+    var stage = stageForGenerateModel(generateState.modelId);
+    if (!stage) throw new Error('LoRA planning is not configured for this generation model.');
+    var originalModelId = generateState.modelId;
+    var originalPrompt = el('generate-prompt').value;
+    var originalInstruction = el('generate-director-instruction').value;
+    generateState.director.busy = true;
+    setDirectorStatus('Finding relevant enriched LoRAs…');
+    renderDirector();
+    startDirectorActivity();
+    var continueWithoutMatches = false;
+    var approvedPhrases = [];
+    return postJson('/fs/lora_library/plan', {
+      stage: stage,
+      intent: [originalPrompt, operation === 'refine_prompt' ? originalInstruction : ''].filter(Boolean).join('\\n'),
+      existing: {storyWide: selectedLoras(originalModelId).map(function (item) {
+        return {name: item.name, strength: item.strength};
+      })},
+      directorModel: generateState.director.modelId
+    }).then(function (response) {
+      if (response.empty) return {proposal: {storyWide: []}, empty: true};
+      trackTransientLlmJob(response.job);
+      generateState.director.jobId = String(response.job && response.job.jobId || '');
+      return waitForDirectorJob(response.job);
+    }).then(function (result) {
+      if (generateState.modelId !== originalModelId ||
+          el('generate-prompt').value !== originalPrompt ||
+          el('generate-director-instruction').value !== originalInstruction) {
+        throw new Error('Generate inputs changed during LoRA planning. Review was discarded.');
+      }
+      if (result.empty) {
+        setDirectorStatus('No enriched LoRA suggestions; continuing prompt authoring.');
+        continueWithoutMatches = true;
+        return;
+      }
+      return requestJson('/fs/lora_library').then(function (library) {
+        var options = (library.items || []).filter(function (item) {
+          return item.stage === stage && item.enriched;
+        }).map(function (item) {
+          return Object.assign({name:item.name}, item.enrichment || {});
+        });
+        var selected = (result.proposal || {}).storyWide || [];
+        if (!selected.length) {
+          continueWithoutMatches = true;
+          setDirectorStatus('Director found no additional LoRAs.');
+          return;
+        }
+        window.openDirectorLoraReview({items:selected, catalogue:options, apply:function (choices) {
+          if (generateState.modelId !== originalModelId || el('generate-prompt').value !== originalPrompt) {
+            throw new Error('Generation context changed; request new suggestions.');
+          }
+          return postJson('/fs/lora_library/resolve', {
+            stage:stage, names:choices.map(function (item) { return item.name; })
+          }).then(function (resolved) {
+            if (generateState.modelId !== originalModelId ||
+                el('generate-prompt').value !== originalPrompt) {
+              throw new Error('Generate context changed during LoRA resolution.');
+            }
+            var selectedLoraList = selectedLoras(originalModelId);
+            choices.forEach(function (item) {
+              var name = resolved.names[item.name];
+              if (!name) throw new Error('ComfyUI did not resolve LoRA: ' + item.name);
+              var found = selectedLoraList.find(function (current) { return current.name === name; });
+              if (found) found.strength = item.strength;
+              else selectedLoraList.push({name:name, strength:item.strength});
+            });
+          var phrases = choices.reduce(function (all, item) { return all.concat(item.phrases || []); }, []);
+          approvedPhrases = phrases.slice();
+          var missing = phrases.filter(function (phrase) {
+            return originalPrompt.toLowerCase().indexOf(phrase.toLowerCase()) === -1;
+          });
+          if (missing.length) el('generate-prompt').value = originalPrompt +
+            (originalPrompt.trim() ? ', ' : '') + missing.join(', ');
+          renderLoras();
+          generateState.director.busy = false;
+          renderDirector();
+          return runDirector(operation, true, approvedPhrases);
+          });
+        }});
+        setDirectorStatus('Review LoRA suggestions before applying.');
+      });
+    }).catch(function (error) {
+      setDirectorStatus('LoRA planning failed; current prompt and selections are unchanged.');
+      reportError(error, 'Director LoRA planning failed');
+    }).then(function () {
+      generateState.director.busy = false;
+      generateState.director.jobId = '';
+      renderDirector();
+      finishDirectorActivity();
+      if (continueWithoutMatches) return runDirector(operation, true);
+    });
+  }
+
+  function runDirector(operation, skipPlanning, approvedVocabulary) {
     if (generateState.director.busy) return;
+    if (!skipPlanning && el('generate-director-lora-enable').checked) return planGenerateLoras(operation);
     if (!generateState.director.modelId) throw new Error('Choose a Prompt Assistant model.');
     var promptNode = el('generate-prompt');
     var prompt = String(promptNode.value || '').trim();
@@ -2268,7 +2369,13 @@
         return !!(input && input.files && input.files[0]);
       })
     }).then(function (payload) {
-      promptNode.value = String(payload.result || '');
+      var rewritten = String(payload.result || '');
+      (approvedVocabulary || []).forEach(function (phrase) {
+        if (!rewritten.toLowerCase().includes(phrase.toLowerCase())) {
+          rewritten += (rewritten.trim() ? ', ' : '') + phrase;
+        }
+      });
+      promptNode.value = rewritten;
       generateState.director.previousPrompt = previousPrompt;
 
       if (operation === 'refine_prompt') el('generate-director-instruction').value = '';
@@ -2554,6 +2661,12 @@
       items[index].strength = Number(input.value);
       });
     el('generate-lora-list').addEventListener('click', function (event) {
+      var metadata = event.target.closest('[data-generate-lora-profile]');
+      if (metadata) {
+        var item = selectedLoras(generateState.modelId)[Number(metadata.dataset.generateLoraProfile)];
+        if (item) window.openLoraMetadataEditor(item.name, stageForGenerateModel(generateState.modelId));
+        return;
+      }
       var optionsButton = event.target.closest('[data-generate-lora-insert-options]');
       if (optionsButton) {
         var chosen = selectedLoras(generateState.modelId)[Number(optionsButton.dataset.generateLoraInsertOptions)];

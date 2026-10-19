@@ -215,7 +215,7 @@ def report(folder_path, job_id="", session_name=""):
     if len(series) > 1:
         warnings.append("Campaign tests can differ. Compare scores within an individual campaign, not across campaigns by default.")
     if len(sessions) > 1:
-        warnings.append("Test session prompts and settings can differ. Pooled manual ratings and VL results are descriptive, not controlled comparisons.")
+        warnings.append("Multiple Test sessions present. Use comparable cohort filtering; pooled legacy values are descriptive only.")
     epochs = sorted(set(chosen["savedEpochs"]) | {p["epoch"] for c in series for p in c["points"]} |
                     {p["epoch"] for p in test_points} | {p["epoch"] for p in loss})
     return {
@@ -329,7 +329,7 @@ def _test_cohorts(folder_path, job_id, session_name=""):
             continue
         cohort["sessions"] = sorted(cohort["sessions"])
         cohort["points"] = [{
-            "epoch": row["epoch"], "manual": row["manualSum"] / row["manualCount"] if row["manualCount"] else None,
+            "epoch": row["epoch"], "sessions": cohort["sessions"], "manual": row["manualSum"] / row["manualCount"] if row["manualCount"] else None,
             "manualCount": row["manualCount"],
             "testVl": row["vlMatches"] / row["vlCount"] if row["vlCount"] else None,
             "testVlCount": row["vlCount"],

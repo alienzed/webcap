@@ -10,6 +10,9 @@
   var lastSessionDetailsMarkup = null;
   var prepared = null;
   var launchFolder = '';
+  var preparedContext = '';
+  var openGeneration = 0;
+  var preparedFingerprint = '';
   var currentSession = '';
   var currentSessionFolder = '';
   var currentSessionModel = '';
@@ -4465,6 +4468,7 @@
   }
 
   function closePane() {
+    ++openGeneration;
     var node = pane();
     var frame = el('app-frame');
     if (node) node.classList.add('hidden');
@@ -4553,6 +4557,9 @@
     launchFolder = owningSetFolder((state && state.folder) || '');
     if (!launchFolder) throw new Error('Test Generations requires a current Set.');
     var requestedModelId = currentTestModelId();
+    var context = launchFolder + '|' + requestedModelId;
+    var generation = ++openGeneration;
+    var warmReturn = prepared !== null && preparedContext === context;
     var rememberedSession = (
       currentSession &&
       currentSessionFolder === launchFolder &&
@@ -4567,6 +4574,40 @@
     node.classList.remove('hidden');
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+    if (warmReturn) {
+      // The hidden workspace DOM is still alive. Keep previews, controls,
+      // selections and scroll intact while synchronizing server changes.
+      refreshActivityButton();
+      refreshSessions().catch(showError);
+      request('test_prepare', { modelId: requestedModelId }).then(function (payload) {
+        if (generation !== openGeneration || !isOpen()) return;
+        var fingerprint = JSON.stringify([payload.files, payload.candidateScores,
+          payload.candidateMetadata, payload.checkpointHumanRatings,
+          payload.count, payload.defaultStrength]);
+        prepared = payload;
+        syncCandidatesButton(payload);
+        if (fingerprint !== preparedFingerprint) {
+          preparedFingerprint = fingerprint;
+          renderStagedFiles(payload);
+        }
+      }).catch(showError);
+      var sessionToOpen = String(pendingActivitySession || '');
+      pendingActivitySession = '';
+      var warmStatus = sessionToOpen
+        ? request('test_open_session', { session: sessionToOpen }).then(selectSessionStatus)
+        : currentSession
+          ? request('test_open_session', { session: currentSession }).then(renderStatus)
+          : request('test_status', { modelId: requestedModelId }).then(function (status) {
+              if (status && status.session) selectSessionStatus(status);
+              else renderStatus(status || { status: 'idle' });
+            });
+      warmStatus.then(function () {
+        if (generation === openGeneration && isOpen()) pollStatus();
+      }).catch(showError);
+      return;
+    }
+    preparedContext = context;
+    preparedFingerprint = '';
     if (summary) summary.textContent = 'Loading Test folder...';
     if (list) list.textContent = '';
     if (errorEl) {
@@ -4627,7 +4668,11 @@
       reportConsoleError('Test Generations', err);
     });
     request('test_prepare', { modelId: currentTestModelId() }).then(function (payload) {
+      if (generation !== openGeneration || !isOpen()) return;
       prepared = payload;
+      preparedFingerprint = JSON.stringify([payload.files, payload.candidateScores,
+        payload.candidateMetadata, payload.checkpointHumanRatings,
+        payload.count, payload.defaultStrength]);
       syncCandidatesButton(payload);
       if (Array.isArray(payload.warnings)) {
         payload.warnings.forEach(function (warning) {

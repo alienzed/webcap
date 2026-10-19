@@ -10,6 +10,8 @@
   var mediaFacts = new Map();
   var loupeReturn = null;
   var artifact = '', owner = '';
+  function storyboardType() { return source === 'storyboard' ? el('media-explorer-storyboard-type').value : ''; }
+  function syncStoryboardType() { el('media-explorer-storyboard-type').classList.toggle('hidden', source !== 'storyboard'); }
   function el(id) { return document.getElementById(id); }
   function report(err) {
     var message = String(err && err.message || err);
@@ -131,6 +133,7 @@
         owner = item.storageId; source = item.source; role = ''; artifact = '';
         el('media-explorer-search').value = '';
         facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
+        el('media-explorer-storyboard-type').value = '';
         sourceButtons.forEach(function (button) {
           button.classList.toggle('active', button.dataset.mediaSource === source);
         });
@@ -416,7 +419,7 @@
   }
   var facetIds = ['kind', 'model', 'folder', 'rating', 'date'];
   function hasFilters() {
-    return artifact || owner || role || source || el('media-explorer-search').value.trim() || facetIds.some(function (id) { return el('media-explorer-' + id).value; });
+    return artifact || owner || role || source || storyboardType() || el('media-explorer-search').value.trim() || facetIds.some(function (id) { return el('media-explorer-' + id).value; });
   }
   function emptyState() {
     var empty = el('media-explorer-empty'); empty.classList.toggle('hidden', items.length > 0 || loading);
@@ -439,6 +442,7 @@
     var search = el('media-explorer-search');
     if (artifact) chip('Focused media', function () { artifact = ''; load(true); });
     if (owner) chip('Related to ' + owner, function () { owner = ''; load(true); });
+    if (storyboardType()) chip(storyboardType() === 'exports' ? 'Exported Sequences' : 'Scenes', function () { el('media-explorer-storyboard-type').value = ''; load(true); });
     if (search.value.trim()) chip('“' + search.value.trim() + '”', function () { search.value = ''; load(true); });
     facetIds.slice(1).forEach(function (id) {
       var select = el('media-explorer-' + id);
@@ -465,6 +469,7 @@
     if (!visible) return;
     clearTimeout(debounce);
     window.syncShellLocationRoute();
+    syncStoryboardType();
     filterControls();
     if (reset) {
       serial++; loading = false; needsLoad = true;
@@ -483,7 +488,7 @@
     var qs = new URLSearchParams({limit:pageSize, offset:reset ? 0 : offset, role:role,
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
       sort:el('media-explorer-sort').value, source:source, full:full ? '1' : '0',
-      model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, date:el('media-explorer-date').value, artifact:artifact, owner:owner});
+      storyboard_type:storyboardType(), model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, date:el('media-explorer-date').value, artifact:artifact, owner:owner});
     fetch('/fs/media_explorer?' + qs, {signal: controller.signal}).then(function (res) {
       return res.json().catch(function (err) { throw new Error('Media discovery HTTP ' + res.status + ': ' + err.message); }).then(function (data) {
         if (!res.ok || !data.ok) throw new Error(data.error || 'Media discovery failed.');
@@ -645,6 +650,7 @@
     clearTimeout(debounce); debounce = setTimeout(function () { load(true); }, 250);
   });
   el('media-explorer-kind').addEventListener('change', function () { load(true); });
+  el('media-explorer-storyboard-type').addEventListener('change', function () { load(true); });
   facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).addEventListener('change', function () { load(true); }); });
   el('media-explorer-sort').addEventListener('change', function () { load(true); });
   el('media-explorer-size').addEventListener('input', function () {
@@ -661,6 +667,7 @@
   el('media-explorer-clear-filters').addEventListener('click', function () {
     el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
     facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
+    el('media-explorer-storyboard-type').value = '';
     sourceButtons[0].click();
   });
   el('media-explorer-empty-action').addEventListener('click', function () {

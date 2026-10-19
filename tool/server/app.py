@@ -2015,6 +2015,7 @@ def media_explorer_route():
             date=request.args.get("date", ""),
             artifact=request.args.get("artifact", ""),
             owner=request.args.get("owner", ""),
+            storyboard_type=request.args.get("storyboard_type", ""),
         ))
     except Exception as exc:
         app.logger.exception("MEDIA EXPLORER DISCOVERY FAILED: %s", exc)

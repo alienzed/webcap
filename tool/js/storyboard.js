@@ -5691,6 +5691,9 @@
     if (!modal || !input || !preset || !status) throw new Error('Director Tools modal markup is missing.');
     preset.value = '';
     input.value = '';
+    input.readOnly = false;
+    el('storyboard-director-tools-run').textContent = 'Revise Scenes';
+    el('storyboard-director-tools-generate-takes').closest('label').classList.remove('hidden');
     el('storyboard-director-tools-generate-takes').checked = false;
     status.textContent = '';
     modal.classList.remove('hidden');
@@ -5832,6 +5835,12 @@
       if (!input) return;
       if (this.value === 'continuity') input.value = DIRECTOR_PASS_PRESETS.continuity.instruction;
       if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
+      var coherence = this.value === 'coherence';
+      var run = el('storyboard-director-tools-run');
+      if (run) run.textContent = coherence ? 'Check Coherence' : 'Revise Scenes';
+      var fresh = el('storyboard-director-tools-generate-takes').closest('label');
+      if (fresh) fresh.classList.toggle('hidden', coherence);
+      input.readOnly = coherence;
       input.focus();
     };
     el('storyboard-director-tools-run').onclick = runDirectorToolsRevision;

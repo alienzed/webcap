@@ -7328,7 +7328,7 @@ html[data-theme="dark"] iframe {
 .test-unified-finder-building .test-unified-builder>p,
 .test-unified-finder-building .test-unified-builder-actions {display:none;}
 .test-unified-finder-building .test-generations-next-run,
-.test-unified-finder-building .test-generations-staged-panel,
+.test-unified-finder-building .test-generations-staged-panel {display:none;}
 
 .test-unified-builder #epoch-finder-screen {display:block;position:relative;min-height:560px;width:100%;}
 .test-unified-builder #epoch-finder-screen .test-workspace-pane-switcher {display:none;}

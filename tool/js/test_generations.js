@@ -189,6 +189,33 @@
     });
   }
 
+  // Only clear neighboring shade names get partial credit. Do not relabel the VL's
+  // choice, infer color from pixels, or equate arbitrary colors in the same family.
+  function testVlNearColorMatch(expected, observed) {
+    var a = String(expected || '').trim().toLowerCase();
+    var b = String(observed || '').trim().toLowerCase();
+    if (!a || !b || a === b) return false;
+    var neighbors = [
+      ['peach', 'coral'], ['coral', 'pink'],
+      ['blue', 'cyan'], ['cyan', 'teal'], ['teal', 'turquoise'],
+      ['light blue', 'sky blue'], ['light blue', 'cyan'],
+      ['purple', 'violet'], ['purple', 'mauve'],
+      ['red', 'burgundy'], ['burgundy', 'maroon']
+    ];
+    return neighbors.some(function (pair) {
+      return (a === pair[0] && b === pair[1]) || (a === pair[1] && b === pair[0]);
+    });
+  }
+
+  // A recognized color choice has less influence than shape, pose, or structure.
+  function testVlColorAttribute(group) {
+    var colors = 'black white gray grey silver red burgundy maroon orange yellow gold green olive lime blue cyan teal turquoise navy purple violet lavender magenta pink peach coral mauve brown tan beige cream';
+    var names = new Set(colors.split(' ').concat(['light blue', 'sky blue', 'dark blue', 'navy blue', 'royal blue', 'dark green', 'forest green', 'olive green', 'lime green', 'light pink', 'hot pink']));
+    return [group.expectedText, group.selectedText].some(function (value) {
+      return names.has(String(value || '').trim().toLowerCase());
+    });
+  }
+
   // Session-only scoring: neither the VL observation nor counting overrides are persisted.
   function testVlPartialCredit(expected, observed) {
     var a = String(expected || '').toLowerCase().match(/[a-z0-9]+/g) || [];
@@ -212,14 +239,14 @@
     (comparison || []).forEach(function (group) {
       if (testVl.disabledGroups.has(group.id) || (ignoredGroups && ignoredGroups.has(group.id))) {
         score.excluded += 1;
-      } else if (group.result === 'match') {
-        score.matches += 1;
-        score.count += 1;
-      } else if (group.result === 'mismatch') {
-        var partial = testVlPartialCredit(group.expectedText, group.selectedText);
-        score.matches += partial;
-        score.mismatches += 1 - partial;
-        score.count += 1;
+      } else if (group.result === 'match' || group.result === 'mismatch') {
+        var weight = testVlColorAttribute(group) ? 0.5 : 1;
+        var partial = group.result === 'match' ? 1 :
+          testVlPartialCredit(group.expectedText, group.selectedText);
+        if (!partial && testVlNearColorMatch(group.expectedText, group.selectedText)) partial = 0.5;
+        score.matches += weight * partial;
+        score.mismatches += weight * (1 - partial);
+        score.count += weight;
       } else {
         score.unclear += 1;
       }
@@ -233,7 +260,7 @@
 
   function testVlScoreText(prefix, score) {
     return prefix + (score.count ? (' ' + Math.round(100 * score.matches / score.count) +
-      '% (' + testVlCreditText(score.matches) + '/' + score.count + ')') : ' — (0 counted)');
+      '% (' + testVlCreditText(score.matches) + '/' + testVlCreditText(score.count) + ' weighted)') : ' — (0 counted)');
   }
 
   function testVlCandidateScores(results) {
@@ -351,7 +378,7 @@
     epochLabel.textContent = epochScore && epochScore.count ?
       ('VL ' + Math.round(100 * epochScore.matches / epochScore.count) + '%') : '';
     epochLabel.title = epochLabel.textContent ?
-      'Epoch VL agreement · ' + epochScore.previews + ' preview(s), ' + epochScore.count + ' counted attributes' : '';
+      'Epoch VL agreement · ' + epochScore.previews + ' preview(s), ' + testVlCreditText(epochScore.count) + ' weighted attributes' : '';
     epochLabel.classList.toggle('hidden', !epochLabel.textContent);
 
     button.textContent = item ?
@@ -360,7 +387,7 @@
       var score = testVlScore(item.comparison, item.ignoredGroups);
       button.textContent = score.count ? 'VL ' + Math.round(100 * score.matches / score.count) + '%' : 'VL —';
       if (item.saveError) button.textContent += ' !';
-      button.title = (score.count ? (score.matches + '/' + score.count + ' counted attributes agree') : 'No counted attributes') +
+      button.title = (score.count ? (testVlCreditText(score.matches) + '/' + testVlCreditText(score.count) + ' weighted agreement') : 'No counted attributes') +
         (score.unclear ? ' · ' + score.unclear + ' unclear' : '') +
         (item.modelId ? ' · Model: ' + item.modelId : '') +
         (item.saveError ? ' · Not saved: ' + item.saveError : '') + ' · Open VL assessment';
@@ -442,7 +469,7 @@
         : '';
       label.classList.toggle('hidden', !label.textContent);
       label.title = score && score.count
-        ? score.matches + '/' + score.count + ' matched · ' + score.previews + ' preview(s), ' + score.count + ' counted attributes'
+        ? testVlCreditText(score.matches) + '/' + testVlCreditText(score.count) + ' weighted agreement · ' + score.previews + ' preview(s)'
         : '';
     });
     sortStagedCandidateRows();
@@ -491,7 +518,12 @@
     });
     var entryScore = testVlScore(groups, entry.ignoredGroups);
     var matches = groups.filter(function (g) { return g.result === 'match'; });
-    var mismatches = groups.filter(function (g) { return g.result === 'mismatch'; });
+    var nearMatches = groups.filter(function (g) {
+      return g.result === 'mismatch' && testVlNearColorMatch(g.expectedText, g.selectedText);
+    });
+    var mismatches = groups.filter(function (g) {
+      return g.result === 'mismatch' && !testVlNearColorMatch(g.expectedText, g.selectedText);
+    });
     var unclear = groups.filter(function (g) { return g.result === 'unclear'; });
 
     summary.textContent = groups.length
@@ -501,9 +533,10 @@
 
     // Only differences and unresolved observations demand immediate attention.
     var visible = '';
-    if (mismatches.length) visible += '<div class="test-generations-vl-comparison-group"><strong>Differences</strong>' + testVlComparisonTable(mismatches, groups, entry) + '</div>';
-    if (unclear.length) visible += '<div class="test-generations-vl-comparison-group"><strong>Unclear</strong>' + testVlComparisonTable(unclear, groups, entry) + '</div>';
-    if (groups.length && !mismatches.length && !unclear.length) visible = '<p>No differences reported.</p>';
+    if (mismatches.length) visible += '<strong>Differences</strong>' + testVlComparisonTable(mismatches, groups, entry);
+    if (nearMatches.length) visible += '<strong>Related colors · partial credit</strong>' + testVlComparisonTable(nearMatches, groups, entry);
+    if (unclear.length) visible += '<strong>Unclear</strong>' + testVlComparisonTable(unclear, groups, entry);
+    if (groups.length && !mismatches.length && !nearMatches.length && !unclear.length) visible = '<p>No differences reported.</p>';
     comparison.innerHTML = visible;
     comparison.classList.toggle('hidden', !groups.length);
     el('test-generations-vl-agreements-label').textContent = 'Show ' + matches.length + ' agreeing attribute' + (matches.length === 1 ? '' : 's');

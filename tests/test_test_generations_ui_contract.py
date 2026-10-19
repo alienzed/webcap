@@ -1505,7 +1505,8 @@ def test_test_vl_session_scoring_audit_contract():
     assert "var candidateScores = testVlCandidateScores(results);" in script
     assert "renderTestVlCard(card, result, candidateScores);" in script
     assert "showTestVlResult(file, true);" in script
-    assert "score.previews + ' preview(s), ' + score.count + ' counted attributes'" in script
+    assert "testVlCreditText(score.count) + ' weighted agreement" in script
+    assert "testVlCreditText(epochScore.count) + ' weighted attributes'" in script
 
 def test_candidate_summary_keeps_controls_on_top_line_and_compacts_scores():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

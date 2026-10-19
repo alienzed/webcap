@@ -1409,7 +1409,9 @@
     var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
     var correction = root.querySelector('[data-director-correction]');
     var complete = !!(scene && scene.refineComplete) && !(correction && correction.value.trim());
-    button.textContent = complete ? '✓' : 'Refine';
+    var label = button.querySelector('[data-director-refine-label]');
+    if (!label) throw new Error('Scene Refine button label is missing.');
+    label.textContent = complete ? '✓' : 'Refine';
     button.title = complete
       ? 'Last refinement completed. Start typing another instruction to refine again.'
       : 'Apply this correction to the existing generation prompt.';
@@ -1581,6 +1583,8 @@
     var saveBarrier = flushPendingSaves();
     clearSceneDirectorCompletion(storyId, sceneId);
     setDirectorPending(directorTarget, true);
+    var refineButton = root.querySelector('[data-director-refine]');
+    if (refineButton) refineButton.classList.add('is-working');
     updateSceneDirectorStatus(sceneId, 'Director working…');
     startDirectorActivity();
     saveBarrier.then(function () {
@@ -1593,6 +1597,7 @@
       }
     }).finally(function () {
       setDirectorPending(directorTarget, false);
+      if (refineButton) refineButton.classList.remove('is-working');
       finishDirectorActivity();
     });
   }
@@ -3969,7 +3974,7 @@
                 '<input type="text" data-director-correction placeholder="Tell the Director what to change in this prompt...">' +
                 '<button type="button" class="review-captions-btn storyboard-director-action" data-director-refine title="' +
                   (scene.refineComplete ? 'Last refinement completed. Start typing another instruction to refine again.' : 'Apply this correction to the existing generation prompt.') +
-                  '">' + (scene.refineComplete ? '✓' : 'Refine') + '</button>' +
+                  '"><span class="storyboard-director-wand" aria-hidden="true">✦</span><span data-director-refine-label>' + (scene.refineComplete ? '✓' : 'Refine') + '</span></button>' +
                 '<span class="storyboard-save-state" data-director-status></span>' +
               '</div>' +
               '<details class="storyboard-scene-disclosure storyboard-prompt-pipeline-details">' +
@@ -6022,6 +6027,15 @@
       if (picker) renderLoraPickerMenu(picker);
     });
     el('storyboard-scenes-list').addEventListener('keydown', handleLoraPickerKeydown);
+    el('storyboard-scenes-list').addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' || event.repeat || event.isComposing || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+      var correction = event.target.closest('[data-director-correction]');
+      if (!correction) return;
+      var scene = correction.closest('.storyboard-scene[data-scene-id]');
+      if (!scene) return;
+      event.preventDefault();
+      runDirector(scene.dataset.sceneId, 'refine_prompt');
+    });
     el('storyboard-scenes-list').addEventListener('input', function (event) {
       var picker = event.target.closest('[data-scene-lora-picker]');
       if (picker) {

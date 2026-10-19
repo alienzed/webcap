@@ -496,7 +496,7 @@
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
     if (job.operation === 'interpret_atmosphere' || job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
     if (job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene') return { kind: 'scenes', storyId: job.storyId };
-    if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence') return { kind: 'repair', storyId: job.storyId };
+    if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence' || job.operation === 'check_coherence_sequence') return { kind: 'repair', storyId: job.storyId };
     if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId, operation: job.operation };
     }
@@ -5708,34 +5708,79 @@
     modal.setAttribute('aria-hidden', 'true');
   }
 
-  function showCoherenceReview(storyId, sceneId, original, improved, modelId) {
+  function showCoherenceReview(storyId, scenes, modelId) {
+    var changed = scenes.filter(function (scene) {
+      return scene.originalPrompt.trim() !== scene.prompt.trim();
+    });
     var dialog = document.createElement('dialog');
-    dialog.setAttribute('aria-label', 'Check Coherence result');
-    dialog.style.cssText = 'width:min(900px,94vw);max-height:90vh;padding:20px;border-radius:10px;';
+    dialog.setAttribute('aria-label', 'Check Coherence results');
+    dialog.style.cssText = 'width:min(920px,94vw);max-height:90vh;padding:20px;border-radius:10px;';
     var title = document.createElement('h3');
-    title.textContent = original === improved ? 'Check Coherence — no changes needed' : 'Review coherence changes';
-    var result = document.createElement('textarea');
-    result.value = improved;
-    result.readOnly = original === improved;
-    result.style.cssText = 'box-sizing:border-box;width:100%;height:55vh;resize:vertical;';
+    title.textContent = 'Check Coherence: ' + scenes.length + ' Scenes reviewed, ' + changed.length + ' changed';
+    var content = document.createElement('div');
+    content.style.cssText = 'max-height:65vh;overflow:auto;';
+    var entries = [];
+    scenes.forEach(function (scene, index) {
+      var isChanged = scene.originalPrompt.trim() !== scene.prompt.trim();
+      var item = document.createElement('details');
+      item.open = isChanged;
+      item.style.cssText = 'margin:12px 0;border-bottom:1px solid #8885;padding-bottom:10px;';
+      var heading = document.createElement('summary');
+      heading.textContent = (index + 1) + '. ' + (scene.title || scene.sceneId) + (isChanged ? ' — changes proposed' : ' — unchanged');
+      item.appendChild(heading);
+      var box = document.createElement('textarea');
+      box.value = scene.prompt;
+      box.readOnly = !isChanged;
+      box.setAttribute('aria-label', 'Coherence prompt for ' + (scene.title || scene.sceneId));
+      box.style.cssText = 'box-sizing:border-box;width:100%;height:240px;resize:vertical;margin-top:8px;';
+      if (isChanged) {
+        var label = document.createElement('label');
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        label.append(checkbox, document.createTextNode(' Apply this Scene'));
+        item.appendChild(label);
+        entries.push({scene: scene, checkbox: checkbox, box: box});
+      }
+      item.appendChild(box);
+      content.appendChild(item);
+    });
+    var status = document.createElement('p');
+    status.setAttribute('aria-live', 'polite');
     var actions = document.createElement('div');
     actions.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;margin-top:12px;';
-    var discard = document.createElement('button');
-    discard.type = 'button';
-    discard.textContent = 'Close / Discard';
-    discard.onclick = function () { dialog.close(); };
-    actions.appendChild(discard);
-    if (original !== improved) {
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = 'Close / Discard';
+    close.onclick = function () { dialog.close(); };
+    actions.appendChild(close);
+    if (entries.length) {
       var apply = document.createElement('button');
       apply.type = 'button';
-      apply.textContent = 'Apply Prompt';
+      apply.textContent = 'Apply Selected';
       apply.onclick = function () {
+        var selected = entries.filter(function (entry) { return entry.checkbox.checked; });
+        if (!selected.length) {
+          status.textContent = 'Select at least one changed Scene.';
+          return;
+        }
         apply.disabled = true;
-        directorRequest({
-          operation: 'apply_coherence', storyId: storyId, sceneId: sceneId,
-          expectedPrompt: original, prompt: result.value, model: modelId
-        }).then(function () {
-          // Reload the canonical Scene; no unrelated fields are touched.
+        var applied = 0;
+        selected.reduce(function (promise, entry) {
+          return promise.then(function () {
+            status.textContent = 'Applying ' + (applied + 1) + ' of ' + selected.length + '…';
+            return directorRequest({
+              operation: 'apply_coherence', storyId: storyId,
+              sceneId: entry.scene.sceneId, expectedPrompt: entry.scene.originalPrompt,
+              prompt: entry.box.value, model: modelId
+            }).then(function () {
+              applied += 1;
+              entry.checkbox.checked = false;
+              entry.checkbox.disabled = true;
+            });
+          });
+        }, Promise.resolve()).then(function () {
+          status.textContent = 'Applied ' + applied + ' Scene(s).';
           return request(null, 'story=' + encodeURIComponent(storyId));
         }).then(function (payload) {
           if (storyState.story && String(storyState.story.id) === String(storyId)) {
@@ -5744,13 +5789,13 @@
           }
           dialog.close();
         }).catch(function (err) {
-          apply.disabled = false;
+          status.textContent = 'Applied ' + applied + ' before failure: ' + String(err.message || err);
           reportError(err);
-        });
+        }).finally(function () { apply.disabled = false; });
       };
       actions.appendChild(apply);
     }
-    dialog.append(title, result, actions);
+    dialog.append(title, content, status, actions);
     dialog.addEventListener('close', function () { dialog.remove(); });
     document.body.appendChild(dialog);
     dialog.showModal();
@@ -5758,30 +5803,31 @@
 
   function runDirectorToolsCoherence() {
     var storyId = storyState.story.id;
-    var sceneId = ensureActiveScene(storyState.story.sceneOrder);
-    var scene = storyState.story.scenes[sceneId];
     var modelId = storyState.director.modelId;
-    if (!modelId || !scene || !String(scene.prompt || '').trim()) {
-      reportError(new Error('Choose a Director model and a Scene with an H3 prompt.'));
+    if (!modelId) {
+      reportError(new Error('Choose a Director model first.'));
       return;
     }
     var run = el('storyboard-director-tools-run');
     var status = el('storyboard-director-tools-status');
-    var original = '';
+    var target = {kind: 'repair', storyId: storyId};
     run.disabled = true;
-    status.textContent = 'Checking Scene coherence…';
+    status.textContent = 'Starting Story coherence review…';
     flushPendingSaves().then(function () {
-      return request(null, 'story=' + encodeURIComponent(storyId));
-    }).then(function (fresh) {
-      var savedScene = fresh.story && fresh.story.scenes && fresh.story.scenes[sceneId];
-      original = String(savedScene && savedScene.prompt || '');
-      if (!original.trim()) throw new Error('The selected Scene has no saved generation prompt.');
-      return directorRequest({storyId: storyId, sceneId: sceneId, operation: 'check_coherence', model: modelId});
-    }).then(function (payload) {
+      setDirectorPending(target, true);
+      startDirectorActivity();
       closeDirectorTools();
-      showCoherenceReview(storyId, sceneId, original, String(payload.result || ''), modelId);
-      return consumeDirectorJob(payload.jobId);
-    }).catch(reportError).finally(syncDirectorToolsUi);
+      return directorRequest({
+        storyId: storyId, operation: 'check_coherence_sequence', model: modelId
+      });
+    }).then(function (result) {
+      showCoherenceReview(storyId, result.scenes || [], modelId);
+      return consumeDirectorJob(result.jobId);
+    }).catch(reportError).finally(function () {
+      setDirectorPending(target, false);
+      finishDirectorActivity();
+      syncDirectorToolsUi();
+    });
   }
 
   function runDirectorToolsRevision() {

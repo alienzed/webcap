@@ -40,8 +40,17 @@ def _catalog(folder_path, campaigns, warnings):
                 indexed[identifier] = {
                     "jobId": identifier, "label": str(run.get("runName") or ("Run " + str(run.get("runSequence") or identifier))),
                     "stage": str(run.get("stage") or ""), "modelId": str(run.get("modelId") or ""),
-                    "savedEpochs": list(run.get("epochs") or []), "archive": None, "source": "training",
+                    "savedEpochs": [], "archive": None, "source": "training",
                 }
+                try:
+                    run_dir = finder.candidate_run_folder_path(folder, identifier)
+                    indexed[identifier]["savedEpochs"] = sorted({
+                        item["epoch"] for item in finder.saved_artifacts_for_run(run_dir)
+                        if item.get("status") == "available" and type(item.get("epoch")) is int
+                    })
+                except (OSError, ValueError, RuntimeError) as exc:
+                    warnings.append("Saved checkpoints unavailable for run " + identifier + ": " + str(exc))
+
     except (OSError, RuntimeError) as exc:
         warnings.append("Live training-run discovery unavailable: " + str(exc))
     archive_rows = {}
@@ -183,11 +192,12 @@ def _test_series(folder_path, job_id, session_name=''):
     return points, sorted(sessions), unlinked, sorted(available_sessions)
 
 
-def report(folder_path, job_id="", session_name=""):
+def report(folder_path, job_id="", session_name="", campaigns=None, catalog=None):
     """A deterministic on-demand snapshot. No writes, model calls or queue state mutations."""
     warnings = []
-    campaigns = _campaigns(folder_path, warnings)
-    runs, archives = _catalog(folder_path, campaigns, warnings)
+    if campaigns is None:
+        campaigns = _campaigns(folder_path, warnings)
+    runs, archives = catalog if catalog is not None else _catalog(folder_path, campaigns, warnings)
     identifier = str(job_id or "").strip()
     if not identifier:
         return {"runs": runs, "jobId": "", "campaigns": [], "testPoints": [],
@@ -225,7 +235,8 @@ def report(folder_path, job_id="", session_name=""):
         "sessionFilter": session_name, "warnings": warnings,
         "coverage": {
             "savedEpochs": len(chosen["savedEpochs"]), "observedEpochs": len(set(
-                [p["epoch"] for c in series for p in c["points"]] + [p["epoch"] for p in test_points])),
+                [p["epoch"] for c in series for p in c["points"] if p["observations"] > 0]
+                + [p["epoch"] for p in test_points if p["manualCount"] or p["testVlCount"]])),
             "campaigns": len(series), "testSessions": len(sessions),
             "campaignVlRenders": sum(p["renders"] for c in series for p in c["points"]),
             "manualRatings": sum(p["manualCount"] for p in test_points),
@@ -244,10 +255,14 @@ def report_selected(folder_path, job_ids, session_name=""):
     if session_name and (Path(session_name).name != session_name or
                          "/" in session_name or chr(92) in session_name):
         raise ValueError("Invalid Test session filter.")
-    reports = [report(folder_path, item, session_name) for item in job_ids]
+    scan_warnings = []
+    campaigns_loaded = _campaigns(folder_path, scan_warnings)
+    catalog = _catalog(folder_path, campaigns_loaded, scan_warnings)
+    reports = [report(folder_path, item, session_name, campaigns_loaded, catalog) for item in job_ids]
     for item in reports:
         item["testCohorts"] = _test_cohorts(folder_path, item["jobId"], session_name)
-        item["roundPoints"] = _round_trajectories(folder_path, item["jobId"])
+        item["roundPoints"] = _round_trajectories(folder_path, item["jobId"], campaigns_loaded)
+        item["warnings"].extend(scan_warnings)
     all_sessions = sorted({session for item in reports for session in item["availableSessions"]})
     if session_name and session_name not in all_sessions:
         raise ValueError("Selected Test session does not contain identified results for these runs.")
@@ -271,25 +286,38 @@ def report_selected(folder_path, job_ids, session_name=""):
     }
 
 
-def _cohort_key(session):
-    """Frozen Test context; never compare pooled sessions as one controlled cohort."""
+def _cohort_key(session, result=None, assessment=None, vision=None):
+    """Frozen generation configuration plus per-preview LoRA and VL evaluation protocol."""
     import hashlib
     import json
-    payload = {key: session.get(key) for key in ("modelId", "sourcePrompt", "resolvedPrompt", "settings", "workflowSha256", "sweepWeights")}
+    result = result or {}
+    assessment = assessment or {}
+    vision = vision or {}
+    # Evaluation model/question/rubric may vary even within a Test session.
+    rubric = sorted(
+        (str(g.get("id") or ""), str(g.get("expectedText") or ""), str(g.get("weight") or ""))
+        for g in (assessment.get("comparison") or []) if isinstance(g, dict)
+    )
+    payload = {key: session.get(key) for key in
+               ("modelId", "sourcePrompt", "resolvedPrompt", "settings", "workflowSha256", "sweepWeights")}
+    payload.update({
+        "strength": result.get("strength", (session.get("settings") or {}).get("strength")),
+        "vlModel": assessment.get("modelId") or "",
+        "vlQuestion": assessment.get("question") or "",
+        "vlRubric": rubric,
+        "disabledGroups": sorted(vision.get("disabledGroups") or []),
+        "ignoredGroups": sorted(assessment.get("ignoredGroups") or []),
+    })
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
-def _test_cohorts(folder_path, job_id, session_name=""):
+def _test_cohorts(folder_path, job_id, session_name="", sessions=None):
     folder = _folder_key(folder_path)
     cohorts = {}
-    for path in bench._session_directories(folder_path):
+    for path in (sessions if sessions is not None else bench._session_directories(folder_path)):
         stored = bench._read_status(path) or {}
         if stored.get("campaignStaging") or (session_name and path.name != session_name):
             continue
-        signature = _cohort_key(stored)
-        model = str(stored.get("modelId") or "")
-        cohort = cohorts.setdefault(signature, {"id": signature, "modelId": model,
-            "sessions": set(), "points": {}, "settings": "Frozen Test prompt / workflow / settings cohort"})
         ratings = bench._session_rating_map(path)
         vision = bench._session_vision_state(path)
         by_media = vision.get("byMedia") if isinstance(vision.get("byMedia"), dict) else {}
@@ -303,49 +331,61 @@ def _test_cohorts(folder_path, job_id, session_name=""):
                     type(proof.get("sourceEpoch")) is not int):
                 continue
             epoch = proof["sourceEpoch"]
-            item = cohort["points"].setdefault(epoch, {"epoch": epoch, "manualSum": 0,
-                "manualCount": 0, "vlMatches": 0, "vlCount": 0})
-            cohort["sessions"].add(path.name)
             media = bench._result_media_file(result)
-            if media in ratings:
-                item["manualSum"] += ratings[media]
-                item["manualCount"] += 1
             assessed = by_media.get(media)
-            if not isinstance(assessed, dict):
-                continue
+            assessed = assessed if isinstance(assessed, dict) else {}
+            signature = _cohort_key(stored, result, assessed, vision)
+            cohort = cohorts.setdefault(signature, {
+                "id": signature, "modelId": str(stored.get("modelId") or ""),
+                "vlModelId": str(assessed.get("modelId") or ""),
+                "strength": result.get("strength", (stored.get("settings") or {}).get("strength")),
+                "sessions": set(), "points": {}, "settings": "Matching frozen Test generation and VL protocol",
+            })
+            row = cohort["points"].setdefault(epoch, {"epoch": epoch, "manualSum": 0,
+                "manualCount": 0, "vlMatches": 0, "vlCount": 0, "sessions": set()})
+            cohort["sessions"].add(path.name)
+            row["sessions"].add(path.name)
+            if media in ratings:
+                row["manualSum"] += ratings[media]
+                row["manualCount"] += 1
             ignored = set(assessed.get("ignoredGroups") or [])
             for group in assessed.get("comparison") or []:
                 if not isinstance(group, dict) or group.get("id") in disabled | ignored:
                     continue
                 if group.get("result") == "match":
-                    item["vlMatches"] += 1
-                    item["vlCount"] += 1
+                    row["vlMatches"] += 1
+                    row["vlCount"] += 1
                 elif group.get("result") == "mismatch":
-                    item["vlMatches"] += bench._test_vl_partial_credit(group.get("expectedText"), group.get("selectedText"))
-                    item["vlCount"] += 1
+                    row["vlMatches"] += bench._test_vl_partial_credit(
+                        group.get("expectedText"), group.get("selectedText"))
+                    row["vlCount"] += 1
     output = []
     for cohort in cohorts.values():
-        if not cohort["sessions"]:
-            continue
         cohort["sessions"] = sorted(cohort["sessions"])
         cohort["points"] = [{
-            "epoch": row["epoch"], "sessions": cohort["sessions"], "manual": row["manualSum"] / row["manualCount"] if row["manualCount"] else None,
+            "epoch": row["epoch"], "sessions": sorted(row["sessions"]),
+            "manual": row["manualSum"] / row["manualCount"] if row["manualCount"] else None,
             "manualCount": row["manualCount"],
             "testVl": row["vlMatches"] / row["vlCount"] if row["vlCount"] else None,
             "testVlCount": row["vlCount"],
         } for row in sorted(cohort["points"].values(), key=lambda row: row["epoch"])]
         output.append(cohort)
-    return sorted(output, key=lambda row: row["id"])
+    return sorted(output, key=lambda row: (row["modelId"], row["id"]))
 
 
-def _round_trajectories(folder_path, job_id):
+def _round_trajectories(folder_path, job_id, campaigns=None):
     output = []
-    for campaign in _campaigns(folder_path, []):
+    for campaign in (campaigns if campaigns is not None else _campaigns(folder_path, [])):
         if not campaign.get("rounds"):
             continue
         mapping = campaign.get("candidateMap") or {}
-        for round_no in range(1, len(campaign["rounds"]) + 1):
+        # Actual assessed rounds only. Planned-but-unstarted rounds are not evidence.
+        assessed = {u.get("round") for u in campaign.get("units") or []
+                    if isinstance(u, dict) and u.get("assessment") and type(u.get("round")) is int}
+        for round_no in sorted(n for n in assessed if 1 <= n <= len(campaign["rounds"])):
             for point in finder._rank(campaign, round_no):
+                if point["count"] <= 0:
+                    continue
                 identity = mapping.get(str(point["epoch"])) if mapping else None
                 source = identity.get("jobId") if identity else campaign.get("jobId")
                 if source != job_id:
@@ -353,8 +393,8 @@ def _round_trajectories(folder_path, job_id):
                 epoch = identity.get("epoch") if identity else point["epoch"]
                 if type(epoch) is not int:
                     continue
-                output.append({"campaignId": campaign["id"], "round": round_no, "epoch": epoch,
-                               "score": point["score"], "observations": point["count"]})
+                output.append({"campaignId": campaign["id"], "round": round_no,
+                               "epoch": epoch, "score": point["score"], "observations": point["count"]})
     return output
 
 

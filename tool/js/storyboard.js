@@ -1946,6 +1946,10 @@
         scheduleStorySave();
       }
       setRepairStatus('Revised ' + String(sceneIds.length) + ' Scenes.');
+      if (storyState.story && storyState.story.id === storyId &&
+          storyState.story.directorLoraPlanning === true) {
+        suggestStoryboardLoras().catch(reportError);
+      }
       return { text: 'Revised ' + String(sceneIds.length) + ' Scenes.' };
     }).catch(function (err) {
       if (directorWasStopped(err)) setRepairStatus('Revise Scenes stopped.');
@@ -2031,6 +2035,124 @@
     });
   }
 
+  function suggestStoryboardLoras() {
+    var story = storyState.story;
+    if (!story) return Promise.reject(new Error('Open a Story before requesting LoRAs.'));
+    if (!el('storyboard-director-lora-enable').checked) {
+      return Promise.reject(new Error('Enable Director LoRA planning for this Story first.'));
+    }
+    var storyId = story.id;
+    var directorModel = String(storyState.director.modelId || '');
+    if (!directorModel) return Promise.reject(new Error('Choose a Director model.'));
+    var status = el('storyboard-director-lora-status');
+    var button = el('storyboard-director-lora-suggest');
+    button.disabled = true;
+    status.textContent = 'Director is matching enriched LoRAs…';
+    return flushPendingSaves().then(function () {
+      story = storyState.story;
+      if (!story || story.id !== storyId || !story.directorLoraPlanning) {
+        throw new Error('Story LoRA planning changed while saving.');
+      }
+      var scenes = (story.sceneOrder || []).map(function (id) {
+        var scene = story.scenes[id] || {};
+        return {id:id, title:scene.title || id, summary:scene.summary || scene.prompt || ''};
+      });
+      return fetch('/fs/lora_library/plan', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          stage:'h3', directorModel:directorModel, storyId:storyId,
+          intent:[story.concept, story.style].filter(Boolean).join('\\n'),
+          scenes:scenes,
+          existing:{storyWide:story.loras || [],scenes:scenes.map(function (scene) {
+            return {sceneId:scene.id, assign:(story.scenes[scene.id] || {}).loras || []};
+          })}
+        })
+      }).then(function (response) {
+        return response.json().then(function (payload) {
+          if (!response.ok || !payload.ok) throw new Error(payload.error || 'LoRA planning failed.');
+          return {payload:payload,scenes:scenes,revision:story.updatedAt};
+        });
+      });
+    }).then(function (batch) {
+      if (batch.payload.empty) {
+        status.textContent = 'No enriched LoRAs available to suggest.';
+        return;
+      }
+      return waitForDirectorJob(batch.payload.job).then(function (result) {
+        var proposal = result.proposal || {};
+        var totalSuggestions = (proposal.storyWide || []).length +
+          (proposal.scenes || []).reduce(function (count, group) {
+            return count + (group.assign || []).length;
+          }, 0);
+        if (!totalSuggestions) {
+          status.textContent = 'Director found no useful LoRAs to add.';
+          return;
+        }
+        var items = (proposal.storyWide || []).map(function (item) {
+          return Object.assign({sceneId:''},item);
+        });
+        (proposal.scenes || []).forEach(function (group) {
+          (group.assign || []).forEach(function (item) {
+            items.push(Object.assign({sceneId:group.sceneId},item));
+          });
+        });
+        return fetch('/fs/lora_library').then(function (response) {
+          return response.json();
+        }).then(function (library) {
+          if (!library.ok) throw new Error(library.error || 'Could not read LoRA catalogue.');
+          if (!storyState.story || storyState.story.id !== storyId ||
+              storyState.story.updatedAt !== batch.revision) {
+            throw new Error('Story changed while Director was planning; run suggestions again.');
+          }
+          var catalogue = (library.items || []).filter(function (item) {
+            return item.stage === 'h3' && item.enriched;
+          }).map(function (item) { return Object.assign({name:item.name}, item.enrichment || {}); });
+          window.openDirectorLoraReview({
+            items:items, catalogue:catalogue, scenes:batch.scenes,
+            apply:function (approved) {
+              if (!storyState.story || storyState.story.id !== storyId) {
+                throw new Error('Open the original Story before applying suggestions.');
+              }
+              return flushPendingSaves().then(function () {
+                if (!storyState.story || storyState.story.id !== storyId ||
+                    storyState.story.updatedAt !== batch.revision) {
+                  throw new Error('Story or Scene edits changed during review. Request new suggestions.');
+                }
+                var storyWide = [], byScene = {};
+                approved.forEach(function (item) {
+                var choice = {name:item.name,strength:item.strength,phrases:item.phrases || []};
+                if (item.sceneId) {
+                  (byScene[item.sceneId] || (byScene[item.sceneId] = [])).push(choice);
+                } else storyWide.push(choice);
+              });
+              return fetch('/fs/lora_library/story/apply', {
+                method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                  storyId:storyId,expectedUpdatedAt:batch.revision,storyWide:storyWide,
+                  scenes:Object.keys(byScene).map(function (id) {
+                    return {sceneId:id,assign:byScene[id]};
+                  })
+                })
+              }).then(function (response) {
+                return response.json().then(function (payload) {
+                  if (!response.ok || !payload.ok) throw new Error(payload.error || 'Could not apply LoRAs.');
+                  storyState.story = payload.story;
+                  renderStory();
+                  status.textContent = 'Approved LoRAs applied.';
+                });
+              }).catch(function (error) { reportError(error); throw error; });
+              });
+            }
+          });
+          status.textContent = 'Review the suggested LoRAs.';
+        });
+      });
+    }).catch(function (error) {
+      status.textContent = String(error.message || error);
+      reportError(error);
+    }).finally(function () { button.disabled = false; });
+  }
+
   function developStory() {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
@@ -2089,6 +2211,10 @@
         'Developed ' + String(actualCount) + ' Scenes with ' + String(payload.model || modelId) +
         (individual ? ' · one at a time.' : '.') + countWarning
       );
+      if (storyState.story && storyState.story.id === storyId &&
+          storyState.story.directorLoraPlanning === true) {
+        suggestStoryboardLoras().catch(reportError);
+      }
     }).catch(function (err) {
       if (directorWasStopped(err)) setDevelopStatus('Story development stopped. Existing Scenes were left unchanged.');
       else {
@@ -3395,6 +3521,7 @@
           ' aria-label="Enable Story LoRA ' + escapeHtml(name) + '">' +
       '</label>' +
       '<select data-story-lora-name>' + loraOptions(name) + '</select>' +
+      '<button type="button" class="review-captions-btn" data-story-lora-profile title="Open LoRA metadata">ⓘ</button>' +
       '<input type="number" step="0.05" data-story-lora-strength value="' + escapeHtml(strength) + '" aria-label="Story LoRA strength">' +
       '<button type="button" class="review-captions-btn" data-story-lora-remove title="Remove Story LoRA">×</button>' +
     '</div>';
@@ -3422,6 +3549,7 @@
     var strength = lora.strength == null ? 1 : lora.strength;
     return '<div class="storyboard-lora-row" data-scene-lora-row>' +
       '<select data-scene-lora-name>' + loraOptions(name) + '</select>' +
+      '<button type="button" class="review-captions-btn" data-scene-lora-profile title="Open LoRA metadata">ⓘ</button>' +
       '<input type="number" step="0.05" data-scene-lora-strength value="' + escapeHtml(strength) + '" aria-label="Scene LoRA strength">' +
       '<button type="button" class="review-captions-btn" data-scene-lora-remove title="Remove Scene LoRA">×</button>' +
     '</div>';
@@ -3440,10 +3568,10 @@
     lora = lora || {};
     override = override || {};
     var storyEnabled = lora.enabled !== false;
-    var enabled = override.enabled !== false;
+    var enabled = override.enabled === true || (storyEnabled && override.enabled !== false);
     var defaultStrength = Number(lora.strength == null ? 1 : lora.strength);
     var strength = override.strength == null ? defaultStrength : Number(override.strength);
-    var disabledAttr = storyEnabled ? '' : ' disabled';
+    var disabledAttr = '';
     return '<div class="storyboard-lora-row storyboard-lora-row-inherited' + (storyEnabled ? '' : ' storyboard-lora-row-story-disabled') +
       '" data-story-lora-inherited-row data-lora-name="' +
       escapeHtml(lora.name || '') + '" data-story-default-strength="' + escapeHtml(defaultStrength) + '">' +
@@ -3995,6 +4123,8 @@
       restoreConceptButton.classList.toggle('hidden', typeof storyState.story.previousConcept !== 'string');
     }
     setStoryCollapsed(storyState.storyCollapsed);
+    el('storyboard-director-lora-enable').checked = storyState.story.directorLoraPlanning === true;
+    el('storyboard-director-lora-suggest').disabled = !storyState.story.directorLoraPlanning;
     renderStoryLoras();
     renderScenes();
     renderStoryReadiness();
@@ -4245,6 +4375,7 @@
       repairComplete: !!storyState.story.repairComplete,
       invariants: storyInvariantsFromUi(),
       loras: storyLorasFromUi(),
+      directorLoraPlanning: el('storyboard-director-lora-enable').checked,
       targetSceneCount: el('storyboard-scene-count-auto').getAttribute('aria-pressed') === 'true'
         ? null
         : (el('storyboard-story-target-scenes').value || 12),
@@ -5847,6 +5978,13 @@
       syncStoryLorasIntoScenes();
       scheduleStorySave();
     });
+    el('storyboard-director-lora-enable').addEventListener('change', function () {
+      scheduleStorySave();
+      el('storyboard-director-lora-suggest').disabled = !this.checked;
+    });
+    el('storyboard-director-lora-suggest').onclick = function () {
+      suggestStoryboardLoras().catch(reportError);
+    };
     el('storyboard-story-lora-refresh').onclick = refreshStoryboardLoraCatalog;
     var storyLoraPicker = el('storyboard-story-lora-picker');
     storyLoraPicker.addEventListener('focus', function () { renderLoraPickerMenu(storyLoraPicker); });
@@ -5859,6 +5997,11 @@
     });
 
     el('storyboard-story-lora-list').addEventListener('click', function (event) {
+      var profile = event.target.closest('[data-story-lora-profile]');
+      if (profile) {
+        window.openLoraMetadataEditor(profile.closest('[data-story-lora-row]').querySelector('[data-story-lora-name]').value, 'h3');
+        return;
+      }
       var remove = event.target.closest('[data-story-lora-remove]');
       if (!remove) return;
       var row = remove.closest('[data-story-lora-row]');
@@ -5966,6 +6109,11 @@
     });
 
     el('storyboard-scenes-list').addEventListener('click', function (event) {
+      var profile = event.target.closest('[data-scene-lora-profile]');
+      if (profile) {
+        window.openLoraMetadataEditor(profile.closest('[data-scene-lora-row]').querySelector('[data-scene-lora-name]').value, 'h3');
+        return;
+      }
       var refreshLoras = event.target.closest('[data-storyboard-lora-refresh]');
       if (refreshLoras) {
         refreshStoryboardLoraCatalog();

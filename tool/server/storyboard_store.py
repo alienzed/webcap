@@ -257,6 +257,23 @@ def _normalize_shared_context_refs(value):
     return result
 
 
+
+def _normalize_lora_phrase_choices(value):
+    """Approved prompt phrases are separate from ComfyUI LoRA assignments."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("LoRA phrase selections must be a mapping.")
+    result = {}
+    for name, phrases in value.items():
+        if not isinstance(name, str) or not name.strip() or not isinstance(phrases, list):
+            raise ValueError("Invalid LoRA phrase entry.")
+        if any(not isinstance(phrase, str) for phrase in phrases):
+            raise ValueError("LoRA phrases must be text.")
+        result[name] = [phrase for phrase in phrases if phrase.strip()]
+    return result
+
+
 def _normalize_story_lora_overrides(value):
     if value is None:
         return []
@@ -423,10 +440,12 @@ def resolve_scene_loras(story, scene):
 
     resolved = []
     for item in story_loras:
-        if item.get("enabled") is False:
-            continue
         override = overrides.get(item["name"].casefold(), {})
         if override.get("enabled") is False:
+            continue
+        # A Scene may explicitly enable a globally disabled Story LoRA
+        # without enabling it in any other Scene.
+        if item.get("enabled") is False and override.get("enabled") is not True:
             continue
         resolved.append({
             "name": item["name"],
@@ -539,6 +558,9 @@ def _normalize_scene(scene_id, value, existing=None):
         "seed": seed,
         "seedMode": seed_mode,
         "loras": _normalize_loras(value.get("loras", current.get("loras", []))),
+        "directorLoraPhrases": _normalize_lora_phrase_choices(
+            value.get("directorLoraPhrases", current.get("directorLoraPhrases", {}))
+        ),
         "storyLoraOverrides": _normalize_story_lora_overrides(
             value.get("storyLoraOverrides", current.get("storyLoraOverrides", []))
         ),
@@ -595,6 +617,10 @@ def _normalize_story(payload, existing=None, story_id=None):
         "repairComplete": bool(payload.get("repairComplete", current.get("repairComplete", False))),
         "invariants": _normalize_story_invariants(payload.get("invariants", current.get("invariants", []))),
         "loras": _normalize_loras(payload.get("loras", current.get("loras", [])), allow_enabled=True),
+        "directorLoraPlanning": payload.get("directorLoraPlanning", current.get("directorLoraPlanning", False)) is True,
+        "directorLoraPhrases": _normalize_lora_phrase_choices(
+            payload.get("directorLoraPhrases", current.get("directorLoraPhrases", {}))
+        ),
         "targetSceneCount": target_scene_count,
         "generationDefaults": generation_defaults,
         "tags": _normalize_tags(payload.get("tags", current.get("tags", []))),
@@ -722,6 +748,95 @@ def load_story(story_id):
         raise RuntimeError("Story metadata ID does not match its folder.")
     return story
 
+
+
+@_serialized_mutation
+def apply_lora_plan(story_id, expected_updated_at, story_wide, scenes):
+    """Atomically apply an explicitly approved LoRA plan, preserving other assignments."""
+    from .lora_library import catalogue
+    current = load_story(story_id)
+    if str(current.get("updatedAt") or "") != str(expected_updated_at or ""):
+        raise RuntimeError("Story changed during LoRA review; request fresh suggestions.")
+    if not current.get("directorLoraPlanning"):
+        raise ValueError("Director LoRA planning is disabled for this Story.")
+    if not isinstance(story_wide, list) or not isinstance(scenes, list):
+        raise ValueError("Invalid reviewed LoRA assignments.")
+    eligible = {item["name"]: item["enrichment"] for item in catalogue()
+                if item["stage"] == "h3" and item["enriched"]}
+    from .lora_library import resolve_for_inference
+    approved_names = [entry.get("name") for entry in story_wide]
+    for group in scenes:
+        if isinstance(group, dict):
+            approved_names.extend(entry.get("name") for entry in group.get("assign") or [])
+    resolved_names = resolve_for_inference("h3", approved_names) if approved_names else {}
+
+    def verified(entries):
+        result = _normalize_loras(entries)
+        for raw, item in zip(entries, result):
+            if item["name"] not in eligible:
+                raise ValueError("LoRA no longer available with enriched metadata: " + item["name"])
+            choices = (raw or {}).get("phrases", [])
+            if not isinstance(choices, list) or any(not isinstance(word, str) for word in choices):
+                raise ValueError("Approved LoRA phrases must be an array of strings.")
+            enriched = eligible[item["name"]]
+            allowed = set(enriched.get("trainedWords") or [])
+            for values in (enriched.get("promptOptions") or {}).values():
+                allowed.update(values)
+            if any(word not in allowed for word in choices):
+                raise ValueError("Approved LoRA phrase is not in its enriched metadata.")
+        for item in result:
+            item["name"] = resolved_names[item["name"]]
+        return result
+
+    updated = copy.deepcopy(current)
+    existing_story = _normalize_loras(updated.get("loras"), allow_enabled=True)
+    existing_map = {item["name"].casefold(): item for item in existing_story}
+    story_phrases = _normalize_lora_phrase_choices(updated.get("directorLoraPhrases"))
+    for raw, entry in zip(story_wide, verified(story_wide)):
+        story_phrases[entry["name"]] = list(raw.get("phrases") or [])
+        key = entry["name"].casefold()
+        if key in existing_map:
+            existing_map[key].update({"strength": entry["strength"], "enabled": True})
+        else:
+            existing_story.append(entry)
+            existing_map[key] = entry
+    updated["loras"] = existing_story
+    updated["directorLoraPhrases"] = story_phrases
+    seen_scenes = set()
+    for group in scenes:
+        if not isinstance(group, dict):
+            raise ValueError("Scene assignment must be an object.")
+        scene_id = str(group.get("sceneId") or "")
+        if scene_id in seen_scenes or scene_id not in updated.get("sceneOrder", []):
+            raise ValueError("Unknown or duplicate Scene in LoRA plan.")
+        seen_scenes.add(scene_id)
+        scene = updated["scenes"][scene_id]
+        existing = _normalize_loras(scene.get("loras"))
+        by_name = {item["name"].casefold(): item for item in existing}
+        overrides = _normalize_story_lora_overrides(scene.get("storyLoraOverrides"))
+        overrides_by_name = {item["name"].casefold(): item for item in overrides}
+        scene_phrases = _normalize_lora_phrase_choices(scene.get("directorLoraPhrases"))
+        raw_assignments = group.get("assign") or []
+        for raw, entry in zip(raw_assignments, verified(raw_assignments)):
+            scene_phrases[entry["name"]] = list(raw.get("phrases") or [])
+            key = entry["name"].casefold()
+            if key in existing_map:
+                if key in overrides_by_name:
+                    overrides_by_name[key].update({"enabled": True, "strength": entry["strength"]})
+                else:
+                    overrides.append({"name": entry["name"], "strength": entry["strength"], "enabled": True})
+            elif key in by_name:
+                by_name[key]["strength"] = entry["strength"]
+            else:
+                existing.append(entry)
+                by_name[key] = entry
+        scene["loras"] = existing
+        scene["directorLoraPhrases"] = scene_phrases
+        scene["storyLoraOverrides"] = overrides
+        resolve_scene_loras(updated, scene)
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    return updated
 
 @_serialized_mutation
 def update_story(story_id, payload):

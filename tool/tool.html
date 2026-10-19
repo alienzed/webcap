@@ -1271,6 +1271,10 @@
                                     <label>Source training run<select id="test-references-run"><option value="">Loading runs…</option></select></label>
                                     <label>Scoped Set group<select id="test-references-group" disabled><option value="">Select a run first</option></select></label>
                                     <label>Tagged option<select id="test-references-option" disabled><option value="">Select a group first</option></select></label>
+                                    <div class="test-references-nav" aria-label="Tagged option navigation">
+                                        <button type="button" id="test-references-previous" disabled>← Previous</button>
+                                        <button type="button" id="test-references-skip" disabled>Skip →</button>
+                                    </div>
                                     <button id="test-references-refresh" type="button" class="review-captions-btn">Refresh references</button>
                                     <p class="epoch-finder-muted">Only images actually included in the selected run and carrying this exact annotation are shown. A tag is not proof that a feature is visible.</p>
                                 </section>
@@ -1283,6 +1287,11 @@
                             <main class="epoch-finder-dashboard">
                                 <section class="epoch-finder-reference-workspace">
                                     <div class="epoch-finder-panel-heading"><h3>Matching images</h3><span id="test-references-count"></span></div>
+                                    <div class="test-references-workflow-heading">
+                                        <span id="test-references-tag-progress" aria-live="polite"></span>
+                                        <button type="button" id="test-references-next" disabled>Next tag →</button>
+                                    </div>
+                                    <div id="test-references-tags" class="test-references-tags" aria-label="Tagged options"></div>
                                     <p id="test-references-status" class="epoch-finder-muted" aria-live="polite">Select a training run to explore its references.</p>
                                     <div id="test-references-gallery" class="epoch-finder-reference-gallery"></div>
                                 </section>

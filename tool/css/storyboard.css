@@ -3888,3 +3888,16 @@
 }
 #storyboard-director-view-activity { grid-area: activity; pointer-events: auto; justify-self: start; }
 #storyboard-director-stop { grid-area: stop; pointer-events: auto; justify-self: start; }
+
+/* Reuse the Test wildcard wand motion for active Scene refinements. */
+.storyboard-director-action[data-director-refine] .storyboard-director-wand {
+  display: inline-block;
+  margin-right: 5px;
+  transform-origin: center;
+}
+.storyboard-director-action[data-director-refine].is-working .storyboard-director-wand {
+  animation: test-generations-wand-pulse 900ms ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .storyboard-director-action[data-director-refine].is-working .storyboard-director-wand { animation: none; }
+}

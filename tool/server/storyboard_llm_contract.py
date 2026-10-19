@@ -420,6 +420,7 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         invariants = _story_invariants_text(story)
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
+        _add_model_limitations(blocks, "minimax_h3")
         target_scene_count = story.get("targetSceneCount")
         scene_count_guidance = (
             "Create exactly " + str(int(target_scene_count)) + " planned Scenes. "

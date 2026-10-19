@@ -35,8 +35,8 @@ function diagnosticsAssessmentCounts(row, tests) {
     structured: ['language_synthesis', 'language_challenge'],
     vision: ['vision_open', 'vision_group_aware']
   };
-  var role = row.dataset.assessmentModel.split(':')[0];
-  var needed = role === 'director' ? ['writing', 'structured'] : ['vision'];
+  var role = row.dataset.assessmentRole;
+  var needed = role === 'both' ? ['writing', 'structured', 'vision'] : role === 'director' ? ['writing', 'structured'] : ['vision'];
   var good = 0, bad = 0, running = 0, missing = 0;
   needed.forEach(function (family) {
     var total = 0, completed = 0, problems = 0, active = 0;
@@ -72,13 +72,13 @@ function diagnosticsAssessmentCounts(row, tests) {
     span.title = hint;
     host.appendChild(span);
   }
-  mark(role === 'director' ? 'Director ' + state : 'Vision ' + state,
+  mark((role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') + state,
     state === 'Passed' ? 'passed' : state === 'Issues' ? 'issues' : 'untested',
-    role === 'director' ? 'Requires successful writing and structured synthesis/challenge probes; this is a technical sanity check, not a quality score.' : 'Requires completed open and group-aware Vision probes; this is not caption-accuracy grading.');
+    role === 'both' ? 'Requires Director writing and structured probes plus open and group-aware Vision probes.' : role === 'director' ? 'Requires successful writing and structured synthesis/challenge probes; this is a technical sanity check, not a quality score.' : 'Requires completed open and group-aware Vision probes; this is not caption-accuracy grading.');
   var report = row.assessmentReport;
   var abilities = report && report.abilities || {};
   var longform = Number(abilities.coherentOutputTokens || 0);
-  if (role === 'director' && report && report.assessmentKind !== 'confirmation') {
+  if (role !== 'vision' && report && report.assessmentKind !== 'confirmation') {
     if (longform >= 16384) mark('16K proven', 'passed', 'A 16K-target prose calibration passed its explicit completeness checks.');
     else if (longform >= 8192) mark('8K proven', 'passed', 'An 8K-target prose calibration passed its explicit completeness checks.');
     else if (longform >= 4096) mark('4K proven', 'passed', 'A 4K-target prose calibration passed.');
@@ -357,6 +357,7 @@ function refreshUnifiedModelAssessment() {
       var key = ref;
       var row = document.createElement('tbody');
       row.dataset.assessmentModel = key;
+      row.dataset.assessmentRole = supportsDirector && supportsVision ? 'both' : supportsDirector ? 'director' : 'vision';
       var runtimeModel = (kind === 'director' ? directors : vision).find(function (model) { return String(model.id || model.modelRef || '') === ref; }) || {};
       row.dataset.assessmentRuntime = String(runtimeModel.runtimeId || '').toLowerCase() === 'local' || ref.startsWith('local::') ? 'local' : 'remote';
       row.dataset.assessmentSearch = (title + ' ' + ref + ' ' + (supportsDirector ? 'director ' : '') + (supportsVision ? 'vision ' : '')).toLowerCase();

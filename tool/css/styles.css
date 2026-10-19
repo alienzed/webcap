@@ -7438,3 +7438,24 @@ html[data-theme="dark"] iframe {
 #run-analytics-epoch-media-more.hidden {display:none;}
 
 .test-generations-inline-launch-summary {font-size:11px;color:var(--muted);flex:1 1 140px;text-align:right;}
+
+/* PR 506 audit: a readable launch hierarchy and more deliberate result browsing. */
+.test-generations-form-heading {align-items:center;gap:12px;}
+.test-generations-form-title {gap:12px;}
+.test-generations-form-title > strong {font-size:15px;letter-spacing:-.015em;}
+#test-generations-campaign-mode {font-size:12px;padding:6px 10px;}
+.test-generations-launch-options {gap:12px 18px;padding:12px 14px;margin:10px 0 8px;border:1px solid var(--border);border-radius:10px;background:var(--panel-soft);}
+.test-generations-launch-options label {font-size:12px;gap:9px;}
+.test-generations-launch-options input[type=number] {width:66px;min-width:66px;}
+.test-generations-inline-launch-summary {flex-basis:100%;text-align:left;font-size:12px;line-height:1.4;}
+.run-analytics-epoch-media-dialog {padding:0;overflow:auto;}
+.run-analytics-epoch-media-head {position:sticky;top:0;z-index:1;background:var(--panel);padding:17px 22px 14px;margin:0 0 16px;align-items:flex-start;}
+.run-analytics-epoch-media-head h3 {font-size:19px;line-height:1.3;}
+.run-analytics-epoch-media-description {font-size:12px;max-width:62ch;}
+#run-analytics-epoch-media-status {font-size:12px;margin-top:7px;}
+.run-analytics-epoch-media-grid {padding:0 22px 12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));}
+.run-analytics-epoch-media-card {display:flex;flex-direction:column;gap:6px;padding:10px;}
+.run-analytics-epoch-media-card img,.run-analytics-epoch-media-card video {aspect-ratio:4/3;object-fit:contain;border-radius:6px;}
+.run-analytics-epoch-media-card p {margin:3px 0;color:var(--muted);line-height:1.45;}
+.run-analytics-epoch-media-card button {align-self:flex-start;margin-top:auto;}
+@media(max-width:640px) {.run-analytics-epoch-media-head {flex-direction:column;}.run-analytics-epoch-media-grid {padding:0 12px 12px;}}

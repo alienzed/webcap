@@ -131,6 +131,7 @@ function diagnosticsAssessmentSortAndFilter() {
     body.hidden = (diagnosticsAssessmentRuntime !== 'all' && body.dataset.assessmentRuntime !== diagnosticsAssessmentRuntime) || (!!query && !body.dataset.assessmentSearch.includes(query));
     table.appendChild(body); // Move paired main/evidence rows together; never recreate interactive DOM.
   });
+  diagnosticsAssessmentSyncHeaderSelection();
   table.querySelectorAll('thead th[data-assessment-sort]').forEach(function (heading) {
     heading.setAttribute('aria-sort', heading.dataset.assessmentSort === diagnosticsAssessmentSort.key
       ? diagnosticsAssessmentSort.descending ? 'descending' : 'ascending' : 'none');

@@ -8,7 +8,15 @@
   function el(id) { return document.getElementById('test-unified-' + id); }
   function text(node, value) { node.textContent = String(value == null ? '' : value); }
   function label(item) { return item.name || item.id; }
-  function show(enabled) { root.classList.toggle('hidden', !enabled); legacy.classList.toggle('hidden', enabled); }
+  function show(enabled) {
+    root.classList.toggle('hidden', !enabled);
+    legacy.classList.toggle('hidden', enabled);
+    if (!enabled) {
+      var originalBuild = document.querySelector('[data-test-generations-perspective="build"]');
+      if (!originalBuild) throw new Error('Existing Test Build view is missing.');
+      originalBuild.click();
+    }
+  }
   function api() {
     return fetch('/fs/epoch_finder', {method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{modelId:model}})})

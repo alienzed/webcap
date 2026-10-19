@@ -77,3 +77,21 @@ def test_storyboard_missing_bookmark_is_not_silently_replaced():
     assert "selected.storyId === route.storyId" in restore
     assert "selected.sceneId === route.sceneId" in restore
     assert "if ((!route.storyId || selected.storyId === route.storyId)" in restore
+
+
+def test_director_blocker_has_one_job_aware_activity_action():
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    storyboard = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/storyboard.css").read_text(encoding="utf-8")
+
+    assert html.count('id="storyboard-director-view-activity"') == 1
+    assert "card.querySelector('[data-view-activity]')" not in storyboard
+    assert "activityLink = document.createElement('button')" not in storyboard
+    assert "activityButton.dataset.directorJobId = jobId;" in storyboard
+    handler = storyboard.split("el('storyboard-director-view-activity').onclick", 1)[1].split("};", 1)[0]
+    assert "this.dataset.directorJobId" in handler
+    assert "window.focusActivityJob(jobId);" in handler
+    assert "window.setActivityDrawerOpen(true);" in handler
+    assert "grid-area: action;" in css
+    assert 'grid-template-areas: "label" "phase" "detail" "action" "stop";' in css
+    assert ".storyboard-director-activity [data-view-activity]" not in css

@@ -4662,6 +4662,7 @@
   var testBatchCompletedActivity = new Set();
   var testBatchDismissedIds = new Set();
   var testBatchSnapshotKeys = Object.create(null);
+  var testBatchScores = Object.create(null);
   function refreshServerTestBatches() {
     return captionAssistRequestJson('/fs/test_generations/batches').then(function (payload) {
       var batches = payload.batches || [];
@@ -4675,7 +4676,7 @@
         b.active = b.status === 'queued' || b.status === 'running' || b.status === 'stopping';
         b.activityId = 'test-batch:' + b.id;
         b.startedAt = b.startedAt || b.queuedAt;
-        b.scores = b.scores || [];
+        b.scores = testBatchScores[b.id] || [];
         b.dismissed = testBatchDismissedIds.has(b.id);
         b.activityFinished = testBatchCompletedActivity.has(b.id);
       });
@@ -4692,6 +4693,7 @@
           });
         })).then(function () {
           testBatchRecalculate(selected);
+          testBatchScores[selected.id] = selected.scores;
           renderTestBatch();
         });
       }
@@ -5350,7 +5352,7 @@
       var id = this.value;
       viewedTestBatch = [testBatch].concat(testBatchHistory).find(function (entry) { return entry && entry.activityId === id; }) || null;
       if (viewedTestBatch === testBatch) viewedTestBatch = null;
-      renderTestBatch();
+      refreshServerTestBatches();
     };
     ['test-generations-batch-count', 'test-generations-batch-auto-vl'].forEach(function (id) {
       el(id).addEventListener('change', function () {
@@ -5372,7 +5374,7 @@
     el('test-generations-batch-stop').onclick = stopTestBatch;
     el('test-generations-batch-dismiss').onclick = function () {
       var batch = viewedTestBatch || testBatch;
-      if (batch) { batch.dismissed = true; viewedTestBatch = null; renderTestBatch(); }
+      if (batch) { testBatchDismissedIds.add(batch.id); batch.dismissed = true; viewedTestBatch = null; renderTestBatch(); }
     };
     el('test-generations-batch-results').onclick = function (event) {
       var sort = event.target.closest('[data-test-batch-sort]');

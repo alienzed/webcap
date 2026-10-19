@@ -34,3 +34,14 @@ def test_storyboard_lora_plan_preserves_existing_and_stale_guard(monkeypatch):
     assert result["scenes"]["s1"]["loras"][0]["name"] == "manual.safetensors"
     with pytest.raises(RuntimeError, match="changed"):
         updated("story-1", "old", [], [])
+
+
+def test_scene_override_can_enable_disabled_story_lora():
+    story = {"loras": [{"name": "identity.safetensors", "strength": 0.9, "enabled": False}]}
+    scene = {"loras": [], "storyLoraOverrides": [
+        {"name": "identity.safetensors", "enabled": True, "strength": 0.7}
+    ]}
+    assert storyboard_store.resolve_scene_loras(story, scene) == [
+        {"name": "identity.safetensors", "strength": 0.7}
+    ]
+    assert storyboard_store.resolve_scene_loras(story, {"loras": []}) == []

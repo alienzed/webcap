@@ -1409,3 +1409,16 @@ def test_storyboard_repair_progress_uses_recorded_scene_counts():
     assert "sceneProgressBar.max = total" in js
     assert "completed + 1" in js
     assert ".storyboard-director-scene-progress progress" in css
+
+
+def test_story_and_scene_right_click_use_the_existing_action_menus():
+    js = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    assert "sceneProgression.addEventListener('contextmenu', function (event)" in js
+    assert "storyLibraryList.addEventListener('contextmenu', function (event)" in js
+    assert "event.target.closest('.storyboard-scene-progress-card[data-scene-id]')" in js
+    assert "event.target.closest('.storyboard-story-row[data-story-id]')" in js
+    assert "event.target.closest('.storyboard-scene-menu-popover')" in js
+    assert "event.target.closest('.storyboard-story-menu-popover')" in js
+    assert "positionSceneActionMenu(menu, { x: event.clientX, y: event.clientY })" in js
+    assert "positionStoryActionMenu(menu, { x: event.clientX, y: event.clientY })" in js
+    assert "menu.open = true;" in js

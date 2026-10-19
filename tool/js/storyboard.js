@@ -2690,9 +2690,7 @@
       var active = storyState.sceneViewMode === item[1];
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
-      button.classList.toggle('hidden', item[1] === 'focus'
-        ? storyState.sceneViewMode === 'focus'
-        : storyState.sceneViewMode === 'sequence');
+      button.classList.toggle('hidden', item[1] === 'focus' && storyState.sceneViewMode === 'focus');
     });
     var sequenceMode = storyState.sceneViewMode === 'sequence';
     el('storyboard-generate-scenes-btn').classList.toggle('hidden', sequenceMode);

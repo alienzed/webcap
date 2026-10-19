@@ -756,7 +756,6 @@ def _test_auto_vl_compare(answer, groups):
 
 def _queue_test_auto_vl(folder_path, session_name, media_file):
     """Enqueue VL in the existing LLM lane; each session owns its evidence."""
-    from .caption_vision import build_vision_question_messages, vision_media_data_url
     from .llm_runner import enqueue as enqueue_llm
 
     session_dir = _session_directory(folder_path, session_name)
@@ -769,11 +768,12 @@ def _queue_test_auto_vl(folder_path, session_name, media_file):
     groups = visible.get("wildcardEvaluationGroups") or []
     question = _test_auto_vl_question(groups)
     try:
-        media = resolve_result_media(folder_path, session_name, media_file)
+        resolve_result_media(folder_path, session_name, media_file)
+        # Keep the queued contract small. The vision bytes are resolved only when the LLM runs.
         job = enqueue_llm(
             "caption", model, {
                 "operation": "vision_question",
-                "messages": build_vision_question_messages(question, vision_media_data_url(media)),
+                "messages": [{"role": "user", "content": question}],
             }, context={
                 "testAutoVl": True, "testFolder": _relative_set_folder(folder_path),
                 "testSession": session_name, "testMedia": media_file,

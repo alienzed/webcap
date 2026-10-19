@@ -765,13 +765,10 @@ def test_storyboard_compact_header_places_controls_with_their_owned_surfaces():
     assert 'aria-controls="storyboard-story-authoring"' in scenes_heading
     assert "showButton.classList.toggle('hidden', !storyState.storyCollapsed);" in storyboard
     assert 'id="storyboard-director-model"' in scenes_heading
-    assert 'id="storyboard-scenes-overview-btn"' in scenes_heading
-    assert 'aria-label="Scene grid overview"' in scenes_heading
     assert 'id="storyboard-scenes-focus-btn"' in scenes_heading
     assert 'id="storyboard-scenes-sequence-btn"' in scenes_heading
     assert 'data-inference-queue-toggle' not in scenes_heading
     assert "button.setAttribute('aria-pressed', active ? 'true' : 'false');" in storyboard
-    assert ".storyboard-scenes-grid-btn.active" in css
     assert ".storyboard-story-heading-actions" in css
     assert ".storyboard-scene-progress-work" in css
 
@@ -1018,13 +1015,11 @@ def test_storyboard_scene_focus_mode_scrolls_naturally_and_has_peer_sequence_vie
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    assert 'id="storyboard-scenes-overview-btn"' in html
     assert 'id="storyboard-scenes-focus-btn"' in html
     assert 'id="storyboard-scenes-sequence-btn"' in html
     assert 'id="storyboard-scene-progression"' in html
     assert "sceneViewMode:" in storyboard
-    assert "['overview', 'focus', 'sequence']" in storyboard
-    assert "data-scene-open" in storyboard
+    assert "['focus', 'sequence']" in storyboard
     assert "data-scene-progress" in storyboard
     assert "data-scene-progress-add" in storyboard
     assert "newTakeCounts:" in storyboard
@@ -1111,10 +1106,8 @@ def test_storyboard_scene_cards_visually_mark_selected_take_state():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
 
-    assert "storyboard-scene-overview-card' + (scene.selectedTakeId ? ' has-selected-take' : '')" in storyboard
     assert "(scene.selectedTakeId ? ' has-selected-take' : '')" in storyboard
     assert ".storyboard-scene-progress-card.has-selected-take" in css
-    assert ".storyboard-scene-overview-card.has-selected-take" in css
 
 
 def test_storyboard_scene_continuity_is_collapsible():

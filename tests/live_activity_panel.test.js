@@ -17,9 +17,7 @@ function harness(active, owner, local = []) {
   const sandbox = {
     state: {
       payload: { active, gpuOwner: owner },
-      dismissedJobs: Object.create(null),
       selectedJobKey: '',
-      autoOpenSeen: Object.create(null),
       open: false,
     },
     isProgressChild: () => false,
@@ -28,7 +26,7 @@ function harness(active, owner, local = []) {
     el: () => null,
   };
   vm.runInNewContext(source.slice(start, end) +
-    '\nthis.choose = currentPrimaryItem; this.autoOpen = maybeAutoOpen; this.featured = () => featuredActivityItems(currentActivityItems(), currentPrimaryItem());', sandbox);
+    '\nthis.choose = currentPrimaryItem; this.featured = () => featuredActivityItems(currentActivityItems(), currentPrimaryItem());', sandbox);
   return { ...sandbox, opened };
 }
 
@@ -77,23 +75,20 @@ test('when GPU is idle, active non-GPU work may be primary', () => {
   assert.equal(h.choose().id, 'd1');
 });
 
-test('short Director work opens automatically; Training and Inference do not', () => {
-  const h = harness([
-    { id: 't1', lane: 'training', kind: 'training' },
-    { id: 'i1', lane: 'inference', kind: 'generate' },
-  ], 'training');
-  h.autoOpen();
-  assert.equal(h.opened.length, 0);
-  h.state.payload.active.push({ id: 'd1', lane: 'llm', kind: 'director' });
-  h.autoOpen();
-  assert.deepEqual(h.opened, [true]);
+test('background activity updates never open the unified drawer', () => {
+  assert.ok(!source.includes('maybeAutoOpen'));
+  assert.ok(!source.includes('autoOpenSeen'));
+  assert.ok(!source.includes('dismissedJobs'));
+  assert.ok(source.includes('window.publishActivityProgress = publishProgress'));
+  assert.ok(source.includes("window.addEventListener('webcap:inference-queue-changed', wake)"));
+  assert.ok(source.includes("state.payload = payload;"));
 });
 
-test('dismissing one Director job prevents reopening for that job', () => {
-  const h = harness([{ id: 'd1', lane: 'llm', kind: 'director' }], 'none');
-  h.state.dismissedJobs['llm:d1'] = true;
-  h.autoOpen();
-  assert.equal(h.opened.length, 0);
+test('explicit Activity navigation still opens the drawer', () => {
+  assert.ok(source.includes("window.openOperationsDrawer('activity')"));
+  assert.ok(source.includes("window.selectOperationsSection('activity')"));
+  assert.ok(source.includes('window.focusActivityJob = function (jobId)'));
+  assert.ok(source.includes('window.focusActivityByJob = function (jobId)'));
 });
 
 test('Model Assessment uses server-owned Activity receipts and an honest indeterminate progress card', () => {
@@ -121,25 +116,10 @@ test('queued Inference jobs are navigation-only and telemetry is owned by the sh
   assert.ok(!source.includes("fetch('/fs/system_status')"));
 });
 
-test('automatic Activity opening never dismisses an already visible Director drawer', () => {
-  const h = harness([{ id: 'd1', lane: 'llm', kind: 'director' }], 'none');
-  h.el = (id) => id === 'director-chat-drawer' ? { classList: { contains: () => false } } : null;
-  // The extracted helper captures sandbox.el, so update the sandbox used by a fresh run.
-  assert.ok(source.includes("!competingDrawer && shortInteractive"));
-  assert.ok(source.includes("event.target.closest('.shell-workload-indicator')"));
-});
-
 test('short job notifications wake Activity through the shared tracker', () => {
   const common = fs.readFileSync(path.join(__dirname, '../tool/js/common.js'), 'utf8');
   assert.ok(common.includes('entry.activityWakeSent = true'));
   assert.ok(common.includes('window.refreshActivityMonitor()'));
-});
-
-
-test('manual Activity dismissal is scoped to a job, not the whole LLM lane', () => {
-  assert.ok(source.includes('state.dismissedJobs[activityJobKey(item)] = true'));
-  assert.ok(!source.includes('silencedLanes'));
-  assert.ok(source.includes('state.selectedJobKey = activityJobKey(item); render();'));
 });
 
 

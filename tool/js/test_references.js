@@ -35,15 +35,17 @@
     }).catch(function (error) { if (folder === currentFolder && token === loadCounter) report(error); });
   }
   function changeSelection(operation, item, after) {
-    if (!loaded || pending) return;
+    if (!loaded || pending) { if (!loaded) report(new Error('Training references have not loaded; selection was not saved.')); return; }
     pending = true;
+    var saveFolder = folder;
     resetError();
     api(operation, item).then(function () {
+      if (saveFolder !== folder) return;
       if (operation === 'reference_selection_remove') delete selected[JSON.stringify([item.runId, item.group, item.term])];
       else selected[JSON.stringify([item.runId, item.group, item.term])] = item;
       drawGallery();
       if (after) after();
-    }).catch(report).finally(function () { pending = false; });
+    }).catch(function (error) { if (saveFolder === folder) report(error); }).finally(function () { pending = false; });
   }
   function mediaUrl(name) { return '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(name); }
   function key(group, term) { return JSON.stringify([runId, group, term]); }

@@ -1143,7 +1143,14 @@ def workspace_gallery(folder_path, model_id=""):
                     "dinoAssessments": unit.get("dinoAssessments") or [],
                     "startedAt": campaign.get("startedAt"),
                 })
-    return {"sessions": sessions, "campaigns": campaigns, "media": media}
+    warnings = []
+    try:
+        runs = _runs(folder_path)
+    except (OSError, RuntimeError, ValueError) as exc:
+        runs = []
+        warnings.append("Saved checkpoint listing unavailable: " + str(exc))
+    return {"sessions": sessions, "campaigns": campaigns, "media": media,
+            "runs": runs, "warnings": warnings}
 
 
 def command(folder_path, operation, criteria=None):

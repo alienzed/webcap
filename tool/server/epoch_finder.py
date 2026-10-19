@@ -70,7 +70,7 @@ def _requires_reference(role):
     return role == "primary"
 
 
-def _runs(folder_path):
+def _runs(folder_path, require_saved_checkpoints=True):
     folder = _folder_key(folder_path)
     result = []
     # Queue and history are distinct views: paused/resumable jobs leave History.
@@ -90,19 +90,25 @@ def _runs(folder_path):
         try:
             _path, run = _candidate_run_snapshot(folder, job_id)
             model = get_test_model_for_staging_key(str(run.get("stages") or ""))
-            artifacts = saved_artifacts_for_run(candidate_run_folder_path(folder, job_id))
-            epochs = [a["epoch"] for a in artifacts if a.get("status") == "available"]
+            run_dir = candidate_run_folder_path(folder, job_id)
+            epochs = ([a["epoch"] for a in saved_artifacts_for_run(run_dir) if a.get("status") == "available"]
+                      if require_saved_checkpoints else [])
         except (LookupError, FileNotFoundError, ValueError, RuntimeError, OSError):
             continue
-        if epochs:
+        if epochs or not require_saved_checkpoints:
             result.append({
-                "jobId": job_id, "runName": run.get("runName") or job.get("runName") or "",
+                "folder": folder, "jobId": job_id, "runName": run.get("runName") or job.get("runName") or "",
                 "runSequence": run.get("runSequence") or job.get("runSequence") or run.get("runId") or job.get("runId") or "",
                 "setName": Path(folder).name,
                 "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
                 "epochs": epochs,
             })
     return result
+
+
+def candidate_runs(folder_path):
+    """All available same-Set training runs for Test Generations' Candidates curve."""
+    return _runs(folder_path, require_saved_checkpoints=False)
 
 
 def _timing_key(campaign, plan):

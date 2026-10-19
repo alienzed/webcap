@@ -98,6 +98,8 @@
     var node = document.createElement('div');
     node.className = 'inference-queue-row job-queue-row status-' + String(job.status || 'queued');
     node.dataset.jobQueueId = String(job.jobId || job.id || '');
+    node.dataset.queueDragLane = which;
+    node.dataset.queueDragId = String(job.jobId || job.id || '');
     var copy = textNode('div', 'inference-queue-copy', '');
     var heading = textNode('div', 'inference-queue-heading', '');
     heading.appendChild(textNode('span', 'inference-queue-position', active(job) ? job.status : job.status === 'queued' ? '#' + (position || job.queuePosition || '') : job.status));
@@ -107,6 +109,13 @@
     if (which === 'llm') heading.querySelector('strong').title = [job.client, job.operation].filter(Boolean).join(' · ');
     if (details) copy.appendChild(textNode('small', '', details));
     if (active(job)) copy.appendChild(textNode('small', '', elapsed(job)));
+    if (which === 'training' && job.status === 'queued') {
+      var handle = textNode('span', 'job-queue-drag-handle', '\u283f');
+      handle.title = 'Drag to reorder queued training';
+      handle.draggable = true;
+      handle.setAttribute('aria-hidden', 'true');
+      node.appendChild(handle);
+    }
     node.appendChild(copy);
     var controls = textNode('div', 'inference-queue-actions', '');
     if (which === 'llm') controls.appendChild(actionButton(active(job) ? 'Stop' : 'Cancel', which, 'cancel_job', job));
@@ -175,6 +184,10 @@
           if (!newActions && oldActions) oldActions.remove();
           else if (newActions && !oldActions) existing.appendChild(newActions);
           else if (newActions && oldActions && oldActions.outerHTML !== newActions.outerHTML) oldActions.replaceWith(newActions);
+          var oldHandle = existing.querySelector('.job-queue-drag-handle');
+          var newHandle = fresh.querySelector('.job-queue-drag-handle');
+          if (oldHandle && !newHandle) oldHandle.remove();
+          else if (!oldHandle && newHandle) existing.insertBefore(newHandle, existing.firstChild);
           existing.dataset.jobQueueStatus = job.status;
           return existing;
         }
@@ -258,6 +271,80 @@
       return refresh();
     });
   }
+  // The same native handle/half-row drop pattern as Checklist; one drawer
+  // controller keeps both reorderable lanes consistent without a new library.
+  var drag = null;
+  var moving = false;
+  function clearDrag() {
+    drawer.querySelectorAll('.queue-drop-before, .queue-drop-after, .is-dragging')
+      .forEach(function (row) { row.classList.remove('queue-drop-before', 'queue-drop-after', 'is-dragging'); });
+    drag = null;
+  }
+  function queueRows(which) {
+    var list = which === 'inference'
+      ? document.getElementById('inference-queue-list')
+      : document.querySelector('#job-queue-panel-training [data-job-queue-list]');
+    return list ? Array.from(list.querySelectorAll('[data-queue-drag-lane="' + which + '"].status-queued')) : [];
+  }
+  drawer.addEventListener('dragstart', function (event) {
+    var handle = event.target.closest('.job-queue-drag-handle');
+    var row = handle && handle.closest('[data-queue-drag-lane]');
+    if (!row || row.classList.contains('status-queued') === false || moving) {
+      event.preventDefault();
+      return;
+    }
+    var which = row.dataset.queueDragLane;
+    if (which === 'llm' || queueRows(which).length < 2) { event.preventDefault(); return; }
+    drag = { lane: which, id: row.dataset.queueDragId };
+    row.classList.add('is-dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', drag.id);
+  });
+  drawer.addEventListener('dragover', function (event) {
+    if (!drag) return;
+    var row = event.target.closest('[data-queue-drag-lane]');
+    if (!row || row.dataset.queueDragLane !== drag.lane || !row.classList.contains('status-queued')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    drawer.querySelectorAll('.queue-drop-before, .queue-drop-after').forEach(function (item) {
+      item.classList.remove('queue-drop-before', 'queue-drop-after');
+    });
+    var rect = row.getBoundingClientRect();
+    row.classList.add(event.clientY < rect.top + rect.height / 2 ? 'queue-drop-before' : 'queue-drop-after');
+  });
+  drawer.addEventListener('drop', function (event) {
+    if (!drag) return;
+    event.preventDefault();
+    var row = event.target.closest('[data-queue-drag-lane]');
+    var source = drag;
+    var target = row && row.dataset.queueDragLane === source.lane && row.classList.contains('status-queued') ? row : null;
+    var after = target && target.classList.contains('queue-drop-after');
+    var beforeRows = queueRows(source.lane);
+    clearDrag();
+    if (!target || moving) return;
+    var from = beforeRows.findIndex(function (item) { return item.dataset.queueDragId === source.id; });
+    var to = beforeRows.indexOf(target) + (after ? 1 : 0);
+    if (from < 0 || to < 0) return;
+    if (from < to) to -= 1;
+    if (from === to) return;
+    moving = true;
+    var request = source.lane === 'inference'
+      ? window.reorderInferenceQueueToPosition(source.id, to)
+      : post('/fs/training_runner/reorder', { jobId: source.id, position: to }).then(function () {
+          window.refreshTrainingRunnerStatus();
+          return refresh();
+        });
+    Promise.resolve(request).catch(function (error) {
+      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Job Queue reorder', error);
+    }).finally(function () { moving = false; });
+  });
+  drawer.addEventListener('dragend', clearDrag);
+  drawer.addEventListener('dragleave', function (event) {
+    if (event.relatedTarget && drawer.contains(event.relatedTarget)) return;
+    drawer.querySelectorAll('.queue-drop-before, .queue-drop-after').forEach(function (item) {
+      item.classList.remove('queue-drop-before', 'queue-drop-after');
+    });
+  });
   drawer.addEventListener('click', function (event) {
     var tab = event.target.closest('[data-job-queue-tab]');
     if (tab) { opening++; select(tab.dataset.jobQueueTab); return; }

@@ -227,13 +227,15 @@
     cancelCaptionAssistJob(directorJob).catch(error);
     el('director-status').textContent='Stop requested…';
   };
-  var epochMediaScope=null, epochMediaSerial=0, epochMediaOffset=0, epochMediaTotal=0, epochMediaLoading=false;
+  var epochMediaScope=null, epochMediaSerial=0, epochMediaOffset=0, epochMediaTotal=0, epochMediaLoading=false, epochMediaReturnMode='analytics';
   function epochMediaClose() {
+    var back=epochMediaReturnMode;
     epochMediaSerial++;
     epochMediaScope=null;
     el('epoch-media-dialog').close();
     el('epoch-media-grid').replaceChildren();
     el('epoch-media-more').classList.add('hidden');
+    if(back==='finder')window.epochFinderShowMode('finder');
   }
   function epochMediaLoad(more) {
     if (!epochMediaScope || epochMediaLoading) return;
@@ -286,10 +288,12 @@
         error(err);
       }).finally(function(){if(serial===epochMediaSerial)epochMediaLoading=false;});
   }
-  window.runAnalyticsViewEpoch=function(jobId,epoch) {
+  window.runAnalyticsViewEpoch=function(jobId,epoch,returnMode) {
     var id=String(jobId||'');
     var num=Number(epoch);
     if(!id||!Number.isInteger(num))throw new Error('Choose a valid saved checkpoint.');
+    epochMediaReturnMode=returnMode==='finder'?'finder':'analytics';
+    el('epoch-media-close').textContent=epochMediaReturnMode==='finder'?'← Back to Campaign':'← Back to Analytics';
     window.epochFinderShowMode('analytics');
     epochMediaSerial++;
     epochMediaScope={jobId:id,epoch:num};
@@ -300,7 +304,12 @@
   };
   el('epoch-media-close').onclick=epochMediaClose;
   el('epoch-media-more').onclick=function(){epochMediaLoad(true);};
-  el('epoch-media-dialog').addEventListener('close',function(){epochMediaSerial++;epochMediaScope=null;});
+  el('epoch-media-dialog').addEventListener('close',function(){
+    if(!epochMediaScope)return;
+    epochMediaSerial++;
+    epochMediaScope=null;
+    if(epochMediaReturnMode==='finder')window.epochFinderShowMode('finder');
+  });
   el('table').onclick=function(event){
     var media=event.target.closest('[data-epoch-media-job]');
     if(media){

@@ -1335,17 +1335,29 @@
                     </section>
                     <div id="test-unified-workspace" class="test-unified-workspace hidden" aria-label="Unified Test Generations">
                         <aside class="test-unified-rail">
-                            <h3>Test Generations</h3>
-                            <div class="test-unified-switch"><button id="test-unified-explore" type="button">Explore</button><button id="test-unified-build" type="button">Build</button><button id="test-unified-analytics" type="button">Analytics</button></div>
+                            <h3>Browse results</h3>
                             <div class="test-unified-switch"><button id="test-unified-experiments" type="button">Experiments</button><button id="test-unified-checkpoints" type="button">Checkpoints</button></div>
                             <div id="test-unified-list" class="test-unified-list"></div>
                             <button id="test-unified-reload" class="review-captions-btn" type="button">Refresh results</button>
                             <button id="test-unified-legacy" class="review-captions-btn" type="button">Existing tools</button>
                         </aside>
                         <main class="test-unified-main">
-                            <header class="test-unified-header"><div><h2 id="test-unified-title">Generated results</h2><p id="test-unified-description">Browse experiments or checkpoints</p></div><button id="test-unified-new" class="training-btn training-launch-btn" type="button">New tests</button></header>
+                            <header class="test-unified-header">
+                                <div class="test-unified-header-main">
+                                    <div class="test-unified-switch test-unified-primary-nav" role="group" aria-label="Test Generations workspace">
+                                        <button id="test-unified-explore" type="button" aria-pressed="false">Explore</button>
+                                        <button id="test-unified-build" type="button" aria-pressed="false">Build</button>
+                                        <button id="test-unified-analytics" type="button" aria-pressed="false">Analytics</button>
+                                    </div>
+                                    <div class="test-unified-heading"><h2 id="test-unified-title">Generated results</h2><p id="test-unified-description">Browse experiments or checkpoints</p></div>
+                                </div>
+                                <div class="test-unified-header-actions">
+                                    <button id="test-unified-references" class="review-captions-btn hidden" type="button">Manage references</button>
+                                    <button id="test-unified-new" class="training-btn training-launch-btn" type="button">New tests</button>
+                                </div>
+                            </header>
                             <div id="test-unified-gallery" class="test-unified-gallery"></div>
-                            <div id="test-unified-builder" class="test-unified-builder hidden"><h3>Build tests</h3><p>Choose a workflow; original settings and controls remain available.</p><div class="test-unified-builder-actions"><button type="button" id="test-unified-normal" class="review-captions-btn">Regular</button><button type="button" id="test-unified-finder" class="review-captions-btn">Campaign</button><button type="button" id="test-unified-references" class="review-captions-btn">Manage references</button></div></div>
+                            <div id="test-unified-builder" class="test-unified-builder hidden"></div>
                         </main>
                         <aside id="test-unified-inspector" class="test-unified-inspector"><h3>Inspector</h3><div id="test-unified-details">Select a result to inspect its prompt, settings, provenance and assessment.</div></aside>
                     </div>

@@ -185,6 +185,13 @@
     advancedMarkers[mode] = marker;
   });
   var activeAdvanced = '';
+  function highlightBuildMode(next) {
+    ['normal','finder','references','analytics'].forEach(function(mode) {
+      var selected=mode===next;
+      el(mode).classList.toggle('active',selected);
+      el(mode).setAttribute('aria-pressed',String(selected));
+    });
+  }
   function mountAdvanced(next) {
     if (activeAdvanced === next) return;
     if (activeAdvanced) {
@@ -203,6 +210,7 @@
       legacy.classList.add('hidden');
     }
     root.classList.toggle('test-unified-finder-building', !!next);
+    highlightBuildMode(next || 'normal');
   }
   var mounted = false;
   var movable = [
@@ -229,6 +237,7 @@
   }
   function builder(enabled) {
     if (activeAdvanced) mountAdvanced('');
+    if (enabled) highlightBuildMode('normal');
     mountExistingControls(enabled);
     el('builder').classList.toggle('hidden',!enabled);
     el('gallery').classList.toggle('hidden',enabled);

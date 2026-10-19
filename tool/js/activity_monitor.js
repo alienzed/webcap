@@ -957,7 +957,7 @@
 
   function syncFeaturedCard(card, item) {
     var snapshot = itemProgress(item);
-    ProgressCard.update(card, snapshot, { onOpen: function () { itemOpen(snapshot); } });
+    ProgressCard.update(card, snapshot, { onOpen: function () { itemOpen(snapshot); }, className: isRemoteDirector(item) ? 'activity-remote-card' : '' });
     // Keep a short, per-job in-memory token history. No new network polling.
     var existingStats = card.querySelector('[data-director-live-stats]');
     var directorJob = (snapshot.kind === 'director' || snapshot.kind === 'first-cut') && snapshot.original;
@@ -969,7 +969,7 @@
       if (Number(directorJob.outputTokens) > 0) labels.push('Output ' + Number(directorJob.outputTokens).toLocaleString() + ' tokens');
       if (directorJob.finishReason) labels.push('Finish: ' + directorJob.finishReason);
       snapshot.progressLabel = labels.join(' · ');
-      ProgressCard.update(card, snapshot, { onOpen: function () { itemOpen(snapshot); } });
+      ProgressCard.update(card, snapshot, { onOpen: function () { itemOpen(snapshot); }, className: isRemoteDirector(item) ? 'activity-remote-card' : '' });
     }
     if (directorJob && !isRemoteDirector(item) && Number.isFinite(generated) && generated >= 0) {
       if (!existingStats) {
@@ -1073,13 +1073,20 @@
       var key = String(itemProgress(item).id);
       var card = existing[key] || ProgressCard.create();
       syncFeaturedCard(card, item);
-      host.appendChild(card);
       retained[key] = true;
       return card;
     });
     Object.keys(existing).forEach(function (key) {
       if (!retained[key]) existing[key].remove();
     });
+    // Poll updates preserve interactive DOM positions unless the visible job order changes.
+    var mounted = Array.prototype.map.call(host.querySelectorAll('[data-progress-card-id]'), function (card) {
+      return card.getAttribute('data-progress-card-id');
+    });
+    var ordered = cards.map(function (card) { return card.getAttribute('data-progress-card-id'); });
+    if (mounted.join('\n') !== ordered.join('\n')) {
+      cards.forEach(function (card) { host.appendChild(card); });
+    }
     // One chart, owned by the local job. Never attach machine telemetry to remote work.
     var graph = el('activity-monitor-trend');
     var localIndex = featured.findIndex(isLocalGpuActivity);
@@ -1114,8 +1121,9 @@
     drawer.classList.toggle('hidden', !state.open);
     details.classList.toggle('hidden', !detailsVisible);
     detailsToggle.setAttribute('aria-expanded', detailsVisible ? 'true' : 'false');
-    detailsCount.textContent = '(' + String(active.length - featured.length + pendingItems.length + recent.length) + ')';
-    detailsToggle.classList.toggle('hidden', !primary || !active.length && !pendingItems.length && !recent.length);
+    var otherCount = active.length - featured.length + pendingItems.length + recent.length;
+    detailsCount.textContent = '(' + String(otherCount) + ')';
+    detailsToggle.classList.toggle('hidden', !primary || otherCount === 0);
     drawer.setAttribute('aria-hidden', state.open ? 'false' : 'true');
     var unseen = unseenCount();
     syncActivityRailWork(active, unseen);
@@ -1131,12 +1139,12 @@
       var backlog = Number(queue.backlog || 0);
       var nextJob = Array.isArray(queue.jobs) ? queue.jobs[0] : null;
       var queueLabel = queueKey === 'director' ? 'Director' : queueKey === 'inference' ? 'Inference' : 'Training';
-      primaryQueue.textContent = waiting || backlog || queue.paused
-        ? queueLabel + ' queue · ' + (waiting ? String(waiting) + ' waiting' : 'Paused') +
-          (nextJob ? ' · Next: ' + activityTitle(nextJob) : '') +
-          (backlog ? ' · ' + String(backlog) + ' backlog' : '') +
-          (queue.paused ? ' · paused' : '')
-        : '';
+      var queueParts = [];
+      if (waiting) queueParts.push(String(waiting) + ' waiting');
+      if (nextJob) queueParts.push('Next: ' + activityTitle(nextJob));
+      if (backlog) queueParts.push(String(backlog) + ' backlog');
+      if (queue.paused) queueParts.push('paused');
+      primaryQueue.textContent = queueParts.length ? queueLabel + ' queue · ' + queueParts.join(' · ') : '';
     } else {
       primaryQueue.textContent = '';
     }

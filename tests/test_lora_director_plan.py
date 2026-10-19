@@ -54,3 +54,15 @@ def test_catalogue_codes_are_request_local(monkeypatch):
     options = lora_director_plan.shortlist("h3", "character A", max_chars=10000)
     assert [x["code"] for x in options] == ["A", "B"]
     assert options[0]["name"] == "a.safetensors"
+
+
+@pytest.mark.parametrize("proposal", [
+    {"storyWide": {}, "scenes": []},
+    {"storyWide": [], "scenes": {}},
+    {"storyWide": [{"code": "A", "strength": "invalid", "phrases": []}]},
+    {"storyWide": [], "scenes": [None]},
+    {"storyWide": [], "scenes": [{"sceneId": "s1", "assign": {}}]},
+])
+def test_malformed_director_proposal_rejected_cleanly(options, proposal):
+    with pytest.raises(ValueError):
+        lora_director_plan.validate_plan(proposal, options, [{"id": "s1"}])

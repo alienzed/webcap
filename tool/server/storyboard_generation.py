@@ -435,6 +435,43 @@ def start_generation(story_id, scene_id):
     return generation_status(job["jobId"])
 
 
+
+def regenerate_take(story_id, scene_id, take_id):
+    """Queue a fresh Take from the frozen recipe, not editable Scene defaults."""
+    reconcile_startup()
+    story = load_story(story_id)
+    scene = (story.get("scenes") or {}).get(str(scene_id or ""))
+    if not isinstance(scene, dict):
+        raise FileNotFoundError("Scene does not exist.")
+    original = (scene.get("takes") or {}).get(str(take_id or ""))
+    if not isinstance(original, dict) or not original.get("generated"):
+        raise ValueError("Only generated Takes have reproducible generation recipes.")
+    if original.get("workflowProfile") != "minimax_h3_inference_v1":
+        raise ValueError("This Take's workflow profile is not supported for regeneration.")
+    if original.get("seed") is None:
+        raise ValueError("This Take did not record a generation seed.")
+    settings = {
+        "prompt": str(original.get("sourcePrompt") or original.get("prompt") or ""),
+        "sourcePrompt": str(original.get("sourcePrompt") or original.get("prompt") or ""),
+        "duration": original.get("durationSeconds"),
+        "aspectRatio": original.get("aspectRatio"),
+        "megapixels": original.get("megapixels"),
+        "seed": original.get("seed"),
+        "seedMode": "fixed",
+        "loras": copy.deepcopy(original.get("loras") or []),
+        "references": copy.deepcopy(original.get("references") or []),
+        "entryState": str(original.get("entryState") or ""),
+        "exitState": str(original.get("exitState") or ""),
+    }
+    for reference in settings["references"]:
+        if isinstance(reference, dict) and reference.get("mediaPath"):
+            _resolve_story_reference_path(story_id, reference["mediaPath"])
+    request = _storyboard_request(settings)
+    from .inference_runner import enqueue_storyboard
+    job = enqueue_storyboard(request, story_id, scene_id, label=str(scene.get("title") or "Storyboard Take") + " · Regenerate")
+    return generation_status(job["jobId"])
+
+
 def generation_status(job_id, consume=False):
     reconcile_startup()
     return _generation_job(_storyboard_job(job_id, consume=consume))

@@ -2585,6 +2585,9 @@
   }
 
   function takePreviewHtml(storyId, sceneId, take) {
+    if (take && take.mediaPurged) {
+      return '<div class="storyboard-takes-empty">Media reclaimed · recipe retained</div>';
+    }
     var url = takeMediaUrl(storyId, sceneId, take);
     var path = String(take && take.mediaPath ? take.mediaPath : '').toLowerCase();
     if (/\.(png|jpe?g|webp|gif|bmp)$/.test(path)) {
@@ -3102,7 +3105,7 @@
             '<div class="storyboard-story-menu-popover">' +
               '<button type="button" data-story-action="duplicate">Duplicate</button>' +
               '<button type="button" data-story-action="pin">' + (story.pinned ? 'Unpin' : 'Pin') + '</button>' +
-              '<button type="button" data-story-action="archive">' + (story.status === 'archived' ? 'Restore' : 'Archive') + '</button>' +
+              '<button type="button" data-story-action="archive">' + (story.status === 'archived' ? 'Restore Recipe' : 'Archive & Reclaim…') + '</button>' +
               '<button type="button" data-story-action="export">Export</button>' +
               '<button type="button" class="danger" data-story-action="delete">Delete…</button>' +
             '</div>' +
@@ -3531,6 +3534,7 @@
     if (take && take.generated && take.seed !== undefined && take.seed !== null && take.seed !== '') {
       parts.push('Seed ' + String(take.seed));
     }
+    if (take && take.mediaPurged) parts.push('Media reclaimed');
     var elapsed = formatGenerationElapsedMs(take && take.elapsedMs);
     if (elapsed) parts.push(elapsed);
     return parts.join(' · ');
@@ -3596,6 +3600,7 @@
           '<span>' + escapeHtml(takeMetaLabel(take)) + '</span>' +
         '</div>' +
         ratingHtml +
+        (take.mediaPurged && take.generated ? '<button type="button" class="review-captions-btn" data-take-action="regenerate" data-take-id="' + escapeHtml(takeId) + '">Regenerate</button>' : '') +
         '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
       '</div>' +
       '<details class="storyboard-take-advanced">' +
@@ -4151,10 +4156,46 @@
   function toggleStoryArchive(storyId) {
     var story = libraryStory(storyId);
     if (!story) return;
-    var archived = story.status === 'archived';
-    setSaveState(archived ? 'Restoring...' : 'Archiving...');
-    updateStoryFromLibrary(storyId, { status: archived ? 'active' : 'archived' }).then(function () {
-      setSaveState('Saved');
+    if (story.status === 'archived') {
+      setSaveState('Restoring recipe...');
+      updateStoryFromLibrary(storyId, { status: 'active' }).then(function () {
+        setSaveState('Recipe restored · previously purged media remains deleted');
+      }).catch(reportError);
+      return;
+    }
+    setSaveState('Checking archive...');
+    flushPendingSaves().then(function () {
+      return request({ operation: 'archive_preview', storyId: storyId });
+    }).then(function (payload) {
+      var preview = payload.preview || {};
+      var count = Number(preview.purgeTakeCount || 0);
+      var bytes = Number(preview.reclaimableBytes || 0);
+      var size = bytes >= 1073741824 ? (bytes / 1073741824).toFixed(2) + ' GiB'
+        : (bytes / 1048576).toFixed(1) + ' MiB';
+      var message = 'Archive "' + (story.title || 'Untitled Story') + '"?\\n\\n' +
+        'Keep the exported movie and the complete Story/Take recipes.\\n' +
+        'Permanently delete ' + count + ' generated Take file(s), reclaiming ' + size + '.\\n' +
+        'Imported Takes and conditioning references are retained.\\n' +
+        'Deleted media cannot be restored; generated Takes can be queued again using their saved recipes.';
+      if (Array.isArray(preview.missingReferences) && preview.missingReferences.length) {
+        message += '\\n\\nWarning: ' + preview.missingReferences.length +
+          ' referenced input(s) are already missing. Some Takes may not be reproducible.';
+      }
+      if (!window.confirm(message.replace(/\\n/g, '\n'))) {
+        setSaveState('');
+        return null;
+      }
+      setSaveState('Archiving · reclaiming Take storage...');
+      return request({ operation: 'archive_story', storyId: storyId });
+    }).then(function (payload) {
+      if (!payload) return;
+      if (storyState.story && storyState.story.id === storyId) {
+        storyState.story = payload.story;
+      }
+      return refreshLibrary().then(function () {
+        renderStory();
+        setSaveState('Archived · generated Take media reclaimed');
+      });
     }).catch(reportError);
   }
 
@@ -5247,6 +5288,27 @@
     });
   }
 
+  function regenerateArchivedTake(sceneId, takeId) {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    setSaveState('Queueing saved Take recipe...');
+    flushPendingSaves().then(function () {
+      return generationRequest({
+        operation: 'regenerate_take', storyId: storyId, sceneId: sceneId, takeId: takeId
+      });
+    }).then(function (payload) {
+      var job = payload.job;
+      storyState.generationJobs[job.jobId] = job;
+      reportGenerationStatus(sceneId, job, null);
+      syncStoryboardGenerationActivity();
+      syncPlanReplacementControls();
+      syncSceneTakeDom(sceneId);
+      return window.refreshInferenceQueue();
+    }).then(function () {
+      setSaveState('Regeneration queued');
+    }).catch(reportError);
+  }
+
   function generateScene(sceneId) {
     if (!storyState.story) return;
     setSaveState('Saving...');
@@ -5976,6 +6038,7 @@
         else if (takeAction.dataset.takeAction === 'remove') removeTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
         else if (takeAction.dataset.takeAction === 'delete') deleteTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
         else if (takeAction.dataset.takeAction === 'restore') restoreTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
+        else if (takeAction.dataset.takeAction === 'regenerate') regenerateArchivedTake(takeScene.dataset.sceneId, takeAction.dataset.takeId);
         return;
       }
       var referenceClear = event.target.closest('[data-reference-clear]');

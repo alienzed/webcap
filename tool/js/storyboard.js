@@ -2726,6 +2726,7 @@
       ? String(Math.round(selectedSeconds * 10) / 10) + 's'
       : '';
 
+    var purgedSelected = selected.filter(function (item) { return !!(item.take && item.take.mediaPurged); });
     var assembly = storyState.sequenceExport;
     var pending = storyState.sequenceExportPending[story.id];
     var exportError = storyState.sequenceExportErrors[story.id];
@@ -2756,7 +2757,7 @@
       '<button type="button" class="review-captions-btn" data-sequence-toggle aria-expanded="' + (storyState.sequenceCollapsed ? 'false' : 'true') + '">' +
         (storyState.sequenceCollapsed ? 'Show' : 'Hide') +
       '</button>' +
-      '<button type="button" class="storyboard-primary-btn" data-sequence-export' + (pending ? ' disabled' : '') + '>' +
+      '<button type="button" class="storyboard-primary-btn" data-sequence-export' + (pending || purgedSelected.length ? ' disabled title="Regenerate reclaimed Takes before exporting another sequence"' : '') + '>' +
         (pending && !pending.encode ? 'Exporting…' : 'Export Sequence') + '</button>' +
       '</div></header>' +
       (encodingWarnings.length ? '<div class="storyboard-sequence-encoding-warning"><strong>This requires encoding</strong>' +
@@ -2770,6 +2771,8 @@
         '<div><strong>' + (pending.encode ? 'Encoding sequence' : 'Exporting sequence') + '</strong>' +
         '<span>' + (pending.encode ? 'Preparing Takes, normalizing video, and assembling the sequence' : 'Preparing and assembling selected Takes') +
         ' · <span data-sequence-elapsed aria-live="off">' + sequenceExportElapsed(pending.startedAt) + '</span></span></div></div>' : '') +
+      (purgedSelected.length ? '<div class="storyboard-sequence-processing" role="status"><div><strong>Archived sequence</strong>' +
+        '<span>' + purgedSelected.length + ' source Take(s) reclaimed. The finished export remains playable above; regenerate sources before making another export.</span></div></div>' : '') +
       (exportError ? '<div class="storyboard-sequence-error" role="alert"><strong>Sequence export failed</strong><span>' +
         escapeHtml(exportError) + '</span></div>' : '') +
       '<div class="storyboard-sequence-body' + (storyState.sequenceCollapsed ? ' hidden' : '') + '">' +

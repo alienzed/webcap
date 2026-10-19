@@ -5221,7 +5221,19 @@
     });
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
-    el('test-generations-run-btn').onclick = startRun;
+    el('test-generations-run-btn').onclick = function () {
+      var count = Number(el('test-generations-inline-count').value);
+      if (!Number.isInteger(count) || count < 1 || count > 20)
+        return showError(new Error('Choose 1–20 Test sessions.'));
+      var autoVl = el('test-generations-inline-auto-vl').checked;
+      if (count === 1 && !autoVl) return startRun();
+      el('test-generations-batch-count').value = String(count);
+      el('test-generations-batch-auto-vl').checked = autoVl;
+      try { runTestBatch(count); } catch (err) { showError(err); }
+    };
+    el('test-generations-campaign-mode').onclick = function () {
+      window.epochFinderShowMode('finder');
+    };
     el('test-generations-batch-btn').onclick = openTestBatchDialog;
     el('test-generations-batch-history').onchange = function () {
       var id = this.value;

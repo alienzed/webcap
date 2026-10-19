@@ -1306,14 +1306,15 @@
                               <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
                               <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="analytics" aria-pressed="true">Analytics</button>
                             </nav>
-                            <section class="epoch-finder-panel"><h3>Evidence scope</h3><label>Training run<select id="run-analytics-run"><option value="">Discovering runs…</option></select></label><button id="run-analytics-analyze" class="training-btn training-launch-btn" type="button">Analyze</button><p class="epoch-finder-muted">No inference or rescans. Results are derived on demand from existing saved evidence.</p></section>
-                            <section class="epoch-finder-panel"><h3>Comparable evidence</h3><label>Campaign<select id="run-analytics-campaign"><option value="">Select a campaign</option></select></label><p class="epoch-finder-muted">Each campaign uses its own frozen tests. Different campaigns are not merged into one score.</p></section>
+                            <section class="epoch-finder-panel"><h3>Evidence scope</h3><p class="epoch-finder-muted">Choose up to six runs from this Set. Campaign results are comparable only when they come from the same campaign.</p><div id="run-analytics-run-choices" class="epoch-finder-run-choices"></div><button id="run-analytics-analyze" class="training-btn training-launch-btn" type="button">Analyze selected</button></section>
+                            <section class="epoch-finder-panel"><h3>Evidence filters</h3><label>Campaign<select id="run-analytics-campaign"><option value="">No campaign (independent signals)</option></select></label><label>Test session<select id="run-analytics-session"><option value="">All sessions (descriptive only)</option></select></label><p class="epoch-finder-muted">Changing filters never starts inference.</p></section>
                           </aside>
                           <main class="epoch-finder-dashboard">
                             <section class="epoch-finder-panel"><h3>Evidence coverage</h3><div id="run-analytics-coverage">Choose a training run to begin.</div></section>
                             <section class="epoch-finder-panel"><h3>Checkpoint trajectory</h3><p id="run-analytics-chart-note" class="epoch-finder-muted"></p><div id="run-analytics-chart"></div></section>
                             <section class="epoch-finder-panel"><h3>Checkpoints</h3><div id="run-analytics-table"></div></section>
                             <section class="epoch-finder-panel"><h3>Findings and limits</h3><div id="run-analytics-findings"></div><div id="run-analytics-warnings"></div></section>
+                            <section class="epoch-finder-panel"><h3>Director interpretation</h3><p class="epoch-finder-muted">Optional analysis of the visible numeric evidence only. No captions, prompts, images or raw logs are sent.</p><button id="run-analytics-director" type="button" class="review-captions-btn" disabled>Interpret with Director</button><button id="run-analytics-director-stop" type="button" class="review-captions-btn hidden">Stop</button><p id="run-analytics-director-status" aria-live="polite"></p><div id="run-analytics-director-result"></div></section>
                             <p id="run-analytics-error" class="epoch-finder-error hidden" role="alert"></p>
                           </main>
                         </div>

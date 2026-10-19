@@ -119,11 +119,12 @@ def _campaign_series(campaigns, job_id):
     return sorted(output, key=lambda item: item["id"])
 
 
-def _test_series(folder_path, job_id):
+def _test_series(folder_path, job_id, session_name=''):
     folder = _folder_key(folder_path)
     by_epoch = defaultdict(lambda: {"ratingSum": 0, "ratingCount": 0,
                                     "vlMatches": 0.0, "vlCount": 0, "sessions": set()})
     sessions = set()
+    available_sessions = set()
     unlinked = 0
     for path in bench._session_directories(folder_path):
         stored = bench._read_status(path) or {}
@@ -146,6 +147,9 @@ def _test_series(folder_path, job_id):
                 continue
             if source_folder != folder or type(source_epoch) is not int or source_epoch < 0:
                 unlinked += 1
+                continue
+            available_sessions.add(path.name)
+            if session_name and path.name != session_name:
                 continue
             media = bench._result_media_file(result)
             item = by_epoch[source_epoch]
@@ -176,10 +180,10 @@ def _test_series(folder_path, job_id):
             "testVlCount": value["vlCount"],
             "sessions": sorted(value["sessions"]),
         })
-    return points, sorted(sessions), unlinked
+    return points, sorted(sessions), unlinked, sorted(available_sessions)
 
 
-def report(folder_path, job_id=""):
+def report(folder_path, job_id="", session_name=""):
     """A deterministic on-demand snapshot. No writes, model calls or queue state mutations."""
     warnings = []
     campaigns = _campaigns(folder_path, warnings)
@@ -192,7 +196,7 @@ def report(folder_path, job_id=""):
     if chosen is None:
         raise ValueError("Selected training run is not available in this Set.")
     series = _campaign_series(campaigns, identifier)
-    test_points, sessions, unlinked = _test_series(folder_path, identifier)
+    test_points, sessions, unlinked, available_sessions = _test_series(folder_path, identifier, session_name)
     loss = []
     archive = archives.get(identifier)
     selected_epoch = archive.get("selectedEpoch") if archive else None
@@ -217,7 +221,8 @@ def report(folder_path, job_id=""):
     return {
         "runs": runs, "jobId": identifier, "run": chosen, "campaigns": series,
         "testPoints": test_points, "lossPoints": loss, "selectedEpoch": selected_epoch,
-        "epochs": epochs, "sessions": sessions, "warnings": warnings,
+        "epochs": epochs, "sessions": sessions, "availableSessions": available_sessions,
+        "sessionFilter": session_name, "warnings": warnings,
         "coverage": {
             "savedEpochs": len(chosen["savedEpochs"]), "observedEpochs": len(set(
                 [p["epoch"] for c in series for p in c["points"]] + [p["epoch"] for p in test_points])),
@@ -227,3 +232,102 @@ def report(folder_path, job_id=""):
             "testVlJudgments": sum(p["testVlCount"] for p in test_points),
         },
     }
+
+
+def report_selected(folder_path, job_ids, session_name=""):
+    """Bounded same-Set run selection. Never join scores across independent campaigns."""
+    if (not isinstance(job_ids, list) or not 1 <= len(job_ids) <= 6 or
+            any(not isinstance(value, str) or not value.strip() for value in job_ids) or
+            len(set(job_ids)) != len(job_ids)):
+        raise ValueError("Choose 1–6 distinct training runs in this Set.")
+    session_name = str(session_name or "").strip()
+    if session_name and (Path(session_name).name != session_name or
+                         "/" in session_name or chr(92) in session_name):
+        raise ValueError("Invalid Test session filter.")
+    reports = [report(folder_path, item, session_name) for item in job_ids]
+    all_sessions = sorted({session for item in reports for session in item["availableSessions"]})
+    if session_name and session_name not in all_sessions:
+        raise ValueError("Selected Test session does not contain identified results for these runs.")
+    campaigns = {}
+    for item in reports:
+        for campaign in item["campaigns"]:
+            entry = campaigns.setdefault(campaign["id"], {
+                "id": campaign["id"], "name": campaign["name"],
+                "modelId": campaign["modelId"], "visionModel": campaign["visionModel"],
+                "runs": []})
+            entry["runs"].append(item["jobId"])
+    return {
+        "jobIds": job_ids, "sessionFilter": session_name,
+        "runs": reports[0]["runs"], "reports": reports,
+        "availableSessions": all_sessions,
+        "campaigns": sorted(campaigns.values(), key=lambda entry: entry["id"]),
+        "warnings": sorted({warning for item in reports for warning in item["warnings"]}),
+    }
+
+
+def director_facts(snapshot, campaign_id=""):
+    """Only derived numeric data. No prompts, media, captions, transcripts, or logs."""
+    campaign_id = str(campaign_id or "").strip()
+    if campaign_id and campaign_id not in {entry["id"] for entry in snapshot["campaigns"]}:
+        raise ValueError("Choose a campaign present in the selected runs.")
+    facts = {
+        "protocol": "Campaign VL scores are weighted matched judgments; Test VL and human ratings are independent.",
+        "limits": "Only explicitly recorded source IDs joined. Different campaigns and sessions can use different prompts, settings, and evaluators.",
+        "sessionFilter": snapshot["sessionFilter"] or "all",
+        "campaignFilter": campaign_id or "none",
+        "runs": [],
+    }
+    for item in snapshot["reports"]:
+        campaigns = [campaign for campaign in item["campaigns"] if campaign["id"] == campaign_id] if campaign_id else []
+        facts["runs"].append({
+            "runId": item["jobId"], "label": item["run"]["label"][:100],
+            "stage": item["run"]["stage"], "archive": bool(item["run"]["archive"]),
+            "coverage": item["coverage"],
+            "campaigns": [{
+                "id": c["id"], "status": c["status"], "visionModel": c["visionModel"],
+                "points": [{"epoch": p["epoch"], "score": p["score"],
+                            "weightedObservations": p["observations"], "renders": p["renders"]}
+                           for p in c["points"][:120]],
+            } for c in campaigns],
+            "test": [{"epoch": p["epoch"], "rating": p["manual"], "ratings": p["manualCount"],
+                      "vl": p["testVl"], "vlJudgments": p["testVlCount"]}
+                     for p in item["testPoints"][:120]],
+            "loss": [{"epoch": p["epoch"], "loss": p["loss"]}
+                     for p in item["lossPoints"][:120]],
+            "warnings": item["warnings"][:8],
+        })
+    return facts
+
+def director_contract(facts):
+    """Bounded schema-based interpretation, not another assessment or rating."""
+    import json
+    return {
+        "operation": "interpret_run_analytics",
+        "prompt": (
+            "Review only the numerical evidence below. Never assume a causal effect from "
+            "loss, learning rate, epoch count, or sample size. Distinguish direct observations "
+            "from hypotheses and experiments. Do not fabricate comparisons where campaign "
+            "settings or evaluation protocols differ. Mention small denominators. "
+            "Reply with four concise sections: Observed, Hypotheses, Try next, Limits.\n"
+            + json.dumps(facts, ensure_ascii=False, separators=(",", ":"))
+        ),
+        "response_schema": {
+            "type": "object", "additionalProperties": False,
+            "required": ["observed", "hypotheses", "tryNext", "limits"],
+            "properties": {
+                "observed": {"type": "string"},
+                "hypotheses": {"type": "string"},
+                "tryNext": {"type": "string"},
+                "limits": {"type": "string"}
+            }
+        }
+    }
+
+
+def normalize_director_response(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("Director Analytics response must be structured.")
+    fields = ("observed", "hypotheses", "tryNext", "limits")
+    if any(not isinstance(payload.get(field), str) for field in fields):
+        raise ValueError("Director Analytics response is missing a required section.")
+    return {field: payload[field][:3000] for field in fields}

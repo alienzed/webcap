@@ -2375,6 +2375,26 @@ def epoch_finder_propose_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/run_analytics/interpret", methods=["POST"])
+def run_analytics_interpret_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        folder_path = safe_join_fs_root(str(data.get("folder") or "").strip())
+        from .run_analytics import report_selected, director_facts, director_contract
+        snapshot = report_selected(folder_path, data.get("jobIds"), data.get("session"))
+        facts = director_facts(snapshot, data.get("campaignId"))
+        if bool(data.get("previewOnly")):
+            return jsonify({"ok": True, "facts": facts})
+        job = enqueue_llm(
+            "test", str(data.get("directorModel") or "").strip(),
+            director_contract(facts), context={}, label="Run Analytics: interpret evidence",
+        )
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("RUN ANALYTICS INTERPRET FAILED: %s", type(exc).__name__)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/epoch_finder", methods=["POST"])
 def epoch_finder_route():
     data = request.get_json(silent=True) or {}

@@ -22,6 +22,8 @@ def test_storyboard_lora_plan_preserves_existing_and_stale_guard(monkeypatch):
     monkeypatch.setattr(lora_library, "catalogue", lambda: [
         {"stage": "h3", "name": "new.safetensors", "enriched": True, "enrichment": {"trainedWords": []}},
     ])
+    monkeypatch.setattr(lora_library, "resolve_for_inference",
+                        lambda stage, names: {name: name for name in names})
     updated = storyboard_store.apply_lora_plan.__wrapped__ if hasattr(
         storyboard_store.apply_lora_plan, "__wrapped__") else storyboard_store.apply_lora_plan
     # The decorated public mutation is the integration boundary; its wrapper

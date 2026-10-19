@@ -9,7 +9,8 @@ const buttons = actions.map(name=>'<button id="test-unified-'+name+'"></button>'
 const html = `<!doctype html><html><body>
 <div id="test-generations-body">
  <aside class="test-generations-rail">
-  <button data-test-generations-perspective="build"></button>\n  <button data-test-generations-perspective="explore"></button>
+  <button data-test-generations-perspective="build"></button> 
+  <button data-test-generations-perspective="explore"></button>
   <div class="test-generations-controls">
    <section class="test-generations-next-run" id="real-test-form"><input id="test-generations-prompt"></section>
    <details id="test-generations-batch-summary"></details>
@@ -45,7 +46,8 @@ test('Explore, Build and Finder preserve original control nodes and image attrib
        campaignId:'abc123',frame:'r1-e0-c1.png',jobId:'run1',epoch:75,runName:'H3 Training',prompt:'blue outfit'}],
    warnings:[]};
  w.fetch=async()=>({ok:true,json:async()=>payload});
- w.eval(fs.readFileSync('tool/js/test_generations_perspective.js','utf8'));\n w.eval(fs.readFileSync('tool/js/test_generations_unified.js','utf8'));
+ w.eval(fs.readFileSync('tool/js/test_generations_perspective.js','utf8')); 
+ w.eval(fs.readFileSync('tool/js/test_generations_unified.js','utf8'));
  w.epochFinderPrepare('sets/foo');
  d.querySelector('[data-test-generations-perspective="explore"]').click();
  await new Promise(resolve=>setImmediate(resolve));
@@ -69,6 +71,7 @@ test('Explore, Build and Finder preserve original control nodes and image attrib
  assert.match(d.getElementById('test-unified-details').textContent,/red outfit/);
  d.querySelector('#test-unified-details button').click();
  assert.ok(calls.includes('session:test-one'));
- assert.ok(d.getElementById('test-unified-workspace').classList.contains('hidden'));\n assert.ok(!d.getElementById('test-generations-body').classList.contains('test-generations-explore'));
+ assert.ok(d.getElementById('test-unified-workspace').classList.contains('hidden')); 
+ assert.ok(!d.getElementById('test-generations-body').classList.contains('test-generations-explore'));
  dom.window.close();
 });

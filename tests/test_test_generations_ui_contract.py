@@ -867,7 +867,7 @@ def test_test_generations_reuses_normal_folder_review_for_assessment():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    assert 'id="test-generations-session-name"' in html
+    assert 'id="test-generations-session-name"' not in html
     assert 'id="test-generations-open-results-btn"' not in html
     assert "var selectedCandidates = null;" in script
     assert "dataset.candidateSelect" in script
@@ -926,7 +926,7 @@ def test_test_generations_queue_contract():
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
 
-    assert "request('test_enqueue'" in script
+    assert "requestForFolder(folder, 'test_enqueue'" in script
     assert "request('test_queue', { modelId: modelId })" in script
     assert "request('test_queue_cancel'" in script
     assert "request('test_queue_clear', { modelId: currentTestModelId() })" in script
@@ -1352,7 +1352,7 @@ def test_primer_template_assistant_uses_existing_template_editor():
 def test_new_test_run_selects_returned_session_for_results_header():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    enqueue_block = script.split("request('test_enqueue'", 1)[1].split("function stopRun", 1)[0]
+    enqueue_block = script.split("requestForFolder(folder, 'test_enqueue'", 1)[1].split("function stopRun", 1)[0]
     assert "var startedStatus = payload && payload.latest ? payload.latest : null;" in enqueue_block
     assert "selectSessionStatus(startedStatus);" in enqueue_block
     assert "if (currentSession === String(startedStatus.session || '')) renderStatus(startedStatus);" not in enqueue_block
@@ -1670,48 +1670,18 @@ def test_preview_sort_is_session_local_and_preserves_keyed_cards():
     assert "sortTestPreviewCards(status);" in script.split("function renderResults(status)", 1)[1].split("function syncActiveRunControls", 1)[0]
 
 
-def test_multisession_submission_uses_native_sessions_without_modal_navigation():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    assert "function runTestBatch(count, autoVl)" in script
-    assert "return refreshSessions();" in script
-    assert "pendingBatchSelection" in script
-    assert 'id="test-generations-batch-modal"' not in html
-
-def test_batch_finishes_after_rating_refresh_and_can_be_restarted():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    complete = script.split("function runTestBatch(count)", 1)[1].split("function openTestBatchDialog()", 1)[0]
-    refresh = complete.index("requestForFolder(batch.folder, 'test_rating_summary'")
-    finish = complete.index("batch.phase = 'Complete'")
-    assert refresh < finish
-    assert "}).then(function () {\n      testBatchCheck(batch);\n      batch.phase = 'Complete';" in complete
-    assert "batch.active = false;" in complete
-
-
-def test_batch_stop_releases_polling_wait_and_session_navigation_is_always_visible():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    assert "if (testBatchWake) { var wake = testBatchWake; testBatchWake = null; wake(); }" in script
-    assert "button.dataset.testBatchSession = session;" in script
-    assert "sessionsHost.querySelectorAll('[data-test-batch-session]')" in script
-    assessment = script.split("function testBatchEvaluateSession(batch, session)", 1)[1].split("function runTestBatch(count)", 1)[0]
-    assert assessment.index("batch.evaluated += 1;") < assessment.index("testBatchError(batch, err, session + ' · ' + file)")
-
-
-def test_batch_ux_has_live_workload_summary_and_recent_sessions():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    assert "function openTestBatchDialogSummary()" in script
-    assert "workload * totalRenders" in script
-    assert "test-generations-batch-history" in html
-    assert "testBatchHistory.unshift(testBatch)" in script
-    assert "viewedTestBatch || testBatch" in script
-
-
-def test_multisession_errors_and_activity_are_visible_without_batch_panel():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    assert "reportConsoleError('Test sessions', new Error(message))" in script
-    assert "function publishTestBatchActivity(batch)" in script
-    assert "window.publishActivityProgress" in script
-    assert "window.finishActivityProgress" in script
-    assert "window.recordActivityCompletion" in script
-
+def test_repeat_launch_is_native_and_session_owned():
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    backend = (ROOT / "tool/server/epoch_test_bench.py").read_text(encoding="utf-8")
+    assert 'Repeat <input id="test-generations-inline-count"' in html
+    assert 'id="test-generations-session-name"' not in html
+    assert "criteria.repeat = repeat;" in script
+    assert "criteria.autoVl = autoVl;" in script
+    assert "requestForFolder(folder, 'test_enqueue', criteria)" in script
+    assert "def enqueue_repeated(folder_path, criteria):" in backend
+    assert "def complete_test_auto_vl(context, answer, elapsed_ms):" in backend
+    assert "def _queue_test_auto_vl(folder_path, session_name, media_file):" in backend
+    assert "refreshServerTestBatches" not in script
+    assert "test_generations/batches" not in script
+    assert 'id="test-generations-multi-actions"' not in html

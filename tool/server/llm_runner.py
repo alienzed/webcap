@@ -187,6 +187,13 @@ def _assert_storyboard_contract_current(context, frozen_contract):
 
 def _client_result(client, context, llm_result, job_id="", frozen_contract=None):
     if client in {"chat", "caption"}:
+        if client == "caption" and context.get("testAutoVl") is True:
+            if str((frozen_contract or {}).get("operation") or "") != "vision_question":
+                raise ValueError("Automatic Test VL requires a vision_question job.")
+            from .epoch_test_bench import complete_test_auto_vl
+            seconds = llm_result.get("requestSeconds")
+            elapsed_ms = int(float(seconds) * 1000) if isinstance(seconds, (int, float)) else 0
+            complete_test_auto_vl(context, llm_result["text"], elapsed_ms)
         result = {
             "text": llm_result["text"],
             "reasoning": llm_result.get("reasoning", ""),
@@ -594,6 +601,17 @@ def _execute_claimed(job_id, gpu_reserved):
             job_id,
             status="stopped",
             error="LLM request stopped before execution.",
+        )
+
+    if client == "caption" and context.get("testAutoVl") is True:
+        from . import config as app_config
+        from .caption_vision import build_vision_question_messages, vision_media_data_url
+        from .epoch_test_bench import resolve_result_media
+        folder = app_config.safe_join_fs_root(str(context["testFolder"]))
+        media = resolve_result_media(folder, str(context["testSession"]), str(context["testMedia"]))
+        contract = dict(contract)
+        contract["messages"] = build_vision_question_messages(
+            str(context["testQuestion"]), vision_media_data_url(media)
         )
 
     from .storyboard_llm_runtime import run_contract, run_freeform_chat

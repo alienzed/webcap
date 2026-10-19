@@ -3074,7 +3074,7 @@
     if (status.status === 'stopping') return 'Stopping · ' + completed + ' / ' + total + liveStatusDetails(status);
     if (status.status === 'stopped') return 'Stopped · ' + completed + ' / ' + total;
     if (status.status === 'complete') return 'Complete · ' + completed + ' / ' + total + (failed ? ' · ' + failed + ' failed' : '');
-    if (status.status === 'failed') return 'Batch failed · ' + completed + ' / ' + total;
+    if (status.status === 'failed') return 'Failed · ' + completed + ' / ' + total;
     return String(status.status || '');
   }
 
@@ -3868,7 +3868,7 @@
         ? 'Test Generations is not available for the selected Base Model.'
         : !selectedCount
           ? 'Select at least one LoRA to run tests.'
-          : 'Queue this frozen Test batch.';
+          : 'Queue Test sessions.';
     }
   }
 
@@ -4358,7 +4358,11 @@
     var live = status && (status.status === 'running' || status.status === 'stopping');
     if (statusEl) statusEl.textContent = live ? '' : statusText(status);
     if (errorEl) {
-      errorEl.textContent = showSessionError && status && status.error ? String(status.error) : '';
+      var sessionError = showSessionError && status && status.error ? String(status.error) : '';
+      var vlErrors = status && Array.isArray(status.autoVlErrors) ? status.autoVlErrors : [];
+      errorEl.textContent = [sessionError].concat(vlErrors.map(function (message) {
+        return 'Automatic VL: ' + String(message);
+      })).filter(Boolean).join('\n');
       errorEl.classList.toggle('hidden', !errorEl.textContent);
     }
     renderSessionMeta(status || {});
@@ -4649,7 +4653,6 @@
     el('test-generations-wildcard-modal-status').textContent = '';
     setResultsView('grid');
     renderStatus({ status: 'idle' });
-    refreshServerTestBatches();
     window.epochFinderPrepare(launchFolder);
     // Default to the same real Regular form in Build; exact Activity routes
     // continue to the proven native session/campaign review destinations.
@@ -4730,149 +4733,6 @@
     });
   }
 
-  // The server coordinates submissions and automatic VL; the Sessions list owns
-  // all queued, running and completed Test presentation.
-  var activeTestBatches = [];
-  var pendingBatchSelection = null;
-  var batchAssessmentCounts = Object.create(null);
-  var batchErrorKeys = new Set();
-  var completedBatchActivities = new Set();
-  var lastBatchStateKeys = Object.create(null);
-
-  setInterval(function () {
-    if (launchFolder) refreshServerTestBatches();
-  }, 4000);
-
-  function syncTestBatchStopActions(batches) {
-    var host = el('test-generations-multi-actions');
-    var wanted = new Set(batches.map(function (batch) { return String(batch.id); }));
-    host.querySelectorAll('[data-test-batch-stop]').forEach(function (button) {
-      if (!wanted.has(button.dataset.testBatchStop)) button.remove();
-    });
-    batches.forEach(function (batch) {
-      var id = String(batch.id);
-      var button = Array.from(host.querySelectorAll('[data-test-batch-stop]')).find(function (item) {
-        return item.dataset.testBatchStop === id;
-      });
-      if (!button) {
-        button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'review-captions-btn';
-        button.dataset.testBatchStop = id;
-        host.appendChild(button);
-      }
-      button.textContent = batch.status === 'stopping' ? 'Stopping submission / VL…' : 'Stop submission / VL';
-      button.title = 'Stop remaining session submissions and automatic VL only. Already accepted Test sessions continue.';
-      button.disabled = batch.status === 'stopping';
-    });
-  }
-
-  function publishTestBatchActivity(batch) {
-    var id = 'test-batch:' + batch.id;
-    var active = ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1;
-    if (active) {
-      var evaluating = batch.phase === 'Evaluating';
-      var completed = evaluating ? batch.evaluated : batch.finished;
-      var total = evaluating ? batch.previews : batch.count;
-      window.publishActivityProgress({
-        id: id, kind: 'test-batch', lane: 'background',
-        title: batch.autoVl ? 'Tests + VL' : 'Tests',
-        status: 'running', phase: batch.phase,
-        detail: batch.folder + (batch.detail ? ' · ' + batch.detail : ''),
-        progress: total > 0 ? { completed: completed, total: total } : null,
-        progressLabel: total > 0 ? completed + ' / ' + total + (evaluating ? ' previews' : ' sessions') : '',
-        startedAt: batch.startedAt || batch.queuedAt,
-        folder: batch.folder, modelId: batch.criteria.modelId
-      });
-    } else {
-      window.finishActivityProgress(id, batch.status === 'failed' ? 'failed' : batch.status === 'stopped' ? 'stopped' : 'completed');
-      if (completedBatchActivities.has(id)) return;
-      completedBatchActivities.add(id);
-      window.recordActivityCompletion({
-        id: id, kind: 'test-batch', lane: 'background',
-        title: batch.autoVl ? 'Tests + VL' : 'Tests',
-        status: batch.status === 'failed' ? 'failed' : batch.status === 'stopped' ? 'stopped' : 'completed',
-        folder: batch.folder, modelId: batch.criteria.modelId,
-        detail: batch.detail, finishedAt: batch.finishedAt || Date.now() / 1000
-      });
-    }
-  }
-
-  function refreshTestCandidateScoresAfterVl(folder, modelId, session) {
-    return requestForFolder(folder, 'test_rating_summary', { modelId: modelId }).then(function (payload) {
-      if (String(launchFolder) !== folder || currentTestModelId() !== modelId || !prepared) return;
-      prepared.candidateScores = payload.candidateScores || {};
-      prepared.candidateVisionScores = payload.candidateVisionScores || {};
-      syncStagedCandidateScores(prepared.candidateScores);
-      syncTestVlCandidateRows();
-      if (!session || currentSession !== session || testVl.running) return;
-      return requestForFolder(folder, 'test_open_session', { session: session }).then(function (status) {
-        if (String(launchFolder) !== folder || currentTestModelId() !== modelId || currentSession !== session) return;
-        testVl.loadedScope = '';
-        renderStatus(status);
-      });
-    }).catch(function (err) { reportConsoleError('Refresh Test VL scores', err); });
-  }
-
-  function refreshServerTestBatches() {
-    return captionAssistRequestJson('/fs/test_generations/batches').then(function (payload) {
-      var folder = String(launchFolder || '');
-      var modelId = currentTestModelId();
-      var batches = (payload.batches || []).filter(function (batch) { return batch.folder === folder; });
-      activeTestBatches = batches.filter(function (batch) {
-        return ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1
-          && batch.criteria.modelId === modelId;
-      });
-      syncTestBatchStopActions(activeTestBatches);
-      var updateSessions = false;
-      batches.forEach(function (batch) {
-        publishTestBatchActivity(batch);
-        var key = [batch.sessions.length, batch.finished, batch.status].join(':');
-        if (key !== lastBatchStateKeys[batch.id]) {
-          lastBatchStateKeys[batch.id] = key;
-          updateSessions = true;
-        }
-        (batch.errors || []).forEach(function (message, index) {
-          var errorKey = batch.id + ':' + index;
-          if (batchErrorKeys.has(errorKey)) return;
-          batchErrorKeys.add(errorKey);
-          reportConsoleError('Test sessions', new Error(message));
-        });
-        if (batch.autoVl && batch.evaluated > (batchAssessmentCounts[batch.id] || 0)) {
-          batchAssessmentCounts[batch.id] = batch.evaluated;
-          var visibleSession = batch.sessions.indexOf(currentSession) !== -1 ? currentSession : '';
-          refreshTestCandidateScoresAfterVl(folder, batch.criteria.modelId, visibleSession);
-        }
-        var pending = pendingBatchSelection;
-        if (pending && pending.id === batch.id && batch.sessions.length) {
-          pendingBatchSelection = null;
-          if (pending.folder === folder && pending.modelId === modelId && currentSession === pending.previousSession) {
-            var session = batch.sessions[0];
-            requestForFolder(folder, 'test_open_session', { session: session }).then(function (status) {
-              if (isOpen() && launchFolder === folder && currentTestModelId() === modelId &&
-                  currentSession === pending.previousSession) selectSessionStatus(status);
-            }).catch(showError);
-          }
-        }
-      });
-      if (isOpen() && (updateSessions || activeTestBatches.length)) {
-        return refreshSessionsIfDue(updateSessions ? 0 : 3000).then(function () {
-          if (!pollTimer && (queuedTestJobs.length || activeTestBatches.length)) pollStatus();
-        });
-      }
-    }).catch(function (err) { reportConsoleError('Test session coordination', err); });
-  }
-
-  function stopTestBatch(id) {
-    return captionAssistRequestJson('/fs/test_generations/batches', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({operation:'cancel', batchId:id})
-    }).then(refreshServerTestBatches).catch(function (err) {
-      reportConsoleError('Stop Test submission / VL', err);
-      showError(err);
-    });
-  }
-
   function testRunCriteria() {
     if (!isTestModelSupported()) throw new Error('Test Generations is not available for the selected Base Model.');
     var prompt = String(el('test-generations-prompt').value || '').trim();
@@ -4909,66 +4769,49 @@
     return criteria;
   }
 
-  function runTestBatch(count, autoVl) {
+  function startRun() {
     var criteria;
-    try { criteria = testRunCriteria(); } catch (err) { showError(err); return; }
-    saveTestWorkspacePrompt(criteria.prompt);
-    saveTestBenchState();
+    try { criteria = testRunCriteria(); } catch (err) { return showError(err); }
+    var repeat = Number(el('test-generations-inline-count').value);
+    if (!Number.isInteger(repeat) || repeat < 1 || repeat > 20) {
+      return showError(new Error('Repeat must be between 1 and 20.'));
+    }
+    var autoVl = el('test-generations-inline-auto-vl').checked;
     var folder = String(launchFolder);
     var modelId = criteria.modelId;
     var previousSession = currentSession;
-    var vlModel = autoVl ? loadCaptionVisionCapabilities().then(function () {
+    var chosenVl = autoVl ? loadCaptionVisionCapabilities().then(function () {
       var model = getCaptionVisionModelId();
       if (!model) throw new Error('Select an available Vision model.');
       return model;
     }) : Promise.resolve('');
-    return vlModel.then(function (chosenVl) {
-      return captionAssistRequestJson('/fs/test_generations/batches', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          operation: 'enqueue', folder: folder, count: count, criteria: criteria,
-          autoVl: autoVl, vlModel: chosenVl, preserveSingleSeed: count === 1
-        })
-      });
+    return chosenVl.then(function (vlModel) {
+      criteria.repeat = repeat;
+      criteria.autoVl = autoVl;
+      if (autoVl) criteria.vlModel = vlModel;
+      saveTestWorkspacePrompt(criteria.prompt);
+      saveTestBenchState();
+      el('test-generations-error').classList.add('hidden');
+      return requestForFolder(folder, 'test_enqueue', criteria);
     }).then(function (payload) {
       if (folder === launchFolder && modelId === currentTestModelId()) {
-        pendingBatchSelection = { id: payload.batch.id, folder: folder, modelId: modelId, previousSession: previousSession };
         el('test-generations-seed').value = String(randomSeed());
+        var first = payload && payload.sessions && payload.sessions[0] || payload.latest;
+        if (first && first.session && currentSession === previousSession && !testVl.running) {
+          showSessionError = true;
+          selectSessionStatus(first);
+        }
       }
-      return refreshServerTestBatches().then(function () {
-        return refreshSessions();
-      }).then(function () {
-        if (isOpen()) pollStatus();
-      });
-    }).catch(function (err) {
+      refreshActivityButton();
+      reportConsoleInfo('Test Generations', repeat + ' Test session' + (repeat === 1 ? '' : 's') + ' submitted.');
+      if (payload && payload.errors && payload.errors.length) {
+        showError(new Error(payload.errors.join('\n')));
+      }
+      return refreshSessions();
+    }).then(function () { if (isOpen()) pollStatus(); }).catch(function (err) {
       reportConsoleError('Submit Test sessions', err);
       showError(err);
-    });
-  }
-
-  function startRun() {
-    var criteria;
-    try { criteria = testRunCriteria(); } catch (err) { return showError(err); }
-    saveTestWorkspacePrompt(criteria.prompt);
-    saveTestBenchState();
-    var runBtn = el('test-generations-run-btn');
-    var errorEl = el('test-generations-error');
-    runBtn.disabled = true;
-    errorEl.classList.add('hidden');
-    request('test_enqueue', criteria).then(function (payload) {
-      var startedStatus = payload && payload.latest ? payload.latest : null;
-      syncActiveRunControls(startedStatus || currentStatus);
-      refreshActivityButton();
-      reportConsoleInfo('Test Generations', 'Run submitted' + (startedStatus && startedStatus.session ? ': ' + startedStatus.session : '.'));
-      if (startedStatus && startedStatus.session && !testVl.running) {
-        showSessionError = true;
-        selectSessionStatus(startedStatus);
-      }
-      el('test-generations-seed').value = String(randomSeed());
-      return refreshSessions();
-    }).then(function () { pollStatus(); }).catch(function (err) {
-      syncActiveRunControls(currentStatus);
-      showError(err);
+      refreshSessions().catch(showError);
     });
   }
 
@@ -5108,7 +4951,7 @@
       var count=Number(el('test-generations-inline-count').value);
       var valid=Number.isInteger(count)&&count>=1&&count<=20;
       var autoVl=el('test-generations-inline-auto-vl').checked;
-      el('test-generations-run-btn').textContent=!valid?'Run Tests':count>1?'Queue '+count+' sessions':autoVl?'Run Tests + VL':'Run Tests';
+      el('test-generations-run-btn').textContent=!valid?'Run Tests':count>1?'Run '+count+' Tests':autoVl?'Run Test + VL':'Run Test';
       el('test-generations-inline-launch-summary').textContent=!valid?'Choose 1–20 sessions'
         :count>1?count+' sessions, with a fresh seed for each'+(autoVl?' · VL assessment after generation':'')
         :'One session using the selected seed'+(autoVl?' · VL assessment after generation':'');
@@ -5118,19 +4961,7 @@
       el(id).addEventListener('change',syncInlineLaunch);
     });
     syncInlineLaunch();
-    el('test-generations-run-btn').onclick = function () {
-      var count = Number(el('test-generations-inline-count').value);
-      if (!Number.isInteger(count) || count < 1 || count > 20) {
-        return showError(new Error('Choose 1–20 Test sessions.'));
-      }
-      var autoVl = el('test-generations-inline-auto-vl').checked;
-      if (count === 1 && !autoVl) return startRun();
-      return runTestBatch(count, autoVl);
-    };
-    el('test-generations-multi-actions').onclick = function (event) {
-      var button = event.target.closest('[data-test-batch-stop]');
-      if (button) stopTestBatch(button.dataset.testBatchStop);
-    };
+    el('test-generations-run-btn').onclick = startRun;
 
     var evaluateButton = el('test-generations-ask-vl');
     var evaluateMenu = el('test-generations-evaluate-menu');

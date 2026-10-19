@@ -714,6 +714,107 @@ def update_vision(folder_path, session_name, criteria):
         "candidateVisionScores": _candidate_vision_scores(folder_path, model_id),
     }
 
+
+def _test_auto_vl_question(groups):
+    if not groups:
+        return "Describe this image using only visible evidence, including distinctive details."
+    prefix = ('Inspect the image and choose the best visible option for EVERY numbered attribute below. '
+              'Respond with exactly one line per group, e.g. G1: 2. Use only the option number, '
+              'or "unclear" if you cannot see it, or "none" if no option fits. '
+              'If "(absent)" is an option, select its number when that attribute is absent. '
+              'Do not assume any option is present; use only visible evidence.\n\n')
+    return prefix + "\n".join(
+        str(g["id"]) + " (" + str(g.get("label") or "") + "): " +
+        "; ".join(str(i + 1) + "=" + str(option or "(absent)")
+                  for i, option in enumerate(g.get("options") or []))
+        for g in groups
+    )
+
+
+def _test_auto_vl_compare(answer, groups):
+    lines = str(answer or "").splitlines()
+    rows = []
+    for group in groups:
+        options = group.get("options") or []
+        group_id = str(group["id"])
+        matches = [re.sub(r"^\s*" + re.escape(group_id) + r"\s*[:=-]\s*", "", line, flags=re.I).strip()
+                   for line in lines if re.match(r"^\s*" + re.escape(group_id) + r"\s*[:=-]\s*", line, flags=re.I)]
+        observed = matches[0] if len(matches) == 1 else ""
+        selected = int(observed) if observed.isdecimal() and 0 < int(observed) <= len(options) else None
+        expected = group.get("expected")
+        expected_text = "unresolved" if expected is None else (options[expected - 1] or "(absent)")
+        selected_text = (options[selected - 1] or "(absent)") if selected is not None else (observed or "unclear")
+        result = ("unclear" if expected is None else
+                  ("match" if selected == expected else "mismatch") if selected is not None else
+                  "mismatch" if re.fullmatch(r"none(?: of these)?", observed, flags=re.I) else "unclear")
+        rows.append({"id": group_id, "label": group.get("label"), "expected": expected,
+                     "selected": selected, "expectedText": expected_text,
+                     "selectedText": selected_text, "result": result})
+    return rows
+
+
+
+def _queue_test_auto_vl(folder_path, session_name, media_file):
+    """Enqueue VL in the existing LLM lane; each session owns its evidence."""
+    from .llm_runner import enqueue as enqueue_llm
+
+    session_dir = _session_directory(folder_path, session_name)
+    status = _read_status(session_dir) or {}
+    model = str(status.get("autoVlModel") or "")
+    jobs = status.get("autoVlJobs") or {}
+    if not model or media_file in jobs:
+        return
+    visible = open_session(folder_path, session_name)
+    groups = visible.get("wildcardEvaluationGroups") or []
+    question = _test_auto_vl_question(groups)
+    try:
+        resolve_result_media(folder_path, session_name, media_file)
+        # Keep the queued contract small. The vision bytes are resolved only when the LLM runs.
+        job = enqueue_llm(
+            "caption", model, {
+                "operation": "vision_question",
+                "messages": [{"role": "user", "content": question}],
+            }, context={
+                "testAutoVl": True, "testFolder": _relative_set_folder(folder_path),
+                "testSession": session_name, "testMedia": media_file,
+                "testGroups": groups, "testQuestion": question, "testModel": model,
+            }, label="Test Ask VL · " + session_name,
+        )
+        with _status_lock:
+            latest = _read_status(session_dir) or {}
+            registered = dict(latest.get("autoVlJobs") or {})
+            registered[media_file] = str(job["jobId"])
+            latest["autoVlJobs"] = registered
+            _atomic_write_json(_status_path(session_dir), latest)
+    except Exception as exc:
+        _logger.exception("Automatic Test VL submission failed for Session %s, media %s", session_name, media_file)
+        with _status_lock:
+            latest = _read_status(session_dir) or {}
+            errors = list(latest.get("autoVlErrors") or [])
+            errors.append(media_file + ": " + str(exc))
+            latest["autoVlErrors"] = errors
+            _atomic_write_json(_status_path(session_dir), latest)
+
+
+def complete_test_auto_vl(context, answer, elapsed_ms):
+    """Apply an LLM receipt to existing session-owned test_vision evidence."""
+    folder_path = app_config.safe_join_fs_root(str(context["testFolder"]))
+    session = str(context["testSession"])
+    media = str(context["testMedia"])
+    current = _session_vision_state(_session_directory(folder_path, session))
+    if media in (current.get("byMedia") or {}):
+        return  # An explicit user assessment takes precedence over pending auto VL.
+    update_vision(folder_path, session, {
+        "mediaFile": media,
+        "assessment": {
+            "text": str(answer).strip() or "(empty response)",
+            "question": str(context["testQuestion"]),
+            "comparison": _test_auto_vl_compare(answer, context.get("testGroups") or []),
+            "modelId": str(context["testModel"]),
+            "elapsedMs": elapsed_ms,
+        },
+    })
+
 def _saved_candidate_assessments(folder_path, model_id):
     model = get_test_model(model_id)
     totals = {}
@@ -1322,6 +1423,8 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_enqueue":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         save_workspace_prompt(folder_path, criteria.get("modelId"), criteria.get("prompt"))
+        if int(criteria.get("repeat") or 1) != 1 or criteria.get("autoVl"):
+            return enqueue_repeated(folder_path, criteria)
         return enqueue(
             folder_path,
             criteria.get("prompt"),
@@ -2547,6 +2650,7 @@ def execute_inference(job_id, request, context):
             status_payload["current"] = ""
             status_payload["comfyStatus"] = "completed"
             _atomic_write_json(_status_path(session_directory), status_payload)
+        _queue_test_auto_vl(folder_path, session_id, media_path.name)
         return {"status": "completed", "session": session_id, "mediaFile": media_path.name}
     except inference_runtime.InferenceStopped:
         raise
@@ -2566,7 +2670,7 @@ def execute_inference(job_id, request, context):
         raise
 
 
-def _enqueue_frozen_test_request(folder_path, request, loras, include_base, legacy_job_id=""):
+def _enqueue_frozen_test_request(folder_path, request, loras, include_base, legacy_job_id="", auto_vl_model=""):
     from .inference_runner import enqueue_test
 
     model = get_test_model(request.get("modelId"))
@@ -2638,6 +2742,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "inferenceJobs": [],
         "legacyJobId": str(legacy_job_id or ""),
         "migrationComplete": False,
+        "autoVlModel": str(auto_vl_model or ""),
+        "autoVlJobs": {},
         "campaignStaging": str(request.get("campaignStaging") or ""),
     }
     if sweep_weights is not None:
@@ -2853,7 +2959,7 @@ def reconcile_startup():
 
 def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
             candidate_strengths=None, include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None,
-            sweep_weights=None, campaign_staging=""):
+            sweep_weights=None, campaign_staging="", auto_vl_model=""):
     reconcile_startup()
     request, loras, include_base = _new_inference_request(
         folder_path,
@@ -2871,7 +2977,7 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
         duration=duration,
         campaign_staging=campaign_staging,
     )
-    latest = _enqueue_frozen_test_request(folder_path, request, loras, include_base)
+    latest = _enqueue_frozen_test_request(folder_path, request, loras, include_base, auto_vl_model=auto_vl_model)
     return {
         "operation": "test_enqueue",
         "job": {
@@ -2894,6 +3000,59 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
         "latest": latest,
     }
 
+
+
+
+def enqueue_repeated(folder_path, criteria):
+    """Repeat the normal Test Session submission; no batch state or coordinator."""
+    from .storyboard_llm_runtime import list_vision_models
+
+    count = criteria.get("repeat", 1)
+    if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 20:
+        raise ValueError("Repeat must be an integer between 1 and 20.")
+    auto_vl = criteria.get("autoVl") is True
+    vl_model = str(criteria.get("vlModel") or "") if auto_vl else ""
+    if auto_vl:
+        available = {str(item.get("id") or "") for item in list_vision_models()}
+        if not vl_model or vl_model not in available:
+            raise ValueError("Select an available Vision model.")
+
+    accepted = []
+    used_seeds = set()
+    for index in range(count):
+        settings = dict(criteria.get("settings") or {})
+        if count > 1:
+            seed = secrets.randbits(32)
+            while seed in used_seeds:
+                seed = secrets.randbits(32)
+            used_seeds.add(seed)
+            settings["seed"] = str(seed)
+        try:
+            submitted = enqueue(
+                folder_path, criteria.get("prompt"), settings=settings,
+                name=criteria.get("name"), seed=criteria.get("seed"),
+                aspect_ratio=criteria.get("aspectRatio"),
+                megapixels=criteria.get("megapixels"), duration=criteria.get("duration"),
+                selected_files=criteria.get("selectedFiles"),
+                candidate_strengths=criteria.get("candidateStrengths"),
+                include_base=criteria.get("includeBase"),
+                model_id=criteria.get("modelId"),
+                sweep_weights=criteria.get("sweepWeights"),
+                auto_vl_model=vl_model,
+            )
+        except Exception as exc:
+            if not accepted:
+                raise
+            # Already accepted Sessions remain authoritative and must be shown.
+            first = dict(accepted[0])
+            first["sessions"] = [item["latest"] for item in accepted]
+            first["errors"] = ["Repeat " + str(index + 1) + " could not enqueue: " + str(exc)]
+            return first
+        accepted.append(submitted)
+
+    first = dict(accepted[0])
+    first["sessions"] = [item["latest"] for item in accepted]
+    return first
 
 
 def queued_jobs(folder_path, model_id=None):

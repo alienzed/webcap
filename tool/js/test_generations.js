@@ -4788,7 +4788,7 @@
       saveTestWorkspacePrompt(criteria.prompt);
       saveTestBenchState();
       el('test-generations-error').classList.add('hidden');
-      return request('test_enqueue', criteria);
+      return requestForFolder(folder, 'test_enqueue', criteria);
     }).then(function (payload) {
       if (folder === launchFolder && modelId === currentTestModelId()) {
         el('test-generations-seed').value = String(randomSeed());

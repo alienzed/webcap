@@ -144,24 +144,38 @@
     });
     if(!records.length) {var p=document.createElement('p');p.textContent='No recorded images for this selection.';host.appendChild(p);}
   }
-  var finderScreen = document.getElementById('epoch-finder-screen');
-  if (!finderScreen) throw new Error('Epoch Finder original workspace is missing.');
-  var finderMarker = document.createComment('Epoch Finder original position');
-  finderScreen.parentNode.insertBefore(finderMarker, finderScreen);
-  var finderMounted = false;
-  function mountFinder(enabled) {
-    if (finderMounted === enabled) return;
-    if (enabled) {
-      el('builder').appendChild(finderScreen);
-      window.epochFinderShowMode('finder');
-      legacy.classList.add('hidden');
-    } else {
-      finderMarker.parentNode.insertBefore(finderScreen, finderMarker.nextSibling);
+  var advancedScreens = {
+    finder: document.getElementById('epoch-finder-screen'),
+    references: document.getElementById('test-references-screen'),
+    analytics: document.getElementById('run-analytics-screen')
+  };
+  var advancedMarkers = {};
+  Object.keys(advancedScreens).forEach(function(mode) {
+    var screen = advancedScreens[mode];
+    if (!screen || !screen.parentNode) throw new Error('Missing original Test tool: ' + mode);
+    var marker = document.createComment(mode + ' original location');
+    screen.parentNode.insertBefore(marker, screen);
+    advancedMarkers[mode] = marker;
+  });
+  var activeAdvanced = '';
+  function mountAdvanced(next) {
+    if (activeAdvanced === next) return;
+    if (activeAdvanced) {
+      var prior = advancedScreens[activeAdvanced], marker = advancedMarkers[activeAdvanced];
+      marker.parentNode.insertBefore(prior, marker.nextSibling);
+      activeAdvanced = '';
       window.epochFinderShowMode('tests');
       legacy.classList.add('hidden');
     }
-    root.classList.toggle('test-unified-finder-building', enabled);
-    finderMounted = enabled;
+    if (next) {
+      var target = advancedScreens[next];
+      if (!target) throw new Error('Unknown advanced Test tool: ' + next);
+      el('builder').appendChild(target);
+      activeAdvanced = next;
+      window.epochFinderShowMode(next);
+      legacy.classList.add('hidden');
+    }
+    root.classList.toggle('test-unified-finder-building', !!next);
   }
   var mounted = false;
   var movable = [
@@ -187,14 +201,14 @@
     mounted = enabled;
   }
   function builder(enabled) {
-    if (finderMounted) mountFinder(false);
+    if (activeAdvanced) mountAdvanced('');
     mountExistingControls(enabled);
     el('builder').classList.toggle('hidden',!enabled);
     el('gallery').classList.toggle('hidden',enabled);
     el('inspector').classList.toggle('hidden',enabled);
     el('new').classList.toggle('hidden',enabled);
   }
-  function legacyMode(mode) {if(finderMounted)mountFinder(false);mountExistingControls(false);show(false);window.epochFinderShowMode(mode);}
+  function legacyMode(mode) {if(activeAdvanced)mountAdvanced('');mountExistingControls(false);show(false);window.epochFinderShowMode(mode);}
   el('explore').onclick=function(){builder(false);if(folder)refresh();};
   el('build').onclick=function(){builder(true);};
   el('new').onclick=function(){builder(true);};
@@ -204,11 +218,11 @@
   window.addEventListener('webcap:test-preview-updated', function () {
     if (!root.classList.contains('hidden') && el('builder').classList.contains('hidden')) refresh();
   });
-  el('legacy').onclick=function(){if(finderMounted)mountFinder(false);mountExistingControls(false);show(false);};
+  el('legacy').onclick=function(){if(activeAdvanced)mountAdvanced('');mountExistingControls(false);show(false);};
   el('normal').onclick=function(){legacyMode('tests');};
-  el('finder').onclick=function(){mountExistingControls(false);mountFinder(true);};
-  el('references').onclick=function(){legacyMode('references');};
-  el('analytics').onclick=function(){legacyMode('analytics');};
+  el('finder').onclick=function(){mountExistingControls(false);mountAdvanced('finder');};
+  el('references').onclick=function(){mountExistingControls(false);mountAdvanced('references');};
+  el('analytics').onclick=function(){mountExistingControls(false);mountAdvanced('analytics');};
   var prepare=window.epochFinderPrepare;
   window.epochFinderPrepare=function(nextFolder) {
     folder=String(nextFolder||'');model=String(window.getWorkingModelProfileId()||'');
@@ -219,7 +233,7 @@
     if(folder)refresh();
   };
   function exitToNative() {
-    if (finderMounted) mountFinder(false);
+    if (activeAdvanced) mountAdvanced('');
     mountExistingControls(false);
     show(false);
   }

@@ -426,3 +426,19 @@ def test_storyboard_sequence_export_is_discovered(monkeypatch, tmp_path):
     assert items[0]["mediaKind"] == "video"
     assert items[0]["storageId"] == "story-a"
     assert items[0]["uses"][0]["label"] == "Sequence export"
+
+
+def test_storyboard_export_filter_applies_before_paging(monkeypatch):
+    records = [
+        {"id": "scene", "source": "storyboard", "role": "generated", "roles": ["generated"], "createdAt": 3, "mediaKind": "video", "fileName": "scene.mp4", "model": "", "ownerFolder": "", "rating": None},
+        {"id": "export", "source": "storyboard", "role": "export", "roles": ["export"], "createdAt": 2, "mediaKind": "video", "fileName": "sequence.mp4", "model": "", "ownerFolder": "", "rating": None},
+        {"id": "reference", "source": "storyboard", "role": "reference", "roles": ["reference"], "createdAt": 1, "mediaKind": "image", "fileName": "ref.png", "model": "", "ownerFolder": "", "rating": None},
+    ]
+    monkeypatch.setattr(media_explorer, "discover_storyboards", lambda: records)
+    exports = media_explorer.list_media(source="storyboard", storyboard_type="exports", limit=1)
+    assert exports["total"] == 1
+    assert [item["id"] for item in exports["items"]] == ["export"]
+    scenes = media_explorer.list_media(source="storyboard", storyboard_type="scenes")
+    assert [item["id"] for item in scenes["items"]] == ["scene", "reference"]
+    with pytest.raises(ValueError, match="Storyboard"):
+        media_explorer.list_media(source="storyboard", storyboard_type="invalid")

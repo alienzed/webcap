@@ -280,3 +280,24 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .test-references-tag small{opacity:.7;margin-left:4px}
 .test-references-screen .epoch-finder-reference-tile img{height:225px}
 @media(max-width:850px){.test-references-screen .epoch-finder-layout{grid-template-columns:1fr}.test-references-screen .epoch-finder-reference-workspace .epoch-finder-reference-gallery{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}.test-references-screen .epoch-finder-reference-tile img{height:165px}}
+
+/* Analytics evidence hierarchy, responsive data surfaces, and traceable model preview. */
+#run-analytics-screen .epoch-finder-dashboard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+#run-analytics-screen .epoch-finder-dashboard>.epoch-finder-panel{min-width:0;margin:0}
+#run-analytics-screen .epoch-finder-dashboard>.epoch-finder-panel:nth-of-type(2),
+#run-analytics-screen .epoch-finder-dashboard>.epoch-finder-panel:nth-of-type(3){grid-column:1/-1}
+#run-analytics-screen .epoch-finder-dashboard>.epoch-finder-panel:nth-of-type(4){grid-column:1/-1;grid-row:1}
+#run-analytics-screen .epoch-finder-dashboard>.epoch-finder-panel:nth-of-type(5){grid-column:1/-1}
+#run-analytics-screen .epoch-finder-dashboard>p[role="alert"]{grid-column:1/-1}
+#run-analytics-screen .epoch-finder-dashboard h4{font-size:13px;margin:13px 0 6px}
+#run-analytics-screen .epoch-finder-run-choices{max-height:340px}
+#run-analytics-screen #run-analytics-chart{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px}
+#run-analytics-screen .run-analytics-chart{min-width:0;overflow:hidden}
+#run-analytics-screen .run-analytics-evidence-preview{white-space:pre-wrap;overflow:auto;max-height:270px;overflow-wrap:anywhere;padding:12px;border:1px solid var(--border-color,#384653);border-radius:8px;font-size:11px}
+#run-analytics-screen details summary{cursor:pointer;font-weight:650;padding:7px 0}
+#run-analytics-screen .run-analytics-table-wrap{max-height:60vh;overflow:auto}
+#run-analytics-screen #run-analytics-findings p{line-height:1.5;margin:7px 0}
+#run-analytics-screen .epoch-finder-error{font-size:12px}
+@media(max-width:1100px){#run-analytics-screen .epoch-finder-dashboard{grid-template-columns:1fr}
+#run-analytics-screen .epoch-finder-dashboard>.epoch-finder-panel{grid-column:1/-1!important}}
+@media(max-width:400px){.test-workspace-pane-switcher{flex-wrap:wrap}.test-workspace-pane-btn{flex:1 1 46%}}

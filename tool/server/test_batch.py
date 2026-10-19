@@ -179,8 +179,9 @@ def _run(batch):
             settings = dict(criteria.get("settings") or {})
             settings["seed"] = str(seed)
             named["settings"] = settings
-            name = str(criteria.get("name") or "Batch Test")[:110]
-            named["name"] = name + ((" " + str(index + 1) + "/" + str(batch["count"])) if batch["count"] > 1 else "")
+            # New Test sessions use their generated IDs; retain explicit names only for legacy callers.
+            name = str(criteria.get("name") or "")[:110]
+            named["name"] = name + ((" " + str(index + 1) + "/" + str(batch["count"])) if name and batch["count"] > 1 else "")
             try:
                 response = handle_request(folder, "test_enqueue", named)
                 session = str((response.get("job") or {}).get("id") or "")

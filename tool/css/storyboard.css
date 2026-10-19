@@ -3424,6 +3424,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -3534,6 +3535,8 @@
 .storyboard-story-heading-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
   min-width: 0;
 }
@@ -3562,16 +3565,13 @@
 #storyboard-story-show {
   flex: 0 0 auto;
 }
-@media (max-width: 980px) {
+/* The Scene column can be narrow even on a wide desktop when Story is visible. */
+@container (max-width: 780px) {
   .storyboard-scenes-heading {
     grid-template-columns: minmax(0, 1fr);
   }
   .storyboard-scenes-heading-actions {
     justify-self: start;
-  }
-  .storyboard-scenes-heading .storyboard-director-header {
-    grid-column: auto;
-    justify-self: auto;
   }
 }
 

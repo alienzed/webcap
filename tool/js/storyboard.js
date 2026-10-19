@@ -2591,13 +2591,13 @@
 
   function takeMediaUrl(storyId, sceneId, take) {
     var mediaPath = String(take && take.mediaPath ? take.mediaPath : '');
-    return '/fs/storyboard/media?story=' + encodeURIComponent(storyId) + '&path=' + encodeURIComponent(mediaPath);
+    return '/fs/storyboard/media?story=' + encodeURIComponent(storyId) + '&path=' + encodeURIComponent(mediaPath) + '&t=' + encodeURIComponent(String(take && take.mediaRefreshToken || ''));
   }
 
   function openStoryboardVideoClip(mediaPath) {
     if (!storyState.story) throw new Error('Open a Story before editing video.');
     var path = String(mediaPath || '');
-    if (!/\\.(mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(path)) {
+    if (!/\.(mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(path)) {
       throw new Error('Clip is only available for video Takes.');
     }
     if (typeof openVideoClipModal !== 'function') throw new Error('Clip editor is unavailable.');
@@ -3636,7 +3636,7 @@
         ratingHtml +
         (take.mediaPurged && take.generated ? '<button type="button" class="review-captions-btn" data-take-action="regenerate" data-take-id="' + escapeHtml(takeId) + '">Regenerate</button>' : '') +
         '<button type="button" class="review-captions-btn" data-take-action="select" data-take-id="' + escapeHtml(takeId) + '"' + (selected ? ' disabled' : '') + '>' + (selected ? 'Selected' : 'Select') + '</button>' +
-        (/\\.(mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(String(take.mediaPath || '')) ?
+        (/\.(mp4|webm|ogg|mov|mkv|avi|m4v|wmv|mpg|mpeg)$/i.test(String(take.mediaPath || '')) ?
           '<button type="button" class="review-captions-btn" data-take-clip="' + escapeHtml(takeId) + '">Open in Clip</button>' : '') +
       '</div>' +
       '<details class="storyboard-take-advanced">' +

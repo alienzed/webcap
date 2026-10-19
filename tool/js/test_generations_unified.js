@@ -59,9 +59,9 @@
       originalBuild.click();
     }
   }
-  function api() {
+  function api(limitOverride) {
     return fetch('/fs/epoch_finder', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{modelId:model,limit:pageSize,offset:loadedOffset,collectionId:perspective==='experiments'?selection:'',checkpoints:perspective==='checkpoints'?(checkpointSelection.size?Array.from(checkpointSelection):(selection?[selection]:[])):[]}})})
+      body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{modelId:model,limit:limitOverride || pageSize,offset:loadedOffset,collectionId:perspective==='experiments'?selection:'',checkpoints:perspective==='checkpoints'?(checkpointSelection.size?Array.from(checkpointSelection):(selection?[selection]:[])):[]}})})
       .then(function(response) { return response.json().then(function(data) {
         if (!response.ok || !data.ok) throw new Error(data.error || 'Could not load generated results.');
         return data;
@@ -69,9 +69,10 @@
   }
   function refresh() {
     var version = ++serial;
+    var priorCount = (payload.media || []).length;
     loadedOffset = 0;
-    text(el('description'), 'Loading first 48 results…');
-    return api().then(function(result) {
+    if (!priorCount) text(el('description'), 'Loading first 48 results…');
+    return api(Math.max(pageSize,priorCount)).then(function(result) {
       if (version !== serial) return;
       payload = result;
       renderList(); renderGallery();
@@ -129,8 +130,13 @@
       el(name).classList.toggle('active',active);
       el(name).setAttribute('aria-pressed',String(active));
     });
-    var host=el('list');host.replaceChildren();
-    collections().forEach(function(item) {
+    var host=el('list');
+    var options=collections();
+    var listSignature=JSON.stringify([perspective,selection,Array.from(checkpointSelection),options]);
+    if (host.dataset.renderSignature === listSignature) return;
+    host.dataset.renderSignature=listSignature;
+    host.replaceChildren();
+    options.forEach(function(item) {
       var btn=document.createElement('button');btn.type='button';btn.className='test-unified-item';
       btn.classList.toggle('active',item.id===selection || (perspective==='checkpoints' && checkpointSelection.has(item.id)));
       btn.textContent=label(item)+(item.status?' · '+item.status:'');

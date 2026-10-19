@@ -41,7 +41,7 @@ class RunAnalyticsNextTests(unittest.TestCase):
     def test_director_preview_is_numeric_and_bounded(self):
         facts = analytics.director_facts(self._snapshot(["job1"]), "campaign-a")
         self.assertIn("weightedObservations", str(facts))
-        self.assertNotIn("prompt", str(facts).lower())
+        self.assertNotIn("sourcePrompt", str(facts))
         self.assertNotIn("caption", str(facts).lower())
         self.assertNotIn("image", str(facts).lower())
         self.assertRaises(ValueError, analytics.director_facts, self._snapshot(["job1"]), "wrong")

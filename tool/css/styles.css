@@ -7415,3 +7415,24 @@ html[data-theme="dark"] iframe {
  .test-unified-builder > .test-generations-next-run,
  .test-unified-builder > .test-generations-staged-panel {grid-column:1;}
 }
+
+/* Focused Test launch evolution: native forms and separate Finder wizard remain owners. */
+.test-generations-launch-options {display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:8px 0 10px;}
+.test-generations-launch-options label {display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;}
+.test-generations-launch-options input[type=number] {width:64px;min-width:64px;padding:6px 7px;}
+.test-generations-launch-options input[type=checkbox] {width:auto;margin:0;}
+.test-generations-form-title {display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+#test-generations-campaign-mode {width:auto;min-width:0;font-size:11px;padding:5px 8px;}
+.epoch-finder-intro-actions {display:flex;gap:8px;align-items:center;}
+.run-analytics-epoch-media-dialog {width:min(1100px,95vw);max-width:95vw;max-height:90vh;min-height:400px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:18px 22px;}
+.run-analytics-epoch-media-dialog::backdrop {background:rgba(0,0,0,.7);}
+.run-analytics-epoch-media-head {display:flex;justify-content:space-between;gap:14px;align-items:center;border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:14px;}
+.run-analytics-epoch-media-head h3 {margin:0 0 4px;}
+.run-analytics-epoch-media-head p {margin:0;color:var(--muted);}
+.run-analytics-epoch-media-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+.run-analytics-epoch-media-card {min-width:0;padding:8px;border:1px solid var(--border);border-radius:9px;background:var(--panel-soft);}
+.run-analytics-epoch-media-card img,.run-analytics-epoch-media-card video {display:block;width:100%;height:auto;max-height:270px;object-fit:contain;background:#111;}
+.run-analytics-epoch-media-card p {font-size:12px;overflow-wrap:anywhere;}
+.run-analytics-epoch-media-card button,.run-analytics-epoch-media-card a {display:inline-block;font-size:12px;margin:5px 6px 5px 0;}
+#run-analytics-epoch-media-more {display:block;width:auto;margin:16px auto 0;}
+#run-analytics-epoch-media-more.hidden {display:none;}

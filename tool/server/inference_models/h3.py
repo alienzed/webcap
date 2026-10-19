@@ -185,6 +185,17 @@ def effective_input(workflow):
         "strengthClip": float(turbo.get("strength_clip", 1.0)),
     }]
 
+    assets = {}
+    for node_id, key, label in (
+        ("127", "unet_name", "diffusion"),
+        ("128", "clip_name", "textEncoder"),
+        ("119", "vae_name", "videoVae"),
+        ("120", "vae_name", "audioVae"),
+    ):
+        value = ((workflow.get(node_id) or {}).get("inputs") or {}).get(key)
+        if value:
+            assets[label] = str(value)
+
     return {
         "prompt": str(prompt_inputs.get("populated_text") or prompt_inputs.get("wildcard_text") or ""),
         "promptMode": str(prompt_inputs.get("mode") or ""),
@@ -194,6 +205,7 @@ def effective_input(workflow):
         "durationSeconds": duration.get("value"),
         "references": references,
         "requiredLoras": required_loras,
+        "assets": assets,
         "loras": loras,
     }
 

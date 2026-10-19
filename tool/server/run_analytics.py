@@ -259,8 +259,9 @@ def report_selected(folder_path, job_ids, session_name=""):
     campaigns_loaded = _campaigns(folder_path, scan_warnings)
     catalog = _catalog(folder_path, campaigns_loaded, scan_warnings)
     reports = [report(folder_path, item, session_name, campaigns_loaded, catalog) for item in job_ids]
+    session_paths = bench._session_directories(folder_path)
     for item in reports:
-        item["testCohorts"] = _test_cohorts(folder_path, item["jobId"], session_name)
+        item["testCohorts"] = _test_cohorts(folder_path, item["jobId"], session_name, session_paths)
         item["roundPoints"] = _round_trajectories(folder_path, item["jobId"], campaigns_loaded)
         item["warnings"].extend(scan_warnings)
     all_sessions = sorted({session for item in reports for session in item["availableSessions"]})
@@ -283,6 +284,7 @@ def report_selected(folder_path, job_ids, session_name=""):
         "coverage": {"runs": len(reports), "campaigns": len(unique_campaigns),
                      "testSessions": len({s for item in reports for s in item["sessions"]})},
         "warnings": sorted({warning for item in reports for warning in item["warnings"]}),
+        "findings": _findings({"reports": reports}, ""),
     }
 
 

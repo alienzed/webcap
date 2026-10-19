@@ -195,12 +195,15 @@
     el('new').classList.toggle('hidden',enabled);
   }
   function legacyMode(mode) {if(finderMounted)mountFinder(false);mountExistingControls(false);show(false);window.epochFinderShowMode(mode);}
-  el('explore').onclick=function(){builder(false);};
+  el('explore').onclick=function(){builder(false);if(folder)refresh();};
   el('build').onclick=function(){builder(true);};
   el('new').onclick=function(){builder(true);};
   el('experiments').onclick=function(){perspective='experiments';selection='';checkpointSelection.clear();renderList();renderGallery();};
   el('checkpoints').onclick=function(){perspective='checkpoints';selection='';checkpointSelection.clear();renderList();renderGallery();};
   el('reload').onclick=refresh;
+  window.addEventListener('webcap:test-preview-updated', function () {
+    if (!root.classList.contains('hidden') && el('builder').classList.contains('hidden')) refresh();
+  });
   el('legacy').onclick=function(){if(finderMounted)mountFinder(false);mountExistingControls(false);show(false);};
   el('normal').onclick=function(){legacyMode('tests');};
   el('finder').onclick=function(){mountExistingControls(false);mountFinder(true);};

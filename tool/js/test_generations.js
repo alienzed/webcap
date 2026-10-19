@@ -5224,6 +5224,20 @@
     });
     var activityButton = el('activity-test-btn');
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
+    function syncInlineLaunch() {
+      var count=Number(el('test-generations-inline-count').value);
+      var valid=Number.isInteger(count)&&count>=1&&count<=20;
+      var autoVl=el('test-generations-inline-auto-vl').checked;
+      el('test-generations-run-btn').textContent=!valid?'Run Tests':count>1?'Queue '+count+' sessions':autoVl?'Run Tests + VL':'Run Tests';
+      el('test-generations-inline-launch-summary').textContent=!valid?'Choose 1–20 sessions'
+        :count>1?count+' sessions · fresh seed each'+(autoVl?' · automatic VL':'')
+        :'1 session · selected seed'+(autoVl?' · automatic VL':'');
+    }
+    ['test-generations-inline-count','test-generations-inline-auto-vl'].forEach(function(id){
+      el(id).addEventListener('input',syncInlineLaunch);
+      el(id).addEventListener('change',syncInlineLaunch);
+    });
+    syncInlineLaunch();
     el('test-generations-run-btn').onclick = function () {
       var count = Number(el('test-generations-inline-count').value);
       if (!Number.isInteger(count) || count < 1 || count > 20)

@@ -1917,13 +1917,7 @@
                                     <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn hidden">← Scenes</button>
                                     <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
                                     <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Director Tools">Director Tools</button>
-                                    <div class="storyboard-director-header storyboard-director-model-tools">
-                                        <label for="storyboard-director-model">Director</label>
-                                        <select id="storyboard-director-model" aria-label="Storyboard Director model">
-                                            <option value="">Director unavailable</option>
-                                        </select>
-                                        <button id="storyboard-director-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
-                                    </div>
+
                                 </div>
                             </div>
                             <div id="storyboard-scene-progression" class="storyboard-scene-progression" aria-label="Scene progression"></div>
@@ -2320,6 +2314,13 @@
                     <button id="storyboard-director-tools-close" type="button" class="training-review-modal-close" aria-label="Close Director Tools">&times;</button>
                 </header>
                 <div class="keep-lora-content">
+                    <div class="keep-lora-field">
+                        <div class="storyboard-director-header storyboard-director-model-tools">
+                            <label for="storyboard-director-model">Director model</label>
+                            <select id="storyboard-director-model" aria-label="Storyboard Director model"><option value="">Director unavailable</option></select>
+                            <button id="storyboard-director-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
+                        </div>
+                    </div>
                     <div class="keep-lora-field">
                         <label for="storyboard-director-tools-preset">Preset</label>
                         <select id="storyboard-director-tools-preset">

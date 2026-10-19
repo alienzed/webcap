@@ -4723,6 +4723,8 @@
   // First Cut-style browser orchestration: accepted Test jobs and saved VL assessments
   // outlive this controller, which deliberately does not survive a tab reload.
   var testBatch = null;
+  var testBatchHistory = [];
+  var viewedTestBatch = null;
   var testBatchTimer = 0;
   var testBatchWake = null;
   var testBatchSort = 'vl';
@@ -4730,15 +4732,37 @@
 
   function renderTestBatch() {
     var card = el('test-generations-batch-summary');
-    card.classList.toggle('hidden', !testBatch || testBatch.dismissed || String(launchFolder) !== testBatch.folder);
-    if (!testBatch) return;
-    var batch = testBatch;
+    var availableBatches = [testBatch].concat(testBatchHistory).filter(Boolean).filter(function (entry) {
+      return entry.folder === String(launchFolder) && !entry.dismissed;
+    });
+    var batch = viewedTestBatch && availableBatches.indexOf(viewedTestBatch) !== -1
+      ? viewedTestBatch : availableBatches[0];
+    card.classList.toggle('hidden', !batch);
+    if (!batch) return;
     var startButton = el('test-generations-batch-start');
     if (!el('test-generations-batch-modal').classList.contains('hidden')) {
-      startButton.disabled = !!batch.active;
-      if (!batch.active) el('test-generations-batch-config-summary').textContent =
-        selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session';
+      startButton.disabled = !!(testBatch && testBatch.active);
+      openTestBatchDialogSummary();
     }
+    var historySelect = el('test-generations-batch-history');
+    var choices = availableBatches;
+    var existingOptions = Array.from(historySelect.options);
+    if (existingOptions.length !== choices.length || choices.some(function (entry, index) {
+      return !existingOptions[index] || existingOptions[index].value !== entry.activityId;
+    })) {
+      historySelect.replaceChildren();
+      choices.forEach(function (entry) {
+        var option = document.createElement('option');
+        option.value = entry.activityId;
+        historySelect.appendChild(option);
+      });
+    }
+    choices.forEach(function (entry, index) {
+      historySelect.options[index].textContent = (entry === testBatch ? 'Latest · ' : 'Earlier · ') +
+        new Date(entry.startedAt * 1000).toLocaleTimeString() + ' · ' + entry.phase;
+    });
+    if (historySelect.value !== batch.activityId) historySelect.value = batch.activityId;
+    historySelect.classList.toggle('hidden', choices.length < 2);
     el('test-generations-batch-heading').textContent = (batch.autoVl ? 'Batch Test + VL' : 'Batch Test') + ' · ' + batch.folder;
     var lines = [];
     lines.push(batch.phase + ' · ' + batch.sessions.length + '/' + batch.count + ' sessions submitted');
@@ -4747,33 +4771,35 @@
       lines.push(batch.evaluated + '/' + batch.previews + ' previews assessed successfully');
     }
     if (batch.detail) lines.push(batch.detail);
-    if (batch.errors.length) lines.push(batch.errors.length + ' error(s); see Console.');
+    if (batch.errors.length) lines.push(batch.errors.length + ' error(s) below; full details in Console.');
     el('test-generations-batch-progress').textContent = lines.join(' · ');
-    if (batch.active) {
-      var evaluatingOnly = batch.phase === 'Evaluating';
-      var completed = evaluatingOnly ? batch.evaluated : (batch.phase === 'Generating + VL' || batch.phase === 'Generating') ? batch.finished : batch.sessions.length;
-      var total = evaluatingOnly ? batch.previews : (batch.phase === 'Generating + VL' || batch.phase === 'Generating') ? batch.sessions.length : batch.count;
+    if (testBatch && testBatch.active) {
+      var activityBatch = testBatch;
+      var evaluatingOnly = activityBatch.phase === 'Evaluating';
+      var completed = evaluatingOnly ? activityBatch.evaluated : (activityBatch.phase === 'Generating + VL' || activityBatch.phase === 'Generating') ? activityBatch.finished : activityBatch.sessions.length;
+      var total = evaluatingOnly ? activityBatch.previews : (activityBatch.phase === 'Generating + VL' || activityBatch.phase === 'Generating') ? activityBatch.sessions.length : activityBatch.count;
       window.publishActivityProgress({
-        id: batch.activityId, kind: 'test-batch', lane: 'background', title: batch.autoVl ? 'Batch Test + VL' : 'Batch Test',
-        status: 'running', phase: batch.phase, detail: batch.folder + (batch.detail ? ' · ' + batch.detail : ''),
+        id: activityBatch.activityId, kind: 'test-batch', lane: 'background', title: activityBatch.autoVl ? 'Batch Test + VL' : 'Batch Test',
+        status: 'running', phase: activityBatch.phase, detail: activityBatch.folder + (activityBatch.detail ? ' · ' + activityBatch.detail : ''),
         progress: total > 0 ? { completed: completed, total: total } : null,
-        progressLabel: total > 0 ? completed + ' / ' + total + (batch.phase === 'Evaluating' ? ' previews' : ' sessions') : '',
-        startedAt: batch.startedAt, folder: batch.folder, modelId: batch.criteria.modelId
+        progressLabel: total > 0 ? completed + ' / ' + total + (activityBatch.phase === 'Evaluating' ? ' previews' : ' sessions') : '',
+        startedAt: activityBatch.startedAt, folder: activityBatch.folder, modelId: activityBatch.criteria.modelId
       });
-    } else {
-      window.finishActivityProgress(batch.activityId, batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'completed');
-      if (!batch.activityFinished) {
-        batch.activityFinished = true;
-        window.recordActivityCompletion({ id: batch.activityId, kind: 'test-batch', lane: 'background',
-          title: batch.autoVl ? 'Batch Test + VL' : 'Batch Test', status: batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'completed',
-          folder: batch.folder, modelId: batch.criteria.modelId, detail: batch.detail, finishedAt: Date.now() / 1000 });
+    } else if (testBatch && !testBatch.active) {
+      var completedBatch = testBatch;
+      window.finishActivityProgress(completedBatch.activityId, completedBatch.phase === 'Failed' ? 'failed' : completedBatch.phase === 'Stopped' ? 'stopped' : 'completed');
+      if (!completedBatch.activityFinished) {
+        completedBatch.activityFinished = true;
+        window.recordActivityCompletion({ id: completedBatch.activityId, kind: 'test-batch', lane: 'background',
+          title: completedBatch.autoVl ? 'Batch Test + VL' : 'Batch Test', status: completedBatch.phase === 'Failed' ? 'failed' : completedBatch.phase === 'Stopped' ? 'stopped' : 'completed',
+          folder: completedBatch.folder, modelId: completedBatch.criteria.modelId, detail: completedBatch.detail, finishedAt: Date.now() / 1000 });
       }
     }
-    el('test-generations-batch-stop').classList.toggle('hidden', !batch.active);
+    el('test-generations-batch-stop').classList.toggle('hidden', !batch.active || batch !== testBatch);
     el('test-generations-batch-dismiss').classList.toggle('hidden', batch.active);
     var resultHost = el('test-generations-batch-results');
-    resultHost.classList.toggle('hidden', !batch.scores.length && !batch.sessions.length);
-    if (!batch.scores.length && !batch.sessions.length) { resultHost.textContent = ''; return; }
+    resultHost.classList.toggle('hidden', !batch.scores.length && !batch.sessions.length && !batch.errors.length);
+    if (!batch.scores.length && !batch.sessions.length && !batch.errors.length) { resultHost.textContent = ''; return; }
     resultHost.classList.remove('hidden');
     var sessionsHost = resultHost.querySelector('[data-test-batch-sessions]');
     if (!sessionsHost) {
@@ -4806,6 +4832,26 @@
       }
       button.textContent = (index + 1) + '/' + batch.count + ' · ' + sessionLabel(session) + ' · ' + (status ? status.status || 'unknown' : 'queued');
     });
+    var errorsHost = resultHost.querySelector('[data-test-batch-errors]');
+    if (!errorsHost) {
+      errorsHost = document.createElement('details');
+      errorsHost.dataset.testBatchErrors = '';
+      resultHost.appendChild(errorsHost);
+    }
+    var wasExpanded = errorsHost.open;
+    errorsHost.replaceChildren();
+    errorsHost.classList.toggle('hidden', !batch.errors.length);
+    if (batch.errors.length) {
+      var summary = document.createElement('summary');
+      summary.textContent = 'Errors (' + batch.errors.length + ')';
+      errorsHost.appendChild(summary);
+      batch.errors.forEach(function (error) {
+        var line = document.createElement('p');
+        line.textContent = error;
+        errorsHost.appendChild(line);
+      });
+    }
+    errorsHost.open = wasExpanded;
     var previousTable = resultHost.querySelector('table');
     if (previousTable) previousTable.remove();
     if (!batch.scores.length) return;
@@ -5078,7 +5124,10 @@
       finished: 0, previews: 0, evaluated: 0, errors: [], scores: [],
       phase: 'Preparing', detail: '', vlJobId: '', scheduledSessions: new Set(), evaluationQueue: Promise.resolve()
     };
+    if (testBatch) testBatchHistory.unshift(testBatch);
+    if (testBatchHistory.length > 8) testBatchHistory.length = 8;
     testBatch = batch;
+    viewedTestBatch = null;
     el('test-generations-batch-modal').classList.add('hidden');
     el('test-generations-batch-modal').setAttribute('aria-hidden', 'true');
     renderTestBatch();
@@ -5165,14 +5214,25 @@
     });
   }
 
+  function openTestBatchDialogSummary() {
+    var count = el('test-generations-batch-count');
+    var activeBatch = testBatch && testBatch.active;
+    var candidates = selectedCandidateFiles().length;
+    var totalRenders = candidates + (el('test-generations-base-include').checked ? 1 : 0);
+    var workload = Number(count.value || 5);
+    el('test-generations-batch-config-summary').textContent = activeBatch
+      ? 'A Test batch is already running for ' + testBatch.folder + '. Stop or finish that batch before starting another.'
+      : candidates + ' candidates · ' + workload + ' sessions · up to ' + (workload * totalRenders) + ' renders' +
+        (el('test-generations-batch-auto-vl').checked ? ' · up to ' + (workload * totalRenders) + ' VL assessments' : '') +
+        ' · current prompt/settings · fresh seed per session';
+  }
+
   function openTestBatchDialog() {
     var modal = el('test-generations-batch-modal');
     var count = el('test-generations-batch-count');
     var activeBatch = testBatch && testBatch.active;
     count.value = '5';
-    el('test-generations-batch-config-summary').textContent = activeBatch
-      ? 'A Test batch is already running for ' + testBatch.folder + '. Stop or finish that batch before starting another.'
-      : selectedCandidateFiles().length + ' candidates · current prompt/settings · new seed per session';
+    openTestBatchDialogSummary();
     el('test-generations-batch-start').disabled = !!activeBatch;
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
@@ -5397,6 +5457,19 @@
     if (activityButton) activityButton.oncontextmenu = openTestBenchActivityMenu;
     el('test-generations-run-btn').onclick = startRun;
     el('test-generations-batch-btn').onclick = openTestBatchDialog;
+    el('test-generations-batch-history').onchange = function () {
+      var id = this.value;
+      viewedTestBatch = [testBatch].concat(testBatchHistory).find(function (entry) { return entry && entry.activityId === id; }) || null;
+      if (viewedTestBatch === testBatch) viewedTestBatch = null;
+      renderTestBatch();
+    };
+    ['test-generations-batch-count', 'test-generations-batch-auto-vl'].forEach(function (id) {
+      el(id).addEventListener('change', function () {
+        if (!el('test-generations-batch-modal').classList.contains('hidden')) {
+          openTestBatchDialogSummary();
+        }
+      });
+    });
     el('test-generations-batch-close').onclick = closeTestBatchDialog;
     el('test-generations-batch-cancel').onclick = closeTestBatchDialog;
     el('test-generations-batch-modal').onclick = function (event) { if (event.target === this) closeTestBatchDialog(); };
@@ -5408,14 +5481,17 @@
       try { runTestBatch(count); } catch (err) { showError(err); }
     };
     el('test-generations-batch-stop').onclick = stopTestBatch;
-    el('test-generations-batch-dismiss').onclick = function () { if (testBatch) { testBatch.dismissed = true; renderTestBatch(); } };
+    el('test-generations-batch-dismiss').onclick = function () {
+      var batch = viewedTestBatch || testBatch;
+      if (batch) { batch.dismissed = true; viewedTestBatch = null; renderTestBatch(); }
+    };
     el('test-generations-batch-results').onclick = function (event) {
       var sort = event.target.closest('[data-test-batch-sort]');
       if (sort) { testBatchSort = sort.dataset.testBatchSort; renderTestBatch(); return; }
       var open = event.target.closest('[data-test-batch-session]');
       if (open && testBatch) {
         pendingActivitySession = open.dataset.testBatchSession;
-        openTestBenchForSetFolder(testBatch.folder);
+        openTestBenchForSetFolder((viewedTestBatch || testBatch).folder);
       }
     };
     el('test-generations-ask-vl').onclick = function () {

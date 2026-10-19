@@ -1695,3 +1695,21 @@ def test_batch_stop_releases_polling_wait_and_session_navigation_is_always_visib
     assert "sessionsHost.querySelectorAll('[data-test-batch-session]')" in script
     assessment = script.split("function testBatchEvaluateSession(batch, session)", 1)[1].split("function runTestBatch(count)", 1)[0]
     assert assessment.index("batch.evaluated += 1;") < assessment.index("testBatchError(batch, err, session + ' · ' + file)")
+
+
+def test_batch_ux_has_live_workload_summary_and_recent_sessions():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    assert "function openTestBatchDialogSummary()" in script
+    assert "workload * totalRenders" in script
+    assert "test-generations-batch-history" in html
+    assert "testBatchHistory.unshift(testBatch)" in script
+    assert "viewedTestBatch || testBatch" in script
+
+
+def test_batch_ux_surfaces_failures_and_keeps_live_activity_on_history_view():
+    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    assert "data-test-batch-errors" in script
+    assert "batch.errors.forEach(function (error)" in script
+    assert "var activityBatch = testBatch;" in script
+    assert "id: activityBatch.activityId" in script

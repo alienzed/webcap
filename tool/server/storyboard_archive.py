@@ -56,8 +56,6 @@ def _archive_plan(story_id, story):
         if not take.get("generated"):
             imported_count += 1
             continue  # Imported media cannot be regenerated from prompts.
-        if take.get("mediaPurged"):
-            continue
         if media_path in reference_paths:
             kept_generated_count += 1
             continue
@@ -105,13 +103,14 @@ def archive_story(story_id):
         reclaimed = 0
         for item in plan["candidates"].values():
             path = item["path"]
+            for take in item["takes"]:
+                take["mediaPurged"] = True
+                if not take.get("mediaPurgedAt"):
+                    take["mediaPurgedAt"] = _utc_now()
+            _write_json_atomic(_story_path(story_id), story)
             if path is not None:
                 path.unlink()
                 reclaimed += item["size"]
-            for take in item["takes"]:
-                take["mediaPurged"] = True
-                take["mediaPurgedAt"] = _utc_now()
-            _write_json_atomic(_story_path(story_id), story)
         story["status"] = "archived"
         story["mediaArchivedAt"] = _utc_now()
         story["updatedAt"] = story["mediaArchivedAt"]

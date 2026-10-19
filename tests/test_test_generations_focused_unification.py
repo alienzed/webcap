@@ -47,6 +47,9 @@ def test_epoch_media_is_explicitly_scoped_and_bounded():
     assert 'checkpoint_ids and source_job + ":" + str(epoch)' in server
     assert "window.openTestBenchAnalyticsSession" in js
     assert "window.epochFinderInspectCampaign" in js
+    test_js = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    assert "data-test-epoch-media-job" in test_js
+    assert "runAnalyticsViewEpoch" in test_js
     assert 'el(\'epoch-media-dialog\').close()' in js
 
 

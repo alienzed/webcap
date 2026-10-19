@@ -232,6 +232,7 @@
     var back=epochMediaReturnMode;
     epochMediaSerial++;
     epochMediaScope=null;
+    epochMediaLoading=false;
     el('epoch-media-dialog').close();
     el('epoch-media-grid').replaceChildren();
     el('epoch-media-more').classList.add('hidden');
@@ -296,6 +297,7 @@
     el('epoch-media-close').textContent=epochMediaReturnMode==='finder'?'← Back to Campaign':epochMediaReturnMode==='tests'?'← Back to Test results':'← Back to Analytics';
     window.epochFinderShowMode('analytics');
     epochMediaSerial++;
+    epochMediaLoading=false;
     epochMediaScope={jobId:id,epoch:num};
     epochMediaOffset=0;
     el('epoch-media-title').textContent='Epoch '+num+' · combined generated results';
@@ -308,6 +310,9 @@
     if(!epochMediaScope)return;
     epochMediaSerial++;
     epochMediaScope=null;
+    epochMediaLoading=false;
+    el('epoch-media-grid').replaceChildren();
+    el('epoch-media-more').classList.add('hidden');
     if(epochMediaReturnMode==='finder'||epochMediaReturnMode==='tests')window.epochFinderShowMode(epochMediaReturnMode);
   });
   el('table').onclick=function(event){

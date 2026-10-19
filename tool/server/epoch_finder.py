@@ -1094,6 +1094,7 @@ def workspace_gallery(folder_path, model_id=""):
                 "id": "test:" + session_name + ":" + media_file,
                 "source": "test", "session": session_name,
                 "collectionId": "test:" + session_name, "mediaFile": media_file,
+                "mediaAvailable": (directory / media_file).is_file() and not (directory / media_file).is_symlink(),
                 "mediaKind": result.get("mediaKind") or visible.get("mediaKind") or "",
                 "modelId": recorded_model, "jobId": source_job, "epoch": epoch,
                 "runName": provenance.get("sourceRunName") or "",

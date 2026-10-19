@@ -1362,7 +1362,7 @@ list_models.last_warnings = []
 
 
 
-def _assessment_signal(model_ref):
+def _assessment_signal(model_ref, thinking_by_ref=None):
     from .director_model_calibration import get_report
 
     report = get_report(model_ref)
@@ -1382,12 +1382,8 @@ def _assessment_signal(model_ref):
                and health in {"healthy", "limited"} and 0 < coherent_output < 8192)
     thinking = report.get("thinking") is True
     # Unified Model Assessment is authoritative when it has a completed thinking probe.
-    from .model_lab import capability_run_summaries
-    for run in capability_run_summaries():
-        probe = ((run.get("models") or {}).get(model_ref) or {}).get("director_thinking")
-        if probe and probe.get("status") in {"completed", "failed"}:
-            thinking = probe.get("supported") is True
-            break
+    if thinking_by_ref is not None and model_ref in thinking_by_ref:
+        thinking = thinking_by_ref[model_ref]
     return {
         "status": str(report.get("status") or ""),
         "health": health,
@@ -1408,9 +1404,16 @@ def _assessment_signal(model_ref):
 
 
 def _attach_assessment_signals(models):
+    from .model_lab import capability_run_summaries
+    thinking_by_ref = {}
+    for run in capability_run_summaries():
+        for ref, tests in (run.get("models") or {}).items():
+            probe = (tests or {}).get("director_thinking")
+            if ref not in thinking_by_ref and probe and probe.get("status") in {"completed", "failed"}:
+                thinking_by_ref[ref] = probe.get("supported") is True
     for model in models:
         model_ref = str(model.get("id") or "").strip()
-        signal = _assessment_signal(model_ref)
+        signal = _assessment_signal(model_ref, thinking_by_ref)
         if signal is not None:
             model["assessment"] = signal
     return models

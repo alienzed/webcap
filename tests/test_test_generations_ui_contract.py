@@ -1612,7 +1612,7 @@ def test_browser_test_batch_is_navigation_independent_and_uses_existing_queues()
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
     assert "function runTestBatch(count)" in script
     assert "function testBatchPoll(batch)" in script
-    assert "function testBatchEvaluate(batch)" in script
+    assert "function testBatchEvaluateSession(batch, session)" in script
     assert "function stopTestBatch()" in script
     assert "requestForFolder(batch.folder, 'test_enqueue', sessionCriteria)" in script
     assert "requestForFolder(batch.folder, 'test_open_session', { session: session })" in script
@@ -1629,8 +1629,8 @@ def test_browser_test_batch_is_navigation_independent_and_uses_existing_queues()
     assert "stopTestBatch();" not in script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
     assert "test-generations-batch-divider" in html
     assert 'id="test-generations-batch-modal"' in html
-    assert 'id="test-generations-batch-card"' in html
-    assert ".test-generations-batch-card" in css
+    assert 'id="test-generations-batch-summary"' in html
+    assert ".test-generations-batch-summary" in css
     assert "window.localStorage" not in script
 
 
@@ -1692,5 +1692,6 @@ def test_batch_stop_releases_polling_wait_and_session_navigation_is_always_visib
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     assert "if (testBatchWake) { var wake = testBatchWake; testBatchWake = null; wake(); }" in script
     assert "button.dataset.testBatchSession = session;" in script
+    assert "sessionsHost.querySelectorAll('[data-test-batch-session]')" in script
     assessment = script.split("function testBatchEvaluateSession(batch, session)", 1)[1].split("function runTestBatch(count)", 1)[0]
     assert assessment.index("batch.evaluated += 1;") < assessment.index("testBatchError(batch, err, session + ' · ' + file)")

@@ -862,8 +862,6 @@ def add_scene(story_id, payload=None):
 @_serialized_mutation
 def apply_concept_expansion(story_id, expanded_concept):
     story = load_story(story_id)
-    if isinstance(story.get("previousConcept"), str):
-        raise ValueError("Story concept already expanded. Restore the original concept before expanding again.")
     expanded = str(expanded_concept or "").strip()
     if not expanded:
         raise ValueError("Expanded Story concept is empty.")

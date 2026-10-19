@@ -13,7 +13,7 @@ const html = `<!doctype html><html><body>
   <button data-test-generations-perspective="explore"></button>
   <div class="test-generations-controls">
    <section class="test-generations-next-run" id="real-test-form"><input id="test-generations-prompt"></section>
-   <details id="test-generations-batch-summary"></details>
+   
    <div id="test-generations-status"></div><div id="test-generations-error"></div>
    <section><div class="test-generations-staged-panel" id="real-candidates"></div></section>
   </div>

@@ -7370,3 +7370,22 @@ html[data-theme="dark"] iframe {
 /* The expanded builder occupies both center and inspector real estate. */
 .test-unified-workspace.test-unified-building {grid-template-columns:minmax(210px,260px) minmax(0,1fr);}
 @media(max-width:950px) {.test-unified-workspace.test-unified-building {grid-template-columns:185px minmax(0,1fr);}}
+
+/* Gallery-first mockup proportions: readable imagery, retained inspector, bounded controls. */
+.test-unified-workspace {grid-template-columns:232px minmax(0,1fr) 304px;}
+.test-unified-rail {padding:16px 12px;}
+.test-unified-main {background:var(--bg);}
+.test-unified-gallery {grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:14px;padding:20px;align-content:start;}
+.test-unified-card {background:var(--panel);padding:0;overflow:hidden;border-radius:10px;}
+.test-unified-card img,.test-unified-card video {aspect-ratio:16/9;object-fit:contain;border-radius:0;}
+.test-unified-card span {font-size:12px;padding:8px 10px;}
+.test-unified-load-more {grid-column:1/-1;width:auto;justify-self:center;margin:16px;}
+.test-unified-list {max-height:none;flex:1 1 auto;min-height:0;overflow-y:auto;}
+.test-unified-rail {display:flex;flex-direction:column;}
+.test-unified-switch button {width:auto;min-width:0;}
+.test-unified-builder {padding:18px 24px 32px;max-width:1500px;width:100%;margin:0 auto;}
+.test-unified-builder .test-generations-next-run {max-width:100%;margin-top:12px;}
+.test-unified-builder .test-generations-staged-panel {max-width:100%;}
+.test-unified-builder .test-generations-staged-list {max-height:360px;overflow-y:auto;}
+.test-unified-builder-actions button {width:auto;flex:0 1 auto;}
+@media(max-width:1100px) {.test-unified-workspace{grid-template-columns:196px minmax(0,1fr) 260px;}.test-unified-gallery{grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));}}

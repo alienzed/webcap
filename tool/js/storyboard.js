@@ -284,6 +284,19 @@
   }
 
   var atmosphereProposal = null;
+  function renderAtmosphereProposal() {
+    var panel = el('storyboard-style-proposal');
+    var visible = !!(atmosphereProposal && storyState.story &&
+      storyState.story.id === atmosphereProposal.storyId);
+    panel.classList.toggle('hidden', !visible);
+    if (!visible) return;
+    el('storyboard-style-proposal-text').textContent = atmosphereProposal.text;
+    var sourceChanged = el('storyboard-story-style').value.trim() !== atmosphereProposal.source;
+    el('storyboard-style-apply').textContent = sourceChanged
+      ? 'Apply suggestion (replaces current text)'
+      : 'Apply suggestion';
+  }
+
   function interpretAtmosphere() {
     if (!storyState.story) return;
     var input = el('storyboard-story-style').value.trim();
@@ -294,7 +307,7 @@
     var target = {kind:'concept', storyId:storyId};
     if (directorTargetBlocked(target)) return reportError(new Error('That Director target already has pending work.'));
     atmosphereProposal = null;
-    el('storyboard-style-proposal').classList.add('hidden');
+    renderAtmosphereProposal();
     var button = el('storyboard-interpret-style-btn');
     button.disabled = true;
     setDirectorPending(target, true);
@@ -304,13 +317,10 @@
     }).then(function (result) {
       // Consume completed work even when the user navigated away during execution.
       return consumeDirectorJob(result.jobId).then(function () {
-        if (!storyState.story || storyState.story.id !== storyId ||
-            el('storyboard-story-style').value.trim() !== input) return;
         var suggestion = String(result.result || '').trim();
         if (!suggestion) throw new Error('Director returned an empty interpretation.');
         atmosphereProposal = {text:suggestion, source:input, storyId:storyId};
-        el('storyboard-style-proposal-text').textContent = suggestion;
-        el('storyboard-style-proposal').classList.remove('hidden');
+        renderAtmosphereProposal();
       });
     }).catch(reportError).finally(function () {
       button.disabled = false;
@@ -4142,6 +4152,7 @@
     el('storyboard-story-concept').value = storyState.story.concept || '';
     el('storyboard-story-style').value = storyState.story.style || '';
     renderStoryStylePresetSelector();
+    renderAtmosphereProposal();
     renderStoryInvariants();
     el('storyboard-story-status').value = storyState.story.status || 'active';
     var targetSceneCount = storyState.story.targetSceneCount;
@@ -6041,24 +6052,22 @@
     el('storyboard-interpret-style-btn').onclick = interpretAtmosphere;
     el('storyboard-style-dismiss').onclick = function () {
       atmosphereProposal = null;
-      el('storyboard-style-proposal').classList.add('hidden');
+      renderAtmosphereProposal();
     };
     el('storyboard-style-apply').onclick = function () {
       if (!atmosphereProposal || !storyState.story ||
-          storyState.story.id !== atmosphereProposal.storyId ||
-          el('storyboard-story-style').value.trim() !== atmosphereProposal.source) {
-        reportError(new Error('Visual / Atmosphere changed since the Director proposal. Interpret again.'));
+          storyState.story.id !== atmosphereProposal.storyId) {
+        reportError(new Error('Director suggestion is not available for this Story.'));
         return;
       }
       el('storyboard-story-style').value = atmosphereProposal.text;
       atmosphereProposal = null;
-      el('storyboard-style-proposal').classList.add('hidden');
+      renderAtmosphereProposal();
       renderStoryStylePresetSelector();
       scheduleStorySave();
     };
     el('storyboard-story-style').addEventListener('input', function () {
-      atmosphereProposal = null;
-      el('storyboard-style-proposal').classList.add('hidden');
+      renderAtmosphereProposal();
       renderStoryStylePresetSelector();
       scheduleStorySave();
     });

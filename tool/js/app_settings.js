@@ -47,6 +47,8 @@ function normalizeAppConfigShape(cfg) {
   if (!out.caption_assist || typeof out.caption_assist !== 'object') out.caption_assist = {};
   if (!out.storyboard || typeof out.storyboard !== 'object') out.storyboard = {};
   if (!out.storyboard.director || typeof out.storyboard.director !== 'object') out.storyboard.director = {};
+  if (!out.generation_model_guidance || typeof out.generation_model_guidance !== 'object' || Array.isArray(out.generation_model_guidance)) out.generation_model_guidance = {};
+  ['minimax_h3', 'krea2_raw'].forEach(function (id) { out.generation_model_guidance[id] = String(out.generation_model_guidance[id] || ''); });
   if (!out.requirements || typeof out.requirements !== 'object') out.requirements = {};
   if (typeof out.debug !== 'boolean') out.debug = !!out.debug;
   out.theme = String(out.theme || '').toLowerCase() === 'dark' ? 'dark' : 'light';
@@ -337,6 +339,7 @@ function fillAppSettingsForm(cfg) {
     var el = ui[profile.uiKey];
     if (el) el.checked = c.training.enabled_profiles.indexOf(profile.id) !== -1;
   });
+  ['minimax_h3', 'krea2_raw'].forEach(function (id) { var el = document.getElementById('app-settings-model-guidance-' + id); if (el) el.value = c.generation_model_guidance[id] || ''; });
   renderAppSettingsDirectorEndpoints(c.storyboard.director.remote_endpoints || []);
   if (ui.appSettingsStoryboardLlamaServerEl) ui.appSettingsStoryboardLlamaServerEl.value = c.storyboard.director.llama_server || '';
   if (ui.appSettingsStoryboardPortEl) ui.appSettingsStoryboardPortEl.value = c.storyboard.director.port;
@@ -378,6 +381,7 @@ function collectAppSettingsFormConfig() {
     var el = ui[profile.uiKey];
     return !!(el && el.checked);
   }).map(function (profile) { return profile.id; });
+  ['minimax_h3', 'krea2_raw'].forEach(function (id) { var el = document.getElementById('app-settings-model-guidance-' + id); if (el) base.generation_model_guidance[id] = el.value; });
   base.storyboard.director.mode = 'local';
   base.storyboard.director.endpoint = '';
   base.storyboard.director.remote_endpoints = collectAppSettingsDirectorEndpoints();
@@ -818,6 +822,7 @@ function wireAppSettingsUi() {
     ui.appSettingsEnableMediaPipeAnalysisEl,
     ui.appSettingsDebugEl,
   ];
+  ['minimax_h3', 'krea2_raw'].forEach(function (id) { syncFields.push(document.getElementById('app-settings-model-guidance-' + id)); });
   syncFields.forEach(function (el) {
     if (!el) return;
     el.addEventListener('input', syncAppSettingsJsonFromForm);

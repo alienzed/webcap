@@ -147,7 +147,7 @@
       el('run-choices').innerHTML=runs.map(function(run){
         var sequence = run.runSequence != null && String(run.runSequence).trim() ? 'Run ' + run.runSequence : '';
         var label = String(run.label || '').trim();
-        var identity = [sequence, label && label.toLowerCase() !== 'run train' ? label : ''].filter(Boolean).join(' · ');
+        var identity = [sequence, label && label.toLowerCase() !== 'run train' && label !== sequence ? label : ''].filter(Boolean).join(' · ');
         if (!identity) identity = label || 'Training run';
         var shortId = String(run.jobId || '').slice(-8);
         var details = [run.stage || run.modelId || run.source, (run.savedEpochs || []).length + ' checkpoints',

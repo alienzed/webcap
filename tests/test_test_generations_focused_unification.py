@@ -20,8 +20,10 @@ def test_native_regular_and_campaign_launch_controls():
         assert 'id="' + key + '"' in html, key
     assert "test-generations-base-include" in js  # dynamically rendered by native candidate controller
     assert "if (count === 1 && !autoVl) return startRun();" in js
-    assert "runTestBatch(count)" in js
+    assert "runTestBatch(count, true)" in js
     assert "el('test-generations-batch-auto-vl').checked = autoVl;" in js
+    assert "preserveSingleSeed: !!preserveSingleSeed && count === 1" in js
+    assert "preserveSingleSeed" in (ROOT / "tool/server/test_batch.py").read_text(encoding="utf-8")
     assert "window.epochFinderShowMode('finder')" in js
     assert "epoch-finder-back-to-tests" in finder
     assert "showMode('tests')" in finder

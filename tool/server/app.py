@@ -54,7 +54,7 @@ from .epoch_test_bench import (
     supported_models as test_generations_supported_models,
     browse_keep_lora_destination as test_generations_browse_keep_lora_destination,
 )
-from .epoch_finder import command as epoch_finder_command, frame_path as epoch_finder_frame_path
+from .epoch_finder import command as epoch_finder_command, frame_path as epoch_finder_frame_path, candidate_runs as discover_test_candidate_runs
 from .epoch_finder_plan import build_proposal as epoch_finder_build_proposal
 from .epoch_reference import reference_vocabulary as epoch_reference_vocabulary
 from .training_review import discover_saved_initializers, prepare_training_review, update_training_review
@@ -2484,11 +2484,32 @@ def test_generations_route():
         )
         if str(data.get("operation") or "").strip() == "test_prepare":
             runs = payload.get("candidateRuns") if isinstance(payload.get("candidateRuns"), list) else []
-            payload["candidateRuns"] = [
+            available = [
                 run for run in runs
                 if isinstance(run, dict)
                 and training_runner_candidate_run_available(run.get("folder"), run.get("jobId"))
             ]
+            # Staged-LoRA provenance is not the complete run catalog: also
+            # offer same-Set training runs with no staged Test candidates.
+            if payload.get("modelId"):
+                seen = {(run["folder"], run["jobId"]) for run in available}
+                try:
+                    discovered = discover_test_candidate_runs(folder_path)
+                except (OSError, RuntimeError) as exc:
+                    # Run discovery is optional to preparing Test candidates.
+                    # A broken Training queue must not disable normal Test work.
+                    warning = "Could not discover additional Training runs: " + str(exc)
+                    app.logger.warning("TEST RUN DISCOVERY FAILED: %s", exc)
+                    payload.setdefault("warnings", []).append(warning)
+                    discovered = []
+                for run in discovered:
+                    if run["modelId"] != payload["modelId"]:
+                        continue
+                    key = (run["folder"], run["jobId"])
+                    if key not in seen:
+                        available.append(run)
+                        seen.add(key)
+            payload["candidateRuns"] = available
         return jsonify({"ok": True, **payload})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400

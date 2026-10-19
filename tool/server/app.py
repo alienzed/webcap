@@ -1848,6 +1848,22 @@ def storyboard_director_route():
                 )
             return jsonify({"ok": True, "story": applied_story, "scene": applied_scene})
 
+        if operation == "check_coherence_sequence":
+            scene_ids = list(story.get("sceneOrder") or [])
+            if not scene_ids:
+                raise ValueError("Develop Scenes before checking coherence.")
+            if not model_id:
+                raise ValueError("Choose a Director model.")
+            job = enqueue_llm(
+                "storyboard", model_id, {"operation": operation},
+                context={
+                    "storyId": story_id, "operation": operation,
+                    "sceneIds": scene_ids, "thinking": data.get("thinking") is True,
+                },
+                label="Story: Check Coherence",
+            )
+            return jsonify({"ok": True, "job": job}), 202
+
         if operation == "revise_scenes_sequence":
             if not instruction:
                 raise ValueError("Enter a Revise Scenes instruction.")

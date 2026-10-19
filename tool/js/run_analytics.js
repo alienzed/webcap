@@ -47,7 +47,7 @@
       return '<option value="'+esc(c.id)+'">'+esc(c.name+' · '+c.id.slice(0,6))+'</option>';
     }).join('');
     if(campaigns.some(function(c){return c.id===old;})) el('campaign').value=old;
-    else el('campaign').value='';
+    else el('campaign').value=campaigns.length===1?campaigns[0].id:'';
     var previousSession=el('session').value;
     el('session').innerHTML='<option value="">All sessions (descriptive only)</option>'+(report.availableSessions||[]).map(function(name){return '<option value="'+esc(name)+'">'+esc(name)+'</option>';}).join('');
     if((report.availableSessions||[]).includes(previousSession))el('session').value=previousSession;

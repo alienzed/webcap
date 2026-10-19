@@ -595,6 +595,7 @@ def _normalize_story(payload, existing=None, story_id=None):
         "repairComplete": bool(payload.get("repairComplete", current.get("repairComplete", False))),
         "invariants": _normalize_story_invariants(payload.get("invariants", current.get("invariants", []))),
         "loras": _normalize_loras(payload.get("loras", current.get("loras", [])), allow_enabled=True),
+        "directorLoraPlanning": payload.get("directorLoraPlanning", current.get("directorLoraPlanning", False)) is True,
         "targetSceneCount": target_scene_count,
         "generationDefaults": generation_defaults,
         "tags": _normalize_tags(payload.get("tags", current.get("tags", []))),
@@ -721,6 +722,70 @@ def load_story(story_id):
         raise RuntimeError("Story metadata ID does not match its folder.")
     return story
 
+
+
+@_serialized_mutation
+def apply_lora_plan(story_id, expected_updated_at, story_wide, scenes):
+    """Atomically apply an explicitly approved LoRA plan, preserving other assignments."""
+    from .lora_library import catalogue
+    current = load_story(story_id)
+    if str(current.get("updatedAt") or "") != str(expected_updated_at or ""):
+        raise RuntimeError("Story changed during LoRA review; request fresh suggestions.")
+    if not current.get("directorLoraPlanning"):
+        raise ValueError("Director LoRA planning is disabled for this Story.")
+    if not isinstance(story_wide, list) or not isinstance(scenes, list):
+        raise ValueError("Invalid reviewed LoRA assignments.")
+    eligible = {item["name"] for item in catalogue() if item["stage"] == "h3" and item["enriched"]}
+
+    def verified(entries):
+        result = _normalize_loras(entries)
+        for item in result:
+            if item["name"] not in eligible:
+                raise ValueError("LoRA no longer available with enriched metadata: " + item["name"])
+        return result
+
+    updated = copy.deepcopy(current)
+    existing_story = _normalize_loras(updated.get("loras"), allow_enabled=True)
+    existing_map = {item["name"].casefold(): item for item in existing_story}
+    for entry in verified(story_wide):
+        key = entry["name"].casefold()
+        if key in existing_map:
+            existing_map[key].update({"strength": entry["strength"], "enabled": True})
+        else:
+            existing_story.append(entry)
+            existing_map[key] = entry
+    updated["loras"] = existing_story
+    seen_scenes = set()
+    for group in scenes:
+        if not isinstance(group, dict):
+            raise ValueError("Scene assignment must be an object.")
+        scene_id = str(group.get("sceneId") or "")
+        if scene_id in seen_scenes or scene_id not in updated.get("sceneOrder", []):
+            raise ValueError("Unknown or duplicate Scene in LoRA plan.")
+        seen_scenes.add(scene_id)
+        scene = updated["scenes"][scene_id]
+        existing = _normalize_loras(scene.get("loras"))
+        by_name = {item["name"].casefold(): item for item in existing}
+        overrides = _normalize_story_lora_overrides(scene.get("storyLoraOverrides"))
+        overrides_by_name = {item["name"].casefold(): item for item in overrides}
+        for entry in verified(group.get("assign") or []):
+            key = entry["name"].casefold()
+            if key in existing_map:
+                if key in overrides_by_name:
+                    overrides_by_name[key].update({"enabled": True, "strength": entry["strength"]})
+                else:
+                    overrides.append({"name": entry["name"], "strength": entry["strength"], "enabled": True})
+            elif key in by_name:
+                by_name[key]["strength"] = entry["strength"]
+            else:
+                existing.append(entry)
+                by_name[key] = entry
+        scene["loras"] = existing
+        scene["storyLoraOverrides"] = overrides
+        resolve_scene_loras(updated, scene)
+    updated["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), updated)
+    return updated
 
 @_serialized_mutation
 def update_story(story_id, payload):

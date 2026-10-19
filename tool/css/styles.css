@@ -7366,3 +7366,7 @@ html[data-theme="dark"] iframe {
 .test-unified-builder-actions button.active {border-color:var(--accent);font-weight:650;}
 
 .test-unified-switch button.active {background:var(--surface-raised,var(--border));border-color:var(--accent);font-weight:650;}
+
+/* The expanded builder occupies both center and inspector real estate. */
+.test-unified-workspace.test-unified-building {grid-template-columns:minmax(210px,260px) minmax(0,1fr);}
+@media(max-width:950px) {.test-unified-workspace.test-unified-building {grid-template-columns:185px minmax(0,1fr);}}

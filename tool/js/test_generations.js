@@ -4775,18 +4775,39 @@
     resultHost.classList.toggle('hidden', !batch.scores.length && !batch.sessions.length);
     if (!batch.scores.length && !batch.sessions.length) { resultHost.textContent = ''; return; }
     resultHost.classList.remove('hidden');
-    resultHost.innerHTML = '';
-    var sessionsHeading = document.createElement('div');
-    sessionsHeading.textContent = 'Sessions (' + batch.sessions.length + ')';
-    resultHost.appendChild(sessionsHeading);
+    var sessionsHost = resultHost.querySelector('[data-test-batch-sessions]');
+    if (!sessionsHost) {
+      resultHost.textContent = '';
+      sessionsHost = document.createElement('div');
+      sessionsHost.dataset.testBatchSessions = '';
+      resultHost.appendChild(sessionsHost);
+    }
+    var heading = sessionsHost.querySelector('[data-test-batch-sessions-heading]');
+    if (!heading) {
+      heading = document.createElement('div');
+      heading.dataset.testBatchSessionsHeading = '';
+      sessionsHost.appendChild(heading);
+    }
+    heading.textContent = 'Sessions (' + batch.sessions.length + ')';
+    var expected = new Set(batch.sessions);
+    sessionsHost.querySelectorAll('[data-test-batch-session]').forEach(function (button) {
+      if (!expected.has(button.dataset.testBatchSession)) button.remove();
+    });
     batch.sessions.forEach(function (session, index) {
       var status = batch.statuses[session];
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.dataset.testBatchSession = session;
+      var button = Array.from(sessionsHost.querySelectorAll('[data-test-batch-session]')).find(function (item) {
+        return item.dataset.testBatchSession === session;
+      });
+      if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.testBatchSession = session;
+        sessionsHost.appendChild(button);
+      }
       button.textContent = (index + 1) + '/' + batch.count + ' · ' + sessionLabel(session) + ' · ' + (status ? status.status || 'unknown' : 'queued');
-      resultHost.appendChild(button);
     });
+    var previousTable = resultHost.querySelector('table');
+    if (previousTable) previousTable.remove();
     if (!batch.scores.length) return;
     var rows = batch.scores.slice().sort(function (a, b) {
       if (testBatchSort === 'stars') return (b.starCount ? b.stars : -1) - (a.starCount ? a.stars : -1) || b.vl - a.vl;

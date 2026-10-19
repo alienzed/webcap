@@ -260,7 +260,7 @@
 
   function testVlScoreText(prefix, score) {
     return prefix + (score.count ? (' ' + Math.round(100 * score.matches / score.count) +
-      '% (' + testVlCreditText(score.matches) + '/' + score.count + ')') : ' — (0 counted)');
+      '% (' + testVlCreditText(score.matches) + '/' + testVlCreditText(score.count) + ' weighted)') : ' — (0 counted)');
   }
 
   function testVlCandidateScores(results) {
@@ -378,7 +378,7 @@
     epochLabel.textContent = epochScore && epochScore.count ?
       ('VL ' + Math.round(100 * epochScore.matches / epochScore.count) + '%') : '';
     epochLabel.title = epochLabel.textContent ?
-      'Epoch VL agreement · ' + epochScore.previews + ' preview(s), ' + epochScore.count + ' counted attributes' : '';
+      'Epoch VL agreement · ' + epochScore.previews + ' preview(s), ' + testVlCreditText(epochScore.count) + ' weighted attributes' : '';
     epochLabel.classList.toggle('hidden', !epochLabel.textContent);
 
     button.textContent = item ?
@@ -387,7 +387,7 @@
       var score = testVlScore(item.comparison, item.ignoredGroups);
       button.textContent = score.count ? 'VL ' + Math.round(100 * score.matches / score.count) + '%' : 'VL —';
       if (item.saveError) button.textContent += ' !';
-      button.title = (score.count ? (score.matches + '/' + score.count + ' counted attributes agree') : 'No counted attributes') +
+      button.title = (score.count ? (testVlCreditText(score.matches) + '/' + testVlCreditText(score.count) + ' weighted agreement') : 'No counted attributes') +
         (score.unclear ? ' · ' + score.unclear + ' unclear' : '') +
         (item.modelId ? ' · Model: ' + item.modelId : '') +
         (item.saveError ? ' · Not saved: ' + item.saveError : '') + ' · Open VL assessment';
@@ -469,7 +469,7 @@
         : '';
       label.classList.toggle('hidden', !label.textContent);
       label.title = score && score.count
-        ? score.matches + '/' + score.count + ' matched · ' + score.previews + ' preview(s), ' + score.count + ' counted attributes'
+        ? testVlCreditText(score.matches) + '/' + testVlCreditText(score.count) + ' weighted agreement · ' + score.previews + ' preview(s)'
         : '';
     });
     sortStagedCandidateRows();

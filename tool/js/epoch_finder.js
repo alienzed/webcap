@@ -1041,6 +1041,9 @@
       var matched = Object.entries(campaignState.candidateMap || {}).find(function (entry) {
         return entry[1].epoch === Number(sourceEpoch) && (!sourceJobId || entry[1].jobId === sourceJobId);
       });
+      if (sourceJobId && Object.keys(campaignState.candidateMap || {}).length && !matched) {
+        throw new Error('Source checkpoint is not present in this campaign.');
+      }
       inspectedEpoch = matched ? Number(matched[0]) : Number(sourceEpoch);
       inspectedFrame = 0; lastFrameKey = '';
       gallery(campaignState); inspectFrame(campaignState);

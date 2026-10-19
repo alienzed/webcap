@@ -142,3 +142,26 @@ def test_runs_menu_discovers_same_set_training_runs_without_staged_candidates(tm
     assert [(run["jobId"], run["runName"]) for run in response.get_json()["candidateRuns"]] == [
         ("run-staged", "Staged"), ("run-unstaged", "Unstaged"),
     ]
+
+
+def test_runs_menu_discovery_error_warns_without_blocking_test_prepare(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel: tmp_path / rel)
+    monkeypatch.setattr(app_module, "handle_epoch_test_bench_request", lambda *_args, **_kwargs: {
+        "modelId": "minimax_h3",
+        "files": ["candidate.safetensors"],
+        "candidateRuns": [{"folder": "sets/subject", "jobId": "run-staged"}],
+    })
+    monkeypatch.setattr(app_module, "training_runner_candidate_run_available", lambda *_args: True)
+    monkeypatch.setattr(
+        app_module, "discover_test_candidate_runs",
+        lambda _folder: (_ for _ in ()).throw(RuntimeError("Training queue unavailable")),
+    )
+
+    response = app_module.app.test_client().post("/fs/test_generations", json={
+        "folder": "sets/subject", "operation": "test_prepare",
+    })
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["files"] == ["candidate.safetensors"]
+    assert [run["jobId"] for run in payload["candidateRuns"]] == ["run-staged"]
+    assert "Training queue unavailable" in payload["warnings"][0]

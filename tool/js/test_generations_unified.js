@@ -104,7 +104,7 @@
       } else {var blank=document.createElement('span');blank.textContent=item.error || (item.framePruned?'Frame pruned':'No retained frame');card.appendChild(blank);}
       var title=document.createElement('span');title.textContent=(item.runName ? item.runName+' · ':'')+(item.epoch==null?'Unattributed':'Epoch '+item.epoch)+(item.rating?' · ★ '+item.rating:'');
       card.appendChild(title);card.classList.toggle('active',chosen===item.id);
-      card.addEventListener('click',function(){inspect(item);renderGallery();});host.appendChild(card);
+      card.addEventListener('click',function(){inspect(item);host.querySelectorAll('.test-unified-card').forEach(function(node){node.classList.toggle('active',node===card);});});host.appendChild(card);
     });
     if(!records.length) {var p=document.createElement('p');p.textContent='No recorded images for this selection.';host.appendChild(p);}
   }

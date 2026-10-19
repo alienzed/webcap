@@ -1829,6 +1829,25 @@ def storyboard_director_route():
                 "sceneCount": len(applied_story.get("sceneOrder") or []),
             })
 
+        if operation == "apply_coherence":
+            from .storyboard_store import apply_director_prompt
+            original = data.get("expectedPrompt")
+            revised = data.get("prompt")
+            if not scene_id or not isinstance(original, str) or not isinstance(revised, str) or not revised.strip():
+                raise ValueError("Check Coherence requires a Scene, original prompt, and revised prompt.")
+            if original == revised:
+                raise ValueError("Coherence review returned no changes to apply.")
+            with storyboard_mutation_lock:
+                if (llm_storyboard_target_busy(story_id, "scene-prompt", scene_id)
+                        or llm_storyboard_target_busy(story_id, "scenes")
+                        or llm_storyboard_target_busy(story_id, "repair")):
+                    raise ValueError("Wait for pending Director work before applying coherence changes.")
+                applied_story, applied_scene = apply_director_prompt(
+                    story_id, scene_id, revised, model_id=model_id,
+                    operation="refine_prompt", expected_prompt=original,
+                )
+            return jsonify({"ok": True, "story": applied_story, "scene": applied_scene})
+
         if operation == "revise_scenes_sequence":
             if not instruction:
                 raise ValueError("Enter a Revise Scenes instruction.")

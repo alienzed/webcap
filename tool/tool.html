@@ -2911,7 +2911,7 @@
                                 <button id="diagnostics-assessment-export" type="button" class="review-captions-btn">Export Results</button>
                                 <button id="diagnostics-assessment-import" type="button" class="review-captions-btn">Import Results</button>
                                 <input id="diagnostics-assessment-file" type="file" accept=".json,application/json" hidden>
-                                <label class="model-assessment-deep"><input id="diagnostics-assessment-deep" type="checkbox"> Deep Assessment <small>(16 Set samples, additional Director output probes)</small></label>
+                                <label class="model-assessment-deep"><input id="diagnostics-assessment-deep" type="checkbox"> Deep Assessment <small>(16 Set samples; Director long-form 4K, 8K and 16K probes — slower)</small></label>
                             </div>
                             <div id="diagnostics-assessment-activity" class="hidden" role="region" aria-label="Model Assessment progress"></div>
                             <div id="diagnostics-assessment-transfer" class="hidden" role="region" aria-label="Import assessment results">
@@ -2935,6 +2935,8 @@
                                 <button id="diagnostics-assessment-none" type="button" class="review-captions-btn">Select None</button>
                                 <span class="app-settings-help">Choose models below, then Run Selected Tests. Progress updates live; findings refresh when the run finishes.</span>
                             </div>
+                            <label class="model-assessment-judge">Optional quality judge <select id="diagnostics-assessment-judge-model" aria-label="Choose LLM judge model"><option value="">Choose judge model…</option></select></label>
+                            <span class="app-settings-help">Expand a completed Director model and choose Assess with LLM. Scores are advisory, not workflow qualifications.</span>
                             <label class="model-assessment-search">Filter models <input id="diagnostics-assessment-filter" type="search" placeholder="Model name, runtime or role"></label>
                             <div id="diagnostics-assessment-selection" class="app-settings-help" aria-live="polite">Select models below to prepare an assessment.</div>
                             <div id="diagnostics-assessment-summary" class="app-settings-help" aria-live="polite">Open this tab to load available findings.</div>

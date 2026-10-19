@@ -99,6 +99,15 @@ def _active_record(run_id):
 
 def _reconcile_interrupted(payload):
     run_id = str(payload.get("id") or "")
+    changed_reviews = False
+    for review in (payload.get("qualityReviews") or {}).values():
+        if isinstance(review, dict) and review.get("status") == "running" and not _active_record("quality:" + run_id):
+            review["status"] = "interrupted"
+            review["finishedAt"] = review.get("finishedAt") or _now_iso()
+            review["error"] = "Quality review interrupted by restart; run it again explicitly."
+            changed_reviews = True
+    if changed_reviews:
+        _write(_run_path(run_id), payload)
     if payload.get("status") != "running" or _active_record(run_id):
         return payload
 
@@ -162,10 +171,26 @@ def capability_run_summaries():
             usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
             rate = timings.get("predicted_per_second")
             tokens = usage.get("completion_tokens") or timings.get("predicted_n")
+            if not rate and isinstance(tokens, (int, float)) and tokens > 0:
+                seconds = result.get("requestSeconds")
+                if not isinstance(seconds, (int, float)) or seconds <= 0:
+                    try:
+                        seconds = (datetime.fromisoformat(attempt["finishedAt"].replace("Z", "+00:00")) -
+                                   datetime.fromisoformat(attempt["startedAt"].replace("Z", "+00:00"))).total_seconds()
+                    except (KeyError, ValueError, TypeError):
+                        seconds = 0
+                if seconds and seconds > 0:
+                    rate = float(tokens) / seconds
+                    entry["speedBasis"] = "effective throughput including overhead"
             if isinstance(rate, (int, float)) and not isinstance(rate, bool) and 0 < rate < 10000000:
                 entry["throughputSamples"].append(round(float(rate), 2))
             if isinstance(tokens, (int, float)) and not isinstance(tokens, bool) and 0 < tokens < 10000000:
                 entry["outputTokenSamples"].append(round(float(tokens), 2))
+            if kind.startswith("director_writing") and status == "completed":
+                # A completed LLM job alone does not prove a long-form target.
+                # The calibration protocol owns real 8K/16K qualification.
+                entry["maxRequestedTokens"] = max(entry.get("maxRequestedTokens", 0),
+                    int(kind.rsplit("_", 1)[-1]) if kind.rsplit("_", 1)[-1].isdigit() else 2048)
             entry["status"] = next((value for value in (
                 "failed", "running", "interrupted", "skipped", "completed"
             ) if entry["counts"].get(value)), status)
@@ -175,6 +200,7 @@ def capability_run_summaries():
             "depth": run.get("depth", "quick"),
             "error": row.get("error", ""), "models": models,
             "importedFrom": run.get("importedFrom"),
+            "qualityReviews": _copy(run.get("qualityReviews") or {}),
         })
     return summaries
 
@@ -387,6 +413,7 @@ def _new_run_payload(config):
         "summary": {},
         "error": "",
         "attempts": [],
+        "qualityReviews": {},
     }
 
 
@@ -964,7 +991,7 @@ def _run_director_model(run, model):
         ),
     )
     if run.get("depth") == "deep":
-        for budget in (1024, 4096):
+        for budget in (4096, 8192, 16384):
             _probe_job(
                 run,
                 kind="director_writing_" + str(budget),
@@ -1236,6 +1263,14 @@ def register_routes(app):
             if action == "import":
                 from .assessment_transfer import import_results
                 return jsonify({"ok": True, **import_results(data.get("bundle"), data.get("runtimeMap"))})
+            if action == "judge":
+                from .model_lab_quality import start_review
+                run = start_review(data.get("runId"), data.get("modelRef"), data.get("judgeModelRef"))
+                return jsonify({"ok": True, "run": run, "runs": list_runs()})
+            if action == "stop_judge":
+                from .model_lab_quality import stop_review
+                run = stop_review(data.get("runId"))
+                return jsonify({"ok": True, "run": run, "runs": list_runs()})
             if action == "start":
                 run = start_run(data.get("config"))
                 return jsonify({"ok": True, "run": run, "runs": list_runs()}), 201

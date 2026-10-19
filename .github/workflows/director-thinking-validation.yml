@@ -1,0 +1,31 @@
+name: Director thinking MVP validation
+on:
+  pull_request:
+    paths:
+      - 'tool/server/storyboard_llm_runtime.py'
+      - 'tool/server/director_model_calibration.py'
+      - 'tool/server/director_model_test_store.py'
+      - 'tool/server/llm_runner.py'
+      - 'tool/server/app.py'
+      - 'tool/js/director_model_test.js'
+      - 'tool/js/storyboard.js'
+      - 'tests/test_director_thinking_mvp.py'
+      - '.github/workflows/director-thinking-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  thinking-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m compileall -q tool/server
+      - run: node --check tool/js/director_model_test.js && node --check tool/js/storyboard.js
+      - run: python -m pip install pytest flask
+      - run: python -m pytest -q tests/test_director_thinking_mvp.py

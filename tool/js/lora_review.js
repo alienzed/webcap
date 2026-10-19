@@ -90,12 +90,17 @@
       return;
     }
     var callback = active.apply;
-    try {
-      callback(selected.map(function (item) { return {name: item.name, strength: item.strength, phrases: item.phrases, sceneId:item.sceneId || ''}; }));
+    var button = el('director-lora-review-apply');
+    button.disabled = true;
+    Promise.resolve().then(function () {
+      return callback(selected.map(function (item) {
+        return {name:item.name,strength:item.strength,phrases:item.phrases,sceneId:item.sceneId || ''};
+      }));
+    }).then(function () {
       hide();
-    } catch (error) {
+    }).catch(function (error) {
       el('director-lora-review-error').textContent = String(error.message || error);
-    }
+    }).finally(function () { button.disabled = false; });
   }
   document.addEventListener('click', function (event) {
     if (event.target.closest('#director-lora-review-apply')) apply();

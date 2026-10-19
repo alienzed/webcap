@@ -5,10 +5,10 @@ Status: implemented in Test Generations → Analytics. This replaces the propose
 ## Use
 
 1. Select the active Set, open Test Generations → Analytics, check 1–6 training runs and click **Analyze selected**. Choose from runs known to training history, archives, or persisted campaigns; the list may be incomplete if run identities were discarded before archiving.
-2. Choose a **campaign** to compare only checkpoint fidelity within that exact Epoch Finder test protocol. The same campaign can contain several selected training runs. Do not treat results from different campaigns as comparable. The chart uses cumulative weighted observations. The expandable round history shows each completed round's cumulative result; scores with no observed denominator remain missing.
-3. Choose an individual **Test session** when comparing manual ratings or Test VL. The backend groups frozen sessions by model, source/resolved prompt, settings, workflow hash and sweep weights. Results from multiple differing Test cohorts do **not** become a pooled chart. Separate independent charts cover archive loss; loss is not a quality score.
+2. Choose a **campaign** to compare only checkpoint fidelity within that exact Epoch Finder test protocol. The same campaign can contain several selected training runs. Do not treat results from different campaigns as comparable. The chart uses cumulative weighted observations. The expandable round history shows cumulative results for rounds with actual evaluated work; scores with no observed denominator remain missing.
+3. Choose an individual **Test session**, or select a compatible **Test cohort**, when comparing manual ratings or Test VL. The backend groups saved evidence by exact generation identity, LoRA strength, VL model and available per-assessment rubric fields; multiple session sources appear with each measured checkpoint. Results from multiple differing Test cohorts do **not** become a pooled chart. Separate independent charts cover archive loss; loss is not a quality score.
 4. Inspect a checkpoint via **Inspect epoch** to open its Epoch Finder campaign or use **Test session** for a linked session. These work only when the underlying evidence still exists.
-5. Expand **Preview numerical evidence sent to Director** to read the exact bounded, recomputed numerical/metadata facts. Click **Interpret with Director** to enqueue an opt-in LLM job on the existing Test LLM queue. It returns **Observed, Hypotheses, Try next, Limits**. Progress is visible; stop is available. The response is an interpretation, not a new rating.
+5. Expand **Preview numerical evidence sent to Director** to read the numerical/metadata facts. The backend rechecks these facts at execution and rejects requests if they changed after review. Click **Interpret with Director** to enqueue an opt-in LLM job on the existing Test LLM queue. It returns **Observed, Hypotheses, Try next, Limits**. Progress is visible; stop is available. The response is an interpretation, not a new rating.
 
 ## Provenance and limits
 
@@ -25,3 +25,7 @@ Automated contract tests reside in `tests/test_run_analytics_next.py`; JS source
 ## Out of scope
 
 Global cross-Set search, causal learning-rate optimization, composite quality scoring, image resurrection, new training schedulers, new image analyzers, and new persistent data stores.
+
+## Reconciliation and validation
+
+The UI invalidates a displayed analysis when the selected runs change. Compatible Test cohorts can be selected independently of the session filter; selecting a campaign changes the visible evidence without enqueuing work. Director preview is explicit, not fetched on every render, and the server verifies that the requested numbers still match the reviewed snapshot. Real-machine testing, including training archives and historical cohorts, remains required before claiming verified operation on actual data.

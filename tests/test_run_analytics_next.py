@@ -30,7 +30,7 @@ class RunAnalyticsNextTests(unittest.TestCase):
     def test_same_campaign_keeps_each_run_separate(self):
         ids = ["job1", "job2"]
         snapshot = self._snapshot(ids)
-        with patch.object(analytics, "report", side_effect=[
+        with patch.object(analytics, "_campaigns", return_value=[]), patch.object(analytics, "_catalog", return_value=(snapshot["runs"], {})), patch.object(analytics, "_test_cohorts", return_value=[]), patch.object(analytics, "_round_trajectories", return_value=[]), patch.object(analytics.bench, "_session_directories", return_value=[]), patch.object(analytics, "report", side_effect=[
                 dict(snapshot["reports"][0], runs=snapshot["runs"], availableSessions=["test-1"], sessions=["test-1"]),
                 dict(snapshot["reports"][1], runs=snapshot["runs"], availableSessions=["test-1"], sessions=["test-1"]),
         ]):
@@ -51,12 +51,14 @@ class RunAnalyticsNextTests(unittest.TestCase):
              "settings": {"strength": .6}, "workflowSha256": "digest"}
         b = dict(a, settings={"strength": .9})
         self.assertNotEqual(analytics._cohort_key(a), analytics._cohort_key(b))
+        self.assertNotEqual(analytics._cohort_key(a, {"strength": 0.6}), analytics._cohort_key(a, {"strength": 0.9}))
+        self.assertNotEqual(analytics._cohort_key(a, {}, {"modelId": "vl1"}), analytics._cohort_key(a, {}, {"modelId": "vl2"}))
         self.assertEqual(analytics._cohort_key(a), analytics._cohort_key(dict(a)))
 
     def test_coverage_deduplicates_shared_campaign(self):
         ids = ["job1", "job2"]
         snapshot = self._snapshot(ids)
-        with patch.object(analytics, "report", side_effect=[
+        with patch.object(analytics, "_campaigns", return_value=[]), patch.object(analytics, "_catalog", return_value=(snapshot["runs"], {})), patch.object(analytics.bench, "_session_directories", return_value=[]), patch.object(analytics, "report", side_effect=[
                 dict(snapshot["reports"][0], runs=snapshot["runs"],
                      availableSessions=["test-1"], sessions=["test-1"], warnings=[]),
                 dict(snapshot["reports"][1], runs=snapshot["runs"],

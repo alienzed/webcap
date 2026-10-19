@@ -35,7 +35,7 @@ def test_unified_gallery_links_recorded_test_and_campaign_epoch(tmp_path, monkey
     assert len(evidence["media"]) == 3
     linked = [m for m in evidence["media"] if m["id"] == "test:session-1:linked.png"][0]
     campaign = [m for m in evidence["media"] if m["source"] == "campaign"][0]
-    unknown = [m for m in evidence["media"] if m["mediaFile"] == "unknown.png"][0]
+    unknown = [m for m in evidence["media"] if m.get("mediaFile") == "unknown.png"][0]
     assert (linked["jobId"], linked["epoch"]) == ("run-a", 75)
     assert (campaign["jobId"], campaign["epoch"]) == ("run-a", 75)
     assert (unknown["jobId"], unknown["epoch"]) == ("", None)

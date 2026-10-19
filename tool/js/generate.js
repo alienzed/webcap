@@ -2339,7 +2339,6 @@
   function runDirector(operation, skipPlanning) {
     if (generateState.director.busy) return;
     if (!skipPlanning && el('generate-director-lora-enable').checked) return planGenerateLoras(operation);
-    if (generateState.director.busy) return;
     if (!generateState.director.modelId) throw new Error('Choose a Prompt Assistant model.');
     var promptNode = el('generate-prompt');
     var prompt = String(promptNode.value || '').trim();

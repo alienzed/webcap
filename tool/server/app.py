@@ -1809,22 +1809,6 @@ def storyboard_director_route():
                     knowledge = ""
                 if knowledge:
                     contract["prompt"] = str(contract["prompt"]) + "\n\n" + knowledge
-        if operation in {"write_prompt", "refine_prompt"} and story.get("directorLoraPlanning") is True:
-            from .storyboard_store import resolve_scene_loras
-            scene = (story.get("scenes") or {}).get(scene_id) or {}
-            active = {item["name"] for item in resolve_scene_loras(story, scene)}
-            phrases = []
-            for selection in (story.get("directorLoraPhrases") or {}, scene.get("directorLoraPhrases") or {}):
-                for name, terms in selection.items():
-                    if name in active:
-                        phrases.extend(terms)
-            if phrases:
-                contract["prompt"] += (
-                    "\n\n[APPROVED LORA VOCABULARY]\n"
-                    "Preserve these user-approved phrases wherever they fit the Scene intent: "
-                    + ", ".join(dict.fromkeys(phrases)) +
-                    "\nThese are textual phrases, not <lora:...> loader syntax."
-                )
         repair_base = None
         if operation == "repair_scenes":
             scene_order = list(story.get("sceneOrder") or [])
@@ -2192,9 +2176,11 @@ def lora_library_plan_route():
         contract = build_plan_request(data.get("intent"), stage, scenes, existing)
         if contract is None:
             return jsonify({"ok": True, "empty": True, "reason": "No enriched LoRAs available."})
+        story_id = str(data.get("storyId") or "").strip()
         job = enqueue_llm(
             "generate", str(data.get("directorModel") or "").strip(), contract,
-            context={"operation": "lora_plan", "catalogue": contract["catalogue"], "scenes": scenes},
+            context={"operation": "lora_plan", "catalogue": contract["catalogue"],
+                     "scenes": scenes, "storyId": story_id},
             label="Director: LoRA suggestions",
         )
         return jsonify({"ok": True, "job": job}), 202

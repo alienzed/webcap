@@ -4774,13 +4774,14 @@
         progressLabel: total > 0 ? completed + ' / ' + total + (activityBatch.phase === 'Evaluating' ? ' previews' : ' sessions') : '',
         startedAt: activityBatch.startedAt, folder: activityBatch.folder, modelId: activityBatch.criteria.modelId
       });
-    } else if (!batch.active && batch === testBatch) {
-      window.finishActivityProgress(batch.activityId, batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'completed');
-      if (!batch.activityFinished) {
-        batch.activityFinished = true;
-        window.recordActivityCompletion({ id: batch.activityId, kind: 'test-batch', lane: 'background',
-          title: batch.autoVl ? 'Batch Test + VL' : 'Batch Test', status: batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'completed',
-          folder: batch.folder, modelId: batch.criteria.modelId, detail: batch.detail, finishedAt: Date.now() / 1000 });
+    } else if (testBatch && !testBatch.active) {
+      var completedBatch = testBatch;
+      window.finishActivityProgress(completedBatch.activityId, completedBatch.phase === 'Failed' ? 'failed' : completedBatch.phase === 'Stopped' ? 'stopped' : 'completed');
+      if (!completedBatch.activityFinished) {
+        completedBatch.activityFinished = true;
+        window.recordActivityCompletion({ id: completedBatch.activityId, kind: 'test-batch', lane: 'background',
+          title: completedBatch.autoVl ? 'Batch Test + VL' : 'Batch Test', status: completedBatch.phase === 'Failed' ? 'failed' : completedBatch.phase === 'Stopped' ? 'stopped' : 'completed',
+          folder: completedBatch.folder, modelId: completedBatch.criteria.modelId, detail: completedBatch.detail, finishedAt: Date.now() / 1000 });
       }
     }
     el('test-generations-batch-stop').classList.toggle('hidden', !batch.active || batch !== testBatch);

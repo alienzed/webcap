@@ -244,7 +244,7 @@
     if (!root.classList.contains('hidden') && el('builder').classList.contains('hidden')) refresh();
   });
   el('legacy').onclick=function(){if(activeAdvanced)mountAdvanced('');mountExistingControls(false);show(false);};
-  el('normal').onclick=function(){legacyMode('tests');};
+  el('normal').onclick=function(){builder(true);};
   el('finder').onclick=function(){mountExistingControls(false);mountAdvanced('finder');};
   el('references').onclick=function(){mountExistingControls(false);mountAdvanced('references');};
   el('analytics').onclick=function(){mountExistingControls(false);mountAdvanced('analytics');};

@@ -385,5 +385,5 @@ def test_check_coherence_only_sees_existing_prompt():
     assert "STORY INVARIANTS" not in text
     assert "PREVIOUS SCENE" not in text
     assert "OLD FIRST PROMPT" not in text
-    assert "OLD SECOND PROMPT" in text
+    assert "EXISTING SECOND PROMPT" in text
     assert prompt["response_schema"]["required"] == ["prompt"]

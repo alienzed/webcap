@@ -1049,10 +1049,123 @@ def status(folder_path, campaign_id):
     return campaign
 
 
+
+def workspace_gallery(folder_path, model_id=""):
+    """Read-only visual index over existing Test sessions and Finder campaigns.
+
+    Each result retains its native execution identity. Only recorded run/epoch
+    provenance is used to associate Test media with training checkpoints.
+    """
+    from . import epoch_test_bench as bench
+
+    selected_model = str(model_id or "").strip()
+    media = []
+    sessions = []
+    campaigns = []
+    for directory in bench._session_directories(folder_path):
+        payload = bench._read_status(directory) or {}
+        if not payload or payload.get("campaignStaging"):
+            continue
+        recorded_model = str(payload.get("modelId") or payload.get("model") or "")
+        if selected_model and recorded_model != selected_model:
+            continue
+        visible = bench._with_session_vision(
+            directory, bench._with_session_ratings(directory, bench._session_status_from_payload(directory, payload))
+        )
+        session_name = directory.name
+        sessions.append({
+            "id": session_name, "name": visible.get("name") or session_name,
+            "status": visible.get("status"), "startedAt": visible.get("startedAt"),
+            "modelId": recorded_model, "kind": "test",
+        })
+        for index, result in enumerate(visible.get("results") or []):
+            if not isinstance(result, dict):
+                continue
+            media_file = bench._result_media_file(result)
+            if not media_file:
+                continue
+            provenance = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
+            source_job = str(provenance.get("sourceJobId") or "")
+            source_folder = str(provenance.get("sourceFolder") or "").replace(chr(92), "/").strip("/")
+            epoch = provenance.get("sourceEpoch")
+            if not source_job or source_folder != str(bench._relative_set_folder(folder_path)).replace(chr(92), "/").strip("/") or type(epoch) is not int:
+                source_job, epoch = "", None
+            media.append({
+                "id": "test:" + session_name + ":" + media_file,
+                "source": "test", "session": session_name,
+                "collectionId": "test:" + session_name, "mediaFile": media_file,
+                "mediaAvailable": (directory / media_file).is_file() and not (directory / media_file).is_symlink(),
+                "mediaKind": result.get("mediaKind") or visible.get("mediaKind") or "",
+                "modelId": recorded_model, "jobId": source_job, "epoch": epoch,
+                "runName": provenance.get("sourceRunName") or "",
+                "runSequence": provenance.get("sourceRunSequence") or "",
+                "candidate": result.get("label") or result.get("sourceLoRA") or "",
+                "candidateFile": result.get("candidateFile") or "",
+                "kind": result.get("kind") or "",
+                "strength": result.get("strength"),
+                "elapsedMs": result.get("elapsedMs"),
+                "prompt": result.get("prompt") or visible.get("resolvedPrompt") or visible.get("prompt") or "",
+                "seed": result.get("seed", visible.get("seed")),
+                "settings": visible.get("settings") or {},
+                "rating": result.get("rating"),
+                "assessment": (visible.get("testVision") or {}).get(media_file),
+                "startedAt": visible.get("startedAt"),
+            })
+    root = _root(folder_path)
+    if root.is_dir():
+        for directory in root.iterdir():
+            if not directory.is_dir() or directory.is_symlink() or not _ID.fullmatch(directory.name):
+                continue
+            campaign = _load(folder_path, directory.name)
+            recorded_model = str(campaign.get("modelId") or "")
+            if selected_model and recorded_model != selected_model:
+                continue
+            campaigns.append({
+                "id": campaign["id"], "name": campaign.get("name") or campaign["id"],
+                "status": campaign.get("status"), "startedAt": campaign.get("startedAt"),
+                "modelId": recorded_model, "kind": "campaign",
+            })
+            candidate_map = campaign.get("candidateMap") or {}
+            for index, unit in enumerate(campaign.get("units") or []):
+                candidate = unit.get("epoch")
+                origin = candidate_map.get(str(candidate))
+                job_id = str((origin.get("jobId") if origin else campaign.get("jobId")) or "")
+                epoch = origin.get("epoch") if origin else candidate
+                if type(epoch) is not int:
+                    job_id, epoch = "", None
+                media.append({
+                    "id": "campaign:" + campaign["id"] + ":" + str(index),
+                    "source": "campaign", "campaignId": campaign["id"],
+                    "collectionId": "campaign:" + campaign["id"], "frame": unit.get("frame") or "",
+                    "framePruned": bool(unit.get("framePruned")), "error": unit.get("error") or "",
+                    "modelId": recorded_model, "jobId": job_id, "epoch": epoch,
+                    "runName": origin.get("runName") if origin else campaign.get("runName") or "",
+                    "round": unit.get("round"), "case": unit.get("case"),
+                    "renderSeconds": unit.get("renderSeconds"),
+                    "visionWallSeconds": unit.get("visionWallSeconds"),
+                    "prompt": unit.get("prompt") or "",
+                    "seed": unit.get("seed"),
+                    "assessment": unit.get("assessment"),
+                    "referenceAssessments": unit.get("referenceAssessments") or [],
+                    "dinoAssessments": unit.get("dinoAssessments") or [],
+                    "startedAt": campaign.get("startedAt"),
+                })
+    warnings = []
+    try:
+        runs = _runs(folder_path)
+    except (OSError, RuntimeError, ValueError) as exc:
+        runs = []
+        warnings.append("Saved checkpoint listing unavailable: " + str(exc))
+    return {"sessions": sessions, "campaigns": campaigns, "media": media,
+            "runs": runs, "warnings": warnings}
+
+
 def command(folder_path, operation, criteria=None):
     criteria = criteria if isinstance(criteria, dict) else {}
     if operation == "list":
         return list_campaigns(folder_path)
+    if operation == "workspace_gallery":
+        return workspace_gallery(folder_path, criteria.get("modelId"))
     if operation == "checkpoint_evidence":
         return checkpoint_evidence(folder_path, criteria.get("jobId"))
     if operation == "run_analytics":

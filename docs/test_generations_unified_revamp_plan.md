@@ -1,6 +1,6 @@
 # Test Generations unified workspace revamp — implementation contract
 
-Status: **Phase 0 inventory and phased execution plan. Implementation not yet complete.**
+Status: **Unified workspace implemented as an additive default interface; original controllers and fallback views retained pending live-hardware validation.**
 Reference: `AGENTS.md`, `docs/test_generations_assessment.md`, `docs/epoch_finder_vision.md`, `docs/run_analytics_reconciliation_plan.md`.
 Design decision: gallery-first Explore workspace with Experiments and Checkpoints as equal navigational perspectives; the builder replaces the center/right region while the left rail remains.
 
@@ -62,3 +62,23 @@ Prefer independently reviewable commits/PRs aligned to the phases; a phase is me
 ## Concrete limitations at planning time
 
 The repository sources show that Test sessions and campaigns currently have different recorded data shapes; reliable cross-source image attribution requires an explicit code-level provenance audit and representative saved data. The GitHub code view alone cannot prove that every historical ordinary Test session names a checkpoint uniquely. Do not promise universal historical coverage until verified. Training-machine smoke tests require the user's actual WebCap runtime, and must not be represented as passed by static code inspection.
+
+## Implemented unified workspace and audit (October 2026)
+
+- Default Explore gallery opens from ordinary Test Generations navigation; explicit Activity session/campaign deep links keep their original destinations.
+- Experiments and Checkpoints are equal browsing perspectives over a read-only aggregation of recorded Test session results (including Batch-produced sessions) and Finder campaign units. The checkpoint perspective uses recorded Set/run/epoch identity and also lists available saved checkpoints without images. Media missing/pruned is explicit. Multi-select checkpoints for grouped visual comparison.
+- Right inspector shows image/video preview, original media link, prompt and recorded generation settings, ratings, candidate identity/strength, timing, VL judgments, reference/DINO assessments and source navigation. "Use prompt in builder" reuses the exact recorded prompt without pretending to reproduce unknown or incompatible model bindings.
+- Build expands across center/right and physically relocates the original Test form, staged candidates, Batch history, Finder wizard/campaign dashboard, Training References and Run Analytics into the common workspace. Original DOM nodes/controllers/event handlers and backend execution routes are retained. The existing modal Batch UI and Finder wizard substeps remain, preserving detailed capabilities instead of flattening them into an inaccurate generic form.
+- New gallery renders on scope changes and uses a stable selection highlight without full redraws on image selection. Test preview changes trigger gallery refresh via existing Test polling, not a second inference scheduler.
+- Browser DOM smoke with the real `tool/tool.html`, targeted Python gallery/provenance tests, JS/Python syntax checks and a baseline-relative legacy regression comparison run in branch CI. Old contract failures already on main are explicitly distinguished from new failures.
+
+### Scope limits intentionally left intact
+
+- The unified *navigation* does not rewrite saved Test sessions or Finder campaigns into a new canonical experiment database. They remain individually reproducible source records, and the Experiment list currently reflects those sessions/campaigns rather than providing a persisted cross-source, appendable experiment ID. This identity enhancement requires a separate narrowly scoped producer/storage change.
+- Finder campaign progress is shown through its existing controller when advanced setup/results are open; the cross-source gallery refreshes on entry/manual refresh, while live ordinary Test result arrivals are emitted from existing Test polling.
+- Actual ComfyUI/model execution, restart/handoff behavior and representative-gallery performance still require validation in the real WebCap runtime. CI does not simulate real GPU generation or prove visual pixel-perfect layout.
+- Legacy feature entry points remain deliberately available. Remove them only after the new homes have been exercised with actual sessions/campaigns, references and analytics.
+
+### No-feature-loss migration boundary
+
+This release changes presentation and adds read-only evidence access, with only a generation-result update event added to the original Test frontend. No queue, inference route, saved session/campaign representation, GPU coordination, auto-start scan, localStorage or filesystem migration was introduced.

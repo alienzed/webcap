@@ -4647,19 +4647,16 @@
     });
   }
 
-  // First Cut-style browser orchestration: accepted Test jobs and saved VL assessments
-  // outlive this controller, which deliberately does not survive a tab reload.
+  // Server-owned batches: the browser displays snapshots, never schedules work.
   var testBatch = null;
   var testBatchHistory = [];
   var viewedTestBatch = null;
   var testBatchSort = 'vl';
-  setInterval(function () { if (typeof launchFolder !== 'undefined' && launchFolder) refreshServerTestBatches(); }, 4000);
-  refreshServerTestBatches();
-
   var testBatchCompletedActivity = new Set();
   var testBatchDismissedIds = new Set();
   var testBatchSnapshotKeys = Object.create(null);
   var testBatchScores = Object.create(null);
+  setInterval(function () { if (launchFolder) refreshServerTestBatches(); }, 4000);
   function refreshServerTestBatches() {
     return captionAssistRequestJson('/fs/test_generations/batches').then(function (payload) {
       var batches = payload.batches || [];
@@ -4681,7 +4678,6 @@
       var selected = viewedTestBatch || testBatch;
       var key = selected && [selected.sessions.length,selected.finished,selected.evaluated,selected.status].join(':');
       if (selected && key !== testBatchSnapshotKeys[selected.id]) {
-        testBatchSnapshotKeys[selected.id] = key;
         return Promise.all(selected.sessions.map(function (session) {
           return requestForFolder(selected.folder, 'test_open_session', {session:session}).then(function (status) {
             selected.statuses[session] = status;
@@ -4691,6 +4687,7 @@
         })).then(function () {
           testBatchRecalculate(selected);
           testBatchScores[selected.id] = selected.scores;
+          testBatchSnapshotKeys[selected.id] = key;
           renderTestBatch();
         });
       }

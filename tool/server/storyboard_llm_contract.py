@@ -210,7 +210,7 @@ def _repair_scene_plan(story):
 
 def _relationship_scene(scene):
     """Compact authored context; prior H3 prompt text is not a continuity fact."""
-    return {key: scene[key] for key in ("title", "summary", "entryState", "exitState", "durationSeconds") if scene.get(key) not in (None, "")}
+    return {key: scene[key] for key in ("title", "summary", "entryState", "exitState", "durationSeconds", "suggestedDurationSeconds") if scene.get(key) not in (None, "")}
 
 
 def _previous_scene_context(story, scene_id):

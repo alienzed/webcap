@@ -7233,13 +7233,23 @@ html[data-theme="dark"] iframe {
 #test-generations-vl-progress { flex:0 0 auto; font-variant-numeric:tabular-nums; }
 .test-generations-vl-result { align-self:flex-end; margin:4px 0; }
 .test-generations-vl-detail { border:1px solid var(--border); border-radius:5px; padding:12px; margin:10px 0; max-height:45vh; overflow:auto; }
-.test-generations-vl-detail-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.test-generations-vl-detail-heading { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.test-generations-vl-detail-heading > strong { flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.test-generations-vl-detail-heading > button { flex:0 0 auto; width:auto; white-space:nowrap; }
+@media (max-width:640px) {
+  .test-generations-vl-detail-heading { flex-wrap:wrap; }
+  .test-generations-vl-detail-heading > strong { flex:1 1 100%; }
+}
 .test-generations-vl-detail pre { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; margin:4px 0 12px; }
 
 .test-generations-vl-summary { color:var(--muted); font-weight:600; margin-bottom:12px; }
-.test-generations-vl-comparison > strong { display:block; margin:10px 0 5px; }
-.test-generations-vl-table-wrap { overflow-x:auto; }
-.test-generations-vl-table { width:100%; border-collapse:collapse; text-align:left; font-size:13px; }
+.test-generations-vl-comparison { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap:12px 16px; }
+.test-generations-vl-comparison-group { min-width:0; }
+.test-generations-vl-comparison-group > strong { display:block; margin:10px 0 5px; }
+.test-generations-vl-table-wrap { overflow-x:auto; max-width:1080px; }
+.test-generations-vl-table { width:100%; min-width:560px; table-layout:fixed; border-collapse:collapse; text-align:left; font-size:13px; }
+.test-generations-vl-table thead th:first-child { width:86px; }
+.test-generations-vl-table thead th:nth-child(2) { width:34%; }
 .test-generations-vl-table th, .test-generations-vl-table td { padding:7px 9px; border-bottom:1px solid var(--border); vertical-align:top; overflow-wrap:anywhere; }
 .test-generations-vl-table thead th { color:var(--muted); font-weight:600; }
 .test-generations-vl-table tbody th { font-weight:500; }
@@ -7252,8 +7262,10 @@ html[data-theme="dark"] iframe {
 /* In-memory Test VL evaluation controls and live epoch scores. */
 .test-generations-vl-filters { flex:0 0 auto; margin:0 0 10px; padding:8px 10px; border:1px solid var(--border); border-radius:5px; }
 .test-generations-vl-filters summary { cursor:pointer; font-size:12px; font-weight:600; }
-.test-generations-vl-filter-options { display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:9px; }
+.test-generations-vl-filter-options { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap:10px 16px; margin-top:9px; }
 .test-generations-vl-filter, .test-generations-vl-row-count { display:inline-flex; align-items:center; gap:5px; font-size:12px; cursor:pointer; }
+.test-generations-vl-filter { align-items:flex-start; min-width:0; line-height:1.35; }
+.test-generations-vl-filter input { flex:0 0 auto; margin-top:2px; }
 .test-generations-vl-table .test-generations-vl-row-count { white-space:nowrap; }
 .test-generations-vl-table tr.is-excluded { opacity:.55; }
 .test-generations-vl-candidate-score { display:block; color:var(--muted); font-size:12px; }

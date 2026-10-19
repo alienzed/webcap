@@ -342,9 +342,10 @@ function refreshUnifiedModelAssessment() {
     var present = { director: new Set(), vision: new Set() };
     var seenModels = new Set();
     function refreshSelectionSummary() {
+      var selectedModels = new Set([...diagnosticsAssessmentSelected.director, ...diagnosticsAssessmentSelected.vision]);
       diagnosticsEl('diagnostics-assessment-selection').textContent =
-        (diagnosticsAssessmentSelected.director.size + diagnosticsAssessmentSelected.vision.size) +
-        ' model(s) selected · Run Selected Tests starts the server-owned suite.';
+        selectedModels.size + ' model(s) selected · Run Selected Tests starts the server-owned suite.';
+      diagnosticsAssessmentSyncHeaderSelection();
     }
     function addRow(title, kind, ref, report) {
       if (seenModels.has(ref)) return;
@@ -353,11 +354,11 @@ function refreshUnifiedModelAssessment() {
       var supportsDirector = directors.some(function (entry) { return String(entry.id || '') === ref; });
       if (supportsVision) present.vision.add(ref);
       if (supportsDirector) present.director.add(ref);
-      present[kind].add(ref);
-      var key = kind + ':' + ref;
+      var key = ref;
       var row = document.createElement('tbody');
       row.dataset.assessmentModel = key;
-      row.dataset.assessmentRuntime = String((kind === 'director' ? directors : vision).find(function (model) { return String(model.id || model.modelRef || '') === ref; })?.runtimeId || '').toLowerCase() === 'local' ? 'local' : 'remote';
+      var runtimeModel = (kind === 'director' ? directors : vision).find(function (model) { return String(model.id || model.modelRef || '') === ref; }) || {};
+      row.dataset.assessmentRuntime = String(runtimeModel.runtimeId || '').toLowerCase() === 'local' || ref.startsWith('local::') ? 'local' : 'remote';
       row.dataset.assessmentSearch = (title + ' ' + ref + ' ' + (supportsDirector ? 'director ' : '') + (supportsVision ? 'vision ' : '')).toLowerCase();
       row.assessmentSort = { model: title.toLowerCase(), role: kind, size: null, thinking: null, speed: null, output: null, quality: null, result: 1, tested: null };
       row.assessmentReport = report;
@@ -367,7 +368,7 @@ function refreshUnifiedModelAssessment() {
       checkbox.type = 'checkbox';
       checkbox.dataset.assessmentSelect = '';
       checkbox.checked = diagnosticsAssessmentSelected.director.has(ref) || diagnosticsAssessmentSelected.vision.has(ref);
-      checkbox.setAttribute('aria-label', 'Select ' + kind + ' model ' + ref);
+      checkbox.setAttribute('aria-label', 'Select model ' + ref);
       checkbox.addEventListener('change', function () {
         ['director', 'vision'].forEach(function (role) {
           if (!((role === 'director' && supportsDirector) || (role === 'vision' && supportsVision))) return;

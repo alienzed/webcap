@@ -4668,8 +4668,8 @@
     window.epochFinderPrepare(launchFolder);
     // Default to the same real Regular form in Build; exact Activity routes
     // continue to the proven native session/campaign review destinations.
-    if (pendingActivityCampaign || pendingActivitySession) window.testGenerationsUnifiedNativeRoute();
-    else window.testGenerationsUnifiedDestination('build');
+    window.testGenerationsUnifiedNativeRoute();
+    window.epochFinderShowMode('tests');
     if (pendingActivityCampaign) {
       window.epochFinderInspectCampaign(pendingActivityCampaign); pendingActivityCampaign = '';
     }
@@ -5340,7 +5340,7 @@
       try { runTestBatch(count, true); } catch (err) { showError(err); }
     };
     el('test-generations-campaign-mode').onclick = function () {
-      window.testGenerationsUnifiedDestination('finder');
+      window.epochFinderShowMode('finder');
     };
     el('test-generations-batch-btn').onclick = openTestBatchDialog;
     el('test-generations-batch-history').onchange = function () {

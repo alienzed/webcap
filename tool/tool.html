@@ -1144,12 +1144,17 @@
             </div>
             <section id="test-generations-workspace" class="test-generations-workspace" data-workspace-root="test" aria-label="Test workspace">
                 <section id="test-generations-pane" class="test-generations-pane hidden" aria-label="Test Generations">
+                    <nav id="test-workspace-main-tabs" class="test-workspace-main-tabs" aria-label="Test Generations sections">
+                        <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Tests</button>
+                        <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Campaigns</button>
+                        <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
+                    </nav>
                     <section id="epoch-finder-screen" class="epoch-finder-screen hidden" aria-label="Epoch Finder">
                         <div class="epoch-finder-intro">
                             <div><div class="epoch-finder-eyebrow">TEST GENERATIONS / EPOCH FINDER</div>
                             <h2>Find the strongest epoch</h2>
                             <p>Compare saved checkpoints with matching prompts and seeds. Render, evaluate, narrow, repeat.</p></div>
-                            <div class="epoch-finder-intro-actions"><button id="epoch-finder-back-to-tests" type="button" class="review-captions-btn">← Regular tests</button><button id="epoch-finder-refresh" type="button" class="review-captions-btn">Refresh</button></div>
+                            <div class="epoch-finder-intro-actions"><button id="epoch-finder-back-to-tests" type="button" class="review-captions-btn">← Regular tests</button></div>
                         </div>
                         <div class="epoch-finder-layout">
                             <aside class="epoch-finder-sidebar">
@@ -1203,7 +1208,7 @@
                                 </section>
                                 <section class="epoch-finder-panel">
                                     <div class="epoch-finder-panel-heading"><h3>Campaigns</h3><span id="epoch-finder-count"></span></div>
-                                    <button id="epoch-finder-new" type="button" class="review-captions-btn epoch-finder-new-campaign">+ New Campaign</button>
+                                    <div class="test-workspace-campaign-tools"><button id="epoch-finder-new" type="button" class="review-captions-btn epoch-finder-new-campaign">+ New Campaign</button><button id="epoch-finder-refresh" type="button" class="review-captions-btn">Refresh</button><button id="test-workspace-manage-references" type="button" class="review-captions-btn">Manage references</button></div>
                                     <div id="epoch-finder-campaigns" class="epoch-finder-campaigns"><span class="epoch-finder-muted">No campaigns yet.</span></div>
                                 </section>
                             </aside>
@@ -1267,6 +1272,7 @@
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
                                 </nav>
                                 <section class="epoch-finder-panel">
+                                    <button id="test-workspace-back-to-campaigns" type="button" class="review-captions-btn test-workspace-context-back">← Campaigns</button>
                                     <h3>Find training examples</h3>
                                     <label>Source training run<select id="test-references-run"><option value="">Loading runs…</option></select></label>
                                     <label>Scoped Set group<select id="test-references-group" disabled><option value="">Select a run first</option></select></label>

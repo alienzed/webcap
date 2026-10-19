@@ -51,8 +51,8 @@
     var finder = next === 'finder';
     var references = next === 'references';
     var analytics = next === 'analytics';
-    document.querySelectorAll('[data-test-workspace-mode]').forEach(function (button) {
-      var active = button.dataset.testWorkspaceMode === next;
+    document.querySelectorAll('#test-workspace-main-tabs [data-test-workspace-mode]').forEach(function (button) {
+      var active = button.dataset.testWorkspaceMode === (next === 'references' ? 'finder' : next);
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
     });
@@ -65,7 +65,9 @@
     if (analytics) window.runAnalyticsOpen();
   }
   window.epochFinderShowMode = showMode;
-  document.getElementById('epoch-finder-back-to-tests').onclick = function () { window.testGenerationsUnifiedDestination('build'); };
+  document.getElementById('epoch-finder-back-to-tests').onclick = function () { showMode('tests'); };
+  document.getElementById('test-workspace-manage-references').onclick = function () { showMode('references'); };
+  document.getElementById('test-workspace-back-to-campaigns').onclick = function () { showMode('finder'); };
   function renderSecondsEstimate(modelId, durationSeconds, megapixels) {
     var key = [modelId, Number.isFinite(megapixels) ? String(megapixels) : String(document.getElementById('test-generations-dimensions')?.value || ''), String(durationSeconds)].join('|');
     var samples = timingProfiles[key] && timingProfiles[key].seconds;
@@ -1050,7 +1052,7 @@
       gallery(campaignState); inspectFrame(campaignState);
     }).catch(error);
   };
-  document.querySelectorAll('[data-test-workspace-mode]').forEach(function (button) {
+  document.querySelectorAll('#test-workspace-main-tabs [data-test-workspace-mode]').forEach(function (button) {
     button.addEventListener('click', function () { showMode(button.dataset.testWorkspaceMode); });
   });
   els('refresh').onclick = refresh;

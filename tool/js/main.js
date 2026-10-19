@@ -436,9 +436,10 @@ function wireAllUi() {
 
 addEventListener('DOMContentLoaded', function () {
   console.log('[webcap] initializing');
+  // Apply the bookmarked workspace before any shell initialization may sync the URL.
+  if (typeof applyInitialShellLocationRoute === 'function') applyInitialShellLocationRoute();
   initializeWorkspaceShell();
   wireWorkspaceHeaderUi();
-  if (typeof applyInitialShellLocationRoute === 'function') applyInitialShellLocationRoute();
   refreshCurrentDirectory();
   wireAllUi();
   if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();

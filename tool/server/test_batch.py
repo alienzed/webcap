@@ -28,8 +28,16 @@ class _Stopped(Exception):
 
 
 def _public(batch):
-    return copy.deepcopy({k: v for k, v in batch.items()
-                          if k not in {"cancelled", "folderPath"}})
+    visible = copy.deepcopy({k: v for k, v in batch.items()
+                             if k not in {"cancelled", "folderPath"}})
+    visible["statuses"] = {}
+    for session in visible["sessions"]:
+        try:
+            status = open_session(batch["folderPath"], session)
+            visible["statuses"][session] = {"status": status.get("status", "unknown")}
+        except FileNotFoundError:
+            visible["statuses"][session] = {"status": "missing"}
+    return visible
 
 
 def snapshot():
@@ -57,7 +65,7 @@ def _error(batch, detail):
 
 
 def _media_file(result):
-    return str(result.get("mediaFile") or result.get("file") or result.get("outputFile") or "") if isinstance(result, dict) else ""
+    return str(result.get("mediaFile") or result.get("outputVideo") or "") if isinstance(result, dict) else ""
 
 
 def _question(groups):

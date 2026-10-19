@@ -7359,3 +7359,8 @@ html[data-theme="dark"] iframe {
 .test-unified-inspector button {margin:8px 4px 0 0;}
 
 #test-unified-description.is-warning {color:var(--warning,var(--text));font-weight:500;}
+
+/* Keep real advanced builder tools directly switchable without returning to legacy navigation. */
+.test-unified-finder-building .test-unified-builder-actions {display:flex;}
+.test-unified-builder-actions {position:sticky;top:0;z-index:2;padding:10px 0;background:var(--surface);border-bottom:1px solid var(--border);}
+.test-unified-builder-actions button.active {border-color:var(--accent);font-weight:650;}

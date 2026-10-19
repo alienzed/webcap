@@ -726,9 +726,13 @@
       ? window.testReferencesSelections(referenceCompare.folder) : [];
     var attributes = (status.wildcardEvaluationGroups || []).filter(function (g) { return g.options && g.options.length; });
     // Only references corresponding to a scored option can be assessed.
+    var seen = new Set();
     referenceCompare.plan = all.map(function (choice) {
       var matches = attributes.filter(function (g) { return g.options.includes(choice.term); });
-      return matches.length === 1 ? {choice:choice, attribute:matches[0]} : null;
+      var resultKey = JSON.stringify([choice.group, choice.term]);
+      if (matches.length !== 1 || seen.has(resultKey)) return null;
+      seen.add(resultKey); // Saved comparisons are keyed by method/group/option, not source run.
+      return {choice:choice, attribute:matches[0]};
     }).filter(Boolean);
     var dialog = el('test-generations-reference-dialog');
     var method = el('test-generations-evaluator').value;

@@ -35,3 +35,11 @@ def test_original_workflows_remain_available():
                    'id="epoch-finder-resume"','id="epoch-finder-stop"',
                    'id="run-analytics-director"','id="test-references-gallery"'):
         assert marker in html
+
+
+def test_unified_builder_reclaims_inspector_column():
+    js=(ROOT/"tool/js/test_generations_unified.js").read_text(encoding="utf-8")
+    css=(ROOT/"tool/css/styles.css").read_text(encoding="utf-8")
+    assert "root.classList.toggle('test-unified-building',enabled)" in js
+    assert ".test-unified-workspace.test-unified-building {grid-template-columns:" in css
+    assert "minmax(0,1fr)" in css

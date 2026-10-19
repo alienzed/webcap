@@ -1953,24 +1953,24 @@
   white-space: nowrap;
 }
 
-.storyboard-scene-progress-step .storyboard-scene-progress-refined {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: color-mix(in srgb, #a78bfa 14%, var(--panel-soft));
-  font-size: 15px;
-  line-height: 1;
-}
-
-.storyboard-scene-progress-director-complete {
+.storyboard-scene-progress-step .storyboard-scene-progress-director-complete {
   flex: 0 0 auto;
   color: #22c55e;
   font-size: 13px;
   font-weight: 900;
+  line-height: 1;
+}
+
+.storyboard-scene-progress-step .storyboard-scene-progress-director-complete.is-refine {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #a78bfa 20%, var(--panel-soft));
+  color: #c4b5fd;
+  font-size: 16px;
   line-height: 1;
 }
 

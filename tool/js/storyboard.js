@@ -56,6 +56,7 @@
       activityTarget: null,
       dismissedActivityTargetKey: '',
       sceneCompletions: {},
+      inspectedRefinements: {},
       activityErrorReported: false,
       activitySlotSample: null,
       requestByJobId: {},
@@ -504,7 +505,7 @@
     var sceneId = String(job && job.sceneId || '');
     var operation = String(job && job.operation || '');
     if (!storyId) return Promise.resolve();
-    if ((operation === 'write_prompt' || operation === 'refine_prompt') && sceneId && job.clearCorrection === true) {
+    if (operation === 'write_prompt' && sceneId && job.clearCorrection === true) {
       markSceneDirectorCompletion(storyId, sceneId, operation);
     }
 
@@ -2530,20 +2531,46 @@
 
   function sceneDirectorCompletionDescription(notice) {
     var operation = String(notice && notice.operation || '');
-    if (operation === 'refine_prompt') return 'Refine completed while you were elsewhere.';
-    if (operation === 'write_prompt') return 'Write with Director completed while you were elsewhere.';
+    if (operation === 'refine_prompt') return 'Refined with Director — open Scene to review.';
+    if (operation === 'write_prompt') return 'Written with Director — open Scene to review.';
     return 'Director update completed while you were elsewhere.';
+  }
+
+  function sceneRefinementReviewRevision(sceneId) {
+    var scene = storyState.story && storyState.story.scenes && storyState.story.scenes[sceneId];
+    if (!scene || !scene.refineComplete) return '';
+    return String(scene.promptDirectorJobId || 'refined');
+  }
+
+  function sceneRefinementNeedsReview(sceneId) {
+    var revision = sceneRefinementReviewRevision(sceneId);
+    return !!revision && storyState.director.inspectedRefinements[
+      sceneDirectorCompletionKey(storyState.story.id, sceneId)
+    ] !== revision;
+  }
+
+  function inspectSceneRefinement(storyId, sceneId) {
+    if (!storyState.story || String(storyState.story.id || '') !== String(storyId || '')) return;
+    var revision = sceneRefinementReviewRevision(sceneId);
+    if (!revision) return;
+    var key = sceneDirectorCompletionKey(storyId, sceneId);
+    if (storyState.director.inspectedRefinements[key] === revision) return;
+    storyState.director.inspectedRefinements[key] = revision;
+    syncSceneProgressionCard(sceneId);
   }
 
   function sceneDirectorCompletionHtml(sceneId) {
     var notice = sceneDirectorCompletionNotice(sceneId);
-    var description = notice ? sceneDirectorCompletionDescription(notice) : '';
-    return '<span class="storyboard-scene-progress-director-complete' + (notice ? '' : ' hidden') +
+    var refined = sceneRefinementNeedsReview(sceneId);
+    var description = refined ? 'Refined with Director — open Scene to inspect.' :
+      (notice ? sceneDirectorCompletionDescription(notice) : '');
+    return '<span class="storyboard-scene-progress-director-complete' +
+      (refined ? ' is-refine' : '') + (description ? '' : ' hidden') +
       '" data-scene-director-completion' +
-      (notice
+      (description
         ? ' title="' + escapeHtml(description) + '" aria-label="' + escapeHtml(description) + '"'
         : ' aria-hidden="true"') +
-      '>✓</span>';
+      '>' + (refined ? '✦' : '✓') + '</span>';
   }
 
   function sceneDirectorCompletionVisible(storyId, sceneId) {
@@ -2609,24 +2636,9 @@
     card.classList.toggle('has-selected-take', !!scene.selectedTakeId);
     var indicators = card.querySelector('.storyboard-scene-progress-indicators');
     var title = card.querySelector('[data-scene-progress-title]');
-    var directorCompletion = card.querySelector('[data-scene-director-completion]');
-    var refined = card.querySelector('[data-scene-refined]');
-    if (!indicators || !title || !directorCompletion || !refined) throw new Error('Storyboard Scene progression card markup is missing.');
-    refined.classList.toggle('hidden', !scene.refineComplete);
-    indicators.innerHTML = sceneProgressionIndicatorsHtml(sceneId);
+    if (!indicators || !title) throw new Error('Storyboard Scene progression card markup is missing.');
+    indicators.innerHTML = sceneProgressionIndicatorsHtml(sceneId) + sceneDirectorCompletionHtml(sceneId);
     title.textContent = scene.title || 'Untitled Scene';
-    var notice = sceneDirectorCompletionNotice(sceneId);
-    directorCompletion.classList.toggle('hidden', !notice);
-    if (notice) {
-      var description = sceneDirectorCompletionDescription(notice);
-      directorCompletion.title = description;
-      directorCompletion.setAttribute('aria-label', description);
-      directorCompletion.removeAttribute('aria-hidden');
-    } else {
-      directorCompletion.removeAttribute('title');
-      directorCompletion.removeAttribute('aria-label');
-      directorCompletion.setAttribute('aria-hidden', 'true');
-    }
   }
 
   function markSceneNewTake(sceneId) {
@@ -2654,13 +2666,11 @@
           '<span class="storyboard-scene-progress-kicker"' +
             (planDirectorModel ? ' title="Scene plan originated from Director model ' + escapeHtml(planDirectorModel) + '"' : '') +
           '>Scene ' + String(index + 1).padStart(2, '0') +
-            '<span class="storyboard-scene-progress-indicators">' + sceneProgressionIndicatorsHtml(sceneId) + '</span>' +
+            '<span class="storyboard-scene-progress-indicators">' +
+              sceneProgressionIndicatorsHtml(sceneId) + sceneDirectorCompletionHtml(sceneId) + '</span>' +
           '</span>' +
           '<div class="storyboard-scene-progress-title-row">' +
             '<strong data-scene-progress-title>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
-            '<span class="storyboard-scene-progress-refined' + (scene.refineComplete ? '' : ' hidden') +
-              '" data-scene-refined title="Refined with Director" role="img" aria-label="Refined with Director">🪄</span>' +
-            sceneDirectorCompletionHtml(sceneId) +
           '</div>' +
         '</button>' +
         '<details class="storyboard-scene-menu storyboard-scene-progress-menu">' +
@@ -2713,7 +2723,10 @@
       if (mode === 'focus') {
         var order = storyState.story && Array.isArray(storyState.story.sceneOrder) ? storyState.story.sceneOrder : [];
         clearSceneNewTakeCount(ensureActiveScene(order));
-        if (sceneId && storyState.story) clearSceneDirectorCompletion(storyState.story.id, sceneId);
+        if (sceneId && storyState.story) {
+          clearSceneDirectorCompletion(storyState.story.id, sceneId);
+          inspectSceneRefinement(storyState.story.id, sceneId);
+        }
       }
       renderScenes();
       renderSequencePreview();
@@ -6044,6 +6057,7 @@
       var focusedScene = event.target.closest('.storyboard-scene[data-scene-id]');
       if (focusedScene && storyState.story) {
         clearSceneDirectorCompletion(storyState.story.id, focusedScene.dataset.sceneId);
+        inspectSceneRefinement(storyState.story.id, focusedScene.dataset.sceneId);
       }
       var inheritedMegapixels = event.target.closest('[data-scene-field="megapixels"]');
       if (inheritedMegapixels) seedInheritedSceneMegapixels(inheritedMegapixels);

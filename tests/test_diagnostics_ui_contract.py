@@ -117,7 +117,7 @@ def test_experimental_model_assessment_preserves_existing_diagnostics():
     assert 'id="diagnostics-assessment-results"' in html
     assert 'data-diagnostics-panel="models"' in html
     assert 'data-diagnostics-panel="benchmark"' in html
-    assert 'data-diagnostics-tab="model-lab"' in html
+    assert 'data-diagnostics-panel="model-lab"' in html
     assert "function refreshUnifiedModelAssessment()" in script
     assert 'id="diagnostics-assessment-deep"' in html
     assert 'id="diagnostics-assessment-selection"' in html
@@ -135,7 +135,7 @@ def test_experimental_suite_launch_uses_existing_execution_owners():
     assert "action: 'start'" in diagnostics
     assert 'modelLabPost({' in diagnostics
     assert 'function directorModelTestStartCalibrationForModels(selectedModels)' in director
-    assert 'Deep Assessment is not available yet' in diagnostics
+    assert "depth: deep ? 'deep' : 'quick'" in diagnostics
 
 
 def test_unified_model_assessment_uses_compact_rows_and_toolbar():
@@ -144,6 +144,8 @@ def test_unified_model_assessment_uses_compact_rows_and_toolbar():
     css = (ROOT / "tool" / "css" / "modals.css").read_text(encoding="utf-8")
     assert 'class="model-assessment-toolbar"' in html
     assert 'class="model-assessment-tools"' in html
+    assert '<summary>More</summary>' in html
+    assert "position: absolute; top: calc(100% + 4px); right: 0;" in css
     assert "row.className = 'model-assessment-row';" not in js
     assert "model-assessment-table" in js
     assert "diagnosticsAssessmentSortAndFilter" in js
@@ -153,11 +155,11 @@ def test_unified_model_assessment_uses_compact_rows_and_toolbar():
 def test_unified_assessment_bulk_selection_is_wired():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "diagnostics.js").read_text(encoding="utf-8")
-    assert 'id="diagnostics-assessment-all"' in html
-    assert 'id="diagnostics-assessment-none"' in html
+    assert 'id="diagnostics-assessment-all"' not in html
+    assert 'id="diagnostics-assessment-none"' not in html
+    assert "selectAll.id = 'diagnostics-assessment-select-all'" in script
     assert "function selectUnifiedAssessmentModels(select)" in script
-    assert "selectUnifiedAssessmentModels(true)" in script
-    assert "selectUnifiedAssessmentModels(false)" in script
+    assert "selectUnifiedAssessmentModels(selectAll.checked)" in script
 
 
 def test_assessment_launch_shows_synchronous_errors_and_active_run():

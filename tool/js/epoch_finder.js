@@ -1032,14 +1032,14 @@
     if (mode === 'finder') refresh();
   }
   window.epochFinderPrepare = applyFolder;
-  window.epochFinderInspectCampaign = function (campaignId, sourceEpoch) {
+  window.epochFinderInspectCampaign = function (campaignId, sourceEpoch, sourceJobId) {
     activeCampaign = String(campaignId);
     inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = '';
     showMode('finder');
     return refreshStatus().then(function () {
       if (sourceEpoch == null || !campaignState || campaignState.id !== String(campaignId)) return;
       var matched = Object.entries(campaignState.candidateMap || {}).find(function (entry) {
-        return entry[1].epoch === Number(sourceEpoch);
+        return entry[1].epoch === Number(sourceEpoch) && (!sourceJobId || entry[1].jobId === sourceJobId);
       });
       inspectedEpoch = matched ? Number(matched[0]) : Number(sourceEpoch);
       inspectedFrame = 0; lastFrameKey = '';

@@ -479,6 +479,7 @@
       ? items.map(function (item, index) {
           return '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
             '<span title="' + escapeHtml(item.name) + '">' + escapeHtml(item.name) + '</span>' +
+            '<button type="button" class="review-captions-btn" data-generate-lora-profile="' + index + '" title="Open LoRA metadata">ⓘ</button>' +
             (function () {
               var entry = generateState.loraProfileCache[item.name];
               var enriched = entry && entry.profile && entry.profile.enrichment;
@@ -2641,6 +2642,12 @@
       items[index].strength = Number(input.value);
       });
     el('generate-lora-list').addEventListener('click', function (event) {
+      var metadata = event.target.closest('[data-generate-lora-profile]');
+      if (metadata) {
+        var item = selectedLoras(generateState.modelId)[Number(metadata.dataset.generateLoraProfile)];
+        if (item) window.openLoraMetadataEditor(item.name, stageForGenerateModel(generateState.modelId));
+        return;
+      }
       var optionsButton = event.target.closest('[data-generate-lora-insert-options]');
       if (optionsButton) {
         var chosen = selectedLoras(generateState.modelId)[Number(optionsButton.dataset.generateLoraInsertOptions)];

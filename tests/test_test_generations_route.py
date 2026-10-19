@@ -105,3 +105,40 @@ def test_test_generations_vision_question_rejects_unknown_model(monkeypatch):
     })
     assert response.status_code == 400
     assert "Vision model" in response.get_json()["error"]
+
+
+def test_runs_menu_discovers_same_set_training_runs_without_staged_candidates(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    monkeypatch.setattr(app_module, "safe_join_fs_root", lambda rel: root / rel)
+    monkeypatch.setattr(app_module, "handle_epoch_test_bench_request", lambda *_args, **_kwargs: {
+        "modelId": "minimax_h3",
+        "candidateRuns": [
+            {"folder": "sets/subject", "jobId": "run-staged", "runName": "Staged"},
+            {"folder": "sets/subject", "jobId": "run-missing", "runName": "Removed"},
+        ],
+    })
+    monkeypatch.setattr(
+        app_module, "training_runner_candidate_run_available",
+        lambda _folder, job_id: job_id != "run-missing",
+    )
+    seen = []
+    def discover(folder):
+        seen.append(folder)
+        return [
+            {"folder": "sets/subject", "jobId": "run-unstaged",
+             "runName": "Unstaged", "modelId": "minimax_h3"},
+            {"folder": "sets/subject", "jobId": "run-staged",
+             "runName": "Duplicate", "modelId": "minimax_h3"},
+            {"folder": "sets/subject", "jobId": "run-other-model",
+             "runName": "Wrong model", "modelId": "krea2"},
+        ]
+    monkeypatch.setattr(app_module, "discover_test_candidate_runs", discover)
+
+    response = app_module.app.test_client().post("/fs/test_generations", json={
+        "folder": "sets/subject", "operation": "test_prepare",
+    })
+    assert response.status_code == 200
+    assert seen == [root / "sets/subject"]
+    assert [(run["jobId"], run["runName"]) for run in response.get_json()["candidateRuns"]] == [
+        ("run-staged", "Staged"), ("run-unstaged", "Unstaged"),
+    ]

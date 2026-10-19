@@ -1367,7 +1367,7 @@ def _assessment_signal(model_ref):
 
     report = get_report(model_ref)
     if not isinstance(report, dict):
-        return None
+        report = {}
     abilities = report.get("abilities") if isinstance(report.get("abilities"), dict) else {}
     try:
         coherent_output = max(0, int(abilities.get("coherentOutputTokens") or 0))

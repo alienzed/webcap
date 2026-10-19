@@ -1353,3 +1353,21 @@ def test_first_cut_card_exposes_real_pipeline_steps():
         assert phase in render
     assert "action.sceneCount" in render
     assert "' scenes remaining'" in render
+
+def test_storyboard_sequence_encode_has_inline_pending_elapsed_and_error_feedback():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert "sequenceExportPending: {}" in storyboard
+    assert "storyState.sequenceExportPending[storyId]" in storyboard
+    assert "if (storyState.sequenceExportPending[storyId]) return;" in storyboard
+    assert "data-sequence-encode' + (pending ? ' disabled' : '')" in storyboard
+    assert "data-sequence-export' + (pending ? ' disabled' : '')" in storyboard
+    assert 'data-sequence-elapsed aria-live="off"' in storyboard
+    assert 'role="status" aria-live="polite"' in storyboard
+    assert 'role="alert"' in storyboard
+    assert "window.clearInterval(sequenceExportElapsedTimer)" in storyboard
+    assert "reportError(err, !!storyState.story && storyState.story.id === storyId)" in storyboard
+    assert "if (status && showStatus !== false)" in storyboard
+    assert ".storyboard-sequence-processing" in css
+    assert ".storyboard-sequence-error" in css

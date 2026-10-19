@@ -16,6 +16,8 @@
     generationReceipts: {},
     newTakeCounts: {},
     sequenceExport: null,
+    sequenceExportPending: {},
+    sequenceExportErrors: {},
     sequenceEncodingWarnings: [],
     sequenceWarningsVisible: false,
     sequenceCollapsed: false,
@@ -320,10 +322,10 @@
     scheduleStorySave();
   }
 
-  function reportError(err) {
+  function reportError(err, showStatus) {
     var message = String(err && err.message ? err.message : err || 'Storyboard request failed.');
     var status = el('storyboard-save-state');
-    if (status) status.textContent = 'Error: ' + message;
+    if (status && showStatus !== false) status.textContent = 'Error: ' + message;
     if (typeof reportConsoleError === 'function') reportConsoleError('Storyboard', err);
     else if (window.console && console.error) console.error('[Storyboard] ' + message, err);
   }
@@ -2680,6 +2682,21 @@
     });
   }
 
+  function sequenceExportElapsed(startedAt) {
+    var seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    var minutes = Math.floor(seconds / 60);
+    return (minutes ? String(minutes) + 'm ' : '') + String(seconds % 60) + 's elapsed';
+  }
+
+  function updateSequenceExportElapsed() {
+    var story = storyState.story;
+    if (!story) return;
+    var pending = storyState.sequenceExportPending[story.id];
+    var host = el('storyboard-sequence-preview');
+    var elapsed = host && host.querySelector('[data-sequence-elapsed]');
+    if (pending && elapsed) elapsed.textContent = sequenceExportElapsed(pending.startedAt);
+  }
+
   function renderSequencePreview() {
     var host = el('storyboard-sequence-preview');
     if (!host || !storyState.story) return;
@@ -2707,6 +2724,8 @@
       : '';
 
     var assembly = storyState.sequenceExport;
+    var pending = storyState.sequenceExportPending[story.id];
+    var exportError = storyState.sequenceExportErrors[story.id];
     var encodingWarnings = storyState.sequenceEncodingWarnings || [];
     var warningByTake = {};
     encodingWarnings.forEach(function (warning) {
@@ -2730,17 +2749,26 @@
       selected.length + ' selected Take' + (selected.length === 1 ? '' : 's') +
       (selectedSecondsLabel ? ' · ' + selectedSecondsLabel : '') +
       '</span></div><div class="storyboard-sequence-actions">' +
-      '<span class="storyboard-save-state" data-sequence-status>' + assemblyStatus + '</span>' +
+      '<span class="storyboard-save-state" data-sequence-status>' + (pending ? 'Processing…' : assemblyStatus) + '</span>' +
       '<button type="button" class="review-captions-btn" data-sequence-toggle aria-expanded="' + (storyState.sequenceCollapsed ? 'false' : 'true') + '">' +
         (storyState.sequenceCollapsed ? 'Show' : 'Hide') +
       '</button>' +
-      '<button type="button" class="storyboard-primary-btn" data-sequence-export>Export Sequence</button>' +
+      '<button type="button" class="storyboard-primary-btn" data-sequence-export' + (pending ? ' disabled' : '') + '>' +
+        (pending && !pending.encode ? 'Exporting…' : 'Export Sequence') + '</button>' +
       '</div></header>' +
       (encodingWarnings.length ? '<div class="storyboard-sequence-encoding-warning"><strong>This requires encoding</strong>' +
         '<button type="button" class="review-captions-btn" data-sequence-warnings>' +
           (storyState.sequenceWarningsVisible ? 'Hide warnings' : 'Show warnings') +
         '</button>' +
-        '<button type="button" class="storyboard-primary-btn" data-sequence-encode>Encode</button></div>' : '') +
+        '<button type="button" class="storyboard-primary-btn" data-sequence-encode' + (pending ? ' disabled' : '') + '>' +
+          (pending && pending.encode ? 'Encoding…' : 'Encode') + '</button></div>' : '') +
+      (pending ? '<div class="storyboard-sequence-processing" role="status" aria-live="polite">' +
+        '<span class="storyboard-sequence-working-indicator" aria-hidden="true"></span>' +
+        '<div><strong>' + (pending.encode ? 'Encoding sequence' : 'Exporting sequence') + '</strong>' +
+        '<span>' + (pending.encode ? 'Preparing Takes, normalizing video, and assembling the sequence' : 'Preparing and assembling selected Takes') +
+        ' · <span data-sequence-elapsed aria-live="off">' + sequenceExportElapsed(pending.startedAt) + '</span></span></div></div>' : '') +
+      (exportError ? '<div class="storyboard-sequence-error" role="alert"><strong>Sequence export failed</strong><span>' +
+        escapeHtml(exportError) + '</span></div>' : '') +
       '<div class="storyboard-sequence-body' + (storyState.sequenceCollapsed ? ' hidden' : '') + '">' +
       outputHtml +
       '<section class="storyboard-sequence-timeline" aria-label="Selected Takes timeline">' +
@@ -2782,11 +2810,21 @@
     });
   }
 
+  var sequenceExportElapsedTimer = 0;
+
   function exportSelectedSequence(encode) {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
+    if (storyState.sequenceExportPending[storyId]) return;
+    var pending = { encode: !!encode, startedAt: Date.now() };
+    storyState.sequenceExportPending[storyId] = pending;
+    delete storyState.sequenceExportErrors[storyId];
+    renderSequencePreview();
+    if (!sequenceExportElapsedTimer) {
+      sequenceExportElapsedTimer = window.setInterval(updateSequenceExportElapsed, 1000);
+    }
     setSaveState(encode ? 'Encoding sequence...' : 'Exporting sequence...');
-    flushPendingSaves().then(function () {
+    return flushPendingSaves().then(function () {
       return assemblyRequest({ storyId: storyId, encode: !!encode });
     }).then(function (payload) {
       if (storyState.story && storyState.story.id === storyId) {
@@ -2798,10 +2836,19 @@
           storyState.sequenceEncodingWarnings = [];
           storyState.sequenceWarningsVisible = false;
         }
-        renderSequencePreview();
+        setSaveState('Saved');
       }
-      setSaveState('Saved');
-    }).catch(reportError);
+    }).catch(function (err) {
+      storyState.sequenceExportErrors[storyId] = String(err && err.message ? err.message : err);
+      reportError(err, !!storyState.story && storyState.story.id === storyId);
+    }).finally(function () {
+      delete storyState.sequenceExportPending[storyId];
+      if (!Object.keys(storyState.sequenceExportPending).length && sequenceExportElapsedTimer) {
+        window.clearInterval(sequenceExportElapsedTimer);
+        sequenceExportElapsedTimer = 0;
+      }
+      if (storyState.story && storyState.story.id === storyId) renderSequencePreview();
+    });
   }
 
   function closeStoryActionMenus(exceptMenu) {

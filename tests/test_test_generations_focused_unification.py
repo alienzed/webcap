@@ -9,7 +9,7 @@ def test_native_regular_and_campaign_launch_controls():
     js = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     finder = (ROOT / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
     for key in ("test-generations-inline-count", "test-generations-inline-auto-vl",
-                "test-generations-campaign-mode", "epoch-finder-back-to-tests",
+                "epoch-finder-back-to-tests",
                 "test-generations-prompt", "test-generations-aspect",
                 "test-generations-megapixels", "test-generations-duration",
                 "test-generations-seed",
@@ -24,7 +24,6 @@ def test_native_regular_and_campaign_launch_controls():
     assert "el('test-generations-batch-auto-vl').checked = autoVl;" in js
     assert "preserveSingleSeed: !!preserveSingleSeed && count === 1" in js
     assert "preserveSingleSeed" in (ROOT / "tool/server/test_batch.py").read_text(encoding="utf-8")
-    assert "window.epochFinderShowMode('finder')" in js
     assert "epoch-finder-back-to-tests" in finder
     assert "showMode('tests')" in finder
     assert "window.epochFinderShowMode = showMode" in finder

@@ -18,7 +18,7 @@ ENTRY AND EXIT STATE ARE OPTIONAL PLANNING AIDS.
 Use entry or exit state when a Scene genuinely depends on a specific handoff, visible state, prop, action, or reference frame. Keep them concise and purposeful.
 
 MAKE EACH SCENE GENERATABLE ON ITS OWN.
-Scenes may be generated independently. Include enough concrete information for the current Scene to generate successfully while carrying any shared facts or evolving state the concept requires.
+Scenes may be generated independently. Include enough concrete information for the current Scene to generate successfully while carrying any shared facts or evolving state the concept requires. Use other Scenes to resolve visual facts, not as references in the final generation prompt: replace "taller than the previous character" or "same room as before" with the relevant concrete visual traits and current setting. Comparisons between subjects visible within this Scene remain useful. Do not invent precision or details unsupported by the concept or supplied context.
 
 ASSUME NO SESSION MEMORY.
 Every request is self-contained. Use the Story/Scene context supplied for the current task. Creative invention is appropriate when the task asks for development; narrow writing or revision should preserve supplied facts and focus changes on the requested scope.

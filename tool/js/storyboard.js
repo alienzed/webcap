@@ -25,6 +25,7 @@
     sceneViewMode: 'focus',
     activeSceneId: '',
     openStoryRequestId: 0,
+    navigationRequestId: 0,
     storyCollapsed: false,
     storyLibraryCompact: false,
     storyAction: null,
@@ -2713,6 +2714,7 @@
       }
       renderScenes();
       renderSequencePreview();
+      if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
       if (mode !== previousMode || sceneId) {
         var sceneWorkspace = document.querySelector('.storyboard-scene-workspace');
         if (sceneWorkspace) sceneWorkspace.scrollTop = 0;
@@ -4164,6 +4166,7 @@
         throw new Error('Storyboard Story response identity mismatch.');
       }
       storyState.story = payload.story;
+      if (previousStoryId !== payload.story.id) storyState.activeSceneId = '';
       if (previousStoryId !== payload.story.id && storyState.storyCollapsed) setStoryCollapsed(false);
       if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
       storyState.sequenceExport = null;
@@ -4180,11 +4183,13 @@
       syncDirectorToolsUi();
       if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();
       setSaveState('Saved');
-      return refreshSequenceExport(storyId);
+      if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+      refreshSequenceExport(storyId).catch(reportError);
+      return storyState.story;
     }).catch(function (err) {
       if (requestId !== storyState.openStoryRequestId) return null;
       reportError(err);
-      return null;
+      throw err;
     });
   }
 
@@ -4217,6 +4222,7 @@
       return refreshLibrary().then(function () {
         renderStory();
         setSaveState('Saved');
+        if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
       });
     }).catch(reportError);
   }
@@ -5555,12 +5561,21 @@
     if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();
   }
 
+  function getStoryboardRouteTarget() {
+    return {
+      storyId: String(storyState.story && storyState.story.id || ''),
+      sceneId: String(storyState.story && storyState.sceneViewMode === 'focus' ? storyState.activeSceneId : '')
+    };
+  }
+
   function openStoryboardActivity(target) {
     if (window.closeMediaExplorerActivity) window.closeMediaExplorerActivity();
     target = target && typeof target === 'object' ? target : {};
     var targetStoryId = String(target.storyId || '');
     var targetSceneId = String(target.sceneId || '');
     var targetTakeId = String(target.takeId || '');
+    var navigationId = ++storyState.navigationRequestId;
+    if (targetSceneId && !targetStoryId) throw new Error('Storyboard Scene navigation requires a Story ID.');
     if (typeof window.closeGenerateActivity === 'function') window.closeGenerateActivity();
     var frame = el('app-frame');
     var workspace = el('storyboard-workspace');
@@ -5571,29 +5586,30 @@
     workspace.classList.remove('hidden');
     if (typeof window.refreshAssistantModes === 'function') window.refreshAssistantModes();
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
-    if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
     refreshDirector();
     refreshGenerationCapabilities();
-    refreshLibrary().then(function () {
-      return reconcileDirectorJobs();
-    }).then(function () {
+    return refreshLibrary().then(function () {
+      if (navigationId !== storyState.navigationRequestId) return null;
       if (targetStoryId) return openStory(targetStoryId);
-      if (storyState.story) {
-        return refreshGenerationQueue(storyState.story.id).then(function () {
-          renderStory();
-        });
-      }
+      if (storyState.story) return openStory(storyState.story.id);
       var first = storyState.stories && storyState.stories[0];
       if (first) return openStory(first.id);
       renderStory();
       return null;
-    }).then(function () {
-      if (!targetSceneId || !storyState.story || String(storyState.story.id || '') !== targetStoryId) return;
-      if (!storyState.story.scenes || !storyState.story.scenes[targetSceneId]) {
-        throw new Error('Storyboard activity Scene no longer exists: ' + targetSceneId);
+    }).then(function (story) {
+      if (navigationId !== storyState.navigationRequestId) return null;
+      if (!story && targetStoryId) throw new Error('Storyboard Story could not be opened: ' + targetStoryId);
+      if (!targetSceneId) {
+        if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+        return story;
       }
-      return Promise.resolve(setSceneViewMode('focus', targetSceneId)).then(function () {
-        if (!targetTakeId) return;
+      if (!storyState.story || String(storyState.story.id || '') !== targetStoryId ||
+          !storyState.story.scenes || !storyState.story.scenes[targetSceneId] ||
+          (storyState.story.sceneOrder || []).indexOf(targetSceneId) === -1) {
+        throw new Error('Storyboard Scene no longer exists: ' + targetSceneId);
+      }
+      return setSceneViewMode('focus', targetSceneId).then(function () {
+        if (!targetTakeId) return story;
         var scene = storyState.story.scenes[targetSceneId];
         if (!(scene.takes && scene.takes[targetTakeId]) && !(scene.removedTakes && scene.removedTakes[targetTakeId])) {
           throw new Error('Storyboard Take no longer exists in scene: ' + targetTakeId);
@@ -5602,9 +5618,12 @@
         var cards = sceneRoot && sceneRoot.querySelectorAll('.storyboard-take[data-take-id]');
         var card = cards && Array.prototype.find.call(cards, function (node) { return node.dataset.takeId === targetTakeId; });
         if (!card) throw new Error('Storyboard Take is not visible in scene: ' + targetTakeId);
+        var takes = card.closest('details.storyboard-takes');
+        if (takes) takes.open = true;
         card.setAttribute('tabindex', '-1');
         card.scrollIntoView({block: 'center'});
         card.focus();
+        return story;
       });
     }).catch(reportError);
   }
@@ -5872,7 +5891,7 @@
         else if (action === 'delete') deleteStory(storyId, story && story.title);
         return;
       }
-      if (event.target.closest('[data-story-open]')) openStory(storyId);
+      if (event.target.closest('[data-story-open]')) openStory(storyId).catch(reportError);
     };
     storyLibraryList.addEventListener('scroll', function () {
       closeStoryActionMenus();
@@ -6272,6 +6291,7 @@
   }
 
   window.openStoryboardActivity = openStoryboardActivity;
+  window.getStoryboardRouteTarget = getStoryboardRouteTarget;
   window.closeStoryboardActivity = closeStoryboardActivity;
 
   bindUi();

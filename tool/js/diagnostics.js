@@ -8,6 +8,7 @@ var diagnosticsAssessmentStoppingId = '';
 var diagnosticsAssessmentSort = { key: 'speed', descending: true };
 var diagnosticsAssessmentExpanded = new Set();
 var diagnosticsAssessmentReviewRefresh = 0;
+var diagnosticsAssessmentRuntime = 'local';
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
@@ -127,7 +128,7 @@ function diagnosticsAssessmentSortAndFilter() {
     return diagnosticsAssessmentSort.descending ? -cmp : cmp;
   });
   bodies.forEach(function (body) {
-    body.hidden = !!query && !body.dataset.assessmentSearch.includes(query);
+    body.hidden = (diagnosticsAssessmentRuntime !== 'all' && body.dataset.assessmentRuntime !== diagnosticsAssessmentRuntime) || (!!query && !body.dataset.assessmentSearch.includes(query));
     table.appendChild(body); // Move paired main/evidence rows together; never recreate interactive DOM.
   });
   table.querySelectorAll('thead th[data-assessment-sort]').forEach(function (heading) {
@@ -258,8 +259,9 @@ function selectUnifiedAssessmentModels(select) {
       });
     }
   });
-  document.querySelectorAll('#diagnostics-assessment-results input[data-assessment-select]').forEach(function (input) {
+  document.querySelectorAll('#diagnostics-assessment-results tbody[data-assessment-model]:not([hidden]) input[data-assessment-select]').forEach(function (input) {
     input.checked = select;
+    input.dispatchEvent(new Event('change'));
   });
   diagnosticsEl('diagnostics-assessment-selection').textContent =
     (selected.director.size + selected.vision.size) + ' model(s) selected · Run Selected Tests starts the server-owned suite.';
@@ -269,7 +271,7 @@ function selectUnifiedAssessmentModels(select) {
 function diagnosticsAssessmentSyncHeaderSelection() {
   var header = diagnosticsEl('diagnostics-assessment-select-all');
   if (!header) return;
-  var inputs = Array.from(document.querySelectorAll('#diagnostics-assessment-results input[data-assessment-select]'));
+  var inputs = Array.from(document.querySelectorAll('#diagnostics-assessment-results tbody[data-assessment-model]:not([hidden]) input[data-assessment-select]'));
   var checked = inputs.filter(function (input) { return input.checked; }).length;
   header.checked = inputs.length > 0 && checked === inputs.length;
   header.indeterminate = checked > 0 && checked < inputs.length;
@@ -349,16 +351,24 @@ function refreshUnifiedModelAssessment() {
     table.appendChild(head);
 
     var present = { director: new Set(), vision: new Set() };
+    var seenModels = new Set();
     function refreshSelectionSummary() {
       diagnosticsEl('diagnostics-assessment-selection').textContent =
         (diagnosticsAssessmentSelected.director.size + diagnosticsAssessmentSelected.vision.size) +
         ' model(s) selected · Run Selected Tests starts the server-owned suite.';
     }
     function addRow(title, kind, ref, report) {
+      if (seenModels.has(ref)) return;
+      seenModels.add(ref);
+      var supportsVision = vision.some(function (entry) { return String(entry.modelRef || '') === ref; });
+      var supportsDirector = directors.some(function (entry) { return String(entry.id || '') === ref; });
+      if (supportsVision) present.vision.add(ref);
+      if (supportsDirector) present.director.add(ref);
       present[kind].add(ref);
       var key = kind + ':' + ref;
       var row = document.createElement('tbody');
       row.dataset.assessmentModel = key;
+      row.dataset.assessmentRuntime = String(ref).startsWith('local::') ? 'local' : 'remote';
       row.dataset.assessmentSearch = (title + ' ' + ref + ' ' + kind).toLowerCase();
       row.assessmentSort = { model: title.toLowerCase(), role: kind, size: null, thinking: null, speed: null, output: null, quality: null, result: 1, tested: null };
       row.assessmentReport = report;
@@ -367,11 +377,14 @@ function refreshUnifiedModelAssessment() {
       var checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.dataset.assessmentSelect = '';
-      checkbox.checked = diagnosticsAssessmentSelected[kind].has(ref);
+      checkbox.checked = diagnosticsAssessmentSelected.director.has(ref) || diagnosticsAssessmentSelected.vision.has(ref);
       checkbox.setAttribute('aria-label', 'Select ' + kind + ' model ' + ref);
       checkbox.addEventListener('change', function () {
-        if (checkbox.checked) diagnosticsAssessmentSelected[kind].add(ref);
-        else diagnosticsAssessmentSelected[kind].delete(ref);
+        ['director', 'vision'].forEach(function (role) {
+          if (!((role === 'director' && supportsDirector) || (role === 'vision' && supportsVision))) return;
+          if (checkbox.checked) diagnosticsAssessmentSelected[role].add(ref);
+          else diagnosticsAssessmentSelected[role].delete(ref);
+        });
         refreshSelectionSummary();
       });
       selection.appendChild(checkbox);
@@ -395,7 +408,7 @@ function refreshUnifiedModelAssessment() {
       expand.setAttribute('aria-expanded', String(diagnosticsAssessmentExpanded.has(key)));
       name.appendChild(expand);
       line.appendChild(name);
-      cell('Role', kind === 'vision' ? 'Vision' : 'Director');
+      cell('Role', supportsDirector && supportsVision ? 'Director · Vision' : supportsVision ? 'Vision' : 'Director');
       var model = (kind === 'director' ? directors : vision).find(function (entry) {
         return String(kind === 'director' ? entry.id || '' : entry.modelRef || '') === ref;
       }) || {};
@@ -546,6 +559,7 @@ function refreshUnifiedModelAssessment() {
     });
     results.replaceChildren(table);
     diagnosticsAssessmentSortAndFilter();
+    diagnosticsAssessmentSyncHeaderSelection();
     if (diagnosticsAssessmentReviewRefresh) window.clearTimeout(diagnosticsAssessmentReviewRefresh);
     diagnosticsAssessmentReviewRefresh = 0;
     var reviewsRunning = capabilityRuns.some(function (run) {
@@ -1122,6 +1136,11 @@ function wireDiagnosticsUi() {
         'Cannot start assessment: ' + String(error.message || error);
       reportConsoleError('Model Assessment', error);
     }
+  };
+  diagnosticsEl('diagnostics-assessment-runtime').onchange = function () {
+    diagnosticsAssessmentRuntime = this.value;
+    diagnosticsAssessmentSortAndFilter();
+    diagnosticsAssessmentSyncHeaderSelection();
   };
   diagnosticsEl('diagnostics-assessment-refresh').onclick = function () { refreshUnifiedModelAssessment().catch(function () {}); };
   diagnosticsEl('diagnostics-assessment-stop').onclick = stopUnifiedModelAssessment;

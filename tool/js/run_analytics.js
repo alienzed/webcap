@@ -135,7 +135,7 @@
       .then(function(response){return response.json().then(function(data){if(!response.ok||!data.ok)throw new Error(data.error||'Analytics failed.');return data;});})
       .then(function(data){if(token===generation&&origin===folder){report=data;render();}})
       .catch(function(exc){if(token===generation)error(exc);})
-      .finally(function(){if(token===generation){el('analyze').disabled=false;el('analyze').textContent='Analyze selected';}});
+      .finally(function(){if(token===generation){el('analyze').textContent='Analyze selected';updateScopeUi();}});
   }
   function discover() {
     var token=++generation, origin=folder;

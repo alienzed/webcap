@@ -454,3 +454,40 @@ def test_run_setup_uses_compact_parameter_rail_and_resume_canvas():
     assert 'function formatTrainingRunLearningRate' in script
     assert "noteParts.push('LR forced on resume')" in script
     assert "note.classList.toggle('hidden', !noteParts.length)" in script
+
+
+def test_empty_training_selection_does_not_post_review_or_enable_train():
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
+    script = r'''
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+let posts = 0;
+let renders = 0;
+const button = { disabled: false };
+const context = {
+  console, Promise,
+  document: { addEventListener() {} },
+  state: { folder: 'sets/empty' },
+  trainingWorkspaceState: { review: { ok: true }, reviewRequestId: 0 },
+  fetch() { posts++; throw new Error('Unexpected /fs/training_review request'); }
+};
+vm.createContext(context);
+vm.runInContext(source, context);
+context.isTrainingWorkspaceActive = () => true;
+context.getVisibleMediaSelectionForTraining = () => [];
+context.getTrainingWorkspaceEls = () => ({
+  review: { set innerHTML(value) { renders++; this.text = value; }, querySelectorAll() { return []; } },
+  reviewModalContent: { innerHTML: '', querySelectorAll() { return []; } },
+  queueJobBtn: button
+});
+context.escapeHtml = value => String(value);
+context.refreshTrainingReview().then(value => {
+  if (value !== null || posts !== 0 || renders !== 1 || !button.disabled)
+    throw new Error('Empty selection must clear the review, disable training, and skip the request');
+  if (context.trainingWorkspaceState.reviewError !== 'No visible media items are selected for training.')
+    throw new Error('Missing empty-state message');
+}).catch(err => { console.error(err); process.exitCode = 1; });
+'''
+    subprocess.run(["node", "-e", script, str(root / "tool" / "js" / "training_review.js")], check=True)

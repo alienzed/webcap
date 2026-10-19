@@ -3673,14 +3673,16 @@
 .storyboard-scene-workspace.director-active,
 .storyboard-scene-workspace.director-protected,
 .storyboard-story-overview.director-protected,
-.storyboard-story-authoring.director-protected {
+.storyboard-story-authoring.director-protected,
+.storyboard-scene.director-protected {
   position: relative;
 }
 
 .storyboard-scene-workspace.director-active::after,
 .storyboard-scene-workspace.director-protected::after,
 .storyboard-story-overview.director-protected::after,
-.storyboard-story-authoring.director-protected::after {
+.storyboard-story-authoring.director-protected::after,
+.storyboard-scene.director-protected::after {
   content: "";
   position: absolute;
   inset: 0;

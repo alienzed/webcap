@@ -267,19 +267,20 @@ def test_storyboard_revise_scenes_lives_in_director_tools_and_keeps_sparse_scene
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
 
-    assert "function reviseScenes(instruction, modelId)" in storyboard
+    assert "function reviseScenes(instruction, modelId, generateFreshTakes)" in storyboard
     assert 'id="storyboard-director-tools-btn"' in html
     assert 'id="storyboard-director-tools-modal"' in html
     assert 'id="storyboard-director-tools-instruction"' in html
     assert '<option value="continuity">Continuity pass</option>' in html
     assert "DIRECTOR_PASS_PRESETS.continuity.instruction" in storyboard
     assert "function runDirectorToolsRevision()" in storyboard
-    assert "reviseScenes(instruction, storyState.director.modelId)" in storyboard
+    assert "reviseScenes(instruction, storyState.director.modelId, generateFreshTakes)" in storyboard
     assert "id: 'revise-scenes'" not in storyboard
 
     assert "kind: 'repair'" in storyboard
     protection = storyboard.split("function setDirectorTargetProtected(target, protectedState)", 1)[1].split("function syncDirectorPendingControls", 1)[0]
-    assert "target.kind === 'scene-prompt' || target.kind === 'repair'" in protection
+    assert "if (target.kind === 'scene-prompt')" in protection
+    assert "if (target.kind === 'repair')" in protection
     assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState)" in protection
 
     scene_payload = storyboard.split("function scenePayloadFromUi(sceneId)", 1)[1].split("\n  function ", 1)[0]
@@ -300,26 +301,29 @@ def test_storyboard_director_region_overlays_match_coarse_semantic_scopes():
 
     assert "setDirectorRegionProtected(el('storyboard-story-authoring'), protectedState);" in protection
     assert "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), protectedState);" in protection
-    assert "target.kind === 'scene-prompt' || target.kind === 'repair'" in protection
+    assert "if (target.kind === 'scene-prompt')" in protection
+    assert "if (target.kind === 'repair')" in protection
+    assert "if (sceneRegion) setDirectorRegionProtected(sceneRegion, protectedState);" in protection
     assert "target.kind === 'concept'" in protection
     assert "setDirectorRegionProtected(el('storyboard-story-overview'), protectedState);" in protection
     assert "target.kind === 'story-action'" in protection
     assert "data-story-action-disabled" in protection
 
-    assert "target.kind === 'scene-prompt'" in targeting
+    assert "if (target.kind === 'scene-prompt') return sceneElement(target.sceneId);" in targeting
     assert "target.kind === 'scenes'" in targeting
     assert "target.kind === 'repair'" in targeting
     assert "return document.querySelector('.storyboard-scene-workspace');" in targeting
+    assert "var fillsWorkspace = kind === 'scenes' || kind === 'repair';" in positioning
     assert "kind === 'scene-prompt'" in positioning
-    assert "kind === 'scenes'" in positioning
     assert "kind === 'repair'" in positioning
     assert "var fillsOverview = kind === 'concept';" in positioning
-    assert "var fillsRegion = fillsWorkspace || fillsOverview;" in positioning
-    assert "preferredOverlayWidth = 840;" in positioning
+    assert "var fillsRegion = fillsWorkspace || fillsOverview || kind === 'scene-prompt';" in positioning
+    assert "preferredOverlayWidth = 440;" in positioning
 
     assert ".storyboard-scene-workspace.director-protected" in css
     assert ".storyboard-story-overview.director-protected" in css
     assert ".storyboard-story-authoring.director-protected" in css
+    assert ".storyboard-scene.director-protected::after" in css
 
 
 def test_storyboard_director_region_protection_resets_before_current_story_reapply():
@@ -328,8 +332,10 @@ def test_storyboard_director_region_protection_resets_before_current_story_reapp
     sync = storyboard.split("function syncDirectorPendingControls()", 1)[1].split("function setDirectorPending", 1)[0]
     story_reset = "setDirectorRegionProtected(el('storyboard-story-authoring'), false);"
     scenes_reset = "setDirectorRegionProtected(document.querySelector('.storyboard-scene-workspace'), false);"
+    scene_reset = "setDirectorRegionProtected(scene, false);"
 
     assert story_reset in sync
+    assert scene_reset in sync
     assert scenes_reset in sync
     assert sync.index(story_reset) < sync.index("Object.keys(storyState.director.pendingTargets)")
     assert sync.index(scenes_reset) < sync.index("Object.keys(storyState.director.pendingTargets)")

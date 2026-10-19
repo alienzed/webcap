@@ -2292,6 +2292,11 @@
           return Object.assign({name:item.name}, item.enrichment || {});
         });
         var selected = (result.proposal || {}).storyWide || [];
+        if (!selected.length) {
+          continueWithoutMatches = true;
+          setDirectorStatus('Director found no additional LoRAs.');
+          return;
+        }
         window.openDirectorLoraReview({items:selected, catalogue:options, apply:function (choices) {
           if (generateState.modelId !== originalModelId || el('generate-prompt').value !== originalPrompt) {
             throw new Error('Generation context changed; request new suggestions.');
@@ -2315,7 +2320,7 @@
           if (missing.length) el('generate-prompt').value = originalPrompt +
             (originalPrompt.trim() ? ', ' : '') + missing.join(', ');
           renderLoras();
-          runDirector(operation, true);
+          return runDirector(operation, true);
         }});
         setDirectorStatus('Review LoRA suggestions before applying.');
       });
@@ -2332,6 +2337,7 @@
   }
 
   function runDirector(operation, skipPlanning) {
+    if (generateState.director.busy) return;
     if (!skipPlanning && el('generate-director-lora-enable').checked) return planGenerateLoras(operation);
     if (generateState.director.busy) return;
     if (!generateState.director.modelId) throw new Error('Choose a Prompt Assistant model.');

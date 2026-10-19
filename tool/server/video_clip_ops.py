@@ -455,17 +455,22 @@ def clip_video_response(data):
     overwrite = bool(data.get("overwrite"))
     overwrite_source = bool(data.get("overwriteSource"))
 
-    if not folder:
+    storyboard_source = bool(data.get("storyId") or data.get("mediaPath"))
+    if not folder and not storyboard_source:
         return jsonify({"error": "Missing folder"}), 400
 
     try:
-        src_folder = safe_join_fs_root(folder)
-        if not src_folder.exists() or not src_folder.is_dir():
-            return jsonify({"error": "Source folder does not exist"}), 404
-
-        source_path = src_folder / media_name
-        if not source_path.exists() or not source_path.is_file():
-            return jsonify({"error": "Source media file not found"}), 404
+        if storyboard_source:
+            from .video_frame_ops import resolve_storyboard_clip_source
+            source_path = resolve_storyboard_clip_source(data)
+            src_folder = source_path.parent
+        else:
+            src_folder = safe_join_fs_root(folder)
+            if not src_folder.exists() or not src_folder.is_dir():
+                return jsonify({"error": "Source folder does not exist"}), 404
+            source_path = src_folder / media_name
+            if not source_path.exists() or not source_path.is_file():
+                return jsonify({"error": "Source media file not found"}), 404
 
         if not _is_video_file(source_path):
             return jsonify({"error": "Clip export is only available for video files"}), 400
@@ -498,7 +503,7 @@ def clip_video_response(data):
 
         crop_rect = _parse_crop_rect(data.get("crop"), src_w, src_h)
 
-        in_src_videos = src_folder.name.lower() == "src_videos"
+        in_src_videos = not storyboard_source and src_folder.name.lower() == "src_videos"
         if overwrite_source:
             if in_src_videos:
                 return jsonify({"error": "Source overwrite is not allowed inside src_videos"}), 400

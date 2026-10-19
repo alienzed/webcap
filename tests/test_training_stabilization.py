@@ -2159,3 +2159,29 @@ def test_history_sync_failure_keeps_terminal_continuation_in_queue(tmp_path, mon
                         lambda *_args: (_ for _ in ()).throw(OSError("disk full")))
     training_runner._persist_reconciled_state(training_runner._read_state())
     assert training_runner._read_state()["jobs"][0]["id"] == "next"
+
+
+def test_training_queue_reorder_position_preserves_nonqueued_slots(monkeypatch):
+    jobs = [
+        {"id": "running", "status": "running"},
+        {"id": "first", "status": "queued"},
+        {"id": "finished", "status": "completed"},
+        {"id": "second", "status": "queued"},
+        {"id": "third", "status": "queued"},
+    ]
+    state = {"jobs": jobs}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    monkeypatch.setattr(training_runner, "_persist_reconciled_state", lambda value: None)
+    monkeypatch.setattr(training_runner, "_public_job", lambda job: dict(job))
+
+    response, status = training_runner.reorder_response("third", "", position=0)
+    assert status == 200 and response["ok"]
+    assert [job["id"] for job in jobs] == ["running", "third", "finished", "first", "second"]
+
+    response, status = training_runner.reorder_response("third", "", position=2)
+    assert status == 200 and response["ok"]
+    assert [job["id"] for job in jobs] == ["running", "first", "finished", "second", "third"]
+
+    response, status = training_runner.reorder_response("second", "up")
+    assert status == 200 and response["ok"]
+    assert [job["id"] for job in jobs] == ["running", "second", "finished", "first", "third"]

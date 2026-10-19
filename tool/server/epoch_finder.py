@@ -1050,7 +1050,7 @@ def status(folder_path, campaign_id):
 
 
 
-def workspace_gallery(folder_path, model_id=""):
+def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collection_id="", checkpoints=None):
     """Read-only visual index over existing Test sessions and Finder campaigns.
 
     Each result retains its native execution identity. Only recorded run/epoch
@@ -1059,9 +1059,14 @@ def workspace_gallery(folder_path, model_id=""):
     from . import epoch_test_bench as bench
 
     selected_model = str(model_id or "").strip()
+    limit = max(1, min(96, int(limit)))
+    collection_id = str(collection_id or "")
+    checkpoint_ids = set(str(x) for x in (checkpoints or []) if isinstance(x, str))
+    offset = max(0, int(offset))
     media = []
     sessions = []
     campaigns = []
+    total = 0
     for directory in bench._session_directories(folder_path):
         payload = bench._read_status(directory) or {}
         if not payload or payload.get("campaignStaging"):
@@ -1069,9 +1074,7 @@ def workspace_gallery(folder_path, model_id=""):
         recorded_model = str(payload.get("modelId") or payload.get("model") or "")
         if selected_model and recorded_model != selected_model:
             continue
-        visible = bench._with_session_vision(
-            directory, bench._with_session_ratings(directory, bench._session_status_from_payload(directory, payload))
-        )
+        visible = payload  # Gallery catalog must not run per-session rating/VL enrichment.
         session_name = directory.name
         sessions.append({
             "id": session_name, "name": visible.get("name") or session_name,
@@ -1090,6 +1093,13 @@ def workspace_gallery(folder_path, model_id=""):
             epoch = provenance.get("sourceEpoch")
             if not source_job or source_folder != str(bench._relative_set_folder(folder_path)).replace(chr(92), "/").strip("/") or type(epoch) is not int:
                 source_job, epoch = "", None
+            if collection_id and collection_id != "test:" + session_name:
+                continue
+            if checkpoint_ids and source_job + ":" + str(epoch) not in checkpoint_ids:
+                continue
+            total += 1
+            if total <= offset or len(media) >= limit:
+                continue
             media.append({
                 "id": "test:" + session_name + ":" + media_file,
                 "source": "test", "session": session_name,
@@ -1133,6 +1143,13 @@ def workspace_gallery(folder_path, model_id=""):
                 epoch = origin.get("epoch") if origin else candidate
                 if type(epoch) is not int:
                     job_id, epoch = "", None
+                if collection_id and collection_id != "campaign:" + campaign["id"]:
+                    continue
+                if checkpoint_ids and job_id + ":" + str(epoch) not in checkpoint_ids:
+                    continue
+                total += 1
+                if total <= offset or len(media) >= limit:
+                    continue
                 media.append({
                     "id": "campaign:" + campaign["id"] + ":" + str(index),
                     "source": "campaign", "campaignId": campaign["id"],
@@ -1157,6 +1174,7 @@ def workspace_gallery(folder_path, model_id=""):
         runs = []
         warnings.append("Saved checkpoint listing unavailable: " + str(exc))
     return {"sessions": sessions, "campaigns": campaigns, "media": media,
+            "total": total, "offset": offset, "limit": limit,
             "runs": runs, "warnings": warnings}
 
 
@@ -1165,7 +1183,7 @@ def command(folder_path, operation, criteria=None):
     if operation == "list":
         return list_campaigns(folder_path)
     if operation == "workspace_gallery":
-        return workspace_gallery(folder_path, criteria.get("modelId"))
+        return workspace_gallery(folder_path, criteria.get("modelId"), limit=criteria.get("limit", 48), offset=criteria.get("offset", 0), collection_id=criteria.get("collectionId"), checkpoints=criteria.get("checkpoints"))
     if operation == "checkpoint_evidence":
         return checkpoint_evidence(folder_path, criteria.get("jobId"))
     if operation == "run_analytics":

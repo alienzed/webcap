@@ -4,7 +4,49 @@
   var legacy = document.getElementById('test-generations-body');
   var folder = '', model = '', payload = {sessions:[],campaigns:[],media:[]};
   var perspective = 'experiments', selection = '', chosen = '', serial = 0;
+  var loadedOffset = 0, pageSize = 48, loadingMore = false;
   var checkpointSelection = new Set();
+  var previewObserver = typeof IntersectionObserver === 'function'
+    ? new IntersectionObserver(function(entries) {entries.forEach(function(entry) {
+        if(!entry.isIntersecting)return;
+        previewObserver.unobserve(entry.target);
+        loadPreview(entry.target);
+      });}, {root:document.getElementById('test-unified-gallery'),rootMargin:'60px'})
+    : null;
+  var pendingPreviews=[],activePreviews=0,previewVersion=0;
+  function loadPreview(node) {
+    if(node.dataset.previewRequested)return;
+    node.dataset.previewRequested='1';
+    pendingPreviews.push({node:node,version:previewVersion});
+    pumpPreviews();
+  }
+  function pumpPreviews() {
+    while(activePreviews<3 && pendingPreviews.length) {
+      var task=pendingPreviews.shift(),node=task.node;
+      if(task.version!==previewVersion || !node.isConnected)continue;
+      activePreviews++;
+      var done=false;
+      var timeout=setTimeout(finish,12000);
+      function finish(){if(done)return;done=true;clearTimeout(timeout);activePreviews--;pumpPreviews();}
+      node.addEventListener('error',finish,{once:true});
+      if(node.tagName==='VIDEO') {
+        node.addEventListener('loadedmetadata',function(){
+          var d=Number(node.duration);
+          try {node.currentTime=Number.isFinite(d)&&d>0?Math.min(0.15,d/2):0.1;}
+          catch(e){finish();}
+        },{once:true});
+        node.addEventListener('loadeddata',finish,{once:true});
+        node.addEventListener('seeked',finish,{once:true});
+      } else node.addEventListener('load',finish,{once:true});
+      node.src=node.dataset.previewSrc;
+    }
+  }
+  function deferPreview(node,url) {
+    node.dataset.previewSrc=url;
+    if(previewObserver)previewObserver.observe(node);
+    else loadPreview(node);
+  }
+
   function el(id) { return document.getElementById('test-unified-' + id); }
   function text(node, value) { node.textContent = String(value == null ? '' : value); }
   function label(item) { return item.name || item.id; }
@@ -19,7 +61,7 @@
   }
   function api() {
     return fetch('/fs/epoch_finder', {method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{modelId:model}})})
+      body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{modelId:model,limit:pageSize,offset:loadedOffset,collectionId:perspective==='experiments'?selection:'',checkpoints:perspective==='checkpoints'?(checkpointSelection.size?Array.from(checkpointSelection):(selection?[selection]:[])):[]}})})
       .then(function(response) { return response.json().then(function(data) {
         if (!response.ok || !data.ok) throw new Error(data.error || 'Could not load generated results.');
         return data;
@@ -27,7 +69,8 @@
   }
   function refresh() {
     var version = ++serial;
-    text(el('description'), 'Loading recorded Test and Finder results…');
+    loadedOffset = 0;
+    text(el('description'), 'Loading first 48 results…');
     return api().then(function(result) {
       if (version !== serial) return;
       payload = result;
@@ -38,6 +81,21 @@
       console.error('[Test Generations Explore]', error);
       window.reportConsoleError('Test Generations Explore', error);
     });
+  }
+  function loadMore() {
+    if (loadingMore || (payload.media || []).length >= Number(payload.total || 0)) return;
+    loadingMore = true;
+    loadedOffset = (payload.media || []).length;
+    var version = serial;
+    api().then(function(result) {
+      if(version !== serial) return;
+      payload.media = (payload.media || []).concat(result.media || []);
+      payload.total = result.total;
+      renderGallery();
+    }).catch(function(error) {
+      window.reportConsoleError('Test Generations load more',error);
+      text(el('description'),'More results unavailable: '+String(error.message || error));
+    }).finally(function(){loadingMore=false;});
   }
   function recordedTime(item) {
     var n=Number(item && item.startedAt || 0);
@@ -86,7 +144,7 @@
         selection = perspective==='checkpoints'
           ? (checkpointSelection.has(item.id) ? item.id : (checkpointSelection.values().next().value || ''))
           : item.id;
-        renderList();renderGallery();
+        refresh();
       });
       host.appendChild(btn);
     });
@@ -148,9 +206,37 @@
         else window.openTestBenchAnalyticsSession(item.session);
       }
     });host.appendChild(open);
+    if(item.source==='test' && item.session) {
+      var section=document.createElement('section'),name=document.createElement('strong');
+      name.textContent='Saved assessments';
+      var evidence=document.createElement('pre');
+      evidence.textContent='Loading saved rating and VL evidence…';
+      section.append(name,evidence);host.appendChild(section);
+      var inspectedId=item.id;
+      fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:folder,operation:'test_open_session',criteria:{session:item.session}})})
+        .then(function(response){return response.json().then(function(data){
+          if(!response.ok||!data.ok)throw new Error(data.error||'Session unavailable.');
+          return data;
+        });}).then(function(data){
+          if(chosen!==inspectedId||!evidence.isConnected)return;
+          var result=(data.results||[]).find(function(entry){
+            return String(entry.mediaFile||entry.outputVideo||'')===item.mediaFile;
+          });
+          var byMedia=(data.testVision||{}).byMedia||{};
+          evidence.textContent=JSON.stringify({
+            rating:result&&result.rating, vl:byMedia[item.mediaFile]||null
+          },null,2);
+        }).catch(function(error) {
+          if(chosen===inspectedId&&evidence.isConnected)
+            evidence.textContent='Saved assessment unavailable: '+String(error.message||error);
+        });
+    }
   }
   function renderGallery() {
     var host=el('gallery');host.replaceChildren();
+    previewVersion++;pendingPreviews.length=0;
+    if(previewObserver)previewObserver.disconnect();
     var records=selectedMedia();
     if(!selection) records.sort(function(a,b){return recordedTime(b)-recordedTime(a);});
     if(chosen && !records.some(function(item){return item.id===chosen;})) {
@@ -159,7 +245,7 @@
     if(perspective==='checkpoints' && checkpointSelection.size>1) records.sort(function(a,b){return (a.jobId+':'+a.epoch).localeCompare(b.jobId+':'+b.epoch,undefined,{numeric:true});});
     text(el('title'),selection ? (collections().find(function(x){return x.id===selection;})||{}).name || 'Results' : 'All generated results');
     var warningText=(payload.warnings||[]).filter(Boolean).join(' · ');
-    text(el('description'),records.length+' recorded results · '+(perspective==='experiments'?'Experiments':'Checkpoints')+(warningText?' · '+warningText:''));
+    text(el('description'),records.length+' shown of '+Number(payload.total || records.length)+' results · '+(perspective==='experiments'?'Experiments':'Checkpoints')+(warningText?' · '+warningText:''));
     el('description').classList.toggle('is-warning',!!warningText);
     var previousCheckpoint = '';
     records.forEach(function(item) {
@@ -174,15 +260,20 @@
       var src=mediaUrl(item);
       var isImage=item.source==='campaign' || /\.(png|jpe?g|webp|gif|avif)$/i.test(item.mediaFile||'') || item.mediaKind==='image';
       if(src && item.mediaAvailable !== false && !item.framePruned) {
-        var media=document.createElement(isImage?'img':'video');media.src=src;
-        if(isImage) {media.loading='lazy';media.alt='Generated result';} else {media.preload='metadata';media.muted=true;}
-        card.appendChild(media);
+        var media=document.createElement(isImage?'img':'video');
+        if(isImage) {media.alt='Generated result';} else {media.preload='metadata';media.muted=true;media.playsInline=true;}
+        card.appendChild(media);deferPreview(media,src);
       } else {var blank=document.createElement('span');blank.textContent=item.error || (item.framePruned?'Frame pruned':item.mediaAvailable===false?'Media missing':'No retained frame');card.appendChild(blank);}
       var title=document.createElement('span');title.textContent=(item.runName ? item.runName+' · ':'')+(item.epoch==null?'Unattributed':'Epoch '+item.epoch)+(item.rating?' · ★ '+item.rating:'');
       card.appendChild(title);card.classList.toggle('active',chosen===item.id);
       card.addEventListener('click',function(){inspect(item);host.querySelectorAll('.test-unified-card').forEach(function(node){node.classList.toggle('active',node===card);});});host.appendChild(card);
     });
-    if(!records.length) {var p=document.createElement('p');p.textContent='No recorded images for this selection.';host.appendChild(p);}
+    if(!records.length) {var p=document.createElement('p');p.textContent='No matching results in the loaded page. Load more to continue browsing.';host.appendChild(p);}
+    if ((payload.media || []).length < Number(payload.total || 0)) {
+      var more=document.createElement('button');more.type='button';more.className='review-captions-btn test-unified-load-more';
+      more.textContent='Load more results ('+(payload.media || []).length+' / '+payload.total+')';
+      more.addEventListener('click',loadMore);host.appendChild(more);
+    }
   }
   var advancedScreens = {
     finder: document.getElementById('epoch-finder-screen'),
@@ -266,8 +357,8 @@
   el('explore').onclick=function(){builder(false);if(folder)refresh();};
   el('build').onclick=function(){builder(true);};
   el('new').onclick=function(){builder(true);};
-  el('experiments').onclick=function(){perspective='experiments';selection='';checkpointSelection.clear();renderList();renderGallery();};
-  el('checkpoints').onclick=function(){perspective='checkpoints';selection='';checkpointSelection.clear();renderList();renderGallery();};
+  el('experiments').onclick=function(){perspective='experiments';selection='';checkpointSelection.clear();refresh();};
+  el('checkpoints').onclick=function(){perspective='checkpoints';selection='';checkpointSelection.clear();refresh();};
   el('reload').onclick=refresh;
   window.addEventListener('webcap:test-preview-updated', function () {
     if (!root.classList.contains('hidden') && el('builder').classList.contains('hidden')) refresh();

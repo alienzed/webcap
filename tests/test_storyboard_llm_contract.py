@@ -380,7 +380,7 @@ def test_model_guidance_only_for_h3_authoring(monkeypatch):
     for operation in ("develop_story", "develop_story_outline", "repair_scenes"):
         instruction = "Adjust staging." if operation == "repair_scenes" else ""
         prompt = storyboard_llm_contract.build_request(story, "", operation, instruction)["prompt"]
-        assert "Prefer simple staging." in prompt if operation != "develop_story_outline" else "Prefer simple staging." not in prompt
+        assert prompt.count("Prefer simple staging.") == 1
     for operation in ("write_prompt", "refine_prompt"):
         prompt = storyboard_llm_contract.build_request(story, "scene-2", operation, "Adjust staging.")["prompt"]
         assert prompt.count("Prefer simple staging.") == 1

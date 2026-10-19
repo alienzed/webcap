@@ -582,7 +582,12 @@
     if (!toggles.length || !drawer || !close || !pause || !clear || !list) return;
 
     Array.prototype.forEach.call(toggles, function (toggle) {
-      toggle.onclick = function () { setOpen(!state.open); };
+      toggle.onclick = function () {
+        if (window.isOperationsDrawerMounted) {
+          if (window.isOperationsDrawerVisible()) window.selectOperationsSection('queues');
+          else window.openOperationsDrawer('queues');
+        } else setOpen(!state.open);
+      };
     });
     close.onclick = function () { setOpen(false); };
     pause.onclick = function () {

@@ -225,7 +225,7 @@
   }
 
   function maybeAutoOpen() {
-    var competingDrawer = ['director-chat-drawer', 'inference-queue-drawer'].some(function (id) {
+    var competingDrawer = (window.isOperationsDrawerMounted && !document.getElementById('operations-drawer').classList.contains('hidden')) || ['director-chat-drawer', 'inference-queue-drawer'].some(function (id) {
       var drawer = el(id);
       return drawer && !drawer.classList.contains('hidden');
     });
@@ -1131,7 +1131,7 @@
     var detailsToggle = el('activity-monitor-details-toggle');
     var detailsCount = el('activity-monitor-details-count');
     if (!primaryHost || !primaryQueue || !details || !detailsToggle || !detailsCount) throw new Error('Activity panel markup missing.');
-    if (state.open && !active.length && !pendingItems.length && !recent.length) {
+    if (state.open && !window.isOperationsDrawerMounted && !active.length && !pendingItems.length && !recent.length) {
       state.open = false;
       storeLastSeen(Date.now() / 1000);
     }
@@ -1313,14 +1313,19 @@
     });
   }
 
-  function setOpen(open, manualClose) {
+  function setOpen(open, manualClose, internal) {
+    if (window.isOperationsDrawerMounted && !internal) {
+      if (open) window.openOperationsDrawer('activity');
+      else window.closeOperationsDrawer(manualClose);
+      return;
+    }
     var wasOpen = state.open;
     state.open = !!open;
     if (state.open) {
       // Reopening Activity does not reset per-job dismissal decisions.
       if (!wasOpen) state.openedAt = Date.now() / 1000;
       if (typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
-      if (typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
+      if (!internal && typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
     } else if (wasOpen) {
       if (manualClose) {
         var item = currentPrimaryItem();
@@ -1340,12 +1345,12 @@
     close.onclick = function () { setOpen(false, true); };
     el('activity-monitor-details-toggle').onclick = function () { state.detailsOpen = !state.detailsOpen; render(); };
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || drawer.contains(event.target) ||
+      if (!state.open || (window.isOperationsDrawerMounted && event.target.closest('#operations-drawer')) || drawer.contains(event.target) ||
           event.target.closest('.shell-workload-indicator')) return;
       setOpen(false, true);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open) setOpen(false, true);
+      if (event.key === 'Escape' && state.open && !window.isOperationsDrawerMounted) setOpen(false, true);
     });
     window.addEventListener('webcap:inference-queue-changed', wake);
   }

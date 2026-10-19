@@ -94,6 +94,18 @@
   function inspect(item) {
     chosen=item.id;
     var host=el('details'); host.replaceChildren();
+    var original=mediaUrl(item);
+    if (original && item.mediaAvailable !== false && !item.framePruned) {
+      var preview=document.createElement(item.source==='campaign' || /\\.(png|jpe?g|webp|gif|avif)$/i.test(item.mediaFile||'') || item.mediaKind==='image' ? 'img':'video');
+      preview.className='test-unified-inspect-media';
+      preview.src=original;
+      if(preview.tagName==='VIDEO') preview.controls=true;
+      else preview.alt='Selected generated result';
+      host.appendChild(preview);
+      var link=document.createElement('a');
+      link.href=original;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Open original';
+      host.appendChild(link);
+    }
     var name=document.createElement('h4');name.textContent=item.candidate || (item.epoch==null?'Unattributed result':'Epoch '+item.epoch);host.appendChild(name);
     [['Source',item.source],['Run',item.runName||item.jobId],['Epoch',item.epoch],['Session',item.session],['Campaign',item.campaignId],['Round',item.round],['Seed',item.seed],['Rating',item.rating],['Prompt',item.prompt],['Settings',item.settings],['VL assessment',item.assessment],['Reference comparisons',item.referenceAssessments],['DINO evidence',item.dinoAssessments],['Error',item.error]].forEach(function(pair) {
       if (pair[1]===undefined || pair[1]===null || pair[1]==='')return;
@@ -101,6 +113,16 @@
       label.textContent=pair[0];value.textContent=typeof pair[1]==='object'?JSON.stringify(pair[1],null,2):String(pair[1]);
       section.append(label,value);host.appendChild(section);
     });
+    if(item.prompt) {
+      var reuse=document.createElement('button');reuse.type='button';
+      reuse.className='review-captions-btn';reuse.textContent='Use prompt in builder';
+      reuse.addEventListener('click',function() {
+        document.getElementById('test-generations-prompt').value=String(item.prompt);
+        document.getElementById('test-generations-prompt').dispatchEvent(new Event('input',{bubbles:true}));
+        builder(true);
+      });
+      host.appendChild(reuse);
+    }
     var open=document.createElement('button');open.type='button';open.className='review-captions-btn';
     open.textContent='Open source '+(item.source==='campaign'?'campaign':'session');
     open.addEventListener('click',function() {
@@ -118,6 +140,9 @@
   function renderGallery() {
     var host=el('gallery');host.replaceChildren();
     var records=selectedMedia();
+    if(chosen && !records.some(function(item){return item.id===chosen;})) {
+      chosen='';text(el('details'),'Select an image to inspect its generation settings and assessments.');
+    }
     if(perspective==='checkpoints' && checkpointSelection.size>1) records.sort(function(a,b){return (a.jobId+':'+a.epoch).localeCompare(b.jobId+':'+b.epoch,undefined,{numeric:true});});
     text(el('title'),selection ? (collections().find(function(x){return x.id===selection;})||{}).name || 'Results' : 'All generated results');
     text(el('description'),records.length+' recorded results · '+(perspective==='experiments'?'Experiments':'Checkpoints'));

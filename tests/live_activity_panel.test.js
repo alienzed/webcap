@@ -157,8 +157,10 @@ test('Model Assessment Activity counters never stringify missing fields', () => 
 
 test('Activity includes server-session history without replaying pre-refresh notifications', () => {
   assert.ok(source.includes("requestJson('/fs/activity?limit=50')"));
-  assert.ok(!source.includes("finishedAt(item) < sessionStartedAt) return;"));
-  assert.ok(source.includes("if (finishedAt(item) < sessionStartedAt) return;"));
+  const capture = source.slice(source.indexOf('  function captureRecent('), source.indexOf('  function publishProgress('));
+  const notifications = source.slice(source.indexOf('  function notifyRecent('), source.indexOf('  function queueText('));
+  assert.ok(!capture.includes("finishedAt(item) < sessionStartedAt"));
+  assert.ok(notifications.includes("if (finishedAt(item) < sessionStartedAt) return;"));
   assert.ok(source.includes("var recent = sessionRecent();"));
   assert.ok(source.includes("recent.slice(0, 50)"));
   assert.ok(source.includes("function formatJobDuration(start, end)"));

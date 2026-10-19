@@ -7243,7 +7243,7 @@ html[data-theme="dark"] iframe {
 .test-generations-vl-detail pre { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; margin:4px 0 12px; }
 
 .test-generations-vl-summary { color:var(--muted); font-weight:600; margin-bottom:12px; }
-.test-generations-vl-comparison { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap:12px 16px; }
+.test-generations-vl-comparison { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 600px), 1fr)); gap:12px 16px; }
 .test-generations-vl-comparison-group { min-width:0; }
 .test-generations-vl-comparison-group > strong { display:block; margin:10px 0 5px; }
 .test-generations-vl-table-wrap { overflow-x:auto; max-width:1080px; }

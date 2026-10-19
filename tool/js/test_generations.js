@@ -4358,7 +4358,11 @@
     var live = status && (status.status === 'running' || status.status === 'stopping');
     if (statusEl) statusEl.textContent = live ? '' : statusText(status);
     if (errorEl) {
-      errorEl.textContent = showSessionError && status && status.error ? String(status.error) : '';
+      var sessionError = showSessionError && status && status.error ? String(status.error) : '';
+      var vlErrors = status && Array.isArray(status.autoVlErrors) ? status.autoVlErrors : [];
+      errorEl.textContent = [sessionError].concat(vlErrors.map(function (message) {
+        return 'Automatic VL: ' + String(message);
+      })).filter(Boolean).join('\n');
       errorEl.classList.toggle('hidden', !errorEl.textContent);
     }
     renderSessionMeta(status || {});

@@ -1110,6 +1110,18 @@ def test_storyboard_scene_cards_visually_mark_selected_take_state():
     assert ".storyboard-scene-progress-card.has-selected-take" in css
 
 
+def test_storyboard_scene_progress_cards_mark_saved_refinements():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'data-scene-refined title="Refined with Director"' in storyboard
+    assert "(scene.refineComplete ? '' : ' hidden')" in storyboard
+    assert "refined.classList.toggle('hidden', !scene.refineComplete);" in storyboard
+    refine_sync = storyboard.split("function syncSceneRefineState(sceneId) {", 1)[1].split("\n  }", 1)[0]
+    assert "syncSceneProgressionCard(sceneId);" in refine_sync
+    assert ".storyboard-scene-progress-step .storyboard-scene-progress-refined" in css
+
+
 def test_storyboard_scene_continuity_is_collapsible():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 

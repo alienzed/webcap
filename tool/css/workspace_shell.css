@@ -3135,3 +3135,24 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .operations-sections .activity-monitor-primary .activity-monitor-copy > small{font-size:12px}
 .operations-sections .activity-director-metrics{gap:6px}
 .operations-sections .activity-director-metrics > div{padding:8px}
+
+/* Operations finishing pass: three permanently reachable section controls, one
+   bounded content scroller. No inner Activity/Queue scrolling or new state. */
+.operations-sections{display:flex;flex-direction:column;overflow:hidden;flex:1 1 auto;min-height:0;gap:0}
+.operations-group{display:flex;flex-direction:column;min-height:0;flex:0 0 auto}
+.operations-group.operations-group-expanded{flex:1 1 auto;min-height:0}
+.operations-group .operations-toggle{position:static;z-index:auto;flex:0 0 auto;margin-bottom:7px}
+.operations-group .operations-content.operations-expanded{display:block;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.operations-group .operations-content:not(.operations-expanded){display:none}
+.operations-group .inference-queue-drawer,.operations-group .activity-monitor-drawer{min-height:0}
+.operations-group .activity-monitor-primary,.operations-group .activity-monitor-details,
+.operations-group .inference-queue-list{max-height:none;overflow:visible}
+.operations-group .inference-queue-row.status-running,
+.operations-group .inference-queue-row.status-starting,
+.operations-group .inference-queue-row.status-stopping{border-left:3px solid var(--accent)}
+.operations-group .job-queue-row .inference-queue-heading strong,
+.operations-group .inference-queue-row .inference-queue-heading strong{font-size:13px;line-height:1.3}
+.operations-group .inference-queue-actions .review-captions-btn,
+.operations-group .job-queue-lane-actions .review-captions-btn{min-height:28px;padding:4px 8px;font-size:12px}
+.operations-group .activity-monitor-trend{margin:8px 8px}
+.operations-group .activity-monitor-primary .progress-card{margin-top:7px}

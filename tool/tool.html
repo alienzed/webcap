@@ -1376,7 +1376,6 @@
                                                 <span id="test-generations-wildcard-status" class="test-generations-wildcard-status" aria-live="polite"></span>
                                                 <button id="test-generations-recent-prompts-btn" type="button" class="review-captions-btn" title="Reuse a recent prompt">Recent</button>
                                                 <button id="test-generations-wildcard-btn" type="button" class="review-captions-btn test-generations-wildcard-wand" title="Generate a wildcard prompt from this Set's captions" aria-label="Generate wildcard prompt">&#10024;</button>
-                                                <details class="test-generations-extra-launch"><summary title="Optional detailed Batch setup">More</summary><button id="test-generations-batch-btn" type="button" class="review-captions-btn" title="Detailed Batch setup, using the same server Batch execution">Detailed Batch setup…</button></details>
                                             </div>
                                         </div>
                                         <textarea id="test-generations-prompt" rows="5"></textarea>
@@ -1402,16 +1401,7 @@
                                         </div>
                                     </div>
                                 </section>
-                                <details id="test-generations-batch-summary" class="test-generations-batch-summary hidden" open>
-                                    <summary><strong id="test-generations-batch-heading">Batch Test + VL</strong></summary>
-                                    <select id="test-generations-batch-history" class="hidden" aria-label="Select recent batch"></select>
-                                    <div id="test-generations-batch-progress" class="test-generations-batch-progress" aria-live="polite"></div>
-                                    <div class="test-generations-batch-actions">
-                                        <button id="test-generations-batch-stop" class="review-captions-btn" type="button" title="Stop submitting and assessing. Already queued Test sessions continue running.">Stop submitting / VL</button>
-                                        <button id="test-generations-batch-dismiss" class="review-captions-btn hidden" type="button">Dismiss</button>
-                                    </div>
-                                    <div id="test-generations-batch-results" class="test-generations-batch-results hidden"></div>
-                                </details>
+                                <div id="test-generations-multi-actions" class="test-generations-multi-actions" aria-label="Active multi-session submission controls"></div>
                                 <div id="test-generations-status" class="training-command-status" aria-live="polite"></div>
                                 <div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>
                                 <section class="test-generations-library">
@@ -2081,18 +2071,6 @@
                     <div id="activity-monitor-list" class="activity-monitor-list"></div>
                 </div>
             </aside>
-            <div id="test-generations-batch-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="test-generations-batch-close">
-                <section class="keep-lora-dialog test-generations-batch-dialog" role="dialog" aria-modal="true" aria-labelledby="test-generations-batch-title">
-                    <header class="keep-lora-header"><div><h2 id="test-generations-batch-title">Batch Test + Ask VL</h2><p class="keep-lora-source">Queue normal Test sessions with fresh seeds; optionally evaluate previews with Ask VL.</p></div><button id="test-generations-batch-close" type="button" class="training-review-modal-close" aria-label="Close Batch dialog">&times;</button></header>
-                    <div class="keep-lora-content">
-                        <label class="test-generations-batch-count-label">Test sessions <input id="test-generations-batch-count" type="number" min="1" max="20" step="1" value="5"></label>
-                        <label class="test-generations-batch-count-label"><input id="test-generations-batch-auto-vl" type="checkbox" checked> Automatically evaluate completed previews with Ask VL</label>
-                        <div id="test-generations-batch-config-summary" class="keep-lora-source"></div>
-                        <p class="keep-lora-source">Batch submission and automatic VL continue on the server when this tab closes. Stopping Batch halts further submissions and its VL assessments; accepted Test sessions continue independently. VL percentages require resolved wildcard attributes.</p>
-                    </div>
-                    <footer class="keep-lora-header test-generations-batch-dialog-actions"><button id="test-generations-batch-cancel" type="button" class="review-captions-btn">Cancel</button><button id="test-generations-batch-start" type="button" class="training-btn">Queue Sessions</button></footer>
-                </section>
-            </div>
             <div id="test-generations-wildcard-modal" class="keep-lora-modal test-generations-wildcard-modal hidden" aria-hidden="true" data-escape-close-id="test-generations-wildcard-close">
                 <section class="keep-lora-dialog test-generations-wildcard-dialog" role="dialog" aria-modal="true" aria-labelledby="test-generations-wildcard-title">
                     <header class="keep-lora-header">

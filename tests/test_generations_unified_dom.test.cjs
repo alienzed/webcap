@@ -13,7 +13,7 @@ const html = `<!doctype html><html><body>
   <button data-test-generations-perspective="explore"></button>
   <div class="test-generations-controls">
    <section class="test-generations-next-run" id="real-test-form"><input id="test-generations-prompt"></section>
-   <details id="test-generations-batch-summary"></details>
+   
    <div id="test-generations-status"></div><div id="test-generations-error"></div>
    <section><div class="test-generations-staged-panel" id="real-candidates"></div></section>
   </div>
@@ -119,7 +119,7 @@ test('real WebCap Test markup retains all live controls through unified view tra
  d.getElementById('test-unified-build').click();
  const builder=d.getElementById('test-unified-builder');
  assert.ok(builder.contains(d.getElementById('test-generations-run-btn')));
- assert.ok(builder.contains(d.getElementById('test-generations-batch-btn')));
+ assert.ok(builder.contains(d.getElementById('test-generations-inline-count')));
  assert.ok(builder.contains(d.getElementById('test-generations-files')));
  d.getElementById('test-unified-finder').click();
  assert.ok(builder.contains(d.getElementById('epoch-finder-start')));

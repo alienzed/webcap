@@ -3236,12 +3236,6 @@
         });
         if (previewSort === 'rating') refreshTestPreviewOrder();
       }
-      if (testBatch && testBatch.folder === String(launchFolder) && testBatch.statuses[sessionName]) {
-        (testBatch.statuses[sessionName].results || []).forEach(function (result) {
-          if (resultMediaFile(result) === mediaFile) result.rating = payload.rating;
-        });
-        testBatchRecalculate(testBatch);
-      }
       return request('test_rating_summary', { modelId: currentTestModelId() });
     }).then(function (payload) {
       if (prepared && payload && payload.candidateScores) {
@@ -4655,7 +4649,7 @@
     el('test-generations-wildcard-modal-status').textContent = '';
     setResultsView('grid');
     renderStatus({ status: 'idle' });
-    renderTestBatch();
+    refreshServerTestBatches();
     window.epochFinderPrepare(launchFolder);
     // Default to the same real Regular form in Build; exact Activity routes
     // continue to the proven native session/campaign review destinations.
@@ -4736,437 +4730,246 @@
     });
   }
 
-  // Server-owned batches: the browser displays snapshots, never schedules work.
-  var testBatch = null;
-  var testBatchHistory = [];
-  var viewedTestBatch = null;
-  var testBatchSort = 'vl';
-  var testBatchCompletedActivity = new Set();
-  var testBatchDismissedIds = new Set();
-  var testBatchSnapshotKeys = Object.create(null);
-  var testBatchScores = Object.create(null);
-  setInterval(function () { if (launchFolder) refreshServerTestBatches(); }, 4000);
-  function refreshServerTestBatches() {
-    return captionAssistRequestJson('/fs/test_generations/batches').then(function (payload) {
-      var batches = payload.batches || [];
-      var folder = String(launchFolder || '');
-      var available = batches.filter(function (b) { return b.folder === folder; });
-      available.sort(function (a,b) { return b.queuedAt-a.queuedAt; });
-      testBatch = available.find(function (b) { return b.status === 'queued' || b.status === 'running' || b.status === 'stopping'; }) ||
-                  available[0] || null;
-      testBatchHistory = available.filter(function (b) { return b !== testBatch; });
-      available.forEach(function (b) {
-        b.active = b.status === 'queued' || b.status === 'running' || b.status === 'stopping';
-        b.activityId = 'test-batch:' + b.id;
-        b.startedAt = b.startedAt || b.queuedAt;
-        b.scores = testBatchScores[b.id] || [];
-        b.dismissed = testBatchDismissedIds.has(b.id);
-        b.activityFinished = testBatchCompletedActivity.has(b.id);
-      });
-      if (viewedTestBatch) viewedTestBatch = available.find(function (b) { return b.id === viewedTestBatch.id; }) || null;
-      var selected = viewedTestBatch || testBatch;
-      var key = selected && [selected.sessions.length,selected.finished,selected.evaluated,selected.status].join(':');
-      if (selected && key !== testBatchSnapshotKeys[selected.id]) {
-        return Promise.all(selected.sessions.map(function (session) {
-          return requestForFolder(selected.folder, 'test_open_session', {session:session}).then(function (status) {
-            selected.statuses[session] = status;
-          }).catch(function (err) {
-            reportConsoleError('Batch session refresh · ' + session, err);
-          });
-        })).then(function () {
-          testBatchRecalculate(selected);
-          testBatchScores[selected.id] = selected.scores;
-          testBatchSnapshotKeys[selected.id] = key;
-          renderTestBatch();
-        });
-      }
-      renderTestBatch();
-    }).catch(function (err) { reportConsoleError('Test batch status', err); });
-  }
+  // The server coordinates submissions and automatic VL; the Sessions list owns
+  // all queued, running and completed Test presentation.
+  var activeTestBatches = [];
+  var pendingBatchSelection = null;
+  var batchAssessmentCounts = Object.create(null);
+  var batchErrorKeys = new Set();
+  var completedBatchActivities = new Set();
+  var lastBatchStateKeys = Object.create(null);
 
-  function renderTestBatch() {
-    var card = el('test-generations-batch-summary');
-    var availableBatches = [testBatch].concat(testBatchHistory).filter(Boolean).filter(function (entry) {
-      return entry.folder === String(launchFolder) && !entry.dismissed;
+  setInterval(function () {
+    if (launchFolder) refreshServerTestBatches();
+  }, 4000);
+
+  function syncTestBatchStopActions(batches) {
+    var host = el('test-generations-multi-actions');
+    var wanted = new Set(batches.map(function (batch) { return String(batch.id); }));
+    host.querySelectorAll('[data-test-batch-stop]').forEach(function (button) {
+      if (!wanted.has(button.dataset.testBatchStop)) button.remove();
     });
-    var batch = viewedTestBatch && availableBatches.indexOf(viewedTestBatch) !== -1
-      ? viewedTestBatch : availableBatches[0];
-    card.classList.toggle('hidden', !batch);
-    if (!batch) return;
-    var startButton = el('test-generations-batch-start');
-    if (!el('test-generations-batch-modal').classList.contains('hidden')) {
-      startButton.disabled = !!(testBatch && testBatch.active);
-      openTestBatchDialogSummary();
-    }
-    var historySelect = el('test-generations-batch-history');
-    var choices = availableBatches;
-    var existingOptions = Array.from(historySelect.options);
-    if (existingOptions.length !== choices.length || choices.some(function (entry, index) {
-      return !existingOptions[index] || existingOptions[index].value !== entry.activityId;
-    })) {
-      historySelect.replaceChildren();
-      choices.forEach(function (entry) {
-        var option = document.createElement('option');
-        option.value = entry.activityId;
-        historySelect.appendChild(option);
-      });
-    }
-    choices.forEach(function (entry, index) {
-      historySelect.options[index].textContent = (entry === testBatch ? 'Latest · ' : 'Earlier · ') +
-        new Date(entry.startedAt * 1000).toLocaleTimeString() + ' · ' + entry.phase;
-    });
-    if (historySelect.value !== batch.activityId) historySelect.value = batch.activityId;
-    historySelect.classList.toggle('hidden', choices.length < 2);
-    el('test-generations-batch-heading').textContent = (batch.autoVl ? 'Batch Test + VL' : 'Batch Test') + ' · ' + batch.folder;
-    var lines = [];
-    lines.push(batch.phase + ' · ' + batch.sessions.length + '/' + batch.count + ' sessions submitted');
-    if (batch.sessions.length) lines.push(batch.finished + '/' + batch.sessions.length + ' sessions terminal');
-    if (batch.autoVl && batch.previews) {
-      lines.push(batch.evaluated + '/' + batch.previews + ' previews assessed successfully');
-    }
-    if (batch.detail) lines.push(batch.detail);
-    if (batch.errors.length) lines.push(batch.errors.length + ' error(s) below; full details in Console.');
-    el('test-generations-batch-progress').textContent = lines.join(' · ');
-    if (testBatch && testBatch.active) {
-      var activityBatch = testBatch;
-      var evaluatingOnly = activityBatch.phase === 'Evaluating';
-      var completed = evaluatingOnly ? activityBatch.evaluated : (activityBatch.phase === 'Generating + VL' || activityBatch.phase === 'Generating') ? activityBatch.finished : activityBatch.sessions.length;
-      var total = evaluatingOnly ? activityBatch.previews : (activityBatch.phase === 'Generating + VL' || activityBatch.phase === 'Generating') ? activityBatch.sessions.length : activityBatch.count;
-      window.publishActivityProgress({
-        id: activityBatch.activityId, kind: 'test-batch', lane: 'background', title: activityBatch.autoVl ? 'Batch Test + VL' : 'Batch Test',
-        status: 'running', phase: activityBatch.phase, detail: activityBatch.folder + (activityBatch.detail ? ' · ' + activityBatch.detail : ''),
-        progress: total > 0 ? { completed: completed, total: total } : null,
-        progressLabel: total > 0 ? completed + ' / ' + total + (activityBatch.phase === 'Evaluating' ? ' previews' : ' sessions') : '',
-        startedAt: activityBatch.startedAt, folder: activityBatch.folder, modelId: activityBatch.criteria.modelId
-      });
-    } else if (testBatch && !testBatch.active) {
-      var completedBatch = testBatch;
-      window.finishActivityProgress(completedBatch.activityId, completedBatch.phase === 'Failed' ? 'failed' : completedBatch.phase === 'Stopped' ? 'stopped' : 'completed');
-      if (!completedBatch.activityFinished) {
-        completedBatch.activityFinished = true;
-        testBatchCompletedActivity.add(completedBatch.id);
-        window.recordActivityCompletion({ id: completedBatch.activityId, kind: 'test-batch', lane: 'background',
-          title: completedBatch.autoVl ? 'Batch Test + VL' : 'Batch Test', status: completedBatch.phase === 'Failed' ? 'failed' : completedBatch.phase === 'Stopped' ? 'stopped' : 'completed',
-          folder: completedBatch.folder, modelId: completedBatch.criteria.modelId, detail: completedBatch.detail, finishedAt: Date.now() / 1000 });
-      }
-    }
-    el('test-generations-batch-stop').classList.toggle('hidden', !batch.active || batch !== testBatch);
-    el('test-generations-batch-dismiss').classList.toggle('hidden', batch.active);
-    var resultHost = el('test-generations-batch-results');
-    resultHost.classList.toggle('hidden', !batch.scores.length && !batch.sessions.length && !batch.errors.length);
-    if (!batch.scores.length && !batch.sessions.length && !batch.errors.length) { resultHost.textContent = ''; return; }
-    resultHost.classList.remove('hidden');
-    var sessionsHost = resultHost.querySelector('[data-test-batch-sessions]');
-    if (!sessionsHost) {
-      resultHost.textContent = '';
-      sessionsHost = document.createElement('div');
-      sessionsHost.dataset.testBatchSessions = '';
-      resultHost.appendChild(sessionsHost);
-    }
-    var heading = sessionsHost.querySelector('[data-test-batch-sessions-heading]');
-    if (!heading) {
-      heading = document.createElement('div');
-      heading.dataset.testBatchSessionsHeading = '';
-      sessionsHost.appendChild(heading);
-    }
-    heading.textContent = 'Sessions (' + batch.sessions.length + ')';
-    var expected = new Set(batch.sessions);
-    sessionsHost.querySelectorAll('[data-test-batch-session]').forEach(function (button) {
-      if (!expected.has(button.dataset.testBatchSession)) button.remove();
-    });
-    batch.sessions.forEach(function (session, index) {
-      var status = batch.statuses[session];
-      var button = Array.from(sessionsHost.querySelectorAll('[data-test-batch-session]')).find(function (item) {
-        return item.dataset.testBatchSession === session;
+    batches.forEach(function (batch) {
+      var id = String(batch.id);
+      var button = Array.from(host.querySelectorAll('[data-test-batch-stop]')).find(function (item) {
+        return item.dataset.testBatchStop === id;
       });
       if (!button) {
         button = document.createElement('button');
         button.type = 'button';
-        button.dataset.testBatchSession = session;
-        sessionsHost.appendChild(button);
+        button.className = 'review-captions-btn';
+        button.dataset.testBatchStop = id;
+        host.appendChild(button);
       }
-      var sessionStatus = String(status && status.status || 'queued').toLowerCase();
-      button.dataset.batchState = /fail|error/.test(sessionStatus) ? 'failed'
-        : /complet|success|finish|done/.test(sessionStatus) ? 'completed'
-        : /run|progress|process|start/.test(sessionStatus) ? 'running' : 'queued';
-      button.title = sessionLabel(session) + ' · ' + sessionStatus;
-      button.setAttribute('aria-label', 'Session ' + (index + 1) + ' of ' + batch.count + ': ' + sessionLabel(session) + ' · ' + sessionStatus);
-      button.textContent = (index + 1) + '/' + batch.count + ' · ' + sessionStatus;
+      button.textContent = batch.status === 'stopping' ? 'Stopping submission / VL…' : 'Stop submission / VL';
+      button.title = 'Stop remaining session submissions and automatic VL only. Already accepted Test sessions continue.';
+      button.disabled = batch.status === 'stopping';
     });
-    var errorsHost = resultHost.querySelector('[data-test-batch-errors]');
-    if (!errorsHost) {
-      errorsHost = document.createElement('details');
-      errorsHost.dataset.testBatchErrors = '';
-      resultHost.appendChild(errorsHost);
-    }
-    var wasExpanded = errorsHost.open;
-    errorsHost.replaceChildren();
-    errorsHost.classList.toggle('hidden', !batch.errors.length);
-    if (batch.errors.length) {
-      var summary = document.createElement('summary');
-      summary.textContent = 'Errors (' + batch.errors.length + ')';
-      errorsHost.appendChild(summary);
-      batch.errors.forEach(function (error) {
-        var line = document.createElement('p');
-        line.textContent = error;
-        errorsHost.appendChild(line);
-      });
-    }
-    errorsHost.open = wasExpanded;
-    var previousTable = resultHost.querySelector('table');
-    if (previousTable) previousTable.remove();
-    if (!batch.scores.length) return;
-    var rows = batch.scores.slice().sort(function (a, b) {
-      if (testBatchSort === 'stars') return (b.starCount ? b.stars : -1) - (a.starCount ? a.stars : -1) || b.vl - a.vl;
-      if (testBatchSort === 'name') return a.name.localeCompare(b.name);
-      return b.vl - a.vl;
-    });
-    var table = document.createElement('table');
-    var head = document.createElement('thead');
-    var header = document.createElement('tr');
-    [['Candidate','name'],['VL','vl'],['Stars','stars']].forEach(function (column) {
-      var th = document.createElement('th');
-      var sort = document.createElement('button');
-      sort.type = 'button';
-      sort.dataset.testBatchSort = column[1];
-      sort.textContent = column[0] + (testBatchSort === column[1] ? ' ↓' : '');
-      th.appendChild(sort);
-      header.appendChild(th);
-    });
-    head.appendChild(header);
-    table.appendChild(head);
-    var body = document.createElement('tbody');
-    rows.forEach(function (row) {
-      var tr = document.createElement('tr');
-      var nameCell = document.createElement('td');
-      var open = document.createElement('button');
-      open.type = 'button';
-      open.dataset.testBatchSession = row.session;
-      open.title = row.name;
-      open.textContent = stagedFileParts(row.name).label;
-      nameCell.appendChild(open);
-      tr.appendChild(nameCell);
-      var vl = document.createElement('td');
-      vl.textContent = row.count ? Math.round(100 * row.matches / row.count) + '%' : '—';
-      vl.title = row.count + ' counted attributes · ' + row.previews + ' assessed previews';
-      tr.appendChild(vl);
-      var stars = document.createElement('td');
-      stars.textContent = row.starCount ? '★ ' + row.stars.toFixed(1) : '—';
-      stars.title = row.starCount + ' manual rating(s)';
-      tr.appendChild(stars);
-      body.appendChild(tr);
-    });
-    table.appendChild(body);
-    resultHost.appendChild(table);
   }
 
-  function stopTestBatch() {
-    if (!testBatch || !testBatch.active) return;
-    captionAssistRequestJson('/fs/test_generations/batches', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({operation:'cancel', batchId:testBatch.id})
+  function publishTestBatchActivity(batch) {
+    var id = 'test-batch:' + batch.id;
+    var active = ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1;
+    if (active) {
+      var evaluating = batch.phase === 'Evaluating';
+      var completed = evaluating ? batch.evaluated : batch.finished;
+      var total = evaluating ? batch.previews : batch.count;
+      window.publishActivityProgress({
+        id: id, kind: 'test-batch', lane: 'background',
+        title: batch.autoVl ? 'Tests + VL' : 'Tests',
+        status: 'running', phase: batch.phase,
+        detail: batch.folder + (batch.detail ? ' · ' + batch.detail : ''),
+        progress: total > 0 ? { completed: completed, total: total } : null,
+        progressLabel: total > 0 ? completed + ' / ' + total + (evaluating ? ' previews' : ' sessions') : '',
+        startedAt: batch.startedAt || batch.queuedAt,
+        folder: batch.folder, modelId: batch.criteria.modelId
+      });
+    } else {
+      window.finishActivityProgress(id, batch.status === 'failed' ? 'failed' : batch.status === 'stopped' ? 'stopped' : 'completed');
+      if (completedBatchActivities.has(id)) return;
+      completedBatchActivities.add(id);
+      window.recordActivityCompletion({
+        id: id, kind: 'test-batch', lane: 'background',
+        title: batch.autoVl ? 'Tests + VL' : 'Tests',
+        status: batch.status === 'failed' ? 'failed' : batch.status === 'stopped' ? 'stopped' : 'completed',
+        folder: batch.folder, modelId: batch.criteria.modelId,
+        detail: batch.detail, finishedAt: batch.finishedAt || Date.now() / 1000
+      });
+    }
+  }
+
+  function refreshTestCandidateScoresAfterVl(folder, modelId, session) {
+    return requestForFolder(folder, 'test_rating_summary', { modelId: modelId }).then(function (payload) {
+      if (String(launchFolder) !== folder || currentTestModelId() !== modelId || !prepared) return;
+      prepared.candidateScores = payload.candidateScores || {};
+      prepared.candidateVisionScores = payload.candidateVisionScores || {};
+      syncStagedCandidateScores(prepared.candidateScores);
+      syncTestVlCandidateRows();
+      if (!session || currentSession !== session || testVl.running) return;
+      return requestForFolder(folder, 'test_open_session', { session: session }).then(function (status) {
+        if (String(launchFolder) !== folder || currentTestModelId() !== modelId || currentSession !== session) return;
+        testVl.loadedScope = '';
+        renderStatus(status);
+      });
+    }).catch(function (err) { reportConsoleError('Refresh Test VL scores', err); });
+  }
+
+  function refreshServerTestBatches() {
+    return captionAssistRequestJson('/fs/test_generations/batches').then(function (payload) {
+      var folder = String(launchFolder || '');
+      var modelId = currentTestModelId();
+      var batches = (payload.batches || []).filter(function (batch) { return batch.folder === folder; });
+      activeTestBatches = batches.filter(function (batch) {
+        return ['queued', 'running', 'stopping'].indexOf(batch.status) !== -1
+          && batch.criteria.modelId === modelId;
+      });
+      syncTestBatchStopActions(activeTestBatches);
+      var updateSessions = false;
+      batches.forEach(function (batch) {
+        publishTestBatchActivity(batch);
+        var key = [batch.sessions.length, batch.finished, batch.status].join(':');
+        if (key !== lastBatchStateKeys[batch.id]) {
+          lastBatchStateKeys[batch.id] = key;
+          updateSessions = true;
+        }
+        (batch.errors || []).forEach(function (message, index) {
+          var errorKey = batch.id + ':' + index;
+          if (batchErrorKeys.has(errorKey)) return;
+          batchErrorKeys.add(errorKey);
+          reportConsoleError('Test sessions', new Error(message));
+        });
+        if (batch.autoVl && batch.evaluated > (batchAssessmentCounts[batch.id] || 0)) {
+          batchAssessmentCounts[batch.id] = batch.evaluated;
+          var visibleSession = batch.sessions.indexOf(currentSession) !== -1 ? currentSession : '';
+          refreshTestCandidateScoresAfterVl(folder, batch.criteria.modelId, visibleSession);
+        }
+        var pending = pendingBatchSelection;
+        if (pending && pending.id === batch.id && batch.sessions.length) {
+          pendingBatchSelection = null;
+          if (pending.folder === folder && pending.modelId === modelId && currentSession === pending.previousSession) {
+            var session = batch.sessions[0];
+            requestForFolder(folder, 'test_open_session', { session: session }).then(function (status) {
+              if (isOpen() && launchFolder === folder && currentTestModelId() === modelId &&
+                  currentSession === pending.previousSession) selectSessionStatus(status);
+            }).catch(showError);
+          }
+        }
+      });
+      if (isOpen() && (updateSessions || activeTestBatches.length)) {
+        return refreshSessionsIfDue(updateSessions ? 0 : 3000).then(function () {
+          if (!pollTimer && (queuedTestJobs.length || activeTestBatches.length)) pollStatus();
+        });
+      }
+    }).catch(function (err) { reportConsoleError('Test session coordination', err); });
+  }
+
+  function stopTestBatch(id) {
+    return captionAssistRequestJson('/fs/test_generations/batches', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({operation:'cancel', batchId:id})
     }).then(refreshServerTestBatches).catch(function (err) {
-      reportConsoleError('Test batch cancellation', err); showError(err);
-    });
-  }
-
-  function testBatchRecalculate(batch) {
-    var totals = Object.create(null);
-    batch.sessions.forEach(function (session) {
-      var status = batch.statuses[session];
-      var vision = status && status.testVision || {};
-      var byMedia = vision.byMedia || {};
-      var excluded = new Set(vision.disabledGroups || []);
-      (status && status.results || []).forEach(function (result) {
-        if (!result || result.kind === 'base') return;
-        var file = resultMediaFile(result);
-        var entry = byMedia[file];
-        var name = String(result.candidateFile || result.sourceLoRA || '');
-        if (!name) return;
-        var item = totals[name] || (totals[name] = {
-          name: name, session: session, matches: 0, count: 0, previews: 0, stars: 0, starCount: 0, vl: -1
-        });
-        var rating = Number(result.rating || 0);
-        if (rating > 0) { item.stars += rating; item.starCount += 1; }
-        if (!entry || !Array.isArray(entry.comparison)) return;
-        var ignored = new Set(entry.ignoredGroups || []);
-        var counted = false;
-        entry.comparison.forEach(function (group) {
-          if (excluded.has(group.id) || ignored.has(group.id)) return;
-          if (group.result !== 'match' && group.result !== 'mismatch') return;
-          item.count += 1;
-          if (group.result === 'match') item.matches += 1;
-          counted = true;
-        });
-        if (counted) item.previews += 1;
-      });
-    });
-    batch.scores = Object.keys(totals).map(function (name) {
-      var item = totals[name];
-      if (item.starCount) item.stars /= item.starCount;
-      item.vl = item.count ? item.matches / item.count : -1;
-      return item;
-    });
-    renderTestBatch();
-  }
-
-  function runTestBatch(count, preserveSingleSeed) {
-    if (testBatch && testBatch.active) throw new Error('A Test batch is already active.');
-    if (!isTestModelSupported()) throw new Error('Test model is unavailable.');
-    var prompt = String(el('test-generations-prompt').value || '').trim();
-    var selectedFiles = selectedCandidateFiles();
-    if (!prompt || !selectedFiles.length) throw new Error('Choose a prompt and at least one staged candidate.');
-    var declared = prepared && Array.isArray(prepared.settings) ? prepared.settings : [];
-    var settings = {};
-    [['aspectRatio','test-generations-aspect'],['megapixels','test-generations-megapixels'],
-      ['duration','test-generations-duration'],['dimensions','test-generations-dimensions']].forEach(function (pair) {
-      if (declared.indexOf(pair[0]) !== -1) settings[pair[0]] = String(el(pair[1]).value || '');
-    });
-    if (declared.indexOf('aspectRatio') !== -1 && !settings.aspectRatio) throw new Error('An aspect ratio is required.');
-    if (declared.indexOf('dimensions') !== -1 && !settings.dimensions.trim()) throw new Error('Dimensions are required.');
-    var strengths = {};
-    var defaultStrength = Number(defaultCandidateStrength);
-    if (!isFinite(defaultStrength) || defaultStrength < -2 || defaultStrength > 2) throw new Error('Default weight must be between -2 and 2.');
-    selectedFiles.forEach(function (file) {
-      var weight = Object.prototype.hasOwnProperty.call(candidateStrengths || {}, file) ? Number(candidateStrengths[file]) : defaultStrength;
-      if (!isFinite(weight) || weight < -2 || weight > 2) throw new Error('Strength must be between -2 and 2.');
-      strengths[file] = weight;
-    });
-    var criteria = {
-      name: String(el('test-generations-session-name').value || '').trim(),
-      selectedFiles: selectedFiles, modelId: currentTestModelId(), candidateStrengths: strengths,
-      includeBase: el('test-generations-base-include').checked,
-      prompt: prompt, settings: settings
-    };
-    if (sweepMode) criteria.sweepWeights = parseSweepWeights(sweepWeights);
-    if (preserveSingleSeed && count === 1 && declared.indexOf('seed') !== -1)
-      settings.seed = String(el('test-generations-seed').value || '').trim();
-    var autoVl = el('test-generations-batch-auto-vl').checked;
-    el('test-generations-batch-modal').classList.add('hidden');
-    el('test-generations-batch-modal').setAttribute('aria-hidden', 'true');
-    var acquireModel = autoVl ? loadCaptionVisionCapabilities().then(function () {
-      var model = getCaptionVisionModelId();
-      if (!model) throw new Error('Select an available Vision model.');
-      return model;
-    }) : Promise.resolve('');
-    return acquireModel.then(function (vlModel) {
-      return captionAssistRequestJson('/fs/test_generations/batches', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({operation:'enqueue', folder:String(launchFolder), count:count,
-                              criteria:criteria, autoVl:autoVl, vlModel:vlModel,
-                              preserveSingleSeed: !!preserveSingleSeed && count === 1})
-      });
-    }).then(function () { return refreshServerTestBatches(); }).catch(function (err) {
-      reportConsoleError('Test batch enqueue', err);
+      reportConsoleError('Stop Test submission / VL', err);
       showError(err);
     });
   }
 
-  function openTestBatchDialogSummary() {
-    var count = el('test-generations-batch-count');
-    var activeBatch = testBatch && testBatch.active;
-    var candidates = selectedCandidateFiles().length;
-    var totalRenders = candidates + (el('test-generations-base-include').checked ? 1 : 0);
-    var workload = Number(count.value || 5);
-    el('test-generations-batch-config-summary').textContent = activeBatch
-      ? 'A Test batch is already running for ' + testBatch.folder + '. Stop or finish that batch before starting another.'
-      : candidates + ' candidates · ' + workload + ' sessions · up to ' + (workload * totalRenders) + ' renders' +
-        (el('test-generations-batch-auto-vl').checked ? ' · up to ' + (workload * totalRenders) + ' VL assessments' : '') +
-        ' · current prompt/settings · fresh seed per session';
+  function testRunCriteria() {
+    if (!isTestModelSupported()) throw new Error('Test Generations is not available for the selected Base Model.');
+    var name = String(el('test-generations-session-name').value || '').trim();
+    var prompt = String(el('test-generations-prompt').value || '').trim();
+    var selectedFiles = selectedCandidateFiles();
+    var declared = prepared && Array.isArray(prepared.settings) ? prepared.settings : [];
+    var settings = {};
+    [['aspectRatio', 'test-generations-aspect'], ['megapixels', 'test-generations-megapixels'],
+      ['duration', 'test-generations-duration'], ['dimensions', 'test-generations-dimensions'],
+      ['seed', 'test-generations-seed']].forEach(function (pair) {
+      if (declared.indexOf(pair[0]) !== -1) settings[pair[0]] = String(el(pair[1]).value || '').trim();
+    });
+    if (!selectedFiles.length) throw new Error('Select at least one staged LoRA to test.');
+    if (!prompt) throw new Error('A test prompt is required.');
+    if (declared.indexOf('aspectRatio') !== -1 && !settings.aspectRatio) throw new Error('An aspect ratio is required.');
+    if (declared.indexOf('dimensions') !== -1 && !settings.dimensions) throw new Error('Dimensions are required.');
+    var defaultStrength = Number(defaultCandidateStrength);
+    if (!isFinite(defaultStrength) || defaultStrength < -2 || defaultStrength > 2) {
+      throw new Error('Default weight must be between -2 and 2.');
+    }
+    var strengths = {};
+    selectedFiles.forEach(function (file) {
+      var weight = Object.prototype.hasOwnProperty.call(candidateStrengths || {}, file)
+        ? Number(candidateStrengths[file]) : defaultStrength;
+      if (!isFinite(weight) || weight < -2 || weight > 2) throw new Error('Strength must be between -2 and 2.');
+      strengths[file] = weight;
+    });
+    var criteria = {
+      name: name, selectedFiles: selectedFiles, modelId: currentTestModelId(),
+      candidateStrengths: strengths,
+      includeBase: el('test-generations-base-include').checked,
+      prompt: prompt, settings: settings
+    };
+    if (sweepMode) criteria.sweepWeights = parseSweepWeights(sweepWeights);
+    return criteria;
   }
 
-  function openTestBatchDialog() {
-    var modal = el('test-generations-batch-modal');
-    var count = el('test-generations-batch-count');
-    var activeBatch = testBatch && testBatch.active;
-    refreshServerTestBatches();
-    count.value = '5';
-    openTestBatchDialogSummary();
-    el('test-generations-batch-start').disabled = !!activeBatch;
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden', 'false');
-  }
-
-  function closeTestBatchDialog() {
-    var modal = el('test-generations-batch-modal');
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
+  function runTestBatch(count, autoVl) {
+    var criteria;
+    try { criteria = testRunCriteria(); } catch (err) { showError(err); return; }
+    saveTestWorkspacePrompt(criteria.prompt);
+    saveTestBenchState();
+    var folder = String(launchFolder);
+    var modelId = criteria.modelId;
+    var previousSession = currentSession;
+    var vlModel = autoVl ? loadCaptionVisionCapabilities().then(function () {
+      var model = getCaptionVisionModelId();
+      if (!model) throw new Error('Select an available Vision model.');
+      return model;
+    }) : Promise.resolve('');
+    return vlModel.then(function (chosenVl) {
+      return captionAssistRequestJson('/fs/test_generations/batches', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          operation: 'enqueue', folder: folder, count: count, criteria: criteria,
+          autoVl: autoVl, vlModel: chosenVl, preserveSingleSeed: count === 1
+        })
+      });
+    }).then(function (payload) {
+      if (folder === launchFolder && modelId === currentTestModelId()) {
+        pendingBatchSelection = { id: payload.batch.id, folder: folder, modelId: modelId, previousSession: previousSession };
+        el('test-generations-seed').value = String(randomSeed());
+        el('test-generations-session-name').value = '';
+      }
+      return refreshServerTestBatches().then(function () {
+        return refreshSessions();
+      }).then(function () {
+        if (isOpen()) pollStatus();
+      });
+    }).catch(function (err) {
+      reportConsoleError('Submit Test sessions', err);
+      showError(err);
+    });
   }
 
   function startRun() {
-    if (!isTestModelSupported()) {
-      return showError(new Error('Test Generations is not available for the selected Base Model.'));
-    }
-    var name = String(el('test-generations-session-name') && el('test-generations-session-name').value || '').trim();
-    var prompt = String(el('test-generations-prompt') && el('test-generations-prompt').value || '').trim();
-    var selectedFiles = selectedCandidateFiles();
-    var baseInclude = el('test-generations-base-include');
-    var includeBase = !baseInclude || baseInclude.checked;
-    var declaredSettings = prepared && Array.isArray(prepared.settings) ? prepared.settings : [];
-    var settings = {};
-    if (declaredSettings.indexOf('aspectRatio') !== -1) settings.aspectRatio = String(el('test-generations-aspect').value || '').trim();
-    if (declaredSettings.indexOf('megapixels') !== -1) settings.megapixels = String(el('test-generations-megapixels').value || '').trim();
-    if (declaredSettings.indexOf('duration') !== -1) settings.duration = String(el('test-generations-duration').value || '').trim();
-    if (declaredSettings.indexOf('dimensions') !== -1) settings.dimensions = String(el('test-generations-dimensions').value || '');
-    if (declaredSettings.indexOf('seed') !== -1) settings.seed = String(el('test-generations-seed').value || '').trim();
-    if (!selectedFiles.length) return showError(new Error('Select at least one staged LoRA to test.'));
-    if (!prompt) return showError(new Error('A test prompt is required.'));
-    if (declaredSettings.indexOf('aspectRatio') !== -1 && !settings.aspectRatio) return showError(new Error('An aspect ratio is required.'));
-    if (declaredSettings.indexOf('dimensions') !== -1 && !settings.dimensions.trim()) return showError(new Error('Dimensions are required.'));
-    var defaultStrength = Number(defaultCandidateStrength);
-    if (!isFinite(defaultStrength) || defaultStrength < -2 || defaultStrength > 2) {
-      return showError(new Error('Default weight must be between -2 and 2.'));
-    }
-    var selectedStrengths = {};
-    for (var strengthIndex = 0; strengthIndex < selectedFiles.length; strengthIndex += 1) {
-      var strengthFile = selectedFiles[strengthIndex];
-      var strengthValue = Object.prototype.hasOwnProperty.call(candidateStrengths || {}, strengthFile)
-        ? Number(candidateStrengths[strengthFile])
-        : defaultStrength;
-      if (!isFinite(strengthValue) || strengthValue < -2 || strengthValue > 2) {
-        return showError(new Error('Strength must be between -2 and 2.'));
-      }
-      selectedStrengths[strengthFile] = strengthValue;
-    }
-    var weights = null;
-    if (sweepMode) {
-      try { weights = parseSweepWeights(sweepWeights); } catch (err) { return showError(err); }
-    }
-    saveTestWorkspacePrompt(prompt);
+    var criteria;
+    try { criteria = testRunCriteria(); } catch (err) { return showError(err); }
+    saveTestWorkspacePrompt(criteria.prompt);
     saveTestBenchState();
     var runBtn = el('test-generations-run-btn');
     var errorEl = el('test-generations-error');
-    if (runBtn) runBtn.disabled = true;
-    if (errorEl) errorEl.classList.add('hidden');
-    var criteria = {
-      name: name,
-      selectedFiles: selectedFiles,
-      modelId: currentTestModelId(),
-      includeBase: includeBase,
-      candidateStrengths: selectedStrengths,
-      prompt: prompt,
-      settings: settings
-    };
-    if (weights) criteria.sweepWeights = weights;
+    runBtn.disabled = true;
+    errorEl.classList.add('hidden');
     request('test_enqueue', criteria).then(function (payload) {
       var startedStatus = payload && payload.latest ? payload.latest : null;
-      var status = startedStatus || currentStatus;
-      syncActiveRunControls(status);
+      syncActiveRunControls(startedStatus || currentStatus);
       refreshActivityButton();
-      reportConsoleInfo('Test Generations', 'Run submitted' + (startedStatus && startedStatus.session ? ': ' + startedStatus.session : '.') );
-      // Enqueueing another Test must not switch away from a running Ask VL batch.
+      reportConsoleInfo('Test Generations', 'Run submitted' + (startedStatus && startedStatus.session ? ': ' + startedStatus.session : '.'));
       if (startedStatus && startedStatus.session && !testVl.running) {
         showSessionError = true;
         selectSessionStatus(startedStatus);
       }
-      var nextSeed = el('test-generations-seed');
-      if (nextSeed) nextSeed.value = String(randomSeed());
-      var nameInput = el('test-generations-session-name');
-      if (nameInput) nameInput.value = '';
+      el('test-generations-seed').value = String(randomSeed());
+      el('test-generations-session-name').value = '';
       return refreshSessions();
-    }).then(function () {
-      pollStatus();
-    }).catch(function (err) {
+    }).then(function () { pollStatus(); }).catch(function (err) {
       syncActiveRunControls(currentStatus);
       showError(err);
     });
@@ -5320,51 +5123,16 @@
     syncInlineLaunch();
     el('test-generations-run-btn').onclick = function () {
       var count = Number(el('test-generations-inline-count').value);
-      if (!Number.isInteger(count) || count < 1 || count > 20)
-        return showError(new Error('Choose 1–20 Test sessions.'));
-      var autoVl = el('test-generations-inline-auto-vl').checked;
-      if (count === 1 && !autoVl) return startRun();
-      el('test-generations-batch-count').value = String(count);
-      el('test-generations-batch-auto-vl').checked = autoVl;
-      try { runTestBatch(count, true); } catch (err) { showError(err); }
-    };
-    el('test-generations-batch-btn').onclick = openTestBatchDialog;
-    el('test-generations-batch-history').onchange = function () {
-      var id = this.value;
-      viewedTestBatch = [testBatch].concat(testBatchHistory).find(function (entry) { return entry && entry.activityId === id; }) || null;
-      if (viewedTestBatch === testBatch) viewedTestBatch = null;
-      refreshServerTestBatches();
-    };
-    ['test-generations-batch-count', 'test-generations-batch-auto-vl'].forEach(function (id) {
-      el(id).addEventListener('change', function () {
-        if (!el('test-generations-batch-modal').classList.contains('hidden')) {
-          openTestBatchDialogSummary();
-        }
-      });
-    });
-    el('test-generations-batch-close').onclick = closeTestBatchDialog;
-    el('test-generations-batch-cancel').onclick = closeTestBatchDialog;
-    el('test-generations-batch-modal').onclick = function (event) { if (event.target === this) closeTestBatchDialog(); };
-    el('test-generations-batch-start').onclick = function () {
-      var count = Number(el('test-generations-batch-count').value);
       if (!Number.isInteger(count) || count < 1 || count > 20) {
         return showError(new Error('Choose 1–20 Test sessions.'));
       }
-      try { runTestBatch(count); } catch (err) { showError(err); }
+      var autoVl = el('test-generations-inline-auto-vl').checked;
+      if (count === 1 && !autoVl) return startRun();
+      return runTestBatch(count, autoVl);
     };
-    el('test-generations-batch-stop').onclick = stopTestBatch;
-    el('test-generations-batch-dismiss').onclick = function () {
-      var batch = viewedTestBatch || testBatch;
-      if (batch) { testBatchDismissedIds.add(batch.id); batch.dismissed = true; viewedTestBatch = null; renderTestBatch(); }
-    };
-    el('test-generations-batch-results').onclick = function (event) {
-      var sort = event.target.closest('[data-test-batch-sort]');
-      if (sort) { testBatchSort = sort.dataset.testBatchSort; renderTestBatch(); return; }
-      var open = event.target.closest('[data-test-batch-session]');
-      if (open && testBatch) {
-        pendingActivitySession = open.dataset.testBatchSession;
-        openTestBenchForSetFolder((viewedTestBatch || testBatch).folder);
-      }
+    el('test-generations-multi-actions').onclick = function (event) {
+      var button = event.target.closest('[data-test-batch-stop]');
+      if (button) stopTestBatch(button.dataset.testBatchStop);
     };
 
     var evaluateButton = el('test-generations-ask-vl');

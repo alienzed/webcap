@@ -1825,6 +1825,10 @@
 
   function expandConcept() {
     if (!storyState.story) return;
+    if (typeof storyState.story.previousConcept === 'string') {
+      setDevelopStatus('Restore the original concept before expanding again.');
+      return;
+    }
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'concept', storyId: storyId };
     if (directorTargetBlocked(directorTarget)) {
@@ -1893,7 +1897,7 @@
       if (!storyState.story || storyState.story.id !== storyId) return;
       storyState.story = payload.story;
       renderStory();
-      setDevelopStatus('Previous concept restored.');
+      setDevelopStatus('Original concept restored.');
       setSaveState('Saved');
       return refreshLibrary();
     }).catch(reportError).finally(function () {
@@ -4149,10 +4153,9 @@
       var developRow = developButton.closest('.storyboard-develop-row');
       if (developRow) developRow.classList.toggle('has-scenes', hasScenes);
     }
-    var restoreConceptButton = el('storyboard-restore-concept-btn');
-    if (restoreConceptButton) {
-      restoreConceptButton.classList.toggle('hidden', typeof storyState.story.previousConcept !== 'string');
-    }
+    var hasExpandedConcept = typeof storyState.story.previousConcept === 'string';
+    el('storyboard-expand-concept-btn').classList.toggle('hidden', hasExpandedConcept);
+    el('storyboard-restore-concept-btn').classList.toggle('hidden', !hasExpandedConcept);
     setStoryCollapsed(storyState.storyCollapsed);
     el('storyboard-director-lora-enable').checked = storyState.story.directorLoraPlanning === true;
     el('storyboard-director-lora-suggest').disabled = !storyState.story.directorLoraPlanning;

@@ -182,6 +182,24 @@ def test_checkpoint_picker_groups_previous_saved_resume_points():
     assert "resumeCheckpointTag" in runner
 
 
+def test_history_continue_epoch_extension_is_job_scoped():
+    runner = (ROOT / "tool" / "server" / "training_runner.py").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
+    app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
+
+    assert "def _history_continue_epoch_plan(" in runner
+    assert "target - observed_epoch <= 5" in runner
+    assert "def _apply_history_continue_epoch_plan(" in runner
+    assert 'job["bundleArtifacts"][stage + "Config"] = str(copied)' in runner
+    assert 'job["snapshot"][stage] = str(copied)' in runner
+    assert '"continueEpochs"' in history
+    assert 'continue_epochs=data.get("continueEpochs")' in app
+    assert "window.prompt(" in script
+    assert "continueEpochs: epochs" in script
+    assert "parentJobId: job.id" in script
+
+
 def test_h3_image_checkpoint_marker_uses_recorded_model_identity():
     runner = (ROOT / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
     history = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")

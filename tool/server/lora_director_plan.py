@@ -55,6 +55,8 @@ def shortlist(stage, intent, scenes=None, existing=None, max_chars=14000):
             triple[0]["name"] not in assigned, -triple[2], triple[0]["name"].casefold()))
         chosen, used = [], 0
         for entry, profile, score in candidates:
+            if score <= 0 and entry["name"] not in assigned:
+                continue
             item = {"name": entry["name"], "stage": stage, **profile}
             cost = size(item)
             if entry["name"] in assigned or used + cost <= max_chars:

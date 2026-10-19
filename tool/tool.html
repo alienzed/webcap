@@ -1758,7 +1758,8 @@
                             <div id="storyboard-story-overview" class="storyboard-story-fields storyboard-story-overview-surface">
                                 <div class="storyboard-story-panel-heading">
                                     <strong>Story Overview</strong>
-                                    <div class="storyboard-story-action-wrap">
+                                    <div class="storyboard-story-heading-actions">
+                                        <div class="storyboard-story-action-wrap">
                                         <button id="storyboard-first-cut-btn" type="button" class="storyboard-primary-btn storyboard-director-action" title="Take this Story from its current concept through Director refinement and queue one first Take per Scene.">First Cut</button>
                                         <div id="storyboard-story-action-card" class="storyboard-story-action-card hidden" aria-live="polite">
                                             <div class="storyboard-story-action-copy">
@@ -1768,6 +1769,8 @@
                                             </div>
                                             <button id="storyboard-story-action-cancel" data-story-action-cancel type="button" class="review-captions-btn">Cancel</button>
                                         </div>
+                                        </div>
+                                        <button id="storyboard-story-toggle" type="button" class="review-captions-btn" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Story</button>
                                     </div>
                                 </div>
 
@@ -1892,21 +1895,19 @@
                                 <div class="storyboard-scenes-heading-left">
                                     <div class="storyboard-scenes-heading-title">
                                         <div class="storyboard-scenes-title-row">
+                                            <button id="storyboard-story-show" type="button" class="review-captions-btn hidden" aria-expanded="false" aria-controls="storyboard-story-authoring">Show Story</button>
                                             <strong id="storyboard-workspace-mode-title">Scenes</strong>
+                                            <button id="storyboard-scenes-overview-btn" type="button" class="review-captions-btn storyboard-scenes-grid-btn" aria-label="Scene grid overview" title="Scene grid overview" aria-pressed="false">▦</button>
                                             <button id="storyboard-generate-scenes-btn" type="button" class="review-captions-btn" title="Queue one new Take for every Scene in this Story.">Generate</button>
                                             <button id="storyboard-cancel-takes-btn" type="button" class="review-captions-btn hidden" title="Cancel this Story's queued Take generation. The current Take will finish.">Cancel Takes</button>
-                                            <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Director Tools">Director Tools</button>
                                         </div>
                                         <span id="storyboard-progress-summary" class="storyboard-progress-summary"></span>
                                     </div>
                                 </div>
-                                <div class="storyboard-view-toggle" role="group" aria-label="Storyboard workspace mode">
-                                    <button id="storyboard-scenes-overview-btn" type="button" class="review-captions-btn">Overview</button>
-                                    <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn active">Focus</button>
-                                    <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
-                                </div>
                                 <div class="storyboard-scenes-heading-actions">
-                                    <button id="storyboard-story-toggle" type="button" class="review-captions-btn" aria-expanded="true" aria-controls="storyboard-story-authoring">Hide Story</button>
+                                    <button id="storyboard-scenes-focus-btn" type="button" class="review-captions-btn hidden">← Scenes</button>
+                                    <button id="storyboard-scenes-sequence-btn" type="button" class="review-captions-btn">Sequence</button>
+                                    <button id="storyboard-director-tools-btn" type="button" class="review-captions-btn storyboard-director-action" title="Open Director Tools">Director Tools</button>
                                     <div class="storyboard-director-header storyboard-director-model-tools">
                                         <label for="storyboard-director-model">Director</label>
                                         <select id="storyboard-director-model" aria-label="Storyboard Director model">

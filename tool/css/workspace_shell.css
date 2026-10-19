@@ -3050,3 +3050,26 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 @media (max-width: 560px) {
   .activity-director-metrics { grid-template-columns: 1fr; }
 }
+
+/* Queue reorder affordance: the handle is the only draggable surface. */
+.inference-queue-row:has(> .job-queue-drag-handle) {
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+}
+.job-queue-drag-handle {
+  align-self: center;
+  cursor: grab;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  user-select: none;
+  opacity: .7;
+}
+.job-queue-drag-handle:hover { opacity: 1; }
+.job-queue-drag-handle:active { cursor: grabbing; }
+.job-queue-drag-handle.hidden { display: none; }
+.inference-queue-row:has(> .job-queue-drag-handle.hidden) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.inference-queue-row.is-dragging { opacity: .5; }
+.inference-queue-row.queue-drop-before { box-shadow: inset 0 3px 0 var(--accent); }
+.inference-queue-row.queue-drop-after { box-shadow: inset 0 -3px 0 var(--accent); }

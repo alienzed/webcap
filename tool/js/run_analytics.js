@@ -286,18 +286,25 @@
         error(err);
       }).finally(function(){if(serial===epochMediaSerial)epochMediaLoading=false;});
   }
+  window.runAnalyticsViewEpoch=function(jobId,epoch) {
+    var id=String(jobId||'');
+    var num=Number(epoch);
+    if(!id||!Number.isInteger(num))throw new Error('Choose a valid saved checkpoint.');
+    window.epochFinderShowMode('analytics');
+    epochMediaSerial++;
+    epochMediaScope={jobId:id,epoch:num};
+    epochMediaOffset=0;
+    el('epoch-media-title').textContent='Epoch '+num+' · combined generated results';
+    el('epoch-media-dialog').showModal();
+    epochMediaLoad(false);
+  };
   el('epoch-media-close').onclick=epochMediaClose;
   el('epoch-media-more').onclick=function(){epochMediaLoad(true);};
   el('epoch-media-dialog').addEventListener('close',function(){epochMediaSerial++;epochMediaScope=null;});
   el('table').onclick=function(event){
     var media=event.target.closest('[data-epoch-media-job]');
     if(media){
-      epochMediaSerial++;
-      epochMediaScope={jobId:media.dataset.epochMediaJob,epoch:Number(media.dataset.epochMediaEpoch)};
-      epochMediaOffset=0;
-      el('epoch-media-title').textContent='Epoch '+epochMediaScope.epoch+' · combined generated results';
-      el('epoch-media-dialog').showModal();
-      epochMediaLoad(false);
+      window.runAnalyticsViewEpoch(media.dataset.epochMediaJob,Number(media.dataset.epochMediaEpoch));
       return;
     }
     var btn=event.target.closest('[data-inspect-campaign]');

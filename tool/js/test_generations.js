@@ -4587,13 +4587,9 @@
     renderStatus({ status: 'idle' });
     renderTestBatch();
     window.epochFinderPrepare(launchFolder);
-    window.testGenerationsUnifiedRoute({
-      folder: launchFolder,
-      modelId: requestedModelId,
-      activitySession: String(pendingActivitySession || ''),
-      activityCampaign: String(pendingActivityCampaign || ''),
-      rememberedSession: rememberedSession
-    });
+    window.testGenerationsUnifiedNativeRoute();
+    // Keep the proven Test/Finder/References/Analytics surfaces as the default.
+    // Unified Explore remains available on demand, never the landing route.
     if (pendingActivityCampaign) {
       window.epochFinderInspectCampaign(pendingActivityCampaign); pendingActivityCampaign = '';
     }

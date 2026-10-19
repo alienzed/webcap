@@ -187,6 +187,13 @@ def _assert_storyboard_contract_current(context, frozen_contract):
 
 def _client_result(client, context, llm_result, job_id="", frozen_contract=None):
     if client in {"chat", "caption"}:
+        if client == "caption" and context.get("testAutoVl") is True:
+            if str((frozen_contract or {}).get("operation") or "") != "vision_question":
+                raise ValueError("Automatic Test VL requires a vision_question job.")
+            from .epoch_test_bench import complete_test_auto_vl
+            seconds = llm_result.get("requestSeconds")
+            elapsed_ms = int(float(seconds) * 1000) if isinstance(seconds, (int, float)) else 0
+            complete_test_auto_vl(context, llm_result["text"], elapsed_ms)
         result = {
             "text": llm_result["text"],
             "reasoning": llm_result.get("reasoning", ""),

@@ -1404,6 +1404,7 @@
   }
 
   function syncSceneRefineState(sceneId) {
+    syncSceneProgressionCard(sceneId);
     var root = sceneElement(sceneId);
     var button = root && root.querySelector('[data-director-refine]');
     if (!button) return;
@@ -2608,7 +2609,9 @@
     var indicators = card.querySelector('.storyboard-scene-progress-indicators');
     var title = card.querySelector('[data-scene-progress-title]');
     var directorCompletion = card.querySelector('[data-scene-director-completion]');
-    if (!indicators || !title || !directorCompletion) throw new Error('Storyboard Scene progression card markup is missing.');
+    var refined = card.querySelector('[data-scene-refined]');
+    if (!indicators || !title || !directorCompletion || !refined) throw new Error('Storyboard Scene progression card markup is missing.');
+    refined.classList.toggle('hidden', !scene.refineComplete);
     indicators.innerHTML = sceneProgressionIndicatorsHtml(sceneId);
     title.textContent = scene.title || 'Untitled Scene';
     var notice = sceneDirectorCompletionNotice(sceneId);
@@ -2654,6 +2657,8 @@
           '</span>' +
           '<div class="storyboard-scene-progress-title-row">' +
             '<strong data-scene-progress-title>' + escapeHtml(scene.title || 'Untitled Scene') + '</strong>' +
+            '<span class="storyboard-scene-progress-refined' + (scene.refineComplete ? '' : ' hidden') +
+              '" data-scene-refined title="Refined with Director" role="img" aria-label="Refined with Director">🪄</span>' +
             sceneDirectorCompletionHtml(sceneId) +
           '</div>' +
         '</button>' +

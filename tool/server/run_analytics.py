@@ -43,7 +43,7 @@ def _catalog(folder_path, campaigns, warnings):
                     name = "Run " + str(sequence) if sequence is not None and str(sequence).strip() else "Run " + identifier[-8:]
                 indexed[identifier] = {
                     "jobId": identifier, "label": name,
-                    "runSequence": sequence,
+                    "runSequence": run.get("runSequence"),
                     "stage": str(run.get("stage") or ""), "modelId": str(run.get("modelId") or ""),
                     "savedEpochs": [], "archive": None, "source": "training",
                 }

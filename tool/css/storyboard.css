@@ -3693,12 +3693,11 @@
 
 @media (max-width: 980px) {
   .storyboard-scenes-heading {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .storyboard-scenes-heading .storyboard-director-header {
-    grid-column: 1 / -1;
-    justify-self: end;
+  .storyboard-scenes-heading-actions {
+    justify-self: start;
   }
 }
 

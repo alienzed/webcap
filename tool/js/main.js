@@ -442,5 +442,9 @@ addEventListener('DOMContentLoaded', function () {
   wireWorkspaceHeaderUi();
   refreshCurrentDirectory();
   wireAllUi();
+  // Storyboard is independent of the selected Set: restore its deep link even
+  // if the folder request or unrelated model selector fails to load.
+  var startupRoute = typeof parseShellLocationRoute === 'function' ? parseShellLocationRoute() : null;
+  if (startupRoute && startupRoute.workspace === 'storyboard') restoreInitialShellLocationRoute();
   if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();
 });

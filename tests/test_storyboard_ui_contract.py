@@ -375,6 +375,18 @@ def test_storyboard_can_insert_director_scene_between_existing_scenes():
     assert "job.operation === 'develop_story' || job.operation === 'insert_scene'" in storyboard
 
 
+def test_atmosphere_director_proposal_survives_source_edits():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    interpret = storyboard.split("function interpretAtmosphere()", 1)[1].split("\n  function ", 1)[0]
+    apply = storyboard.split("el('storyboard-style-apply').onclick = function () {", 1)[1].split("\n    };", 1)[0]
+    input_listener = storyboard.split("el('storyboard-story-style').addEventListener('input', function () {", 1)[1].split("\n    });", 1)[0]
+
+    assert "el('storyboard-story-style').value.trim() !== input) return;" not in interpret
+    assert "el('storyboard-story-style').value.trim() !== atmosphereProposal.source" not in apply
+    assert "atmosphereProposal = null;" not in input_listener
+    assert "Apply suggestion (replaces current text)" in storyboard
+
+
 def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

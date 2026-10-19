@@ -580,6 +580,17 @@ def _execute_claimed(job_id, gpu_reserved):
     if not model_id or contract is None:
         raise RuntimeError("LLM job is missing its frozen model or contract.")
 
+    if client == "caption" and context.get("testAutoVl") is True:
+        from . import config as app_config
+        from .caption_vision import build_vision_question_messages, vision_media_data_url
+        from .epoch_test_bench import resolve_result_media
+        folder = app_config.safe_join_fs_root(str(context["testFolder"]))
+        media = resolve_result_media(folder, str(context["testSession"]), str(context["testMedia"]))
+        contract = dict(contract)
+        contract["messages"] = build_vision_question_messages(
+            str(context["testQuestion"]), vision_media_data_url(media)
+        )
+
     if client == "storyboard":
         metadata_story_id = str(metadata.get("storyId") or "").strip()
         context_story_id = str(context.get("storyId") or "").strip()

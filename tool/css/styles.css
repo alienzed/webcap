@@ -7357,3 +7357,5 @@ html[data-theme="dark"] iframe {
 .test-unified-inspect-media {display:block;width:100%;max-height:310px;object-fit:contain;background:#171a20;border-radius:8px;margin-bottom:8px;}
 .test-unified-inspector a {display:inline-block;margin:4px 0 10px;color:var(--accent);}
 .test-unified-inspector button {margin:8px 4px 0 0;}
+
+#test-unified-description.is-warning {color:var(--warning,var(--text));font-weight:500;}

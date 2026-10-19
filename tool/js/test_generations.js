@@ -4762,16 +4762,17 @@
     if (batch.detail) lines.push(batch.detail);
     if (batch.errors.length) lines.push(batch.errors.length + ' error(s) below; full details in Console.');
     el('test-generations-batch-progress').textContent = lines.join(' · ');
-    if (batch.active && batch === testBatch) {
-      var evaluatingOnly = batch.phase === 'Evaluating';
-      var completed = evaluatingOnly ? batch.evaluated : (batch.phase === 'Generating + VL' || batch.phase === 'Generating') ? batch.finished : batch.sessions.length;
-      var total = evaluatingOnly ? batch.previews : (batch.phase === 'Generating + VL' || batch.phase === 'Generating') ? batch.sessions.length : batch.count;
+    if (testBatch && testBatch.active) {
+      var activityBatch = testBatch;
+      var evaluatingOnly = activityBatch.phase === 'Evaluating';
+      var completed = evaluatingOnly ? activityBatch.evaluated : (activityBatch.phase === 'Generating + VL' || activityBatch.phase === 'Generating') ? activityBatch.finished : activityBatch.sessions.length;
+      var total = evaluatingOnly ? activityBatch.previews : (activityBatch.phase === 'Generating + VL' || activityBatch.phase === 'Generating') ? activityBatch.sessions.length : activityBatch.count;
       window.publishActivityProgress({
-        id: batch.activityId, kind: 'test-batch', lane: 'background', title: batch.autoVl ? 'Batch Test + VL' : 'Batch Test',
-        status: 'running', phase: batch.phase, detail: batch.folder + (batch.detail ? ' · ' + batch.detail : ''),
+        id: activityBatch.activityId, kind: 'test-batch', lane: 'background', title: activityBatch.autoVl ? 'Batch Test + VL' : 'Batch Test',
+        status: 'running', phase: activityBatch.phase, detail: activityBatch.folder + (activityBatch.detail ? ' · ' + activityBatch.detail : ''),
         progress: total > 0 ? { completed: completed, total: total } : null,
-        progressLabel: total > 0 ? completed + ' / ' + total + (batch.phase === 'Evaluating' ? ' previews' : ' sessions') : '',
-        startedAt: batch.startedAt, folder: batch.folder, modelId: batch.criteria.modelId
+        progressLabel: total > 0 ? completed + ' / ' + total + (activityBatch.phase === 'Evaluating' ? ' previews' : ' sessions') : '',
+        startedAt: activityBatch.startedAt, folder: activityBatch.folder, modelId: activityBatch.criteria.modelId
       });
     } else if (!batch.active && batch === testBatch) {
       window.finishActivityProgress(batch.activityId, batch.phase === 'Failed' ? 'failed' : batch.phase === 'Stopped' ? 'stopped' : 'completed');

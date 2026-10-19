@@ -328,7 +328,9 @@
     if (!button || !progress) throw new Error('Test VL controls are missing.');
     var results = currentStatus && Array.isArray(currentStatus.results) ? currentStatus.results : [];
     button.disabled = !testVl.running && (!currentSession || !results.some(function (r) { return !!resultMediaFile(r); }));
-    button.textContent = testVl.running ? 'Stop VL' : 'Evaluate ▾';
+    button.textContent = 'Evaluate ▾';
+    var originalAction = el('test-generations-evaluate-menu').querySelector('[data-test-evaluate="original"]');
+    originalAction.textContent = testVl.running ? 'Stop Original VL' : 'Ask VL · Original';
     var sameScope = testVl.scope === testVlScope(currentStatus);
     progress.textContent = !sameScope ? '' : testVl.running ? (testVl.done + ' / ' + testVl.total) :
       (testVl.total ? (testVl.done + ' / ' + testVl.total + ' processed') : '');
@@ -5385,7 +5387,6 @@
       evaluateButton.setAttribute('aria-expanded', 'false');
     }
     evaluateButton.onclick = function () {
-      if (testVl.running) { try { stopTestVl(); } catch (err) { showError(err); } return; }
       var opening = evaluateMenu.classList.contains('hidden');
       evaluateMenu.classList.toggle('hidden', !opening);
       evaluateButton.setAttribute('aria-expanded', String(opening));

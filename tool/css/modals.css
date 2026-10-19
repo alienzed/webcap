@@ -862,7 +862,7 @@
 .director-model-assessment-model > summary {
   position: relative;
   display: grid;
-  grid-template-columns: 26px minmax(250px, 1.25fr) minmax(320px, 1.75fr);
+  grid-template-columns: 26px minmax(250px, 1.25fr) 100px minmax(320px, 1.75fr);
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -920,6 +920,16 @@
   font-size: 11px;
 }
 
+.director-model-assessment-thinking {
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+.director-model-assessment-thinking strong {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+}
 .director-model-assessment-capability {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);

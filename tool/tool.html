@@ -2877,6 +2877,17 @@
                             </details>
                         </section>
                     </div>
+                        <section class="app-settings-section">
+                            <div class="app-settings-section-header">
+                                <div class="app-settings-section-title">Active GPU Consumers</div>
+                                <div class="app-settings-section-copy">On-demand NVIDIA CUDA process snapshot. Shows observed processes, not WebCap queue ownership; graphics processes may not appear.</div>
+                            </div>
+                            <div class="app-settings-environment-actions">
+                                <button id="diagnostics-gpu-refresh" type="button" class="review-captions-btn">Refresh GPU Consumers</button>
+                                <span id="diagnostics-gpu-status" class="app-settings-environment-summary" role="status">Not checked yet.</span>
+                            </div>
+                            <div id="diagnostics-gpu-consumers" class="app-settings-environment-results" aria-live="polite"></div>
+                        </section>
                     <div id="diagnostics-panel-assessment" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="assessment" role="tabpanel" aria-labelledby="diagnostics-tab-assessment" hidden>
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">

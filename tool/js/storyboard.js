@@ -2105,7 +2105,7 @@
               }
               var storyWide = [], byScene = {};
               approved.forEach(function (item) {
-                var choice = {name:item.name,strength:item.strength};
+                var choice = {name:item.name,strength:item.strength,phrases:item.phrases || []};
                 if (item.sceneId) {
                   (byScene[item.sceneId] || (byScene[item.sceneId] = [])).push(choice);
                 } else storyWide.push(choice);

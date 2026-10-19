@@ -165,6 +165,8 @@
     var row = document.createElement('article');
     row.className = 'inference-queue-row';
     row.dataset.inferenceJobId = String(job.jobId || '');
+    row.dataset.queueDragLane = 'inference';
+    row.dataset.queueDragId = String(job.jobId || '');
 
     var position = document.createElement('span');
     position.className = 'inference-queue-position';
@@ -192,6 +194,13 @@
     var actions = document.createElement('div');
     actions.className = 'inference-queue-actions';
 
+    var handle = document.createElement('span');
+    handle.className = 'job-queue-drag-handle';
+    handle.textContent = '\u283f';
+    handle.title = 'Drag to reorder queued inference';
+    handle.draggable = true;
+    handle.setAttribute('aria-hidden', 'true');
+    row.appendChild(handle);
     row.appendChild(copy);
     row.appendChild(actions);
     return row;
@@ -206,6 +215,8 @@
     var detail = row.querySelector('[data-queue-detail]');
     var actions = row.querySelector('.inference-queue-actions');
     var status = String(job.status || '');
+    var handle = row.querySelector('.job-queue-drag-handle');
+    if (handle) handle.classList.toggle('hidden', status !== 'queued');
 
     if (position) {
       position.textContent = jobStatusLabel(job);
@@ -534,11 +545,12 @@
     window.openGenerateActivity();
   }
 
-  function action(operation, jobId) {
+  function action(operation, jobId, position) {
     var payload = {
       operation: operation,
       jobId: String(jobId || '')
     };
+    if (operation === 'reorder' && position != null) payload.position = position;
     if (operation === 'reorder_up' || operation === 'reorder_down') {
       payload.operation = 'reorder';
       payload.direction = operation === 'reorder_up' ? 'up' : 'down';
@@ -552,6 +564,8 @@
       if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Inference Queue', err);
     });
   }
+
+  window.reorderInferenceQueueToPosition = function (id, position) { return action('reorder', id, position); };
 
   function bind() {
     var toggles = document.querySelectorAll('[data-inference-queue-toggle]');

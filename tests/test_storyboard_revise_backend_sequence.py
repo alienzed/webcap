@@ -64,16 +64,16 @@ def test_revise_scenes_follows_authoritative_progress_without_new_polling():
     ui = (root / "tool/js/storyboard.js").read_text()
     batch = runner.split(
         'if client == "storyboard" and context.get("operation") == "revise_scenes_sequence":', 1
-    )[1].split('    try:\\n        if client in {"chat", "caption"}:', 1)[0]
+    )[1].split('    try:\n        if client in {"chat", "caption"}:', 1)[0]
     assert '"sceneId": scene_id' in batch
     assert batch.index('"sceneId": scene_id') < batch.index('result = run_contract(')
-    receipt = ui.split("function directorJobRequest(jobId, consume)", 1)[1].split("\\n  function ", 1)[0]
+    receipt = ui.split("function directorJobRequest(jobId, consume)", 1)[1].split("\n  function ", 1)[0]
     assert "followRevisionProgress(body.job);" in receipt
-    follower = ui.split("function followRevisionProgress(job)", 1)[1].split("\\n  function ", 1)[0]
+    follower = ui.split("function followRevisionProgress(job)", 1)[1].split("\n  function ", 1)[0]
     assert "job.operation !== 'revise_scenes_sequence'" in follower
     assert "job.status !== 'running'" in follower
     assert "progress.phase !== 'Revising Scenes'" in follower
     assert "followVisibleWorkingScene(job.storyId, progress.sceneId, true)" in follower
-    visible = ui.split("function followVisibleWorkingScene(storyId, sceneId, visualOnly)", 1)[1].split("\\n  function ", 1)[0]
+    visible = ui.split("function followVisibleWorkingScene(storyId, sceneId, visualOnly)", 1)[1].split("\n  function ", 1)[0]
     assert "if (!visualOnly) clearSceneNewTakeCount(targetSceneId);" in visible
     assert "if (!visualOnly && typeof window.syncShellLocationRoute" in visible

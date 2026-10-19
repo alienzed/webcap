@@ -2857,6 +2857,21 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .activity-monitor-primary .progress-card {
   margin-top: 10px;
 }
+.activity-monitor-primary .activity-remote-card {
+  padding: 14px 16px;
+  gap: 12px;
+}
+.activity-monitor-primary .activity-remote-card .activity-monitor-copy > strong {
+  font-size: 17px;
+}
+.activity-monitor-primary .activity-remote-card .activity-monitor-copy > span,
+.activity-monitor-primary .activity-remote-card .activity-monitor-copy > small {
+  font-size: 13px;
+}
+.activity-monitor-primary .activity-remote-card .activity-monitor-progress {
+  margin-top: 9px;
+}
+
 .activity-monitor-trend {
   flex: 0 0 auto;
   margin: 10px 13px 8px;

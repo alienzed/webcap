@@ -92,3 +92,16 @@ def test_run_analytics_picker_distinguishes_runs_and_uses_compact_rows():
     assert "ID ' + shortId" in frontend
     assert "run-analytics-run-choice" in frontend
     assert "#run-analytics-screen .run-analytics-run-choice" in css
+
+
+def test_run_analytics_guides_selection_and_empty_evidence_states():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    assert 'id="run-analytics-selection-count"' in html
+    assert "function updateScopeUi()" in script
+    assert "el('selection-count').textContent = selection.size + ' / 6 runs selected'" in script
+    assert "el(name).disabled = !report" in script
+    assert "No checkpoint observations match the current evidence filters." in script
+    assert "Expand to load and review the numerical facts before interpreting." in script

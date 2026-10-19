@@ -46,11 +46,12 @@
     });
   }
   function close(manual) {
+    var sectionBeforeClose = section;
     root.classList.add('hidden');
     root.setAttribute('aria-hidden', 'true');
     section = '';
     enabled = false;
-    window.setActivityDrawerOpen(false, !!manual, true);
+    window.setActivityDrawerOpen(false, !!manual && sectionBeforeClose === 'activity', true);
     window.setInferenceQueueOpen(false, true);
   }
   window.operationsSectionIsHistory = function () { return section === 'history'; };

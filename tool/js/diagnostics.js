@@ -263,6 +263,17 @@ function selectUnifiedAssessmentModels(select) {
   });
   diagnosticsEl('diagnostics-assessment-selection').textContent =
     (selected.director.size + selected.vision.size) + ' model(s) selected · Run Selected Tests starts the server-owned suite.';
+  diagnosticsAssessmentSyncHeaderSelection();
+}
+
+function diagnosticsAssessmentSyncHeaderSelection() {
+  var header = diagnosticsEl('diagnostics-assessment-select-all');
+  if (!header) return;
+  var inputs = Array.from(document.querySelectorAll('#diagnostics-assessment-results input[data-assessment-select]'));
+  var checked = inputs.filter(function (input) { return input.checked; }).length;
+  header.checked = inputs.length > 0 && checked === inputs.length;
+  header.indeterminate = checked > 0 && checked < inputs.length;
+  header.disabled = inputs.length === 0;
 }
 
 function refreshUnifiedModelAssessment() {
@@ -324,7 +335,13 @@ function refreshUnifiedModelAssessment() {
         });
         th.appendChild(button);
       } else {
-        th.textContent = column.name;
+        var selectAll = document.createElement('input');
+        selectAll.type = 'checkbox';
+        selectAll.id = 'diagnostics-assessment-select-all';
+        selectAll.setAttribute('aria-label', 'Select all models');
+        selectAll.title = 'Select or deselect all models';
+        selectAll.addEventListener('change', function () { selectUnifiedAssessmentModels(selectAll.checked); });
+        th.appendChild(selectAll);
       }
       header.appendChild(th);
     });
@@ -1092,8 +1109,6 @@ function wireDiagnosticsUi() {
   diagnosticsEl('h3-calibration-stop-btn').onclick = stopH3Calibration;
   diagnosticsEl('h3-calibration-reset-btn').onclick = resetH3CalibrationSettings;
   diagnosticsEl('h3-calibration-console-btn').onclick = showConsolePanel;
-  diagnosticsEl('diagnostics-assessment-all').onclick = function () { selectUnifiedAssessmentModels(true); };
-  diagnosticsEl('diagnostics-assessment-none').onclick = function () { selectUnifiedAssessmentModels(false); };
   diagnosticsEl('diagnostics-assessment-filter').oninput = diagnosticsAssessmentSortAndFilter;
   diagnosticsEl('diagnostics-assessment-run').onclick = function () {
     try {

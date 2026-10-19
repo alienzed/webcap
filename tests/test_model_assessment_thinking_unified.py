@@ -28,3 +28,12 @@ def test_legacy_model_lab_tab_removed_but_advanced_access_preserved():
     assert 'id="diagnostics-tab-model-lab"' not in html
     assert 'id="diagnostics-assessment-lab"' in html
     assert 'id="diagnostics-panel-model-lab"' in html
+
+
+def test_model_assessment_bulk_selection_uses_header_checkbox():
+    html = Path("tool/tool.html").read_text(encoding="utf-8")
+    source = Path("tool/js/diagnostics.js").read_text(encoding="utf-8")
+    assert 'id="diagnostics-assessment-all"' not in html
+    assert 'id="diagnostics-assessment-none"' not in html
+    assert "selectAll.id = 'diagnostics-assessment-select-all'" in source
+    assert "header.indeterminate = checked > 0 && checked < inputs.length" in source

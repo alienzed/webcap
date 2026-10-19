@@ -4,6 +4,10 @@ on:
     paths:
       - 'tool/css/storyboard.css'
       - 'tool/js/storyboard.js'
+      - 'tool/js/diagnostics.js'
+      - 'tool/server/model_lab.py'
+      - 'tool/server/storyboard_llm_runtime.py'
+      - 'tests/test_model_assessment_thinking_unified.py'
       - 'tests/test_storyboard_header_regression.py'
   workflow_dispatch:
 permissions:
@@ -19,9 +23,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: node --check tool/js/storyboard.js
+      - run: node --check tool/js/storyboard.js && node --check tool/js/diagnostics.js
       - run: cp tool/config.example.json tool/config.json
       - run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
       - run: python -m compileall -q tool/server
       - run: node --check tool/js/director_model_test.js
-      - run: python -m pytest -q tests/test_storyboard_header_regression.py tests/test_director_thinking_mvp.py
+      - run: python -m pytest -q tests/test_storyboard_header_regression.py tests/test_director_thinking_mvp.py tests/test_model_assessment_thinking_unified.py

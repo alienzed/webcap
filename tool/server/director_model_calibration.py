@@ -213,6 +213,7 @@ def _report_with_derived_fields(report):
         max_tokens = 0
     status = str(value.get("status") or "incomplete").strip()
     value["assessmentKind"] = str(value.get("assessmentKind") or "calibration")
+    value["thinking"] = value.get("thinking") is True
 
     value["health"] = _report_health(attempts, context_mode, context_size, max_tokens, status, value["assessmentKind"])
     value["pathologies"] = _report_pathologies(attempts)

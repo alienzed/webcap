@@ -2174,6 +2174,76 @@ def generate_director_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/lora_library/resolve", methods=["POST"])
+def lora_library_resolve_route():
+    try:
+        from .lora_library import resolve_for_inference
+        data = request.get_json(silent=True) or {}
+        result = resolve_for_inference(str(data.get("stage") or ""), data.get("names"))
+        return jsonify({"ok": True, "names": result})
+    except (ValueError, RuntimeError, OSError, ConnectionError, TimeoutError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/lora_library/story/apply", methods=["POST"])
+def lora_library_story_apply_route():
+    from .storyboard_store import apply_lora_plan
+    try:
+        data = request.get_json(silent=True) or {}
+        story = apply_lora_plan(
+            str(data.get("storyId") or ""), str(data.get("expectedUpdatedAt") or ""),
+            data.get("storyWide"), data.get("scenes"))
+        return jsonify({"ok": True, "story": story})
+    except (ValueError, RuntimeError, OSError) as exc:
+        app.logger.error("LORA PLAN APPLY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 409
+
+
+@app.route("/fs/lora_library/plan", methods=["POST"])
+def lora_library_plan_route():
+    """Review-only coded LoRA planning via the existing Generate LLM lane."""
+    try:
+        from .lora_director_plan import build_plan_request
+        data = request.get_json(silent=True) or {}
+        stage = str(data.get("stage") or "").strip()
+        scenes = data.get("scenes") if isinstance(data.get("scenes"), list) else []
+        existing = data.get("existing") if isinstance(data.get("existing"), dict) else {}
+        contract = build_plan_request(data.get("intent"), stage, scenes, existing)
+        if contract is None:
+            return jsonify({"ok": True, "empty": True, "reason": "No enriched LoRAs available."})
+        story_id = str(data.get("storyId") or "").strip()
+        job = enqueue_llm(
+            "generate", str(data.get("directorModel") or "").strip(), contract,
+            context={"operation": "lora_plan", "catalogue": contract["catalogue"],
+                     "scenes": scenes, "storyId": story_id},
+            label="Director: LoRA suggestions",
+        )
+        return jsonify({"ok": True, "job": job}), 202
+    except (ValueError, OSError) as exc:
+        app.logger.error("LORA PLAN FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/lora_library", methods=["GET", "POST"])
+def lora_library_route():
+    """Discover profiles, read one profile or save an explicitly reviewed edit."""
+    from .lora_library import catalogue, profile
+    try:
+        if request.method == "GET":
+            return jsonify({"ok": True, "items": catalogue()})
+        data = request.get_json(silent=True) or {}
+        stage = str(data.get("stage") or "")
+        path = str(data.get("path") or "")
+        if "enrichment" in data:
+            result = profile(stage, path, data["enrichment"])
+        else:
+            result = profile(stage, path)
+        return jsonify({"ok": True, "modelProfile": result})
+    except (ValueError, OSError) as exc:
+        app.logger.error("LORA LIBRARY FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/training_profiles", methods=["GET"])
 def training_profiles_route():
     enabled = set((app_config.config.get("training") or {}).get("enabled_profiles") or [])

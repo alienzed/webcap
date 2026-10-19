@@ -48,8 +48,9 @@ function rememberShellRecentSet(folder) {
   }
 }
 
-var initialShellLocationRoute = null;
+var initialShellLocationRoute = parseShellLocationRoute();
 var initialShellLocationRestored = false;
+var initialShellLocationRestoring = false;
 var WORKBENCH_RAIL_SESSION_KEY = 'webcap.workbenchRailCollapsedByView';
 var workbenchRailCollapsedByView = loadWorkbenchRailSessionState();
 
@@ -207,9 +208,28 @@ function applyInitialShellLocationRoute() {
 }
 
 function restoreInitialShellLocationRoute() {
-  if (initialShellLocationRestored) return;
-  initialShellLocationRestored = true;
+  if (initialShellLocationRestored || initialShellLocationRestoring) return;
   var route = initialShellLocationRoute;
+  if (route && route.workspace === 'storyboard') {
+    // Keep the incoming bookmark authoritative until the requested Scene is selected.
+    // A Story load renders its first Scene before the asynchronous focus handoff.
+    initialShellLocationRestoring = true;
+    return Promise.resolve().then(function () {
+      return window.openStoryboardActivity({ storyId: route.storyId, sceneId: route.sceneId });
+    }).finally(function () {
+      initialShellLocationRestoring = false;
+      initialShellLocationRestored = true;
+      initialShellLocationRoute = null;
+      var selected = window.getStoryboardRouteTarget();
+      // Do not silently replace a missing Story/Scene link with the first Story.
+      // The Storyboard owner already reports the concrete navigation failure.
+      if ((!route.storyId || selected.storyId === route.storyId) &&
+          (!route.sceneId || selected.sceneId === route.sceneId)) {
+        syncShellLocationRoute();
+      }
+    });
+  }
+  initialShellLocationRestored = true;
   initialShellLocationRoute = null;
   if (!route) {
     syncShellLocationRoute();
@@ -225,10 +245,6 @@ function restoreInitialShellLocationRoute() {
     window.openGenerateActivity();
   } else if (route.workspace === 'test' && typeof window.openTestBenchForCurrentFolder === 'function') {
     window.openTestBenchForCurrentFolder();
-  } else if (route.workspace === 'storyboard' && typeof window.openStoryboardActivity === 'function') {
-    window.openStoryboardActivity({ storyId: route.storyId, sceneId: route.sceneId });
-    // Story selection is asynchronous; do not overwrite the deep link before it resolves.
-    return;
   } else if (route.workspace === 'media' && typeof window.openMediaExplorerActivity === 'function') {
     window.openMediaExplorerActivity();
   } else if (route.workspace === 'storage' && typeof window.openStorageActivity === 'function') {

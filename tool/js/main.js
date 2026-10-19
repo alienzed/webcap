@@ -436,10 +436,15 @@ function wireAllUi() {
 
 addEventListener('DOMContentLoaded', function () {
   console.log('[webcap] initializing');
+  // Apply the bookmarked workspace before any shell initialization may sync the URL.
+  if (typeof applyInitialShellLocationRoute === 'function') applyInitialShellLocationRoute();
   initializeWorkspaceShell();
   wireWorkspaceHeaderUi();
-  if (typeof applyInitialShellLocationRoute === 'function') applyInitialShellLocationRoute();
   refreshCurrentDirectory();
   wireAllUi();
+  // Storyboard is independent of the selected Set: restore its deep link even
+  // if the folder request or unrelated model selector fails to load.
+  var startupRoute = typeof parseShellLocationRoute === 'function' ? parseShellLocationRoute() : null;
+  if (startupRoute && startupRoute.workspace === 'storyboard') restoreInitialShellLocationRoute();
   if (typeof refreshTrainingRunnerStatus === 'function') refreshTrainingRunnerStatus();
 });

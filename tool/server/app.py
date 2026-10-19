@@ -2150,6 +2150,17 @@ def generate_director_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/lora_library/resolve", methods=["POST"])
+def lora_library_resolve_route():
+    try:
+        from .lora_library import resolve_for_inference
+        data = request.get_json(silent=True) or {}
+        result = resolve_for_inference(str(data.get("stage") or ""), data.get("names"))
+        return jsonify({"ok": True, "names": result})
+    except (ValueError, RuntimeError, OSError, ConnectionError, TimeoutError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/lora_library/story/apply", methods=["POST"])
 def lora_library_story_apply_route():
     from .storyboard_store import apply_lora_plan

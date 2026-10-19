@@ -52,7 +52,8 @@
   function label(item) { return item.name || item.id; }
   function show(enabled) {
     root.classList.toggle('hidden', !enabled);
-    legacy.classList.toggle('hidden', enabled);
+    if (enabled) legacy.classList.add('hidden');
+    else legacy.classList.remove('hidden');
     if (!enabled) {
       var originalBuild = document.querySelector('[data-test-generations-perspective="build"]');
       if (!originalBuild) throw new Error('Existing Test Build view is missing.');
@@ -319,12 +320,10 @@
     advancedMarkers[mode] = marker;
   });
   var activeAdvanced = '';
+  var nativeBodyMarker=document.createComment('Original Test workspace location');
+  legacy.parentNode.insertBefore(nativeBodyMarker,legacy);
   function highlightBuildMode(next) {
-    ['normal','finder','references','analytics'].forEach(function(mode) {
-      var selected=mode===next;
-      el(mode).classList.toggle('active',selected);
-      el(mode).setAttribute('aria-pressed',String(selected));
-    });
+    // The compact header owns destination selection.
   }
   function mountAdvanced(next) {
     if (activeAdvanced === next) return;
@@ -346,76 +345,59 @@
     root.classList.toggle('test-unified-finder-building', !!next);
     highlightBuildMode(next || 'normal');
   }
-  var mounted = false;
-  var movable = [
-    '.test-generations-next-run',
-    '.test-generations-staged-panel',
-    '#test-generations-batch-summary',
-    '#test-generations-status',
-    '#test-generations-error'
-  ].map(function(selector) {
-    var node = document.querySelector(selector);
-    if (!node || !node.parentNode) throw new Error('Missing original Test control: ' + selector);
-    var marker = document.createComment('Test control original position');
-    node.parentNode.insertBefore(marker, node);
-    return {node:node,marker:marker};
-  });
   function mountExistingControls(enabled) {
-    if (mounted === enabled) return;
-    if (enabled) {
-      movable.forEach(function(item) { el('builder').appendChild(item.node); });
+    if(enabled) {
+      if(legacy.parentNode!==el('builder'))el('builder').appendChild(legacy);
+      legacy.classList.remove('hidden');
     } else {
-      movable.forEach(function(item) { item.marker.parentNode.insertBefore(item.node, item.marker.nextSibling); });
+      if(legacy.parentNode===el('builder'))
+        nativeBodyMarker.parentNode.insertBefore(legacy,nativeBodyMarker.nextSibling);
+      legacy.classList.add('hidden');
     }
-    mounted = enabled;
+  }
+  function setPrimary(destination) {
+    ['explore','build','analytics'].forEach(function(name) {
+      var active=destination===name;
+      el(name).classList.toggle('active',active);
+      el(name).setAttribute('aria-pressed',String(active));
+    });
+    var explore=destination==='explore';
+    root.classList.toggle('test-unified-building',!explore);
+    root.classList.toggle('test-unified-exploring',explore);
+    el('gallery').classList.toggle('hidden',!explore);
+    el('inspector').classList.toggle('hidden',!explore);
+    el('builder').classList.toggle('hidden',explore);
+    el('new').classList.toggle('hidden',!explore);
+    el('references').classList.toggle('hidden',destination!=='build');
+    el('title').textContent=explore?'Generated results':destination==='analytics'?'Run Analytics':'Test Generations';
+    if(!explore)el('description').textContent=destination==='analytics'?'Compare recorded runs and checkpoints.':'Configure, run and review tests.';
   }
   function builder(enabled) {
-    root.classList.toggle('test-unified-building',enabled);
-    el('build').classList.toggle('active',enabled);
-    el('explore').classList.toggle('active',!enabled);
-    el('build').setAttribute('aria-pressed',String(enabled));
-    el('explore').setAttribute('aria-pressed',String(!enabled));
-    if (activeAdvanced) mountAdvanced('');
-    if (enabled) highlightBuildMode('normal');
+    if(activeAdvanced)mountAdvanced('');
+    setPrimary(enabled?'build':'explore');
     mountExistingControls(enabled);
-    el('builder').classList.toggle('hidden',!enabled);
-    el('gallery').classList.toggle('hidden',enabled);
-    el('inspector').classList.toggle('hidden',enabled);
-    el('new').classList.toggle('hidden',enabled);
   }
-  function legacyMode(mode) {if(activeAdvanced)mountAdvanced('');mountExistingControls(false);show(false);window.epochFinderShowMode(mode);}
-  el('explore').onclick=function(){builder(false);if(folder)refresh();};
-  el('build').onclick=function(){builder(true);};
-  el('new').onclick=function(){builder(true);};
+  el('explore').onclick=function(){window.testGenerationsUnifiedDestination('explore');};
+  el('build').onclick=function(){window.testGenerationsUnifiedDestination('build');};
+  el('new').onclick=function(){window.testGenerationsUnifiedDestination('build');};
   el('experiments').onclick=function(){perspective='experiments';selection='';checkpointSelection.clear();refresh();};
   el('checkpoints').onclick=function(){perspective='checkpoints';selection='';checkpointSelection.clear();refresh();};
   el('reload').onclick=refresh;
-  window.addEventListener('webcap:test-preview-updated', function () {
-    if (!root.classList.contains('hidden') && el('builder').classList.contains('hidden')) refresh();
+  window.addEventListener('webcap:test-preview-updated',function(){
+    if(!root.classList.contains('hidden')&&!el('gallery').classList.contains('hidden'))refresh();
   });
-  el('legacy').onclick=function(){if(activeAdvanced)mountAdvanced('');mountExistingControls(false);show(false);};
-  el('normal').onclick=function(){builder(true);};
-  el('finder').onclick=function(){window.testGenerationsUnifiedDestination('finder');};
+  el('legacy').onclick=function(){exitToNative();};
   el('references').onclick=function(){window.testGenerationsUnifiedDestination('references');};
   el('analytics').onclick=function(){window.testGenerationsUnifiedDestination('analytics');};
-  // One explicit handoff for feature-owned navigation. The original controllers
-  // keep their DOM and operations; only the visible destination is coordinated.
   window.testGenerationsUnifiedDestination=function(destination) {
-    if (['explore','build','finder','references','analytics'].indexOf(destination)===-1)
+    if(['explore','build','finder','references','analytics'].indexOf(destination)===-1)
       throw new Error('Unknown Test Generations destination: '+destination);
     if(root.classList.contains('hidden'))show(true);
-    if(destination==='explore') {builder(false);if(folder)refresh();return;}
-    if(destination==='build') {builder(true);return;}
+    if(destination==='explore'){builder(false);if(folder)refresh();return;}
+    if(destination==='build'){builder(true);return;}
     mountExistingControls(false);
-    el('builder').classList.remove('hidden');
-    el('gallery').classList.add('hidden');
-    el('inspector').classList.add('hidden');
-    root.classList.add('test-unified-building');
-    el('build').classList.add('active');
-    el('explore').classList.remove('active');
-    el('build').setAttribute('aria-pressed','true');
-    el('explore').setAttribute('aria-pressed','false');
     mountAdvanced(destination);
+    setPrimary(destination==='analytics'?'analytics':'build');
   };
   var prepare=window.epochFinderPrepare;
   window.epochFinderPrepare=function(nextFolder) {

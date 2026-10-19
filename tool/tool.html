@@ -2905,18 +2905,19 @@
                     </div>
                     <div id="diagnostics-panel-assessment" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="assessment" role="tabpanel" aria-labelledby="diagnostics-tab-assessment" hidden>
                         <section class="app-settings-section">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Model Assessment <span class="app-settings-help">Unified comparison</span></div>
-                                <div class="app-settings-section-copy">Compare observed performance and core capabilities. Expand any model for details; specialized test tools remain available below.</div>
-                            </div>
                             <div class="model-assessment-toolbar">
                                 <button id="diagnostics-assessment-run" type="button">Run Selected Tests</button>
                                 <button id="diagnostics-assessment-stop" type="button" class="review-captions-btn hidden" hidden disabled>Stop Assessment</button>
                                 <button id="diagnostics-assessment-refresh" type="button" class="review-captions-btn">Refresh</button>
-                                <button id="diagnostics-assessment-export" type="button" class="review-captions-btn">Export Results</button>
-                                <button id="diagnostics-assessment-import" type="button" class="review-captions-btn">Import Results</button>
+                                <label class="model-assessment-deep" title="16 Set samples; Director long-form 4K, 8K and 16K probes — slower"><input id="diagnostics-assessment-deep" type="checkbox"> Deep assessment <small>(16 samples · 4K/8K/16K)</small></label>
+                                <details class="model-assessment-transfer-menu">
+                                    <summary>Import / Export</summary>
+                                    <div class="model-assessment-toolbar">
+                                        <button id="diagnostics-assessment-export" type="button" class="review-captions-btn">Export Results</button>
+                                        <button id="diagnostics-assessment-import" type="button" class="review-captions-btn">Import Results</button>
+                                    </div>
+                                </details>
                                 <input id="diagnostics-assessment-file" type="file" accept=".json,application/json" hidden>
-                                <label class="model-assessment-deep"><input id="diagnostics-assessment-deep" type="checkbox"> Deep Assessment <small>(16 Set samples; Director long-form 4K, 8K and 16K probes — slower)</small></label>
                             </div>
                             <div id="diagnostics-assessment-activity" class="hidden" role="region" aria-label="Model Assessment progress"></div>
                             <div id="diagnostics-assessment-transfer" class="hidden" role="region" aria-label="Import assessment results">
@@ -2927,24 +2928,24 @@
                                 <button id="diagnostics-assessment-import-cancel" type="button" class="review-captions-btn">Cancel</button>
                             </div>
                             <p id="diagnostics-assessment-transfer-status" class="app-settings-help" role="status"></p>
-                            <details class="model-assessment-tools"><summary>Other testing tools</summary>
+                            <div class="model-assessment-filters">
+                                <label>Runtime <select id="diagnostics-assessment-runtime" aria-label="Assessment runtime"><option value="local">Local</option><option value="remote">Remote</option><option value="all">All</option></select></label>
+                                <label class="model-assessment-judge" title="Select a judge, then expand a completed Director model and choose Assess with LLM. Scores are advisory.">LLM judge <select id="diagnostics-assessment-judge-model" aria-label="Choose LLM judge model"><option value="">Choose judge model…</option></select></label>
+                                <label class="model-assessment-search">Filter <input id="diagnostics-assessment-filter" type="search" placeholder="Model name, runtime or role"></label>
+                            </div>
+                            <div class="model-assessment-feedback">
+                                <div id="diagnostics-assessment-selection" class="app-settings-help" aria-live="polite">Select models below to prepare an assessment.</div>
+                                <div id="diagnostics-assessment-summary" class="app-settings-help" aria-live="polite">Open this tab to load available findings.</div>
+                            </div>
+                            <div id="diagnostics-assessment-results" class="app-settings-environment-results"></div>
+                            <details class="model-assessment-tools">
+                                <summary>Legacy tools &amp; history</summary>
                                 <div class="model-assessment-toolbar">
                                     <button id="diagnostics-assessment-director" type="button">Director Calibration</button>
-                                    <button id="diagnostics-assessment-lab" type="button">Vision &amp; Structured Tests</button>
-                                    <button id="diagnostics-assessment-benchmark" type="button">Benchmark &amp; Performance History</button>
+                                    <button id="diagnostics-assessment-lab" type="button">Detailed Probes &amp; History</button>
+                                    <button id="diagnostics-assessment-benchmark" type="button">Custom Prompt Benchmark</button>
                                 </div>
                             </details>
-                            <div class="model-assessment-bulk">
-                                <strong>Models</strong>
-                                <label>Runtime <select id="diagnostics-assessment-runtime" aria-label="Assessment runtime"><option value="local">Local</option><option value="remote">Remote</option><option value="all">All</option></select></label>
-                                <span class="app-settings-help">Choose models below, then Run Selected Tests. Progress updates live; findings refresh when the run finishes.</span>
-                            </div>
-                            <label class="model-assessment-judge">Optional quality judge <select id="diagnostics-assessment-judge-model" aria-label="Choose LLM judge model"><option value="">Choose judge model…</option></select></label>
-                            <span class="app-settings-help">Expand a completed Director model and choose Assess with LLM. Scores are advisory, not workflow qualifications.</span>
-                            <label class="model-assessment-search">Filter models <input id="diagnostics-assessment-filter" type="search" placeholder="Model name, runtime or role"></label>
-                            <div id="diagnostics-assessment-selection" class="app-settings-help" aria-live="polite">Select models below to prepare an assessment.</div>
-                            <div id="diagnostics-assessment-summary" class="app-settings-help" aria-live="polite">Open this tab to load available findings.</div>
-                            <div id="diagnostics-assessment-results" class="app-settings-environment-results"></div>
                         </section>
                     </div>
                     <div id="diagnostics-panel-h3" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="h3" role="tabpanel" aria-labelledby="diagnostics-tab-h3" hidden>

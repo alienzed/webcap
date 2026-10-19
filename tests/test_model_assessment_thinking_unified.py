@@ -37,3 +37,14 @@ def test_model_assessment_bulk_selection_uses_header_checkbox():
     assert 'id="diagnostics-assessment-none"' not in html
     assert "selectAll.id = 'diagnostics-assessment-select-all'" in source
     assert "header.indeterminate = checked > 0 && checked < inputs.length" in source
+
+
+def test_unified_assessment_deduplicates_multimodal_models_and_scopes_runtimes():
+    source = Path("tool/js/diagnostics.js").read_text(encoding="utf-8")
+    html = Path("tool/tool.html").read_text(encoding="utf-8")
+    assert "if (seenModels.has(ref)) return;" in source
+    assert "supportsDirector && supportsVision ? 'Director · Vision'" in source
+    assert "diagnosticsAssessmentRuntime !== 'all'" in source
+    assert "diagnosticsAssessmentSyncHeaderSelection();" in source
+    assert 'id="diagnostics-assessment-runtime"' in html
+    assert 'value="local"' in html and 'value="remote"' in html

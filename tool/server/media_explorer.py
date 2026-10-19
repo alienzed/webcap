@@ -351,10 +351,12 @@ def discover_storyboards():
 
 
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
-               model="", folder="", rating="", artifact="", owner="", date=""):
+               model="", folder="", rating="", artifact="", owner="", date="", storyboard_type=""):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
+    if storyboard_type not in ("", "scenes", "exports"):
+        raise ValueError("Unknown Storyboard media filter.")
     if source not in ('', 'generate', 'test', 'epoch', 'storyboard'):
         raise ValueError('Unknown Media Explorer source.')
     results = (discover_generate(limit=None if full else 500) if source in ('', 'generate') else [])
@@ -369,6 +371,8 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
         "folders": sorted({item.get("ownerFolder", "") for item in results if item.get("ownerFolder")}),
     }
     results.sort(key=lambda item: (item['createdAt'], item['id']), reverse=True)
+    if source == "storyboard" and storyboard_type:
+        results = [item for item in results if (item.get("role") == "export") == (storyboard_type == "exports")]
     if role:
         results = [item for item in results if role in item.get("roles", [item["role"]])]
     if artifact:

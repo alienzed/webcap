@@ -541,6 +541,7 @@ def list_archives():
         rows.append({
             "name": directory.name,
             "runId": run_id,
+            "sourceJobId": archive.get("sourceJobId"),
             "archivedAt": archive.get("archivedAt"),
             "sourceFolder": archive.get("sourceFolder"),
             "runName": archive.get("runName"),

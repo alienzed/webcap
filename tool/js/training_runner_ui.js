@@ -988,11 +988,11 @@ function renderTrainingRunner() {
       (trainingWorkspaceState.runnerNotice
         ? '<div class="training-runner-detail is-warning">' + escapeHtml(trainingWorkspaceState.runnerNotice) + '</div>'
         : '');
-    els.runnerActions.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
+    els.runnerActions.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused && !queuedCount);
     if (els.runnerFinishBtn) els.runnerFinishBtn.classList.add('hidden');
     if (els.runnerPauseBtn) els.runnerPauseBtn.classList.add('hidden');
     if (els.runnerCancelBtn) els.runnerCancelBtn.classList.add('hidden');
-    if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused);
+    if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused && !queuedCount);
     return;
   }
   if (!getTrainingRunnerJobById(trainingWorkspaceState.runnerSelectedJobId)) {
@@ -1065,7 +1065,7 @@ function renderTrainingRunner() {
   if (els.runnerFinishBtn) els.runnerFinishBtn.classList.toggle('hidden', !checkpointedStopReady);
   if (els.runnerPauseBtn) els.runnerPauseBtn.classList.toggle('hidden', !checkpointedStopReady || trainingWorkspaceState.runnerQueuePaused);
   if (els.runnerCancelBtn) els.runnerCancelBtn.classList.toggle('hidden', !queued);
-  if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', !trainingWorkspaceState.runnerQueuePaused || !!activeCount);
+  if (els.runnerResumeQueueBtn) els.runnerResumeQueueBtn.classList.toggle('hidden', (!trainingWorkspaceState.runnerQueuePaused && !queuedCount) || !!activeCount);
   if (!activeCount && !queuedCount && !trainingWorkspaceState.runnerQueuePaused && status !== 'failed' && status !== 'completed' && status !== 'finished_early' && status !== 'stopped') {
     els.runnerActions.classList.add('hidden');
   }

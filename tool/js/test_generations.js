@@ -4587,6 +4587,7 @@
     renderStatus({ status: 'idle' });
     renderTestBatch();
     window.epochFinderPrepare(launchFolder);
+    window.testGenerationsUnifiedNativeRoute();
     // Keep the proven Test/Finder/References/Analytics surfaces as the default.
     // Unified Explore remains available on demand, never the landing route.
     if (pendingActivityCampaign) {

@@ -14,14 +14,15 @@ def test_native_regular_and_campaign_launch_controls():
                 "test-generations-megapixels", "test-generations-duration",
                 "test-generations-seed",
                 "test-generations-master-select", "test-generations-sweep-mode",
-                "test-generations-batch-btn", "epoch-finder-run-choices",
+                "epoch-finder-run-choices",
                 "epoch-finder-epoch-picker", "epoch-finder-reference-workspace",
                 "epoch-finder-start", "epoch-finder-back", "epoch-finder-next"):
         assert 'id="' + key + '"' in html, key
     assert "test-generations-base-include" in js  # dynamically rendered by native candidate controller
     assert "if (count === 1 && !autoVl) return startRun();" in js
-    assert "runTestBatch(count, true)" in js
-    assert "el('test-generations-batch-auto-vl').checked = autoVl;" in js
+    assert "return runTestBatch(count, autoVl);" in js
+    assert "function testRunCriteria()" in js
+    assert "refreshSessions();" in js
     assert "preserveSingleSeed: !!preserveSingleSeed && count === 1" in js
     assert "preserveSingleSeed" in (ROOT / "tool/server/test_batch.py").read_text(encoding="utf-8")
     assert "epoch-finder-back-to-tests" in finder
@@ -60,9 +61,28 @@ def test_original_four_destinations_and_review_survive():
         assert 'data-test-workspace-mode="' + mode + '"' in html
     for control in ("test-generations-view-grid-btn", "test-generations-view-compare-btn",
                     "test-generations-preview-sort", "test-generations-ask-vl",
-                    "test-generations-batch-summary", "test-generations-sessions-list",
+                    "test-generations-multi-actions", "test-generations-sessions-list",
                     "run-analytics-chart", "run-analytics-table",
                     "test-references-gallery", "epoch-finder-shortlist"):
         assert 'id="' + control + '"' in html, control
     assert "syncCompareVideos" in js
     assert "test_batch" not in (ROOT / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+
+
+def test_batch_ui_is_retired_without_removing_server_coordinator():
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    js = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
+    for old in ("test-generations-batch-summary", "test-generations-batch-modal",
+                "test-generations-batch-results", "test-generations-batch-btn"):
+        assert f'id="{old}"' not in html
+        assert f"el('{old}')" not in js
+    assert "function testRunCriteria()" in js
+    assert js.count("var criteria = testRunCriteria();") == 0  # shared builder is validated through try/catch
+    assert "criteria = testRunCriteria();" in js
+    assert "function refreshServerTestBatches()" in js
+    assert "function syncTestBatchStopActions(batches)" in js
+    assert ".test-generations-batch-summary" not in css
+    server = (ROOT / "tool/server/test_batch.py").read_text(encoding="utf-8")
+    assert "def enqueue_batch(" in server
+    assert "def cancel_batch(" in server

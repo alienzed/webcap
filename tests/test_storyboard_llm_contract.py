@@ -340,37 +340,32 @@ def test_individual_development_scene_uses_whole_outline_and_previous_authored_s
     assert "Author exactly this one planned Scene" in prompt
 
 
-def test_relationship_context_is_compact_without_losing_scene_intent():
-    story = _story()
-    story["scenes"]["scene-1"]["prompt"] = "UNRELATED PREVIOUS CAMERA AND SOUND DIRECTIONS"
-    refined = storyboard_llm_contract.build_request(story, "scene-2", "refine_prompt", "Adjust the action.")["prompt"]
-    inserted = storyboard_llm_contract.build_request(story, "scene-1", "insert_scene")["prompt"]
-    assert "UNRELATED PREVIOUS CAMERA AND SOUND DIRECTIONS" not in refined
-    assert "UNRELATED PREVIOUS CAMERA AND SOUND DIRECTIONS" not in inserted
-    assert "She is just inside the closed front door." in refined
-    assert "She reaches the hotel entrance." in inserted
-    assert "EXISTING SECOND PROMPT" in refined
-
-
-def test_scene_development_retains_outline_and_compact_previous_scene():
-    story = _story()
-    outline = {"scenes": [
-        {"title": "Arrival", "summary": "Mara arrives.", "suggestedDurationSeconds": 10},
-        {"title": "Footprints", "summary": "Mara spots prints.", "suggestedDurationSeconds": 12},
-    ]}
-    previous = {"title": "Arrival", "summary": "Mara arrives.", "prompt": "FULL PREVIOUS H3 SHOT SCRIPT", "entryState": "Outside"}
-    prompt = storyboard_llm_contract.build_request(story, "", "develop_story_scene", development={
-        "outline": outline, "sceneIndex": 1, "previousScene": previous,
-    })["prompt"]
-    assert "[COMPLETE SCENE OUTLINE]" in prompt
-    assert "[CURRENT PLANNED SCENE]" in prompt
-    assert "Mara spots prints." in prompt
-    assert "Outside" in prompt
-    assert "FULL PREVIOUS H3 SHOT SCRIPT" not in prompt
-
-
-def test_standalone_visual_instruction_preserves_h3_example():
-    prompt = storyboard_llm_contract.build_request(_story(), "", "develop_story")["prompt"]
+def test_director_guidance_resolves_cross_scene_references_without_changing_h3_structure():
+    request = storyboard_llm_contract.build_request(_story(), "", "develop_story")
+    prompt = request["prompt"]
     assert "Use other Scenes to resolve visual facts" in prompt
     assert "Comparisons between subjects visible within this Scene remain useful" in prompt
+    assert "Do not invent precision or details unsupported by the concept" in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
+    assert "Environment / Continuity Anchors:" in prompt
+    assert "integrated_multimodal_description:" in prompt
+
+
+def test_existing_relationship_context_remains_available():
+    story = _story()
+    assert "OLD FIRST PROMPT" in storyboard_llm_contract.build_request(
+        story, "scene-2", "refine_prompt", "Adjust the action."
+    )["prompt"]
+    assert "OLD FIRST PROMPT" in storyboard_llm_contract.build_request(
+        story, "scene-1", "insert_scene"
+    )["prompt"]
+    outline = {"scenes": [
+        {"title": "Arrival", "summary": "Mara arrives.", "suggestedDurationSeconds": 10},
+        {"title": "Footprints", "summary": "Mara notices prints.", "suggestedDurationSeconds": 12},
+    ]}
+    prompt = storyboard_llm_contract.build_request(story, "", "develop_story_scene", development={
+        "outline": outline, "sceneIndex": 1,
+        "previousScene": {"title": "Arrival", "prompt": "PREVIOUS FULL H3 PROMPT"},
+    })["prompt"]
+    assert "PREVIOUS FULL H3 PROMPT" in prompt
+    assert '"suggestedDurationSeconds": 12' in prompt

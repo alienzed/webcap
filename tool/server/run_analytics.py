@@ -37,8 +37,12 @@ def _catalog(folder_path, campaigns, warnings):
         for run in finder._runs(folder_path, require_saved_checkpoints=False):
             identifier = str(run.get("jobId") or "")
             if identifier:
+                name = str(run.get("runName") or "").strip()
+                sequence = run.get("runSequence")
+                if not name or name.casefold() == "run train":
+                    name = "Run " + str(sequence) if sequence is not None and str(sequence).strip() else "Run " + identifier[-8:]
                 indexed[identifier] = {
-                    "jobId": identifier, "label": str(run.get("runName") or ("Run " + str(run.get("runSequence") or identifier))),
+                    "jobId": identifier, "label": name,
                     "runSequence": run.get("runSequence"),
                     "stage": str(run.get("stage") or ""), "modelId": str(run.get("modelId") or ""),
                     "savedEpochs": [], "archive": None, "source": "training",

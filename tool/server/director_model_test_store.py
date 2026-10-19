@@ -247,7 +247,11 @@ def calibration_prompt(kind, target):
         target = int(target)
     except (TypeError, ValueError) as exc:
         raise ValueError("Director calibration target must be an integer.") from exc
-    if kind == "context":
+    if kind == "thinking":
+        messages = [{"role": "user", "content": "Think briefly: what is 7 + 5? Answer with the number."}]
+        overrides = {"maxTokens": 128}
+        label = "Director Thinking Check"
+    elif kind == "context":
         if target not in CONTEXT_STEPS:
             raise ValueError("Unsupported Director context calibration target.")
         return "Reply with exactly: CONTEXT_OK"
@@ -330,7 +334,7 @@ def enqueue_calibration_run(model_ref, kind, target, context_size=None):
             "operation": "freeform_chat",
             "messages": messages,
         },
-        context={"runtimeOverrides": overrides, "assessmentEvidence": True},
+        context={"runtimeOverrides": overrides, "assessmentEvidence": True, "thinking": kind == "thinking"},
         label=label,
     )
 
@@ -441,13 +445,16 @@ def register_routes(app):
                     "calibrationProfiles": begun["profiles"],
                     "calibrationReports": begun["reports"],
                 })
+            if action == "thinking_metadata":
+                from .storyboard_llm_runtime import advertised_thinking
+                return jsonify({"ok": True, "thinking": advertised_thinking(data.get("modelRef"))})
             if action == "enqueue_calibration":
                 kind = data.get("kind")
                 target = data.get("target")
                 return jsonify({
                     "ok": True,
                     "job": enqueue_calibration_run(data.get("modelRef"), kind, target, data.get("contextSize")),
-                    "prompt": calibration_prompt(kind, target),
+                    "prompt": "Think briefly: what is 7 + 5? Answer with the number." if kind == "thinking" else calibration_prompt(kind, target),
                 }), 202
             if action == "save_calibration_report":
                 return jsonify({

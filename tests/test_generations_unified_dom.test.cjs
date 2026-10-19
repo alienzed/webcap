@@ -79,6 +79,10 @@ test('Explore, Build and Finder preserve original control nodes and image attrib
  assert.ok(calls.includes('session:test-one'));
  assert.ok(d.getElementById('test-unified-workspace').classList.contains('hidden')); 
  assert.ok(!d.getElementById('test-generations-body').classList.contains('test-generations-explore'));
+ w.testGenerationsUnifiedRoute({folder:'set-one',modelId:'h3'});
+ assert.ok(!d.getElementById('test-unified-workspace').classList.contains('hidden'));
+ w.testGenerationsUnifiedRoute({folder:'set-one',modelId:'h3',activitySession:'test-one'});
+ assert.ok(d.getElementById('test-unified-workspace').classList.contains('hidden'));
  dom.window.close();
 });
 

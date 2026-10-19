@@ -119,7 +119,7 @@ test('real WebCap Test markup retains all live controls through unified view tra
  d.getElementById('test-unified-build').click();
  const builder=d.getElementById('test-unified-builder');
  assert.ok(builder.contains(d.getElementById('test-generations-run-btn')));
- assert.ok(builder.contains(d.getElementById('test-generations-batch-btn')));
+ assert.ok(builder.contains(d.getElementById('test-generations-inline-count')));
  assert.ok(builder.contains(d.getElementById('test-generations-files')));
  d.getElementById('test-unified-finder').click();
  assert.ok(builder.contains(d.getElementById('epoch-finder-start')));

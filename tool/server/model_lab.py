@@ -186,6 +186,8 @@ def capability_run_summaries():
                 entry["throughputSamples"].append(round(float(rate), 2))
             if isinstance(tokens, (int, float)) and not isinstance(tokens, bool) and 0 < tokens < 10000000:
                 entry["outputTokenSamples"].append(round(float(tokens), 2))
+            if kind == "director_thinking":
+                entry["supported"] = status == "completed" and bool(str(result.get("reasoning") or "").strip())
             if kind.startswith("director_writing") and status == "completed":
                 # A completed LLM job alone does not prove a long-form target.
                 # The calibration protocol owns real 8K/16K qualification.
@@ -971,6 +973,18 @@ def _run_director_model(run, model):
     model_ref = model["modelRef"]
     from .director_model_test_store import calibration_prompt
     from .llm_runner import enqueue
+
+    # One tiny opt-in thinking probe, owned by Model Lab's existing queue.
+    _probe_job(
+        run, kind="director_thinking", role="director", model_ref=model_ref,
+        enqueue=lambda: enqueue(
+            "chat", model_ref,
+            {"operation": "freeform_chat", "messages": [
+                {"role": "user", "content": "Think briefly: what is 7 + 5? Answer with the number."}]},
+            context={"runtimeOverrides": {"maxTokens": 128}, "assessmentEvidence": True, "thinking": True},
+            label="Model Assessment · Thinking",
+        ),
+    )
 
     # WebCap's existing representative writing protocol; one bounded request,
     # independent of browser lifecycle and without changing learned calibration.

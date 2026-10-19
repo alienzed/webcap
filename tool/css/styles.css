@@ -7298,3 +7298,12 @@ html[data-theme="dark"] iframe {
 .test-generations-batch-results th,.test-generations-batch-results td {padding:5px 4px; border-bottom:1px solid var(--border); text-align:left;}
 .test-generations-batch-results th button {background:transparent; border:0; color:var(--text); cursor:pointer; font:inherit; font-weight:600;}
 .test-generations-batch-results td button {padding:0; border:0; background:transparent; color:var(--accent); cursor:pointer; text-align:left; font:inherit; max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+/* Test Generations Phase 1: reversible, presentation-only gallery perspective. */
+.test-generations-perspective { display:flex; gap:4px; padding:10px 12px 4px; }
+.test-generations-perspective button { flex:1; padding:7px 10px; border:1px solid var(--border); border-radius:6px; background:transparent; color:inherit; cursor:pointer; }
+.test-generations-perspective button.active { background:var(--surface-raised, var(--surface)); border-color:var(--accent); font-weight:600; }
+.test-generations-body.test-generations-explore:not(.test-generations-rail-collapsed) { grid-template-columns:minmax(240px, 280px) minmax(0, 1fr); }
+.test-generations-explore .test-generations-next-run,
+.test-generations-explore .test-generations-staged-panel { display:none; }
+.test-generations-explore .test-generations-controls { gap:0; }

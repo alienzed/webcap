@@ -294,7 +294,7 @@
     el('epoch-media-status').textContent=more?'Loading more recorded results…':'Loading recorded checkpoint results…';
     fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{
-        limit:8,offset:more?epochMediaOffset:0,checkpoints:[scope.jobId+':'+scope.epoch]
+        limit:8,offset:more?epochMediaOffset:0,checkpoints:[scope.jobId+':'+scope.epoch],generatedOnly:true
       }})}).then(function(response){return response.json().then(function(data){
         if(!response.ok||!data.ok)throw new Error(data.error||'Checkpoint results unavailable');
         return data;

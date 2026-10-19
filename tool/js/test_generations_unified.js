@@ -145,7 +145,9 @@
     }
     if(perspective==='checkpoints' && checkpointSelection.size>1) records.sort(function(a,b){return (a.jobId+':'+a.epoch).localeCompare(b.jobId+':'+b.epoch,undefined,{numeric:true});});
     text(el('title'),selection ? (collections().find(function(x){return x.id===selection;})||{}).name || 'Results' : 'All generated results');
-    text(el('description'),records.length+' recorded results · '+(perspective==='experiments'?'Experiments':'Checkpoints'));
+    var warningText=(payload.warnings||[]).filter(Boolean).join(' · ');
+    text(el('description'),records.length+' recorded results · '+(perspective==='experiments'?'Experiments':'Checkpoints')+(warningText?' · '+warningText:''));
+    el('description').classList.toggle('is-warning',!!warningText);
     var previousCheckpoint = '';
     records.forEach(function(item) {
       var checkpoint = item.jobId+':'+item.epoch;

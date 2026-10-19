@@ -3766,3 +3766,29 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-passed { color: var(--text); background: rgba(37,146,90,.22); border: 1px solid rgba(37,146,90,.4); }
 .model-assessment-issues { color: var(--text); background: rgba(188,66,58,.18); border: 1px solid rgba(188,66,58,.35); }
 .model-assessment-untested { color: var(--muted); background: var(--surface-alt, rgba(128,128,128,.08)); border: 1px solid var(--border); }
+
+/* Terminal assessment receipts must not look like active work. */
+.model-assessment-progress-card.progress-card-compact {
+  padding: 9px 12px;
+  margin: 8px 0;
+  gap: 10px;
+  align-items: center;
+}
+.model-assessment-progress-card.progress-card-compact .activity-monitor-copy {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.model-assessment-progress-card.progress-card-compact .activity-monitor-copy strong { font-size: 13px; }
+.model-assessment-progress-card.progress-card-compact .activity-monitor-copy span,
+.model-assessment-progress-card.progress-card-compact .activity-monitor-copy small { font-size: 12px; }
+.model-assessment-progress-card .activity-monitor-dot.assessment-finished {
+  background: #28a66d;
+  box-shadow: none;
+  animation: none;
+}
+.model-assessment-progress-card .activity-monitor-dot.assessment-terminal {
+  box-shadow: none;
+  animation: none;
+}

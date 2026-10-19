@@ -1156,6 +1156,8 @@
                                 <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
                                     <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="finder" aria-pressed="true">Epoch Finder</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
                                 </nav>
                                 <section class="epoch-finder-panel">
                                     <h3>New campaign</h3>
@@ -1166,7 +1168,7 @@
                                         <span data-epoch-step-label="4">4 · Launch</span>
                                     </nav>
                                     <div data-epoch-wizard-step="1">
-                                    <label>Training run<select id="epoch-finder-run"><option value="">Loading saved runs…</option></select></label>
+                                    <label class="hidden">Training run (legacy)<select id="epoch-finder-run"><option value="">Loading saved runs…</option></select></label><div id="epoch-finder-run-choices" class="epoch-finder-run-choices" aria-label="Select training runs"></div>
                                     <p id="epoch-finder-run-detail" class="epoch-finder-muted"></p>
                                     <div id="epoch-finder-epoch-picker" class="epoch-finder-epoch-picker hidden"></div>
                                     </div>
@@ -1249,11 +1251,80 @@
                             </main>
                         </div>
                     </section>
+                    <section id="test-references-screen" class="epoch-finder-screen test-references-screen hidden" aria-label="Training References">
+                        <div class="epoch-finder-intro">
+                            <div><div class="epoch-finder-eyebrow">TEST GENERATIONS / REFERENCES</div>
+                                <h2>Training references</h2>
+                                <p>Explore exact Set tags within a training run, inspect whole images, and choose examples for upcoming Epoch Finder campaigns.</p>
+                            </div>
+                        </div>
+                        <div class="epoch-finder-layout">
+                            <aside class="epoch-finder-sidebar">
+                                <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
+                                    <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="references" aria-pressed="true">References</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
+                                </nav>
+                                <section class="epoch-finder-panel">
+                                    <h3>Find training examples</h3>
+                                    <label>Source training run<select id="test-references-run"><option value="">Loading runs…</option></select></label>
+                                    <label>Scoped Set group<select id="test-references-group" disabled><option value="">Select a run first</option></select></label>
+                                    <label>Tagged option<select id="test-references-option" disabled><option value="">Select a group first</option></select></label>
+                                    <button id="test-references-refresh" type="button" class="review-captions-btn">Refresh references</button>
+                                    <p class="epoch-finder-muted">Only images actually included in the selected run and carrying this exact annotation are shown. A tag is not proof that a feature is visible.</p>
+                                </section>
+                                <section class="epoch-finder-panel">
+                                    <div class="epoch-finder-panel-heading"><h3>Chosen examples</h3><span id="test-references-selected-count"></span></div>
+                                    <div id="test-references-selections" class="test-references-selections epoch-finder-muted">Choose an example to use for its tag.</div>
+                                    <p class="epoch-finder-muted">Choices are temporary until a campaign is launched. Its approved references are then stored with that campaign.</p>
+                                </section>
+                            </aside>
+                            <main class="epoch-finder-dashboard">
+                                <section class="epoch-finder-reference-workspace">
+                                    <div class="epoch-finder-panel-heading"><h3>Matching images</h3><span id="test-references-count"></span></div>
+                                    <p id="test-references-status" class="epoch-finder-muted" aria-live="polite">Select a training run to explore its references.</p>
+                                    <div id="test-references-gallery" class="epoch-finder-reference-gallery"></div>
+                                </section>
+                                <p id="test-references-error" class="epoch-finder-error hidden" role="alert"></p>
+                            </main>
+                        </div>
+                        <dialog id="test-references-preview" class="epoch-finder-reference-preview" aria-label="Training image preview">
+                            <form method="dialog"><button type="submit" class="review-captions-btn">Close ×</button></form>
+                            <img id="test-references-preview-image" alt="">
+                            <p id="test-references-preview-caption"></p>
+                            <a id="test-references-preview-original" target="_blank" rel="noopener noreferrer">Open original image ↗</a>
+                        </dialog>
+                    </section>
+                    <section id="run-analytics-screen" class="epoch-finder-screen hidden" aria-label="Run Analytics">
+                        <div class="epoch-finder-intro"><div><div class="epoch-finder-eyebrow">TEST GENERATIONS / ANALYTICS</div><h2>Run Analytics</h2><p>Read-only evidence across saved campaigns, Test sessions and training archives.</p></div></div>
+                        <div class="epoch-finder-layout">
+                          <aside class="epoch-finder-sidebar">
+                            <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
+                              <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
+                              <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
+                              <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
+                              <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="analytics" aria-pressed="true">Analytics</button>
+                            </nav>
+                            <section class="epoch-finder-panel"><h3>Evidence scope</h3><label>Training run<select id="run-analytics-run"><option value="">Discovering runs…</option></select></label><button id="run-analytics-analyze" class="training-btn training-launch-btn" type="button">Analyze</button><p class="epoch-finder-muted">No inference or rescans. Results are derived on demand from existing saved evidence.</p></section>
+                            <section class="epoch-finder-panel"><h3>Comparable evidence</h3><label>Campaign<select id="run-analytics-campaign"><option value="">Select a campaign</option></select></label><p class="epoch-finder-muted">Each campaign uses its own frozen tests. Different campaigns are not merged into one score.</p></section>
+                          </aside>
+                          <main class="epoch-finder-dashboard">
+                            <section class="epoch-finder-panel"><h3>Evidence coverage</h3><div id="run-analytics-coverage">Choose a training run to begin.</div></section>
+                            <section class="epoch-finder-panel"><h3>Checkpoint trajectory</h3><p id="run-analytics-chart-note" class="epoch-finder-muted"></p><div id="run-analytics-chart"></div></section>
+                            <section class="epoch-finder-panel"><h3>Checkpoints</h3><div id="run-analytics-table"></div></section>
+                            <section class="epoch-finder-panel"><h3>Findings and limits</h3><div id="run-analytics-findings"></div><div id="run-analytics-warnings"></div></section>
+                            <p id="run-analytics-error" class="epoch-finder-error hidden" role="alert"></p>
+                          </main>
+                        </div>
+                    </section>
                     <div id="test-generations-body" class="test-generations-body">
                         <aside class="test-generations-rail">
                             <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
                                 <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Tests</button>
                                 <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
+                                <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
                             </nav>
                             <div id="test-generations-help" class="test-generations-help hidden">
                                 <strong>How Test Generations works</strong>
@@ -1978,13 +2049,14 @@
             </aside>
             <div id="test-generations-batch-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="test-generations-batch-close">
                 <section class="keep-lora-dialog test-generations-batch-dialog" role="dialog" aria-modal="true" aria-labelledby="test-generations-batch-title">
-                    <header class="keep-lora-header"><div><h2 id="test-generations-batch-title">Batch Test + Ask VL</h2><p class="keep-lora-source">Queue sessions with fresh seeds, then evaluate all completed previews automatically.</p></div><button id="test-generations-batch-close" type="button" class="training-review-modal-close" aria-label="Close Batch dialog">&times;</button></header>
+                    <header class="keep-lora-header"><div><h2 id="test-generations-batch-title">Batch Test + Ask VL</h2><p class="keep-lora-source">Queue normal Test sessions with fresh seeds; optionally evaluate previews with Ask VL.</p></div><button id="test-generations-batch-close" type="button" class="training-review-modal-close" aria-label="Close Batch dialog">&times;</button></header>
                     <div class="keep-lora-content">
                         <label class="test-generations-batch-count-label">Test sessions <input id="test-generations-batch-count" type="number" min="1" max="20" step="1" value="5"></label>
+                        <label class="test-generations-batch-count-label"><input id="test-generations-batch-auto-vl" type="checkbox" checked> Automatically evaluate completed previews with Ask VL</label>
                         <div id="test-generations-batch-config-summary" class="keep-lora-source"></div>
-                        <p class="keep-lora-source">The browser must remain open. Switching to Prepare Set or Training is fine. Already-queued generation jobs continue if this automation stops. Scored VL percentages require resolved wildcard attributes.</p>
+                        <p class="keep-lora-source">The browser must remain open for batch submission, monitoring and automatic VL. Submitted Test sessions continue independently if the browser closes or automation stops. Scored VL percentages require resolved wildcard attributes.</p>
                     </div>
-                    <footer class="keep-lora-header test-generations-batch-dialog-actions"><button id="test-generations-batch-cancel" type="button" class="review-captions-btn">Cancel</button><button id="test-generations-batch-start" type="button" class="training-btn">Queue and Evaluate</button></footer>
+                    <footer class="keep-lora-header test-generations-batch-dialog-actions"><button id="test-generations-batch-cancel" type="button" class="review-captions-btn">Cancel</button><button id="test-generations-batch-start" type="button" class="training-btn">Queue Sessions</button></footer>
                 </section>
             </div>
             <div id="test-generations-wildcard-modal" class="keep-lora-modal test-generations-wildcard-modal hidden" aria-hidden="true" data-escape-close-id="test-generations-wildcard-close">
@@ -3301,6 +3373,8 @@
         <script src="/static/js/workflow_gate.js"></script>
         <script src="/static/js/test_generations.js"></script>
         <script src="/static/js/epoch_finder.js"></script>
+        <script src="/static/js/test_references.js"></script>
+        <script src="/static/js/run_analytics.js"></script>
         <script src="/static/js/storyboard.js"></script>
         <script src="/static/js/main.js"></script>
     </body>

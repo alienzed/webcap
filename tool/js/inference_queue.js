@@ -506,12 +506,17 @@
     }, state.open ? 2000 : (hasActiveQueueWork() ? 4000 : 15000));
   }
 
-  function setOpen(open) {
+  function setOpen(open, internal) {
+    if (window.isOperationsDrawerMounted && !internal) {
+      if (open) window.openOperationsDrawer('queues');
+      else window.closeOperationsDrawer(false);
+      return;
+    }
     var wasOpen = state.open;
     state.open = !!open;
     if (state.open && !wasOpen) window.dispatchEvent(new Event('webcap:job-queues-opened'));
     if (state.open && typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
-    if (state.open && typeof window.setActivityDrawerOpen === 'function') {
+    if (state.open && !internal && typeof window.setActivityDrawerOpen === 'function') {
       window.setActivityDrawerOpen(false);
     }
     if (state.open) {
@@ -594,13 +599,13 @@
       if (link) openJobScreen(link);
     };
     document.addEventListener('pointerdown', function (event) {
-      if (!state.open || drawer.contains(event.target)) return;
+      if (!state.open || drawer.contains(event.target) || (window.isOperationsDrawerMounted && event.target.closest('#operations-drawer'))) return;
       var toggle = event.target.closest('[data-inference-queue-toggle]');
       if (toggle) return;
       setOpen(false);
     });
     window.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.open) setOpen(false);
+      if (event.key === 'Escape' && state.open && !window.isOperationsDrawerMounted) setOpen(false);
     });
   }
 

@@ -73,6 +73,10 @@ test('Explore, Build and Finder preserve original control nodes and image attrib
  assert.equal(d.querySelectorAll('.test-unified-item').length,2);
  d.querySelectorAll('.test-unified-item')[0].click();
  assert.equal(d.querySelectorAll('.test-unified-card').length,2);
+ d.querySelectorAll('.test-unified-item')[1].dispatchEvent(new w.MouseEvent('click',{bubbles:true,ctrlKey:true}));
+ assert.equal(d.querySelectorAll('.test-unified-card').length,2);
+ d.querySelectorAll('.test-unified-item')[1].dispatchEvent(new w.MouseEvent('click',{bubbles:true,ctrlKey:true}));
+ assert.equal(d.querySelectorAll('.test-unified-card').length,2);
  d.querySelectorAll('.test-unified-card')[0].click();
  assert.match(d.getElementById('test-unified-details').textContent,/Source/);
  assert.match(d.getElementById('test-unified-details').textContent,/red outfit/);

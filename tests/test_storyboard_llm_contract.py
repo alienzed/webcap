@@ -343,12 +343,14 @@ def test_individual_development_scene_uses_whole_outline_and_previous_authored_s
 def test_director_guidance_resolves_cross_scene_references_without_changing_h3_structure():
     request = storyboard_llm_contract.build_request(_story(), "", "develop_story")
     prompt = request["prompt"]
-    assert "Use other Scenes to resolve visual facts" in prompt
+    assert "Resolve references to other Scenes into concrete current visual facts" in prompt
     assert "Comparisons between subjects visible within this Scene remain useful" in prompt
-    assert "Do not invent precision or details unsupported by the concept" in prompt
+    assert "Do not invent unsupported detail" in prompt
     assert "--- BEGIN EXAMPLE PROMPT SHAPE ---" in prompt
     assert "Environment / Continuity Anchors:" in prompt
     assert "integrated_multimodal_description:" in prompt
+    assert "without restating unchanged facts" in prompt
+    assert "Treat invariants as authoritative facts" in prompt
 
 
 def test_existing_relationship_context_remains_available():

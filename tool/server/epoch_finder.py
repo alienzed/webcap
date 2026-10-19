@@ -1055,6 +1055,8 @@ def command(folder_path, operation, criteria=None):
         return list_campaigns(folder_path)
     if operation == "checkpoint_evidence":
         return checkpoint_evidence(folder_path, criteria.get("jobId"))
+    if operation == "reference_runs":
+        return {"runs": candidate_runs(folder_path)}
     if operation == "reference_vocabulary":
         from .epoch_reference import reference_vocabulary
         return {"vocabulary": reference_vocabulary(_folder_key(folder_path), criteria.get("jobId"))}

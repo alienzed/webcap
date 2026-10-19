@@ -9,9 +9,9 @@
   root.innerHTML =
     '<header class="operations-header"><div><strong>Activity &amp; Queues</strong><small>Current work and this session</small></div><button type="button" id="operations-close" aria-label="Close Activity and Queues">×</button></header>' +
     '<div class="operations-sections">' +
-    '<button type="button" class="operations-toggle" data-operations-section="activity" aria-expanded="false">Activity <small id="operations-activity-count"></small><span aria-hidden="true">⌄</span></button><div id="operations-activity" class="operations-content"></div>' +
-    '<button type="button" class="operations-toggle" data-operations-section="queues" aria-expanded="false">Job Queues <small id="operations-queue-count"></small><span aria-hidden="true">⌄</span></button><div id="operations-queues" class="operations-content"></div>' +
-    '<button type="button" class="operations-toggle" data-operations-section="history" aria-expanded="false">Recent <small id="operations-recent-count"></small><span aria-hidden="true">⌄</span></button><div id="operations-history" class="operations-content"></div>' +
+    '<div class="operations-group" data-operations-group="activity"><button type="button" class="operations-toggle" data-operations-section="activity" aria-expanded="false">Activity <small id="operations-activity-count"></small><span aria-hidden="true">⌄</span></button><div id="operations-activity" class="operations-content"></div></div>' +
+    '<div class="operations-group" data-operations-group="queues"><button type="button" class="operations-toggle" data-operations-section="queues" aria-expanded="false">Job Queues <small id="operations-queue-count"></small><span aria-hidden="true">⌄</span></button><div id="operations-queues" class="operations-content"></div></div>' +
+    '<div class="operations-group" data-operations-group="history"><button type="button" class="operations-toggle" data-operations-section="history" aria-expanded="false">Recent <small id="operations-recent-count"></small><span aria-hidden="true">⌄</span></button><div id="operations-history" class="operations-content"></div></div>' +
     '</div>';
   var activity = document.getElementById('activity-monitor-drawer');
   var queues = document.getElementById('inference-queue-drawer');
@@ -45,6 +45,9 @@
       var expanded = button.dataset.operationsSection === section;
       button.setAttribute('aria-expanded', String(expanded));
       button.querySelector('span').textContent = expanded ? '⌃' : '⌄';
+    });
+    root.querySelectorAll('[data-operations-group]').forEach(function (group) {
+      group.classList.toggle('operations-group-expanded', group.dataset.operationsGroup === section);
     });
     root.querySelectorAll('.operations-content').forEach(function (pane) {
       pane.classList.toggle('operations-expanded', pane.id === 'operations-' + section);

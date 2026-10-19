@@ -42,7 +42,8 @@ def _public(batch):
 
 def snapshot():
     with _LOCK:
-        return {"batches": [_public(batch) for batch in _BATCHES]}
+        batches = list(_BATCHES)
+    return {"batches": [_public(batch) for batch in batches]}
 
 
 def _check(batch):
@@ -253,7 +254,7 @@ def enqueue_batch(folder_path, folder, count, criteria, auto_vl, vl_model):
         if not vl_model or vl_model not in available:
             raise ValueError("Select an available Vision model.")
     with _LOCK:
-        if any(b["folder"] == folder and b["status"] in {"queued", "running"} for b in _BATCHES):
+        if any(b["folder"] == folder and b["status"] in {"queued", "running", "stopping"} for b in _BATCHES):
             raise ValueError("This Set already has an active Test batch.")
         batch = {
             "id": uuid.uuid4().hex, "folder": folder, "folderPath": folder_path,

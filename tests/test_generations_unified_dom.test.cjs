@@ -37,6 +37,7 @@ test('Explore, Build and Finder preserve original control nodes and image attrib
  w.epochFinderPrepare=folder=>calls.push('prepare:'+folder);
  w.epochFinderInspectCampaign=(id,epoch,job)=>calls.push('campaign:'+id+':'+epoch+':'+job);
  w.openTestBenchAnalyticsSession=id=>calls.push('session:'+id);
+ w.openTestBenchActivity=target=>calls.push('activity:'+target.sessionId);
  w.reportConsoleError=(context,error)=>{throw error;};
  const payload={ok:true,sessions:[{id:'test-one',name:'Prompt stress test',modelId:'h3'}],
    campaigns:[{id:'abc123',name:'Epoch comparison',modelId:'h3'}],
@@ -83,6 +84,9 @@ test('Explore, Build and Finder preserve original control nodes and image attrib
  assert.ok(!d.getElementById('test-unified-workspace').classList.contains('hidden'));
  w.testGenerationsUnifiedRoute({folder:'set-one',modelId:'h3',activitySession:'test-one'});
  assert.ok(d.getElementById('test-unified-workspace').classList.contains('hidden'));
+ w.testGenerationsUnifiedRoute({folder:'set-one',modelId:'h3'});
+ w.openTestBenchActivity({sessionId:'test-one'});
+ assert.ok(d.getElementById('test-unified-workspace').classList.contains('hidden'));
  dom.window.close();
 });
 
@@ -95,6 +99,7 @@ test('real WebCap Test markup retains all live controls through unified view tra
  w.epochFinderPrepare=()=>{};
  w.epochFinderInspectCampaign=()=>{};
  w.openTestBenchAnalyticsSession=()=>{};
+ w.openTestBenchActivity=()=>{};
  w.reportConsoleError=()=>{};
  w.fetch=async()=>({ok:true,json:async()=>({ok:true,sessions:[],campaigns:[],runs:[],media:[]})});
  w.eval(fs.readFileSync('tool/js/test_generations_perspective.js','utf8'));

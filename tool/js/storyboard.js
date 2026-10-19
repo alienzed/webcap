@@ -6138,11 +6138,6 @@
         refreshStoryboardLoraCatalog();
         return;
       }
-      var openScene = event.target.closest('[data-scene-open]');
-      if (openScene) {
-        setSceneViewMode('focus', openScene.dataset.sceneOpen);
-        return;
-      }
       var pickerOption = event.target.closest('[data-lora-picker-option]');
       if (pickerOption) {
         var pickerWrap = pickerOption.closest('.storyboard-lora-picker-wrap');

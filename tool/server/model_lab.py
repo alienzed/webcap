@@ -215,11 +215,6 @@ def capability_run_summaries():
             if kind.startswith("director_scene_plan_") and status == "completed":
                 entry["verifiedOutputTokens"] = max(entry.get("verifiedOutputTokens", 0),
                     int(result.get("verifiedOutputTokens") or 0))
-            if kind.startswith("director_writing") and status == "completed":
-                # A completed LLM job alone does not prove a long-form target.
-                # The calibration protocol owns real 8K/16K qualification.
-                entry["maxRequestedTokens"] = max(entry.get("maxRequestedTokens", 0),
-                    int(kind.rsplit("_", 1)[-1]) if kind.rsplit("_", 1)[-1].isdigit() else 2048)
             entry["status"] = next((value for value in (
                 "failed", "running", "interrupted", "skipped", "completed"
             ) if entry["counts"].get(value)), status)

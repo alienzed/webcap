@@ -3279,6 +3279,57 @@ def session_cleanup_status(folder_path):
     }
 
 
+
+def archive_run_session_cleanup_status(folder_path, run_dir, action_id):
+    """Only whole Test sessions exclusively tied to this training run are disposable."""
+    wanted_run = Path(run_dir).resolve()
+    wanted_action = str(action_id or "").strip()
+    matches = []
+    for session in _all_owned_session_directories(folder_path):
+        payload = _read_status(session) or {}
+        candidates = payload.get("candidates")
+        if not isinstance(candidates, list) or not candidates:
+            continue  # Legacy/unattributed sessions remain available.
+        has_run_candidate = False
+        exclusively_this_run = True
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                exclusively_this_run = False
+                break
+            if candidate.get("kind") == "base":
+                exclusively_this_run = False
+                break  # Baseline evidence is not owned by a training run.
+            provenance = candidate.get("provenance")
+            try:
+                source_run, source = candidate_run_snapshot_from_provenance(provenance)
+            except (LookupError, FileNotFoundError, RuntimeError, ValueError, OSError):
+                exclusively_this_run = False
+                break
+            if Path(source_run).resolve() != wanted_run or str(source.get("actionId") or "").strip() != wanted_action:
+                exclusively_this_run = False
+                break
+            has_run_candidate = True
+        if has_run_candidate and exclusively_this_run:
+            matches.append(session)
+    return {
+        "count": len(matches),
+        "sessions": matches,
+        "active": sorted(session.name for session in matches if _session_has_nonterminal_jobs(session)),
+    }
+
+
+def clear_archived_run_sessions(folder_path, sessions):
+    """Discard only the previously identified run-owned sessions; keep Set workspace."""
+    active = sorted(session.name for session in sessions if _session_has_nonterminal_jobs(session))
+    if active:
+        raise RuntimeError("Cannot clear active Test Generations sessions: " + ", ".join(active))
+    for session in sessions:
+        shutil.rmtree(session)
+    if sessions:
+        _invalidate_recent_session_caches()
+    return [session.name for session in sessions]
+
+
 def clear_sessions(folder_path):
     sessions = _all_owned_session_directories(folder_path)
     active = sorted(

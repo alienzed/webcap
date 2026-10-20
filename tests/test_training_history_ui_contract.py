@@ -73,7 +73,7 @@ def test_training_history_exposes_finalize_and_archive_lifecycle():
     assert "removedTestSessions" in backend
     assert "testCleanupWarning" in backend
     assert "setMarkerWarning" in backend
-    assert "test_session_cleanup_status" in backend
+    assert "archive_run_session_cleanup_status" in backend
     assert 'path.name != ".webcap"' in backend
     assert "set_last_training_archive" in backend
     assert "saveFolderStateForCurrentRoot()" not in script

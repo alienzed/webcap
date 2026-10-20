@@ -1057,7 +1057,7 @@ def test_test_generations_exposes_training_candidates_link_from_unique_run_prove
     assert "payload.candidateRuns" in block
     assert "run.jobId && run.folder" in block
     assert "button.classList.toggle('hidden', !runs.length);" in block
-    assert "button.textContent = 'Runs';" in block
+    assert "button.textContent = 'Training Runs';" in block
     assert "trainingCandidatesCloseHook" in candidates
     assert "options && typeof options.onClose === 'function'" in candidates
 
@@ -1390,7 +1390,7 @@ def test_candidate_sorting_reuses_existing_scores_and_preserves_rows():
     assert '<option value="rating" selected>' in html
     assert '<option value="vl">' in html
     assert ".test-generations-candidate-toolbar" in css
-    assert "button.textContent = 'Runs';" in script
+    assert "button.textContent = 'Training Runs';" in script
 
     sorter = script.split("function sortStagedCandidateRows()", 1)[1].split("function syncStagedCandidateScores", 1)[0]
     assert "prepared.files.map" in sorter

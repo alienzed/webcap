@@ -747,8 +747,8 @@
       return (inspectedEpoch==null||u.epoch===inspectedEpoch)&&!!u.frame&&!u.framePruned;
     });
     var key=campaign.id+':'+inspectedEpoch+':'+units.map(function(u){
-      return [u.frame,!!u.assessment,(u.referenceAssessments||[]).length,
-        (u.dinoAssessments||[]).length,u.error||''].join(':');
+      return [u.frame,JSON.stringify(u.assessment||null),JSON.stringify(u.referenceAssessments||[]),
+        JSON.stringify(u.dinoAssessments||[]),u.error||''].join(':');
     }).join('|');
     if(lastFrameKey===key)return;
     lastFrameKey=key;
@@ -773,7 +773,7 @@
     shown.forEach(function(unit){
       var identity=unit.epoch+':'+unit.round+':'+unit.case;
       keep.add(identity);
-      var version=[unit.frame,!!unit.assessment,(unit.referenceAssessments||[]).length,(unit.dinoAssessments||[]).length,unit.error||''].join('|');
+      var version=[unit.frame,JSON.stringify(unit.assessment||null),JSON.stringify(unit.referenceAssessments||[]),JSON.stringify(unit.dinoAssessments||[]),unit.error||''].join('|');
       var prior=preserved.get(identity);
       if(prior&&prior.dataset.cardVersion===version){host.appendChild(prior);return;}
       var url='/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+'&campaign='+encodeURIComponent(campaign.id)+'&frame='+encodeURIComponent(unit.frame);

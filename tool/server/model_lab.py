@@ -185,6 +185,8 @@ def capability_run_summaries():
             timings = result.get("timings") if isinstance(result.get("timings"), dict) else {}
             usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
             rate = timings.get("predicted_per_second")
+            if isinstance(rate, (int, float)) and not isinstance(rate, bool) and rate > 0:
+                entry.setdefault("generationSpeedSamples", []).append(round(float(rate), 2))
             tokens = usage.get("completion_tokens") or timings.get("predicted_n")
             if not rate and isinstance(tokens, (int, float)) and tokens > 0:
                 seconds = result.get("requestSeconds")
@@ -673,7 +675,7 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                 validation_error = ""
                 if kind.startswith("director_scene_plan_"):
                     try:
-                        expected = int(kind.rsplit("_", 1)[-1]) // 512
+                        expected = int(kind.rsplit("_", 1)[-1]) // 256
                         plan = json.loads(str(result.get("text") or ""))
                         scenes = plan.get("scenes") if isinstance(plan, dict) else None
                         if not isinstance(scenes, list) or len(scenes) != max(2, expected):
@@ -684,11 +686,15 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                                 for field in ("title", "summary", "prompt")
                             ) or not isinstance(scene.get("suggestedDurationSeconds"), (int, float)):
                                 raise ValueError("Storyboard Scene is incomplete.")
+                            if len(scene["prompt"].split()) < 80 or not 6 <= scene["suggestedDurationSeconds"] <= 15:
+                                raise ValueError("Storyboard Scene has insufficient prompt detail or invalid duration.")
                         if str(result.get("finishReason") or "").lower() == "length":
                             raise ValueError("Structured response was truncated at its token budget.")
-                        result["verifiedOutputTokens"] = int(
+                        # Provider completion usage may include hidden/separate reasoning.
+                        # Do not call those tokens verified answer output.
+                        result["verifiedOutputTokens"] = (int(
                             (result.get("usage") or {}).get("completion_tokens") or 0
-                        )
+                        ) if not str(result.get("reasoning") or "").strip() else 0)
                     except (ValueError, TypeError, KeyError) as exc:
                         validation_error = "Storyboard structured-output validation failed: " + str(exc)
                 if required_result and not isinstance(result.get(required_result), dict):
@@ -1088,7 +1094,7 @@ def _run_director_model(run, model):
     from .storyboard_llm_contract import SCENE_PLAN_SCHEMA_PATH, _read_json
     scene_schema = _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema")
     for budget in ((2048, 4096, 8192, 16384) if run.get("depth") == "deep" else (2048,)):
-        scene_count = max(2, budget // 512)
+        scene_count = max(2, budget // 256)
         prompt = (
             "Create a WebCap Storyboard Scene plan for a grounded, continuous cinematic sequence "
             "showing an urban night-shift maintenance worker investigating a malfunctioning elevator. "

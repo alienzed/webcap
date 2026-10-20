@@ -741,9 +741,11 @@
   padding: 0;
   justify-content: flex-end;
   justify-self: end;
+  grid-column: 4;
 }
 
 .app.shell-revamp .preview-header-position {
+  grid-column: 1;
   justify-self: start;
 }
 
@@ -752,6 +754,7 @@
 }
 
 .app.shell-revamp #focused-annotation-item-nav {
+  grid-column: 2;
   min-width: 0;
 }
 
@@ -787,6 +790,7 @@
   overflow: hidden;
   display: flex;
   align-items: center;
+  grid-column: 3;
   justify-self: stretch;
   padding-left: 10px;
   border-left: 1px solid rgba(148, 163, 184, 0.14);

@@ -430,7 +430,7 @@
     var selected = referenceDraftChoices[item.key] == null ? -1 : referenceDraftChoices[item.key];
     host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' + escape(item.attribute) +
       ' · ' + escape(item.option) + '</strong><span>' + (referenceIndex+1) + ' / ' +
-      referenceItems.length + '</span></div><p class="epoch-finder-muted">Matching references are selected by default. Click Selected to clear; unselected options skip reference comparisons.</p>' +
+      referenceItems.length + '</span></div><p class="epoch-finder-muted">References are optional; identically named tags in different groups are separate features.</p>' +
       '<div class="epoch-finder-reference-nav"><button type="button" data-reference-nav="prev"' +
       (referenceIndex===0?' disabled':'') + '>← Previous</button><button type="button" data-reference-nav="next">' +
       (referenceIndex===referenceItems.length-1?'Finish':'Next →') + '</button></div>';

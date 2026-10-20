@@ -20,7 +20,7 @@ def _representative_captions(captions, max_items=150, max_chars=24000):
         return [], 0
     count = min(len(unique), max_items)
     while True:
-        indices = [index * len(unique) // count for index in range(count)]
+        indices = [index * (len(unique) - 1) // (count - 1) for index in range(count)] if count > 1 else [0]
         examples = ["[count=" + str(counts[unique[index]]) + "] " + unique[index]
                     for index in indices]
         if sum(len(example) + 2 for example in examples) <= max_chars or count == 1:

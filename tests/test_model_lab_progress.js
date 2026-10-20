@@ -5,9 +5,9 @@ const vm = require('node:vm');
 
 const scope = vm.createContext({});
 const source = fs.readFileSync('tool/js/model_lab.js', 'utf8');
-assert.match(source, /initializeModelLab\(\);\s*$/);
+assert.ok(source.includes('function modelLabProgressSnapshot'));
 // Exercise production functions without running browser-only event wiring.
-vm.runInContext(source.replace(/initializeModelLab\(\);\s*$/, ''), scope);
+vm.runInContext(source, scope);
 
 const running = {
   id: 'assessment-1', status: 'running',

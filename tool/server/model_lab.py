@@ -1066,18 +1066,15 @@ def _run_reference_director_for_vision(run, vision_model):
     if not model_ref:
         return
     open_records, vocabulary_records = _vision_records(run, vision_model["modelRef"])
+    prefix = "vision:{}:vocab".format(vision_model["modelRef"])
     if len(open_records) < 2:
-        _skip_attempt(
-            run,
-            "vision_vocab_synthesis",
-            "director",
-            model_ref,
-            vision_model["modelRef"],
-            "Not enough completed open Vision probes for this Vision model.",
-        )
+        for kind in (prefix + "_synthesis", prefix + "_challenge"):
+            _skip_attempt(
+                run, kind, "director", model_ref, "",
+                "Not enough completed open Vision probes for this Vision model.",
+            )
         return
     analysis = _analysis_from_records(open_records, vocabulary_records, vision_model["modelRef"])
-    prefix = "vision:{}:vocab".format(vision_model["modelRef"])
     _run_schema_pair(run, model_ref, analysis, run["groups"], prefix)
 
 
@@ -1134,14 +1131,11 @@ def _run_director_model(run, model):
         return
     open_records, vocabulary_records = _vision_records(run, reference_vision_ref)
     if len(open_records) < 2:
-        _skip_attempt(
-            run,
-            "set_vocabulary_synthesis",
-            "director",
-            model_ref,
-            "",
-            "Reference Vision did not produce enough completed open probes.",
-        )
+        for kind in ("set_vocabulary_synthesis", "set_vocabulary_challenge"):
+            _skip_attempt(
+                run, kind, "director", model_ref, "",
+                "Reference Vision did not produce enough completed open probes.",
+            )
         return
     analysis = _analysis_from_records(open_records, vocabulary_records, reference_vision_ref)
     _run_schema_pair(run, model_ref, analysis, run["groups"], "set_vocabulary")

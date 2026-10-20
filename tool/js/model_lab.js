@@ -177,7 +177,9 @@ function modelLabProgressSnapshot(run) {
     phase = progress.phase === 'retry' ? 'Preparing deferred retries' :
       progress.phase === 'starting' ? 'Preparing assessment' : 'Preparing next probe';
   } else {
-    phase = status.charAt(0).toUpperCase() + status.slice(1);
+    phase = status === 'completed' && run.work && run.work.remaining
+      ? 'Finished · ' + run.work.remaining + ' probes unresolved'
+      : status.charAt(0).toUpperCase() + status.slice(1);
   }
   var work = run.work;
   var planned = work && Number(work.planned);
@@ -189,7 +191,10 @@ function modelLabProgressSnapshot(run) {
     phase: phase,
     detail: run.error || (current ? [modelName, current.file].filter(Boolean).join(' · ') : ''),
     progressLabel: modelLabRunProgress(run),
-    progress: determinate ? {completed: resolved, total: planned} : null,
+    progress: determinate ? {
+      completed: resolved, total: planned,
+      description: 'Resolved planned tests, including reused, skipped and final failed probes. Not a pass rate or ETA.'
+    } : null,
     startedAt: isFinite(start) && start > 0 ? start / 1000 : 0,
     finishedAt: isFinite(finish) && finish > 0 ? finish / 1000 : 0,
     childJobId: String(current && current.jobId || '')

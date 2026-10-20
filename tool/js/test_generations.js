@@ -408,7 +408,9 @@
     button.dataset.testVlTitle = button.title;
     updateTestVlElapsedButton(button, item);
     button.classList.toggle('hidden', !item);
-    row.classList.toggle('hidden', !manualLabel.textContent && !epochLabel.textContent && !item);
+    row.classList.toggle('hidden', !item);
+    var epochSection = card.querySelector('.test-preview-card-epoch-metrics');
+    if (epochSection) epochSection.classList.toggle('hidden', !manualLabel.textContent && !epochLabel.textContent);
   }
 
   function syncTestVlCards() {
@@ -3247,7 +3249,7 @@
     return createTestPreviewCard({
       className: className, failed: !!failed, title: title,
       titleTooltip: identity.primary + (identity.secondary ? ' · ' + identity.secondary : ''),
-      sourceDetail: identity.secondary ? (stagedFileParts(identity.secondary).detail || identity.secondary.replace(/\.safetensors$/i,'')) : '',
+      sourceDetail: '',
       sourceTooltip: identity.secondary,
       elapsed: failed && elapsed ? 'Failed after ' + elapsed : elapsed,
       metadata: failed ? [] : metrics,
@@ -3267,7 +3269,8 @@
       details: failed ? [] : [
         {label:'Resolved prompt',value:result && result.prompt || status && status.resolvedPrompt || '',pre:true},
         {label:'Seed',value:result && result.seed!=null?String(result.seed):''},
-        {label:'Model',value:status && status.modelId || ''}
+        {label:'Model',value:status && status.modelId || ''},
+        {label:'Checkpoint file',value:identity.secondary}
       ],
       actions: failed || !session || !mediaFile ? [] : [
         {label:'Ask VL for this render',onClick:function(){

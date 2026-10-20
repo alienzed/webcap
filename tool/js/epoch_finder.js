@@ -255,20 +255,27 @@
   function chosenEpochs() {
     return selectedRunEntries().flatMap(function (entry) { return entry.epochs; });
   }
+  function displayRunName(run) {
+    var name = String(run.runName || '').trim();
+    var sequence = String(run.runSequence || '').trim();
+    if (name.toLowerCase() === 'run train') name = '';
+    if (sequence) {
+      var numbered = 'Run ' + (/[0-9]+/.test(sequence) ? String(Number(sequence)) : sequence);
+      return name ? name + ' · ' + numbered : numbered;
+    }
+    return name || 'Run ' + String(run.jobId).slice(-8);
+  }
   function candidateLabel(campaign, candidate) {
     var source = (campaign.candidateMap || {})[String(candidate)];
     if (!source) return 'Epoch ' + candidate;
-    var run = String(source.runName || (source.runSequence ? 'Run ' + source.runSequence : source.jobId));
-    return run + ' · Epoch ' + source.epoch;
+    return displayRunName(source) + ' · Epoch ' + source.epoch;
   }
   function drawRuns() {
     var model = String(window.getWorkingModelProfileId() || '');
     var options = runs.filter(function (run) { return run.modelId === model; });
     els('run-choices').innerHTML = options.length ? options.map(function (run,index) {
       var chosen = runEpochSelections[run.jobId] instanceof Set;
-      var identity = run.runName || '';
-      if (run.runSequence) identity += (identity ? ' · ' : '') + 'Run ' + run.runSequence;
-      if (!identity) identity = 'Run ' + String(run.jobId).slice(-8);
+      var identity = displayRunName(run);
       var label = [run.setName, identity].filter(Boolean).join(' · ');
       return '<label class="epoch-finder-run-choice"><input type="checkbox" data-run-id="' + escape(run.jobId) +
         '"' + (chosen ? ' checked' : '') + '><span><strong>' + escape(label) + '</strong>' +
@@ -285,7 +292,7 @@
     host.innerHTML = selected.map(function (choice) {
       var run = runs.find(function (item) { return item.jobId === choice.jobId; });
       return '<section class="epoch-finder-run-epochs" data-epoch-run="' + escape(run.jobId) + '">' +
-        '<strong>' + escape(run.runName || run.runSequence || run.jobId) + ' · ' + choice.epochs.length + '/' + run.epochs.length + ' selected</strong>' +
+        '<strong>' + escape(displayRunName(run)) + ' · ' + choice.epochs.length + '/' + run.epochs.length + ' selected</strong>' +
         '<div class="epoch-finder-epoch-timeline">' + run.epochs.map(function (epoch) {
           return '<button type="button" class="epoch-finder-epoch-tick' + (runEpochSelections[run.jobId].has(epoch) ? ' is-selected' : '') +
             '" data-epoch-choice="' + epoch + '" aria-pressed="' + runEpochSelections[run.jobId].has(epoch) + '"> ' + epoch + '</button>';
@@ -551,7 +558,7 @@
       if (!options.some(function (run) { return run.jobId === jobId; })) delete runEpochSelections[jobId];
     });
     els('run').innerHTML = '<option value="">No run selected</option>' + options.map(function (run) {
-      return '<option value="' + escape(run.jobId) + '">' + escape(run.runName || run.jobId) + '</option>';
+      return '<option value="' + escape(run.jobId) + '">' + escape(displayRunName(run)) + '</option>';
     }).join('');
     drawEpochPicker();
     roundPlan();

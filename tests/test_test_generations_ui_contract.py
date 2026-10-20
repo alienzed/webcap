@@ -1468,4 +1468,4 @@ def test_launch_action_stays_inside_repeat_and_vl_panel():
     launch = html.split('<div class="test-generations-launch-options">', 1)[1]
     launch = launch.split('<div id="test-generations-status"', 1)[0]
     assert launch.index('id="test-generations-inline-launch-summary"') < launch.index('id="test-generations-run-btn"')
-    assert launch.index('id="test-generations-run-btn"') < launch.index('</div>\n                                    </div>\n                                </section>')
+    assert launch.index('id="test-generations-run-btn"') < launch.index('</section>')

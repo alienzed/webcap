@@ -133,7 +133,7 @@
     fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({folder:folder,operation:'run_analytics_selected',criteria:{jobIds:ids,session:sessionFilter}})})
       .then(function(response){return response.json().then(function(data){if(!response.ok||!data.ok)throw new Error(data.error||'Analytics failed.');return data;});})
-      .then(function(data){if(token===generation&&origin===folder){report=data;render();}})
+      .then(function(data){if(token===generation&&origin===folder){report=data;render();el('report-surface').classList.remove('hidden');}})
       .catch(function(exc){if(token===generation)error(exc);})
       .finally(function(){if(token===generation){el('analyze').textContent='Analyze selected';updateScopeUi();}});
   }
@@ -222,7 +222,7 @@
   el('run-choices').onchange=function(event){
     var cb=event.target.closest('[data-analytics-run]');if(!cb)return;
     if(cb.checked)selection.add(cb.dataset.analyticsRun);else selection.delete(cb.dataset.analyticsRun);
-    generation++;report=null;previewGeneration++;previewFacts=null;previewKey='';el('director').disabled=true;el('analyze').disabled=false;el('analyze').textContent='Analyze selected';el('coverage').textContent='Selection changed — Analyze selected to refresh.';el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';
+    generation++;report=null;previewGeneration++;previewFacts=null;previewKey='';el('director').disabled=true;el('analyze').disabled=false;el('analyze').textContent='Analyze selected';el('coverage').textContent='Selection changed — Analyze selected to refresh.';el('report-surface').classList.add('hidden');el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';
     if(selection.size>6){selection.delete(cb.dataset.analyticsRun);cb.checked=false;error(new Error('Select up to six runs.'));}
     updateScopeUi();
   };
@@ -392,7 +392,7 @@
   function labGroup(){return (labSnapshot&&labSnapshot.cohorts||[]).find(function(g){return g.id===lab('cohort').value;});}
   function labPoints(){var g=labGroup(),id=lab('run').value;return (g&&g.points||[]).filter(function(p){return !id||p.jobId===id;});}
   function labEmpty(message){return '<p class="run-lab-empty">'+esc(message)+'</p>';}
-  function labDetail(){labEnsureDetailIndex();el('report-surface').classList.remove('hidden');el('report-surface').scrollIntoView({behavior:'smooth'});}
+  function labDetail(){labEnsureDetailIndex();var scope=document.querySelector('#run-analytics-screen .epoch-finder-sidebar .epoch-finder-panel:nth-of-type(2) details');if(scope){scope.open=true;scope.scrollIntoView({behavior:'smooth',block:'start'});}lab('status').textContent='Select 1–6 runs and click Analyze selected to inspect detailed evidence.';}
   function labGroupRender(){
     var group=labGroup(),prior=lab('run').value;
     var identities=new Map((group&&group.points||[]).map(function(p){return [p.jobId,p.runName||'Run '+p.jobId.slice(-8)];}));

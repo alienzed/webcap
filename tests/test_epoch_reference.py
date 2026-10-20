@@ -28,6 +28,29 @@ def test_paired_vision_rejects_missing_or_oversized_inputs(feature, a, b):
         build_reference_comparison_messages(feature, a, b)
 
 
+def test_reference_comparison_names_selected_group_and_alias():
+    from tool.server.caption_vision import reference_comparison_feature
+    top = reference_comparison_feature("BT Back", "simple string straps",
+                                       ["simple string straps", "metal ring"],
+                                       "Bikini tops")
+    bottom = reference_comparison_feature("BB Back", "simple string straps",
+                                          ["simple string straps", "metal ring"],
+                                          "Bikini bottoms")
+    assert '"Bikini tops" with "simple string straps"' in top
+    assert "BT Back" in top
+    assert '"Bikini bottoms" with "simple string straps"' in bottom
+    assert "BB Back" in bottom
+    assert top != bottom
+    assert "1=simple string straps" in top
+
+
+def test_reference_group_context_falls_back_to_exact_group():
+    from tool.server.caption_vision import reference_comparison_feature
+    question = reference_comparison_feature("BB Back", "simple string straps",
+                                             ["simple string straps", "metal ring"])
+    assert '"BB Back" with "simple string straps"' in question
+
+
 def _dataset(tmp_path, monkeypatch, annotations):
     for name in ("a.png", "b.png", "close.png", "clip.mp4"):
         (tmp_path / name).write_bytes(b"example")

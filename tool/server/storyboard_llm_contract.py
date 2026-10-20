@@ -10,7 +10,7 @@ H3_RUNTIME_CONTEXT_PATH = DOCS_ROOT / "mmh3-prompt-runtime-context.txt"
 SCENE_PLAN_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-plan.schema.json"
 INVARIANT_SCHEMA_PATH = DOCS_ROOT / "storyboard-invariants.schema.json"
 SCENE_REPAIR_SCHEMA_PATH = DOCS_ROOT / "storyboard-scene-repair.schema.json"
-VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "repair_scenes", "write_prompt", "refine_prompt", "check_coherence"}
+VALID_OPERATIONS = {"interpret_atmosphere", "expand_concept", "define_invariants", "develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story", "repair_scenes", "write_prompt", "refine_prompt", "check_coherence"}
 
 
 def _read_text(path, label):
@@ -248,7 +248,7 @@ def approved_lora_vocabulary(story, scene_id):
             "with the Scene: " + ", ".join(chosen) + "\nNever write loader syntax.") if chosen else ""
 
 
-def build_request(story, scene_id, operation, instruction="", development=None):
+def build_request(story, scene_id, operation, instruction="", development=None, scene_count=1):
     if not isinstance(story, dict):
         raise ValueError("Story data must be an object.")
     operation = _clean(operation).lower()
@@ -512,12 +512,9 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         if scene_id not in order:
             raise FileNotFoundError("Scene does not exist.")
         index = order.index(scene_id)
-        if index + 1 >= len(order):
-            raise ValueError("Insert Scene requires a following Scene.")
-        next_scene_id = order[index + 1]
         before_scene = scenes.get(scene_id)
-        after_scene = scenes.get(next_scene_id)
-        if not isinstance(before_scene, dict) or not isinstance(after_scene, dict):
+        after_scene = scenes.get(order[index + 1]) if index + 1 < len(order) else None
+        if not isinstance(before_scene, dict) or (after_scene is not None and not isinstance(after_scene, dict)):
             raise RuntimeError("Storyboard Scene order is invalid.")
 
         blocks = ["[DIRECTOR CONTEXT]\n" + director_context]
@@ -535,12 +532,21 @@ def build_request(story, scene_id, operation, instruction="", development=None):
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
         blocks.append("[SCENE BEFORE]\n" + _scene_context(before_scene) + "\nGeneration prompt: " + _clean(before_scene.get("prompt")))
-        blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene) + "\nGeneration prompt: " + _clean(after_scene.get("prompt")))
+        if after_scene is not None:
+            blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene) + "\nGeneration prompt: " + _clean(after_scene.get("prompt")))
+        blocks.append("[EXISTING SCENE OUTLINE]\n" + "\n".join(
+            str(number) + ". " + _clean(scenes.get(ordered_id, {}).get("title"))
+            + ": " + _clean(scenes.get(ordered_id, {}).get("summary"))
+            for number, ordered_id in enumerate(order, start=1)
+        ))
+        if _clean(instruction):
+            blocks.append("[USER DIRECTION]\n" + _clean(instruction))
         blocks.append(
-            "[CURRENT TASK]\nCreate exactly one new Scene to insert between these two existing Scenes. "
-            "Use the complete concept to decide what belongs in this gap. Treat the adjacent Scenes as relationship and contrast context. "
-            "The new Scene may continue, contrast, vary, repeat a format, jump, or remain relatively independent as the concept warrants. "
-            "Make it meaningfully distinct from both adjacent Scenes while still belonging to the same concept. "
+            "[CURRENT TASK]\nCreate exactly one new Scene after SCENE BEFORE"
+            + (" and before SCENE AFTER. " if after_scene is not None else ", at the end of the Story. ")
+            + "Use the complete concept to decide what belongs here. Treat neighbouring Scenes as relationship and contrast context, not templates to copy. "
+            "The new Scene may continue a narrative, contrast, vary a repeated format with fresh content, jump, or remain independent as the concept warrants. "
+            "Make it meaningfully distinct while preserving intentional recurring characters or state. "
             "Use entry and exit state when a real handoff matters. "
             "Write the complete H3 prompt exactly as it should be used, following the supplied Director and H3 guidance. Return only JSON matching the supplied schema."
         )
@@ -549,6 +555,57 @@ def build_request(story, scene_id, operation, instruction="", development=None):
             "output": "json",
             "prompt": "\n\n".join(blocks).strip() + "\n",
             "response_schema": _single_scene_response_schema(),
+        }
+
+    if operation == "extend_story":
+        order = story.get("sceneOrder") if isinstance(story.get("sceneOrder"), list) else []
+        scenes = story.get("scenes") if isinstance(story.get("scenes"), dict) else {}
+        if not order:
+            raise ValueError("Extend Story requires an existing Scene.")
+        if isinstance(scene_count, bool) or not isinstance(scene_count, int) or scene_count < 1:
+            raise ValueError("Extend Story scene count must be a positive integer.")
+        blocks = ["[DIRECTOR CONTEXT]\n" + director_context]
+        for label, value in (
+            ("STORY TITLE", story.get("title")),
+            ("STORY CONCEPT", story.get("concept")),
+            ("STORY VISUAL / ATMOSPHERE", story.get("style")),
+        ):
+            if _clean(value):
+                blocks.append("[" + label + "]\n" + _clean(value))
+        invariants = _story_invariants_text(story)
+        if invariants:
+            blocks.append("[STORY INVARIANTS]\n" + invariants)
+        blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        blocks.append("[EXISTING SCENE OUTLINE]\n" + "\n".join(
+            str(number) + ". " + _scene_context(scenes[ordered_id])
+            for number, ordered_id in enumerate(order, start=1)
+        ))
+        last_scene = scenes[order[-1]]
+        blocks.append("[LAST SCENE GENERATION PROMPT]\n" + _clean(last_scene.get("prompt")))
+        if _clean(instruction):
+            blocks.append("[USER DIRECTION]\n" + _clean(instruction))
+        blocks.append(
+            "[CURRENT TASK]\nAppend exactly " + str(scene_count) + " new Scenes after the existing sequence. "
+            "Build on the complete concept and existing Scenes without rewriting or repeating them. "
+            "For an ongoing narrative, advance the action and relevant state; for a sequence of independent moments, introduce fresh situations or variations. "
+            "Preserve recurring characters and format when intentional, but give each new Scene a distinct purpose. "
+            "Return each new Scene with its complete H3 generation prompt using the supplied Director and H3 guidance. "
+            "Return only the new Scenes as JSON matching the supplied schema."
+        )
+        return {
+            "operation": operation,
+            "output": "json",
+            "prompt": "\n\n".join(blocks).strip() + "\n",
+            "response_schema": {
+                **_read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema"),
+                "properties": {
+                    "scenes": {
+                        **_read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema")["properties"]["scenes"],
+                        "minItems": scene_count,
+                        "maxItems": scene_count,
+                    }
+                },
+            },
         }
 
     if operation == "repair_scenes":

@@ -1884,6 +1884,8 @@ def storyboard_director_route():
             return jsonify({"ok": True, "job": job}), 202
 
         contract_kwargs = {"instruction": instruction}
+        if operation == "extend_story":
+            contract_kwargs["scene_count"] = data.get("sceneCount")
         if development is not None:
             contract_kwargs["development"] = development
         contract = storyboard_build_llm_request(
@@ -1956,6 +1958,7 @@ def storyboard_director_route():
                 "operation": operation,
                 "replaceExisting": replace_existing,
                 "sourceInstruction": instruction,
+                **({"sceneCount": data.get("sceneCount")} if operation == "extend_story" else {}),
                 "thinking": data.get("thinking") is True,
                 **({"deferredApply": True} if operation in {"develop_story_outline", "develop_story_scene"} else {}),
                 **({"repairBase": repair_base} if repair_base is not None else {}),

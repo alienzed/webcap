@@ -177,6 +177,7 @@ def _assert_storyboard_contract_current(context, frozen_contract):
         scene_id,
         operation,
         instruction=str(context.get("sourceInstruction") or ""),
+        **({"scene_count": context.get("sceneCount")} if operation == "extend_story" else {}),
     )
     if current_contract != frozen_contract:
         raise RuntimeError(
@@ -476,6 +477,21 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         return {
             "storyId": story["id"],
             "sceneCount": len(story.get("sceneOrder") or []),
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
+    if operation == "extend_story":
+        from .storyboard_store import extend_director_story
+        plan = copy.deepcopy(llm_result.get("data"))
+        if not isinstance(plan, dict):
+            raise ValueError("Storyboard Director returned an invalid Story extension.")
+        story, added_ids = extend_director_story(story_id, plan, model_id=llm_result["model"])
+        return {
+            "storyId": story["id"],
+            "sceneCount": len(added_ids),
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
@@ -961,7 +977,7 @@ def _storyboard_target(context, operation):
         return None
     if operation in {"interpret_atmosphere", "expand_concept", "define_invariants"}:
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
-    if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene"}:
+    if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story"}:
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
     if operation in {"repair_scenes", "revise_scenes_sequence", "check_coherence_sequence"}:
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}

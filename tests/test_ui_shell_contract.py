@@ -1199,3 +1199,17 @@ def test_activity_panel_tracks_director_and_bounds_child_job_suppression():
     assert "state.notified[recentKey(item)] = true;" in activity
     assert "modelLabRequest('/app/model-lab?run=' + encodeURIComponent(activeId))" in model
     assert 'modelLabPublishProgress(payload.run);' in model
+
+
+def test_preview_header_keeps_slots_when_optional_controls_hide():
+    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
+    header = css.split(".app.shell-revamp .preview-header {", 1)[1].split(".app.shell-revamp .preview-stage {", 1)[0]
+    assert "grid-template-columns: auto auto minmax(0, 1fr) auto;" in header
+    for selector, column in (
+        (".app.shell-revamp .preview-header-position", 1),
+        (".app.shell-revamp #focused-annotation-item-nav", 2),
+        (".app.shell-revamp .preview-header-meta", 3),
+        (".app.shell-revamp .preview-header-copy", 4),
+    ):
+        rule = header.split(selector + " {", 1)[1].split("}", 1)[0]
+        assert "grid-column: " + str(column) + ";" in rule

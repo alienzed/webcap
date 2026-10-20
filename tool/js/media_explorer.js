@@ -74,13 +74,14 @@
     document.querySelectorAll('[data-explorer-mode]').forEach(function (btn) {
       btn.setAttribute('aria-pressed', String(btn.dataset.explorerMode === next));
     });
-    if (isExternal()) items.forEach(function (item, index) {
+    items.forEach(function (item, index) {
       var card = gallery.children[index];
       if (!card || card.dataset.id !== item.id) return;
       var frame = card.querySelector('.media-explorer-card-thumb');
       var media = frame.querySelector('img, video, .external-video-placeholder');
       if (next === 'list' && media) media.remove();
-      if (next !== 'list' && !media) frame.prepend(externalTileMedia(item));
+      if (next !== 'list' && !media) frame.prepend(
+        item.source === 'external' ? externalTileMedia(item) : mediaElement(item, false));
     });
     syncExternalControls();
   }
@@ -524,8 +525,8 @@
     open.setAttribute('aria-label', item.fileName + ', ' + item.role);
     card.appendChild(open);
     var frame = document.createElement('div'); frame.className = 'media-explorer-card-thumb';
-    if (!isExternal()) frame.appendChild(mediaElement(item, false));
-    else if (explorerMode === 'grid') frame.appendChild(externalTileMedia(item));
+    if (explorerMode === 'grid') frame.appendChild(
+      item.source === 'external' ? externalTileMedia(item) : mediaElement(item, false));
     open.appendChild(frame);
     var badge = document.createElement('span'); badge.className = 'media-explorer-card-badge';
     text(badge, badgeText(item));
@@ -583,8 +584,13 @@
       text(el('media-explorer-empty-description'), 'Your filters are kept. Try again, or open the Console for the full error.');
       text(el('media-explorer-empty-action'), 'Try again'); return;
     }
-    text(el('media-explorer-empty-title'), filtered ? 'No matching media' : (isExternal() ? 'Choose an external folder' : 'Generated media, in one place'));
-    text(el('media-explorer-empty-description'), isExternal() ? 'Browse another folder or adjust the filters. Technical metadata filters show verified matches only.' : (filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Scan full history for older generated media.'));
+    text(el('media-explorer-empty-title'), isExternal() && !complete && externalPath
+      ? 'Discovering files…' : filtered ? 'No matching media' :
+      (isExternal() ? 'Choose an external folder' : 'Generated media, in one place'));
+    text(el('media-explorer-empty-description'), isExternal()
+      ? (!complete && externalPath ? 'Files will appear as they are discovered. Browsing remains responsive.' :
+        'Browse another folder or adjust the filters. Technical metadata filters show verified matches only.')
+      : (filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Scan full history for older generated media.'));
     text(el('media-explorer-empty-action'), isExternal() ? 'Refresh' : (!full ? 'Scan full history' : filtered ? 'Clear filters' : 'Refresh library'));
   }
   function filterControls() {

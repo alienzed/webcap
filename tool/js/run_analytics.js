@@ -488,19 +488,20 @@
       return '<div class="run-lab-progress"><div><b>'+row[0]+'</b><span>'+row[1]+' / '+total+' Test renders</span></div><div class="run-lab-meter"><i style="width:'+(100*row[1]/total)+'%"></i></div></div>';
     }).join('')+'<p class="run-lab-footnote">Linked Test renders only; each render can have both a rating and a VL review.</p>':
       labEmpty('No generated Test renders linked to a training epoch.');
-    var tooManyUnrated=total>0&&rated<total/2;
-    if(tooManyUnrated||!ranked.length&&total>rated){
-      lab('challenge-title').textContent='Improve your evidence: '+(total-rated)+' unrated records';
-      lab('challenge-description').textContent='Rate a blind batch from available saved Test files before generating more. '+rated+' of '+total+' linked Test records are rated.';
+    var reviewable=Number((labSnapshot.coverage||{}).reviewableUnrated||0);
+    var tooManyUnrated=reviewable>0&&total>0&&rated<total/2;
+    if(tooManyUnrated||!ranked.length&&reviewable>0){
+      lab('challenge-title').textContent='Improve your evidence: '+reviewable+' unrated renders available';
+      lab('challenge-description').textContent='Rate a blind batch from existing Test files before generating more. '+rated+' of '+total+' linked results have saved ratings.';
       lab('challenge-actions').innerHTML='<button type="button" data-lab-action="review">Blind-rate five</button><button type="button" data-lab-action="inspect">Inspect a contender</button>';
     }else if(ratedLeaders.length>=2){
       lab('challenge-title').textContent='Compare your two highest-rated contenders';
       lab('challenge-description').textContent='Leader '+ratedLeaders[0].allManualAverage.toFixed(2)+'/5 ('+ratedLeaders[0].ratedCount+' ratings) versus runner-up '+ratedLeaders[1].allManualAverage.toFixed(2)+'/5 ('+ratedLeaders[1].ratedCount+' ratings). Sample size matters.';
-      lab('challenge-actions').innerHTML='<button type="button" data-lab-action="inspect">Inspect leader</button><button type="button" data-lab-action="challenger">Inspect runner-up</button>'+(total>rated?'<button type="button" data-lab-action="review">Blind-rate five</button>':'');
+      lab('challenge-actions').innerHTML='<button type="button" data-lab-action="inspect">Inspect leader</button><button type="button" data-lab-action="challenger">Inspect runner-up</button>'+(reviewable?'<button type="button" data-lab-action="review">Blind-rate five</button>':'');
     }else{
-      lab('challenge-title').textContent=total>rated?'Review the remaining unrated Test renders':'Explore what your training history reveals';
-      lab('challenge-description').textContent=total>rated?'Review existing evidence before scheduling another Test.':'Ask Director to compare saved active and archived run details.';
-      lab('challenge-actions').innerHTML=(total>rated?'<button type="button" data-lab-action="review">Blind-rate five</button>':'')+'<button type="button" data-lab-action="ai">AI Insights</button><button type="button" data-lab-action="detail">Detailed evidence</button>';
+      lab('challenge-title').textContent=reviewable?'Review existing unrated Test renders':'Explore what your training history reveals';
+      lab('challenge-description').textContent=reviewable?'Review saved results before generating more Tests.':'Ask Director to compare active and archived training evidence.';
+      lab('challenge-actions').innerHTML=(reviewable?'<button type="button" data-lab-action="review">Blind-rate five</button>':'')+'<button type="button" data-lab-action="ai">AI Insights</button><button type="button" data-lab-action="detail">Detailed evidence</button>';
     }
     lab('status').textContent=rated+' rated of '+total+' linked Test renders · '+ranked.length+' rated epochs across '+new Set(points.filter(function(p){return p.ratedCount>0;}).map(function(p){return p.jobId;})).size+' runs. Manual averages combine saved ratings from every Test session.';
     labChart();

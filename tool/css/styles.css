@@ -7430,7 +7430,8 @@ html[data-theme="dark"] iframe {
 .test-generations-launch-options {gap:12px 18px;padding:12px 14px;margin:10px 0 8px;border:1px solid var(--border);border-radius:10px;background:var(--panel-soft);}
 .test-generations-launch-options label {font-size:12px;gap:9px;}
 .test-generations-launch-options input[type=number] {width:66px;min-width:66px;}
-.test-generations-inline-launch-summary {flex-basis:100%;text-align:left;font-size:12px;line-height:1.4;}
+.test-generations-inline-launch-summary {flex-basis:220px;text-align:left;font-size:12px;line-height:1.4;}
+.test-generations-launch-options .test-generations-actions {margin-left:auto;}
 .run-analytics-epoch-media-dialog {padding:0;overflow:auto;}
 .run-analytics-epoch-media-head {position:sticky;top:0;z-index:1;background:var(--panel);padding:17px 22px 14px;margin:0 0 16px;align-items:flex-start;}
 .run-analytics-epoch-media-head h3 {font-size:19px;line-height:1.3;}

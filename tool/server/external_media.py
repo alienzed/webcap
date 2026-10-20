@@ -224,7 +224,11 @@ def _metadata_worker(snapshot, job):
             else:
                 details = _technical_probe(path)
                 cache = _read_cache(path.parent)
-                cache[path.name] = details
+                previous = cache.get(path.name)
+                if isinstance(previous, dict) and previous.get("mtime") == details["mtime"] and previous.get("size") == details["size"]:
+                    cache[path.name] = {**previous, **details}
+                else:
+                    cache[path.name] = details
                 write_folder_state_atomic(path.parent / "media_metadata.json", cache)
                 with _LOCK:
                     entry["metadata"] = details

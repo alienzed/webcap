@@ -98,9 +98,12 @@ def _runs(folder_path, require_saved_checkpoints=True):
         if epochs or not require_saved_checkpoints:
             result.append({
                 "folder": folder, "jobId": job_id, "runName": run.get("runName") or job.get("runName") or "",
-                "runSequence": run.get("runSequence") or job.get("runSequence") or run.get("runId") or job.get("runId") or "",
+                "runSequence": run.get("sequence") or job.get("sequence") or run.get("runSequence") or job.get("runSequence") or "",
                 "setName": Path(folder).name,
                 "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
+                "runSummary": run.get("runSummary") or job.get("runSummary") or {},
+                "currentEpoch": run.get("currentEpoch"),
+                "plannedEpochs": run.get("plannedEpochs") or (run.get("runSummary") or {}).get("epochs"),
                 "epochs": epochs,
             })
     return result

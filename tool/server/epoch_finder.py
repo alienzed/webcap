@@ -494,7 +494,7 @@ def _question(groups):
         'or "unclear" if you cannot see it, or "none" if no option fits. '
         'If "(absent)" is an option, select its number when that attribute is absent. '
         "Do not assume any option is present; use only visible evidence.\n\n" +
-        "\n".join(g["id"] + " (" + g["label"] + "): " +
+        "\n".join(g["id"] + " (" + (g.get("annotationGroup") or g["label"]) + "): " +
                   "; ".join(str(i + 1) + "=" + (value or "(absent)")
                             for i, value in enumerate(g["options"]))
                   for g in groups)
@@ -584,7 +584,9 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     for group, dimension in zip(unit["groups"], campaign["dimensions"]):
         if group.get("options") != dimension["options"]:
             raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
-        group.update({"label": dimension["label"], "role": dimension["role"], "weight": dimension["weight"]})
+        group.update({"label": dimension["label"], "role": dimension["role"],
+                      "weight": dimension["weight"],
+                      "annotationGroup": dimension.get("annotationGroup", "")})
     unit["question"] = _question(unit["groups"])
     unit["prompt"] = status.get("resolvedPrompt") or status.get("prompt") or ""
     _save(folder_path, campaign)

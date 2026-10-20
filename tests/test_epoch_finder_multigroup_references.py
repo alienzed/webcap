@@ -7,7 +7,8 @@ from tool.server import epoch_finder
 
 
 @pytest.mark.parametrize("choice_group", ["Position", "Action"])
-def test_campaign_accepts_same_tag_in_multiple_groups(monkeypatch, tmp_path, choice_group):
+@pytest.mark.parametrize("selected_options", [("standing", "sitting"), ("standing",), ()])
+def test_campaign_accepts_same_tag_in_multiple_groups(monkeypatch, tmp_path, choice_group, selected_options):
     run = {"jobId": "job-1", "stage": "h3", "modelId": "h3", "runName": "Run",
            "epochs": [5]}
     monkeypatch.setattr(epoch_finder, "_runs", lambda folder: [run])
@@ -40,13 +41,12 @@ def test_campaign_accepts_same_tag_in_multiple_groups(monkeypatch, tmp_path, cho
         "referencePlan": [
             {"attribute": "Pose", "option": tag, "group": choice_group,
              "tag": tag, "media": tag + ".png"}
-            for tag in ("standing", "sitting")
+            for tag in selected_options
         ],
     }
     campaign = epoch_finder.create_campaign("set", criteria)
-    assert len(campaign["referencePlan"]) == 2
-    assert seen == [(choice_group, "sitting", "sitting.png"),
-                    (choice_group, "standing", "standing.png")]
+    assert len(campaign["referencePlan"]) == len(selected_options)
+    assert seen == [(choice_group, tag, tag + ".png") for tag in sorted(selected_options)]
 
 
 def test_reference_group_must_contain_selected_exact_tag(monkeypatch, tmp_path):

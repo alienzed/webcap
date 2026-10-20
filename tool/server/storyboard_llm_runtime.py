@@ -1363,39 +1363,49 @@ list_models.last_warnings = []
 
 
 def _assessment_signal(model_ref, evidence=None):
-    """Use WebCap's current production-shaped assessment evidence only.
+    """Report production assessment, preserving *observed* legacy warnings.
 
-    Structured JSON output cannot establish legacy coherent-prose or context
-    ceilings, so never infer full-story suitability from those older thresholds.
+    Scene JSON does not establish an 8K prose capacity. Historic completed prose
+    trials and observed looping/garbled output still matter to Storyboard.
     """
+    from .director_model_calibration import get_report
+
     probes = evidence or {}
+    report = get_report(model_ref) or {}
+    old_abilities = report.get("abilities") or {}
+    pathologies = list(report.get("pathologies") or [])
+    old_health = str(report.get("health") or "")
+    serious = bool(pathologies) or old_health == "likely-unusable"
+    coherent = int(old_abilities.get("coherentOutputTokens") or 0)
+    limited = old_health == "limited"
     scene = probes.get("director_scene_plan_2048") or {}
-    structure = [probes.get("language_synthesis") or {}, probes.get("language_challenge") or {}]
-    qualified = (scene.get("status") == "completed"
-                 and all(probe.get("status") == "completed" for probe in structure))
+    schema = [probes.get("language_synthesis") or {}, probes.get("language_challenge") or {}]
+    qualified = scene.get("status") == "completed" and all(
+        probe.get("status") == "completed" for probe in schema
+    )
     thinking = probes.get("director_thinking") or {}
-    structured_tokens = max((
+    structured = max((
         int(probe.get("verifiedOutputTokens") or 0)
-        for kind, probe in probes.items() if kind.startswith("director_scene_plan_")
-        and probe.get("status") == "completed"
+        for kind, probe in probes.items()
+        if kind.startswith("director_scene_plan_") and probe.get("status") == "completed"
     ), default=0)
-    observed = any(probe.get("status") for probe in [scene, *structure])
+    observed = any(probe.get("status") for probe in (scene, *schema))
     return {
-        "status": "complete" if qualified else ("incomplete" if observed else ""),
-        "health": "healthy" if qualified else "",
-        "assessmentKind": "model-assessment",
-        "pathologies": [],
-        "seriousWarning": False,
-        "limited": False,
-        "fullStoryCapable": None,
-        "individualScenesRecommended": False,
+        "status": ("complete" if qualified else "incomplete") if observed else str(report.get("status") or ""),
+        "health": old_health if serious or limited else ("technical-pass" if qualified else old_health),
+        "assessmentKind": "model-assessment" if observed else str(report.get("assessmentKind") or ""),
+        "pathologies": pathologies,
+        "seriousWarning": serious,
+        "limited": limited,
+        "fullStoryCapable": True if coherent >= 8192 else None,
+        "individualScenesRecommended": limited and 0 < coherent < 8192,
         "abilities": {
-            "contextTokens": 0,
-            "structuredOutputTokens": structured_tokens,
-            "coherentOutputTokens": 0,
+            "contextTokens": int(old_abilities.get("contextTokens") or 0),
+            "structuredOutputTokens": max(structured, int(old_abilities.get("structuredOutputTokens") or 0)),
+            "coherentOutputTokens": coherent,
         },
-        "thinking": thinking.get("status") == "completed" and thinking.get("supported") is True,
-        "updatedAt": "",
+        "thinking": (thinking.get("supported") is True if thinking else report.get("thinking") is True),
+        "updatedAt": str(report.get("updatedAt") or ""),
     }
 
 

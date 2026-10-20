@@ -572,6 +572,7 @@ def insights_director_facts(folder_path):
             "leadingRatedEpochs": [{
                 "epoch": row["epoch"], "average": row["allManualAverage"],
                 "ratings": row["ratedCount"], "renders": row["testCount"],
+                "ratingDistribution": row["ratingDistribution"],
             } for row in rated[:3]],
         })
     return {
@@ -734,7 +735,8 @@ def overview(folder_path):
             epochs[key] = {
                 "jobId": job_id, "epoch": epoch, "runName": name,
                 "testCount": 0, "campaignCount": 0, "ratedCount": 0,
-                "ratingSum": 0, "vlReviewedCount": 0, "sessions": set(),
+                "ratingSum": 0, "ratingDistribution": {str(n): 0 for n in range(1, 6)},
+                "vlReviewedCount": 0, "sessions": set(),
             }
         elif name and not epochs[key]["runName"]:
             epochs[key]["runName"] = name
@@ -798,6 +800,7 @@ def overview(folder_path):
             if rated:
                 entry["ratedCount"] += 1
                 entry["ratingSum"] += ratings[media]
+                entry["ratingDistribution"][str(ratings[media])] += 1
             if judgments:
                 entry["vlReviewedCount"] += 1
 

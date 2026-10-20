@@ -435,8 +435,10 @@
     }).join('');
   }
   function labDiscoveries(){
-    var group=labGroup(),attributes=(group&&group.attributes||[]).slice(0,8);
-    var hidden=new Set(labSnapshot.hiddenVlGroups||[]);
+    var group=labGroup(),hidden=new Set(labSnapshot.hiddenVlGroups||[]);
+    var attributes=(group&&group.attributes||[]).slice().sort(function(a,b){
+      return Number(hidden.has(a.id||a.label))-Number(hidden.has(b.id||b.label));
+    });
     lab('discoveries').innerHTML=attributes.length?attributes.map(function(a){
       var key=a.id||a.label,checked=!hidden.has(key);
       return '<div class="run-lab-insight'+(checked?'':' is-muted')+'"><div><label class="run-lab-insight-choice"><input type="checkbox" data-insights-group="'+esc(key)+'"'+(checked?' checked':'')+'><strong>'+esc(a.label)+'</strong></label><span>'+(100*a.matched).toFixed(0)+'% · '+a.judgments+' judgments</span></div><div class="run-lab-meter"><i style="width:'+(100*a.matched)+'%"></i></div></div>';
@@ -525,7 +527,7 @@
     if(done){
       lab('review-progress').textContent='Batch complete · '+reviewRated+' rated, '+reviewSkipped+' skipped';
       lab('review-status').textContent='Your saved ratings will appear in Insights when you close this review.';
-      lab('review-next').classList.remove('hidden');
+      lab('review-next').classList.toggle('hidden',!reviewItems.length);
       lab('review-next').textContent='Review five more';
       return;
     }

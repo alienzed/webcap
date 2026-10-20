@@ -17,6 +17,11 @@
     el('media-explorer-rating').classList.toggle('hidden', external);
     el('media-explorer-date').classList.toggle('hidden', external);
     el('media-explorer-size').disabled = explorerMode !== 'grid';
+    ['path', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
+      var option = el('media-explorer-sort').querySelector('option[value="' + value + '"]');
+      option.hidden = !external;
+    });
+    el('media-explorer-sort').querySelector('option[value="rating"]').hidden = external;
   }
   function setExplorerMode(next) {
     explorerMode = next;
@@ -705,6 +710,7 @@
       stopExternalTimers();
       if (isExternal()) {
         explorerMode = 'list';
+        facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).value = ''; });
         if (!['newest', 'oldest', 'name', 'path', 'resolution', 'megapixels', 'duration'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
       } else if (!['newest', 'oldest', 'name', 'rating'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
       setExplorerMode(explorerMode);

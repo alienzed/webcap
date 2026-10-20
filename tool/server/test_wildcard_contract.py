@@ -34,6 +34,21 @@ def _concept_tags(annotations):
     return tags
 
 
+def _spread_caption_examples(captions, max_items=150, max_chars=24000):
+    """Existing unannotated Director request behavior (also used by Epoch Finder)."""
+    counts = Counter(captions)
+    unique = list(counts)
+    count = min(len(unique), max_items)
+    while True:
+        indices = [index * (len(unique) - 1) // (count - 1)
+                   for index in range(count)] if count > 1 else [0]
+        examples = ["[count=" + str(counts[unique[index]]) + "] " + unique[index]
+                    for index in indices]
+        if sum(len(example) + 2 for example in examples) <= max_chars or count == 1:
+            return examples, len(unique)
+        count -= 1
+
+
 def _sample_caption_examples(rows, max_items=24, max_chars=7200):
     """Prefer examples covering previously unseen, especially rare, concept tags."""
     counts = Counter()
@@ -98,28 +113,48 @@ def build_request(captions, set_name="", focus="", vocabulary=None, annotations=
 
     set_name = _clean_context(set_name)
     focus = _clean_context(focus)
-    scoped = [_concept_tags(entry) for entry in annotations] if annotations is not None else [
-        set() for _ in cleaned
-    ]
-    # Aggregate actual trained-media annotations, not the entire configured vocabulary.
-    frequencies = Counter(tag for tags in scoped for tag in tags)
-    aliases = {
-        _clean_context(entry.get("group")): _clean_context(entry.get("alias"))
-        for entry in vocabulary or [] if isinstance(entry, dict) and
-        _clean_context(entry.get("group"))
-    }
-    groups = []
-    for group in sorted({name for name, _ in frequencies}):
-        terms = sorted(
-            ((term, count) for (name, term), count in frequencies.items() if name == group),
-            key=lambda item: (-item[1], item[0]),
+    if annotations is None:
+        # Epoch Finder and other unannotated callers retain the existing request.
+        groups = []
+        for raw in vocabulary if isinstance(vocabulary, list) else []:
+            if not isinstance(raw, dict):
+                continue
+            group = _clean_context(raw.get("group"))
+            if not group:
+                continue
+            terms = ([_clean_context(term) for term in raw.get("terms", [])
+                      if str(term or "").strip()]
+                     if isinstance(raw.get("terms"), list) else [])
+            groups.append({"group": group, "alias": _clean_context(raw.get("alias")),
+                           "terms": terms})
+        corpus, unique_count = _spread_caption_examples([text for text in cleaned if text])
+        inventory_context = "Annotation groups and terms: " + (
+            json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"
         )
-        groups.append({
-            "group": group, "alias": aliases.get(group, ""),
-            "terms": [{"term": term, "count": count} for term, count in terms],
-        })
-
-    corpus, unique_count = _sample_caption_examples(list(zip(cleaned, scoped)))
+    else:
+        scoped = [_concept_tags(entry) for entry in annotations]
+        frequencies = Counter(tag for tags in scoped for tag in tags)
+        aliases = {
+            _clean_context(entry.get("group")): _clean_context(entry.get("alias"))
+            for entry in vocabulary or [] if isinstance(entry, dict) and
+            _clean_context(entry.get("group"))
+        }
+        groups = []
+        for group in sorted({name for name, _ in frequencies}):
+            terms = sorted(
+                ((term, count) for (name, term), count in frequencies.items()
+                 if name == group),
+                key=lambda item: (-item[1], item[0]),
+            )
+            groups.append({
+                "group": group, "alias": aliases.get(group, ""),
+                "terms": [{"term": term, "count": count} for term, count in terms],
+            })
+        corpus, unique_count = _sample_caption_examples(list(zip(cleaned, scoped)))
+        inventory_context = "Observed concept tags (selected run; counts are annotated media): " + (
+            json.dumps(groups, ensure_ascii=False, separators=(",", ":"))
+            if groups else "(no scoped concept tags)"
+        )
 
     schema = {
         "type": "object",
@@ -160,8 +195,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, annotations=
     context_lines = [
         "Set name: " + (set_name or "(not supplied)"),
         "Explicit focus: " + (focus or "(auto - infer from Set name and repeated caption language)"),
-        "Observed concept tags (selected run; counts are annotated media): " +
-        (json.dumps(groups, ensure_ascii=False, separators=(",", ":")) if groups else "(no scoped concept tags)"),
+        inventory_context,
         "Caption sampling: " + str(len(corpus)) + " representative examples from " +
         str(unique_count) + " distinct captions. [count=N] indicates exact duplicates.",
     ]

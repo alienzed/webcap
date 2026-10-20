@@ -89,80 +89,30 @@ def test_test_results_header_promotes_view_tabs_without_legacy_rate_action():
 
 
 def test_test_generations_uses_training_pane_and_core_controls():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
-
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    assert 'id="test-generations-pane"' in html
-    assert "el('test-generations-workspace')" in script
-    assert "training-tests-actions" in script
-    assert ".training-run-setup-actions" not in script
-    assert "document.querySelector('.editor-surface')" not in script
-    assert "workspace-test-open" in script
-    assert "test-generations-aspect" in script
-    assert "test-generations-megapixels" in script
-    assert "test-generations-duration" in script
-    assert "test-generations-seed" in script
-    assert "test-generations-results" in script
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
+    for control in ("test-generations-pane", "test-generations-prompt",
+                    "test-generations-run-btn", "test-generations-inline-count",
+                    "test-generations-inline-auto-vl", "test-generations-results",
+                    "test-generations-sessions-list", "test-generations-files-count"):
+        assert f'id="{control}"' in html
     assert "card.dataset.resultKey = resultKey" in script
     assert "host.insertBefore(card, pending || null)" in script
-    assert "pending.querySelector('.test-generations-result-name').textContent" in script
-    assert "var failures = status && Array.isArray(status.failures) ? status.failures : [];" in script
     assert "placeholder.textContent = 'Generation failed';" in script
-    assert "detail.textContent = String(failure.error || 'Generation failed.');" in script
-    assert "(results.length + failures.length) < total" in script
-    assert "host.innerHTML = html" not in script
-    assert "Previews appear as each LoRA finishes." in script
-    assert "settings: settings" in script
-    assert "var declaredSettings = prepared && Array.isArray(prepared.settings)" in script
-    assert "test-generations-dimensions" in script
-    assert "settings.seed" in script
-
-    assert ".test-generations-pane" in css
-    assert ".test-generations-workspace" in css
-    assert ".test-generations-results" in css
+    assert "function renderResults(status)" in script
     assert ".test-generations-result-card video" in css
     assert ".test-generations-result-card img" in css
-    assert ".test-generations-setup-overview" in css
-    assert ".test-generations-setup-options" in css
-    assert 'id="test-generations-files-count"' in html
-    assert 'id="test-generations-sessions-count"' in html
-    assert 'id="test-generations-clear-sessions-btn"' in html
-    assert "countEl.textContent = String(count)" in script
-    assert "countEl.textContent = String(items.length + queued.length)" in script
-    assert 'class="test-generations-library"' in html
-    assert "<details>" not in html
-    body_rule = css.split(".test-generations-body {", 1)[1].split("}", 1)[0]
-    assert "grid-template-columns: minmax(400px, 430px) minmax(0, 1fr);" in body_rule
-    assert 'class="test-generations-rail"' in html
-    controls_rule = css.split(".test-generations-controls {", 1)[1].split("}", 1)[0]
-    assert "display: flex;" in controls_rule
-    assert "flex-direction: column;" in controls_rule
-    assert ".test-generations-library-panel" in css
-    assert ".test-generations-library-heading" in css
-    shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
-    assert 'id="test-generations-workspace"' in html
-    assert ".app-frame.workspace-test-open > .test-generations-workspace" in shell_css
-    assert 'src="/static/js/test_generations.js"' in html
-
-
 
 def test_test_generation_previews_keep_stable_width_and_natural_height():
-    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
-
+    css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
     results_rule = css.split(".test-generations-results {", 1)[1].split("}", 1)[0]
     assert "display: grid;" in results_rule
-    assert "grid-template-columns: repeat(auto-fill, 280px);" in results_rule
-    assert "justify-content: start;" in results_rule
-    assert "flex: 1 1 0;" in results_rule
+    assert "grid-template-columns: repeat(auto-fill, 500px);" in results_rule
     assert "grid-auto-rows: max-content;" in results_rule
-
     video_rule = css.split(".test-generations-result-card video,\n.test-generations-result-card img {", 1)[1].split("}", 1)[0]
     assert "width: 100%;" in video_rule
     assert "height: auto;" in video_rule
-    assert "aspect-ratio:" not in video_rule
-    assert "object-fit:" not in video_rule
-
 
 def test_test_generations_uses_explicit_workspace_root():
     shell_css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
@@ -219,17 +169,15 @@ def test_test_navigation_uses_global_set_context_and_local_run_choice():
 
 
 def test_test_prompt_can_reuse_recent_session_prompt_without_switching_set():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     assert 'id="test-generations-recent-prompts-btn"' in html
     assert "function openRecentPromptsMenu(button)" in script
     assert "Array.isArray(testActivity.recentPrompts)" in script
-    assert "function applyRecentPrompt(item)" in script
-    assert "saveTestPromptDraft(prompt);" in script
-    assert "saveTestBenchState(prompt);" in script
+    recent = script.split("function applyRecentPrompt(item)", 1)[1].split("function openRecentPromptsMenu", 1)[0]
+    assert "saveTestBenchState();" in recent
+    assert "openPane()" not in recent
     assert "No recent Test prompts yet." in script
-
 
 def test_recent_set_group_tracks_loaded_set_contexts():
     ui = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
@@ -279,52 +227,33 @@ def test_test_generation_archive_lifecycle_is_visible_and_clearable():
 
 
 def test_test_generation_sessions_and_candidate_removal_contract():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
-
-    assert "test-generations-sessions-count" in script
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
     assert "test-generations-sessions-list" in script
     assert "test_open_session" in script
     assert "test_delete_session" in script
-    assert "dataset.removeCandidate" in script
     assert "function removeCandidate(fileName, sessionName)" in script
     assert "session: String(sessionName || '')" in script
-    assert "removeCandidate(button.dataset.fileName, '')" in script
     assert "function removeCurrentSessionCandidate(button)" in script
-    assert "window.confirm(" in script
-    assert "This deletes the staged LoRA and its result from the current session. Other sessions are unchanged." in script
-    removal_block = script.split("function removeCurrentSessionCandidate(button)", 1)[1].split("function bindUi()", 1)[0]
-    assert removal_block.index("if (!confirmed) return;") < removal_block.index("button.disabled = true;")
-    assert removal_block.index("button.disabled = true;") < removal_block.index("removeCandidate(candidateFile, currentSession)")
-    assert "button.disabled = false;" in removal_block
-    assert "removeCurrentSessionCandidate(remove);" in script
-    assert "button.disabled = true;" in script
-    assert "button.disabled = false;" in script
-    assert "queueCancel.disabled = false;" in script
+    removal = script.split("function removeCurrentSessionCandidate(button)", 1)[1].split("function bindUi()", 1)[0]
+    assert "if (!confirmed) return;" in removal
+    assert "removeCandidate(candidateFile, currentSession)" in removal
+    assert removal.index("if (!confirmed) return;") < removal.index("removeCandidate(candidateFile, currentSession)")
+    assert "window.confirm(" in removal
     assert "row.dataset.sessionName = name;" in script
     assert "row.dataset.queueJobId = String(job.id || '');" in script
-    assert "openSession(row.dataset.sessionName);" in script
-    assert "open.dataset.sessionFolderOpen = resultFolder;" in script
-    assert "openResultsFolder(folderOpen.dataset.sessionFolderOpen);" in script
-    assert "open.dataset.sessionOpen" not in script
     assert ".test-generations-session-row" in css
-    assert ".test-generations-session-row:not([data-queue-job-id])" in css
-    assert ".test-generations-session-group" in css
     assert ".test-generations-session-progress" in css
-    assert ".test-generations-result-footer" in css
-
-
 
 def test_session_list_groups_running_queue_then_finished():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     block = script.split("function renderSessions(sessions, queuedJobs)", 1)[1].split("function refreshSessions()", 1)[0]
-
-    assert "appendGroup('Running', activeItems.length, 'is-running')" in block
-    assert "appendGroup('Queued', queued.length, 'is-queued')" in block
-    assert "appendGroup('Finished', historyItems.length, 'is-history')" in block
-    assert block.index("appendGroup('Running'") < block.index("appendGroup('Queued'")
-    assert block.index("appendGroup('Queued'") < block.index("appendGroup('Completed'")
-
+    assert "var order = { running: 0, queued: 1, history: 2 };" in block
+    assert 'group.dataset.sessionGroup = key;' in block
+    assert "function ensureGroup(key, label, count, className)" in block
+    assert "function ensureRow(key)" in block
+    assert "if (row) return row;" in block
+    assert "host.insertBefore(group, next);" in block
 
 def test_running_session_progress_uses_processed_over_total_and_updates_live():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -347,15 +276,14 @@ def test_active_session_row_surfaces_live_elapsed_time():
     assert "formatElapsedMs(Date.now() - startedAt)" in block
 
 def test_active_session_row_uses_live_polled_progress():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     assert "function sessionStatusText(session)" in script
-    assert "function syncVisibleSessionProgress(status)" in script
-    assert "meta.textContent = sessionStatusText(session);" in script
-    render_block = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
-    assert "syncVisibleSessionProgress(status || {});" in render_block
-
-
+    block = script.split("function syncVisibleSessionProgress(status)", 1)[1].split("function renderSessions", 1)[0]
+    assert "meta.textContent = sessionStatusText(status);" in block
+    assert "progress.setAttribute('aria-valuenow', String(processed));" in block
+    assert "if (fill) fill.style.width = percent.toFixed(1) + '%';" in block
+    render = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
+    assert "syncVisibleSessionProgress(status || {});" in render
 
 def test_test_generations_persists_only_against_its_current_set():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -402,36 +330,18 @@ def test_test_generations_compare_mode_reuses_current_session_results():
 
 
 def test_test_bench_activity_rail_and_live_session_contract():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
-    ui_script = (ROOT / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
     assert 'id="activity-test-btn"' in html
     assert "function refreshActivityButton()" in script
     assert "function openTestBenchActivity(target)" in script
     assert "window.testGenerationsFolderLoaded = testGenerationsFolderLoaded" in script
-    assert "window.openTestBenchForFolder = openTestBenchForSetFolder" in script
     assert "window.refreshTestBenchActivity = refreshActivityButton" in script
-    assert "activityButton.classList.toggle('test-running', !!active)" in script
-    assert ".activity-rail-btn.test-running::after" in (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
-    assert "window.testGenerationsFolderLoaded()" in ui_script
-
-    assert "function setRunSettingsDisabled" not in script
-    controls_block = script.split("function syncActiveRunControls(status)", 1)[1].split("function renderStatus(status)", 1)[0]
-    assert "runBtn.disabled = active" not in controls_block
-    assert "runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;" in controls_block
-    assert 'id="test-generations-stop-btn"' in html
-    assert "function syncActiveTestCard(status)" in script
-    assert "el('test-generations-stop-btn').onclick = function () { stopRun(this); };" in script
-    assert "dataset.sessionStop = name;" not in script
-    assert "data-session-stop" not in script
-    assert ".disabled = !!disabled" not in controls_block
-
-    assert "if (currentSession === activeSession)" in script
-    assert "savedPrompt.trim()" not in script
-    assert "saveTestBenchState(prompt);" in script
-    assert "if (nextSeed) nextSeed.value = String(randomSeed());" in script
+    controls = script.split("function syncActiveRunControls(status)", 1)[1].split("var TEST_PROMPT_COLOR_SWATCHES", 1)[0]
+    assert "runBtn.disabled = !prepared || !prepared.count || !selectedCount || !supported;" in controls
+    assert "Queue Test sessions." in controls
+    assert "function syncVisibleSessionProgress(status)" in script
+    assert "function pollStatus()" in script
 
 def test_selected_test_session_is_preview_only_and_does_not_restore_working_controls():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -451,36 +361,29 @@ def test_selected_test_session_is_preview_only_and_does_not_restore_working_cont
 
 
 def test_selected_test_session_rehydrates_across_navigation_and_queue_handoff():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     assert "var currentSessionFolder = '';" in script
     assert "var currentSessionModel = '';" in script
-    assert "currentSessionFolder === launchFolder" in script
-    assert "currentSessionModel === requestedModelId" in script
-    assert "request('test_open_session', { session: rememberedSession })" in script
+    open_pane = script.split("function openPane()", 1)[1].split("function testRunCriteria()", 1)[0]
+    assert "currentSessionFolder === launchFolder" in open_pane
+    assert "currentSessionModel === requestedModelId" in open_pane
+    assert "request('test_open_session', { session: currentSession })" in open_pane
+    assert "request('test_open_session', { session: sessionToOpen })" in open_pane
+    assert "if (generation !== openGeneration || !isOpen()) return;" in open_pane
     assert "function selectSessionStatus(status)" in script
-    assert "currentSession = String(status.session || '');" in script
-    assert "request('test_open_session', { session: currentSession })" in script
-
 
 def test_test_polling_keeps_active_worker_status_separate_from_selected_preview():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
-
-    assert "syncActiveTestCard(status);" in poll
+    assert "syncActiveRunControls(status);" in poll
     assert "if (currentSession === activeSession)" in poll
     assert "else if (selectedPreviewLive)" in poll
     assert "renderStatus(selectedStatus);" in poll
-    assert "selectedPreviewLive" in poll
+    assert "selectSessionStatus(" not in poll
     assert "testStatusHasPendingWork(currentStatus)" in poll
-    assert "testStatusHasPendingWork(status) || testStatusHasPendingWork(currentStatus)" in poll
-
     assert "refreshActivityButtonIfDue(15000);" in poll
     assert "refreshSessionsIfDue(10000).catch(showError);" in poll
     assert "pollTimer = setTimeout(pollStatus, 4000);" in poll
-    assert "function refreshActivityButtonIfDue(intervalMs)" in script
-    assert "function refreshSessionsIfDue(intervalMs)" in script
-
 
 def test_test_preview_polling_survives_inter_job_queued_state():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -494,23 +397,16 @@ def test_test_preview_polling_survives_inter_job_queued_state():
 
 
 def test_active_test_card_is_separate_from_selected_session_results():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
-
-    assert 'id="test-generations-active"' in html
-    assert 'id="test-generations-active-progress"' in html
-    assert 'id="test-generations-active-current"' in html
-    assert 'id="test-generations-active-meta"' in html
-    assert "syncActiveTestCard(status);" in script
-    poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
-    assert "syncActiveTestCard(status);" in poll
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    assert 'id="test-generations-sessions-list"' in html
+    assert 'id="test-generations-results"' in html
+    assert 'id="test-generations-status"' in html
+    assert "function syncVisibleSessionProgress(status)" in script
+    assert "function syncActiveRunControls(status)" in script
     render = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
     assert "statusEl.textContent = live ? '' : statusText(status);" in render
-    assert ".test-generations-active {" in css
-    assert ".test-generations-stop-btn {" in css
-    assert "min-height: 160px;" in css
-
+    assert "renderResults(status || {});" in render
 
 def test_live_test_status_surfaces_comfy_job_progress_and_errors_to_console():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

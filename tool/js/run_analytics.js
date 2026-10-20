@@ -516,22 +516,31 @@
       Math.min(reviewIndex+1,reviewItems.length)+' of '+reviewItems.length+
       ' · '+reviewRated+' rated · '+reviewSkipped+' skipped':'Review five saved Test renders';
   }
-  function labReviewRender(){
-    var current=reviewItems[reviewIndex],done=!current;
+  function labReviewButtons(){
+    var done=!reviewItems[reviewIndex];
     labReviewProgress();
     lab('review-stars').classList.toggle('hidden',done||reviewRatedCurrent);
     lab('review-skip').classList.toggle('hidden',done||reviewRatedCurrent);
     lab('review-next').classList.toggle('hidden',!done&&!reviewRatedCurrent);
     lab('review-undo').classList.toggle('hidden',!reviewRatedCurrent);
+  }
+  function labReviewRender(){
+    var current=reviewItems[reviewIndex],done=!current;
+    labReviewButtons();
     lab('review-reveal').textContent='';
     lab('review-status').textContent='';
     lab('review-media').replaceChildren();
     lab('review-wildcards').replaceChildren();
     if(done){
-      lab('review-progress').textContent='Batch complete · '+reviewRated+' rated, '+reviewSkipped+' skipped';
-      lab('review-status').textContent='Your saved ratings will appear in Insights when you close this review.';
-      lab('review-next').classList.toggle('hidden',!reviewItems.length);
-      lab('review-next').textContent='Review five more';
+      if(!reviewItems.length){
+        lab('review-progress').textContent='No available unrated renders';
+        lab('review-status').textContent='No reviewable saved Test media found. Historical outputs may be unavailable or unlinked.';
+        lab('review-next').classList.add('hidden');
+      }else{
+        lab('review-progress').textContent='Batch complete · '+reviewRated+' rated, '+reviewSkipped+' skipped';
+        lab('review-status').textContent='Your saved ratings will appear in Insights when you close this review.';
+        lab('review-next').textContent='Review five more';
+      }
       return;
     }
     lab('review-next').textContent='Next render';
@@ -577,7 +586,7 @@
     labReviewApi('test_rate_result',{session:item.session,mediaFile:item.mediaFile,rating:rating},'/fs/test_generations')
       .then(function(){
         reviewRated++;reviewRatedCurrent=true;
-        labReviewRender();
+        labReviewButtons();
         lab('review-reveal').textContent='Rated '+rating+'/5 · '+(item.runName||'Run '+item.jobId.slice(-8))+' · Epoch '+item.epoch;
       }).catch(function(exc){error(exc);lab('review-status').textContent=String(exc.message||exc);})
       .finally(function(){reviewBusy=false;Array.from(lab('review-stars').querySelectorAll('button')).forEach(function(b){b.disabled=false;});});
@@ -587,7 +596,7 @@
     if(!item||!reviewRatedCurrent||reviewBusy)return;
     reviewBusy=true;
     labReviewApi('test_rate_result',{session:item.session,mediaFile:item.mediaFile,rating:0},'/fs/test_generations')
-      .then(function(){reviewRated--;reviewRatedCurrent=false;labReviewRender();})
+      .then(function(){reviewRated--;reviewRatedCurrent=false;labReviewButtons();lab('review-reveal').textContent='';})
       .catch(function(exc){error(exc);lab('review-status').textContent=String(exc.message||exc);})
       .finally(function(){reviewBusy=false;});
   }

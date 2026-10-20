@@ -12,6 +12,7 @@ on:
       - 'tests/test_model_lab.py'
       - 'tests/test_model_assessment_completion.py'
       - 'tests/test_assessment_transfer.py'
+      - 'tests/test_director_model_calibration.py'
       - 'tests/test_model_assessment_thinking_unified.py'
       - '.github/workflows/model-assessment-regression.yml'
   push:
@@ -25,6 +26,7 @@ on:
       - 'tests/test_model_lab.py'
       - 'tests/test_model_assessment_completion.py'
       - 'tests/test_assessment_transfer.py'
+      - 'tests/test_director_model_calibration.py'
       - 'tests/test_model_assessment_thinking_unified.py'
       - '.github/workflows/model-assessment-regression.yml'
 
@@ -41,7 +43,7 @@ jobs:
       - name: Prepare test configuration
         run: cp tool/config.example.json tool/config.json
       - name: Assessment and integration tests
-        run: python -m pytest -q tests/test_model_lab.py tests/test_model_assessment_thinking_unified.py tests/test_model_assessment_completion.py tests/test_assessment_transfer.py
+        run: python -m pytest -q tests/test_model_lab.py tests/test_model_assessment_thinking_unified.py tests/test_model_assessment_completion.py tests/test_assessment_transfer.py tests/test_director_model_calibration.py
       - name: Progress Card snapshot and Diagnostics JavaScript
         run: |
           node --check tool/js/model_lab.js

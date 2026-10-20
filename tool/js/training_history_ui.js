@@ -621,14 +621,6 @@ function finalizeTrainingArchive() {
     trainingWorkspaceState.archivesLoaded = false;
     var archive = payload.archive || {};
     var archiveName = String(archive.archiveName || '');
-    if (
-      archive.lastTrainingArchive &&
-      typeof state === 'object' &&
-      state &&
-      String(state.folder || '') === String(preview.folder || '')
-    ) {
-      state.lastTrainingArchive = JSON.parse(JSON.stringify(archive.lastTrainingArchive));
-    }
     window.dispatchEvent(new CustomEvent('webcap:training-archived', {
       detail: {
         folder: String(preview.folder || ''),
@@ -642,10 +634,6 @@ function finalizeTrainingArchive() {
       }));
     }
     var notices = [];
-    if (archive.setMarkerWarning) {
-      notices.push('Set archive marker was not saved: ' + String(archive.setMarkerWarning));
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Training Archive', String(archive.setMarkerWarning));
-    }
     if (archive.testCleanupWarning) notices.push('Run-owned Test sessions were not fully cleared: ' + String(archive.testCleanupWarning));
     setStatus(
       'Finalized and archived ' + archiveName + '.' +

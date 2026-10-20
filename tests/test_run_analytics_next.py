@@ -200,7 +200,8 @@ def test_lab_ranking_uses_all_epoch_ratings_without_cohort_filter():
     assert "labSnapshot.epochs||[]" in script
     assert "p.allManualAverage" in script
     assert "p.ratedCount" in script
-    assert "var p=labRanked()[0]||labPoints()[0]" in script
+    assert "var list=labRanked().slice().sort(" in script
+    assert "p=action===\'challenger\'?list[1]:(list[0]||labPoints()[0])" in script
     assert "data-lab-show-all" in script
     assert "operation:'checkpoint_workspace'" in script
     assert "savedRating.textContent=item.rating==null?'Unrated':'Rated '+item.rating+'/5'" in script

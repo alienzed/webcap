@@ -346,7 +346,7 @@ def create_campaign(folder_path, criteria):
             if not matches:
                 raise ValueError("No trained annotation group contains exact tag " +
                                  repr(option) + " for Primary attribute " + dimension["label"] + ".")
-            primary_groups[(dimension["label"], option)] = matches[0]
+            primary_groups[(dimension["label"], option)] = matches
     reference_choices = criteria.get("referencePlan")
     if not isinstance(reference_choices, list):
         raise ValueError("Approve a training reference for every Primary wildcard option.")

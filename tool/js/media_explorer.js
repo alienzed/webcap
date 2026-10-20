@@ -4,7 +4,36 @@
   var selected = new Set(), anchor = -1;
   var source = '', pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
   var needsLoad = true;
-  var explorerMode = 'grid', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null, autoMetadataRequested = new Set();
+  var explorerMode = 'grid', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null;
+  var autoMetadataRequested = new Set(), externalRevision = -1, externalOverview = '', externalJobSummary = '', lastExternalError = '';
+  function externalSummary() {
+    var node = el('media-explorer-metadata-progress');
+    text(node, [externalOverview, externalJobSummary].filter(Boolean).join(' · '));
+    node.classList.toggle('hidden', !node.textContent);
+    el('media-explorer-stop-metadata').classList.toggle('hidden', !externalJobRunning);
+  }
+  var externalJobRunning = false;
+  function canRefreshExternalPage() {
+    return !loading && !selected.size && active < 0 && offset <= pageSize &&
+      !el('media-explorer-loupe').open && !el('media-explorer-compare-dialog').open;
+  }
+  function pollExternalDiscovery() {
+    if (!visible || !isExternal() || !externalPath) return;
+    fetch('/fs/media_explorer/external/status?path=' + encodeURIComponent(externalPath))
+      .then(function (res) { return res.json().then(function (data) {
+        if (!res.ok || !data.ok) throw Error(data.error || 'External discovery status failed');
+        return data;
+      }); }).then(function (data) {
+        if (!visible || !isExternal()) return;
+        externalOverview = data.discovered + ' found · ' + data.analyzed + ' analyzed' +
+          (data.complete ? '' : ' · discovering') + (data.warnings ? ' · ' + data.warnings + ' warnings' : '');
+        externalSummary();
+        if (data.error && data.error !== lastExternalError) { lastExternalError = data.error; report(new Error(data.error)); }
+        if (data.lastWarning && data.lastWarning !== lastExternalError) { lastExternalError = data.lastWarning; window.reportConsoleError('External media discovery', data.lastWarning); }
+        if (data.revision !== externalRevision && canRefreshExternalPage()) load(true, {soft:true});
+        if (!data.complete) externalDiscoveryTimer = setTimeout(pollExternalDiscovery, 1400);
+      }).catch(report);
+  }
   function isExternal() { return source === 'external'; }
   function externalParams() { return {path:externalPath, min_side:el('media-explorer-min-side').value, min_mp:el('media-explorer-min-mp').value, min_duration:el('media-explorer-min-duration').value, max_duration:el('media-explorer-max-duration').value}; }
   function syncExternalControls() {
@@ -24,45 +53,85 @@
     el('media-explorer-sort').querySelector('option[value="rating"]').hidden = external;
   }
   function setExplorerMode(next) {
+    if (next === 'single') {
+      if (items.length) openLoupe(active >= 0 ? active : 0);
+      return; // Existing fullscreen viewer is the Single Item presentation.
+    }
     explorerMode = next;
     var gallery = el('media-explorer-grid');
     gallery.classList.toggle('explorer-list', next === 'list');
-    gallery.classList.toggle('explorer-single', next === 'single');
-    if (isExternal()) {
-      items.forEach(function (item, index) {
-        var card = gallery.children[index];
-        if (!card || card.dataset.id !== item.id) return;
-        var frame = card.querySelector('.media-explorer-card-thumb');
-        var media = frame.querySelector('img, video');
-        if (next === 'list' && media) media.remove();
-        if (next !== 'list' && !media) frame.prepend(mediaElement(item, false));
-      });
-    }
-    document.querySelectorAll('[data-explorer-mode]').forEach(function (btn) { btn.setAttribute('aria-pressed', String(btn.dataset.explorerMode === next)); });
+    document.querySelectorAll('[data-explorer-mode]').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', String(btn.dataset.explorerMode === next));
+    });
+    if (isExternal()) items.forEach(function (item, index) {
+      var card = gallery.children[index];
+      if (!card || card.dataset.id !== item.id) return;
+      var frame = card.querySelector('.media-explorer-card-thumb');
+      var media = frame.querySelector('img, video, .external-video-placeholder');
+      if (next === 'list' && media) media.remove();
+      if (next !== 'list' && !media) frame.prepend(externalTileMedia(item));
+    });
     syncExternalControls();
-    if (next === 'single' && active < 0 && items.length) selectItem(0);
-    if (next === 'single' && active >= 0) selectItem(active);
   }
-  function stopExternalTimers() { clearTimeout(externalDiscoveryTimer); clearTimeout(externalMetadataTimer); externalDiscoveryTimer = null; externalMetadataTimer = null; }
+  function externalTileMedia(item) {
+    if (item.mediaKind === 'video') {
+      var placeholder = document.createElement('span');
+      placeholder.className = 'external-video-placeholder';
+      text(placeholder, '▶ Video');
+      return placeholder;
+    }
+    return mediaElement(item, false);
+  }
+  function stopExternalTimers() {
+    clearTimeout(externalDiscoveryTimer); clearTimeout(externalMetadataTimer);
+    externalDiscoveryTimer = null; externalMetadataTimer = null;
+  }
   function externalMetadataStatus() {
     if (!visible || !isExternal() || !externalPath) return;
-    fetch('/fs/media_explorer/external/metadata/status').then(function (r) { return r.json(); }).then(function (job) {
-      var node = el('media-explorer-metadata-progress');
-      var summary = job.total ? 'Technical metadata ' + job.completed + '/' + job.total + ' · ' + job.failed + ' failed' : '';
-      node.textContent = job.running ? summary + (job.current ? ' · ' + job.current : '') : summary;
-      node.classList.toggle('hidden', !summary);
-      if (job.lastError) {
-        node.title = job.lastError;
-        if (!job.running && job.failed) window.reportConsoleError('Media Explorer metadata', job.lastError);
+    fetch('/fs/media_explorer/external/metadata/status').then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok || !data.ok) throw Error(data.error || 'Metadata status failed');
+        return data;
+      });
+    }).then(function (job) {
+      if (!visible || !isExternal()) return;
+      externalJobRunning = !!job.running;
+      externalJobSummary = job.total
+        ? 'Metadata ' + job.completed + '/' + job.total + ' · ' + job.failed + ' failed' +
+          (job.uncached ? ' · ' + job.uncached + ' uncached' : '') +
+          (job.running && job.current ? ' · ' + job.current : '') + (job.canceled ? ' · stopped' : '')
+        : '';
+      externalSummary();
+      if (job.lastError && job.lastError !== lastExternalError) {
+        lastExternalError = job.lastError;
+        window.reportConsoleError('Media Explorer metadata', job.lastError);
       }
       if (job.running) externalMetadataTimer = setTimeout(externalMetadataStatus, 1600);
-      else if (job.total) load(true);
+      else if (job.total && canRefreshExternalPage()) load(true, {soft:true});
     }).catch(report);
   }
   function requestExternalMetadata(scope, files) {
-    var payload = Object.assign(externalParams(), {scope:scope, files:files || [], kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim()});
-    return fetch('/fs/media_explorer/external/metadata', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}).then(function (r) { return r.json().then(function (data) { if (!r.ok || !data.ok) throw Error(data.error || 'Metadata scan failed'); return data; }); }).then(function () {
-      clearTimeout(externalMetadataTimer); externalMetadataTimer = setTimeout(externalMetadataStatus, 300);
+    var payload = Object.assign(externalParams(), {
+      scope:scope, files:files || [], kind:el('media-explorer-kind').value,
+      search:el('media-explorer-search').value.trim()
+    });
+    return fetch('/fs/media_explorer/external/metadata', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok || !data.ok) throw Error(data.error || 'Metadata scan failed');
+        return data;
+      });
+    }).then(function (job) {
+      externalJobRunning = !!job.running;
+      if (!job.discoveryComplete && scope === 'filtered') {
+        externalJobSummary = 'Scanning discovered matches; folder discovery is still running';
+      }
+      externalSummary();
+      if (job.running) {
+        clearTimeout(externalMetadataTimer);
+        externalMetadataTimer = setTimeout(externalMetadataStatus, 300);
+      }
     }).catch(report);
   }
 
@@ -440,7 +509,9 @@
     open.setAttribute('aria-label', item.fileName + ', ' + item.role);
     card.appendChild(open);
     var frame = document.createElement('div'); frame.className = 'media-explorer-card-thumb';
-    if (!isExternal() || explorerMode === 'grid') frame.appendChild(mediaElement(item, false)); open.appendChild(frame);
+    if (!isExternal()) frame.appendChild(mediaElement(item, false));
+    else if (explorerMode === 'grid') frame.appendChild(externalTileMedia(item));
+    open.appendChild(frame);
     var badge = document.createElement('span'); badge.className = 'media-explorer-card-badge';
     text(badge, badgeText(item));
     frame.appendChild(badge);
@@ -449,7 +520,7 @@
     text(name, item.fileName); meta.appendChild(name);
     if (item.relativePath) { var relative = document.createElement('div'); relative.className = 'media-explorer-card-path'; text(relative, item.relativePath); meta.appendChild(relative); }
     var sub = document.createElement('div'); sub.className = 'media-explorer-card-sub';
-    text(sub, cardSummary(item));
+    text(sub, isExternal() ? ((item.metadata && item.metadata.resolution) || 'Metadata unknown') + (item.metadata && item.metadata.duration != null ? ' · ' + duration(item.metadata.duration) : '') : cardSummary(item));
     meta.appendChild(sub); open.appendChild(meta);
     var check = document.createElement('input'); check.type = 'checkbox'; check.className = 'media-explorer-card-check';
     check.tabIndex = index === 0 ? 0 : -1;
@@ -530,7 +601,8 @@
       select.classList.toggle('hidden', !options.length);
     });
   }
-  function load(reset) {
+  function load(reset, options) {
+    options = options || {};
     if (!visible) return;
     syncExternalControls();
     if (isExternal() && !externalPath) {
@@ -563,6 +635,7 @@
       sort:el('media-explorer-sort').value, source:source, full:full ? '1' : '0',
       storyboard_type:storyboardType(), model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, date:el('media-explorer-date').value, artifact:artifact, owner:owner});
     if (isExternal()) Object.entries(externalParams()).forEach(function (entry) { qs.set(entry[0], entry[1]); });
+    if (isExternal() && options.refreshFilesystem) qs.set('refresh', '1');
     fetch((isExternal() ? '/fs/media_explorer/external?' : '/fs/media_explorer?') + qs, {signal: controller.signal}).then(function (res) {
       return res.json().catch(function (err) { throw new Error('Media discovery HTTP ' + res.status + ': ' + err.message); }).then(function (data) {
         if (!res.ok || !data.ok) throw new Error(data.error || 'Media discovery failed.');
@@ -573,10 +646,15 @@
       total = data.total;
       complete = !!data.complete;
       if (isExternal()) {
-        var s = data.discovered + ' discovered · ' + data.analyzed + ' analyzed';
+        externalRevision = data.revision;
+        externalOverview = data.discovered + ' found · ' + data.analyzed + ' analyzed' + (data.complete ? '' : ' · discovering');
+        if (data.warnings) externalOverview += ' · ' + data.warnings + ' warnings';
+        externalSummary();
         if (data.error) report(new Error(data.error));
-        else el('media-explorer-metadata-progress').textContent = s;
-        el('media-explorer-metadata-progress').classList.remove('hidden');
+        if (data.lastWarning && data.lastWarning !== lastExternalError) {
+          lastExternalError = data.lastWarning;
+          window.reportConsoleError('External media discovery', data.lastWarning);
+        }
       }
       var incoming = data.items || [];
       var host = el('media-explorer-grid');
@@ -587,13 +665,13 @@
         var keep = new Set(incoming.map(function (item) { return item.id; }));
         cards.forEach(function (card, id) { if (!keep.has(id)) card.remove(); });
         items = []; offset = 0; active = -1; anchor = -1;
-        selected.forEach(function (id) { if (!keep.has(id)) selected.delete(id); });
+        if (!options.soft) selected.forEach(function (id) { if (!keep.has(id)) selected.delete(id); });
         incoming.forEach(function (item, index) {
           var card = cards.get(item.id);
           if (card) item = Object.assign(previousItems.get(item.id), item);
           items.push(item);
           if (!card) card = renderCard(item, index);
-          text(card.querySelector('.media-explorer-card-sub'), isExternal() ? ((item.metadata && item.metadata.resolution) || 'Metadata unknown') : cardSummary(item));
+          text(card.querySelector('.media-explorer-card-sub'), isExternal() ? ((item.metadata && item.metadata.resolution) || 'Metadata unknown') + (item.metadata && item.metadata.duration != null ? ' · ' + duration(item.metadata.duration) : '') : cardSummary(item));
           text(card.querySelector('.media-explorer-card-badge'), badgeText(item));
           card.querySelector('.media-explorer-card-open').setAttribute('aria-label', item.fileName + ', ' + item.role);
           card.dataset.index = index;
@@ -617,8 +695,11 @@
       if (!isExternal()) facets(data.facets);
       needsLoad = false;
       if (isExternal()) {
-        if (!data.complete) { clearTimeout(externalDiscoveryTimer); externalDiscoveryTimer = setTimeout(function () { load(true); }, 1200); }
-        else if (incoming.length && !el('media-explorer-min-side').value && !el('media-explorer-min-mp').value && !el('media-explorer-min-duration').value && !el('media-explorer-max-duration').value) {
+        if (!data.complete) {
+          clearTimeout(externalDiscoveryTimer);
+          externalDiscoveryTimer = setTimeout(pollExternalDiscovery, 1400);
+        }
+        if (incoming.length && !el('media-explorer-min-side').value && !el('media-explorer-min-mp').value && !el('media-explorer-min-duration').value && !el('media-explorer-max-duration').value) {
           var unanalyzed = incoming.filter(function (item) { return !item.metadata && !autoMetadataRequested.has(item.relativePath); });
           if (unanalyzed.length) {
             unanalyzed.forEach(function (item) { autoMetadataRequested.add(item.relativePath); });
@@ -626,7 +707,7 @@
           }
         }
       }
-      text(el('media-explorer-status'), '');
+      if (!data.error) text(el('media-explorer-status'), '');
     }).catch(function (err) { if (request === serial && err.name !== 'AbortError') report(err); })
       .finally(function () { if (request === serial) {
         loading = false; activeRequest = null; el('media-explorer-scan-all').disabled = false;
@@ -726,11 +807,18 @@
     var nextPath = el('media-explorer-external-path').value.trim();
     if (nextPath !== externalPath) autoMetadataRequested.clear();
     externalPath = nextPath;
+    autoMetadataRequested.clear(); externalRevision = -1; externalOverview = ''; externalJobSummary = '';
     stopExternalTimers(); selected.clear(); updateSelection();
-    load(true);
+    load(true, {refreshFilesystem:true});
   });
   el('media-explorer-external-path').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('media-explorer-open-path').click(); });
   el('media-explorer-generate-metadata').addEventListener('click', function () { requestExternalMetadata('filtered'); });
+  el('media-explorer-stop-metadata').addEventListener('click', function () {
+    fetch('/fs/media_explorer/external/metadata/stop', {method:'POST'}).then(function (res) {
+      if (!res.ok) throw Error('Could not stop metadata analysis');
+      return res.json();
+    }).then(function () { externalMetadataStatus(); }).catch(report);
+  });
   ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (name) { el('media-explorer-' + name).addEventListener('change', function () { load(true); }); });
   el('media-explorer-clear-selection').addEventListener('click', function () { selected.clear(); updateSelection(); });
   el('media-explorer-compare').addEventListener('click', function () {
@@ -753,7 +841,10 @@
     el('media-explorer-compare-dialog').showModal();
   });
   el('media-explorer-compare-close').addEventListener('click', function () { el('media-explorer-compare-dialog').close(); });
-  el('media-explorer-refresh').addEventListener('click', function () { load(true); });
+  el('media-explorer-refresh').addEventListener('click', function () {
+    if (isExternal()) { autoMetadataRequested.clear(); externalRevision = -1; load(true, {refreshFilesystem:true}); }
+    else load(true);
+  });
   el('media-explorer-scan-all').addEventListener('click', function () { full = true; load(true); });
   el('media-explorer-more-btn').addEventListener('click', function () { load(false); });
   var debounce;
@@ -780,10 +871,10 @@
     el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
     facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
     el('media-explorer-storyboard-type').value = '';
-    sourceButtons[0].click();
+    sourceButtons.find(function (btn) { return btn.hasAttribute('data-media-role') && btn.dataset.mediaRole === ''; }).click();
   });
   el('media-explorer-empty-action').addEventListener('click', function () {
-    if (isExternal()) load(true);
+    if (isExternal()) load(true, {refreshFilesystem:true});
     else if (el('media-explorer-status').dataset.state === 'error' && el('media-explorer-status').textContent) load(true);
     else if (!full) { full = true; load(true); }
     else if (hasFilters()) el('media-explorer-clear-filters').click();

@@ -55,4 +55,4 @@ def test_no_new_storage_and_pruned_frames_remain_without_cards():
     assert "!u.framePruned" in finder
     assert "return null;" in epoch_info
     assert "if(!card){card=renderCard(item,view)" in epoch_info
-    assert "card.dataset.cardVersion===version" in finder
+    assert "prior.dataset.cardVersion===version" in finder

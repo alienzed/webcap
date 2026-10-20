@@ -123,6 +123,9 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "For example, separate color, pattern, trim, top shape, and bottom shape rather than collapsing them into a single 'style' wildcard.\n"
         "- Set annotationGroup to the exact group name ONLY if every option is an exact observed tag in that group. "
         "For natural-language caption phrases use an empty annotationGroup; never map paraphrases to exact tag identifiers.\n"
+        "- Position/pose wildcard options may be descriptive phrases rather than exact Position tags. "
+        "For example 'standing upright' is not the same tag as 'standing'. If ANY option is not an exact "
+        "tag name, leave annotationGroup empty for that dimension rather than claiming a tag mapping.\\n"
         "- For tags in the SAME annotation group, only use joint combinations observed together in the selected training media. "
         "If a pair was never observed together in that group, treat it as mutually exclusive. "
         "Prefer one option from that group in each resolved caption unless an observed tag combination requires several. "
@@ -205,8 +208,21 @@ def validate_group_compatibility(data, combinations):
             raise ValueError("Unknown wildcard annotation group: " + group)
         allowed = {tag for combo in combinations[group] for tag in combo}
         options = item.get("options") or []
-        if not isinstance(options, list) or any(option not in allowed for option in options):
-            raise ValueError("Wildcard values must be exact tags in group " + group)
+        if not isinstance(options, list):
+            raise ValueError("Wildcard options must be a list in group " + group)
+        missing = [option for option in options if option not in allowed]
+        if missing:
+            available = sorted(allowed)
+            sample = ", ".join(repr(tag) for tag in available[:8])
+            if len(available) > 8:
+                sample += ", ..."
+            raise ValueError(
+                "Wildcard values must be exact tags in group " + group +
+                " (not found in selected training media: " +
+                ", ".join(repr(tag) for tag in missing[:5]) +
+                (", ..." if len(missing) > 5 else "") +
+                "; available tags: " + (sample or "(none)") + ")"
+            )
         assigned.setdefault(group, []).append(options)
     from itertools import product
     for group, dimensions in assigned.items():

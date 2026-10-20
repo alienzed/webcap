@@ -61,8 +61,8 @@ def test_no_new_storage_and_pruned_frames_remain_without_cards():
 def test_campaign_changed_cards_replace_prior_and_reference_updates_refresh():
     finder = read("tool/js/epoch_finder.js")
     assert "if(prior)prior.remove();" in finder
-    assert "(u.referenceAssessments||[]).length" in finder.split("var key=",1)[1].split("if(lastFrameKey===key)",1)[0]
-    assert "(u.dinoAssessments||[]).length" in finder.split("var key=",1)[1].split("if(lastFrameKey===key)",1)[0]
+    assert "JSON.stringify(u.referenceAssessments||[])" in finder.split("var key=",1)[1].split("if(lastFrameKey===key)",1)[0]
+    assert "JSON.stringify(u.dinoAssessments||[])" in finder.split("var key=",1)[1].split("if(lastFrameKey===key)",1)[0]
 
 
 def test_epoch_paging_preserves_nodes_and_empty_message_is_unique():

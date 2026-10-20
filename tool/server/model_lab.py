@@ -647,6 +647,26 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                 result = job.get("result") if isinstance(job.get("result"), dict) else {}
                 required_result = {"vision_open": "sight", "vision_group_aware": "vocabularySight"}.get(kind)
                 validation_error = ""
+                if kind.startswith("director_scene_plan_"):
+                    try:
+                        expected = int(kind.rsplit("_", 1)[-1]) // 512
+                        plan = json.loads(str(result.get("text") or ""))
+                        scenes = plan.get("scenes") if isinstance(plan, dict) else None
+                        if not isinstance(scenes, list) or len(scenes) != max(2, expected):
+                            raise ValueError("Wrong number of Storyboard Scenes.")
+                        for scene in scenes:
+                            if not isinstance(scene, dict) or not all(
+                                isinstance(scene.get(field), str) and scene[field].strip()
+                                for field in ("title", "summary", "prompt")
+                            ) or not isinstance(scene.get("suggestedDurationSeconds"), (int, float)):
+                                raise ValueError("Storyboard Scene is incomplete.")
+                        if str(result.get("finishReason") or "").lower() == "length":
+                            raise ValueError("Structured response was truncated at its token budget.")
+                        result["verifiedOutputTokens"] = int(
+                            (result.get("usage") or {}).get("completion_tokens") or 0
+                        )
+                    except (ValueError, TypeError, KeyError) as exc:
+                        validation_error = "Storyboard structured-output validation failed: " + str(exc)
                 if required_result and not isinstance(result.get(required_result), dict):
                     validation_error = result.get("structureWarning") or "Vision returned no usable structured evidence."
                     if not str(result.get("text") or "").strip():
@@ -1022,10 +1042,9 @@ def _run_reference_director_for_vision(run, vision_model):
 
 def _run_director_model(run, model):
     model_ref = model["modelRef"]
-    from .director_model_test_store import calibration_prompt
     from .llm_runner import enqueue
 
-    # One tiny opt-in thinking probe, owned by Model Lab's existing queue.
+    # Thinking remains a small, directly useful Storyboard capability check.
     _probe_job(
         run, kind="director_thinking", role="director", model_ref=model_ref,
         enqueue=lambda: enqueue(
@@ -1037,39 +1056,32 @@ def _run_director_model(run, model):
         ),
     )
 
-    # WebCap's existing representative writing protocol; one bounded request,
-    # independent of browser lifecycle and without changing learned calibration.
-    _probe_job(
-        run,
-        kind="director_writing",
-        role="director",
-        model_ref=model_ref,
-        enqueue=lambda: enqueue(
-            "chat",
-            model_ref,
-            {
-                "operation": "freeform_chat",
-                "messages": [{"role": "user", "content": calibration_prompt("prose", 2048)}],
-            },
-            context={"runtimeOverrides": {"maxTokens": 2048}, "assessmentEvidence": True},
-            label="Model Lab · Director Writing",
-        ),
-    )
-    if run.get("depth") == "deep":
-        for budget in (4096, 8192, 16384):
-            _probe_job(
-                run,
-                kind="director_writing_" + str(budget),
-                role="director",
-                model_ref=model_ref,
-                enqueue=lambda budget=budget: enqueue(
-                    "chat", model_ref,
-                    {"operation": "freeform_chat", "messages": [
-                        {"role": "user", "content": calibration_prompt("prose", budget)}]},
-                    context={"runtimeOverrides": {"maxTokens": budget}, "assessmentEvidence": True},
-                    label="Model Assessment · Deep Writing " + str(budget),
-                ),
-            )
+    # Use WebCap's actual Storyboard Scene schema, rather than synthetic prose.
+    # The generated Scene-plan JSON supplies capacity, speed and review evidence.
+    from .storyboard_llm_contract import SCENE_PLAN_SCHEMA_PATH, _read_json
+    scene_schema = _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema")
+    for budget in ((2048, 4096, 8192, 16384) if run.get("depth") == "deep" else (2048,)):
+        scene_count = max(2, budget // 512)
+        prompt = (
+            "Create a WebCap Storyboard Scene plan for a grounded, continuous cinematic sequence "
+            "showing an urban night-shift maintenance worker investigating a malfunctioning elevator. "
+            "Return exactly " + str(scene_count) + " distinct chronological Scenes, each with a "
+            "descriptive title, concrete overview, a practical and detailed MiniMax H3 visual generation "
+            "prompt of approximately 120-180 words, and a valid suggestedDurationSeconds. "
+            "Maintain continuity across Scenes, avoid repeated descriptions, and use only JSON matching "
+            "the supplied WebCap Scene-plan schema. Complete the final Scene without stopping early."
+        )
+        _probe_job(
+            run, kind="director_scene_plan_" + str(budget), role="director", model_ref=model_ref,
+            enqueue=lambda budget=budget, prompt=prompt: enqueue(
+                "chat", model_ref, {
+                    "operation": "assessment_scene_plan",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "response_schema": scene_schema,
+                }, context={"runtimeOverrides": {"maxTokens": budget}, "assessmentEvidence": True},
+                label="Model Assessment · Storyboard JSON " + str(budget),
+            ),
+        )
     synthetic_groups = [
         {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
         {"group": "BT Connector", "terms": ["chain"]},

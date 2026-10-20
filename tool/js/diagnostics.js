@@ -447,6 +447,11 @@ function refreshUnifiedModelAssessment() {
       if (qualityReview && qualityReview.status === 'completed') {
         qualityCell.title = (qualityReview.tasks || []).map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');
         row.assessmentSort.quality = (qualityReview.tasks || []).reduce(function (total, item) { return total + item.score; }, 0) / Math.max(1, (qualityReview.tasks || []).length);
+        var qualityBadge = document.createElement('span');
+        qualityBadge.className = 'model-assessment-qualification model-assessment-' + (row.assessmentSort.quality >= 3 ? 'passed' : 'issues');
+        qualityBadge.textContent = 'Quality ' + row.assessmentSort.quality.toFixed(1) + '/5';
+        qualityBadge.title = 'Advisory LLM review, separate from technical qualification: ' + qualityCell.title;
+        qualification.appendChild(qualityBadge);
       }
 
       var allTests = Object.keys(tests).map(function (probe) { return tests[probe]; });

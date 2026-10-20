@@ -1085,7 +1085,7 @@ def enqueue(client, model_id, contract, context=None, label=""):
                 "label": str(label or "LLM"),
                 "operation": str(contract.get("operation") or ""),
                 "modelId": model_id,
-                "modelLabel": str(context.get("modelLabel") or ""),
+                "modelLabel": str(context.get("modelLabel") or model_id.split("::", 1)[-1]),
                 "storyId": str(context.get("storyId") or ""),
                 "storyTitle": str(context.get("storyTitle") or ""),
                 "sceneId": str(context.get("sceneId") or ""),

@@ -64,7 +64,13 @@
     return [job.folder || 'Training', job.stage || job.modelType || job.model || ''].filter(Boolean).join(' · ');
   }
   function detail(job, which) {
-    if (which === 'llm') return [job.modelId, job.label, job.error].filter(Boolean).join(' · ');
+    if (which === 'llm') {
+      var context = [];
+      if (job.storyTitle) context.push(job.storyTitle);
+      if (Number(job.sceneNumber) > 0) context.push('Scene ' + Number(job.sceneNumber) + (job.sceneTitle ? ': ' + job.sceneTitle : ''));
+      else if (job.sceneTitle) context.push(job.sceneTitle);
+      return context.concat([job.modelLabel || job.modelId, job.error]).filter(Boolean).join(' · ');
+    }
     var p = job.progress || {};
     return [
       job.resumeFromCheckpoint ? 'From checkpoint' : '',

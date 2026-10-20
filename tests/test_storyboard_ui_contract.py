@@ -655,6 +655,11 @@ def test_storyboard_takes_can_be_named_and_loras_filtered():
     assert 'if operation == "label_take":' in app
     assert "def label_take(" in store
     assert "takeMetaLabel(take)" in storyboard
+    take_meta = storyboard.split("function takeMetaLabel(take) {", 1)[1].split("function takeEffectiveInputHtml", 1)[0]
+    assert "elapsed + ' elapsed'" in take_meta
+    assert "Seed ' + String(take.seed)" not in take_meta
+    assert "Elapsed —" in take_meta
+    assert "'Seed: ' + String(input.seed" in storyboard
     assert "data-scene-lora-picker" in storyboard
     assert "function loraOptions(selectedName)" in storyboard
     assert "function loraNamesMatching(query, excludedNames)" in storyboard
@@ -1469,3 +1474,26 @@ def test_removed_takes_are_stacked_and_delete_without_reconfirmation():
     assert "var isRemoved =" in delete_fn
     assert "if (!isRemoved && !window.confirm(message)) return;" in delete_fn
     assert "operation: 'delete_take'" in delete_fn
+
+
+def test_storyboard_take_mutations_preserve_video_elements():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    sync = storyboard.split("function syncSceneTakeDom(sceneId) {", 1)[1].split("function applyTakeMutation(", 1)[0]
+    assert "sceneTakeCardById(grid, takeId)" in sync
+    assert "syncTakeCardDetails(card, take, takeIndex, scene.selectedTakeId)" in sync
+    assert "card.remove();" in sync
+    assert "grid.innerHTML =" not in sync
+    assert "renderScenes();" not in sync
+    assert "removedTakesMarkup(removedTakes)" in sync
+    assert "summary.textContent = takeSummaryText(scene, jobs.length)" in sync
+
+    for action in (
+        "uploadTake", "labelTake", "rateTake", "selectTake",
+        "removeTake", "deleteTake", "restoreTake",
+    ):
+        body = storyboard.split("function " + action + "(", 1)[1].split("  function ", 1)[0]
+        assert "applyTakeMutation(sceneId, payload);" in body
+        assert "renderStory();" not in body
+
+    assert "syncSceneProgressionCard(sceneId);" in storyboard.split("function applyTakeMutation(", 1)[1].split("  function ", 1)[0]
+    assert "renderStoryReadiness();" in storyboard.split("function applyTakeMutation(", 1)[1].split("  function ", 1)[0]

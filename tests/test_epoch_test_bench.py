@@ -820,6 +820,78 @@ def test_session_cleanup_status_is_passive_and_clear_sessions_removes_completed_
     assert not second.exists()
 
 
+
+def test_archive_cleanup_preserves_other_runs_mixed_sessions_and_workspace(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    output = tmp_path / "output"
+    set_folder = root / "sets" / "subject"
+    set_folder.mkdir(parents=True)
+    monkeypatch.setattr(bench.app_config, "FS_ROOT", root)
+    monkeypatch.setattr(bench.app_config, "output_root", lambda: output)
+    bench.save_workspace_prompt(set_folder, "minimax_h3", "keep this prompt")
+
+    def make_session(name, candidates):
+        session = bench._workspace_sessions_root(set_folder) / name
+        session.mkdir(parents=True)
+        bench._atomic_write_json(session / "test.json", {
+            "ownerFolder": "sets/subject", "status": "complete",
+            "modelId": "minimax_h3", "candidates": candidates, "results": [],
+        })
+        return session
+
+    def candidate(run):
+        return {"kind": "lora", "fileName": run + ".safetensors",
+                "provenance": {"run": run}}
+
+    own = make_session("own", [candidate("own")])
+    other = make_session("other", [candidate("other")])
+    mixed = make_session("mixed", [candidate("own"), candidate("other")])
+    ambiguous = make_session("unknown", [{"kind": "lora", "fileName": "manual.safetensors"}])
+    base = make_session("base", [{"kind": "base", "fileName": ""}])
+    combined_base = make_session("own-with-base", [candidate("own"), {"kind": "base", "fileName": ""}])
+    monkeypatch.setattr(
+        bench, "candidate_run_snapshot_from_provenance",
+        lambda provenance: (tmp_path / provenance["run"], {"actionId": "action"}),
+    )
+    status = bench.archive_run_session_cleanup_status(set_folder, tmp_path / "own", "action")
+    assert status["count"] == 2
+    assert {session.name for session in status["sessions"]} == {"own", "own-with-base"}
+    assert status["active"] == []
+    assert set(bench.clear_archived_run_sessions(set_folder, status["sessions"])) == {"own", "own-with-base"}
+    assert not own.exists()
+    assert not combined_base.exists()
+    assert all(session.exists() for session in (other, mixed, ambiguous, base))
+    assert bench.workspace_prompt(set_folder, "minimax_h3")["prompt"] == "keep this prompt"
+
+
+def test_archive_cleanup_active_check_is_run_scoped(tmp_path, monkeypatch):
+    configure_execution_queue(monkeypatch, tmp_path)
+    own = tmp_path / bench.TEST_RESULTS_DIR / "own"
+    other = tmp_path / bench.TEST_RESULTS_DIR / "other"
+    own.mkdir(parents=True)
+    other.mkdir(parents=True)
+    job = execution_queue.enqueue(
+        inference_runner.EXECUTION_LANE, {"request": {"modelId": bench.get_test_model().PROFILE_ID}},
+        metadata={"client": "test", "folder": ".", "sessionId": other.name, "candidateKind": "lora"},
+    )
+    bench._atomic_write_json(own / "test.json", {
+        "status": "complete", "candidates": [{"kind": "lora", "provenance": {"run": "own"}}], "results": [],
+    })
+    bench._atomic_write_json(other / "test.json", {
+        "status": "queued", "candidates": [{"kind": "lora", "provenance": {"run": "other"}}],
+        "inferenceJobs": [job["id"]], "results": [], "failures": [],
+    })
+    monkeypatch.setattr(
+        bench, "candidate_run_snapshot_from_provenance",
+        lambda provenance: (tmp_path / provenance["run"], {"actionId": "action"}),
+    )
+    status = bench.archive_run_session_cleanup_status(tmp_path, tmp_path / "own", "action")
+    assert status["count"] == 1
+    assert status["active"] == []
+    assert bench.clear_archived_run_sessions(tmp_path, status["sessions"]) == ["own"]
+    assert other.exists()
+
+
 def test_clear_sessions_refuses_nonterminal_test_work_before_deleting_history(tmp_path, monkeypatch):
     configure_execution_queue(monkeypatch, tmp_path)
     complete = tmp_path / bench.TEST_RESULTS_DIR / "complete-session"

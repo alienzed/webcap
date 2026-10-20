@@ -444,3 +444,53 @@ def test_insights_reviewable_count_requires_available_unrated_linked_test_media(
     assert evidence["epochs"][0]["ratedCount"] == 1
     assert evidence["epochs"][0]["ratingDistribution"]["5"] == 1
     assert sum(evidence["epochs"][0]["ratingDistribution"].values()) == 1
+
+
+def test_insights_promotes_just_three_tasks_and_keeps_every_existing_evidence_surface():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    js = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    page = html[html.index('id="run-analytics-lab"'):html.index('id="run-analytics-report-surface"')]
+    assert page.index('id="run-lab-challenge-title"') < page.index('id="run-lab-featured"')
+    assert page.index('id="run-lab-featured"') < page.index('id="run-lab-ai-panel"')
+    assert page.index('id="run-lab-ai-panel"') < page.index('id="run-lab-history"')
+    assert page.index('id="run-lab-history"') < page.index('id="run-lab-summary"')
+    assert '<summary>More evidence: totals, trajectory and coverage</summary>' in page
+    assert '<summary>Full epoch rankings and VL diagnostics</summary>' in page
+    assert '<summary>Browse recorded results</summary>' in page
+    for element in ("run-lab-contenders", "run-lab-discoveries", "run-lab-chart",
+                    "run-lab-coverage", "run-lab-explorer", "run-lab-summary"):
+        assert f'id="{element}"' in page
+    assert page.count('id="run-lab-run"') == 1
+    assert 'id="run-lab-ai"' in page
+    assert "lab('ai').onclick=labAiStart" in js
+
+
+def test_insights_chart_filter_cannot_change_global_contenders():
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[1] / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    points = js[js.index("  function labPoints(){"):js.index("  function labEmpty(")]
+    chart = js[js.index("  function labChart(){"):js.index("  function labRender(){")]
+    assert "return labSnapshot&&labSnapshot.epochs||[];" in points
+    assert "lab('run').value" not in points
+    assert "(!runId||p.jobId===runId)" in chart
+    assert "lab('run').onchange=labChart;" in js
+    assert "labFeatured(ranked)" in js
+    assert "p.allManualAverage" in js
+
+
+def test_insights_rating_missions_use_real_saved_coverage_and_batch_progress():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    js = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    for field in ("run-lab-mission-meter", "run-lab-mission-metrics", "run-lab-review-meter"):
+        assert f'id="{field}"' in html
+    assert "lab('mission-meter').value=rated" in js
+    assert "lab('mission-meter').max=total||1" in js
+    assert "lab('review-meter').value=completed" in js
+    assert "reviewIndex+(reviewRatedCurrent?1:0)" in js
+    assert "data-lab-action=\"review\"" in js
+    assert "ratingDistribution" in js
+    assert "test_rate_result" in js

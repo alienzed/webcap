@@ -396,10 +396,8 @@
   function labEnsureDetailIndex(){if(!labDiscovered){labDiscovered=true;discover();}}
   function lab(id){return document.getElementById('run-lab-'+id);}
   function labGroup(){return (labSnapshot&&labSnapshot.cohorts||[]).find(function(g){return g.id===lab('cohort').value;});}
-  function labPoints(){
-    var id=lab('run').value;
-    return (labSnapshot&&labSnapshot.epochs||[]).filter(function(p){return !id||p.jobId===id;});
-  }
+  function labPoints(){return labSnapshot&&labSnapshot.epochs||[];}
+
   function labEmpty(message){return '<p class="run-lab-empty">'+esc(message)+'</p>';}
   function labRanked(){
     var byCount=lab('sort').value==='count';
@@ -503,12 +501,17 @@
       lab('challenge-description').textContent=reviewable?'Review saved results before generating more Tests.':'Ask Director to compare active and archived training evidence.';
       lab('challenge-actions').innerHTML=(reviewable?'<button type="button" data-lab-action="review">Blind-rate five</button>':'')+'<button type="button" data-lab-action="ai">AI Insights</button><button type="button" data-lab-action="detail">Detailed evidence</button>';
     }
+    lab('mission-meter').max=total||1;
+    lab('mission-meter').value=rated;
+    lab('mission-metrics').textContent=rated+' / '+total+' linked Test renders rated';
+    lab('mission-hint').textContent=reviewable?reviewable+' available to blind-rate':'No available unrated Test media';
     lab('status').textContent=rated+' rated of '+total+' linked Test renders · '+ranked.length+' rated epochs across '+new Set(points.filter(function(p){return p.ratedCount>0;}).map(function(p){return p.jobId;})).size+' runs. Manual averages combine saved ratings from every Test session.';
     labChart();
   }
   function labChart(){
-    var points=labPoints().filter(function(p){return p.ratedCount>0&&p.allManualAverage!=null;});
-    if(!points.length){lab('chart').innerHTML=labEmpty('No rated epochs to plot.');return;}
+    var runId=lab('run').value;
+    var points=labPoints().filter(function(p){return p.ratedCount>0&&p.allManualAverage!=null&&(!runId||p.jobId===runId);});
+    if(!points.length){lab('chart').innerHTML=labEmpty('No rated epochs to plot for this selection.');return;}
     var lo=Math.min.apply(null,points.map(function(p){return p.epoch;})),hi=Math.max.apply(null,points.map(function(p){return p.epoch;}));
     var runs=new Map();
     points.forEach(function(p){if(!runs.has(p.jobId))runs.set(p.jobId,[]);runs.get(p.jobId).push(p);});
@@ -548,6 +551,7 @@
     if(!model){error(new Error('Select a Director model in the app header before requesting AI Insights.'));return;}
     var origin=folder;
     lab('ai-panel').classList.remove('hidden');
+    lab('ai-panel').scrollIntoView({behavior:'smooth',block:'start'});
     lab('ai-result').replaceChildren();
     lab('ai-facts').textContent='';
     lab('ai-status').textContent='Collecting archived training metrics and saved ratings…';
@@ -621,9 +625,11 @@
       });});
   }
   function labReviewProgress(){
-    lab('review-progress').textContent=reviewItems.length?
-      Math.min(reviewIndex+1,reviewItems.length)+' of '+reviewItems.length+
-      ' · '+reviewRated+' rated · '+reviewSkipped+' skipped':'Review five saved Test renders';
+    var total=reviewItems.length,completed=Math.min(total,reviewIndex+(reviewRatedCurrent?1:0));
+    lab('review-meter').max=total||1;
+    lab('review-meter').value=completed;
+    lab('review-progress').textContent=total?
+      Math.min(reviewIndex+1,total)+' of '+total+' · '+reviewRated+' rated · '+reviewSkipped+' skipped':'Review five saved Test renders';
   }
   function labReviewButtons(){
     var done=!reviewItems[reviewIndex];
@@ -647,7 +653,7 @@
         lab('review-next').classList.add('hidden');
       }else{
         lab('review-progress').textContent='Batch complete · '+reviewRated+' rated, '+reviewSkipped+' skipped';
-        lab('review-status').textContent='Your saved ratings will appear in Insights when you close this review.';
+        lab('review-status').textContent='Mission complete: '+reviewRated+' saved ratings, '+reviewSkipped+' skipped. Close to see refreshed rankings, or review another five.';
         lab('review-next').textContent='Review five more';
       }
       return;
@@ -761,7 +767,7 @@
     if(event.key.toLowerCase()==='s'&&!reviewRatedCurrent){event.preventDefault();labReviewAdvance(true);}
     if(event.key==='ArrowRight'&&reviewRatedCurrent){event.preventDefault();labReviewAdvance(false);}
   });
-  lab('run').onchange=function(){labShowAll=false;labResults();};
+  lab('run').onchange=labChart;
   lab('sort').onchange=function(){labShowAll=false;labResults();};
   lab('detail').onclick=labDetail;
   ['contenders','explorer'].forEach(function(id){lab(id).onclick=function(event){if(event.target.closest('[data-lab-show-all]')){labShowAll=true;labResults();return;}var b=event.target.closest('[data-lab-job]');if(b)window.runAnalyticsViewEpoch(b.dataset.labJob,Number(b.dataset.labEpoch));};});

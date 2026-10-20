@@ -77,6 +77,19 @@ def test_exact_tag_lookup_ignores_unrelated_choices_and_videos(tmp_path, monkeyp
     assert epoch_reference.find_reference_candidates("set", "BT Shape", "triangle", "job-1")[0]["media"] == "a.png"
 
 
+def test_identical_strap_tag_stays_scoped_to_selected_group(tmp_path, monkeypatch):
+    _dataset(tmp_path, monkeypatch, {
+        "a.png": {"BT Back": ["simple string straps"]},
+        "b.png": {"BB Back": ["simple string straps"]},
+        "close.png": {"BT Back": ["simple string straps"],
+                      "BB Back": ["simple string straps"]},
+    })
+    top = epoch_reference.find_reference_candidates("set", "BT Back", "simple string straps", "job-1")
+    bottom = epoch_reference.find_reference_candidates("set", "BB Back", "simple string straps", "job-1")
+    assert [r["media"] for r in top] == ["a.png", "close.png"]
+    assert [r["media"] for r in bottom] == ["b.png", "close.png"]
+
+
 def test_reference_vocabulary_counts_scoped_options(tmp_path, monkeypatch):
     _dataset(tmp_path, monkeypatch, {
         "a.png": {"BB Shape": ["v-front"]},

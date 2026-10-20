@@ -82,6 +82,20 @@ def set_media_annotation_state(
     }
 
 
+
+def set_insights_hidden_vl_groups(state_path, groups):
+    """Set-scoped display preferences; never mutate historical VL evidence."""
+    if not isinstance(groups, list) or any(not isinstance(group, str) for group in groups):
+        raise ValueError("Insights VL groups must be a list of names.")
+    values = sorted({group.strip() for group in groups if group.strip()})
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        state["insightsHiddenVlGroups"] = values
+        write_folder_state_atomic(path, state)
+    return values
+
+
 def set_media_rating(state_path, media_key, rating):
     key = str(media_key or "").strip()
     if not key:

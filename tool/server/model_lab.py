@@ -403,7 +403,13 @@ def _reusable_evidence(run):
                 if kind == "vision_group_aware" and previous.get("groups") != run["groups"]:
                     continue
             elif kind.startswith("set_") or kind.startswith("vision:"):
-                continue
+                if (previous.get("folder") != run["folder"]
+                    or previous.get("files") != run["files"]
+                    or previous.get("mediaSignatures") != run.get("mediaSignatures")
+                    or previous.get("groups") != run["groups"]
+                    or previous.get("referenceVisionRef") != run.get("referenceVisionRef")
+                    or previous.get("referenceDirectorRef") != run.get("referenceDirectorRef")):
+                    continue
             key = _attempt_key(kind, ref, filename)
             if key in reused:
                 continue
@@ -441,6 +447,10 @@ def _new_run_payload(config):
 
     groups = _normalize_groups(config.get("groups"))
     reference_vision_ref = str(config.get("referenceVisionRef") or "").strip()
+    if not reference_vision_ref and vision_models and director_models:
+        # The Vision assessment has already gathered precisely the Sight
+        # observations Schema Assist needs. Do not generate another fixture.
+        reference_vision_ref = vision_models[0]["modelRef"]
     reference_director_ref = str(config.get("referenceDirectorRef") or "").strip()
 
     all_vision = list(vision_models)
@@ -1144,14 +1154,15 @@ def _run_director_model(run, model):
                 label="Model Assessment · Storyboard JSON " + str(budget),
             ),
         )
-    synthetic_groups = [
-        {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
-        {"group": "BT Connector", "terms": ["chain"]},
-    ]
-    _run_schema_pair(run, model_ref, _synthetic_analysis(), synthetic_groups, "language")
-
     reference_vision_ref = str(run.get("referenceVisionRef") or "")
     if not reference_vision_ref:
+        # Director-only: exercise the actual Schema Assist contract with a
+        # small frozen representative Sight fixture, not a generic prose test.
+        fixture_groups = [
+            {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
+            {"group": "BT Connector", "terms": ["chain"]},
+        ]
+        _run_schema_pair(run, model_ref, _synthetic_analysis(), fixture_groups, "language")
         return
     open_records, vocabulary_records = _vision_records(run, reference_vision_ref)
     if len(open_records) < 2:
@@ -1320,11 +1331,12 @@ def _planned_probes(run):
         if run.get("depth") == "deep":
             for budget in (4096, 8192, 16384):
                 include("director_scene_plan_" + str(budget), ref)
-        include("language_synthesis", ref)
-        include("language_challenge", ref)
         if run.get("referenceVisionRef"):
             include("set_vocabulary_synthesis", ref)
             include("set_vocabulary_challenge", ref)
+        else:
+            include("language_synthesis", ref)
+            include("language_challenge", ref)
     return list(dict.fromkeys(probes))
 
 

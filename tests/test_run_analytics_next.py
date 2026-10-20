@@ -200,7 +200,8 @@ def test_lab_ranking_uses_all_epoch_ratings_without_cohort_filter():
     assert "labSnapshot.epochs||[]" in script
     assert "p.allManualAverage" in script
     assert "p.ratedCount" in script
-    assert "var p=labRanked()[0]||labPoints()[0]" in script
+    assert "var list=labRanked().slice().sort(" in script
+    assert "p=action===\'challenger\'?list[1]:(list[0]||labPoints()[0])" in script
     assert "data-lab-show-all" in script
     assert "operation:'checkpoint_workspace'" in script
     assert "savedRating.textContent=item.rating==null?'Unrated':'Rated '+item.rating+'/5'" in script
@@ -332,3 +333,114 @@ def test_insights_ui_reuses_existing_evaluation_and_test_launch_contracts():
     assert 'id="run-lab-featured"' in html
     assert 'data-test-workspace-mode="analytics"' in html  # internal routing unchanged
     assert ">Insights</button>" in html
+
+
+def test_insights_inventory_retains_active_and_archive_training_summaries(monkeypatch, tmp_path):
+    rows = [
+        {"jobId": "live", "label": "Run 1", "source": "training", "archive": None,
+         "savedEpochs": [40, 50], "stage": "h3",
+         "runSummary": {"rank": 16, "lr": 0.0001}},
+        {"jobId": "archived", "label": "Run 2", "source": "archive", "archive": "bikini-old",
+         "selectedEpoch": 65, "savedEpochs": [65], "stage": "h3",
+         "runSummary": {"rank": 32, "lr": 0.0002}},
+    ]
+    monkeypatch.setattr(analytics, "_catalog", lambda *_: (rows, {}))
+    monkeypatch.setattr(analytics, "_campaigns", lambda *_: [])
+    inventory = analytics.insights_inventory(tmp_path)
+    assert len(inventory["runs"]) == 2
+    assert inventory["runs"][0]["runSummary"] == {"rank": 16, "lr": 0.0001}
+    assert inventory["runs"][1]["selectedEpoch"] == 65
+    assert inventory["runs"][1]["runSummary"]["rank"] == 32
+
+
+def test_insights_ai_facts_keep_archive_selection_distinct_from_rated_winner(monkeypatch, tmp_path):
+    monkeypatch.setattr(analytics, "insights_inventory", lambda _: {
+        "runs": [
+            {"jobId": "run-a", "label": "Run A", "source": "archive", "archive": "old-a",
+             "selectedEpoch": 65, "savedEpochs": [65, 70], "stage": "h3",
+             "runSummary": {"lr": 0.0001, "rank": 32}},
+            {"jobId": "run-b", "label": "Run B", "source": "training", "archive": None,
+             "selectedEpoch": None, "savedEpochs": [40], "stage": "h3",
+             "runSummary": {"lr": 0.0002, "rank": 16}},
+            {"jobId": "run-c", "label": "Run C", "source": "archive", "archive": "missing-log",
+             "selectedEpoch": 35, "savedEpochs": [35], "stage": "h3", "runSummary": {}},
+        ], "warnings": []})
+    monkeypatch.setattr(analytics, "overview", lambda _: {
+        "epochs": [
+            {"jobId": "run-a", "epoch": 70, "ratedCount": 8, "testCount": 10,
+             "allManualAverage": 4.5, "ratingDistribution": {"1": 0, "2": 0, "3": 1, "4": 2, "5": 5}},
+            {"jobId": "run-b", "epoch": 40, "ratedCount": 2, "testCount": 2,
+             "allManualAverage": 5.0, "ratingDistribution": {"1": 0, "2": 0, "3": 0, "4": 0, "5": 2}},
+        ],
+        "coverage": {"ratedPreviews": 11, "sessions": 3}, "warnings": []})
+    def metric(name):
+        if name == "missing-log":
+            raise FileNotFoundError(name)
+        return {"selectedEpoch": 65, "epochLoss": 0.22,
+                "trainingSecondsToSelected": 9000, "step": 7000}
+    monkeypatch.setattr(analytics, "archive_metrics", metric)
+    facts = analytics.insights_director_facts(tmp_path)
+    assert facts["coverage"]["catalogRuns"] == 3
+    assert facts["coverage"]["archivedRuns"] == 2
+    assert facts["coverage"]["runsWithRatings"] == 2
+    assert facts["unlinkedRatedRenders"] == 1
+    assert facts["runs"][0]["selectedEpoch"] == 65
+    assert facts["runs"][0]["leadingRatedEpochs"][0]["epoch"] == 70
+    assert facts["runs"][0]["leadingRatedEpochs"][0]["ratingDistribution"]["5"] == 5
+    assert facts["runs"][0]["selectedMetrics"]["epochLoss"] == 0.22
+    assert facts["runs"][1]["selectedMetrics"] is None
+    assert facts["runs"][2]["ratedRenders"] == 0
+    assert any("missing-log" in warning for warning in facts["warnings"])
+    contract = analytics.insights_director_contract(facts)
+    assert contract["operation"] == "interpret_run_analytics"
+    assert "missing or deleted Test ratings" in contract["prompt"]
+    assert "Observed" in contract["response_schema"]["required"][0].title()
+
+
+def test_insights_ai_is_explicit_and_keeps_existing_director_path():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    app = (root / "tool/server/app.py").read_text(encoding="utf-8")
+    finder = (root / "tool/server/epoch_finder.py").read_text(encoding="utf-8")
+    assert 'id="run-lab-ai"' in html
+    assert 'id="run-lab-run"' in html
+    assert html.count('id="run-lab-run"') == 1
+    assert 'mode:\'insights\'' in js
+    assert "lab('ai').onclick=labAiStart" in js
+    assert "cancelCaptionAssistJob(labAiJob)" in js
+    assert "run_insights_inventory" in finder
+    assert 'data.get("mode") == "insights"' in app
+    assert 'director_contract(facts)' in app
+    assert 'insights_director_contract(facts)' in app
+    assert "test_enqueue" not in js
+
+
+def test_insights_reviewable_count_requires_available_unrated_linked_test_media(tmp_path, monkeypatch):
+    session = tmp_path / "test-session"
+    session.mkdir()
+    (session / "review.png").touch()
+    (session / "rated.png").touch()
+    (session / "base.png").touch()
+
+    def render(name, folder="set/a", kind="lora"):
+        return {"kind": kind, "mediaFile": name, "provenance": {
+            "sourceJobId": "run-a", "sourceFolder": folder, "sourceEpoch": 50}}
+    status = {"sourcePrompt": "sample", "results": [
+        render("review.png"), render("rated.png"), render("missing.png"),
+        render("base.png", kind="base"), render("unlinked.png", folder="elsewhere")]}
+
+    monkeypatch.setattr(analytics, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(analytics.bench, "_session_directories", lambda _: [session])
+    monkeypatch.setattr(analytics.bench, "_read_status", lambda _: status)
+    monkeypatch.setattr(analytics.bench, "_session_rating_map", lambda _: {"rated.png": 5})
+    monkeypatch.setattr(analytics.bench, "_session_vision_state", lambda _: {})
+    monkeypatch.setattr(analytics, "_campaigns", lambda *_: [])
+
+    evidence = analytics.overview(tmp_path)
+    assert evidence["coverage"]["reviewableUnrated"] == 1
+    assert evidence["epochs"][0]["testCount"] == 3
+    assert evidence["epochs"][0]["ratedCount"] == 1
+    assert evidence["epochs"][0]["ratingDistribution"]["5"] == 1
+    assert sum(evidence["epochs"][0]["ratingDistribution"].values()) == 1

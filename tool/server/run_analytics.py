@@ -47,6 +47,7 @@ def _catalog(folder_path, campaigns, warnings):
                     "runSequence": run.get("runSequence"),
                     "stage": str(run.get("stage") or ""), "modelId": str(run.get("modelId") or ""),
                     "savedEpochs": [], "archive": None, "source": "training",
+                    "runSummary": run.get("runSummary") if isinstance(run.get("runSummary"), dict) else {},
                 }
                 try:
                     run_dir = finder.candidate_run_folder_path(folder, identifier)
@@ -71,9 +72,12 @@ def _catalog(folder_path, campaigns, warnings):
             indexed[identifier] = {
                 "jobId": identifier, "label": str(entry.get("runName") or name), "stage": str(entry.get("stage") or ""),
                 "modelId": "", "savedEpochs": [], "archive": name, "source": "archive",
+                "runSummary": entry.get("runSummary") or {}, "selectedEpoch": entry.get("selectedEpoch"),
             }
         else:
             existing["archive"] = name
+            existing["runSummary"] = entry.get("runSummary") or existing.get("runSummary") or {}
+            existing["selectedEpoch"] = entry.get("selectedEpoch")
         available = {int(x) for x in entry.get("retainedAlternateEpochs", []) if type(x) is int}
         chosen = entry.get("selectedEpoch")
         if type(chosen) is int:
@@ -508,6 +512,113 @@ def normalize_director_response(payload):
 
 
 
+
+def insights_inventory(folder_path):
+    """Lightweight Set training catalog, including archive run configurations.
+
+    Do not open TensorBoard event logs on ordinary Insights page loads.
+    """
+    warnings = []
+    rows, _archives = _catalog(folder_path, _campaigns(folder_path, warnings), warnings)
+    return {
+        "runs": [{
+            "jobId": row["jobId"], "label": row["label"],
+            "source": row["source"], "archive": row.get("archive"),
+            "selectedEpoch": row.get("selectedEpoch"),
+            "savedEpochs": row.get("savedEpochs") or [],
+            "stage": row.get("stage") or "",
+            "runSummary": row.get("runSummary") or {},
+        } for row in rows],
+        "warnings": warnings,
+    }
+
+
+def insights_director_facts(folder_path):
+    """Deterministic, read-only evidence for one explicitly requested AI brief.
+
+    Each run's outcome stays separate from its training configuration. Archived
+    selections are not automatically quality winners; missing ratings stay null.
+    """
+    inventory = insights_inventory(folder_path)
+    snapshot = overview(folder_path)
+    by_run = defaultdict(list)
+    for epoch in snapshot["epochs"]:
+        if epoch["ratedCount"]:
+            by_run[epoch["jobId"]].append(epoch)
+    entries = []
+    warnings = list(inventory["warnings"]) + list(snapshot["warnings"])
+    for run in inventory["runs"]:
+        archive = run.get("archive")
+        metrics = None
+        if archive:
+            try:
+                detail = archive_metrics(archive)
+                metrics = {key: detail.get(key) for key in (
+                    "selectedEpoch", "step", "epochLoss", "smoothedLoss",
+                    "lossReductionPercent", "recentLossChangePercent",
+                    "trainingSecondsToSelected", "selectedEpochSeconds",
+                )}
+            except (OSError, RuntimeError, ValueError, FileNotFoundError) as exc:
+                warnings.append("Archived training metrics for " + archive + ": " + str(exc))
+        rated = sorted(by_run.get(run["jobId"], []), key=lambda row: (
+            -row["allManualAverage"], -row["ratedCount"], row["epoch"]))
+        entries.append({
+            "runId": run["jobId"], "label": run["label"], "source": run["source"],
+            "stage": run["stage"], "archive": archive,
+            "training": run["runSummary"], "selectedEpoch": run["selectedEpoch"],
+            "selectedMetrics": metrics, "savedEpochs": len(run["savedEpochs"]),
+            "evaluatedEpochs": len(rated),
+            "ratedRenders": sum(row["ratedCount"] for row in rated),
+            "leadingRatedEpochs": [{
+                "epoch": row["epoch"], "average": row["allManualAverage"],
+                "ratings": row["ratedCount"], "renders": row["testCount"],
+                "ratingDistribution": row["ratingDistribution"],
+            } for row in rated[:3]],
+        })
+    return {
+        "scope": "current Set, live training runs and same-Set archives",
+        "meaning": "Human ratings are observations, not a controlled training experiment. Archived selection is a human checkpoint choice, not a measured quality score. Empty quality data does not mean poor quality.",
+        "coverage": {**snapshot["coverage"], "catalogRuns": len(entries),
+                     "archivedRuns": sum(bool(item["archive"]) for item in entries),
+                     "runsWithRatings": sum(bool(item["ratedRenders"]) for item in entries)},
+        "runs": entries,
+        "unlinkedRatedRenders": snapshot["coverage"]["ratedPreviews"] -
+            sum(item["ratedRenders"] for item in entries),
+        "warnings": warnings[:40],
+    }
+
+
+def insights_director_contract(facts):
+    """Existing Director lane and existing four-part schema; new evidence scope."""
+    import json
+    return {
+        "operation": "interpret_run_analytics",
+        "prompt": (
+            "Interpret the supplied Set-wide training evidence. The user's goal is to "
+            "choose promising epochs and learn what training decisions to test next. "
+            "Separate directly observed facts from hypotheses. Explore learning rate, "
+            "rank, training variant, dataset size, selected epoch, elapsed training time, "
+            "steps, and within-run loss progression ONLY where actual values exist. "
+            "Never equate the selected archived epoch with a quality winner. "
+            "Never interpret missing or deleted Test ratings as poor results. "
+            "Do not compare absolute loss values across different training settings "
+            "as if they were a common quality score. A correlation is not a cause. "
+            "If too few scored runs remain, explain that rather than invent patterns. "
+            "Propose a small, controlled, actionable next comparison using existing "
+            "WebCap Test or review workflows. Include run/epoch identifiers and "
+            "sample sizes for major factual claims. No invented measurements. "
+            "Reply with concise sections Observed, Hypotheses, Try next, Limits.\n"
+            + json.dumps(facts, ensure_ascii=False, separators=(",", ":"))
+        ),
+        "response_schema": {
+            "type": "object", "additionalProperties": False,
+            "required": ["observed", "hypotheses", "tryNext", "limits"],
+            "properties": {key: {"type": "string"} for key in
+                           ("observed", "hypotheses", "tryNext", "limits")},
+        },
+    }
+
+
 def _insights_state_path(folder_path):
     return bench._owning_set_directory(folder_path) / ".webcap_state.json"
 
@@ -614,7 +725,7 @@ def overview(folder_path):
     totals = {
         "sessions": 0, "testPreviews": 0, "campaignPreviews": 0,
         "ratedPreviews": 0, "vlReviewedPreviews": 0, "vlJudgments": 0,
-        "unlinkedPreviews": 0, "campaigns": 0,
+        "unlinkedPreviews": 0, "reviewableUnrated": 0, "campaigns": 0,
     }
     recent = []
 
@@ -624,7 +735,8 @@ def overview(folder_path):
             epochs[key] = {
                 "jobId": job_id, "epoch": epoch, "runName": name,
                 "testCount": 0, "campaignCount": 0, "ratedCount": 0,
-                "ratingSum": 0, "vlReviewedCount": 0, "sessions": set(),
+                "ratingSum": 0, "ratingDistribution": {str(n): 0 for n in range(1, 6)},
+                "vlReviewedCount": 0, "sessions": set(),
             }
         elif name and not epochs[key]["runName"]:
             epochs[key]["runName"] = name
@@ -685,9 +797,12 @@ def overview(folder_path):
             entry = epoch_record(job_id, epoch, name)
             entry["testCount"] += 1
             entry["sessions"].add(directory.name)
+            if not rated and media and (directory / media).is_file():
+                totals["reviewableUnrated"] += 1
             if rated:
                 entry["ratedCount"] += 1
                 entry["ratingSum"] += ratings[media]
+                entry["ratingDistribution"][str(ratings[media])] += 1
             if judgments:
                 entry["vlReviewedCount"] += 1
 

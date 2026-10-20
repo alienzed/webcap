@@ -3655,6 +3655,43 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   font-size: 12px;
 }
 
+.storyboard-director-tools-instruction-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.storyboard-director-tools-instruction-heading > label[for] {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.storyboard-director-tools-instruction-heading > .storyboard-director-tools-fresh-takes {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.storyboard-director-tools-instruction-heading #storyboard-director-tools-generate-takes {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.storyboard-director-tools-instruction-heading > small {
+  flex: 1 1 160px;
+  min-width: 0;
+  text-align: right;
+  font-size: 11px;
+}
+
 .storyboard-scenes-heading-actions {
   display: flex;
   align-items: center;

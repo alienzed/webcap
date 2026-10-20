@@ -9,6 +9,14 @@
   }
   function stat(title,value){var box=element('div','epoch-info-stat');box.appendChild(element('strong','',value));box.appendChild(element('span','',title));return box;}
   function renderHeader(root,view) {
+    // Only the first render rebuilds the shell; subsequent pages update keyed cards.
+    if(view.rendered){
+      view.refreshCards();
+      var more=view.moreButton;
+      if(more)more.hidden=view.offset>=view.total;
+      return;
+    }
+    view.rendered=true;
     root.replaceChildren();
     var header=element('div','epoch-info-header');
     header.appendChild(element('h3','', 'Epoch '+view.epoch));
@@ -51,20 +59,33 @@
     var sort=element('select');sort.setAttribute('aria-label','Sort generation evidence');
     [['original','Original order'],['rating','Highest rated'],['recent','Newest first']].forEach(function(p){var opt=element('option','',p[1]);opt.value=p[0];sort.appendChild(opt);});
     toolbar.appendChild(source);toolbar.appendChild(sort);root.appendChild(toolbar);
-    var gallery=element('div','epoch-info-grid');root.appendChild(gallery);
+    var gallery=view.gallery||element('div','epoch-info-grid');
+    view.gallery=gallery;
+    root.appendChild(gallery);
     function refreshCards(){
-      var items=view.items.filter(function(x){return source.value==='all'||x.source===source.value||(source.value==='rated'&&x.source==='test'&&x.rating>0);});
+      var items=view.items.filter(function(x){return (x.source==='test'?x.mediaAvailable!==false:!!x.frame&&!x.framePruned) && (source.value==='all'||x.source===source.value||(source.value==='rated'&&x.source==='test'&&x.rating>0));});
       if(sort.value==='rating')items.sort(function(a,b){return Number(b.rating||0)-Number(a.rating||0);});
       if(sort.value==='recent')items.sort(function(a,b){return Number(b.startedAt||0)-Number(a.startedAt||0);});
-      // Sorting or explicit filter changes are the only reasons to reconstruct cards.
-      gallery.replaceChildren();
-      items.forEach(function(item){gallery.appendChild(renderCard(item,view));});
+      // Keyed reuse preserves video playback and open Details during paging/refresh.
+      var ordered=new Set();
+      items.forEach(function(item){
+        if(!item||!item.id)return;
+        ordered.add(item.id);
+        var card=view.cards.get(item.id);
+        if(!card){card=renderCard(item,view);if(card)view.cards.set(item.id,card);}
+        if(card)gallery.appendChild(card);
+      });
+      Array.from(gallery.children).forEach(function(card){
+        if(card.dataset.resultKey&&!ordered.has(card.dataset.resultKey))card.remove();
+      });
       if(!items.length)gallery.appendChild(element('p','', 'No matching recorded generations.'));
     }
     source.onchange=refreshCards;sort.onchange=refreshCards;refreshCards();
     view.refreshCards=refreshCards;
-    if(view.offset<view.total) {
+    {
       var more=element('button','review-captions-btn','Load more');
+      view.moreButton=more;
+      more.hidden=view.offset>=view.total;
       more.type='button';root.appendChild(more);
       more.onclick=function(){more.disabled=true;load(view,true).catch(function(e){showError(root,e);}).finally(function(){more.disabled=false;});};
     }
@@ -87,55 +108,60 @@
       }).catch(function(e){showError(document.getElementById(view.host),e);});
   }
   function showError(root,e){root.appendChild(element('p','epoch-finder-error',e.message||e));window.reportConsoleError('Epoch Info',e);}
-  function renderCard(item,view) {
-    var card=element('article','epoch-info-card');
-    var head=element('div','epoch-info-card-head');
-    head.appendChild(element('strong','',item.source==='test'?'Test session '+item.session:'Campaign '+item.campaignId.slice(0,8)));
-    head.appendChild(element('span','',item.source==='test'?(item.candidate||'Test generation'):('Round '+item.round+' · Test '+(Number(item.case)+1))));
-    card.appendChild(head);
-    var media=element('div','epoch-info-media');
-    var available=item.source==='test'?item.mediaAvailable!==false:!!item.frame&&!item.framePruned;
-    var uri=item.source==='test'?'/fs/test_generations/media?folder='+encodeURIComponent(view.folder)+'&session='+encodeURIComponent(item.session)+'&media='+encodeURIComponent(item.mediaFile):'/fs/epoch_finder/frame?folder='+encodeURIComponent(view.folder)+'&campaign='+encodeURIComponent(item.campaignId)+'&frame='+encodeURIComponent(item.frame||'');
-    if(available) {
-      var isVideo=item.source==='test'&&(item.mediaKind==='video'||/\.(mp4|webm|mov|mkv)$/i.test(item.mediaFile||''));
-      var preview=element(isVideo?'video':'img');
-      preview.src=uri;if(isVideo){preview.controls=true;preview.preload='metadata';preview.playsInline=true;}else{preview.loading='lazy';preview.alt='Saved checkpoint render';}
-      media.appendChild(preview);
-    }else media.appendChild(element('p','',item.framePruned?'Frame pruned after evaluation':'Media unavailable'));
-    card.appendChild(media);
-    var meta=element('div','epoch-info-card-info');
-    if(item.source==='test') {
-      var rating=element('div','epoch-info-rating');rating.setAttribute('aria-label','Rate Test render');
-      function stars(n){rating.replaceChildren();for(var value=1;value<=5;value++){(function(v){var b=element('button','test-generations-result-star'+(v<=n?' active':''),v<=n?'★':'☆');b.title='Rate '+v+' stars';b.type='button';b.onclick=function(){setRating(v);};rating.appendChild(b);})(value);}}
-      function setRating(v){Array.from(rating.querySelectorAll('button')).forEach(function(b){b.disabled=true;});
-        fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder:view.folder,operation:'test_rate_result',criteria:{session:item.session,mediaFile:item.mediaFile,rating:v}})})
-          .then(function(r){return r.json().then(function(data){if(!r.ok||!data.ok)throw new Error(data.error||'Rating failed');return data;});})
-          .then(function(data){item.rating=data.rating;stars(data.rating);syncRatingSummary(view);})
-          .catch(function(e){stars(item.rating||0);showError(meta,e);});}
-      stars(item.rating||0);meta.appendChild(rating);
-    }else meta.appendChild(element('span','epoch-info-readonly','Campaign VL · no manual rating'));
-    var wildcard=item.wildcards||[];
-    if(wildcard.length){var list=element('div','epoch-info-wildcards');wildcard.forEach(function(entry){list.appendChild(element('span','',typeof entry==='string'?entry:(entry.label+': '+entry.value)));});meta.appendChild(list);}
-    var settings=item.settings||{};
-    var labels=[];if(settings.megapixels!=null)labels.push(settings.megapixels+' MP');if(settings.duration!=null)labels.push(settings.duration+'s');if(item.seed!=null)labels.push('Seed '+item.seed);if(item.strength!=null)labels.push('Strength '+item.strength);if(item.elapsedMs!=null)labels.push(Math.round(item.elapsedMs/1000)+'s render');
-    if(labels.length)meta.appendChild(element('p','epoch-info-meta',labels.join(' · ')));
-    var a=item.assessment;
-    if(a&&typeof a==='object') {
-      var checks=a.comparison||[];var matched=checks.filter(function(c){return c.result==='match';}).length;
-      var compared=checks.filter(function(c){return c.result==='match'||c.result==='mismatch';}).length;
-      var details=element('details','epoch-info-assessment');
-      details.appendChild(element('summary','', 'VL assessment · '+(compared?matched+'/'+compared+' direct matches':'saved evidence')));
-      checks.forEach(function(c){details.appendChild(element('p','', (c.label||c.id||'Attribute')+': '+c.result));});
-      if(a.text)details.appendChild(element('pre','',a.text));meta.appendChild(details);
+  function renderCard(item, view) {
+    var available=item.source==='test' ? item.mediaAvailable!==false : !!item.frame&&!item.framePruned;
+    if (!available) return null;
+    var isTest=item.source==='test';
+    var url=isTest?'/fs/test_generations/media?folder='+encodeURIComponent(view.folder)+'&session='+encodeURIComponent(item.session)+'&media='+encodeURIComponent(item.mediaFile)
+      : '/fs/epoch_finder/frame?folder='+encodeURIComponent(view.folder)+'&campaign='+encodeURIComponent(item.campaignId)+'&frame='+encodeURIComponent(item.frame);
+    var title=isTest?(item.runName||'Run')+' · Epoch '+view.epoch:'Campaign · Epoch '+view.epoch;
+    var settings=item.settings||{}, meta=[];
+    if (settings.megapixels!=null)meta.push(settings.megapixels+' MP');
+    if (item.strength!=null)meta.push('Strength '+item.strength);
+    if (settings.duration!=null)meta.push(settings.duration+'s');
+    var evaluations=[],details=[];
+    var checks=item.assessment&&item.assessment.comparison||[];
+    if(item.assessment){
+      var matches=checks.filter(function(c){return c.result==='match';}).length;
+      var counted=checks.filter(function(c){return c.result==='match'||c.result==='mismatch';}).length;
+      evaluations.push({label:counted?'VL '+matches+'/'+counted:'VL ✓',title:'Recorded original VL evidence; use Details for the judgments.'});
+      details.push({label:'VL observations',value:checks.length?checks.map(function(c){return (c.label||c.id||'Attribute')+': '+c.result+' · expected '+(c.expectedText||'')+' · observed '+(c.selectedText||'');}):item.assessment.text||'Saved assessment'});
     }
-    if(item.referenceAssessments&&item.referenceAssessments.length||item.dinoAssessments&&item.dinoAssessments.length){
-      var extra=element('details','epoch-info-assessment');extra.appendChild(element('summary','', 'Reference comparisons'));(item.referenceAssessments||[]).forEach(function(v){extra.appendChild(element('p','',(v.label||'Reference')+': '+v.verdict));});(item.dinoAssessments||[]).forEach(function(v){extra.appendChild(element('p','',(v.reference||'DINO')+': '+Number(v.similarity).toFixed(3)));});meta.appendChild(extra);
+    if((item.referenceAssessments||[]).length){
+      evaluations.push({label:'Ref '+item.referenceAssessments.length,title:'Saved reference VL comparisons'});
+      details.push({label:'Reference VL',value:item.referenceAssessments.map(function(v){return (v.label||v.group||'Reference')+': '+(v.verdict||'unclear')+' · '+(v.reference||'');})});
     }
-    if(item.prompt){var p=element('details','epoch-info-assessment');p.appendChild(element('summary','', 'Resolved prompt'));p.appendChild(element('pre','',item.prompt));meta.appendChild(p);}
-    var actions=element('div','epoch-info-actions');
-    if(available){var original=element('a','', 'Open original ↗');original.href=uri;original.target='_blank';original.rel='noopener noreferrer';actions.appendChild(original);}
-    var origin=element('button','review-captions-btn','Open '+(item.source==='test'?'session':'campaign'));origin.type='button';origin.onclick=function(){if(item.source==='test')window.openTestBenchAnalyticsSession(item.session);else window.epochFinderInspectCampaign(item.campaignId,item.epoch,item.jobId);};actions.appendChild(origin);
-    meta.appendChild(actions);card.appendChild(meta);return card;
+    if((item.dinoAssessments||[]).length){
+      evaluations.push({label:'DINO '+item.dinoAssessments.length,title:'Saved distinct DINO comparisons; per-reference scores under Details'});
+      details.push({label:'DINOv2',value:item.dinoAssessments.map(function(v){return (v.reference||'Reference')+': '+(Number.isFinite(Number(v.similarity))?Number(v.similarity).toFixed(3):'unavailable');})});
+    }
+    if(item.prompt)details.push({label:'Resolved prompt',value:item.prompt,pre:true});
+    if(item.seed!=null)details.push({label:'Seed',value:String(item.seed)});
+    if(item.modelId)details.push({label:'Model',value:item.modelId});
+    var card=createTestPreviewCard({
+      className:'epoch-info-card',key:item.id,
+      title:title, sourceDetail:isTest?'Test · '+item.session:'Campaign · Round '+item.round+' / Test '+(Number(item.case)+1),
+      elapsed:item.elapsedMs!=null?Math.round(item.elapsedMs/1000)+'s':item.renderSeconds!=null?Math.round(item.renderSeconds)+'s':'',
+      media:{kind:isTest&&(item.mediaKind==='video'||/\.(mp4|webm|mov|mkv)$/i.test(item.mediaFile||''))?'video':'image',url:url,alt:'Saved checkpoint result'},
+      metadata:meta,wildcards:item.wildcards||[],evaluations:evaluations,details:details,
+      rating:isTest?{value:item.rating,session:item.session,mediaFile:item.mediaFile,
+        onRate:function(value,card){
+          card.querySelectorAll('[data-test-rating]').forEach(function(button){button.disabled=true;});
+          fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({folder:view.folder,operation:'test_rate_result',criteria:{session:item.session,mediaFile:item.mediaFile,rating:value}})})
+            .then(function(r){return r.json().then(function(data){if(!r.ok||!data.ok)throw new Error(data.error||'Rating failed');return data;});})
+            .then(function(data){item.rating=data.rating;updateTestPreviewCardRating(card,data.rating);syncRatingSummary(view);})
+            .catch(function(e){updateTestPreviewCardRating(card,item.rating||0);showError(card,e);});
+        }}:null,
+      actions:[
+        {label:'Open original',url:url},
+        {label:isTest?'Open session':'Open campaign',onClick:function(){
+          if(isTest)window.openTestBenchAnalyticsSession(item.session);
+          else window.epochFinderInspectCampaign(item.campaignId,item.epoch,item.jobId);
+        }}
+      ]
+    });
+    return card;
   }
   function load(view,more,summaryOnly){
     var host=document.getElementById(view.host);
@@ -151,7 +177,7 @@
   window.epochInfoOpen=function(mode,folder,jobId,epoch){
     if(mode!=='tests'&&mode!=='analytics')throw new Error('Unknown epoch inspector view: '+mode);
     var host=mode==='tests'?'test-generations-epoch-info':'run-analytics-epoch-info';
-    var view={mode:mode,host:host,folder:folder,jobId:String(jobId),epoch:Number(epoch),items:[],offset:0,total:0};
+    var view={mode:mode,host:host,folder:folder,jobId:String(jobId),epoch:Number(epoch),items:[],offset:0,total:0,cards:new Map(),rendered:false};
     state[mode]=view;
     if(mode==='tests') {
       document.getElementById('test-generations-session-surface').classList.add('hidden');

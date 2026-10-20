@@ -99,7 +99,7 @@ def test_test_generations_uses_training_pane_and_core_controls():
         assert f'id="{control}"' in html
     assert "card.dataset.resultKey = resultKey" in script
     assert "host.insertBefore(card, pending || null)" in script
-    assert "placeholder.textContent = 'Generation failed';" in script
+    assert "placeholder: failed ? 'Generation failed'" in script
     assert "function renderResults(status)" in script
     assert ".test-generations-result-card video" in css
     assert ".test-generations-result-card img" in css
@@ -311,14 +311,13 @@ def test_test_generations_compare_mode_reuses_current_session_results():
     assert "video.addEventListener('pause'" in script
     assert "video.addEventListener('seeked'" in script
     assert "video.addEventListener('ratechange'" in script
-    assert "function buildResultFooter(result, options)" in script
+    assert "function sharedTestCard(result, status, className, muted, failed)" in script
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
     result_block = script.split("function renderResults(status)", 1)[1].split("function syncActiveRunControls(status)", 1)[0]
-    assert "var remove = buildResultRemoveButton(result);" in compare_block
-    assert "if (remove) item.appendChild(remove);" in compare_block
-    assert "var remove = buildResultRemoveButton(result);" in result_block
-    assert "if (remove) card.appendChild(remove);" in result_block
-    assert "var remove = buildResultRemoveButton(failure);" in result_block
+    assert "sharedTestCard(result, status, 'test-generations-compare-item', true)" in compare_block
+    assert "sharedTestCard(result, status, 'test-generations-result-card', false)" in result_block
+    assert "sharedTestCard(failure, status, 'test-generations-result-card is-failed', false, true)" in result_block
+    assert "removeNode: buildResultRemoveButton(result)" in script
     assert "remove.dataset.removeCandidate = candidateFile" in script
     assert ".test-generations-compare-stage" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
@@ -464,12 +463,13 @@ def test_test_result_footer_identity_timing_and_remove_contract():
     assert "return hours + 'h ' + minutes + 'm';" in script
     assert "return minutes + 'm ' + seconds + 's';" in script
     assert "return seconds + 's';" in script
-    assert "opts.failed ? 'Failed after ' + elapsed : elapsed" in script
-    assert "source.title = identity.secondary;" in script
+    assert "failed && elapsed ? 'Failed after ' + elapsed : elapsed" in script
+    assert "sourceTooltip: identity.secondary" in script
     assert "function buildResultRemoveButton(result)" in script
     assert "remove.textContent = '×';" in script
     assert "Remove this staged candidate and its result from this session." in script
-    assert "secondaryRow.className = 'test-generations-result-secondary';" in script
+    shared = (ROOT / 'tool/js/test_preview_card.js').read_text(encoding='utf-8')
+    assert "'test-generations-result-secondary'" in shared
     assert ".test-generations-result-source" in css
     assert ".test-generations-result-elapsed" in css
     assert ".test-generations-result-secondary" in css
@@ -482,17 +482,15 @@ def test_test_result_stars_are_shared_by_grid_and_compare():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
-    assert "function buildResultRating(result, sessionName)" in script
+    shared = (ROOT / 'tool/js/test_preview_card.js').read_text(encoding='utf-8')
+    assert "function createTestPreviewCard(options)" in shared
     assert "function rateTestResult(button)" in script
     assert "function syncResultRatingButtons(sessionName, mediaFile, rating)" in script
     assert "request('test_rate_result'" in script
-    assert "star.dataset.testSession = session;" in script
-    assert "var rating = buildResultRating(result, opts.sessionName);" in script
-    assert "star.textContent = value <= currentRating ? '★' : '☆';" in script
-    assert "if (!opts.failed)" in script
-
-    footer_block = script.split("function buildResultFooter(result, options)", 1)[1].split("function formatTestVideoTime", 1)[0]
-    assert "secondaryRow.appendChild(rating);" in footer_block
+    assert "star.dataset.testSession = text(o.rating.session);" in shared
+    assert "rating: !failed && session && mediaFile" in script
+    assert "star.textContent = active ? '★' : '☆';" in shared
+    assert "second.appendChild(rating);" in shared
 
     grid_handler = script.split("el('test-generations-results').onclick", 1)[1].split("el('test-generations-compare').onclick", 1)[0]
     compare_handler = script.split("el('test-generations-compare').onclick", 1)[1].split("el('test-generations-prompt').addEventListener", 1)[0]
@@ -518,7 +516,7 @@ def test_test_rating_refresh_preserves_preview_dom():
     assert "star.classList.toggle('active', active);" in sync_block
     assert "star.textContent = active ? '★' : '☆';" in sync_block
 
-    rate_block = script.split("function rateTestResult(button)", 1)[1].split("function buildResultFooter", 1)[0]
+    rate_block = script.split("function rateTestResult(button)", 1)[1].split("function sharedTestCard", 1)[0]
     assert "var sessionName = String(button && button.dataset.testSession || '').trim();" in rate_block
     assert "request('test_rate_result'" in rate_block
     assert "syncResultRatingButtons(sessionName, mediaFile, payload && payload.rating);" in rate_block
@@ -549,9 +547,10 @@ def test_compare_videos_start_muted():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
-    preview_block = script.split("function appendTestPreview(container, sessionName, result, options)", 1)[1].split("function candidateFileForResult", 1)[0]
-    assert "appendTestPreview(item, sessionName, result, { muted: true })" in compare_block
-    assert "video.muted = !!(options && options.muted);" in preview_block
+    shared = (ROOT / 'tool/js/test_preview_card.js').read_text(encoding='utf-8')
+    assert "sharedTestCard(result, status, 'test-generations-compare-item', true)" in compare_block
+    assert "muted: !!muted" in script
+    assert "preview.muted = !!media.muted;" in shared
 
 
 
@@ -1068,10 +1067,10 @@ def test_test_result_cards_show_frozen_megapixels_and_candidate_strength():
 
     assert "function testResultMegapixels(status)" in script
     assert "function testResultStrength(status, result)" in script
-    assert "metadata.push(String(megapixels) + ' MP');" in script
-    assert "metadata.push('Strength ' + String(strength));" in script
-    assert "buildResultFooter(result, { sessionName: sessionName, status: status })" in script
-    assert "buildResultFooter(failure, { failed: true, status: status })" in script
+    assert "metrics.push(megapixels + ' MP');" in script
+    assert "metrics.push('Strength ' + strength);" in script
+    assert "sharedTestCard(result, status, 'test-generations-result-card', false)" in script
+    assert "sharedTestCard(failure, status, 'test-generations-result-card is-failed', false, true)" in script
     assert ".test-generations-result-metadata" in css
 
 
@@ -1214,7 +1213,7 @@ def test_test_generations_sweep_is_opt_in_and_avoids_destructive_result_actions(
     assert "if (sweepMode) criteria.sweepWeights = parseSweepWeights(sweepWeights);" in script
     assert "sweepMode = false;" in script
     assert "if (result && result.strength !== undefined && result.strength !== null) return null;" in script
-    assert "identity.primary += ' · Weight ' + String(result.strength);" in script
+    assert "title = identity.primary;" in script
     assert "defaultStrength: defaultCandidateStrength" in script
     assert ".test-generations-sweep-setup" in css
 
@@ -1367,12 +1366,13 @@ def test_test_result_compact_three_rows_and_vl_model_provenance():
     script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
-    for marker in ("label.appendChild(source);", "primaryRow.appendChild(label);",
-                   "secondaryRow.appendChild(metadataRow);", "secondaryRow.appendChild(rating);",
-                   "evaluation.appendChild(vlButton);",
-                   "manualScore.dataset.testManualEpochScore = '1';",
-                   "vlScore.dataset.testVlEpochScore = '1';"):
-        assert marker in script
+    shared = (ROOT / "tool/js/test_preview_card.js").read_text(encoding="utf-8")
+    for marker in ("name.appendChild(secondary);", "primary.appendChild(name);",
+                   "second.appendChild(line);", "second.appendChild(rating);",
+                   "evaluation.appendChild(action);",
+                   "manual.dataset.testManualEpochScore = '1';",
+                   "vl.dataset.testVlEpochScore = '1';"):
+        assert marker in shared
     assert "entry.modelId = run.model;" in script
     assert "modelId: savedEntry.modelId || ''" in script
     assert "Unknown (previous assessment)" in script
@@ -1490,13 +1490,12 @@ def test_launch_action_stays_inside_repeat_and_vl_panel():
 def test_preview_footer_epoch_navigation_and_compact_controls():
     script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
-    footer = script.split("function buildResultFooter(result, options)", 1)[1].split("function syncResultElapsed", 1)[0]
-    assert "label.appendChild(browse);" in footer
-    assert "secondaryRow.appendChild(browse);" not in footer
-    assert "browse.className = 'test-generations-epoch-link';" in footer
-    assert "browse.dataset.testEpochMediaJob = String(provenance.sourceJobId);" in footer
-    assert "secondaryRow.appendChild(rating);" in footer
-    assert "evaluation.appendChild(vlButton);" in footer
+    shared = (ROOT / 'tool/js/test_preview_card.js').read_text(encoding='utf-8')
+    assert "name.appendChild(jump);" in shared
+    assert "jump.className" not in shared
+    assert "jump.dataset.testEpochMediaJob = text(epoch.jobId);" in shared
+    assert "second.appendChild(rating);" in shared
+    assert "evaluation.appendChild(action);" in shared
     assert ".test-generations-epoch-link { display:inline; width:auto;" in css
     assert ".test-generations-result-evaluation .test-generations-vl-result { width:auto;" in css
 

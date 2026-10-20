@@ -743,48 +743,75 @@
       (caveats.length ? '<p class="epoch-finder-muted">' + caveats.map(escape).join(' · ') + '</p>' : '');
   }
   function gallery(campaign) {
-    var units = campaign.units.filter(function (u) {
-      return inspectedEpoch == null || u.epoch === inspectedEpoch;
+    var units=campaign.units.filter(function(u){
+      return (inspectedEpoch==null||u.epoch===inspectedEpoch)&&!!u.frame&&!u.framePruned;
     });
-    var key = campaign.id + ':' + inspectedEpoch + ':' + units.map(function (u) {
-      return u.frame + ':' + (u.assessment ? '1' : '0') + ':' + (u.error || '');
+    var key=campaign.id+':'+inspectedEpoch+':'+units.map(function(u){
+      return u.frame+':'+(u.assessment?'1':'0')+':'+(u.error||'');
     }).join('|');
-    if (lastFrameKey === key) return;
-    lastFrameKey = key;
-    var heading = inspectedEpoch == null ? '<strong>Recent retained frames</strong>' :
-      '<strong>' + escape(candidateLabel(campaign, inspectedEpoch)) + ' · All recorded tests</strong> ' +
-      '<button type="button" data-inspect-reset>Show all epochs</button>';
-    var shown = inspectedEpoch == null ? units.filter(function (u) { return !!u.frame; }).slice(-40).reverse() :
-      units.slice().sort(function (a,b) { return a.round - b.round || a.case - b.case; });
-    els('frames').innerHTML = '<div class="epoch-finder-gallery-heading">' + heading + '</div>' +
-      shown.map(function (unit) {
-        var src = unit.frame ? '/fs/epoch_finder/frame?folder=' + encodeURIComponent(currentFolder) +
-          '&campaign=' + encodeURIComponent(campaign.id) + '&frame=' + encodeURIComponent(unit.frame) : '';
-        var assessment = unit.assessment || {};
-        var selections = (unit.groups || []).filter(function (group) {
-          return group.expected != null && group.options && group.options[group.expected - 1];
-        }).map(function (group) {
-          return '<span title="' + escape(group.label) + '">' + escape(group.options[group.expected - 1]) + '</span>';
-        });
-        var comparisons = assessment.comparison || [];
-        var matched = comparisons.filter(function (c) { return c.result === 'match'; }).length;
-        var decided = comparisons.filter(function (c) { return c.result === 'match' || c.result === 'mismatch'; }).length;
-        var status = unit.error ? 'Error' : unit.assessment ?
-          (decided ? matched + '/' + decided + ' attributes matched' : 'VL evaluated · unclear') :
-          (src ? 'Frame ready · awaiting VL' : 'Awaiting frame');
-        return '<figure class="epoch-finder-frame" role="button" tabindex="0" aria-label="Inspect epoch ' + unit.epoch +
-          ', round ' + unit.round + ', test ' + (unit.case + 1) + '" data-gallery-epoch="' + unit.epoch +
-          '" data-gallery-round="' + unit.round + '" data-gallery-case="' + unit.case + '">' +
-          (src ? '<img loading="lazy" src="' + escape(src) + '" alt="Epoch ' + unit.epoch + ' test frame">' :
-            '<div class="epoch-finder-frame-empty">Frame pruned or unavailable</div>') +
-          '<figcaption><div class="epoch-finder-frame-heading"><strong>' + escape(candidateLabel(campaign, unit.epoch)) +
-          '</strong><span>Round ' + unit.round + ' · Test ' + (unit.case + 1) + '</span></div>' +
-          (selections.length ? '<div class="epoch-finder-frame-choices" aria-label="Expected wildcard choices">' +
-            selections.join('') + '</div>' : '') +
-          '<div class="epoch-finder-frame-footer"><small>' + escape(unit.error || status) + '</small>' +
-          (src ? '<a href="' + escape(src) + '" target="_blank" rel="noopener" data-frame-original title="Open original image">Open image ↗</a>' : '') +
-          '</div></figcaption></figure>';
-      }).join('');
+    if(lastFrameKey===key)return;
+    lastFrameKey=key;
+    var host=els('frames');
+    var preserved=new Map();
+    host.querySelectorAll('[data-gallery-epoch]').forEach(function(card){
+      preserved.set(card.dataset.galleryEpoch+':'+card.dataset.galleryRound+':'+card.dataset.galleryCase,card);
+    });
+    var heading=host.querySelector('.epoch-finder-gallery-heading');
+    if(!heading){heading=document.createElement('div');heading.className='epoch-finder-gallery-heading';}
+    heading.replaceChildren();
+    var label=document.createElement('strong');
+    label.textContent=inspectedEpoch==null?'Recent retained frames':candidateLabel(campaign,inspectedEpoch)+' · Available renders';
+    heading.appendChild(label);
+    if(inspectedEpoch!=null){
+      var reset=document.createElement('button');reset.type='button';reset.dataset.inspectReset='1';
+      reset.textContent='Show all epochs';heading.appendChild(reset);
+    }
+    host.appendChild(heading);
+    var shown=inspectedEpoch==null?units.slice(-40).reverse():units.slice().sort(function(a,b){return a.round-b.round||a.case-b.case;});
+    var keep=new Set();
+    shown.forEach(function(unit){
+      var identity=unit.epoch+':'+unit.round+':'+unit.case;
+      keep.add(identity);
+      var version=[unit.frame,!!unit.assessment,(unit.referenceAssessments||[]).length,(unit.dinoAssessments||[]).length,unit.error||''].join('|');
+      var prior=preserved.get(identity);
+      if(prior&&prior.dataset.cardVersion===version){host.appendChild(prior);return;}
+      var url='/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+'&campaign='+encodeURIComponent(campaign.id)+'&frame='+encodeURIComponent(unit.frame);
+      var checks=unit.assessment&&unit.assessment.comparison||[];
+      var matched=checks.filter(function(c){return c.result==='match';}).length;
+      var counted=checks.filter(function(c){return c.result==='match'||c.result==='mismatch';}).length;
+      var selection=(unit.groups||[]).filter(function(g){return g.expected!=null&&g.options&&g.options[g.expected-1];})
+        .map(function(g){return {label:g.label||g.id,value:g.options[g.expected-1]};});
+      var evidence=[];
+      if(unit.assessment)evidence.push({label:counted?'VL '+matched+'/'+counted:'VL ✓'});
+      if((unit.referenceAssessments||[]).length)evidence.push({label:'Ref '+unit.referenceAssessments.length});
+      if((unit.dinoAssessments||[]).length)evidence.push({label:'DINO '+unit.dinoAssessments.length});
+      var details=[];
+      if(unit.prompt)details.push({label:'Resolved prompt',value:unit.prompt,pre:true});
+      if(unit.seed!=null)details.push({label:'Seed',value:String(unit.seed)});
+      if(checks.length)details.push({label:'VL judgments',value:checks.map(function(c){
+        return (c.label||c.id||'Attribute')+': '+c.result+' · expected '+(c.expectedText||'')+' · observed '+(c.selectedText||'');
+      })});
+      if((unit.referenceAssessments||[]).length)details.push({label:'Reference VL',value:unit.referenceAssessments.map(function(r){
+        return (r.label||'Reference')+': '+r.verdict+' · '+(r.reference||'');
+      })});
+      if((unit.dinoAssessments||[]).length)details.push({label:'DINOv2',value:unit.dinoAssessments.map(function(r){
+        return (r.reference||'Reference')+': '+Number(r.similarity).toFixed(3);
+      })});
+      var card=createTestPreviewCard({
+        tag:'figure',className:'epoch-finder-frame',role:'button',tabIndex:0,
+        ariaLabel:'Inspect epoch '+unit.epoch+', round '+unit.round+', test '+(unit.case+1),
+        dataset:{galleryEpoch:unit.epoch,galleryRound:unit.round,galleryCase:unit.case},
+        title:candidateLabel(campaign,unit.epoch),
+        sourceDetail:'Round '+unit.round+' · Test '+(unit.case+1),
+        elapsed:unit.renderSeconds!=null?Math.round(unit.renderSeconds)+'s':'',
+        media:{kind:'image',url:url,alt:'Saved Campaign render'},
+        wildcards:selection,evaluations:evidence,details:details,
+        actions:[{label:'Open original',url:url}],
+      });
+      card.dataset.cardVersion=version;
+      host.appendChild(card);
+    });
+    preserved.forEach(function(card,id){if(!keep.has(id))card.remove();});
   }
   function evidenceSection(campaign) {
     if (inspectedEpoch == null) return '';
@@ -1220,13 +1247,13 @@
       inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = null; refreshStatus().catch(error);
       return;
     }
-    if (event.target.closest('[data-frame-original]')) return;
+    if (event.target.closest('.test-preview-card-utility, .test-preview-card-details')) return;
     var frame = event.target.closest('[data-gallery-epoch]');
     if (frame) selectGalleryFrame(frame);
   };
   els('frames').onkeydown = function (event) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    if (event.target.closest('[data-frame-original]')) return;
+    if (event.target.closest('.test-preview-card-utility, .test-preview-card-details')) return;
     var frame = event.target.closest('[data-gallery-epoch]');
     if (!frame) return;
     event.preventDefault();

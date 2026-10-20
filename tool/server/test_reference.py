@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from . import epoch_test_bench as bench
-from .caption_vision import build_reference_comparison_messages, vision_resized_image_data_url
+from .caption_vision import build_reference_comparison_messages, reference_comparison_feature, vision_resized_image_data_url
 from .epoch_reference import verified_reference
 
 _write_lock = threading.RLock()
@@ -68,9 +68,7 @@ def prepare(folder_path, criteria):
                           "reference": ref_name, "similarity": score, "at": time.time()}
             save(folder_path, session, media.name, assessment)
             return {"assessment": assessment}
-        question = (group + " — reference demonstrates " + term +
-                    ". Select the visible option in generated image B: " +
-                    "; ".join(str(i + 1) + "=" + c for i, c in enumerate(choices)))
+        question = reference_comparison_feature(group, term, choices, criteria.get("groupAlias"))
         messages = build_reference_comparison_messages(
             question, vision_resized_image_data_url(reference),
             vision_resized_image_data_url(generated))

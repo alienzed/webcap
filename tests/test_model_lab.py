@@ -255,11 +255,12 @@ def test_model_lab_is_diagnostics_owned_and_does_not_write_set_intelligence():
 
     assert 'data-diagnostics-tab="assessment"' in html
     assert 'data-diagnostics-tab="model-lab"' not in html
-    assert 'data-diagnostics-panel="model-lab"' in html
+    assert 'data-diagnostics-panel="model-lab"' not in html
+    assert 'data-diagnostics-panel="benchmark"' not in html
+    assert 'data-diagnostics-panel="models"' not in html
     assert '/static/js/model_lab.js' in html
-    assert "if (next === 'model-lab') {" in diagnostics
-    assert "modelLabFetch(modelLabRunId)" in diagnostics
-    assert "else modelLabRefresh();" in diagnostics
+    assert '/static/js/director_model_test.js' not in html
+    assert "if (next === 'model-lab')" not in diagnostics
     assert "/app/model-lab" in frontend
 
     assert "save_vision_sight" not in backend

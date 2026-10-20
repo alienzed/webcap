@@ -3297,7 +3297,8 @@ def archive_run_session_cleanup_status(folder_path, run_dir, action_id):
                 exclusively_this_run = False
                 break
             if candidate.get("kind") == "base":
-                continue
+                exclusively_this_run = False
+                break  # Baseline evidence is not owned by a training run.
             provenance = candidate.get("provenance")
             try:
                 source_run, source = candidate_run_snapshot_from_provenance(provenance)

@@ -3944,7 +3944,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-director-activity.is-workspace-overlay,
 .storyboard-director-activity.is-structure-overlay {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "label" "phase" "detail" "action" "stop";
+  grid-template-areas: "label" "phase" "detail" "scene-progress" "action" "stop";
   row-gap: 8px;
   align-items: start;
   min-height: 0;

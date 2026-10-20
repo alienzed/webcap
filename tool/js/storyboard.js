@@ -797,7 +797,10 @@
   function refreshDirector() {
     return directorRequest(null).then(function (payload) {
       storyState.director.available = !!payload.available;
-      storyState.director.models = payload.models || [];
+      storyState.director.models = (payload.models || []).filter(function (model) {
+        var modalities = model.inputModalities || (model.architecture && model.architecture.input_modalities) || [];
+        return modalities.indexOf('image') === -1;
+      });
       storyState.director.runtimeLabel = payload.runtime || '';
       storyState.director.error = payload.error || '';
       renderDirectorSelector();

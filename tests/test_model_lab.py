@@ -253,7 +253,8 @@ def test_model_lab_is_diagnostics_owned_and_does_not_write_set_intelligence():
     set_scan = (root / "tool" / "js" / "set_scan.js").read_text(encoding="utf-8")
     vocabulary = (root / "tool" / "js" / "vision_schema_assist.js").read_text(encoding="utf-8")
 
-    assert 'data-diagnostics-tab="model-lab"' in html
+    assert 'data-diagnostics-tab="assessment"' in html
+    assert 'data-diagnostics-tab="model-lab"' not in html
     assert 'data-diagnostics-panel="model-lab"' in html
     assert '/static/js/model_lab.js' in html
     assert "if (next === 'model-lab') {" in diagnostics

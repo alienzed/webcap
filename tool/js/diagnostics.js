@@ -309,9 +309,10 @@ function refreshUnifiedModelAssessment() {
     var head = document.createElement('thead');
     var header = document.createElement('tr');
     [{key: '', name: 'Select'}, {key: 'model', name: 'Model'}, {key: 'role', name: 'Role'},
-      {key: 'size', name: 'Size'}, {key: 'result', name: 'Qualified for'},
-      {key: 'thinking', name: 'Thinking'}, {key: 'speed', name: 'tok/s'}, {key: 'output', name: 'Output observed'},
-      {key: 'quality', name: 'Quality review'}, {key: 'tested', name: 'Last tested'}].forEach(function (column) {
+      {key: 'size', name: 'Size'}, {key: 'output', name: 'Verified output'},
+      {key: 'speed', name: 'tok/s'}, {key: 'result', name: 'Assessment'},
+      {key: 'thinking', name: 'Thinking'}, {key: 'quality', name: 'Quality review'},
+      {key: 'tested', name: 'Last tested'}].forEach(function (column) {
       var th = document.createElement('th');
       th.scope = 'col';
       if (column.key) {
@@ -345,7 +346,7 @@ function refreshUnifiedModelAssessment() {
     function refreshSelectionSummary() {
       var selectedModels = new Set([...diagnosticsAssessmentSelected.director, ...diagnosticsAssessmentSelected.vision]);
       diagnosticsEl('diagnostics-assessment-selection').textContent =
-        selectedModels.size + ' model(s) selected · Run Selected Tests starts the server-owned suite.';
+        selectedModels.size + ' model(s) selected · Completed compatible tests will be reused.';
       diagnosticsAssessmentSyncHeaderSelection();
     }
     function addRow(title, kind, ref, report) {
@@ -415,6 +416,9 @@ function refreshUnifiedModelAssessment() {
       speedCell.title = 'Runtime-reported generation throughput when available; different probes and runtimes may not be directly comparable.';
       var outputCell = cell('Output', '—', 'output');
       outputCell.title = 'Largest observed completion, potentially including reasoning tokens; not a verified limit.';
+      // Put headline metrics before assessment; secondary fields are details-only.
+      line.insertBefore(outputCell, qualification);
+      line.insertBefore(speedCell, qualification);
       var qualityCell = cell('Quality review', 'Not judged', 'quality');
       var evidence = capabilityRuns.filter(function (run) {
         return run.models && run.models[ref] && Object.keys(run.models[ref]).some(function (probe) {
@@ -448,23 +452,17 @@ function refreshUnifiedModelAssessment() {
       var allTests = Object.keys(tests).map(function (probe) { return tests[probe]; });
       var structuredTests = Object.keys(tests).filter(function (kind) { return kind.indexOf('director_scene_plan_') === 0 && Number((tests[kind].counts || {}).completed || 0) > 0; }).map(function (kind) { return tests[kind]; });
       var speedTests = supportsDirector ? structuredTests : allTests;
-      var rates = speedTests.flatMap(function (entry) { return entry.throughputSamples || []; })
+      var nativeRates = speedTests.flatMap(function (entry) { return entry.generationSpeedSamples || []; }).filter(function (v) { return Number(v) > 0; });
+      var rates = nativeRates.length ? nativeRates : speedTests.flatMap(function (entry) { return entry.throughputSamples || []; })
         .filter(function (value) { return Number(value) > 0; });
       var outputs = structuredTests.map(function (entry) { return Number(entry.verifiedOutputTokens || 0); }).filter(function (v) { return v > 0; });
-      var legacyAttempts = report && Array.isArray(report.attempts) ? report.attempts : [];
-      var legacyRates = legacyAttempts.filter(function (attempt) { return attempt.status === 'passed' && Number(attempt.tokensPerSecond) > 0; });
+      // Historical prose benchmark speeds are not mixed into current structured results.
       if (rates.length) {
         var rate = rates.reduce(function (a, b) { return a + Number(b); }, 0) / rates.length;
         speedCell.textContent = rate.toFixed(1);
-        speedCell.title = allTests.some(function (item) { return item.speedBasis; })
-          ? 'Effective throughput including request overhead for probes without runtime timing; compare on same hardware.'
-          : 'Runtime-reported tokens/s across saved probes; compare on same hardware.';
+        speedCell.title = nativeRates.length ? 'Runtime-reported generation tokens/s; compare on the same runtime/hardware.'
+          : 'Effective throughput includes processing/loading overhead; not directly comparable to generation tokens/s.';
         row.assessmentSort.speed = rate;
-      } else if (legacyRates.length) {
-        var legacyRate = Number(legacyRates[legacyRates.length - 1].tokensPerSecond);
-        speedCell.textContent = legacyRate.toFixed(1);
-        speedCell.title = 'Legacy calibration throughput on its source runtime; may not be directly comparable.';
-        row.assessmentSort.speed = legacyRate;
       }
       var maxOutput = outputs.length ? Math.max.apply(null, outputs.map(Number)) : 0;
       if (maxOutput > 0) {

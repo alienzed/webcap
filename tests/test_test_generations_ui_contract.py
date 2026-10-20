@@ -1287,6 +1287,7 @@ def test_test_vl_comparison_heading_and_table_share_one_grid_item():
         assert expected in script
     assert ".test-generations-vl-comparison { display:grid;" in css
     assert ".test-generations-vl-comparison-group { min-width:0; }" in css
+    assert ".test-generations-vl-table-wrap { overflow-x:auto; }" in css
 
 
 def test_test_vl_counting_overrides_remain_browser_memory_only():

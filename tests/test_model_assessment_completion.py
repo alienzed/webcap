@@ -134,7 +134,7 @@ def test_mixed_assessment_pairs_schema_assist_with_existing_vision(isolated):
 
 @pytest.mark.parametrize("text,finish,expected", [
     ("<think>Internal reasoning leaked</think>", "stop", "leakage"),
-    ("\\ufffd\\ufffd\\ufffd broken", "stop", "garbled"),
+    ("\ufffd\ufffd\ufffd broken", "stop", "garbled"),
     ("", "stop", "empty"),
 ])
 def test_actual_scene_output_pathologies_are_classified(monkeypatch, text, finish, expected):

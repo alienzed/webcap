@@ -1440,3 +1440,19 @@ def test_storyboard_prompt_take_status_compares_original_prompt_on_live_editor_c
     assert "if (focusedSceneId) syncPromptTakeStatus(focusedSceneId)" in storyboard
     assert "syncPromptTakeStatus(sceneId);" in storyboard.split("function syncSceneTakeDom(sceneId)", 1)[1].split("\n  function ", 1)[0]
     assert "storyboard-prompt-take-status" in css
+
+
+def test_individual_scene_development_tracks_real_completion_in_director_activity():
+    script = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    assert "individualDevelopmentProgress = { completed: 0, total: outline.scenes.length, phase: 'developing' }" in script
+    assert "individualDevelopmentProgress.completed = authoredScenes.length;" in script
+    assert "individualDevelopmentProgress.phase = 'applying';" in script
+    assert "sceneProgressBar.value = developed;" in script
+    assert "sceneProgressBar.max = individual.total;" in script
+    assert "individualDevelopmentProgress = null;" in script
+
+
+def test_individual_develop_mirrors_progress_to_existing_activity():
+    script = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    assert "window.publishActivityProgress({ id: 'storyboard:individual:' + storyId" in script
+    assert "window.finishActivityProgress('storyboard:individual:' + storyId)" in script

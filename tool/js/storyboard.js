@@ -61,7 +61,8 @@
       activitySlotSample: null,
       requestByJobId: {},
       developIndividuallyOverride: null,
-      developStrategyModelId: ''
+      developStrategyModelId: '',
+      individualDevelopmentProgress: null
     }
   };
 
@@ -1316,11 +1317,21 @@
     var total = Number(progress && progress.total);
     var completed = Number(progress && progress.completed);
     var operation = String(activity && activity.operation || '');
+    var individual = targetKind === 'scenes' && storyState.director.individualDevelopmentProgress;
+    var isIndividualPass = !terminal && individual && Number.isInteger(individual.total) && individual.total > 0;
     var isScenePass = !terminal && targetKind === 'repair'
       && ['revise_scenes_sequence', 'check_coherence_sequence'].includes(operation)
       && Number.isInteger(total) && total > 0
       && Number.isInteger(completed) && completed >= 0 && completed <= total;
-    sceneProgress.classList.toggle('hidden', !isScenePass);
+    sceneProgress.classList.toggle('hidden', !isScenePass && !isIndividualPass);
+    if (isIndividualPass) {
+      var developed = Math.min(individual.total, Math.max(0, individual.completed));
+      phase.textContent = individual.phase === 'applying' ? 'Director is applying developed Scenes…'
+        : 'Director is developing Scene ' + (developed + 1) + ' of ' + individual.total + '…';
+      sceneProgressText.textContent = developed + ' of ' + individual.total + ' Scenes developed';
+      sceneProgressBar.max = individual.total;
+      sceneProgressBar.value = developed;
+    }
     if (isScenePass) {
       var checking = operation === 'check_coherence_sequence';
       var queuingTakes = String(progress.phase || '') === 'Queuing fresh Takes';
@@ -2067,6 +2078,12 @@
       if (!outline || !Array.isArray(outline.scenes) || !outline.scenes.length) {
         throw new Error('Director returned an empty Story outline.');
       }
+      storyState.director.individualDevelopmentProgress = { completed: 0, total: outline.scenes.length, phase: 'developing' };
+      window.publishActivityProgress({ id: 'storyboard:individual:' + storyId, kind: 'storyboard', lane: 'background',
+        title: 'Develop Scenes one at a time', storyId: storyId, status: 'running',
+        phase: 'Developing Scene 1 of ' + outline.scenes.length,
+        progress: { completed: 0, total: outline.scenes.length },
+        progressLabel: '0 of ' + outline.scenes.length + ' Scenes developed' });
       return consumeDirectorJob(outlineResult.jobId);
     }).then(function () {
       return outline.scenes.reduce(function (promise, _plannedScene, index) {
@@ -2086,11 +2103,19 @@
               throw new Error('Director returned an invalid individual Scene.');
             }
             authoredScenes.push(sceneResult.scene);
+            storyState.director.individualDevelopmentProgress.completed = authoredScenes.length;
+            window.publishActivityProgress({ id: 'storyboard:individual:' + storyId, kind: 'storyboard', lane: 'background',
+              title: 'Develop Scenes one at a time', storyId: storyId, status: 'running',
+              phase: authoredScenes.length < outline.scenes.length
+                ? 'Developing Scene ' + (authoredScenes.length + 1) + ' of ' + outline.scenes.length : 'Applying Scenes',
+              progress: { completed: authoredScenes.length, total: outline.scenes.length },
+              progressLabel: authoredScenes.length + ' of ' + outline.scenes.length + ' Scenes developed' });
             return consumeDirectorJob(sceneResult.jobId);
           });
         });
       }, Promise.resolve());
     }).then(function () {
+      storyState.director.individualDevelopmentProgress.phase = 'applying';
       setDevelopStatus('Applying ' + String(authoredScenes.length) + ' developed Scenes…');
       return directorRequest({
         storyId: storyId,
@@ -2258,6 +2283,7 @@
     var individual = !!el('storyboard-develop-individual').checked;
     var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
+    storyState.director.individualDevelopmentProgress = null;
     setDevelopStatus(individual ? 'Preparing individual Scene development…' : 'Director is developing the Story…');
     startDirectorActivity();
 
@@ -2300,6 +2326,8 @@
         reportError(err);
       }
     }).finally(function () {
+      window.finishActivityProgress('storyboard:individual:' + storyId);
+      storyState.director.individualDevelopmentProgress = null;
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
     });

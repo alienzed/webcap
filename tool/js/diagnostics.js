@@ -167,10 +167,8 @@ function diagnosticsAssessmentProgressError(runId, error) {
   card.querySelector('[data-progress-detail]').textContent = String(error.message || error);
 }
 
-function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
-  // Legacy deep links still open their specialist tool panels; only consolidated
-  // primary destinations appear in the tab bar.
-  var next = ['health', 'assessment', 'h3', 'models', 'benchmark', 'model-lab'].indexOf(tabName) !== -1 ? tabName : 'health';
+function setDiagnosticsTab(tabName, focusTab) {
+  var next = ['health', 'assessment', 'h3'].indexOf(tabName) !== -1 ? tabName : 'assessment';
   diagnosticsActiveTab = next;
   if (next !== 'assessment' && diagnosticsAssessmentReviewRefresh) {
     window.clearTimeout(diagnosticsAssessmentReviewRefresh);
@@ -180,7 +178,7 @@ function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
   var selectedButton = null;
 
   Array.prototype.forEach.call(document.querySelectorAll('[data-diagnostics-tab]'), function (button) {
-    var active = button.getAttribute('data-diagnostics-tab') === (next === 'models' || next === 'benchmark' || next === 'model-lab' ? 'assessment' : next);
+    var active = button.getAttribute('data-diagnostics-tab') === next;
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', active ? 'true' : 'false');
     button.tabIndex = active ? 0 : -1;
@@ -195,11 +193,6 @@ function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
 
   if (next === 'assessment') refreshUnifiedModelAssessment();
   if (next === 'h3') refreshH3CalibrationSettings();
-  if ((next === 'models' || next === 'benchmark') && !directorModelTestState.loaded) directorModelTestRefresh();
-  if (next === 'model-lab') {
-    if (modelLabRunId) modelLabFetch(modelLabRunId).catch(function (error) { reportConsoleError('Model Lab', error); });
-    else modelLabRefresh();
-  }
   if (focusTab && selectedButton) selectedButton.focus();
 }
 
@@ -230,14 +223,13 @@ function refreshUnifiedModelAssessment() {
   summary.textContent = 'Loading model findings…';
   return Promise.all([
     fetch('/fs/storyboard/director').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Director discovery failed.'); return p; }); }),
-    fetch('/app/director-model-test').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Director findings failed.'); return p; }); }),
     fetch('/app/model-lab?summary=1').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Model Lab findings failed.'); return p; }); })
   ]).then(function (values) {
     var directors = values[0].models || [];
-    var reports = values[1].calibrationReports || [];
-    var labRuns = values[2].runs || [];
-    var capabilityRuns = values[2].capabilityRuns || [];
-    var labModels = values[2].models || {};
+    var reports = [];
+    var labRuns = values[1].runs || [];
+    var capabilityRuns = values[1].capabilityRuns || [];
+    var labModels = values[1].models || {};
     var vision = labModels.visions || [];
     var judgeSelect = diagnosticsEl('diagnostics-assessment-judge-model');
     var previouslySelectedJudge = judgeSelect.value;
@@ -596,7 +588,7 @@ function runUnifiedModelAssessment() {
       diagnosticsAssessmentRunStatus = '';
       modelLabState.run = payload.run;
       modelLabState.runs = payload.runs || modelLabState.runs;
-      modelLabRender();
+      modelLabPublishProgress(payload.run);
       modelLabSchedulePoll();
       if (payload.run.status === 'error' || payload.run.status === 'interrupted') {
         throw new Error(payload.run.error || 'Assessment failed before probes could complete.');
@@ -766,13 +758,7 @@ function closeDiagnosticsModal() {
 
   // Diagnostics can contain very large model/evidence trees. Once the modal
   // closes they provide no value to the active workspace, so release them.
-  ['director-model-assessment-models', 'director-model-assessment-history'].forEach(function (id) {
-    var host = diagnosticsEl(id);
-    if (host) host.replaceChildren();
-  });
-  if (typeof directorModelTestState !== 'undefined') {
-    directorModelTestState.loaded = false;
-  }
+  // The unified Assessment retains its own evidence and progress state.
 }
 
 function refreshH3CalibrationSettings() {

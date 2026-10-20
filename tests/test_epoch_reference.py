@@ -21,11 +21,24 @@ def test_paired_vision_request_keeps_image_order_and_vocabulary():
 
 @pytest.mark.parametrize("feature,a,b", [
     ("", "a", "b"), ("bottom", "", "b"), ("bottom", "a", ""),
-    ("x" * 241, "a", "b"),
+    ("x" * 5001, "a", "b"),
 ])
 def test_paired_vision_rejects_missing_or_oversized_inputs(feature, a, b):
     with pytest.raises(ValueError):
         build_reference_comparison_messages(feature, a, b)
+
+
+def test_reference_comparison_names_the_correct_component():
+    from tool.server.caption_vision import reference_comparison_feature
+    top = reference_comparison_feature("BT Back", "simple string straps",
+        ["simple string straps", "metal ring"], "Bikini tops")
+    bottom = reference_comparison_feature("BB Back", "simple string straps",
+        ["simple string straps", "metal ring"], "Bikini bottoms")
+    assert '"Bikini tops" with "simple string straps"' in top
+    assert "BT Back" in top
+    assert '"Bikini bottoms" with "simple string straps"' in bottom
+    assert "BB Back" in bottom
+    assert top != bottom
 
 
 def _dataset(tmp_path, monkeypatch, annotations):
@@ -52,6 +65,21 @@ def test_exact_tag_lookup_ignores_unrelated_choices_and_videos(tmp_path, monkeyp
     assert matches[0]["size"] == len(b"example")
     assert epoch_reference.find_reference_candidates("set", "BB Shape", "v", "job-1") == []
     assert epoch_reference.find_reference_candidates("set", "BT Shape", "triangle", "job-1")[0]["media"] == "a.png"
+
+
+def test_same_text_reference_remains_scoped_by_top_and_bottom(tmp_path, monkeypatch):
+    _dataset(tmp_path, monkeypatch, {
+        "a.png": {"BT Back": ["simple string straps"]},
+        "b.png": {"BB Back": ["simple string straps"]},
+        "close.png": {"BT Back": ["simple string straps"],
+                      "BB Back": ["simple string straps"]},
+    })
+    assert [item["media"] for item in epoch_reference.find_reference_candidates(
+        "set", "BT Back", "simple string straps", "job-1"
+    )] == ["a.png", "close.png"]
+    assert [item["media"] for item in epoch_reference.find_reference_candidates(
+        "set", "BB Back", "simple string straps", "job-1"
+    )] == ["b.png", "close.png"]
 
 
 def test_reference_vocabulary_counts_scoped_options(tmp_path, monkeypatch):

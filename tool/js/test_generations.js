@@ -5345,14 +5345,22 @@
     window.addEventListener('webcap:test-sessions-cleared', function (event) {
       var folder = String(event && event.detail && event.detail.folder || '');
       if (!folder) return;
-      forgetTrackedTestSessions(folder);
+      var removed = event && event.detail && event.detail.sessions;
+      var scoped = Array.isArray(removed);
+      if (scoped) {
+        removed.forEach(function (name) { forgetTrackedTestSessions(folder, name); });
+      } else {
+        forgetTrackedTestSessions(folder);
+      }
       if (String(currentSessionFolder || '') === String(owningSetFolder(folder) || '')) {
-        currentSession = '';
-        currentSessionFolder = '';
-        currentSessionModel = '';
-        showSessionError = false;
-        if (isOpen() && String(launchFolder || '') === String(owningSetFolder(folder) || '')) {
+        if (!scoped || removed.indexOf(currentSession) !== -1) {
+          currentSession = '';
+          currentSessionFolder = '';
+          currentSessionModel = '';
+          showSessionError = false;
           renderStatus({ status: 'idle' });
+        }
+        if (isOpen() && String(launchFolder || '') === String(owningSetFolder(folder) || '')) {
           refreshSessions().catch(showError);
         }
       }

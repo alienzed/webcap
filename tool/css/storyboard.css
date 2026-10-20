@@ -2025,6 +2025,25 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   cursor: pointer;
 }
 
+.storyboard-extend-story {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.storyboard-scene-creation-dialog {
+  width: min(460px, 94vw);
+}
+
+.storyboard-scene-creation-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.storyboard-scene-creation-dialog input[type="number"] {
+  width: 90px;
+}
+
 .storyboard-scenes-list.is-focus .storyboard-scene {
   width: 100%;
 }

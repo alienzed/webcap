@@ -30,7 +30,10 @@
         externalSummary();
         if (data.error && data.error !== lastExternalError) { lastExternalError = data.error; report(new Error(data.error)); }
         if (data.lastWarning && data.lastWarning !== lastExternalError) { lastExternalError = data.lastWarning; window.reportConsoleError('External media discovery', data.lastWarning); }
-        if (data.revision !== externalRevision && canRefreshExternalPage()) load(true, {soft:true});
+        if (data.revision !== externalRevision) {
+          if (canRefreshExternalPage()) load(true, {soft:true});
+          else externalOverview += ' · Refresh to include changes';
+        }
         if (!data.complete) externalDiscoveryTimer = setTimeout(pollExternalDiscovery, 1400);
       }).catch(report);
   }
@@ -46,7 +49,7 @@
     el('media-explorer-rating').classList.toggle('hidden', external);
     el('media-explorer-date').classList.toggle('hidden', external);
     el('media-explorer-size').disabled = explorerMode !== 'grid';
-    ['path', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
+    ['path', 'type', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
       var option = el('media-explorer-sort').querySelector('option[value="' + value + '"]');
       option.hidden = !external;
     });
@@ -107,7 +110,11 @@
         window.reportConsoleError('Media Explorer metadata', job.lastError);
       }
       if (job.running) externalMetadataTimer = setTimeout(externalMetadataStatus, 1600);
-      else if (job.total && canRefreshExternalPage()) load(true, {soft:true});
+      else if (job.total && canRefreshExternalPage() && externalRevision !== -1) load(true, {soft:true});
+      else if (job.total) {
+        externalJobSummary += ' · Refresh to show updated metadata';
+        externalSummary();
+      }
     }).catch(report);
   }
   function requestExternalMetadata(scope, files) {
@@ -555,6 +562,9 @@
   }
   var facetIds = ['kind', 'model', 'folder', 'rating', 'date'];
   function hasFilters() {
+    if (isExternal()) return el('media-explorer-search').value.trim() ||
+      el('media-explorer-kind').value ||
+      ['min-side', 'min-mp', 'min-duration', 'max-duration'].some(function (name) { return el('media-explorer-' + name).value; });
     return artifact || owner || role || source || storyboardType() || el('media-explorer-search').value.trim() || facetIds.some(function (id) { return el('media-explorer-' + id).value; });
   }
   function emptyState() {
@@ -580,7 +590,12 @@
     if (owner) chip('Related to ' + owner, function () { owner = ''; load(true); });
     if (storyboardType()) chip(storyboardType() === 'exports' ? 'Exported Sequences' : 'Scenes', function () { el('media-explorer-storyboard-type').value = ''; load(true); });
     if (search.value.trim()) chip('“' + search.value.trim() + '”', function () { search.value = ''; load(true); });
-    facetIds.slice(1).forEach(function (id) {
+    if (isExternal()) {
+      ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (name) {
+        var input = el('media-explorer-' + name);
+        if (input.value) chip(input.closest('label').textContent.trim() + ' ' + input.value, function () { input.value = ''; load(true); });
+      });
+    } else facetIds.slice(1).forEach(function (id) {
       var select = el('media-explorer-' + id);
       if (select.value) chip(select.options[select.selectedIndex].textContent, function () { select.value = ''; load(true); });
     });
@@ -778,6 +793,7 @@
       role = button.dataset.mediaRole;
       artifact = ''; owner = '';
       source = '';
+      stopExternalTimers(); externalJobRunning = false;
       syncExternalControls();
       Array.prototype.forEach.call(document.querySelectorAll('.media-explorer-source'), function (node) {
         node.classList.toggle('active', node === button);
@@ -788,11 +804,11 @@
   Array.prototype.forEach.call(document.querySelectorAll('[data-media-source]'), function (button) {
     button.addEventListener('click', function () {
       source = button.dataset.mediaSource;
-      stopExternalTimers();
+      stopExternalTimers(); externalJobRunning = false;
       if (isExternal()) {
         explorerMode = 'list';
         facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).value = ''; });
-        if (!['newest', 'oldest', 'name', 'path', 'resolution', 'megapixels', 'duration'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
+        if (!['newest', 'oldest', 'name', 'path', 'type', 'resolution', 'megapixels', 'duration'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
       } else if (!['newest', 'oldest', 'name', 'rating'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
       setExplorerMode(explorerMode);
       syncExternalControls();
@@ -805,9 +821,8 @@
   document.querySelectorAll('[data-explorer-mode]').forEach(function (btn) { btn.addEventListener('click', function () { setExplorerMode(btn.dataset.explorerMode); }); });
   el('media-explorer-open-path').addEventListener('click', function () {
     var nextPath = el('media-explorer-external-path').value.trim();
-    if (nextPath !== externalPath) autoMetadataRequested.clear();
     externalPath = nextPath;
-    autoMetadataRequested.clear(); externalRevision = -1; externalOverview = ''; externalJobSummary = '';
+    autoMetadataRequested.clear(); externalRevision = -1; externalOverview = ''; externalJobSummary = ''; externalJobRunning = false;
     stopExternalTimers(); selected.clear(); updateSelection();
     load(true, {refreshFilesystem:true});
   });
@@ -855,7 +870,7 @@
   el('media-explorer-kind').addEventListener('change', function () { load(true); });
   el('media-explorer-storyboard-type').addEventListener('change', function () { load(true); });
   facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).addEventListener('change', function () { load(true); }); });
-  el('media-explorer-sort').addEventListener('change', function () { if (!isExternal() && ['path', 'resolution', 'megapixels', 'duration'].includes(this.value)) this.value = 'newest'; load(true); });
+  el('media-explorer-sort').addEventListener('change', function () { if (!isExternal() && ['path', 'type', 'resolution', 'megapixels', 'duration'].includes(this.value)) this.value = 'newest'; load(true); });
   el('media-explorer-size').addEventListener('input', function () {
     el('media-explorer-grid').style.setProperty('--media-tile-width', this.value + 'px');
   });
@@ -871,7 +886,14 @@
     el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
     facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
     el('media-explorer-storyboard-type').value = '';
-    sourceButtons.find(function (btn) { return btn.hasAttribute('data-media-role') && btn.dataset.mediaRole === ''; }).click();
+    if (isExternal()) {
+      ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (name) {
+        el('media-explorer-' + name).value = '';
+      });
+      load(true);
+    } else {
+      sourceButtons.find(function (btn) { return btn.hasAttribute('data-media-role') && btn.dataset.mediaRole === ''; }).click();
+    }
   });
   el('media-explorer-empty-action').addEventListener('click', function () {
     if (isExternal()) load(true, {refreshFilesystem:true});

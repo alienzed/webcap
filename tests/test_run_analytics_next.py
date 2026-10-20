@@ -191,10 +191,63 @@ def test_testing_lab_exposes_all_epoch_ratings_without_pooling_cohort_scores(tmp
     assert sorted(point["manualCount"] for group in result["cohorts"] for point in group["points"]) == [1, 1]
 
 
-def test_lab_ranking_and_scope_labels_use_selected_cohort_only():
+def test_lab_ranking_uses_all_epoch_ratings_without_cohort_filter():
     from pathlib import Path
-    script = (Path(__file__).resolve().parents[1] / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
     assert "function labRanked()" in script
-    assert "var p=labRanked()[0]" in script
-    assert "rated across all Test protocols at this epoch (descriptive)" in script
-    assert "Rankings use only this protocol" in script
+    assert "labSnapshot.epochs||[]" in script
+    assert "p.allManualAverage" in script
+    assert "p.ratedCount" in script
+    assert "var p=labRanked()[0]||labPoints()[0]" in script
+    assert "data-lab-show-all" in script
+    assert "operation:'checkpoint_workspace'" in script
+    assert "savedRating.textContent=item.rating==null?'Unrated':'Rated '+item.rating+'/5'" in script
+    assert "All runs (separately)" not in script
+    assert "Comparable group <select id=\"run-lab-cohort\"" not in html
+    assert 'id="run-lab-metric"' not in html
+    assert 'id="run-lab-cohort"' in html  # VL-only group remains separate
+
+def test_testing_lab_aggregates_independent_sessions_and_protocols(tmp_path, monkeypatch):
+    from tool.server import run_analytics as analytics
+
+    first, second, third = (tmp_path / name for name in ("one", "two", "three"))
+    for path in (first, second, third):
+        path.mkdir()
+
+    def result(name, job, epoch, kind="lora"):
+        return {"kind": kind, "mediaFile": name, "provenance": {
+            "sourceJobId": job, "sourceFolder": "set/a", "sourceEpoch": epoch,
+            "sourceRunName": job}}
+
+    sessions = {
+        first: {"modelId": "h3", "sourcePrompt": "red", "settings": {"strength": .8},
+                "results": [result("first.png", "run-a", 67), result("base.png", "run-a", 67, "base")]},
+        second: {"modelId": "h3", "sourcePrompt": "blue", "settings": {"strength": .9},
+                 "results": [result("second.png", "run-a", 67),
+                             result("unrated.png", "run-a", 67),
+                             result("other.png", "run-b", 67)]},
+        third: {"modelId": "h3", "sourcePrompt": "green", "settings": {"strength": .7},
+                "results": [result("third.png", "run-a", 67), result("different.png", "run-a", 80),
+                            result("unlinked.png", "", 80)]},
+    }
+    ratings = {first: {"first.png": 5}, second: {"second.png": 3, "other.png": 5},
+               third: {"third.png": 4, "different.png": 5, "unlinked.png": 5}}
+    monkeypatch.setattr(analytics, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(analytics.bench, "_session_directories", lambda _: list(sessions))
+    monkeypatch.setattr(analytics.bench, "_read_status", lambda path: sessions[path])
+    monkeypatch.setattr(analytics.bench, "_session_rating_map", lambda path: ratings[path])
+    monkeypatch.setattr(analytics.bench, "_session_vision_state", lambda _: {})
+    monkeypatch.setattr(analytics, "_campaigns", lambda _, warnings: [])
+
+    snapshot = analytics.overview(tmp_path)
+    rows = {(row["jobId"], row["epoch"]): row for row in snapshot["epochs"]}
+    assert rows["run-a", 67]["ratedCount"] == 3
+    assert rows["run-a", 67]["allManualAverage"] == 4
+    assert rows["run-a", 67]["testCount"] == 4
+    assert len(rows["run-a", 67]["sessions"]) == 3
+    assert rows["run-a", 80]["ratedCount"] == 1
+    assert rows["run-b", 67]["ratedCount"] == 1
+    assert snapshot["coverage"]["unlinkedPreviews"] == 1
+    assert sum(row["ratedCount"] for row in rows.values()) == 5

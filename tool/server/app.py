@@ -72,6 +72,7 @@ from .storyboard_first_cut import register_routes as register_storyboard_first_c
 from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .media_explorer import list_media as media_explorer_list_media
+from .external_media import register_routes as register_external_media_routes
 from .generate_store import load_result as generate_load_result
 from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
@@ -2081,6 +2082,9 @@ def generate_prompt_delete_route():
     except Exception as exc:
         app.logger.exception("GENERATE PROMPT DELETE FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+register_external_media_routes(app)
 
 
 @app.route("/fs/media_explorer", methods=["GET"])

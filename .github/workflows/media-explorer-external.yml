@@ -1,0 +1,35 @@
+name: Media Explorer external source regression
+
+on:
+  pull_request:
+    paths:
+      - 'tool/server/external_media.py'
+      - 'tool/server/media.py'
+      - 'tool/server/media_explorer.py'
+      - 'tool/server/app.py'
+      - 'tool/js/media_explorer.js'
+      - 'tool/tool.html'
+      - 'tool/css/media_explorer.css'
+      - 'tests/test_external_media.py'
+      - 'tests/test_media_explorer.py'
+      - '.github/workflows/media-explorer-external.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  external-media:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check tool/js/media_explorer.js
+      - run: python -m compileall -q tool/server/external_media.py tool/server/media.py tool/server/app.py tests/test_external_media.py
+      - run: cp tool/config.example.json tool/config.json
+      - run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - run: python -m pytest -q tests/test_external_media.py tests/test_media_explorer.py

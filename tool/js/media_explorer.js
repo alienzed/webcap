@@ -23,6 +23,16 @@
     var gallery = el('media-explorer-grid');
     gallery.classList.toggle('explorer-list', next === 'list');
     gallery.classList.toggle('explorer-single', next === 'single');
+    if (isExternal()) {
+      items.forEach(function (item, index) {
+        var card = gallery.children[index];
+        if (!card || card.dataset.id !== item.id) return;
+        var frame = card.querySelector('.media-explorer-card-thumb');
+        var media = frame.querySelector('img, video');
+        if (next === 'list' && media) media.remove();
+        if (next !== 'list' && !media) frame.prepend(mediaElement(item, false));
+      });
+    }
     document.querySelectorAll('[data-explorer-mode]').forEach(function (btn) { btn.setAttribute('aria-pressed', String(btn.dataset.explorerMode === next)); });
     syncExternalControls();
     if (next === 'single' && active < 0 && items.length) selectItem(0);
@@ -515,7 +525,13 @@
   function load(reset) {
     if (!visible) return;
     syncExternalControls();
-    if (isExternal() && !externalPath) { text(el('media-explorer-status'), 'Enter a folder path and select Browse.'); return; }
+    if (isExternal() && !externalPath) {
+      items = []; total = 0; active = -1; selected.clear();
+      el('media-explorer-grid').replaceChildren();
+      text(el('media-explorer-count'), 'No folder selected');
+      text(el('media-explorer-status'), 'Enter a folder path and select Browse.');
+      return;
+    }
     clearTimeout(debounce);
     window.syncShellLocationRoute();
     syncStoryboardType();
@@ -670,6 +686,7 @@
       role = button.dataset.mediaRole;
       artifact = ''; owner = '';
       source = '';
+      syncExternalControls();
       Array.prototype.forEach.call(document.querySelectorAll('.media-explorer-source'), function (node) {
         node.classList.toggle('active', node === button);
       });
@@ -680,6 +697,8 @@
     button.addEventListener('click', function () {
       source = button.dataset.mediaSource;
       stopExternalTimers();
+      if (isExternal()) explorerMode = 'list';
+      setExplorerMode(explorerMode);
       syncExternalControls();
       artifact = ''; owner = '';
       role = '';

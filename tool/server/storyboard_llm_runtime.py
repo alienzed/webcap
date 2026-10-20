@@ -1421,7 +1421,13 @@ def _attach_assessment_signals(models):
         for ref, probes in (run.get("models") or {}).items():
             merged = by_model.setdefault(ref, {})
             for kind, probe in probes.items():
-                if kind not in merged or probe.get("status") == "completed":
+                if (kind.startswith("director_scene_plan_") and
+                    run.get("protocol") != "webcap-model-assessment-structured-v2"):
+                    continue
+                if kind not in merged or (
+                    merged[kind].get("status") != "completed" and
+                    probe.get("status") == "completed"
+                ):
                     merged[kind] = probe
     for model in models:
         ref = str(model.get("id") or "").strip()

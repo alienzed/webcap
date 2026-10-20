@@ -113,7 +113,7 @@ def test_large_wildcard_corpus_is_sampled_without_losing_end_of_set():
     assert "150 representative examples from 220 distinct captions" in prompt
     assert "caption number 000" in prompt
     assert "caption number 219" in prompt
-    caption_section = prompt.split("[SET CAPTIONS]\\n", 1)[1].split("\\n\\n[OUTPUT]", 1)[0]
+    caption_section = prompt.split("[SET CAPTIONS]\n", 1)[1].split("\n\n[OUTPUT]", 1)[0]
     assert caption_section.count("[count=") == 150
     assert "Observed same-group tag combinations:" not in prompt
 
@@ -122,7 +122,7 @@ def test_verbose_wildcard_corpus_uses_character_budget():
     captions = ["item " + str(i) + " " + ("distinct construction " * 12)
                 for i in range(140)]
     request = build_request(captions)
-    part = request["prompt"].split("[SET CAPTIONS]\\n", 1)[1].split("\\n\\n[OUTPUT]", 1)[0]
+    part = request["prompt"].split("[SET CAPTIONS]\n", 1)[1].split("\n\n[OUTPUT]", 1)[0]
     assert len(part) <= 24000
     assert "item 0 " in part
     assert "item 139 " in part

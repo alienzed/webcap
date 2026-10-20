@@ -1362,61 +1362,59 @@ list_models.last_warnings = []
 
 
 
-def _assessment_signal(model_ref, thinking_by_ref=None):
-    from .director_model_calibration import get_report
+def _assessment_signal(model_ref, evidence=None):
+    """Use WebCap's current production-shaped assessment evidence only.
 
-    report = get_report(model_ref)
-    if not isinstance(report, dict):
-        report = {}
-    abilities = report.get("abilities") if isinstance(report.get("abilities"), dict) else {}
-    try:
-        coherent_output = max(0, int(abilities.get("coherentOutputTokens") or 0))
-    except (TypeError, ValueError):
-        coherent_output = 0
-    health = str(report.get("health") or "").strip()
-    pathologies = report.get("pathologies") if isinstance(report.get("pathologies"), list) else []
-    serious = bool(pathologies) or health == "likely-unusable"
-    confirmation = report.get("assessmentKind") == "confirmation"
-    # Short workload confirmation never establishes a model's maximum output.
-    limited = (not confirmation and not serious and report.get("status") == "complete"
-               and health in {"healthy", "limited"} and 0 < coherent_output < 8192)
-    thinking = report.get("thinking") is True
-    # Unified Model Assessment is authoritative when it has a completed thinking probe.
-    if thinking_by_ref is not None and model_ref in thinking_by_ref:
-        thinking = thinking_by_ref[model_ref]
+    Structured JSON output cannot establish legacy coherent-prose or context
+    ceilings, so never infer full-story suitability from those older thresholds.
+    """
+    probes = evidence or {}
+    scene = probes.get("director_scene_plan_2048") or {}
+    structure = [probes.get("language_synthesis") or {}, probes.get("language_challenge") or {}]
+    qualified = (scene.get("status") == "completed"
+                 and all(probe.get("status") == "completed" for probe in structure))
+    thinking = probes.get("director_thinking") or {}
+    structured_tokens = max((
+        int(probe.get("verifiedOutputTokens") or 0)
+        for kind, probe in probes.items() if kind.startswith("director_scene_plan_")
+        and probe.get("status") == "completed"
+    ), default=0)
+    observed = any(probe.get("status") for probe in [scene, *structure])
     return {
-        "status": str(report.get("status") or ""),
-        "health": health,
-        "assessmentKind": report.get("assessmentKind") or "calibration",
-        "pathologies": [str(item) for item in pathologies if str(item or "").strip()],
-        "seriousWarning": serious,
-        "limited": limited,
-        "fullStoryCapable": None if confirmation else (coherent_output >= 8192 and not serious),
-        "individualScenesRecommended": limited,
+        "status": "complete" if qualified else ("incomplete" if observed else ""),
+        "health": "healthy" if qualified else "",
+        "assessmentKind": "model-assessment",
+        "pathologies": [],
+        "seriousWarning": False,
+        "limited": False,
+        "fullStoryCapable": None,
+        "individualScenesRecommended": False,
         "abilities": {
-            "contextTokens": max(0, int(abilities.get("contextTokens") or 0)),
-            "structuredOutputTokens": max(0, int(abilities.get("structuredOutputTokens") or 0)),
-            "coherentOutputTokens": coherent_output,
+            "contextTokens": 0,
+            "structuredOutputTokens": structured_tokens,
+            "coherentOutputTokens": 0,
         },
-        "thinking": thinking,
-        "updatedAt": str(report.get("updatedAt") or ""),
+        "thinking": thinking.get("status") == "completed" and thinking.get("supported") is True,
+        "updatedAt": "",
     }
 
 
 def _attach_assessment_signals(models):
     from .model_lab import capability_run_summaries
-    thinking_by_ref = {}
-    for run in capability_run_summaries():
-        for ref, tests in (run.get("models") or {}).items():
-            probe = (tests or {}).get("director_thinking")
-            if ref not in thinking_by_ref and probe and probe.get("status") in {"completed", "failed"}:
-                thinking_by_ref[ref] = probe.get("supported") is True
+
+    # The newest successful result for each probe supersedes newer partial runs.
+    by_model = {}
+    for run in reversed(capability_run_summaries()):
+        for ref, probes in (run.get("models") or {}).items():
+            merged = by_model.setdefault(ref, {})
+            for kind, probe in probes.items():
+                if kind not in merged or probe.get("status") == "completed":
+                    merged[kind] = probe
     for model in models:
-        model_ref = str(model.get("id") or "").strip()
-        signal = _assessment_signal(model_ref, thinking_by_ref)
-        if signal is not None:
-            model["assessment"] = signal
+        ref = str(model.get("id") or "").strip()
+        model["assessment"] = _assessment_signal(ref, by_model.get(ref))
     return models
+
 
 def status():
     models = _attach_assessment_signals(list_models(reload=True))

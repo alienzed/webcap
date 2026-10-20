@@ -502,7 +502,7 @@
     return fetch(endpoint||'/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({folder:folder,operation:operation,criteria:criteria||{}})})
       .then(function(response){return response.json().then(function(data){
-        if(!response.ok||!data.ok)throw new Error(data.error||'Insights action failed.');
+        if(!response.ok||data.ok===false)throw new Error(data.error||'Insights action failed.');
         return data;
       });});
   }

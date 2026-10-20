@@ -310,7 +310,15 @@ def save_report(report):
 
 def import_reports(reports):
     """Keep newer local evidence and never apply imported runtime limits."""
-    normalized = [normalize_report(report) for report in reports]
+    normalized = []
+    for source in reports:
+        item = normalize_report(source)
+        if source.get("updatedAt"):
+            # Imported findings retain their original evidence timestamp.
+            # Otherwise re-importing the same source is never idempotent.
+            datetime.fromisoformat(str(source["updatedAt"]).replace("Z", "+00:00"))
+            item["updatedAt"] = str(source["updatedAt"])
+        normalized.append(item)
     payload = _read_document()
     count = 0
     for report in normalized:

@@ -1213,7 +1213,7 @@ def test_test_generations_sweep_is_opt_in_and_avoids_destructive_result_actions(
     assert "if (sweepMode) criteria.sweepWeights = parseSweepWeights(sweepWeights);" in script
     assert "sweepMode = false;" in script
     assert "if (result && result.strength !== undefined && result.strength !== null) return null;" in script
-    assert "identity.primary += ' · Weight ' + String(result.strength);" in script
+    assert "title = identity.primary;" in script
     assert "defaultStrength: defaultCandidateStrength" in script
     assert ".test-generations-sweep-setup" in css
 

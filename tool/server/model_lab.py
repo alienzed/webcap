@@ -151,7 +151,11 @@ def capability_run_summaries():
             continue
         run = get_run(row["id"])
         models = {}
-        for attempt in run.get("attempts") or []:
+        attempts = list(run.get("attempts") or [])
+        for source in (run.get("reused") or {}).values():
+            previous = get_run(source["runId"])
+            attempts.extend(a for a in previous.get("attempts") or [] if a.get("id") == source["attemptId"])
+        for attempt in attempts:
             ref = str(attempt.get("modelRef") or "")
             kind = str(attempt.get("kind") or "")
             if not ref or not kind:
@@ -191,6 +195,9 @@ def capability_run_summaries():
                 entry["outputTokenSamples"].append(round(float(tokens), 2))
             if kind == "director_thinking":
                 entry["supported"] = status == "completed" and bool(str(result.get("reasoning") or "").strip())
+            if kind.startswith("director_scene_plan_") and status == "completed":
+                entry["verifiedOutputTokens"] = max(entry.get("verifiedOutputTokens", 0),
+                    int(result.get("verifiedOutputTokens") or 0))
             if kind.startswith("director_writing") and status == "completed":
                 # A completed LLM job alone does not prove a long-form target.
                 # The calibration protocol owns real 8K/16K qualification.

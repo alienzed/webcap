@@ -203,6 +203,23 @@ def test_generated_phrases_keep_optional_group_identity_without_gates():
     assert draft["variationGroups"][1]["annotationGroup"] == ""
 
 
+def test_core_group_defaults_are_guidance_and_explicit_focus_can_promote_them():
+    request = build_request(
+        ["A woman with blonde hair wearing a triangle bikini.",
+         "A woman with brown hair wearing a teardrop bikini."],
+        focus="Hair",
+        annotations=[
+            {"Hair": ["blonde"], "BT Shape": ["triangle"]},
+            {"Hair": ["brown"], "BT Shape": ["teardrop"]},
+        ],
+    )
+    prompt = request["prompt"]
+    assert '"group":"Hair"' in prompt
+    assert "- Vary only (unscored): Viewpoint, Background, Lighting." in prompt
+    assert "- Leakage (secondary independence): Position, Hair, Body, Clothing." in prompt
+    assert "explicit focus can promote a generic group" in prompt
+
+
 def test_wildcard_schema_does_not_require_every_phrase_to_be_a_set_tag():
     schema = build_request(["A woman wearing a black bikini in a studio."])["response_schema"]
     fields = schema["properties"]["variationGroups"]["items"]

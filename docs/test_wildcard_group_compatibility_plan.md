@@ -9,14 +9,22 @@ integrity guarantee; it was a post-hoc gate on an editable Director suggestion.
 
 - Scope caption examples to media captured by the **selected training run**.
 - Drop duplicate captions into one example with a frequency count.
-- Sample evenly across the Set when needed, at most 150 distinct examples and
-  approximately 24,000 caption characters, rather than truncating to early filenames.
-- Send the Set tag-group glossary **once**, with aliases and terms, not a
-  per-item group map or all combinations observed in individual images.
-- Ask Director to prioritize the learned subject/component construction, and
-  keep incidental hair, pose, setting, lighting, and camera variation secondary.
-- Preserve exact annotation-group identity in the Director draft where it is
-  genuinely supported, but make it optional for natural-language alternatives.
+- Compile run-scoped group/tag counts in memory; keep identical tag strings
+  separate across groups. By default omit the generic Viewpoint, Position,
+  Hair, Body, Clothing, Lighting, and Background groups from concept evidence.
+  Explicitly focusing one of those groups can restore it.
+- Use at most 24 captions / approximately 7,200 characters, preferring captions
+  covering distinct and rare concept tags. No filenames, item-by-item group
+  maps, or observed-combination matrices are sent.
+- Each observed group appears once, with its alias and tag counts.
+- Give Director editable role defaults: Viewpoint / Background / Lighting are
+  Vary only; Position / Hair / Body / Clothing are Leakage; learned concept
+  groups are Primary. Explicit focus overrides these suggestions.
+- Ask Director to prioritize construction while keeping incidental detail secondary.
+- Preserve exact annotation-group identity in the Director draft and Campaign
+  dimension metadata when supported. Campaign References use that group as a
+  preference but still allow manual selection from another tagged group.
+  Free-language alternatives keep optional empty annotationGroup.
 - Return the Director proposal for user editing and preview. No second
   exact-tag/observed-combination gate after completion.
 - Existing generated Test media, saved wildcards and manual prompt editing
@@ -25,12 +33,12 @@ integrity guarantee; it was a post-hoc gate on an editable Director suggestion.
 
 ## Boundaries and testing
 
-The 24,000-character caption limit is a conservative **input-size heuristic**,
+The 7,200-character caption limit is a conservative **input-size heuristic**,
 not an exact 16K-token guarantee across different local model tokenizers. The
-one-time vocabulary, instructions, schema and output also consume context.
+compiled group inventory, instructions, schema and output also consume context.
 Large configurations should be measured against the selected Director model's
 actual tokenizer/runtime context before claiming a guaranteed fit.
 
-Unit tests cover representative examples, edge-of-Set retention, source-run
-filtering, optional semantic identity and editable natural-language drafts.
+Unit tests cover source-run filtering, scoped tag frequencies, rare-tag
+representation, core-group defaults, optional identity, and Campaign provenance.
 Real model/browser QA is still required to verify result quality.

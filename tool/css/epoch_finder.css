@@ -281,6 +281,26 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .test-references-screen .epoch-finder-reference-tile img{height:225px}
 @media(max-width:850px){.test-references-screen .epoch-finder-layout{grid-template-columns:1fr}.test-references-screen .epoch-finder-reference-workspace .epoch-finder-reference-gallery{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}.test-references-screen .epoch-finder-reference-tile img{height:165px}}
 
+/* Training References: concept-first group and tag browser, no global settings. */
+.test-references-screen .epoch-finder-panel-heading #test-references-refresh{margin:0;padding:5px 9px;width:auto;flex:none}
+.test-references-screen .epoch-finder-sidebar h4{font-size:12px;margin:14px 0 7px;font-weight:700}
+.test-references-screen #test-references-run-status{margin:5px 0 0;font-size:11px}
+.test-references-groups{display:grid;gap:5px;max-height:250px;overflow-y:auto}
+.test-references-group{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:9px 11px;border:1px solid var(--border-color,#384653);border-radius:7px;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.test-references-group.active{border-color:var(--accent-color,#e99b16);background:var(--panel-bg,#1b2530);font-weight:700}
+.test-references-group small{opacity:.7;white-space:nowrap;font-weight:400}
+.test-references-other-toggle{padding:8px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer;opacity:.78}
+.test-references-tag-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.test-references-tag-heading h4{margin:14px 0 7px}
+.test-references-tag-heading span{font-size:11px;opacity:.75}
+.test-references-screen .test-references-tags{display:grid;grid-template-columns:1fr;gap:5px;max-height:250px;margin:0 0 12px}
+.test-references-screen .test-references-tag{width:100%;text-align:left;border-radius:7px;padding:8px 10px}
+.test-references-screen .test-references-workflow-heading{margin:0 0 12px}
+.test-references-screen .test-references-workflow-heading .test-references-nav{margin:0;flex:none}
+.test-references-screen .test-references-nav button{flex:none;white-space:nowrap}
+.test-references-screen .epoch-finder-reference-workspace .epoch-finder-reference-gallery{margin:10px 0}
+@media(max-width:850px){.test-references-screen .test-references-tags{display:flex;max-height:170px}.test-references-screen .test-references-tag{width:auto}}
+
 /* Analytics evidence hierarchy, responsive data surfaces, and traceable model preview. */
 #run-analytics-screen .epoch-finder-dashboard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
 #run-analytics-screen .epoch-finder-dashboard>.epoch-finder-panel{min-width:0;margin:0}

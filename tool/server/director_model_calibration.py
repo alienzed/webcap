@@ -325,33 +325,8 @@ def import_reports(reports):
 
 
 
-def begin_calibration(model_ref):
-    model_ref = str(model_ref or "").strip()
-    if not model_ref:
-        raise ValueError("Director calibration modelRef is required.")
-    payload = _read_document()
-    payload["profiles"].pop(model_ref, None)
-    payload["reports"].pop(model_ref, None)
-    if payload["profiles"] or payload["reports"]:
-        _write_document(payload)
-    else:
-        path = _path()
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
-    return {
-        "profiles": list_profiles(),
-        "reports": list_reports(),
-    }
 
-def clear_calibration():
-    path = _path()
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        pass
-    return {"profiles": [], "reports": []}
+# Historical profiles remain readable by older QA preflight consumers.
 
 def list_profiles():
     profiles = _read_document()["profiles"]
@@ -365,85 +340,3 @@ def get_profile(model_ref):
     profile = _read_document()["profiles"].get(model_ref)
     return json.loads(json.dumps(profile)) if isinstance(profile, dict) else None
 
-
-def save_profile(profile):
-    profile = profile if isinstance(profile, dict) else {}
-    model_ref = str(profile.get("modelRef") or "").strip()
-    runtime_id = str(profile.get("runtimeId") or "").strip()
-    model_id = str(profile.get("modelId") or "").strip()
-    if not model_ref or not runtime_id or not model_id:
-        raise ValueError("Director calibration profile requires modelRef, runtimeId, and modelId.")
-
-    max_tokens = _positive_int(profile.get("maxTokens"), "Director calibration maxTokens")
-    context_mode = str(profile.get("contextMode") or "").strip()
-    if context_mode not in {"calibrated", "runtime"}:
-        raise ValueError("Director calibration contextMode must be calibrated or runtime.")
-
-    context_size = profile.get("contextSize")
-    if context_mode == "calibrated":
-        context_size = _positive_int(context_size, "Director calibration contextSize")
-    else:
-        try:
-            context_size = max(0, int(context_size or 0))
-        except (TypeError, ValueError):
-            context_size = 0
-
-    attempts = profile.get("attempts")
-    if not isinstance(attempts, list) or not attempts:
-        raise ValueError("Director calibration profile requires calibration attempts.")
-
-    normalized_attempts = [_normalize_attempt(item) for item in attempts]
-    if not any(
-        attempt["kind"] == "output"
-        and attempt["status"] == "passed"
-        and attempt["target"] == max_tokens
-        for attempt in normalized_attempts
-    ):
-        raise ValueError("Director calibration maxTokens must match a passed output attempt.")
-    if not any(
-        attempt["kind"] == "prose"
-        and attempt["status"] == "passed"
-        and attempt["target"] == max_tokens
-        for attempt in normalized_attempts
-    ):
-        raise ValueError("Director calibration maxTokens must also match a passed long-form prose attempt.")
-    if context_mode == "calibrated" and not any(
-        attempt["kind"] == "context"
-        and attempt["status"] == "passed"
-        and attempt["target"] == context_size
-        for attempt in normalized_attempts
-    ):
-        raise ValueError("Director calibration contextSize must match a passed context attempt.")
-
-    normalized = {
-        "version": PROFILE_VERSION,
-        "modelRef": model_ref,
-        "runtimeId": runtime_id,
-        "runtimeName": str(profile.get("runtimeName") or "").strip(),
-        "modelId": model_id,
-        "label": str(profile.get("label") or model_id).strip(),
-        "contextMode": context_mode,
-        "contextSize": context_size,
-        "maxTokens": max_tokens,
-        "calibratedAt": _now_iso(),
-        "attempts": normalized_attempts,
-    }
-
-    payload = _read_document()
-    payload["profiles"][model_ref] = normalized
-    _write_document(payload)
-    return json.loads(json.dumps(normalized))
-
-
-def clear_profiles():
-    payload = _read_document()
-    payload["profiles"] = {}
-    if payload.get("reports"):
-        _write_document(payload)
-    else:
-        path = _path()
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
-    return []

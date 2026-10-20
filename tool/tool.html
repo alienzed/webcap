@@ -2980,112 +2980,7 @@
                             </details>
                         </section>
                     </div>
-                    <div id="diagnostics-panel-models" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="models" role="tabpanel" aria-label="Director calibration tools" hidden>
-                        <section class="app-settings-section" id="director-model-assessment-settings">
-                            <div class="app-settings-section-header director-model-assessment-header">
-                                <div class="director-model-assessment-title-row">
-                                    <div class="app-settings-section-title">Director Models <span id="director-model-assessment-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
-                                    <div class="director-model-assessment-header-actions">
-                                        <button id="director-model-assessment-refresh" type="button" class="review-captions-btn">Refresh Models</button>
-                                        <button id="director-model-assessment-run" type="button">Assess Selected</button>
-                                        <button id="director-model-assessment-stop" type="button" class="hidden">Stop</button>
-                                    </div>
-                                </div>
-                                <div class="app-settings-section-copy">Learn which WebCap Director workflows each model can reliably handle. Expand a model for the underlying assessment tests and evidence.</div>
-                                <div class="director-model-assessment-progress-row">
-                                    <strong id="director-model-assessment-progress">Loading model status…</strong>
-                                    <span id="director-model-assessment-selection-summary" class="app-settings-help">Loading selection…</span>
-                                </div>
-                            </div>
-                            <div id="director-model-assessment-activity" class="director-model-test-activity" aria-live="polite"></div>
-                            <div id="director-model-assessment-models" class="director-model-assessment-groups">
-                                <p class="app-settings-help">Open this tab to load Director models.</p>
-                            </div>
-                            <div class="director-model-assessment-learned-actions">
-                                <button id="director-model-test-clear-calibration" type="button" class="review-captions-btn" disabled>Clear Learned Results</button>
-                            </div>
-                            <details class="director-model-assessment-raw">
-                                <summary>
-                                    <strong>Raw Assessment Runs</strong>
-                                    <span class="app-settings-help">Temporary full prompts and model outputs. Learned model results remain when raw history is deleted.</span>
-                                </summary>
-                                <div class="app-settings-disclosure-body">
-                                    <div class="app-settings-actions app-settings-actions-inline director-model-assessment-raw-actions">
-                                        <button id="director-model-assessment-clear-raw" type="button" class="review-captions-btn" disabled>Clear Raw Runs</button>
-                                    </div>
-                                    <div id="director-model-assessment-history"><p class="app-settings-help">No raw assessment runs are available.</p></div>
-                                </div>
-                            </details>
-                                                </section>
-                    </div>
-                    <div id="diagnostics-panel-benchmark" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="benchmark" role="tabpanel" aria-label="Director benchmark tools" hidden>
-                        <section class="app-settings-section" id="director-model-test-settings">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Director Benchmark <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
-                                <div class="app-settings-section-copy">Run one editable prompt sequentially across selected Director models for side-by-side qualitative comparison. Benchmark results remain session-only unless exported.</div>
-                            </div>
-                            <div id="director-model-test-protocol" class="app-settings-help">Open this tab to load the protocol and available models.</div>
-                            <label class="app-settings-field app-settings-field-wide">
-                                <span class="app-settings-field-label">Benchmark Prompt</span>
-                                <textarea id="director-model-test-prompt" rows="14" spellcheck="true"></textarea>
-                                <span class="app-settings-note">The exact text is frozen into the current benchmark session when the test starts.</span>
-                            </label>
-                            <div class="director-model-test-model-header">
-                                <span class="app-settings-field-label">Models to benchmark</span>
-                                <div class="director-model-test-model-actions">
-                                    <button id="director-model-test-refresh" type="button" class="review-captions-btn">Refresh Models</button>
-                                    <button id="director-model-test-select-all" type="button" class="review-captions-btn">All</button>
-                                    <button id="director-model-test-select-none" type="button" class="review-captions-btn">None</button>
-                                </div>
-                            </div>
-                            <div id="director-model-test-models" class="director-model-test-models"></div>
-                            <div class="app-settings-actions app-settings-actions-inline director-model-test-actions">
-                                <button id="director-model-test-run" type="button">Run Selected</button>
-                                <button id="director-model-test-stop" type="button" class="hidden">Stop</button>
-                                <button id="director-model-test-export" type="button" class="review-captions-btn" disabled>Export JSON</button>
-                            </div>
-                            <div id="director-model-test-activity" class="director-model-test-activity" aria-live="polite"></div>
-                            <div id="director-model-test-results"><p class="app-settings-help">No results yet.</p></div>
-                            <details class="app-settings-advanced director-model-assessment-raw">
-                                <summary>Saved assessment writing samples</summary>
-                                <div id="director-model-test-saved-samples" class="app-settings-disclosure-body"><p class="app-settings-help">Open Benchmark to load saved samples.</p></div>
-                            </details>
-                        </section>
-                    </div>
-                    <div id="diagnostics-panel-model-lab" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="model-lab" role="tabpanel" aria-labelledby="diagnostics-tab-model-lab" hidden>
-                        <section class="app-settings-section" id="model-lab-settings">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Model Lab <span id="model-lab-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
-                                <div class="app-settings-section-copy">Run persistent, diagnostics-only Vision and Director probes against the current Set. Individual failures are recorded and the suite continues.</div>
-                            </div>
-                            <div id="model-lab-source" class="app-settings-help">Open this tab from a Set to prepare a representative sample.</div>
-                            <label class="app-settings-field"><span class="app-settings-field-label">Sample items</span><input id="model-lab-sample-count" type="number" min="2" max="24" value="8"></label>
-                            <div class="model-lab-grid">
-                                <div>
-                                    <div class="director-model-test-model-header"><span class="app-settings-field-label">Vision models</span><button id="model-lab-vision-all" type="button" class="review-captions-btn">All</button></div>
-                                    <div id="model-lab-vision-models" class="director-model-test-models"></div>
-                                    <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Reference Vision for Director tests</span><select id="model-lab-reference-vision"></select></label>
-                                </div>
-                                <div>
-                                    <div class="director-model-test-model-header"><span class="app-settings-field-label">Director models</span><button id="model-lab-director-all" type="button" class="review-captions-btn">All</button></div>
-                                    <div id="model-lab-director-models" class="director-model-test-models"></div>
-                                    <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Reference Director for Vision tests</span><select id="model-lab-reference-director"></select></label>
-                                </div>
-                            </div>
-                            <div class="app-settings-actions app-settings-actions-inline">
-                                <button id="model-lab-run" type="button">Run Model Lab</button>
-                                <button id="model-lab-stop" type="button" class="hidden">Stop</button>
-                                <button id="model-lab-resume" type="button" class="review-captions-btn hidden">Resume</button>
-                                <button id="model-lab-refresh" type="button" class="review-captions-btn">Refresh</button>
-                            </div>
-                            <div id="model-lab-activity" class="director-model-test-activity" aria-live="polite"></div>
-                            <div id="model-lab-results"><p class="app-settings-help">No Model Lab run selected.</p></div>
-                            <details class="director-model-assessment-raw">
-                                <summary><strong>Model Lab History</strong><span class="app-settings-help">Persistent diagnostics evidence. Production Set state is not modified.</span></summary>
-                                <div class="app-settings-disclosure-body"><div id="model-lab-history"></div></div>
-                            </details>
-                        </section>
-                    </div>
+
                 </div>
             </div>
         </div>
@@ -3418,7 +3313,6 @@
         <script src="/static/js/h3_calibration_results.js"></script>
         <script src="/static/js/app_settings.js"></script>
         <script src="/static/js/diagnostics.js"></script>
-        <script src="/static/js/director_model_test.js"></script>
         <script src="/static/js/model_lab.js"></script>
         <script src="/static/js/smart_set.js"></script>
         <script src="/static/js/media_context_actions.js"></script>

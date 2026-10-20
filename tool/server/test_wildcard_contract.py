@@ -29,6 +29,22 @@ def observed_group_combinations(annotations, eligible_media):
             for group, combos in sorted(observed.items())}
 
 
+def _representative_captions(captions, max_items=150, max_chars=24000):
+    """Bound Director input while retaining examples across the whole Set."""
+    counts = Counter(captions)
+    unique = list(counts)
+    if not unique:
+        return [], 0
+    count = min(len(unique), max_items)
+    while True:
+        indices = [index * len(unique) // count for index in range(count)]
+        examples = ["[count=" + str(counts[unique[index]]) + "] " + unique[index]
+                    for index in indices]
+        if sum(len(example) + 2 for example in examples) <= max_chars or count == 1:
+            return examples, len(unique)
+        count -= 1
+
+
 def build_request(captions, set_name="", focus="", vocabulary=None, group_combinations=None):
     cleaned = [_clean_caption(value) for value in (captions or [])]
     cleaned = [value for value in cleaned if value]
@@ -51,10 +67,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         )
         groups.append({"group": group, "alias": _clean_context(raw.get("alias")), "terms": terms})
 
-    counts = Counter(cleaned)
-    corpus = []
-    for caption, count in counts.most_common():
-        corpus.append("[count=" + str(count) + "] " + caption)
+    corpus, unique_count = _representative_captions(cleaned)
 
     schema = {
         "type": "object",
@@ -76,7 +89,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["label", "options", "annotationGroup"],
+                    "required": ["label", "options"],
                     "properties": {
                         "label": {"type": "string", "minLength": 1},
                         "annotationGroup": {"type": "string", "description": "Exact Set annotation group name when options are tags; empty for free prompt variation."},
@@ -96,7 +109,8 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "Set name: " + (set_name or "(not supplied)"),
         "Explicit focus: " + (focus or "(auto - infer from Set name and repeated caption language)"),
         "Annotation groups and terms: " + (json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"),
-        "Observed same-group tag combinations: " + json.dumps(group_combinations or {}, ensure_ascii=False),
+        "Caption sampling: " + str(len(corpus)) + " representative examples from " +
+        str(unique_count) + " distinct captions. [count=N] indicates exact duplicates.",
     ]
 
     prompt = (
@@ -112,8 +126,11 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "[FOCUS PRIORITY]\n"
         "- If Explicit focus is provided, treat it as the primary concept to mine deeply.\n"
         "- Otherwise infer the primary concept from the Set name first, then from repeated caption language and frequency.\n"
-        "- The primary concept should receive the richest decomposition. Secondary recurring dimensions such as pose, camera/view, "
-        "physical appearance, background, and lighting are valid and useful, but they must not crowd out the primary concept.\n\n"
+        "- Prioritize the trained subject's construction, distinct components, shape, material, and color. "
+        "A description may mention both a top and a bottom with identically named strap types: "
+        "treat those as different attributes tied to their respective components.\n"
+        "- Pose, hair, setting, lighting and camera are context. Keep them stable or, at most, "
+        "include one or two useful secondary variations; do not build a wildcard around every detail.\n\n"
         "[COMPOSITION RULES]\n"
         "- Each wildcard group must vary exactly one attribute, even when captions combine several. "
         "For example write '{brown|black|blonde|ginger} hair', not "
@@ -121,20 +138,18 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "Keep hair style and hair color separate.\n"
         "- Prefer independent, composable attributes over whole-phrase alternatives. "
         "For example, separate color, pattern, trim, top shape, and bottom shape rather than collapsing them into a single 'style' wildcard.\n"
-        "- Set annotationGroup to the exact group name ONLY if every option is an exact observed tag in that group. "
-        "For natural-language caption phrases use an empty annotationGroup; never map paraphrases to exact tag identifiers.\n"
+        "- Set annotationGroup to a Set group ONLY when every option is an exact observed tag of that group. "
+        "Otherwise use an empty annotationGroup. Never infer group identity from shared words alone.\n"
         "- Position/pose wildcard options may be descriptive phrases rather than exact Position tags. "
         "For example 'standing upright' is not the same tag as 'standing'. If ANY option is not an exact "
         "tag name, leave annotationGroup empty for that dimension rather than claiming a tag mapping.\n"
-        "- For tags in the SAME annotation group, only use joint combinations observed together in the selected training media. "
-        "If a pair was never observed together in that group, treat it as mutually exclusive. "
-        "Prefer one option from that group in each resolved caption unless an observed tag combination requires several. "
-        "Do not apply this restriction across DIFFERENT annotation groups; cross-group recombination tests generalization.\n"
+        "- Do not recombine mutually exclusive shapes into one choice. "
+        "Independently vary actual components, but keep each resolved prompt physically meaningful.\n"
         "- Recombine attributes across dimensions so tests exercise independently selectable properties, "
         "not merely replay complete caption fragments.\n"
-        "- Annotation groups, aliases, and terms identify important dimensions, but are not proof of training membership. "
-        "Only the supplied selected-run captions and observed tag combinations provide evidence for values.\n"
-        "- Do not invent unseen values or generalization probes. Every option must be evidenced in the training captions or scoped tags.\n"
+        "- The one-time group vocabulary is semantic context, not per-item truth. "
+        "The caption examples are selected-run evidence; omitted captions may contain additional variations.\n"
+        "- Prefer observed variations. If a useful value is unsupported by these examples, do not claim it was trained.\n"
         "- Use supplied garment-construction terms accurately; do not invent nonsensical hardware or garment structures.\n"
         "- Every wildcard option must itself be usable prompt text. Never emit category placeholders such as 'various styles', "
         "'other background', 'different poses', 'multiple colors', 'etc.', or similar descriptions of options you failed to enumerate.\n"
@@ -145,7 +160,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "[GENERAL RULES]\n"
         "- Each caption is prefixed with [count=N] frequency metadata. Use the count as evidence of prevalence; it is not caption text.\n"
         "- Keep stable subject tokens, identity terms, and consistently recurring descriptors outside wildcard braces.\n"
-        "- Put evidenced alternatives in {a|b|c} groups; do not add new values absent from training.\n"
+        "- Put concrete interchangeable alternatives in {a|b|c} groups; leave consistent terms outside braces.\n"
         "- Consolidate obvious synonymous wording only when the alternatives mean the same thing.\n"
         "- Put shared nouns and grammar outside braces; use the shortest interchangeable option that keeps every result natural. "
         "Whole phrases are appropriate only for a genuinely inseparable single attribute.\n"

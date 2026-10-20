@@ -590,11 +590,7 @@ function runUnifiedModelAssessment() {
       action: 'start',
       config: {
         folder: sourceFolder, files: files, groups: modelLabGroups(), depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
-        visionModels: visions, directorModels: directors,
-        referenceVisionRef: '',
-        referenceDirectorRef: '',
-        referenceVision: null,
-        referenceDirector: null
+        visionModels: visions, directorModels: directors
       }
     }).then(function (payload) {
       if (payload.noWork) {

@@ -528,9 +528,6 @@ function refreshUnifiedModelAssessment() {
       });
     });
     results.replaceChildren(table);
-    // Override obsolete CSS nth-child rules until their stylesheet is retired.
-    table.querySelectorAll('thead th:nth-child(3), thead th:nth-child(4), tbody tr:first-child td:nth-child(3), tbody tr:first-child td:nth-child(4)')
-      .forEach(function (node) { node.style.setProperty('display', 'table-cell', 'important'); });
     diagnosticsAssessmentSortAndFilter();
     diagnosticsAssessmentSyncHeaderSelection();
     if (diagnosticsAssessmentReviewRefresh) window.clearTimeout(diagnosticsAssessmentReviewRefresh);

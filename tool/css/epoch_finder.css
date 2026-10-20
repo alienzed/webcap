@@ -453,3 +453,10 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-frame .test-generations-result-primary{align-items:center}
 .epoch-finder-frame .test-generations-result-footer{font-size:12px}
 .epoch-finder-frame .test-preview-card-menu-items{min-width:150px}
+
+/* Keep contextual actions visible outside the compact footer without clipping. */
+.test-generations-result-card:has(.test-preview-card-menu){overflow:visible}
+.test-generations-result-card .test-preview-card-menu-items{z-index:20}
+.test-generations-compare-item:has(.test-preview-card-menu){overflow:visible}
+.test-preview-card-menu[open]{z-index:20}
+.test-preview-card-menu-items{max-width:min(300px,90vw)}

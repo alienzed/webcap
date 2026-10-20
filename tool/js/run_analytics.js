@@ -434,7 +434,8 @@
     lab('featured').innerHTML=picks.map(function(item){
       var p=item.point;
       if(!p)return '<div class="run-lab-feature"><small>'+esc(item.label)+'</small><p>Rate more saved renders to reveal another contender.</p></div>';
-      return '<div class="run-lab-feature"><small>'+esc(item.label)+'</small><h3>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</h3><strong>'+p.allManualAverage.toFixed(2)+'/5</strong><p>'+p.ratedCount+' of '+p.testCount+' Test renders rated · '+p.sessions.length+' sessions</p><small>'+esc(item.note)+'</small><div class="run-lab-feature-actions"><button type="button" data-lab-feature="inspect" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect renders</button><button type="button" data-lab-feature="test" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Prepare 10 tests</button></div></div>';
+      var bins=p.ratingDistribution||{},strong=(bins['4']||0)+(bins['5']||0),weak=(bins['1']||0)+(bins['2']||0);
+      return '<div class="run-lab-feature"><small>'+esc(item.label)+'</small><h3>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</h3><strong>'+p.allManualAverage.toFixed(2)+'/5</strong><p>'+p.ratedCount+' of '+p.testCount+' Test renders rated · '+p.sessions.length+' sessions</p><p>'+strong+' rated 4–5★ · '+weak+' rated 1–2★</p><small>'+esc(item.note)+'</small><div class="run-lab-feature-actions"><button type="button" data-lab-feature="inspect" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect renders</button><button type="button" data-lab-feature="test" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Prepare 10 tests</button></div></div>';
     }).join('');
   }
   function labHistory(){
@@ -488,8 +489,8 @@
       labEmpty('No generated Test renders linked to a training epoch.');
     var tooManyUnrated=total>0&&rated<total/2;
     if(tooManyUnrated||!ranked.length&&total>rated){
-      lab('challenge-title').textContent='Improve your evidence: '+(total-rated)+' unrated renders';
-      lab('challenge-description').textContent='Rate a short blind batch from saved Test results before generating more. '+rated+' of '+total+' linked renders are rated.';
+      lab('challenge-title').textContent='Improve your evidence: '+(total-rated)+' unrated records';
+      lab('challenge-description').textContent='Rate a blind batch from available saved Test files before generating more. '+rated+' of '+total+' linked Test records are rated.';
       lab('challenge-actions').innerHTML='<button type="button" data-lab-action="review">Blind-rate five</button><button type="button" data-lab-action="inspect">Inspect a contender</button>';
     }else if(ranked.length>=2){
       lab('challenge-title').textContent='Compare your two strongest rated contenders';

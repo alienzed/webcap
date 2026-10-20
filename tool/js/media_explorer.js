@@ -25,6 +25,7 @@
     gallery.classList.toggle('explorer-single', next === 'single');
     document.querySelectorAll('[data-explorer-mode]').forEach(function (btn) { btn.setAttribute('aria-pressed', String(btn.dataset.explorerMode === next)); });
     syncExternalControls();
+    if (next === 'single' && active < 0 && items.length) selectItem(0);
     if (next === 'single' && active >= 0) selectItem(active);
   }
   function stopExternalTimers() { clearTimeout(externalDiscoveryTimer); clearTimeout(externalMetadataTimer); externalDiscoveryTimer = null; externalMetadataTimer = null; }
@@ -476,8 +477,8 @@
       text(el('media-explorer-empty-action'), 'Try again'); return;
     }
     text(el('media-explorer-empty-title'), filtered ? 'No matching media' : (isExternal() ? 'Choose an external folder' : 'Generated media, in one place'));
-    text(el('media-explorer-empty-description'), filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Scan full history for older generated media.');
-    text(el('media-explorer-empty-action'), !full ? 'Scan full history' : filtered ? 'Clear filters' : 'Refresh library');
+    text(el('media-explorer-empty-description'), isExternal() ? 'Browse another folder or adjust the filters. Technical metadata filters show verified matches only.' : (filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Scan full history for older generated media.'));
+    text(el('media-explorer-empty-action'), isExternal() ? 'Refresh' : (!full ? 'Scan full history' : filtered ? 'Clear filters' : 'Refresh library'));
   }
   function filterControls() {
     var chips = el('media-explorer-filter-chips'); chips.replaceChildren();
@@ -531,7 +532,7 @@
     emptyState();
     var controller = new AbortController(); activeRequest = controller;
     el('media-explorer-scan-all').disabled = full && loading;
-    el('media-explorer-status').textContent = full ? 'Scanning full generated-media history…' : 'Discovering recent media…';
+    el('media-explorer-status').textContent = isExternal() ? 'Discovering external media…' : (full ? 'Scanning full generated-media history…' : 'Discovering recent media…');
     el('media-explorer-status').dataset.state = 'loading';
     var qs = new URLSearchParams({limit:pageSize, offset:reset ? 0 : offset, role:role,
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
@@ -568,7 +569,7 @@
           if (card) item = Object.assign(previousItems.get(item.id), item);
           items.push(item);
           if (!card) card = renderCard(item, index);
-          text(card.querySelector('.media-explorer-card-sub'), cardSummary(item));
+          text(card.querySelector('.media-explorer-card-sub'), isExternal() ? ((item.metadata && item.metadata.resolution) || 'Metadata unknown') : cardSummary(item));
           text(card.querySelector('.media-explorer-card-badge'), badgeText(item));
           card.querySelector('.media-explorer-card-open').setAttribute('aria-label', item.fileName + ', ' + item.role);
           card.dataset.index = index;
@@ -594,7 +595,8 @@
       if (isExternal()) {
         if (!data.complete) { clearTimeout(externalDiscoveryTimer); externalDiscoveryTimer = setTimeout(function () { load(true); }, 1200); }
         else if (incoming.length && !el('media-explorer-min-side').value && !el('media-explorer-min-mp').value && !el('media-explorer-min-duration').value && !el('media-explorer-max-duration').value) {
-          requestExternalMetadata('loaded', incoming.map(function (item) { return item.relativePath; }));
+          var unanalyzed = incoming.filter(function (item) { return !item.metadata; });
+          if (unanalyzed.length) requestExternalMetadata('loaded', unanalyzed.map(function (item) { return item.relativePath; }));
         }
       }
       text(el('media-explorer-status'), '');
@@ -745,7 +747,8 @@
     sourceButtons[0].click();
   });
   el('media-explorer-empty-action').addEventListener('click', function () {
-    if (el('media-explorer-status').dataset.state === 'error' && el('media-explorer-status').textContent) load(true);
+    if (isExternal()) load(true);
+    else if (el('media-explorer-status').dataset.state === 'error' && el('media-explorer-status').textContent) load(true);
     else if (!full) { full = true; load(true); }
     else if (hasFilters()) el('media-explorer-clear-filters').click();
     else load(true);

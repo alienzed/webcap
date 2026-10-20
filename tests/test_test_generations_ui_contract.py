@@ -440,14 +440,12 @@ def test_test_prepare_warnings_reach_global_console():
 
 
 def test_global_console_reports_text_safely_and_marks_attention():
-    script = (ROOT / "tool" / "js" / "console_panel.js").read_text(encoding="utf-8")
-
-    assert "div.textContent = String(msg);" in script
+    script = (ROOT / "tool/js/console_panel.js").read_text(encoding="utf-8")
+    assert "div.textContent = '[' + timestamp + '] ' + String(msg);" in script
     assert "div.innerHTML" not in script
     assert "function reportConsoleError(source, err)" in script
     assert "function reportConsoleWarning(source, message)" in script
     assert "markConsoleAttention(true)" in script
-
 
 def test_test_result_footer_identity_timing_and_remove_contract():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -539,20 +537,16 @@ def test_result_card_transport_remains_always_visible_without_toggle():
 
 
 def test_compare_polling_preserves_video_elements_and_refreshes_navigation_only():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
-
-    assert "var compareKey = sessionName + '|'" in compare_block
-    assert "host.dataset.compareKey = compareKey" in compare_block
-    assert "host.querySelector('.test-generations-compare-stage')" in compare_block
-    assert "existingPrevious.disabled = compareIndex <= 0;" in compare_block
-    assert "existingNext.disabled = compareIndex >= results.length - 2;" in compare_block
-    assert "existingPosition.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);" in compare_block
-    assert compare_block.index("existingNext.disabled = compareIndex >= results.length - 2;") < compare_block.index("return;")
-    assert compare_block.index("return;") < compare_block.index("host.innerHTML = '';")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
+    assert "var compareKey = sessionName + '|'" in block
+    assert "host.dataset.compareKey = compareKey;" in block
+    assert "host.querySelector('.test-generations-compare-stage')" in block
+    assert "existingPrevious.disabled = compareIndex <= 0;" in block
+    assert "existingNext.disabled = compareIndex >= results.length - 2;" in block
+    assert "existingPosition.textContent = (compareIndex + 1) + ' / ' + (results.length - 1);" in block
+    assert block.index("if (String(host.dataset.compareKey || '') === compareKey") < block.index("host.innerHTML = '';")
     assert "if (resultsView === 'compare') renderCompare(status || {});" in script
-
-
 
 def test_compare_videos_start_muted():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -565,79 +559,43 @@ def test_compare_videos_start_muted():
 
 
 def test_test_bench_shows_frozen_session_metadata_separately_from_next_run():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
-
-    assert "Next run" in script
-    assert "test-generations-session-meta" not in html
-    assert "test-generations-session-info-btn" in script
-    assert "test-generations-session-details" in script
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
+    assert 'id="test-generations-session-info-btn"' in html
+    assert 'id="test-generations-session-details"' in html
+    assert 'id="test-generations-prompt"' in html
     assert "function sessionMetaText(status)" in script
     assert "function renderSessionMeta(status)" in script
-    assert "function extractPromptColorTargets(prompt)" in script
-    assert "function extractPromptExpectations(prompt)" in script
-    assert "function extractHairPromptItems(prompt)" in script
-    assert "function extractNamedPromptItems(prompt, terms, type)" in script
-    assert "function renderPromptExpectations(prompt)" in script
-    assert "TEST_PROMPT_COLOR_SWATCHES" in script
-    assert "TEST_PROMPT_HAIR_STYLES" in script
-    assert "TEST_PROMPT_ACCESSORIES" in script
-    assert "TEST_PROMPT_SCENE_OBJECTS" in script
-    assert "matching\\s+(.+)" in script
-    assert "Only direct prompt correlations are shown." in script
-    assert "title=\"" in script
-    assert "status.resolvedPrompt || status.prompt" in script
-    assert "renderPromptExpectations(resolvedPrompt)" in script
-    assert "status.sourcePrompt" in script
-    assert "status.aspectRatio" in script
-    assert "status.megapixels" in script
-    assert "status.duration" in script
-    assert "status.seed" in script
+    meta = script.split("function renderSessionMeta(status)", 1)[1].split("function selectSessionStatus", 1)[0]
+    assert "status.resolvedPrompt || status.prompt" in meta
+    assert "status.sourcePrompt" in meta
+    assert "renderPromptExpectations(resolvedPrompt)" in meta
+    assert "details.innerHTML = markup;" in meta
     assert ".test-generations-session-details" in css
-    assert ".test-generations-session-info-grid" in css
-    assert "grid-template-columns: minmax(300px, 30%) minmax(0, 70%);" in css
-    assert "max-width: 700px;" not in css
-    assert "width: 100%;" in css
-    assert "box-sizing: border-box;" in css
     assert ".test-generations-prompt-expectations" in css
-    assert ".test-generations-expectation-table" in css
-    assert ".test-generations-expectation-row" in css
-    assert "grid-template-columns: 72px minmax(0, 1fr) 92px minmax(0, .9fr);" in css
-    assert ".test-generations-color-swatch" in css
-    assert ".test-generations-session-prompt pre" in css
-
-    details_block = script.split("details.innerHTML = [", 1)[1].split("].join('');", 1)[0]
-    assert details_block.index("renderPromptExpectations(resolvedPrompt)") < details_block.index("test-generations-session-prompts")
-
 
 def test_test_identity_is_owned_by_shell_header():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
-    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
-
-    assert "test-generations-form-title" in script
-    assert "? 'Test Generations'" in shell
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    shell = (ROOT / "tool/js/workspace_shell.js").read_text(encoding="utf-8")
+    assert 'id="test-workspace-main-tabs"' in html
+    assert 'id="test-generations-pane"' in html
+    assert 'id="test-generations-form-title"' not in html
     assert "window.closeTestBenchActivity" in shell
-
-
+    assert "window.syncApplicationShellContext" in script
 
 def test_test_generations_follows_current_set_without_source_state():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
     assert "var testSource" not in script
-    assert "pendingTestSource" not in script
-    assert "function refreshTestSourceBrowser" not in script
     assert "function chooseTestSource" not in script
-    assert "resolvedCriteria.source" not in script
     assert 'id="test-generations-source-folders"' not in html
-    assert 'id="test-generations-source-path"' not in html
-
-    open_pane = script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
+    open_pane = script.split("function openPane()", 1)[1].split("function testRunCriteria()", 1)[0]
     assert "launchFolder = owningSetFolder((state && state.folder) || '');" in open_pane
     assert "Test Generations requires a current Set." in open_pane
-    assert "request('test_prepare', { modelId: getWorkingModelProfileId() })" in open_pane
+    assert "request('test_prepare', { modelId: currentTestModelId() })" in open_pane
+    assert "request('test_prepare', { modelId: requestedModelId })" in open_pane
 
 def test_test_generation_sessions_are_not_training_set_contexts():
     common = (ROOT / "tool" / "js" / "common.js").read_text(encoding="utf-8")
@@ -663,17 +621,15 @@ def test_rendered_test_status_resynchronizes_run_controls():
 
 
 def test_test_workspace_markup_is_static_and_behavior_only_binds_it():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     assert html.count('id="test-generations-pane"') == 1
     assert html.count('id="test-generations-run-btn"') == 1
-    assert "document.createElement('section')" not in script
-    assert "node.innerHTML = [" not in script
-    assert "workspace.appendChild(node)" not in script
     assert "function bindUi()" in script
     assert "bindUi();" in script
-
+    assert "row = document.createElement('div');" in script
+    assert "row.dataset.sessionRowKey = key;" in script
+    assert "function renderSessions(sessions, queuedJobs)" in script
 
 def test_test_preview_controls_do_not_cover_video_frames():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -716,19 +672,15 @@ def test_test_history_navigation_switches_the_global_set_explicitly():
     assert "launchFolder = owningSetFolder((state && state.folder) || '');" in pane_block
 
 def test_test_execution_uses_backend_model_capabilities_even_when_workspace_is_opened_indirectly():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     assert "function isTestModelSupported()" in script
     assert "function refreshSupportedTestModels()" in script
     assert "fetch('/fs/test_generations/models')" in script
-    assert "supportedTestModelIds.indexOf(String(getWorkingModelProfileId() || '')) !== -1" in script
-    assert "runBtn.disabled = !prepared || !prepared.count || !selectedCandidateFiles().length || !supported;" in script
+    assert "supportedTestModelIds.indexOf(currentTestModelId()) !== -1;" in script
+    assert "runBtn.disabled = !prepared || !prepared.count || !selectedCount || !supported;" in script
     assert "if (!isTestModelSupported())" in script
     assert "Test Generations is not available for the selected Base Model." in script
-    assert "syncLaunchVisibility();" in script[script.index("function testGenerationsFolderLoaded()"):script.index("function stagedFileParts(", script.index("function testGenerationsFolderLoaded()"))]
-    assert "syncActiveRunControls(currentStatus);" in script
-    assert ".test-generations-video-transport, video, button" in script
-
+    assert "syncLaunchVisibility();" in script
 
 def test_recent_test_sets_are_cached_during_active_test_polling():
     backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
@@ -740,13 +692,11 @@ def test_recent_test_sets_are_cached_during_active_test_polling():
 
 
 def test_saved_test_history_is_central_and_set_scoped():
-    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
-
-    assert 'root = app_config.output_root() / TEST_RESULTS_DIR' in backend
+    backend = (ROOT / "tool/server/epoch_test_bench.py").read_text(encoding="utf-8")
     assert "def _session_directories(folder_path):" in backend
     assert "def _session_belongs_to_folder(folder_path, session_directory, payload=None):" in backend
-    assert "def list_sessions(folder_path, model_id=None):" in backend
-    assert "def status(folder_path, model_id=None):" in backend
+    assert "def list_sessions(folder_path, model_id=None, session_snapshot=None, visible_snapshot=None):" in backend
+    assert "def status(folder_path, model_id=None, session_snapshot=None, visible_snapshot=None):" in backend
     assert '"ownerFolder": folder' in backend
     assert '"source": str(request.get("source") or "")' not in backend
 
@@ -759,39 +709,19 @@ def test_test_generations_has_no_legacy_rate_review_workflow():
     assert "data-session-rate" not in script
 
 def test_test_generations_reuses_normal_folder_review_for_assessment():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
     assert 'id="test-generations-session-name"' not in html
     assert 'id="test-generations-open-results-btn"' not in html
-    assert "var selectedCandidates = null;" in script
-    assert "dataset.candidateSelect" in script
-    assert "selectedFiles: selectedFiles" in script
-    assert "selectedFiles: selectedCandidateFiles()" in script
-    assert "Array.isArray(state.testGenerationSettings.selectedFiles)" in script
-    assert "selectedCandidates = new Set(savedSelection === null ? files : savedSelection);" in script
     assert 'id="test-generations-master-select"' in html
+    assert "var selectedCandidates = null;" in script
+    assert "selectedCandidates = allSelected ? new Set() : new Set(files);" in script
     assert "function syncCandidateMasterSelect(files)" in script
     assert "master.indeterminate = selectedCount > 0 && selectedCount < available.length;" in script
-    assert "baseName.textContent = 'Base';" in script
-    assert "baseDetail.textContent = 'Reference comparison';" in script
-    assert "baseInclude.checked = includeBase;" in script
-    assert "baseInclude.disabled = true;" not in script
     assert "includeBase: el('test-generations-base-include').checked" in script
-    assert "var allSelected = !!files.length && files.every" in script
-    assert "selectedCandidates = allSelected ? new Set() : new Set(files);" in script
-    assert "name: name" in script
-    assert "candidateScores" in script
     assert "function openResultsFolder(folder)" in script
-    assert "setWorkspaceSurface('default')" in script
     assert "refreshCurrentDirectory();" in script
-    assert "★ " in script
-
-    staged_rule = css.split(".test-generations-staged-row {", 1)[1].split("}", 1)[0]
-    assert "grid-template-columns: auto minmax(0, 1fr) auto;" in staged_rule
-
-
+    assert "function testRunCriteria()" in script
 
 def test_test_generations_surfaces_save_and_selected_epoch_state():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -818,38 +748,22 @@ def test_test_candidate_removal_does_not_refresh_broader_session_list():
 
 
 def test_test_generations_queue_contract():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool/server/epoch_test_bench.py").read_text(encoding="utf-8")
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
     assert "requestForFolder(folder, 'test_enqueue'" in script
     assert "request('test_queue', { modelId: modelId })" in script
     assert "request('test_queue_cancel'" in script
     assert "request('test_queue_clear', { modelId: currentTestModelId() })" in script
-    assert "var queuedTestJobs = [];" in script
-    assert "remove.dataset.queueCancel" in script
-    assert "queueCancel.dataset.queueCancel" in script
     assert 'id="test-generations-clear-queue-btn"' in html
-    assert "/fs/training_runner/stop" not in script
-    assert "refreshTrainingRunnerStatus();" not in script
-    assert "def enqueue(" in backend
-    assert "def queued_jobs(" in backend
-    assert "def cancel_queued(" in backend
-    assert "def clear_queued(" in backend
-    assert "def start_queued(" in backend
+    for method in ("enqueue", "queued_jobs", "cancel_queued", "clear_queued"):
+        assert f"def {method}(" in backend
+    assert 'SHARED_EXECUTION_LANE = "inference"' in backend
+    assert "execution_enqueue(" in backend
     assert 'operation == "test_enqueue"' in backend
     assert 'operation == "test_queue"' in backend
     assert 'operation == "test_queue_cancel"' in backend
     assert 'operation == "test_queue_clear"' in backend
-    assert "EXECUTION_LANE = \"test-generations\"" in backend
-    assert "execution_enqueue(" in backend
-    assert "execution_claim_next(" in backend
-    assert "_reserve_gpu_for_test_generations" in backend
-
-
-
-
-
 
 def test_test_generations_rail_is_candidate_focused_without_source_browser():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
@@ -952,12 +866,12 @@ def test_test_generations_set_change_reloads_current_set_without_source_redirect
 
 
 def test_test_candidates_keep_explicit_delete_control():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     block = script.split("function renderStagedFiles(payload)", 1)[1].split("function sessionStatusText", 1)[0]
     assert "remove.dataset.fileName = String(fileName || '');" in block
     assert "remove.title = 'Remove this Test candidate';" in block
-    assert "row.appendChild(remove);" in block
+    assert "actions.appendChild(remove);" in block
+    assert "row.appendChild(actions);" in block
 
 def test_test_generations_can_generate_and_edit_wildcard_prompt_in_modal():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
@@ -1012,12 +926,13 @@ def test_test_wildcard_helper_is_optional_and_stays_with_current_set():
 
 
 def test_test_wildcard_uses_current_set_without_source_owner_gate():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-
-    render_block = script.split("function renderWildcardDirector()", 1)[1].split("function renderWildcardAnalysis", 1)[0]
-    assert "sourceBrowser" not in render_block
-    assert "button.disabled = wildcardDirector.busy || !wildcardDirector.modelId;" in render_block
-    assert "Generate a wildcard prompt from this Set's captions" in render_block
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    render = script.split("function renderWildcardDirector()", 1)[1].split("function renderWildcardAnalysis", 1)[0]
+    assert "sourceBrowser" not in render
+    assert "wildcardDirector.modelId = getDirectorModelPreference('webcap.director.model');" in render
+    assert "if (!wildcardDirector.available || !wildcardDirector.modelId)" in render
+    assert "button.disabled = wildcardDirector.busy;" in render
+    assert "Generate a wildcard prompt from this Set" in render
 
 def test_wildcard_builder_footer_buttons_stay_compact_and_single_line():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")

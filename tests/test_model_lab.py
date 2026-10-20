@@ -287,7 +287,7 @@ def test_director_standard_suite_includes_writing_and_schema(monkeypatch):
     monkeypatch.setattr(model_lab, "_probe_job", lambda run, **kw: captured.append(kw["kind"]) or {"status": "failed"})
     monkeypatch.setattr(model_lab, "_run_schema_pair", lambda run, ref, analysis, groups, prefix: captured.append(prefix))
     model_lab._run_director_model({"referenceVisionRef": ""}, _director())
-    assert captured == ["director_writing", "language"]
+    assert captured == ["director_thinking", "director_scene_plan_2048", "language"]
 
 
 def test_capability_summaries_do_not_expose_model_text(monkeypatch):
@@ -325,5 +325,38 @@ def test_deep_assessment_freezes_depth_and_expanded_sample(monkeypatch):
 def test_deep_assessment_director_probe_budgets_exist():
     source = (Path(__file__).resolve().parents[1] / "tool" / "server" / "model_lab.py").read_text(encoding="utf-8")
     assert 'if run.get("depth") == "deep":' in source
-    assert "for budget in (1024, 4096):" in source
-    assert 'kind="director_writing_" + str(budget)' in source
+    assert "(2048, 4096, 8192, 16384)" in source
+    assert 'kind="director_scene_plan_" + str(budget)' in source
+
+
+def test_director_only_assessment_does_not_require_a_set():
+    run = model_lab._new_run_payload({"directorModels": [_director()]})
+    assert run["folder"] == ""
+    assert run["files"] == []
+    assert run["assessmentProtocol"] == model_lab.ASSESSMENT_PROTOCOL
+
+
+def test_compatible_completed_probe_reused_across_runs():
+    previous = model_lab._new_run_payload({"directorModels": [_director()]})
+    previous["status"] = "completed"
+    previous["attempts"] = [{
+        "id": "p-verified", "kind": "director_scene_plan_2048",
+        "modelRef": "local::director.gguf", "file": "", "status": "completed",
+        "result": {"text": '{"scenes":[]}', "verifiedOutputTokens": 1234},
+    }]
+    model_lab._write_run(previous)
+    next_run = model_lab._new_run_payload({"directorModels": [_director()]})
+    assert model_lab._attempt_completed(next_run, "director_scene_plan_2048", "local::director.gguf")
+    assert not model_lab._attempt_completed(next_run, "director_scene_plan_4096", "local::director.gguf")
+    assert next_run["reused"]["director_scene_plan_2048|local::director.gguf|"]["runId"] == previous["id"]
+
+
+def test_failed_probe_is_deferred_until_retry_pass():
+    run = model_lab._new_run_payload({"directorModels": [_director()]})
+    run["previousFailures"] = {"director_scene_plan_2048|local::director.gguf|": True}
+    outcome = model_lab._probe_job(
+        run, kind="director_scene_plan_2048", role="director",
+        model_ref="local::director.gguf", enqueue=lambda: pytest.fail("should defer"),
+    )
+    assert outcome["status"] == "deferred"
+    assert len(run["deferredRetries"]) == 1

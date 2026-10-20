@@ -118,8 +118,6 @@
           rating.appendChild(star);
         }
         second.appendChild(rating);
-        updateRating(card, o.rating.value);
-        // The rating is not yet attached to the card.
         rating.querySelectorAll('[data-test-rating]').forEach(function (star) {
           var active = Number(star.dataset.testRating) <= Number(o.rating.value || 0);
           star.classList.toggle('active', active);

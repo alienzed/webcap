@@ -171,6 +171,21 @@ def build_vision_question_messages(question, media_relative_path):
     ]
 
 
+def reference_comparison_feature(group, tag, options, alias=""):
+    """Name the exact selected Set feature, not an anonymous wildcard slot."""
+    group = str(group or "").strip()
+    tag = str(tag or "").strip()
+    alias = str(alias or "").strip()
+    if not group or not tag:
+        raise ValueError("Reference comparison requires its selected Set group and tag.")
+    subject = alias or group
+    identity = ' (Set group: "' + group + '")' if subject != group else ''
+    choices = "; ".join(str(index + 1) + "=" + str(option)
+                        for index, option in enumerate(options))
+    return ('"' + subject + '" with "' + tag + '"' + identity +
+            ". Select the visible option in generated image B from: " + choices)
+
+
 def build_reference_comparison_messages(feature, reference_image, generated_image):
     """Compare a named feature in two ordered images using the existing VL transport.
 
@@ -178,8 +193,8 @@ def build_reference_comparison_messages(feature, reference_image, generated_imag
     No evaluation is run by this helper.
     """
     feature = str(feature or "").strip()
-    if not feature or len(feature) > 240:
-        raise ValueError("Reference comparison requires a short named feature.")
+    if not feature or len(feature) > 2000:
+        raise ValueError("Reference comparison requires a concise named feature.")
     if not reference_image or not generated_image:
         raise ValueError("Reference comparison requires both images.")
     question = (

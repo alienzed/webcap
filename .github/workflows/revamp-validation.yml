@@ -10,6 +10,8 @@ on:
       - 'tool/css/styles.css'
       - 'tests/test_generations_unified_dom.test.cjs'
       - 'tests/test_test_generations_unified_*.py'
+      - 'tests/test_test_generations_ui_contract.py'
+      - '.github/workflows/revamp-validation.yml'
   push:
     branches:
       - main

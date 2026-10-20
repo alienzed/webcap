@@ -206,7 +206,7 @@
   }
   window.runAnalyticsPrepare=function(next){
     if(next===folder)return;folder=next;generation++;resultEpochGeneration++;runs=[];selection=new Set();report=null;sessionFilter='';
-    labRequest++;labSnapshot=null;labDiscovered=false;lab('status').textContent='Open Analytics to read saved evidence.';el('report-surface').classList.add('hidden');
+    labRequest++;labSnapshot=null;labInventory=null;labDiscovered=false;lab('status').textContent='Open Insights to read saved evidence.';el('report-surface').classList.add('hidden');
     el('run-choices').innerHTML='';el('result-epochs').textContent='Open Analytics to discover results.';el('result-epochs-note').textContent='';el('coverage').textContent='Choose a run to begin.';
     el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';el('warnings').innerHTML='';
     el('campaign').innerHTML='<option value="">No campaign</option>';el('session').innerHTML='<option value="">All sessions</option>';
@@ -392,7 +392,7 @@
     if(session)window.openTestBenchAnalyticsSession(session.dataset.openSession);
   };
 
-  var labSnapshot=null,labRequest=0,labDiscovered=false,labShowAll=false;
+  var labSnapshot=null,labInventory=null,labRequest=0,labDiscovered=false,labShowAll=false;
   function labEnsureDetailIndex(){if(!labDiscovered){labDiscovered=true;discover();}}
   function lab(id){return document.getElementById('run-lab-'+id);}
   function labGroup(){return (labSnapshot&&labSnapshot.cohorts||[]).find(function(g){return g.id===lab('cohort').value;});}
@@ -427,15 +427,39 @@
       return b.allManualAverage-a.allManualAverage||b.ratedCount-a.ratedCount;
     })[0];
     var backed=ranked.slice().sort(function(a,b){
-      return b.ratedCount-a.ratedCount||b.allManualAverage-a.allManualAverage;
+      return b.allManualAverage-a.allManualAverage||b.ratedCount-a.ratedCount;
     }).find(function(p){return !best||p.jobId!==best.jobId||p.epoch!==best.epoch;});
     var picks=[{point:best,label:'Highest rated',note:'An average based on '+(best?best.ratedCount:0)+' saved ratings'},
-               {point:backed,label:'More evidence',note:'More ratings help establish consistency'}];
+               {point:backed,label:'Runner-up',note:'Compare its saved ratings and coverage with the leader'}];
     lab('featured').innerHTML=picks.map(function(item){
       var p=item.point;
       if(!p)return '<div class="run-lab-feature"><small>'+esc(item.label)+'</small><p>Rate more saved renders to reveal another contender.</p></div>';
       return '<div class="run-lab-feature"><small>'+esc(item.label)+'</small><h3>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</h3><strong>'+p.allManualAverage.toFixed(2)+'/5</strong><p>'+p.ratedCount+' of '+p.testCount+' Test renders rated · '+p.sessions.length+' sessions</p><small>'+esc(item.note)+'</small><div class="run-lab-feature-actions"><button type="button" data-lab-feature="inspect" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect renders</button><button type="button" data-lab-feature="test" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Prepare 10 tests</button></div></div>';
     }).join('');
+  }
+  function labHistory(){
+    var host=lab('history');
+    if(!labInventory){host.textContent='Finding current and archived run metadata…';return;}
+    var records=labInventory.runs||[],archive=records.filter(function(p){return !!p.archive;});
+    var ratedRuns=new Set((labSnapshot&&labSnapshot.epochs||[]).filter(function(p){return p.ratedCount>0;}).map(function(p){return p.jobId;}));
+    var missing=records.filter(function(p){return !ratedRuns.has(p.jobId);});
+    var values=function(summary){
+      var parts=[];
+      if(summary.rank!=null)parts.push('Rank '+summary.rank);
+      if(summary.lr!=null)parts.push('LR '+summary.lr);
+      if(summary.capturedItems!=null)parts.push(summary.capturedItems+' items');
+      return parts.join(' · ');
+    };
+    host.innerHTML='<div class="run-lab-history-summary"><strong>'+records.length+' runs found</strong><span>'+archive.length+' archives · '+ratedRuns.size+' runs with rated Test evidence · '+missing.length+' runs without surviving ratings</span></div>'+
+      (archive.length?'<details><summary>Archived training configurations ('+archive.length+')</summary>'+
+      archive.map(function(p){
+        var sum=values(p.runSummary||{});
+        return '<div class="run-lab-history-row"><div><strong>'+esc(p.label)+'</strong><small>Selected epoch '+(p.selectedEpoch==null?'unknown':p.selectedEpoch)+' · '+esc(sum||'No compact configuration saved')+'</small></div><small>'+ (ratedRuns.has(p.jobId)?'Rated Test evidence':'No surviving rated Test evidence')+'</small></div>';
+      }).join('')+'</details>':'<p class="run-lab-footnote">No archived runs were found for this Set.</p>')+
+      '<p class="run-lab-footnote">Archived selection is not a measured quality result. Detailed loss and timing are read only when you request AI Insights.</p>';
+    if(labInventory.warnings&&labInventory.warnings.length){
+      host.insertAdjacentHTML('beforeend','<p class="run-lab-footnote">'+esc(labInventory.warnings.join(' · '))+'</p>');
+    }
   }
   function labDiscoveries(){
     var group=labGroup(),hidden=new Set(labSnapshot.hiddenVlGroups||[]);
@@ -462,9 +486,20 @@
       return '<div class="run-lab-progress"><div><b>'+row[0]+'</b><span>'+row[1]+' / '+total+' Test renders</span></div><div class="run-lab-meter"><i style="width:'+(100*row[1]/total)+'%"></i></div></div>';
     }).join('')+'<p class="run-lab-footnote">Linked Test renders only; each render can have both a rating and a VL review.</p>':
       labEmpty('No generated Test renders linked to a training epoch.');
-    lab('challenge-title').textContent=total>rated?'Review five unrated renders':'Inspect your strongest contenders';
-    lab('challenge-description').textContent=total>rated?(total-rated)+' unrated linked Test renders. Rate a small blind batch, see the wildcards, and reveal the epoch only after voting.':'All linked Test renders are rated. Compare candidates or prepare another experiment.';
-    lab('challenge-actions').innerHTML=(total>rated?'<button type="button" data-lab-action="review">Start blind review</button>':'')+'<button type="button" data-lab-action="inspect">Inspect contender</button><button type="button" data-lab-action="detail">Detailed evidence</button>';
+    var tooManyUnrated=total>0&&rated<total/2;
+    if(tooManyUnrated||!ranked.length&&total>rated){
+      lab('challenge-title').textContent='Improve your evidence: '+(total-rated)+' unrated renders';
+      lab('challenge-description').textContent='Rate a short blind batch from saved Test results before generating more. '+rated+' of '+total+' linked renders are rated.';
+      lab('challenge-actions').innerHTML='<button type="button" data-lab-action="review">Blind-rate five</button><button type="button" data-lab-action="inspect">Inspect a contender</button>';
+    }else if(ranked.length>=2){
+      lab('challenge-title').textContent='Compare your two strongest rated contenders';
+      lab('challenge-description').textContent='Leader '+ranked[0].allManualAverage.toFixed(2)+'/5 ('+ranked[0].ratedCount+' ratings) versus runner-up '+ranked[1].allManualAverage.toFixed(2)+'/5 ('+ranked[1].ratedCount+' ratings). Sample size matters.';
+      lab('challenge-actions').innerHTML='<button type="button" data-lab-action="inspect">Inspect leader</button><button type="button" data-lab-action="challenger">Inspect runner-up</button>'+(total>rated?'<button type="button" data-lab-action="review">Blind-rate five</button>':'');
+    }else{
+      lab('challenge-title').textContent=total>rated?'Review the remaining unrated Test renders':'Explore what your training history reveals';
+      lab('challenge-description').textContent=total>rated?'Review existing evidence before scheduling another Test.':'Ask Director to compare saved active and archived run details.';
+      lab('challenge-actions').innerHTML=(total>rated?'<button type="button" data-lab-action="review">Blind-rate five</button>':'')+'<button type="button" data-lab-action="ai">AI Insights</button><button type="button" data-lab-action="detail">Detailed evidence</button>';
+    }
     lab('status').textContent=rated+' rated of '+total+' linked Test renders · '+ranked.length+' rated epochs across '+new Set(points.filter(function(p){return p.ratedCount>0;}).map(function(p){return p.jobId;})).size+' runs. Manual averages combine saved ratings from every Test session.';
     labChart();
   }
@@ -501,6 +536,7 @@
       return '<div class="run-lab-explorer-row"><div><strong>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</strong><small>'+p.ratedCount+' rated · '+p.testCount+' Test · '+p.campaignCount+' Campaign results</small></div><button data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect results</button></div>';
     }).join(''):labEmpty('No saved generated epoch results in this Set.');
     lab('warnings').textContent=(labSnapshot.warnings||[]).join(' · ');
+    labHistory();
   }
   var reviewItems=[],reviewIndex=0,reviewRated=0,reviewSkipped=0,reviewRatedCurrent=false,reviewBusy=false,reviewExcluded=[];
   function labReviewApi(operation,criteria,endpoint){
@@ -604,7 +640,18 @@
     var serial=++labRequest,scope=folder;lab('status').textContent='Reading recorded Test and Campaign evidence…';
     fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder:scope,operation:'run_analytics_overview'})})
       .then(function(r){return r.json().then(function(d){if(!r.ok||!d.ok)throw Error(d.error||'Could not load evidence');return d;});})
-      .then(function(d){if(serial!==labRequest||scope!==folder)return;labSnapshot=d;labRender();})
+      .then(function(d){
+        if(serial!==labRequest||scope!==folder)return;
+        labSnapshot=d;labInventory=null;labRender();
+        return labReviewApi('run_insights_inventory').then(function(details){
+          if(serial!==labRequest||scope!==folder)return;
+          labInventory=details;labHistory();
+        }).catch(function(e){
+          if(serial!==labRequest||scope!==folder)return;
+          lab('history').textContent='Training history unavailable: '+String(e.message||e);
+          error(e);
+        });
+      })
       .catch(function(e){if(serial!==labRequest)return;lab('status').textContent='Overview failed: '+String(e.message||e);error(e);});
   }
   lab('refresh').onclick=labLoad;
@@ -645,5 +692,13 @@
   lab('sort').onchange=function(){labShowAll=false;labResults();};
   lab('detail').onclick=labDetail;
   ['contenders','explorer'].forEach(function(id){lab(id).onclick=function(event){if(event.target.closest('[data-lab-show-all]')){labShowAll=true;labResults();return;}var b=event.target.closest('[data-lab-job]');if(b)window.runAnalyticsViewEpoch(b.dataset.labJob,Number(b.dataset.labEpoch));};});
-  lab('challenge-actions').onclick=function(event){var b=event.target.closest('[data-lab-action]');if(!b)return;if(b.dataset.labAction==='detail'){labDetail();return;}if(b.dataset.labAction==='review'){labReviewOpen();return;}var p=labRanked()[0]||labPoints()[0];if(p)window.runAnalyticsViewEpoch(p.jobId,p.epoch);else labDetail();};
+  lab('challenge-actions').onclick=function(event){
+    var b=event.target.closest('[data-lab-action]');if(!b)return;
+    var action=b.dataset.labAction;
+    if(action==='detail'){labDetail();return;}
+    if(action==='review'){labReviewOpen();return;}
+    if(action==='ai'){labAiStart();return;}
+    var list=labRanked(),p=action==='challenger'?list[1]:(list[0]||labPoints()[0]);
+    if(p)window.runAnalyticsViewEpoch(p.jobId,p.epoch);else labDetail();
+  };
 })();

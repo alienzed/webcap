@@ -1666,7 +1666,15 @@
       if (!analysis) throw new Error('Wildcard proposal has no analysis.');
       return wildcardPostJson('/fs/test_generations/wildcard/validate', {
         folder: requestFolder, jobId: trainingJobId, analysis: analysis
-      }).then(function () { return result; });
+      }).then(function () { return result; }).catch(function (err) {
+        // Keep the Director's complete draft editable when its annotation
+        // metadata fails compatibility validation. Never silently remap tags.
+        if (result && result.analysis && String(result.analysis.wildcard || '').trim()) {
+          wildcardDirector.analysis = result.analysis;
+          renderWildcardAnalysis(result.analysis);
+        }
+        throw err;
+      });
     }).then(function (result) {
       var analysis = result && result.analysis;
       if (!analysis || !String(analysis.wildcard || '').trim()) {

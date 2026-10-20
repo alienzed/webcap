@@ -14,21 +14,6 @@ function diagnosticsEl(id) {
   return document.getElementById(id);
 }
 
-function diagnosticsProbeMetrics(attempt) {
-  var result = attempt && attempt.result || {};
-  var tokens = Number((result.usage || {}).completion_tokens || 0);
-  var decodeSpeed = Number((result.timings || {}).predicted_per_second || 0);
-  var requestSeconds = Number(result.requestSeconds || 0);
-  var duration = requestSeconds || (Date.parse(attempt && attempt.finishedAt) - Date.parse(attempt && attempt.startedAt)) / 1000;
-  return {
-    speed: decodeSpeed > 0 ? decodeSpeed : tokens > 0 && duration > 0 ? tokens / duration : 0,
-    tokens: tokens,
-    hint: decodeSpeed > 0 ? 'Runtime-reported generation speed.' : requestSeconds > 0
-      ? 'Effective request throughput, including prompt processing, model loading and network time; not decode-only speed.'
-      : 'Effective probe throughput, including queue wait, prompt processing, model loading and network time; not decode-only speed.'
-  };
-}
-
 function diagnosticsAssessmentCounts(row, tests) {
   var families = {
     writing: ['director_scene_plan_2048'],

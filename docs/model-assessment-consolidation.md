@@ -28,7 +28,8 @@ Owner: `tool/server/model_lab.py`. Existing JSON run journals and shared LLM/GPU
 - Diagnostics > Model Assessment is the only model-testing surface: a compact real table, Complete Missing Tests, existing shared ProgressCard, optional saved-output review and evidence import/export.
 - Old hidden panels, frontend engines, routes and unused comparison code are retired; no compatibility JS, fake routes, or column-hiding hacks remain.
 - Storyboard uses current production-shaped assessment evidence while still honoring serious historical observations and genuinely proven older prose capabilities. New structured JSON evidence **does not** prove 8K prose capacity.
-- Historical calibration reports and profiles stay readable for import/export and QA context preflight; old calibration execution and profile mutation UI are gone.
+- Historical calibration reports and profiles remain readable for import/export and QA context preflight; old calibration execution and profile mutation UI are gone.
+- Storage Manager still lists and explicitly deletes older Director assessment cache files through a **read/delete-only** compatibility reader. These historical files aren't automatically removed or used to run tests.
 - H3 hardware calibration is unrelated and remains under its own Diagnostics area.
 - Legacy files on disk are not automatically deleted.
 

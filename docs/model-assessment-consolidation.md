@@ -38,6 +38,16 @@ Owners: `tool/tool.html`, `tool/js/diagnostics.js`, `tool/css/modals.css`.
 - Removed the old specialist launch buttons; progress stays in Model Assessment.
 - Retained old hidden panels and scripts **temporarily** because their initialization and legacy API contracts still have consumers; not complete until deletion pass.
 
+## Assessment progress card (implemented on this branch)
+
+- Backend owns a stable list of planned logical probe identities derived from frozen run configuration, including optional reference-model tasks. Reused evidence contributes to completed progress at startup.
+- Journal-persisted `work` separates planned, completed, reused, skipped, final failures, pending retries, currently running, resolved and remaining; additional attempts do not add to the denominator.
+- A probe that fails its first attempt remains outstanding while awaiting its single deferred retry. Terminal failures and skips are resolved work, not successes. Stopped/interrupted runs retain outstanding work.
+- Existing LLM job status transitions identify queued, starting, running and finishing without adding another polling loop. Existing shared ProgressCard shows the current model/probe, status, successful vs planned counts, remaining work, elapsed wall time and determinate resolved/planned progress.
+- The determinate bar measures work resolution, **not** qualification, pass rate, percentage of wall time or ETA. Historical runs lacking a reliable frozen probe plan stay indeterminate.
+- Restart reconciliation recomputes the saved counts after interrupting unfinished attempts. No background scans, extra GPU scheduling or independent UI state are introduced.
+- Regressions are covered by `tests/test_model_lab.py`, `tests/test_model_lab_progress.js`, and the focused Model Assessment GitHub Actions workflow.
+
 ## Phase 4 — legacy deletion and consumer migration (pending validation)
 
 - Audit all references before removing `tool/js/director_model_test.js`, `tool/js/model_lab.js` specialist UI, and their HTML/CSS. Move retained progress/poll state to the single assessment owner without browser sequencing.

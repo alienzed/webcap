@@ -57,6 +57,10 @@
   min-width: 30px;
   height: 30px;
   padding: 0;
+  justify-content: center;
+  border-left-width: 1px;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .storyboard-library-list {
@@ -3904,7 +3908,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-progress-summary {
   display: inline-block;
   margin-top: 0;
-  max-width: 145px;
+  max-width: none;
 }
 .storyboard-scenes-heading-actions {
   flex: 1 1 auto;
@@ -3934,6 +3938,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 .storyboard-scenes-heading-left { flex: 1 1 220px; }
 .storyboard-scenes-heading-actions {
   flex: 0 0 auto;
+  margin-left: auto;
   flex-wrap: nowrap;
   overflow: visible;
   scrollbar-width: auto;

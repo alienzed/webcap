@@ -95,7 +95,6 @@ CSS_DIR = TOOL_DIR / "css"
 TEMPLATES_DIR = TOOL_DIR / "templates"
 
 app = Flask(__name__, static_folder=None)
-register_director_model_test_routes(app)
 register_model_lab_routes(app)
 register_storyboard_first_cut_routes(app)
 

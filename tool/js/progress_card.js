@@ -76,7 +76,7 @@
     if (determinate) track.setAttribute('aria-valuenow', String(Math.max(0, Math.min(100, completed / total * 100))));
     else track.removeAttribute('aria-valuenow');
     track.title = determinate
-      ? (p.totalIsUpperBound ? 'Progress against an upper bound, not an ETA' : 'Completed work')
+      ? (p.description || (p.totalIsUpperBound ? 'Progress against an upper bound, not an ETA' : 'Completed work'))
       : 'Progress cannot yet be measured';
     card.querySelector('[data-progress-fill]').style.width =
       determinate ? Math.max(0, Math.min(100, completed / total * 100)).toFixed(1) + '%' : '';

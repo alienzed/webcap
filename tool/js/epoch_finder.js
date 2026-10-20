@@ -370,17 +370,17 @@
         var saved = referenceSelections[item.key];
         var cleared = Object.prototype.hasOwnProperty.call(referenceSelections, item.key) && saved === null;
         if (!saved && !cleared) {
-          // A wildcard term may belong to more than one scoped group.
-          // Reuse the first saved choice still represented in this campaign's candidates.
-          item.groups.some(function (group) {
+          // Reuse a saved Training References choice only when exactly one
+          // scoped group provides one; never choose the first of several.
+          var savedMatches = item.groups.map(function (group) {
             var chosen = window.testReferencesChoice(els('run').value, group, item.option);
             if (!chosen || !item.candidates.some(function (candidate) {
               return candidate.group === group && candidate.media === chosen.media;
-            })) return false;
-            saved = {attribute:item.attribute, option:item.option,
+            })) return null;
+            return {attribute:item.attribute, option:item.option,
               group:group, tag:item.option, media:chosen.media};
-            return true;
-          });
+          }).filter(Boolean);
+          if (savedMatches.length === 1) saved = savedMatches[0];
         }
         var selectedIndex = !cleared && item.candidates.length ? item.candidates.findIndex(function (candidate) {
           return saved && candidate.media === saved.media && candidate.group === saved.group && candidate.tag === saved.tag;
@@ -803,7 +803,7 @@
         return (c.label||c.id||'Attribute')+': '+c.result+' · expected '+(c.expectedText||'')+' · observed '+(c.selectedText||'');
       })});
       if((unit.referenceAssessments||[]).length)details.push({label:'Reference VL',value:unit.referenceAssessments.map(function(r){
-        return (r.label||'Reference')+': '+r.verdict+' · '+(r.reference||'');
+        return (r.group||r.label||'Reference')+' · '+r.option+': '+r.verdict+' · '+(r.reference||'');
       })});
       if((unit.dinoAssessments||[]).length)details.push({label:'DINOv2',value:unit.dinoAssessments.map(function(r){
         return (r.reference||'Reference')+': '+Number(r.similarity).toFixed(3);
@@ -910,7 +910,7 @@
       escape(unit.prompt || 'Not yet resolved') + '</p></details>' +
       ((unit.referenceAssessments || []).length ? '<details open><summary>Training-reference comparisons (' +
         unit.referenceAssessments.length + ')</summary>' + unit.referenceAssessments.map(function (v) {
-          return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.label) +
+          return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.group || v.label) +
           ' · ' + escape(v.option) + '</strong><span>' + escape(v.verdict) + '</span>' +
           '<small>Selected in render: ' + escape(v.selected == null ? 'unclear' : ((unit.groups || []).find(function (g) { return g.id === v.groupId; })?.options || [])[v.selected - 1] || 'unclear') + '</small>' +
           '<div>' + escape(v.response) + '</div><small>Reference: ' + escape(v.reference) +

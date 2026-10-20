@@ -1847,6 +1847,14 @@ def storyboard_director_route():
                 )
             return jsonify({"ok": True, "story": applied_story, "scene": applied_scene})
 
+        scene_order = list(story.get("sceneOrder") or [])
+        scene_number = scene_order.index(scene_id) + 1 if scene_id in scene_order else 0
+        job_display_context = {
+            "storyTitle": str(story.get("title") or "Untitled Story"),
+            "sceneNumber": scene_number,
+            "sceneTitle": str(((story.get("scenes") or {}).get(scene_id) or {}).get("title") or ""),
+        }
+
         if operation == "check_coherence_sequence":
             scene_ids = list(story.get("sceneOrder") or [])
             if not scene_ids:
@@ -1857,6 +1865,7 @@ def storyboard_director_route():
                 "storyboard", model_id, {"operation": operation},
                 context={
                     "storyId": story_id, "operation": operation,
+                    **job_display_context,
                     "sceneIds": scene_ids, "thinking": data.get("thinking") is True,
                 },
                 label="Story: Check Coherence",
@@ -1875,6 +1884,7 @@ def storyboard_director_route():
                 "storyboard", model_id, {"operation": operation},
                 context={
                     "storyId": story_id, "operation": operation,
+                    **job_display_context,
                     "sceneIds": scene_ids, "sourceInstruction": instruction,
                     "generateFreshTakes": data.get("generateFreshTakes") is True,
                     "thinking": data.get("thinking") is True,
@@ -1955,6 +1965,7 @@ def storyboard_director_route():
             context={
                 "storyId": story_id,
                 "sceneId": scene_id,
+                **job_display_context,
                 "operation": operation,
                 "replaceExisting": replace_existing,
                 "sourceInstruction": instruction,

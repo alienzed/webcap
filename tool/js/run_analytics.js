@@ -538,6 +538,76 @@
     lab('warnings').textContent=(labSnapshot.warnings||[]).join(' · ');
     labHistory();
   }
+  var labAiJob='';
+  function labAiStart(){
+    if(labAiJob)return;
+    var model=getDirectorModelPreference('webcap.director.model');
+    if(!model){error(new Error('Select a Director model in the app header before requesting AI Insights.'));return;}
+    var origin=folder,requestVersion=labRequest;
+    lab('ai-panel').classList.remove('hidden');
+    lab('ai-result').replaceChildren();
+    lab('ai-facts').textContent='';
+    lab('ai-status').textContent='Collecting archived training metrics and saved ratings…';
+    lab('ai').disabled=true;
+    function send(body){
+      return fetch('/fs/run_analytics/interpret',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(Object.assign({folder:origin,mode:'insights'},body))})
+        .then(function(response){return response.json().then(function(data){
+          if(!response.ok||!data.ok)throw new Error(data.error||'AI Insights request failed.');
+          return data;
+        });});
+    }
+    send({previewOnly:true}).then(function(preview){
+      if(origin!==folder||requestVersion!==labRequest)throw new Error('Insights Set changed during evidence collection.');
+      lab('ai-facts').textContent=JSON.stringify(preview.facts,null,2);
+      lab('ai-status').textContent='Submitting reviewed facts to Director…';
+      return send({directorModel:model,reviewedFacts:JSON.stringify(preview.facts)});
+    }).then(function(response){
+      var job=response.job;
+      if(!job||!job.jobId)throw new Error('Director did not return a job.');
+      labAiJob=job.jobId;
+      trackTransientLlmJob(job);
+      lab('ai-stop').classList.remove('hidden');
+      function poll(){
+        return fetch('/fs/director/job?job='+encodeURIComponent(job.jobId)+'&consume=1')
+          .then(function(response){return response.json().then(function(data){
+            if(!response.ok||data.ok===false)throw new Error(data.error||'Director status unavailable.');
+            return data;
+          });}).then(function(data){
+            var status=data.job||{};
+            if(status.status==='completed')return status.result;
+            if(['failed','interrupted','stopped','cancelled'].includes(status.status))throw new Error(status.error||'Director '+status.status);
+            if(origin===folder)lab('ai-status').textContent=status.status==='queued'?'Queued in Director lane…':'Director is interpreting training evidence…';
+            return new Promise(function(resolve){setTimeout(resolve,1500);}).then(poll);
+          });
+      }
+      return poll();
+    }).then(function(result){
+      if(origin!==folder||requestVersion!==labRequest)return;
+      var interpretation=result&&result.analysis;
+      if(!interpretation)throw new Error('Director produced no structured AI Insights.');
+      lab('ai-status').textContent='AI interpretation complete — hypotheses require validation.';
+      var titles={observed:'Observed evidence',hypotheses:'Possible patterns',tryNext:'What to test next',limits:'What remains uncertain'};
+      lab('ai-result').innerHTML=['observed','hypotheses','tryNext','limits'].map(function(key){
+        return '<section><h4>'+titles[key]+'</h4><p>'+esc(interpretation[key]||'No findings reported.')+'</p></section>';
+      }).join('');
+    }).catch(function(exc){
+      if(origin===folder){
+        lab('ai-status').textContent='AI Insights unavailable: '+String(exc.message||exc);
+        error(exc);
+      }
+    }).finally(function(){
+      labAiJob='';
+      lab('ai').disabled=false;
+      lab('ai-stop').classList.add('hidden');
+    });
+  }
+  lab('ai').onclick=labAiStart;
+  lab('ai-stop').onclick=function(){
+    if(!labAiJob)return;
+    lab('ai-status').textContent='Stopping Director interpretation…';
+    cancelCaptionAssistJob(labAiJob).catch(error);
+  };
   var reviewItems=[],reviewIndex=0,reviewRated=0,reviewSkipped=0,reviewRatedCurrent=false,reviewBusy=false,reviewExcluded=[];
   function labReviewApi(operation,criteria,endpoint){
     return fetch(endpoint||'/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},

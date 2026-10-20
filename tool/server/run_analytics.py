@@ -725,7 +725,7 @@ def overview(folder_path):
     totals = {
         "sessions": 0, "testPreviews": 0, "campaignPreviews": 0,
         "ratedPreviews": 0, "vlReviewedPreviews": 0, "vlJudgments": 0,
-        "unlinkedPreviews": 0, "campaigns": 0,
+        "unlinkedPreviews": 0, "reviewableUnrated": 0, "campaigns": 0,
     }
     recent = []
 
@@ -797,6 +797,8 @@ def overview(folder_path):
             entry = epoch_record(job_id, epoch, name)
             entry["testCount"] += 1
             entry["sessions"].add(directory.name)
+            if not rated and media and (directory / media).is_file():
+                totals["reviewableUnrated"] += 1
             if rated:
                 entry["ratedCount"] += 1
                 entry["ratingSum"] += ratings[media]

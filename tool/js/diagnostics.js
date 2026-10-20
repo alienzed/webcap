@@ -451,7 +451,6 @@ function refreshUnifiedModelAssessment() {
       var rates = speedTests.flatMap(function (entry) { return entry.throughputSamples || []; })
         .filter(function (value) { return Number(value) > 0; });
       var outputs = structuredTests.map(function (entry) { return Number(entry.verifiedOutputTokens || 0); }).filter(function (v) { return v > 0; });
-        .filter(function (value) { return Number(value) > 0; });
       var legacyAttempts = report && Array.isArray(report.attempts) ? report.attempts : [];
       var legacyRates = legacyAttempts.filter(function (attempt) { return attempt.status === 'passed' && Number(attempt.tokensPerSecond) > 0; });
       if (rates.length) {

@@ -180,7 +180,7 @@ def test_insert_scene_uses_adjacent_scenes_as_relationship_context_not_bridge_re
     assert "[SCENE AFTER]" in prompt
     assert "Treat neighbouring Scenes as relationship and contrast context, not templates to copy" in prompt
     assert "contrast, vary a repeated format with fresh content, jump, or remain independent" in prompt
-    assert "meaningfully distinct from both adjacent Scenes" in prompt
+    assert "Make it meaningfully distinct while preserving intentional recurring characters or state" in prompt
     assert "USE EACH GENERATION UNIT WELL." in prompt
 
 

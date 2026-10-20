@@ -372,7 +372,7 @@ def test_storyboard_can_insert_director_scene_between_existing_scenes():
     assert "Insert Scene After" in storyboard
     assert "Insert Scene After…" in storyboard
     assert "Extend Story…" in storyboard
-    assert "function insertDirectorSceneAfter(sceneId)" in storyboard
+    assert "function insertDirectorSceneAfter(sceneId, instruction)" in storyboard
     assert "operation: 'insert_scene'" in storyboard
     assert "job.operation === 'insert_scene' || job.operation === 'extend_story'" in storyboard
 

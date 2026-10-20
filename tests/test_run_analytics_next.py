@@ -163,3 +163,38 @@ def test_testing_lab_overview_groups_saved_test_evidence(tmp_path, monkeypatch):
     assert scored["points"][0]["manual"] == 5
     assert scored["points"][0]["testVl"] == 1
     assert result["epochs"][0]["testCount"] == 2
+
+
+def test_testing_lab_exposes_all_epoch_ratings_without_pooling_cohort_scores(tmp_path, monkeypatch):
+    from tool.server import run_analytics as analytics
+    session = tmp_path / "session"
+    session.mkdir()
+    provenance = {"sourceJobId": "job-a", "sourceFolder": "set/a", "sourceEpoch": 14}
+    stored = {"modelId": "h3", "sourcePrompt": "{red|blue}", "settings": {"strength": 0.9},
+              "results": [{"kind": "lora", "mediaFile": "red.png", "provenance": provenance, "strength": 0.9},
+                          {"kind": "lora", "mediaFile": "blue.png", "provenance": provenance, "strength": 0.9},
+                          {"kind": "lora", "mediaFile": "unrated.png", "provenance": provenance, "strength": 0.9}]}
+    monkeypatch.setattr(analytics, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(analytics.bench, "_session_directories", lambda _: [session])
+    monkeypatch.setattr(analytics.bench, "_read_status", lambda _: stored)
+    monkeypatch.setattr(analytics.bench, "_session_rating_map", lambda _: {"red.png": 5, "blue.png": 3})
+    monkeypatch.setattr(analytics.bench, "_session_vision_state", lambda _: {"byMedia": {
+        "red.png": {"modelId": "v1", "comparison": [{"id": "color", "result": "match"}]}}})
+    monkeypatch.setattr(analytics, "_campaigns", lambda _, warnings: [])
+    result = analytics.overview(tmp_path)
+    assert result["coverage"]["ratedPreviews"] == 2
+    assert result["epochs"][0]["ratedCount"] == 2
+    assert result["epochs"][0]["allManualAverage"] == 4
+    assert "ratingSum" not in result["epochs"][0]
+    assert len(result["cohorts"]) == 2
+    assert sum(group["ratedPreviews"] for group in result["cohorts"]) == 2
+    assert sorted(point["manualCount"] for group in result["cohorts"] for point in group["points"]) == [1, 1]
+
+
+def test_lab_ranking_and_scope_labels_use_selected_cohort_only():
+    from pathlib import Path
+    script = (Path(__file__).resolve().parents[1] / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    assert "function labRanked()" in script
+    assert "var p=labRanked()[0]" in script
+    assert "rated across all Test protocols at this epoch (descriptive)" in script
+    assert "Rankings use only this protocol" in script

@@ -74,9 +74,10 @@ def test_export_excludes_live_work(monkeypatch):
 def test_summary_does_not_hide_earlier_failures():
     transfer.import_results(bundle(), {"remote-1": "local"})
     result = model_lab.capability_run_summaries()[0]["models"]["local::model:q4"]["vision_open"]
-    assert result["status"] == "failed"
-    assert result["counts"] == {"completed": 1, "failed": 1}
-    assert result["error"] == "empty response"
+    assert result["status"] == "completed"
+    assert result["counts"] == {"completed": 1}
+    assert len(model_lab.get_run(model_lab.list_runs()[0]["id"])["attempts"]) == 3
+    assert result["error"] == ""  # recovered failures remain in raw history, not the current verdict
 
 
 @pytest.mark.parametrize("result,expected", [

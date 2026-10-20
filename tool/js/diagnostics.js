@@ -14,26 +14,13 @@ function diagnosticsEl(id) {
   return document.getElementById(id);
 }
 
-function diagnosticsProbeMetrics(attempt) {
-  var result = attempt && attempt.result || {};
-  var tokens = Number((result.usage || {}).completion_tokens || 0);
-  var decodeSpeed = Number((result.timings || {}).predicted_per_second || 0);
-  var requestSeconds = Number(result.requestSeconds || 0);
-  var duration = requestSeconds || (Date.parse(attempt && attempt.finishedAt) - Date.parse(attempt && attempt.startedAt)) / 1000;
-  return {
-    speed: decodeSpeed > 0 ? decodeSpeed : tokens > 0 && duration > 0 ? tokens / duration : 0,
-    tokens: tokens,
-    hint: decodeSpeed > 0 ? 'Runtime-reported generation speed.' : requestSeconds > 0
-      ? 'Effective request throughput, including prompt processing, model loading and network time; not decode-only speed.'
-      : 'Effective probe throughput, including queue wait, prompt processing, model loading and network time; not decode-only speed.'
-  };
-}
-
 function diagnosticsAssessmentCounts(row, tests) {
   var families = {
-    writing: ['director_writing', 'director_writing_1024', 'director_writing_4096'],
-    structured: ['language_synthesis', 'language_challenge'],
-    vision: ['vision_open', 'vision_group_aware']
+    writing: ['director_scene_plan_2048'],
+    structured: row.assessmentHasSetVocabulary
+      ? ['set_vocabulary_synthesis', 'set_vocabulary_challenge']
+      : ['language_synthesis', 'language_challenge'],
+    vision: row.assessmentNeedsGroupAware ? ['vision_open', 'vision_group_aware'] : ['vision_open']
   };
   var role = row.dataset.assessmentRole;
   var needed = role === 'both' ? ['writing', 'structured', 'vision'] : role === 'director' ? ['writing', 'structured'] : ['vision'];
@@ -51,7 +38,7 @@ function diagnosticsAssessmentCounts(row, tests) {
       });
     });
     var requiredKinds = families[family].filter(function (kind) {
-      return kind === 'director_writing' || kind === 'language_synthesis' || kind === 'language_challenge' ||
+      return kind === 'director_scene_plan_2048' || kind === 'language_synthesis' || kind === 'language_challenge' ||
         kind === 'vision_open' || kind === 'vision_group_aware';
     });
     var coverage = requiredKinds.every(function (kind) { return (tests[kind] || {}).counts && Number((tests[kind].counts || {}).completed || 0) > 0; });
@@ -72,17 +59,11 @@ function diagnosticsAssessmentCounts(row, tests) {
     span.title = hint;
     host.appendChild(span);
   }
-  mark((role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') + state,
+  mark((role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') +
+    (state === 'Passed' ? 'Technical pass' : state),
     state === 'Passed' ? 'passed' : state === 'Issues' ? 'issues' : 'untested',
-    role === 'both' ? 'Requires Director writing and structured probes plus open and group-aware Vision probes.' : role === 'director' ? 'Requires successful writing and structured synthesis/challenge probes; this is a technical sanity check, not a quality score.' : 'Requires completed open and group-aware Vision probes; this is not caption-accuracy grading.');
-  var report = row.assessmentReport;
-  var abilities = report && report.abilities || {};
-  var longform = Number(abilities.coherentOutputTokens || 0);
-  if (role !== 'vision' && report && report.assessmentKind !== 'confirmation') {
-    if (longform >= 16384) mark('16K proven', 'passed', 'A 16K-target prose calibration passed its explicit completeness checks.');
-    else if (longform >= 8192) mark('8K proven', 'passed', 'An 8K-target prose calibration passed its explicit completeness checks.');
-    else if (longform >= 4096) mark('4K proven', 'passed', 'A 4K-target prose calibration passed.');
-  }
+    role === 'both' ? 'Requires verified Storyboard JSON and Schema Assist plus Vision.' : role === 'director' ? 'Requires Storyboard JSON and Schema Assist; quality judgment is separate.' : 'Requires completed open and group-aware Vision probes; this is not caption-accuracy grading.');
+  // Historical prose calibrations are not proof of structured Scene capacity.
   row.dataset.assessmentSanity = state;
 }
 function diagnosticsAssessmentSize(bytes) {
@@ -138,48 +119,6 @@ function diagnosticsAssessmentSortAndFilter() {
   });
 }
 
-function diagnosticsUpdateAssessmentMetrics(run) {
-  if (!Array.isArray(run.attempts)) return;
-  diagnosticsEl('diagnostics-assessment-results').querySelectorAll('tbody[data-assessment-model]').forEach(function (row) {
-    var role = row.dataset.assessmentModel.split(':')[0];
-    var ref = row.dataset.assessmentModel.slice(role.length + 1);
-    var attempts = run.attempts.filter(function (item) { return item.role === role && item.modelRef === ref; });
-    if (!attempts.length) return;
-    var tests = {};
-    attempts.forEach(function (item) {
-      var group = tests[item.kind] || (tests[item.kind] = {counts: {}, errors: new Set()});
-      group.counts[item.status] = (group.counts[item.status] || 0) + 1;
-      if (item.error) group.errors.add(item.error);
-    });
-    diagnosticsAssessmentCounts(row, tests);
-    row.querySelector('[data-assessment-provenance]').textContent = 'Model Lab run: ' + run.id + ' · ' + run.status +
-      (run.importedFrom ? ' · Imported from ' + run.importedFrom.host + ' (source runtime measurements)' : '');
-    row.querySelector('[data-assessment-capabilities]').textContent = Object.keys(tests).map(function (kind) {
-      var group = tests[kind];
-      return modelLabAttemptLabel(kind) + ': ' + Object.keys(group.counts).map(function (status) {
-        return group.counts[status] + ' ' + status;
-      }).join(', ') + (group.errors.size ? ' · ' + Array.from(group.errors).join(' · ') : '');
-    }).join(' · ') + ' · Context limit: not established by this assessment';
-    row.querySelectorAll('[data-assessment-initial-evidence]').forEach(function (line) { line.remove(); });
-    var measured = attempts.filter(function (item) { return item.finishedAt && diagnosticsProbeMetrics(item).tokens > 0; });
-    if (measured.length) {
-      var last = diagnosticsProbeMetrics(measured[measured.length - 1]);
-      if (last.speed > 0) {
-        var speed = row.querySelector('[data-assessment-speed]');
-        speed.textContent = last.speed.toFixed(1);
-        speed.title = last.hint;
-        row.assessmentSort.speed = last.speed;
-      }
-      var largest = Math.max.apply(null, measured.map(function (item) { return diagnosticsProbeMetrics(item).tokens; }));
-      var output = row.querySelector('[data-assessment-output]');
-      output.textContent = largest.toLocaleString();
-      output.title = 'Largest observed output in the current run; may include reasoning tokens. Not a verified maximum.';
-      row.assessmentSort.output = largest;
-    }
-  });
-  diagnosticsAssessmentSortAndFilter();
-}
-
 function diagnosticsRenderAssessmentProgress(run) {
   if (String(run.id) !== diagnosticsAssessmentRunId || diagnosticsActiveTab !== 'assessment' ||
       diagnosticsEl('diagnostics-modal').classList.contains('hidden')) return;
@@ -190,13 +129,11 @@ function diagnosticsRenderAssessmentProgress(run) {
   var terminal = ['completed', 'failed', 'error', 'stopped', 'interrupted', 'cancelled'].indexOf(String(run.status)) !== -1;
   ProgressCard.update(card, modelLabProgressSnapshot(run), {
     compact: terminal,
-    className: 'model-assessment-progress-card',
-    onOpen: function () { setDiagnosticsTab('model-lab', true, run.id); }
+    className: 'model-assessment-progress-card'
   });
   card.querySelector('[data-progress-dot]').className = 'activity-monitor-dot ' +
     (run.status === 'completed' ? 'assessment-finished' :
       terminal ? 'assessment-terminal' : 'active');
-  card.querySelector('[data-progress-open]').textContent = 'View probes';
   var wasRunning = diagnosticsAssessmentRunStatus === 'running';
   diagnosticsAssessmentRunStatus = String(run.status);
   diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running';
@@ -206,7 +143,6 @@ function diagnosticsRenderAssessmentProgress(run) {
   stop.hidden = run.status !== 'running';
   stop.disabled = run.status !== 'running' || diagnosticsAssessmentStoppingId === String(run.id);
   stop.textContent = diagnosticsAssessmentStoppingId === String(run.id) ? 'Stopping…' : 'Stop Assessment';
-  diagnosticsUpdateAssessmentMetrics(run);
   if (wasRunning && run.status !== 'running') refreshUnifiedModelAssessment().catch(function () {});
 }
 
@@ -219,10 +155,8 @@ function diagnosticsAssessmentProgressError(runId, error) {
   card.querySelector('[data-progress-detail]').textContent = String(error.message || error);
 }
 
-function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
-  // Legacy deep links still open their specialist tool panels; only consolidated
-  // primary destinations appear in the tab bar.
-  var next = ['health', 'assessment', 'h3', 'models', 'benchmark', 'model-lab'].indexOf(tabName) !== -1 ? tabName : 'health';
+function setDiagnosticsTab(tabName, focusTab) {
+  var next = ['health', 'assessment', 'h3'].indexOf(tabName) !== -1 ? tabName : 'assessment';
   diagnosticsActiveTab = next;
   if (next !== 'assessment' && diagnosticsAssessmentReviewRefresh) {
     window.clearTimeout(diagnosticsAssessmentReviewRefresh);
@@ -232,7 +166,7 @@ function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
   var selectedButton = null;
 
   Array.prototype.forEach.call(document.querySelectorAll('[data-diagnostics-tab]'), function (button) {
-    var active = button.getAttribute('data-diagnostics-tab') === (next === 'models' || next === 'benchmark' || next === 'model-lab' ? 'assessment' : next);
+    var active = button.getAttribute('data-diagnostics-tab') === next;
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', active ? 'true' : 'false');
     button.tabIndex = active ? 0 : -1;
@@ -247,11 +181,6 @@ function setDiagnosticsTab(tabName, focusTab, modelLabRunId) {
 
   if (next === 'assessment') refreshUnifiedModelAssessment();
   if (next === 'h3') refreshH3CalibrationSettings();
-  if ((next === 'models' || next === 'benchmark') && !directorModelTestState.loaded) directorModelTestRefresh();
-  if (next === 'model-lab') {
-    if (modelLabRunId) modelLabFetch(modelLabRunId).catch(function (error) { reportConsoleError('Model Lab', error); });
-    else modelLabRefresh();
-  }
   if (focusTab && selectedButton) selectedButton.focus();
 }
 
@@ -282,14 +211,13 @@ function refreshUnifiedModelAssessment() {
   summary.textContent = 'Loading model findings…';
   return Promise.all([
     fetch('/fs/storyboard/director').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Director discovery failed.'); return p; }); }),
-    fetch('/app/director-model-test').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Director findings failed.'); return p; }); }),
     fetch('/app/model-lab?summary=1').then(function (r) { return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Model Lab findings failed.'); return p; }); })
   ]).then(function (values) {
     var directors = values[0].models || [];
-    var reports = values[1].calibrationReports || [];
-    var labRuns = values[2].runs || [];
-    var capabilityRuns = values[2].capabilityRuns || [];
-    var labModels = values[2].models || {};
+    var reports = [];
+    var labRuns = values[1].runs || [];
+    var capabilityRuns = values[1].capabilityRuns || [];
+    var labModels = values[1].models || {};
     var vision = labModels.visions || [];
     var judgeSelect = diagnosticsEl('diagnostics-assessment-judge-model');
     var previouslySelectedJudge = judgeSelect.value;
@@ -315,10 +243,9 @@ function refreshUnifiedModelAssessment() {
     table.className = 'model-assessment-table';
     var head = document.createElement('thead');
     var header = document.createElement('tr');
-    [{key: '', name: 'Select'}, {key: 'model', name: 'Model'}, {key: 'role', name: 'Role'},
-      {key: 'size', name: 'Size'}, {key: 'result', name: 'Qualified for'},
-      {key: 'thinking', name: 'Thinking'}, {key: 'speed', name: 'tok/s'}, {key: 'output', name: 'Output observed'},
-      {key: 'quality', name: 'Quality review'}, {key: 'tested', name: 'Last tested'}].forEach(function (column) {
+    [{key: '', name: 'Select'}, {key: 'model', name: 'Model'},
+      {key: 'output', name: 'Valid output'}, {key: 'speed', name: 'tok/s'},
+      {key: 'result', name: 'Assessment'}].forEach(function (column) {
       var th = document.createElement('th');
       th.scope = 'col';
       if (column.key) {
@@ -352,7 +279,7 @@ function refreshUnifiedModelAssessment() {
     function refreshSelectionSummary() {
       var selectedModels = new Set([...diagnosticsAssessmentSelected.director, ...diagnosticsAssessmentSelected.vision]);
       diagnosticsEl('diagnostics-assessment-selection').textContent =
-        selectedModels.size + ' model(s) selected · Run Selected Tests starts the server-owned suite.';
+        selectedModels.size + ' model(s) selected · Completed compatible tests will be reused.';
       diagnosticsAssessmentSyncHeaderSelection();
     }
     function addRow(title, kind, ref, report) {
@@ -407,75 +334,101 @@ function refreshUnifiedModelAssessment() {
       expand.setAttribute('aria-expanded', String(diagnosticsAssessmentExpanded.has(key)));
       name.appendChild(expand);
       line.appendChild(name);
-      cell('Role', supportsDirector && supportsVision ? 'Director · Vision' : supportsVision ? 'Vision' : 'Director');
+      var roleLabel = supportsDirector && supportsVision ? 'Director · Vision' : supportsVision ? 'Vision' : 'Director';
       var model = (kind === 'director' ? directors : vision).find(function (entry) {
         return String(kind === 'director' ? entry.id || '' : entry.modelRef || '') === ref;
       }) || {};
       var size = Number(model.sizeBytes || 0);
-      cell('Size', diagnosticsAssessmentSize(size));
+      var sizeLabel = diagnosticsAssessmentSize(size);
       row.assessmentSort.size = size > 0 ? size : null;
       var qualification = cell('Qualified for', '', 'qualification');
       qualification.className = 'model-assessment-qualifications';
-      var thinkingCell = cell('Thinking', supportsDirector ? 'No' : '—', 'thinking');
-      thinkingCell.title = kind === 'director' ? 'No positive thinking support recorded yet.' : 'Thinking applies to Director models.';
+      var thinkingLabel = supportsDirector ? 'Not verified' : 'N/A';
       var speedCell = cell('Speed', '—', 'speed');
       speedCell.title = 'Runtime-reported generation throughput when available; different probes and runtimes may not be directly comparable.';
       var outputCell = cell('Output', '—', 'output');
       outputCell.title = 'Largest observed completion, potentially including reasoning tokens; not a verified limit.';
-      var qualityCell = cell('Quality review', 'Not judged', 'quality');
+      // Put headline metrics before assessment; secondary fields are details-only.
+      line.insertBefore(outputCell, qualification);
+      line.insertBefore(speedCell, qualification);
+      var qualityLabel = 'Not judged';
+      var qualityReason = '';
       var evidence = capabilityRuns.filter(function (run) {
         return run.models && run.models[ref] && Object.keys(run.models[ref]).some(function (probe) {
           var isVision = ['vision_open', 'vision_group_aware', 'vision_model_error'].indexOf(probe) !== -1;
           return supportsVision && isVision || supportsDirector && !isVision;
         });
       })[0];
-      var tests = evidence && evidence.models[ref] || {};
+      row.assessmentNeedsGroupAware = !!(evidence && evidence.groupsConfigured);
+      row.assessmentHasSetVocabulary = capabilityRuns.some(function (saved) {
+        return !!((saved.models || {})[ref] || {}).set_vocabulary_synthesis;
+      });
+      var tests = {};
+      capabilityRuns.slice().reverse().forEach(function (saved) {
+        var byKind = saved.models && saved.models[ref] || {};
+        Object.keys(byKind).forEach(function (kind) {
+          // Old Scene prompts did not use WebCap's real production contract.
+          if (kind.indexOf('director_scene_plan_') === 0 &&
+              saved.protocol !== 'webcap-model-assessment-structured-v2') return;
+          var probe = byKind[kind];
+          var passed = Number((probe.counts || {}).completed || 0) > 0;
+          var selected = tests[kind];
+          var selectedPassed = selected && Number((selected.counts || {}).completed || 0) > 0;
+          if (!selected || (passed && !selectedPassed) ||
+              (passed && selected._imported && !saved.importedFrom)) {
+            tests[kind] = Object.assign({}, probe, {_imported: !!saved.importedFrom});
+          }
+        });
+      });
       var thinking = tests.director_thinking;
       if (supportsDirector) {
         var supported = thinking ? thinking.supported === true : !!(report && report.thinking);
-        thinkingCell.textContent = supported ? 'Yes' : 'No';
-        thinkingCell.title = thinking ? 'Unified thinking probe: ' + (supported ? 'reasoning observed' : 'not verified') : 'Saved Director assessment result';
+        thinkingLabel = supported ? 'Yes' : 'Not verified';
         row.assessmentSort.thinking = supported ? 1 : 0;
       }
       var testedAt = evidence && evidence.startedAt || (report && report.finishedAt) || '';
       var date = testedAt ? new Date(testedAt) : null;
       var validDate = date && !isNaN(date.getTime());
-      var tested = cell('Last tested', validDate ? date.toLocaleDateString() : '—');
-      tested.title = validDate ? date.toLocaleString() : 'No saved evidence';
+      var testedLabel = validDate ? date.toLocaleDateString() : '—';
       row.assessmentSort.tested = validDate ? date.getTime() : null;
       row.appendChild(line);
       diagnosticsAssessmentCounts(row, tests);
-      var qualityReview = evidence && (evidence.qualityReviews || {})[ref];
-      qualityCell.textContent = diagnosticsAssessmentReviewLabel(qualityReview);
+      var qualityRun = capabilityRuns.find(function (run) {
+        return ((run.qualityReviews || {})[ref] || {}).status === 'completed';
+      });
+      var qualityReview = qualityRun && qualityRun.qualityReviews[ref];
+      qualityLabel = diagnosticsAssessmentReviewLabel(qualityReview);
       if (qualityReview && qualityReview.status === 'completed') {
-        qualityCell.title = (qualityReview.tasks || []).map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');
+        qualityReason = (qualityReview.tasks || []).map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');
         row.assessmentSort.quality = (qualityReview.tasks || []).reduce(function (total, item) { return total + item.score; }, 0) / Math.max(1, (qualityReview.tasks || []).length);
+        var qualityBadge = document.createElement('span');
+        qualityBadge.className = 'model-assessment-qualification model-assessment-' + (row.assessmentSort.quality >= 3 ? 'passed' : 'issues');
+        qualityBadge.textContent = 'Quality ' + row.assessmentSort.quality.toFixed(1) + '/5';
+        qualityBadge.title = 'Advisory LLM review, separate from technical qualification: ' + qualityReason;
+        qualification.appendChild(qualityBadge);
       }
 
       var allTests = Object.keys(tests).map(function (probe) { return tests[probe]; });
-      var rates = allTests.flatMap(function (entry) { return entry.throughputSamples || []; })
+      var structuredTests = Object.keys(tests).filter(function (kind) { return kind.indexOf('director_scene_plan_') === 0 && Number((tests[kind].counts || {}).completed || 0) > 0; }).map(function (kind) { return tests[kind]; });
+      var speedTests = (supportsDirector ? structuredTests : allTests).filter(function (item) {
+        return !item._imported;
+      });
+      var nativeRates = speedTests.flatMap(function (entry) { return entry.generationSpeedSamples || []; }).filter(function (v) { return Number(v) > 0; });
+      var rates = nativeRates.length ? nativeRates : speedTests.flatMap(function (entry) { return entry.throughputSamples || []; })
         .filter(function (value) { return Number(value) > 0; });
-      var outputs = allTests.flatMap(function (entry) { return entry.outputTokenSamples || []; })
-        .filter(function (value) { return Number(value) > 0; });
-      var legacyAttempts = report && Array.isArray(report.attempts) ? report.attempts : [];
-      var legacyRates = legacyAttempts.filter(function (attempt) { return attempt.status === 'passed' && Number(attempt.tokensPerSecond) > 0; });
+      var outputs = structuredTests.map(function (entry) { return Number(entry.verifiedOutputTokens || 0); }).filter(function (v) { return v > 0; });
+      // Historical prose benchmark speeds are not mixed into current structured results.
       if (rates.length) {
         var rate = rates.reduce(function (a, b) { return a + Number(b); }, 0) / rates.length;
         speedCell.textContent = rate.toFixed(1);
-        speedCell.title = allTests.some(function (item) { return item.speedBasis; })
-          ? 'Effective throughput including request overhead for probes without runtime timing; compare on same hardware.'
-          : 'Runtime-reported tokens/s across saved probes; compare on same hardware.';
+        speedCell.title = nativeRates.length ? 'Runtime-reported generation tokens/s; compare on the same runtime/hardware.'
+          : 'Effective throughput includes processing/loading overhead; not directly comparable to generation tokens/s.';
         row.assessmentSort.speed = rate;
-      } else if (legacyRates.length) {
-        var legacyRate = Number(legacyRates[legacyRates.length - 1].tokensPerSecond);
-        speedCell.textContent = legacyRate.toFixed(1);
-        speedCell.title = 'Legacy calibration throughput on its source runtime; may not be directly comparable.';
-        row.assessmentSort.speed = legacyRate;
       }
-      var legacyOutput = Number((report && report.abilities || {}).coherentOutputTokens || 0);
-      var maxOutput = outputs.length ? Math.max.apply(null, outputs.map(Number)) : legacyOutput;
+      var maxOutput = outputs.length ? Math.max.apply(null, outputs.map(Number)) : 0;
       if (maxOutput > 0) {
         outputCell.textContent = maxOutput.toLocaleString();
+        outputCell.title = 'Observed completion tokens in a complete, validated Storyboard JSON response; not a proven hardware or model ceiling.';
         row.assessmentSort.output = maxOutput;
       }
 
@@ -483,7 +436,12 @@ function refreshUnifiedModelAssessment() {
       expanded.className = 'model-assessment-evidence';
       expanded.hidden = !diagnosticsAssessmentExpanded.has(key);
       var panel = document.createElement('td');
-      panel.colSpan = 10;
+      panel.colSpan = 5;
+      var metadata = document.createElement('div');
+      metadata.textContent = 'Role: ' + roleLabel + ' · Size: ' + sizeLabel +
+        ' · Thinking: ' + thinkingLabel + ' · Last tested: ' + testedLabel +
+        ' · Quality review: ' + qualityLabel;
+      panel.appendChild(metadata);
       var provenance = document.createElement('div');
       provenance.dataset.assessmentProvenance = '';
       provenance.textContent = evidence ? 'Model Lab run: ' + evidence.id + ' · ' + (evidence.status || 'unknown') +
@@ -515,22 +473,21 @@ function refreshUnifiedModelAssessment() {
           panel.appendChild(detail);
         });
       }
-      if (supportsDirector && evidence && evidence.status === 'completed') {
+      var judgeSource = capabilityRuns.find(function (saved) {
+        return saved.status === 'completed' && Object.keys((saved.models || {})[ref] || {}).some(function (kind) {
+          var item = saved.models[ref][kind];
+          return kind.indexOf('director_scene_plan_') === 0 &&
+            Number((item.counts || {}).completed || 0) > 0;
+        });
+      });
+      if (supportsDirector && judgeSource) {
         var judgeButton = document.createElement('button');
         judgeButton.type = 'button';
         judgeButton.className = 'review-captions-btn';
         judgeButton.textContent = qualityReview && qualityReview.status === 'completed' ? 'Reassess with LLM' : 'Assess with LLM';
         judgeButton.disabled = !!(qualityReview && qualityReview.status === 'running');
-        judgeButton.addEventListener('click', function () { diagnosticsAssessmentJudge(evidence.id, ref); });
+        judgeButton.addEventListener('click', function () { diagnosticsAssessmentJudge(judgeSource.id, ref); });
         panel.appendChild(judgeButton);
-      }
-      if (evidence) {
-        var view = document.createElement('button');
-        view.type = 'button';
-        view.className = 'review-captions-btn';
-        view.textContent = 'View probes';
-        view.addEventListener('click', function () { setDiagnosticsTab('model-lab', true, evidence.id); });
-        panel.appendChild(view);
       }
       expanded.appendChild(panel);
       row.appendChild(expanded);
@@ -622,8 +579,8 @@ function runUnifiedModelAssessment() {
   var files = modelLabCurrentFiles();
   var canLab = !!sourceFolder && files.length >= 2;
   var status = diagnosticsEl('diagnostics-assessment-selection');
-  if (!canLab) throw new Error('Open a Set with at least two media items to run the assessment.');
-  status.textContent = 'Starting ' + (deep ? 'deep' : 'quick') + ' assessment…';
+  if (visions.length && !canLab) throw new Error('Open a Set with at least two media items to assess Vision models. Director assessment needs no Set.');
+  status.textContent = 'Checking saved results and scheduling outstanding ' + (deep ? 'deep' : 'quick') + ' tests…';
   var runButton = diagnosticsEl('diagnostics-assessment-run');
   runButton.disabled = true;
   return Promise.resolve().then(function () {
@@ -634,27 +591,31 @@ function runUnifiedModelAssessment() {
       action: 'start',
       config: {
         folder: sourceFolder, files: files, groups: modelLabGroups(), depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
-        visionModels: visions, directorModels: directors,
-        referenceVisionRef: visions.length ? String(visions[0].modelRef) : '',
-        referenceDirectorRef: directors.length ? String(directors[0].modelRef) : '',
-        referenceVision: visions.length ? visions[0] : null,
-        referenceDirector: directors.length ? directors[0] : null
+        visionModels: visions, directorModels: directors
       }
     }).then(function (payload) {
+      if (payload.noWork) {
+        status.textContent = 'Already assessed · 0 tests needed. Existing results are preserved.';
+        diagnosticsAssessmentRunId = '';
+        diagnosticsAssessmentRunStatus = 'completed';
+        refreshUnifiedModelAssessment().catch(function (error) { reportConsoleError('Model Assessment', error); });
+        return payload.run;
+      }
       diagnosticsAssessmentRunId = String(payload.run.id);
       diagnosticsAssessmentRunStatus = '';
       modelLabState.run = payload.run;
       modelLabState.runs = payload.runs || modelLabState.runs;
-      modelLabRender();
+      modelLabPublishProgress(payload.run);
       modelLabSchedulePoll();
       if (payload.run.status === 'error' || payload.run.status === 'interrupted') {
         throw new Error(payload.run.error || 'Assessment failed before probes could complete.');
       }
-      diagnosticsEl('diagnostics-assessment-summary').textContent = 'Live assessment progress · findings update when the run finishes.';
+      diagnosticsEl('diagnostics-assessment-summary').textContent = 'Existing successful tests are reused · only missing or failed probes run.';
       reportConsoleInfo('Model Assessment', 'Started persistent ' + (deep ? 'deep' : 'quick') + ' Model Lab run ' + payload.run.id + '.');
       return payload.run;
     });
   }).then(function (labRun) {
+    if (labRun.noWork) return;
     status.textContent = labRun.status === 'running'
       ? 'Assessment running. You may close Diagnostics.'
       : 'Assessment ' + String(labRun.status) + '.';
@@ -814,13 +775,7 @@ function closeDiagnosticsModal() {
 
   // Diagnostics can contain very large model/evidence trees. Once the modal
   // closes they provide no value to the active workspace, so release them.
-  ['director-model-assessment-models', 'director-model-assessment-history'].forEach(function (id) {
-    var host = diagnosticsEl(id);
-    if (host) host.replaceChildren();
-  });
-  if (typeof directorModelTestState !== 'undefined') {
-    directorModelTestState.loaded = false;
-  }
+  // The unified Assessment retains its own evidence and progress state.
 }
 
 function refreshH3CalibrationSettings() {
@@ -1152,9 +1107,6 @@ function wireDiagnosticsUi() {
   diagnosticsEl('diagnostics-assessment-import-cancel').onclick = function () {
     diagnosticsAssessmentImportBundle = null; diagnosticsEl('diagnostics-assessment-transfer').classList.add('hidden');
   };
-  diagnosticsEl('diagnostics-assessment-director').onclick = function () { setDiagnosticsTab('models', true); };
-  diagnosticsEl('diagnostics-assessment-lab').onclick = function () { setDiagnosticsTab('model-lab', true); };
-  diagnosticsEl('diagnostics-assessment-benchmark').onclick = function () { setDiagnosticsTab('benchmark', true); };
 
   Array.prototype.forEach.call(document.querySelectorAll('[data-diagnostics-tab]'), function (button) {
     button.onclick = function () {

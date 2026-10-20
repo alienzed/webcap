@@ -12,6 +12,9 @@ from .permissions import normalize_path_permissions
 
 
 RUN_VERSION = 1
+ASSESSMENT_PROTOCOL = "webcap-model-assessment-structured-v2"
+# Existing identical production probes can be reused; legacy prose never qualifies as JSON evidence.
+LEGACY_COMPATIBLE_KINDS = {"language_synthesis", "language_challenge", "vision_open", "vision_group_aware"}
 ROOT_NAME = "model-lab-runs"
 DEFAULT_SAMPLE_COUNT = 8
 MAX_SAMPLE_COUNT = 24
@@ -107,7 +110,7 @@ def _reconcile_interrupted(payload):
             review["error"] = "Quality review interrupted by restart; run it again explicitly."
             changed_reviews = True
     if changed_reviews:
-        _write(_run_path(run_id), payload)
+        _write_run(payload)
     if payload.get("status") != "running" or _active_record(run_id):
         return payload
 
@@ -126,7 +129,7 @@ def _reconcile_interrupted(payload):
     )
     changed = True
     if changed:
-        _write(_run_path(run_id), payload)
+        _write_run(payload)
     return payload
 
 
@@ -148,13 +151,32 @@ def capability_run_summaries():
             continue
         run = get_run(row["id"])
         models = {}
-        for attempt in run.get("attempts") or []:
+        attempts = list(run.get("attempts") or [])
+        for source in (run.get("reused") or {}).values():
+            previous = get_run(source["runId"])
+            attempts.extend(a for a in previous.get("attempts") or [] if a.get("id") == source["attemptId"])
+        emitted_pathologies = {}
+        for attempt in attempts:
+            kind = str(attempt.get("kind") or "")
+            reason = str(attempt.get("failureKind") or "")
+            if kind.startswith("director_scene_plan_") and reason in {"empty", "garbled", "leakage", "looping"}:
+                emitted_pathologies.setdefault((attempt.get("modelRef"), kind), set()).add(reason)
+        # Keep one effective outcome per exact probe identity. A recovered failure
+        # is not an enduring failure, and historical retries are not extra coverage.
+        by_probe = {}
+        for attempt in attempts:
+            key = _attempt_key(attempt.get("kind"), attempt.get("modelRef"), attempt.get("file"))
+            prior = by_probe.get(key)
+            if prior is None or attempt.get("status") == "completed" or prior.get("status") != "completed":
+                by_probe[key] = attempt
+        for attempt in by_probe.values():
             ref = str(attempt.get("modelRef") or "")
             kind = str(attempt.get("kind") or "")
             if not ref or not kind:
                 continue
             by_kind = models.setdefault(ref, {})
             entry = by_kind.setdefault(kind, {"status": "", "error": "", "counts": {}})
+            entry["pathologies"] = sorted(emitted_pathologies.get((ref, kind), set()))
             status = str(attempt.get("status") or "interrupted")
             entry["counts"][status] = entry["counts"].get(status, 0) + 1
             result = attempt.get("result") or {}
@@ -170,6 +192,8 @@ def capability_run_summaries():
             timings = result.get("timings") if isinstance(result.get("timings"), dict) else {}
             usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
             rate = timings.get("predicted_per_second")
+            if isinstance(rate, (int, float)) and not isinstance(rate, bool) and rate > 0:
+                entry.setdefault("generationSpeedSamples", []).append(round(float(rate), 2))
             tokens = usage.get("completion_tokens") or timings.get("predicted_n")
             if not rate and isinstance(tokens, (int, float)) and tokens > 0:
                 seconds = result.get("requestSeconds")
@@ -188,11 +212,9 @@ def capability_run_summaries():
                 entry["outputTokenSamples"].append(round(float(tokens), 2))
             if kind == "director_thinking":
                 entry["supported"] = status == "completed" and bool(str(result.get("reasoning") or "").strip())
-            if kind.startswith("director_writing") and status == "completed":
-                # A completed LLM job alone does not prove a long-form target.
-                # The calibration protocol owns real 8K/16K qualification.
-                entry["maxRequestedTokens"] = max(entry.get("maxRequestedTokens", 0),
-                    int(kind.rsplit("_", 1)[-1]) if kind.rsplit("_", 1)[-1].isdigit() else 2048)
+            if kind.startswith("director_scene_plan_") and status == "completed":
+                entry["verifiedOutputTokens"] = max(entry.get("verifiedOutputTokens", 0),
+                    int(result.get("verifiedOutputTokens") or 0))
             entry["status"] = next((value for value in (
                 "failed", "running", "interrupted", "skipped", "completed"
             ) if entry["counts"].get(value)), status)
@@ -200,6 +222,8 @@ def capability_run_summaries():
             "id": row["id"], "status": row.get("status"),
             "startedAt": row.get("startedAt"), "folder": row.get("folder"),
             "depth": run.get("depth", "quick"),
+            "protocol": run.get("assessmentProtocol"),
+            "groupsConfigured": bool(run.get("groups")),
             "error": row.get("error", ""), "models": models,
             "importedFrom": run.get("importedFrom"),
             "qualityReviews": _copy(run.get("qualityReviews") or {}),
@@ -332,11 +356,77 @@ def _model_by_ref(models, model_ref):
     return next((model for model in models if model.get("modelRef") == model_ref), None)
 
 
+def _media_signatures(folder, files):
+    """Use the media's existing filesystem metadata; no extra scan or database."""
+    from .caption_ops import _resolve_folder
+    root = _resolve_folder(folder)
+    signatures = {}
+    for name in files:
+        path = root / name
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            # Unit fixtures can supply logical filenames; such evidence is
+            # intentionally ineligible for cross-run Vision reuse.
+            continue
+        signatures[name] = [stat.st_size, stat.st_mtime_ns]
+    return signatures
+
+
+def _reusable_evidence(run):
+    """Index saved completed probes once; never repeat them or copy large model outputs.
+
+    Only identical local evidence can satisfy a new assessment. Imported evidence
+    describes another host; its timing is not a local speed measurement.
+    """
+    reused = {}
+    failures = {}
+    selected = {m["modelRef"] for m in run["directorModels"] + run["allVisionModels"]}
+    for item in list_runs():
+        if item.get("status") in {"running", "error"}:
+            continue
+        previous = get_run(item["id"])
+        if previous.get("importedFrom"):
+            continue
+        same_protocol = previous.get("assessmentProtocol") == ASSESSMENT_PROTOCOL
+        for attempt in reversed(previous.get("attempts") or []):
+            kind = str(attempt.get("kind") or "")
+            ref = str(attempt.get("modelRef") or "")
+            filename = str(attempt.get("file") or "")
+            if ref not in selected or not (same_protocol or kind in LEGACY_COMPATIBLE_KINDS):
+                continue
+            if kind.startswith("vision_"):
+                if kind not in {"vision_open", "vision_group_aware"}:
+                    continue
+                if previous.get("folder") != run["folder"] or filename not in run["files"]:
+                    continue
+                signature = (run.get("mediaSignatures") or {}).get(filename)
+                if not signature or signature != (previous.get("mediaSignatures") or {}).get(filename):
+                    continue
+                if kind == "vision_group_aware" and previous.get("groups") != run["groups"]:
+                    continue
+            elif kind.startswith("set_") or kind.startswith("vision:"):
+                if (previous.get("folder") != run["folder"]
+                    or previous.get("files") != run["files"]
+                    or previous.get("mediaSignatures") != run.get("mediaSignatures")
+                    or previous.get("groups") != run["groups"]
+                    or previous.get("referenceVisionRef") != run.get("referenceVisionRef")
+):
+                    continue
+            key = _attempt_key(kind, ref, filename)
+            if key in reused:
+                continue
+            if attempt.get("status") == "completed":
+                reused[key] = {"runId": previous["id"], "attemptId": attempt["id"]}
+                failures.pop(key, None)
+            elif attempt.get("status") == "failed" and key not in failures:
+                failures[key] = True
+    return reused, failures
+
+
 def _new_run_payload(config):
     config = config if isinstance(config, dict) else {}
     folder = str(config.get("folder") or "").strip()
-    if not folder:
-        raise ValueError("Model Lab needs a Set folder.")
 
     try:
         sample_count = int(config.get("sampleCount") or DEFAULT_SAMPLE_COUNT)
@@ -347,19 +437,23 @@ def _new_run_payload(config):
     if depth not in {"quick", "deep"}:
         raise ValueError("Model Lab depth must be quick or deep.")
 
-    files = _supported_media(folder, config.get("files"))
-    if len(files) < 2:
-        raise ValueError("Model Lab needs at least two supported media items in the Set.")
-    sample_files = _even_sample(files, sample_count)
-
     vision_models = _normalize_models(config.get("visionModels"), "Vision")
     director_models = _normalize_models(config.get("directorModels"), "Director")
     if not vision_models and not director_models:
-        raise ValueError("Choose at least one Vision or Director model for Model Lab.")
+        raise ValueError("Choose at least one Vision or Director model for Model Assessment.")
+    if vision_models and not folder:
+        raise ValueError("Vision assessment needs a Set folder.")
+    files = _supported_media(folder, config.get("files")) if vision_models else []
+    if vision_models and len(files) < 2:
+        raise ValueError("Vision assessment needs at least two supported Set media items.")
+    sample_files = _even_sample(files, sample_count) if vision_models else []
 
     groups = _normalize_groups(config.get("groups"))
     reference_vision_ref = str(config.get("referenceVisionRef") or "").strip()
-    reference_director_ref = str(config.get("referenceDirectorRef") or "").strip()
+    if not reference_vision_ref and vision_models and director_models:
+        # The Vision assessment has already gathered precisely the Sight
+        # observations Schema Assist needs. Do not generate another fixture.
+        reference_vision_ref = vision_models[0]["modelRef"]
 
     all_vision = list(vision_models)
     reference_vision = config.get("referenceVision") if isinstance(config.get("referenceVision"), dict) else None
@@ -373,20 +467,12 @@ def _new_run_payload(config):
             raise ValueError("Reference Vision model details are required.")
 
     all_directors = list(director_models)
-    reference_director = config.get("referenceDirector") if isinstance(config.get("referenceDirector"), dict) else None
-    if reference_director_ref and not _model_by_ref(all_directors, reference_director_ref):
-        if reference_director:
-            model = _normalize_model(reference_director, "reference Director")
-            if model["modelRef"] != reference_director_ref:
-                raise ValueError("Reference Director model does not match referenceDirectorRef.")
-            all_directors.append(model)
-        else:
-            raise ValueError("Reference Director model details are required.")
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_id = stamp + "-" + secrets.token_hex(4)
-    return {
+    run = {
         "version": RUN_VERSION,
+        "assessmentProtocol": ASSESSMENT_PROTOCOL,
         "id": run_id,
         "status": "running",
         "startedAt": _now_iso(),
@@ -394,13 +480,13 @@ def _new_run_payload(config):
         "folder": folder,
         "depth": depth,
         "files": sample_files,
+        "mediaSignatures": _media_signatures(folder, sample_files) if sample_files else {},
         "groups": groups,
         "visionModels": vision_models,
         "directorModels": director_models,
         "allVisionModels": all_vision,
         "allDirectorModels": all_directors,
         "referenceVisionRef": reference_vision_ref,
-        "referenceDirectorRef": reference_director_ref,
         "options": {
             "sampleCount": len(sample_files),
             "activeTimeoutSeconds": DEFAULT_ACTIVE_TIMEOUT_SECONDS,
@@ -417,9 +503,13 @@ def _new_run_payload(config):
         "attempts": [],
         "qualityReviews": {},
     }
+    run["reused"], run["previousFailures"] = _reusable_evidence(run)
+    return run
 
 
 def _write_run(run):
+    if run.get("assessmentProtocol") == ASSESSMENT_PROTOCOL:
+        run["work"] = _assessment_work(run)
     _write(_run_path(run["id"]), run)
 
 
@@ -428,13 +518,7 @@ def _attempt_key(kind, model_ref, file_name=""):
 
 
 def _attempt_completed(run, kind, model_ref, file_name=""):
-    key = _attempt_key(kind, model_ref, file_name)
-    return any(
-        isinstance(attempt, dict)
-        and _attempt_key(attempt.get("kind"), attempt.get("modelRef"), attempt.get("file")) == key
-        and attempt.get("status") == "completed"
-        for attempt in run.get("attempts") or []
-    )
+    return _completed_attempt(run, kind, model_ref, file_name) is not None
 
 
 def _completed_attempt(run, kind, model_ref, file_name=""):
@@ -446,6 +530,11 @@ def _completed_attempt(run, kind, model_ref, file_name=""):
             and attempt.get("status") == "completed"
         ):
             return attempt
+    reused = (run.get("reused") or {}).get(key)
+    if reused:
+        source = get_run(reused["runId"])
+        return next((attempt for attempt in source.get("attempts") or []
+                     if attempt.get("id") == reused["attemptId"] and attempt.get("status") == "completed"), None)
     return None
 
 
@@ -518,9 +607,23 @@ def _set_current_job(run_id, job_id):
             active["jobId"] = str(job_id or "")
 
 
+def _mark_retry(run, kind, role, model_ref, file_name):
+    if run.get("retryPhase"):
+        return
+    key = _attempt_key(kind, model_ref, file_name)
+    deferred = run.setdefault("deferredRetries", [])
+    if not any(_attempt_key(row["kind"], row["modelRef"], row["file"]) == key for row in deferred):
+        deferred.append({"kind": kind, "role": role, "modelRef": model_ref, "file": file_name})
+
+
 def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
     if _attempt_completed(run, kind, model_ref, file_name):
         return _completed_attempt(run, kind, model_ref, file_name)
+    key = _attempt_key(kind, model_ref, file_name)
+    # Failed probes wait until all missing work for this model has been attempted.
+    if not run.get("retryPhase") and (run.get("previousFailures") or {}).get(key):
+        _mark_retry(run, kind, role, model_ref, file_name)
+        return {"kind": kind, "status": "deferred", "modelRef": model_ref, "file": file_name}
 
     stop_event = _active_stop_event(run["id"])
     if stop_event is not None and stop_event.is_set():
@@ -539,14 +642,16 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
         "jobId": "",
         "error": "",
         "result": {},
+        "retry": bool(run.get("retryPhase")),
     }
     _append_attempt(run, attempt)
     _persist_progress(
         run,
-        phase=role,
+        phase="retry" if run.get("retryPhase") else role,
         currentModelRef=model_ref,
         currentFile=file_name,
         currentKind=kind,
+        executionStatus="submitting",
     )
 
     job_id = ""
@@ -559,6 +664,7 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
         _update_attempt(run, attempt_id, jobId=job_id)
 
         active_started = None
+        last_job_status = ""
         while True:
             if stop_event is not None and stop_event.is_set():
                 from .llm_runner import cancel_job
@@ -571,6 +677,9 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
             from .llm_runner import job_status
             job = job_status(job_id, consume=False)
             status = str(job.get("status") or "")
+            if status != last_job_status:
+                last_job_status = status
+                _persist_progress(run, executionStatus=status)
             started_at = float(job.get("startedAt") or 0)
             if started_at > 0 and active_started is None:
                 active_started = time.monotonic()
@@ -596,6 +705,71 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                 result = job.get("result") if isinstance(job.get("result"), dict) else {}
                 required_result = {"vision_open": "sight", "vision_group_aware": "vocabularySight"}.get(kind)
                 validation_error = ""
+                failure_kind = ""
+                if kind.startswith("director_scene_plan_"):
+                    text = str(result.get("text") or "")
+                    if str(result.get("finishReason") or "").lower() in {"length", "max_tokens"}:
+                        # Exhausting a requested budget is not evidence of
+                        # empty/garbled model behavior, even if reasoning used it.
+                        failure_kind = "capacity"
+                    elif not text.strip():
+                        failure_kind = "empty"
+                    elif text.count("\ufffd") >= 2:
+                        failure_kind = "garbled"
+                    elif "<think>" in text.lower():
+                        failure_kind = "leakage"
+                    try:
+                        expected = int(kind.rsplit("_", 1)[-1]) // 256
+                        plan = json.loads(str(result.get("text") or ""))
+                        scenes = plan.get("scenes") if isinstance(plan, dict) else None
+                        if not isinstance(scenes, list) or len(scenes) != max(2, expected):
+                            raise ValueError("Wrong number of Storyboard Scenes.")
+                        for scene in scenes:
+                            if not isinstance(scene, dict) or not all(
+                                isinstance(scene.get(field), str) and scene[field].strip()
+                                for field in ("title", "summary", "prompt")
+                            ) or not isinstance(scene.get("suggestedDurationSeconds"), (int, float)):
+                                raise ValueError("Storyboard Scene is incomplete.")
+                            if len(scene["prompt"].split()) < 80 or not 6 <= scene["suggestedDurationSeconds"] <= 15:
+                                raise ValueError("Storyboard Scene has insufficient prompt detail or invalid duration.")
+                        if len(scenes) >= 3 and any(
+                            scenes[i]["prompt"].strip() == scenes[i + 1]["prompt"].strip()
+                            == scenes[i + 2]["prompt"].strip()
+                            for i in range(len(scenes) - 2)
+                        ):
+                            failure_kind = "looping"
+                            raise ValueError("Model repeated identical full Scene prompts.")
+                        if str(result.get("finishReason") or "").lower() in {"length", "max_tokens"}:
+                            failure_kind = "capacity"
+                            raise ValueError("Structured response was truncated at its token budget.")
+                        # Provider completion usage may include hidden/separate reasoning.
+                        # Do not call those tokens verified answer output.
+                        result["visibleOutputWords"] = sum(
+                            len(scene["prompt"].split()) for scene in scenes
+                        )
+                        result["visibleOutputCharacters"] = len(str(result.get("text") or ""))
+                        usage = result.get("usage") or {}
+                        details = usage.get("completion_tokens_details") or {}
+                        reasoning_tokens = details.get("reasoning_tokens")
+                        total_tokens = usage.get("completion_tokens")
+                        # Reasoning-aware token reports have an explicit visible
+                        # fraction. Otherwise show words/chars, not a made-up
+                        # output token count.
+                        if isinstance(total_tokens, int) and (
+                            not str(result.get("reasoning") or "").strip()
+                            or isinstance(reasoning_tokens, int)
+                        ):
+                            result["verifiedOutputTokens"] = max(
+                                0, total_tokens - int(reasoning_tokens or 0)
+                            )
+                        else:
+                            result["verifiedOutputTokens"] = 0
+                    except (ValueError, TypeError, KeyError) as exc:
+                        if not failure_kind:
+                            failure_kind = "contract"
+                        validation_error = "Storyboard structured-output validation failed: " + str(exc)
+                    if failure_kind in {"empty", "garbled", "leakage"} and not validation_error:
+                        validation_error = "Storyboard output pathology: " + failure_kind
                 if required_result and not isinstance(result.get(required_result), dict):
                     validation_error = result.get("structureWarning") or "Vision returned no usable structured evidence."
                     if not str(result.get("text") or "").strip():
@@ -608,9 +782,12 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                     attempt_id,
                     status="failed" if validation_error else "completed",
                     error=validation_error,
+                    failureKind=failure_kind if validation_error else "",
                     finishedAt=_now_iso(),
                     result=result,
                 )
+                if validation_error:
+                    _mark_retry(run, kind, role, model_ref, file_name)
                 try:
                     job_status(job_id, consume=True)
                 except Exception:
@@ -633,7 +810,9 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
             status="failed",
             finishedAt=_now_iso(),
             error=str(exc),
+            failureKind="runtime",
         )
+        _mark_retry(run, kind, role, model_ref, file_name)
         return next(row for row in run["attempts"] if row.get("id") == attempt_id)
     finally:
         _set_current_job(run["id"], "")
@@ -791,7 +970,7 @@ def _run_vision_model(run, model):
         )
         if attempt.get("status") == "completed":
             consecutive_failures = 0
-        else:
+        elif attempt.get("status") != "deferred":
             consecutive_failures += 1
 
         if not run["groups"]:
@@ -829,7 +1008,7 @@ def _run_vision_model(run, model):
         )
         if attempt.get("status") == "completed":
             consecutive_failures = 0
-        else:
+        elif attempt.get("status") != "deferred":
             consecutive_failures += 1
 
 
@@ -949,103 +1128,94 @@ def _run_schema_pair(run, model_ref, analysis, existing_groups, prefix):
     )
 
 
-def _run_reference_director_for_vision(run, vision_model):
-    model_ref = str(run.get("referenceDirectorRef") or "")
-    if not model_ref:
-        return
-    open_records, vocabulary_records = _vision_records(run, vision_model["modelRef"])
-    if len(open_records) < 2:
-        _skip_attempt(
-            run,
-            "vision_vocab_synthesis",
-            "director",
-            model_ref,
-            vision_model["modelRef"],
-            "Not enough completed open Vision probes for this Vision model.",
-        )
-        return
-    analysis = _analysis_from_records(open_records, vocabulary_records, vision_model["modelRef"])
-    prefix = "vision:{}:vocab".format(vision_model["modelRef"])
-    _run_schema_pair(run, model_ref, analysis, run["groups"], prefix)
-
-
 def _run_director_model(run, model):
     model_ref = model["modelRef"]
-    from .director_model_test_store import calibration_prompt
     from .llm_runner import enqueue
 
-    # One tiny opt-in thinking probe, owned by Model Lab's existing queue.
+    # Thinking remains a small, directly useful Storyboard capability check.
     _probe_job(
         run, kind="director_thinking", role="director", model_ref=model_ref,
         enqueue=lambda: enqueue(
             "chat", model_ref,
             {"operation": "freeform_chat", "messages": [
-                {"role": "user", "content": "Think briefly: what is 7 + 5? Answer with the number."}]},
+                {"role": "user", "content": "Storyboard continuity check: Scene A ends with the elevator doors jammed shut and a warning light blinking. What state must Scene B preserve? Answer briefly."}]},
             context={"runtimeOverrides": {"maxTokens": 128}, "assessmentEvidence": True, "thinking": True},
             label="Model Assessment · Thinking",
         ),
     )
 
-    # WebCap's existing representative writing protocol; one bounded request,
-    # independent of browser lifecycle and without changing learned calibration.
-    _probe_job(
-        run,
-        kind="director_writing",
-        role="director",
-        model_ref=model_ref,
-        enqueue=lambda: enqueue(
-            "chat",
-            model_ref,
-            {
-                "operation": "freeform_chat",
-                "messages": [{"role": "user", "content": calibration_prompt("prose", 2048)}],
-            },
-            context={"runtimeOverrides": {"maxTokens": 2048}, "assessmentEvidence": True},
-            label="Model Lab · Director Writing",
-        ),
-    )
-    if run.get("depth") == "deep":
-        for budget in (4096, 8192, 16384):
-            _probe_job(
-                run,
-                kind="director_writing_" + str(budget),
-                role="director",
-                model_ref=model_ref,
-                enqueue=lambda budget=budget: enqueue(
-                    "chat", model_ref,
-                    {"operation": "freeform_chat", "messages": [
-                        {"role": "user", "content": calibration_prompt("prose", budget)}]},
-                    context={"runtimeOverrides": {"maxTokens": budget}, "assessmentEvidence": True},
-                    label="Model Assessment · Deep Writing " + str(budget),
-                ),
-            )
-    synthetic_groups = [
-        {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
-        {"group": "BT Connector", "terms": ["chain"]},
-    ]
-    _run_schema_pair(run, model_ref, _synthetic_analysis(), synthetic_groups, "language")
-
+    # Use the actual production Storyboard Director prompt and response schema.
+    # Each completed Scene plan can yield validity, output length and speed from
+    # the SAME request. Additional size tiers run only when explicitly requested.
+    from .storyboard_llm_contract import build_request
+    story = {
+        "title": "Night Shift",
+        "concept": ("An overnight maintenance worker investigates a malfunctioning "
+                    "elevator in a quiet apartment building. A flickering floor "
+                    "indicator leads to an unexpected mechanical discovery."),
+        "style": "Grounded cinematic realism with practical lighting and consistent spaces.",
+    }
+    for budget in ((2048, 4096, 8192, 16384) if run.get("depth") == "deep" else (2048,)):
+        scene_count = max(2, budget // 256)
+        contract = build_request(
+            {**story, "targetSceneCount": scene_count}, "", "develop_story"
+        )
+        _probe_job(
+            run, kind="director_scene_plan_" + str(budget), role="director", model_ref=model_ref,
+            enqueue=lambda budget=budget, contract=contract: enqueue(
+                "chat", model_ref, {
+                    "operation": "assessment_scene_plan",
+                    "messages": [{"role": "user", "content": contract["prompt"]}],
+                    "response_schema": contract["response_schema"],
+                }, context={"runtimeOverrides": {"maxTokens": budget},
+                            "assessmentEvidence": True},
+                label="Model Assessment · Storyboard JSON " + str(budget),
+            ),
+        )
     reference_vision_ref = str(run.get("referenceVisionRef") or "")
     if not reference_vision_ref:
+        # Director-only: exercise the actual Schema Assist contract with a
+        # small frozen representative Sight fixture, not a generic prose test.
+        fixture_groups = [
+            {"group": "BT Shape", "terms": ["triangle", "bandeau"]},
+            {"group": "BT Connector", "terms": ["chain"]},
+        ]
+        _run_schema_pair(run, model_ref, _synthetic_analysis(), fixture_groups, "language")
         return
     open_records, vocabulary_records = _vision_records(run, reference_vision_ref)
     if len(open_records) < 2:
-        _skip_attempt(
-            run,
-            "set_vocabulary_synthesis",
-            "director",
-            model_ref,
-            "",
-            "Reference Vision did not produce enough completed open probes.",
-        )
+        for kind in ("set_vocabulary_synthesis", "set_vocabulary_challenge"):
+            _skip_attempt(
+                run, kind, "director", model_ref, "",
+                "Reference Vision did not produce enough completed open probes.",
+            )
         return
     analysis = _analysis_from_records(open_records, vocabulary_records, reference_vision_ref)
     _run_schema_pair(run, model_ref, analysis, run["groups"], "set_vocabulary")
 
 
+def _retry_failed_model(run, model, role):
+    ref = model["modelRef"]
+    if not any(row["modelRef"] == ref for row in run.get("deferredRetries") or []):
+        return
+    run["retryPhase"] = True
+    _persist_progress(run, phase="retry", currentModelRef=ref, currentFile="", currentKind="")
+    try:
+        if role == "vision":
+            _run_vision_model(run, model)
+        else:
+            _run_director_model(run, model)
+    finally:
+        run.pop("retryPhase", None)
+        run["deferredRetries"] = [row for row in run.get("deferredRetries") or []
+                                  if row["modelRef"] != ref]
+
+
 def _runner(run_id):
     try:
         run = _read_raw(run_id)
+        run.pop("retryPhase", None)
+        run["deferredRetries"] = []
         run["status"] = "running"
         run["finishedAt"] = ""
         run["error"] = ""
@@ -1058,6 +1228,7 @@ def _runner(run_id):
             vision_refs.append(model["modelRef"])
             try:
                 _run_vision_model(run, model)
+                _retry_failed_model(run, model, "vision")
             except ModelLabStopped:
                 raise
             except Exception as exc:
@@ -1072,28 +1243,11 @@ def _runner(run_id):
             if _active_stop_event(run_id).is_set():
                 raise ModelLabStopped("Model Lab stop requested.")
 
-        if run.get("referenceDirectorRef"):
-            for model in run.get("visionModels") or []:
-                try:
-                    _run_reference_director_for_vision(run, model)
-                except ModelLabStopped:
-                    raise
-                except Exception as exc:
-                    _failed_attempt(
-                        run,
-                        "vision_vocabulary_error",
-                        "director",
-                        run.get("referenceDirectorRef"),
-                        model["modelRef"],
-                        "Vision vocabulary evaluation failed: " + str(exc),
-                    )
-                if _active_stop_event(run_id).is_set():
-                    raise ModelLabStopped("Model Lab stop requested.")
-
         _persist_progress(run, phase="director", currentModelRef="", currentFile="", currentKind="")
         for model in run.get("directorModels") or []:
             try:
                 _run_director_model(run, model)
+                _retry_failed_model(run, model, "director")
             except ModelLabStopped:
                 raise
             except Exception as exc:
@@ -1149,8 +1303,106 @@ def _start_thread(run_id):
         thread.start()
 
 
+def _planned_probes(run):
+    """Frozen logical work units; a retry never adds another unit."""
+    probes = []
+
+    def include(kind, ref, file_name=""):
+        probes.append(_attempt_key(kind, ref, file_name))
+
+    for model in run.get("allVisionModels") or []:
+        ref = model["modelRef"]
+        for file_name in run.get("files") or []:
+            include("vision_open", ref, file_name)
+            if run.get("groups"):
+                include("vision_group_aware", ref, file_name)
+
+    for model in run.get("directorModels") or []:
+        ref = model["modelRef"]
+        include("director_thinking", ref)
+        include("director_scene_plan_2048", ref)
+        if run.get("depth") == "deep":
+            for budget in (4096, 8192, 16384):
+                include("director_scene_plan_" + str(budget), ref)
+        if run.get("referenceVisionRef"):
+            include("set_vocabulary_synthesis", ref)
+            include("set_vocabulary_challenge", ref)
+        else:
+            include("language_synthesis", ref)
+            include("language_challenge", ref)
+    return list(dict.fromkeys(probes))
+
+
+def _assessment_work(run):
+    """Only count planned probes, never incidental retries or stage errors."""
+    planned = _planned_probes(run)
+    keys = set(planned)
+    latest = {}
+    for attempt in run.get("attempts") or []:
+        if not isinstance(attempt, dict):
+            continue
+        key = _attempt_key(attempt.get("kind"), attempt.get("modelRef"), attempt.get("file"))
+        if key in keys and latest.get(key, {}).get("status") != "completed":
+            latest[key] = attempt
+
+    reused = run.get("reused") or {}
+    previous_failures = run.get("previousFailures") or {}
+    completed = reused_count = skipped = failed = deferred = running = 0
+    for key in planned:
+        attempt = latest.get(key)
+        if key in reused or (attempt and attempt.get("status") == "completed"):
+            completed += 1
+            if key in reused:
+                reused_count += 1
+        elif not attempt:
+            if key in previous_failures:
+                deferred += 1
+        elif attempt.get("status") == "skipped":
+            skipped += 1
+        elif attempt.get("status") == "running":
+            running += 1
+        elif attempt.get("status") == "failed":
+            if run.get("status") == "completed" or attempt.get("retry"):
+                failed += 1
+            else:
+                deferred += 1
+    resolved = completed + skipped + failed
+    return {
+        "planned": len(planned),
+        "completed": completed,
+        "reused": reused_count,
+        "skipped": skipped,
+        "failed": failed,
+        "deferred": deferred,
+        "running": running,
+        "remaining": len(planned) - resolved,
+        "resolved": resolved,
+    }
+
+
+def _pending_probe_plan(run):
+    """Only schedule missing/failed work, using the same plan as progress."""
+    missing = retry = 0
+    for key in _planned_probes(run):
+        if key in (run.get("reused") or {}):
+            continue
+        if key in (run.get("previousFailures") or {}):
+            retry += 1
+        else:
+            missing += 1
+    return {"missing": missing, "retry": retry, "total": missing + retry}
+
+
+
 def start_run(config):
     run = _new_run_payload(config)
+    run["plan"] = _pending_probe_plan(run)
+    if not run["plan"]["total"]:
+        run["status"] = "completed"
+        run["finishedAt"] = _now_iso()
+        run["noWork"] = True
+        run["work"] = _assessment_work(run)
+        return run
     with _lock:
         _write_run(run)
         try:
@@ -1202,11 +1454,31 @@ def delete_run(run_id):
     with _lock:
         if _active_record(run_id):
             raise RuntimeError("Active Model Lab run cannot be deleted.")
-        path = _run_path(run_id)
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            raise FileNotFoundError("Model Lab run does not exist: " + str(run_id))
+        source = _read_raw(run_id)
+        updates = []
+        for row in list_runs():
+            if row["id"] == run_id:
+                continue
+            saved = _read_raw(row["id"])
+            refs = {key: value for key, value in (saved.get("reused") or {}).items()
+                    if value.get("runId") == run_id}
+            if not refs:
+                continue
+            if _active_record(row["id"]):
+                raise RuntimeError("Stop the running assessment that is using this evidence first.")
+            for key, value in refs.items():
+                attempt = next((item for item in source.get("attempts") or []
+                                if item.get("id") == value.get("attemptId")
+                                and item.get("status") == "completed"), None)
+                if attempt is None:
+                    raise RuntimeError("Missing reused assessment evidence: " + key)
+                saved.setdefault("attempts", []).append(_copy(attempt))
+                saved["reused"].pop(key)
+            saved["summary"] = _summarize(saved)
+            updates.append(saved)
+        for saved in updates:
+            _write_run(saved)
+        _run_path(run_id).unlink()
     return True
 
 
@@ -1287,7 +1559,8 @@ def register_routes(app):
                 return jsonify({"ok": True, "run": run, "runs": list_runs()})
             if action == "start":
                 run = start_run(data.get("config"))
-                return jsonify({"ok": True, "run": run, "runs": list_runs()}), 201
+                return jsonify({"ok": True, "run": run, "noWork": bool(run.get("noWork")),
+                                "plan": run.get("plan"), "runs": list_runs()}), (200 if run.get("noWork") else 201)
             if action == "resume":
                 run = resume_run(data.get("runId"))
                 return jsonify({"ok": True, "run": run, "runs": list_runs()})

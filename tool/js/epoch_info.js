@@ -145,6 +145,16 @@
     }
     return load(view,false);
   };
+  // Analytics selection and Test-to-epoch links use the same surface.
+  window.runAnalyticsViewEpoch=function(jobId,epoch,returnMode){
+    var mode=returnMode==='tests'?'tests':'analytics';
+    if(mode==='analytics') {
+      window.epochFinderShowMode('analytics');
+    }
+    var folder=window.runAnalyticsFolder();
+    if(!folder)throw new Error('Select a Set before inspecting checkpoint results.');
+    return window.epochInfoOpen(mode,folder,jobId,epoch);
+  };
   window.epochInfoShowSession=function(){
     state.tests=null;document.getElementById('test-generations-epoch-info').classList.add('hidden');document.getElementById('test-generations-session-surface').classList.remove('hidden');
   };

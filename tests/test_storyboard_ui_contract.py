@@ -369,10 +369,12 @@ def test_storyboard_can_develop_concept_directly_into_scenes():
 def test_storyboard_can_insert_director_scene_between_existing_scenes():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    assert "Insert Director Scene After" in storyboard
+    assert "Insert Scene After" in storyboard
+    assert "Insert Scene After…" in storyboard
+    assert "Extend Story…" in storyboard
     assert "function insertDirectorSceneAfter(sceneId)" in storyboard
     assert "operation: 'insert_scene'" in storyboard
-    assert "job.operation === 'develop_story' || job.operation === 'insert_scene'" in storyboard
+    assert "job.operation === 'insert_scene' || job.operation === 'extend_story'" in storyboard
 
 
 def test_atmosphere_director_proposal_survives_source_edits():

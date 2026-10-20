@@ -538,9 +538,9 @@ def build_request(story, scene_id, operation, instruction="", development=None):
         blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene) + "\nGeneration prompt: " + _clean(after_scene.get("prompt")))
         blocks.append(
             "[CURRENT TASK]\nCreate exactly one new Scene to insert between these two existing Scenes. "
-            "Use the complete concept to decide what belongs in this gap. Treat the adjacent Scenes as relationship and contrast context. "
-            "The new Scene may continue, contrast, vary, repeat a format, jump, or remain relatively independent as the concept warrants. "
-            "Make it meaningfully distinct from both adjacent Scenes while still belonging to the same concept. "
+            "Use the complete concept to decide what belongs in this gap. Treat the adjacent Scenes as relationship and contrast context, not templates to copy. "
+            "The new Scene may continue, contrast, vary, repeat a format with fresh content, jump, or remain relatively independent as the concept warrants. "
+            "Make it meaningfully distinct from both adjacent Scenes while still belonging to the same concept. For independent vignettes, vary the people, action, or staging instead of echoing an adjacent Scene. "
             "Use entry and exit state when a real handoff matters. "
             "Write the complete H3 prompt exactly as it should be used, following the supplied Director and H3 guidance. Return only JSON matching the supplied schema."
         )

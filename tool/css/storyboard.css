@@ -2446,6 +2446,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 .storyboard-removed-takes {
+  display: block;
   margin-top: 12px;
   border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
 }
@@ -2507,6 +2508,11 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   min-height: 28px;
   padding: 3px 9px;
   white-space: nowrap;
+}
+
+.storyboard-removed-take-actions .storyboard-take-delete {
+  border-color: color-mix(in srgb, var(--danger, #f87171) 50%, var(--border));
+  color: var(--danger, #f87171);
 }
 
 @container (min-width: 1450px) {

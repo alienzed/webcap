@@ -1456,3 +1456,14 @@ def test_individual_develop_mirrors_progress_to_existing_activity():
     script = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
     assert "window.publishActivityProgress({ id: 'storyboard:individual:' + storyId" in script
     assert "window.finishActivityProgress('storyboard:individual:' + storyId)" in script
+
+
+def test_removed_takes_are_stacked_and_delete_without_reconfirmation():
+    css = (ROOT / "tool/css/storyboard.css").read_text(encoding="utf-8")
+    js = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    removed_css = css.split(".storyboard-removed-takes {")[-1].split("}", 1)[0]
+    assert "display: block;" in removed_css
+    delete_fn = js.split("function deleteTake(sceneId, takeId) {", 1)[1].split("function restoreTake(", 1)[0]
+    assert "var isRemoved =" in delete_fn
+    assert "if (!isRemoved && !window.confirm(message)) return;" in delete_fn
+    assert "operation: 'delete_take'" in delete_fn

@@ -1366,12 +1366,13 @@ def test_test_result_compact_three_rows_and_vl_model_provenance():
     script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
     css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
-    for marker in ("label.appendChild(source);", "primaryRow.appendChild(label);",
-                   "secondaryRow.appendChild(metadataRow);", "secondaryRow.appendChild(rating);",
-                   "evaluation.appendChild(vlButton);",
-                   "manualScore.dataset.testManualEpochScore = '1';",
-                   "vlScore.dataset.testVlEpochScore = '1';"):
-        assert marker in script
+    shared = (ROOT / "tool/js/test_preview_card.js").read_text(encoding="utf-8")
+    for marker in ("name.appendChild(secondary);", "primary.appendChild(name);",
+                   "second.appendChild(line);", "second.appendChild(rating);",
+                   "evaluation.appendChild(action);",
+                   "manual.dataset.testManualEpochScore = '1';",
+                   "vl.dataset.testVlEpochScore = '1';"):
+        assert marker in shared
     assert "entry.modelId = run.model;" in script
     assert "modelId: savedEntry.modelId || ''" in script
     assert "Unknown (previous assessment)" in script

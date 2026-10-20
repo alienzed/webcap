@@ -460,3 +460,10 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .test-generations-compare-item:has(.test-preview-card-menu){overflow:visible}
 .test-preview-card-menu[open]{z-index:20}
 .test-preview-card-menu-items{max-width:min(300px,90vw)}
+
+/* Shared card: keep Details and actions together, without clipping image corners. */
+.test-preview-card-utility{flex-wrap:nowrap;align-items:center;justify-content:space-between}
+.test-preview-card-details{flex:1 1 auto;min-width:0;margin-right:0}
+.test-preview-card-menu{flex:0 0 auto;margin-left:auto}
+.epoch-info-card,.epoch-finder-frame{border-radius:9px}
+.epoch-info-card>img,.epoch-info-card>video,.epoch-finder-frame>img{border-radius:8px 8px 0 0}

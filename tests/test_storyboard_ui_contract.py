@@ -1491,9 +1491,9 @@ def test_storyboard_take_mutations_preserve_video_elements():
         "uploadTake", "labelTake", "rateTake", "selectTake",
         "removeTake", "deleteTake", "restoreTake",
     ):
-        body = storyboard.split("function " + action + "(", 1)[1].split("\\n  function ", 1)[0]
+        body = storyboard.split("function " + action + "(", 1)[1].split("  function ", 1)[0]
         assert "applyTakeMutation(sceneId, payload);" in body
         assert "renderStory();" not in body
 
-    assert "syncSceneProgressionCard(sceneId);" in storyboard.split("function applyTakeMutation(", 1)[1].split("\\n  function ", 1)[0]
-    assert "renderStoryReadiness();" in storyboard.split("function applyTakeMutation(", 1)[1].split("\\n  function ", 1)[0]
+    assert "syncSceneProgressionCard(sceneId);" in storyboard.split("function applyTakeMutation(", 1)[1].split("  function ", 1)[0]
+    assert "renderStoryReadiness();" in storyboard.split("function applyTakeMutation(", 1)[1].split("  function ", 1)[0]

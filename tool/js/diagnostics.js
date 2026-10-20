@@ -33,7 +33,7 @@ function diagnosticsAssessmentCounts(row, tests) {
   var families = {
     writing: ['director_scene_plan_2048'],
     structured: ['language_synthesis', 'language_challenge'],
-    vision: ['vision_open', 'vision_group_aware']
+    vision: row.assessmentNeedsGroupAware ? ['vision_open', 'vision_group_aware'] : ['vision_open']
   };
   var role = row.dataset.assessmentRole;
   var needed = role === 'both' ? ['writing', 'structured', 'vision'] : role === 'director' ? ['writing', 'structured'] : ['vision'];
@@ -371,6 +371,7 @@ function refreshUnifiedModelAssessment() {
           return supportsVision && isVision || supportsDirector && !isVision;
         });
       })[0];
+      row.assessmentNeedsGroupAware = !!(evidence && evidence.groupsConfigured);
       var tests = {};
       capabilityRuns.slice().reverse().forEach(function (saved) {
         var byKind = saved.models && saved.models[ref] || {};

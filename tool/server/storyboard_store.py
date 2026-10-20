@@ -1075,8 +1075,6 @@ def insert_director_scene_after(story_id, after_scene_id, payload, model_id=""):
     after_scene_id = str(after_scene_id or "").strip()
     if after_scene_id not in order or after_scene_id not in scenes:
         raise FileNotFoundError("Scene does not exist.")
-    if order.index(after_scene_id) + 1 >= len(order):
-        raise ValueError("Insert Scene requires a following Scene.")
     if not isinstance(payload, dict):
         raise ValueError("Inserted Scene must be an object.")
 
@@ -1101,6 +1099,30 @@ def insert_director_scene_after(story_id, after_scene_id, payload, model_id=""):
     _write_json_atomic(_story_path(story_id), story)
     (_story_dir(story_id) / "takes" / scene_id).mkdir(parents=True, exist_ok=True)
     return story, scene
+
+
+@_serialized_mutation
+def extend_director_story(story_id, plan, model_id=""):
+    story = load_story(story_id)
+    if not story.get("sceneOrder"):
+        raise ValueError("Extend Story requires an existing Scene.")
+    planned_scenes = _validate_developed_plan(plan, story.get("targetSceneCount"), story.get("invariants"))["scenes"]
+    added_ids = []
+    for item in planned_scenes:
+        scene_id = _new_id("scene")
+        story["scenes"][scene_id] = _normalize_scene(scene_id, {
+            **item,
+            "promptDirectorModel": str(model_id or "").strip(),
+            "planDirectorModel": str(model_id or "").strip(),
+        })
+        story["sceneOrder"].append(scene_id)
+        added_ids.append(scene_id)
+    story["previousSceneRepair"] = None
+    story["updatedAt"] = _utc_now()
+    _write_json_atomic(_story_path(story_id), story)
+    for scene_id in added_ids:
+        (_story_dir(story_id) / "takes" / scene_id).mkdir(parents=True, exist_ok=True)
+    return story, added_ids
 
 
 @_serialized_mutation

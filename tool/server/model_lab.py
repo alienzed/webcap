@@ -12,9 +12,9 @@ from .permissions import normalize_path_permissions
 
 
 RUN_VERSION = 1
-ASSESSMENT_PROTOCOL = "webcap-model-assessment-structured-v1"
+ASSESSMENT_PROTOCOL = "webcap-model-assessment-structured-v2"
 # Existing identical production probes can be reused; legacy prose never qualifies as JSON evidence.
-LEGACY_COMPATIBLE_KINDS = {"director_thinking", "language_synthesis", "language_challenge", "vision_open", "vision_group_aware"}
+LEGACY_COMPATIBLE_KINDS = {"language_synthesis", "language_challenge", "vision_open", "vision_group_aware"}
 ROOT_NAME = "model-lab-runs"
 DEFAULT_SAMPLE_COUNT = 8
 MAX_SAMPLE_COUNT = 24
@@ -1089,35 +1089,37 @@ def _run_director_model(run, model):
         enqueue=lambda: enqueue(
             "chat", model_ref,
             {"operation": "freeform_chat", "messages": [
-                {"role": "user", "content": "Think briefly: what is 7 + 5? Answer with the number."}]},
+                {"role": "user", "content": "Storyboard continuity check: Scene A ends with the elevator doors jammed shut and a warning light blinking. What state must Scene B preserve? Answer briefly."}]},
             context={"runtimeOverrides": {"maxTokens": 128}, "assessmentEvidence": True, "thinking": True},
             label="Model Assessment · Thinking",
         ),
     )
 
-    # Use WebCap's actual Storyboard Scene schema, rather than synthetic prose.
-    # The generated Scene-plan JSON supplies capacity, speed and review evidence.
-    from .storyboard_llm_contract import SCENE_PLAN_SCHEMA_PATH, _read_json
-    scene_schema = _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema")
+    # Use the actual production Storyboard Director prompt and response schema.
+    # Each completed Scene plan can yield validity, output length and speed from
+    # the SAME request. Additional size tiers run only when explicitly requested.
+    from .storyboard_llm_contract import build_request
+    story = {
+        "title": "Night Shift",
+        "concept": ("An overnight maintenance worker investigates a malfunctioning "
+                    "elevator in a quiet apartment building. A flickering floor "
+                    "indicator leads to an unexpected mechanical discovery."),
+        "style": "Grounded cinematic realism with practical lighting and consistent spaces.",
+    }
     for budget in ((2048, 4096, 8192, 16384) if run.get("depth") == "deep" else (2048,)):
         scene_count = max(2, budget // 256)
-        prompt = (
-            "Create a WebCap Storyboard Scene plan for a grounded, continuous cinematic sequence "
-            "showing an urban night-shift maintenance worker investigating a malfunctioning elevator. "
-            "Return exactly " + str(scene_count) + " distinct chronological Scenes, each with a "
-            "descriptive title, concrete overview, a practical and detailed MiniMax H3 visual generation "
-            "prompt of approximately 120-180 words, and a valid suggestedDurationSeconds. "
-            "Maintain continuity across Scenes, avoid repeated descriptions, and use only JSON matching "
-            "the supplied WebCap Scene-plan schema. Complete the final Scene without stopping early."
+        contract = build_request(
+            {**story, "targetSceneCount": scene_count}, "", "develop_story"
         )
         _probe_job(
             run, kind="director_scene_plan_" + str(budget), role="director", model_ref=model_ref,
-            enqueue=lambda budget=budget, prompt=prompt: enqueue(
+            enqueue=lambda budget=budget, contract=contract: enqueue(
                 "chat", model_ref, {
                     "operation": "assessment_scene_plan",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "response_schema": scene_schema,
-                }, context={"runtimeOverrides": {"maxTokens": budget}, "assessmentEvidence": True},
+                    "messages": [{"role": "user", "content": contract["prompt"]}],
+                    "response_schema": contract["response_schema"],
+                }, context={"runtimeOverrides": {"maxTokens": budget},
+                            "assessmentEvidence": True},
                 label="Model Assessment · Storyboard JSON " + str(budget),
             ),
         )

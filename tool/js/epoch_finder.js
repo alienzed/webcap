@@ -346,10 +346,11 @@
   function prepareReferences() {
     var version = ++referenceGeneration;
     referencePlanSignature = JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options,d.annotationGroup]; })]);
-    referenceItems = dimensions.flatMap(function (d) {
+    referenceItems = dimensions.flatMap(function (d, index) {
       return d.role === 'primary' ? d.options.map(function (option) {
-        return {attribute:d.label, option:option, annotationGroup:d.annotationGroup || '',
-          key:JSON.stringify([d.label,option]), candidates:[]};
+        return {attribute:d.label, dimensionId:'G' + (index + 1),
+          option:option, annotationGroup:d.annotationGroup || '',
+          key:JSON.stringify([index,option]), candidates:[]};
       }) : [];
     });
     referenceIndex = 0;
@@ -390,7 +391,7 @@
             if (!chosen || !item.candidates.some(function (candidate) {
               return candidate.group === group && candidate.media === chosen.media;
             })) return null;
-            return {attribute:item.attribute, option:item.option,
+            return {attribute:item.attribute, dimensionId:item.dimensionId, option:item.option,
               group:group, tag:item.option, media:chosen.media};
           }).filter(Boolean);
           saved = item.annotationGroup
@@ -414,7 +415,7 @@
         var candidate = item.candidates[selectedIndex];
         // Ambiguous options remain unselected unless the source group is known.
         referenceSelections[item.key] = candidate ? {
-          attribute:item.attribute, option:item.option,
+          attribute:item.attribute, dimensionId:item.dimensionId, option:item.option,
           group:candidate.group, tag:candidate.tag, media:candidate.media
         } : null;
         referenceDraftChoices[item.key] = selectedIndex;
@@ -1203,8 +1204,8 @@
         referenceSelections[item.key] = null;
       } else {
         referenceDraftChoices[item.key] = index;
-        referenceSelections[item.key] = {attribute:item.attribute, option:item.option,
-          group:candidate.group, tag:candidate.tag, media:candidate.media};
+        referenceSelections[item.key] = {attribute:item.attribute, dimensionId:item.dimensionId,
+          option:item.option, group:candidate.group, tag:candidate.tag, media:candidate.media};
       }
       renderReferenceStep();
       return;

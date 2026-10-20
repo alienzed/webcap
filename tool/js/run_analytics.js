@@ -295,8 +295,8 @@
     epochMediaLoading=true;
     el('epoch-media-status').textContent=more?'Loading more recorded results…':'Loading recorded checkpoint results…';
     fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:folder,operation:'workspace_gallery',criteria:{
-        limit:8,offset:more?epochMediaOffset:0,checkpoints:[scope.jobId+':'+scope.epoch],generatedOnly:true
+      body:JSON.stringify({folder:folder,operation:'checkpoint_workspace',criteria:{
+        jobId:scope.jobId,epoch:scope.epoch,limit:8,offset:more?epochMediaOffset:0
       }})}).then(function(response){return response.json().then(function(data){
         if(!response.ok||!data.ok)throw new Error(data.error||'Checkpoint results unavailable');
         return data;
@@ -322,6 +322,12 @@
           var meta=document.createElement('p');
           meta.textContent=(item.source==='campaign'?'Campaign':'Test session')+' · '+(item.candidate||item.runName||'Epoch '+item.epoch);
           card.appendChild(meta);
+          if(item.source==='test'){
+            var savedRating=document.createElement('strong');
+            savedRating.className='run-analytics-epoch-rating';
+            savedRating.textContent=item.rating==null?'Unrated':'Rated '+item.rating+'/5';
+            card.appendChild(savedRating);
+          }
           var source=document.createElement('button');source.type='button';source.textContent='Open '+(item.source==='campaign'?'campaign':'session');
           source.addEventListener('click',function(){
             epochMediaClose();
@@ -386,56 +392,76 @@
     if(session)window.openTestBenchAnalyticsSession(session.dataset.openSession);
   };
 
-  var labSnapshot=null,labRequest=0,labDiscovered=false;
+  var labSnapshot=null,labRequest=0,labDiscovered=false,labShowAll=false;
   function labEnsureDetailIndex(){if(!labDiscovered){labDiscovered=true;discover();}}
   function lab(id){return document.getElementById('run-lab-'+id);}
   function labGroup(){return (labSnapshot&&labSnapshot.cohorts||[]).find(function(g){return g.id===lab('cohort').value;});}
-  function labPoints(){var g=labGroup(),id=lab('run').value;return (g&&g.points||[]).filter(function(p){return !id||p.jobId===id;});}
+  function labPoints(){
+    var id=lab('run').value;
+    return (labSnapshot&&labSnapshot.epochs||[]).filter(function(p){return !id||p.jobId===id;});
+  }
   function labEmpty(message){return '<p class="run-lab-empty">'+esc(message)+'</p>';}
-  function labEpoch(jobId,epoch){return (labSnapshot&&labSnapshot.epochs||[]).find(function(e){return e.jobId===jobId&&e.epoch===epoch;});}
-  function labRanked(){var key=lab('sort').value==='vl'?'testVl':'manual';return labPoints().filter(function(p){return p[key]!=null;}).sort(function(a,b){return b[key]-a[key]||b.previews-a.previews;});}
+  function labRanked(){
+    var byCount=lab('sort').value==='count';
+    return labPoints().filter(function(p){return p.ratedCount>0&&p.allManualAverage!=null;}).sort(function(a,b){
+      var primary=byCount?b.ratedCount-a.ratedCount:b.allManualAverage-a.allManualAverage;
+      var secondary=byCount?b.allManualAverage-a.allManualAverage:b.ratedCount-a.ratedCount;
+      return primary||secondary||a.jobId.localeCompare(b.jobId)||a.epoch-b.epoch;
+    });
+  }
   function labDetail(){labEnsureDetailIndex();var scope=document.querySelector('#run-analytics-screen .epoch-finder-sidebar .epoch-finder-panel:nth-of-type(2) details');if(scope){scope.open=true;scope.scrollIntoView({behavior:'smooth',block:'start'});}lab('status').textContent='Select 1–6 runs and click Analyze selected to inspect detailed evidence.';}
-  function labGroupRender(){
-    var group=labGroup(),prior=lab('run').value;
-    var identities=new Map((group&&group.points||[]).map(function(p){return [p.jobId,p.runName||'Run '+p.jobId.slice(-8)];}));
-    lab('run').innerHTML='<option value="">All runs (separately)</option>'+Array.from(identities).map(function(pair){return '<option value="'+esc(pair[0])+'">'+esc(pair[1])+'</option>';}).join('');
-    if(identities.has(prior))lab('run').value=prior;
+  function labRunRender(){
+    var old=lab('run').value;
+    var names=new Map((labSnapshot.epochs||[]).filter(function(p){return p.ratedCount>0;}).map(function(p){
+      return [p.jobId,p.runName||'Run '+p.jobId.slice(-8)];
+    }));
+    lab('run').innerHTML='<option value="">All runs</option>'+Array.from(names).map(function(pair){
+      return '<option value="'+esc(pair[0])+'">'+esc(pair[1])+'</option>';
+    }).join('');
+    if(names.has(old))lab('run').value=old;
+    labShowAll=false;
     labResults();
   }
-  function labResults(){
-    var group=labGroup(),byVl=lab('sort').value==='vl',ranked=labRanked();
-    lab('contenders').innerHTML=ranked.length?ranked.slice(0,6).map(function(p,i){
-      return '<div class="run-lab-contender"><b class="run-lab-position">'+(i+1)+'</b><div><strong>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</strong><small>'+p.previews+' in selected protocol · '+p.sessions.length+' sessions</small><small>'+((labEpoch(p.jobId,p.epoch)||{}).ratedCount||0)+' rated across all Test protocols at this epoch (descriptive)</small></div><div class="run-lab-score"><b>'+(p.manual==null?'—':p.manual.toFixed(2)+'/5')+'</b><small>'+p.manualCount+' ratings</small></div><div class="run-lab-score"><b>'+(p.testVl==null?'—':(100*p.testVl).toFixed(1)+'%')+'</b><small>'+p.vlReviewedPreviews+' previews · '+p.testVlCount+' checks</small></div><button data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect</button></div>';
-    }).join(''):labEmpty('No recorded '+(byVl?'VL':'manual')+' measurements in this group. Try another metric or group.');
-    var attributes=(group&&group.attributes||[]).slice(0,5);
-    lab('discoveries').innerHTML=attributes.length?attributes.map(function(a){return '<div class="run-lab-insight"><div><strong>'+esc(a.label)+'</strong><span>'+(100*a.matched).toFixed(0)+'% · '+a.judgments+' judgments</span></div><div class="run-lab-meter"><i style="width:'+(100*a.matched)+'%"></i></div></div>';}).join('')+
-      '<p class="run-lab-footnote">Observations within this evaluation protocol, not a universal score.</p>':
+  function labDiscoveries(){
+    var group=labGroup(),attributes=(group&&group.attributes||[]).slice(0,5);
+    lab('discoveries').innerHTML=attributes.length?attributes.map(function(a){
+      return '<div class="run-lab-insight"><div><strong>'+esc(a.label)+'</strong><span>'+(100*a.matched).toFixed(0)+'% · '+a.judgments+' judgments</span></div><div class="run-lab-meter"><i style="width:'+(100*a.matched)+'%"></i></div></div>';
+    }).join('')+'<p class="run-lab-footnote">VL observations within this evaluation group; not part of manual rankings.</p>':
       labEmpty('No comparable attribute-level VL judgments in this group.');
-    var total=group?group.previews:0,rated=group?group.ratedPreviews:0,reviewed=group?group.vlReviewedPreviews:0;
-    lab('coverage').innerHTML=total?[['Manually rated',rated],['VL-reviewed',reviewed]].map(function(p){
-      return '<div class="run-lab-progress"><div><b>'+p[0]+'</b><span>'+p[1]+' / '+total+' previews</span></div><div class="run-lab-meter"><i style="width:'+(100*p[1]/total)+'%"></i></div></div>';
-    }).join('')+'<p class="run-lab-footnote">A preview may appear in both coverage measures.</p>':labEmpty('No comparable results.');
-    lab('challenge-title').textContent=!total?'Run your first experiment':rated<total?'Review '+(total-rated)+' unrated previews':'Inspect your strongest contenders';
-    lab('challenge-description').textContent=!total?'Generate Test results and return here.':rated<total?'Strengthen the evidence you already generated before spending GPU time.':'Compare real measured results, then choose the next experiment.';
-    lab('challenge-actions').innerHTML='<button type="button" data-lab-action="inspect">Inspect a contender</button><button type="button" data-lab-action="detail">Detailed Analytics</button>';
-    lab('status').textContent='Selected protocol: '+(group?group.previews+' of '+(labSnapshot.coverage||{}).testPreviews+' Test previews, '+group.ratedPreviews+' of '+(labSnapshot.coverage||{}).ratedPreviews+' rated':'no comparable Test previews')+'. Rankings use only this protocol; all-Test rating totals are descriptive.';
+  }
+  function labResults(){
+    var points=labPoints(),ranked=labRanked(),visible=labShowAll?ranked:ranked.slice(0,12);
+    lab('contenders').innerHTML=ranked.length?visible.map(function(p,i){
+      return '<div class="run-lab-contender"><b class="run-lab-position">'+(i+1)+'</b><div><strong>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</strong><small>'+p.ratedCount+' of '+p.testCount+' Test renders rated · '+p.sessions.length+' sessions</small></div><div class="run-lab-score"><b>'+p.allManualAverage.toFixed(2)+'/5</b><small>'+p.ratedCount+' ratings</small></div><button data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect</button></div>';
+    }).join('')+(ranked.length>12&&!labShowAll?'<button class="run-lab-more" type="button" data-lab-show-all>Show all '+ranked.length+' rated epochs</button>':''):
+      labEmpty('No rated Test renders yet. Rate generated previews in Test sessions to identify contenders.');
+    var total=points.reduce(function(n,p){return n+p.testCount;},0);
+    var rated=points.reduce(function(n,p){return n+p.ratedCount;},0);
+    var reviewed=points.reduce(function(n,p){return n+p.vlReviewedCount;},0);
+    lab('coverage').innerHTML=total?[['Manually rated',rated],['VL-reviewed',reviewed]].map(function(row){
+      return '<div class="run-lab-progress"><div><b>'+row[0]+'</b><span>'+row[1]+' / '+total+' Test renders</span></div><div class="run-lab-meter"><i style="width:'+(100*row[1]/total)+'%"></i></div></div>';
+    }).join('')+'<p class="run-lab-footnote">Linked Test renders only; each render can have both a rating and a VL review.</p>':
+      labEmpty('No generated Test renders linked to a training epoch.');
+    lab('challenge-title').textContent=!rated?'Rate your Test renders':rated<total?'Review '+(total-rated)+' unrated Test renders':'Inspect your strongest contenders';
+    lab('challenge-description').textContent=!rated?'Existing renders can be rated without generating anything new.':rated<total?'More saved ratings will make these epoch averages more useful.':'Compare the rated renders before choosing a checkpoint.';
+    lab('challenge-actions').innerHTML='<button type="button" data-lab-action="inspect">'+(ranked.length?'Inspect top contender':'Browse generated results')+'</button><button type="button" data-lab-action="detail">Detailed Analytics</button>';
+    lab('status').textContent=rated+' rated of '+total+' linked Test renders · '+ranked.length+' rated epochs across '+new Set(points.filter(function(p){return p.ratedCount>0;}).map(function(p){return p.jobId;})).size+' runs. Manual averages combine saved ratings from every Test session.';
     labChart();
   }
   function labChart(){
-    var key=lab('metric').value==='vl'?'testVl':'manual';
-    var points=labPoints().filter(function(p){return p[key]!=null;});
-    if(!points.length){lab('chart').innerHTML=labEmpty('No measured points for this metric.');return;}
+    var points=labPoints().filter(function(p){return p.ratedCount>0&&p.allManualAverage!=null;});
+    if(!points.length){lab('chart').innerHTML=labEmpty('No rated epochs to plot.');return;}
     var lo=Math.min.apply(null,points.map(function(p){return p.epoch;})),hi=Math.max.apply(null,points.map(function(p){return p.epoch;}));
-    var runs=new Map();points.forEach(function(p){if(!runs.has(p.jobId))runs.set(p.jobId,[]);runs.get(p.jobId).push(p);});
-    var palette=['#f3b657','#83c6e9','#8bd6a7','#c4acef'];
+    var runs=new Map();
+    points.forEach(function(p){if(!runs.has(p.jobId))runs.set(p.jobId,[]);runs.get(p.jobId).push(p);});
+    var selected=!!lab('run').value,palette=['#f3b657','#83c6e9','#8bd6a7','#c4acef'];
     var paths=Array.from(runs.values()).map(function(series,i){
       series.sort(function(a,b){return a.epoch-b.epoch;});
-      var xy=function(p){return [36+(p.epoch-lo)/(hi-lo||1)*600,175-(p[key]/(key==='manual'?5:1))*148];};
-      var path=series.map(function(p,j){var a=xy(p);return (j?'L':'M')+a[0].toFixed(1)+','+a[1].toFixed(1);}).join(' ');
-      return '<path d="'+path+'" fill="none" stroke="'+palette[i%palette.length]+'" stroke-width="2.5"/>'+
-        series.map(function(p){var a=xy(p);return '<circle cx="'+a[0]+'" cy="'+a[1]+'" r="4" fill="'+palette[i%palette.length]+'"><title>Epoch '+p.epoch+': '+p[key].toFixed(2)+'</title></circle>';}).join('');
+      var xy=function(p){return [36+(p.epoch-lo)/(hi-lo||1)*600,175-(p.allManualAverage/5)*148];};
+      var path=selected?'<path d="'+series.map(function(p,j){var a=xy(p);return (j?'L':'M')+a[0].toFixed(1)+','+a[1].toFixed(1);}).join(' ')+'" fill="none" stroke="'+palette[i%palette.length]+'" stroke-width="2.5"/>':'';
+      return path+series.map(function(p){var a=xy(p);return '<circle cx="'+a[0]+'" cy="'+a[1]+'" r="4" fill="'+palette[i%palette.length]+'"><title>'+esc(p.runName||p.jobId)+' · Epoch '+p.epoch+': '+p.allManualAverage.toFixed(2)+'/5 ('+p.ratedCount+' ratings)</title></circle>';}).join('');
     });
-    lab('chart').innerHTML='<svg viewBox="0 0 680 195" role="img" aria-label="Recorded epoch measurements, separated by run"><path d="M36 15V175H645" stroke="currentColor" stroke-opacity=".25" fill="none"/>'+paths.join('')+'</svg><p class="run-lab-footnote">'+runs.size+' independent run(s). Only observed epochs are plotted.</p>';
+    lab('chart').innerHTML='<svg viewBox="0 0 680 195" role="img" aria-label="Saved manual ratings by epoch and run"><path d="M36 15V175H645" stroke="currentColor" stroke-opacity=".25" fill="none"/>'+paths.join('')+'</svg><p class="run-lab-footnote">'+(selected?'Measured epochs for the selected run.':'All rated epochs · select a run to follow its trajectory.')+'</p>';
   }
   function labRender(){
     var totals=labSnapshot.coverage||{},groups=labSnapshot.cohorts||[];
@@ -443,14 +469,18 @@
       return '<div class="run-lab-stat"><small>'+pair[0]+'</small><strong>'+Number(pair[1]||0).toLocaleString()+'</strong></div>';
     }).join('');
     var old=lab('cohort').value;
-    lab('cohort').innerHTML=groups.length?groups.map(function(g){return '<option value="'+esc(g.id)+'">'+esc((g.modelId||'Test')+' · strength '+(g.strength==null?'default':g.strength)+' · '+(g.vlModelId||'no VL')+' · '+(g.promptPreview||'no prompt').slice(0,38)+' · '+g.previews+' previews / '+g.ratedPreviews+' rated · '+g.id.slice(0,6))+'</option>';}).join(''):'<option value="">No comparable groups</option>';
+    lab('cohort').innerHTML=groups.length?groups.map(function(g){
+      return '<option value="'+esc(g.id)+'">'+esc((g.vlModelId||'VL')+' · '+(g.vlQuestionPreview||g.promptPreview||'Evaluation').slice(0,34)+' · '+g.vlJudgments+' checks · '+g.id.slice(0,6))+'</option>';
+    }).join(''):'<option value="">No VL groups</option>';
     if(groups.some(function(g){return g.id===old;}))lab('cohort').value=old;
-    labGroupRender();
-    lab('explorer').innerHTML=(labSnapshot.epochs||[]).length?labSnapshot.epochs.slice(0,15).map(function(p){
-      return '<div class="run-lab-explorer-row"><div><strong>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</strong><small>'+p.testCount+' Test · '+p.campaignCount+' Campaign results</small></div><button data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect results</button></div>';
+    labDiscoveries();
+    labRunRender();
+    lab('explorer').innerHTML=(labSnapshot.epochs||[]).length?labSnapshot.epochs.slice().sort(function(a,b){
+      return b.ratedCount-a.ratedCount||b.testCount-a.testCount||a.jobId.localeCompare(b.jobId)||a.epoch-b.epoch;
+    }).slice(0,15).map(function(p){
+      return '<div class="run-lab-explorer-row"><div><strong>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</strong><small>'+p.ratedCount+' rated · '+p.testCount+' Test · '+p.campaignCount+' Campaign results</small></div><button data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect results</button></div>';
     }).join(''):labEmpty('No saved generated epoch results in this Set.');
     lab('warnings').textContent=(labSnapshot.warnings||[]).join(' · ');
-    lab('status').textContent=totals.generatedPreviews?'Showing recorded results for this Set.':'No recorded Test or Campaign previews yet.';
   }
   function labLoad(){
     var serial=++labRequest,scope=folder;lab('status').textContent='Reading recorded Test and Campaign evidence…';
@@ -461,11 +491,10 @@
   }
   lab('refresh').onclick=labLoad;
   Array.prototype.forEach.call(document.querySelectorAll('#run-analytics-screen .epoch-finder-sidebar details'),function(details){details.addEventListener('toggle',function(){if(details.open)labEnsureDetailIndex();});});
-  lab('cohort').onchange=labGroupRender;
-  lab('run').onchange=labResults;
-  lab('sort').onchange=labResults;
-  lab('metric').onchange=labChart;
+  lab('cohort').onchange=labDiscoveries;
+  lab('run').onchange=function(){labShowAll=false;labResults();};
+  lab('sort').onchange=function(){labShowAll=false;labResults();};
   lab('detail').onclick=labDetail;
-  ['contenders','explorer'].forEach(function(id){lab(id).onclick=function(event){var b=event.target.closest('[data-lab-job]');if(b)window.runAnalyticsViewEpoch(b.dataset.labJob,Number(b.dataset.labEpoch));};});
-  lab('challenge-actions').onclick=function(event){var b=event.target.closest('[data-lab-action]');if(!b)return;if(b.dataset.labAction==='detail'){labDetail();return;}var p=labRanked()[0];if(p)window.runAnalyticsViewEpoch(p.jobId,p.epoch);else labDetail();};
+  ['contenders','explorer'].forEach(function(id){lab(id).onclick=function(event){if(event.target.closest('[data-lab-show-all]')){labShowAll=true;labResults();return;}var b=event.target.closest('[data-lab-job]');if(b)window.runAnalyticsViewEpoch(b.dataset.labJob,Number(b.dataset.labEpoch));};});
+  lab('challenge-actions').onclick=function(event){var b=event.target.closest('[data-lab-action]');if(!b)return;if(b.dataset.labAction==='detail'){labDetail();return;}var p=labRanked()[0]||labPoints()[0];if(p)window.runAnalyticsViewEpoch(p.jobId,p.epoch);else labDetail();};
 })();

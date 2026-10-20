@@ -519,7 +519,9 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .run-lab-filters{display:flex;gap:8px;flex-wrap:wrap;padding:0 17px 13px}
 #run-analytics-screen .run-lab-filters select{max-width:240px}
 #run-analytics-screen .run-lab-card select{min-width:0;background:var(--panel-bg,#17212c);color:inherit;border:1px solid var(--border-color,#384653);border-radius:6px;padding:6px}
-#run-analytics-screen .run-lab-contender{display:grid;grid-template-columns:29px minmax(0,1fr) auto auto auto;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--border-color,#384653)}
+#run-analytics-screen .run-lab-contender{display:grid;grid-template-columns:29px minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--border-color,#384653)}
+#run-analytics-screen .run-lab-more{display:block;margin:10px 16px 14px;width:auto;padding:8px 14px;border:1px solid var(--border-color,#536578);border-radius:6px;background:transparent;color:inherit;cursor:pointer}
+#run-analytics-screen .run-analytics-epoch-rating{display:block;font-size:13px;margin:5px 0}
 #run-analytics-screen .run-lab-position{display:grid;place-items:center;border-radius:6px;width:28px;height:28px;background:#55472e;color:#efc77a}
 #run-analytics-screen .run-lab-contender strong{display:block;font-size:12px}
 #run-analytics-screen .run-lab-contender small{display:block;font-size:11px;opacity:.7}

@@ -3811,16 +3811,3 @@ html[data-theme="dark"] .app-settings-environment-check {
 #diagnostics-panel-assessment .model-assessment-table td { padding-top: 10px; padding-bottom: 10px; }
 #diagnostics-panel-assessment .model-assessment-expand { font-size: inherit; }
 
-/* Model Assessment: keep the primary decision view focused on output, speed and verdict. */
-.model-assessment-table thead th:nth-child(3),
-.model-assessment-table thead th:nth-child(4),
-.model-assessment-table thead th:nth-child(8),
-.model-assessment-table thead th:nth-child(9),
-.model-assessment-table thead th:nth-child(10),
-.model-assessment-table tbody tr:first-child td:nth-child(3),
-.model-assessment-table tbody tr:first-child td:nth-child(4),
-.model-assessment-table tbody tr:first-child td:nth-child(8),
-.model-assessment-table tbody tr:first-child td:nth-child(9),
-.model-assessment-table tbody tr:first-child td:nth-child(10) {
-  display: none;
-}

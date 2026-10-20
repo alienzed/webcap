@@ -625,6 +625,13 @@ function runUnifiedModelAssessment() {
         referenceDirector: null
       }
     }).then(function (payload) {
+      if (payload.noWork) {
+        status.textContent = 'Already assessed · 0 tests needed. Existing results are preserved.';
+        diagnosticsAssessmentRunId = '';
+        diagnosticsAssessmentRunStatus = 'completed';
+        refreshUnifiedModelAssessment().catch(function (error) { reportConsoleError('Model Assessment', error); });
+        return payload.run;
+      }
       diagnosticsAssessmentRunId = String(payload.run.id);
       diagnosticsAssessmentRunStatus = '';
       modelLabState.run = payload.run;
@@ -639,6 +646,7 @@ function runUnifiedModelAssessment() {
       return payload.run;
     });
   }).then(function (labRun) {
+    if (labRun.noWork) return;
     status.textContent = labRun.status === 'running'
       ? 'Assessment running. You may close Diagnostics.'
       : 'Assessment ' + String(labRun.status) + '.';

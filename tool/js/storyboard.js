@@ -3999,6 +3999,68 @@
     '</details>';
   }
 
+
+  function takeSummaryText(scene, pendingCount) {
+    var count = Array.isArray(scene.takeOrder) ? scene.takeOrder.length : 0;
+    var parts = [String(count) + ' Take' + (count === 1 ? '' : 's')];
+    if (scene.selectedTakeId) parts.push('1 selected');
+    if (pendingCount) parts.push(String(pendingCount) + ' pending');
+    return parts.join(' · ');
+  }
+
+  function removedTakesMarkup(removedTakes) {
+    var removedTakeIds = Object.keys(removedTakes);
+    return removedTakeIds.length
+        ? '<section class="storyboard-removed-takes">' +
+            '<header class="storyboard-removed-takes-header">' +
+              '<strong>Removed Takes</strong>' +
+              '<span>' + String(removedTakeIds.length) + '</span>' +
+            '</header>' +
+            '<div class="storyboard-removed-takes-list">' +
+              removedTakeIds.map(function (takeId) {
+                var take = removedTakes[takeId] || {};
+                var filename = String(take.sourceFilename || takeId);
+                return '<div class="storyboard-removed-take-row">' +
+                  '<span class="storyboard-removed-take-name" title="' + escapeHtml(filename) + '">' +
+                    escapeHtml(filename) +
+                  '</span>' +
+                  '<div class="storyboard-removed-take-actions">' +
+                    '<button type="button" class="review-captions-btn" data-take-action="restore" data-take-id="' +
+                      escapeHtml(takeId) + '">Restore</button>' +
+                    '<button type="button" class="review-captions-btn storyboard-take-delete" data-take-action="delete" data-take-id="' +
+                      escapeHtml(takeId) + '">Delete</button>' +
+                  '</div>' +
+                '</div>';
+              }).join('') +
+            '</div>' +
+          '</section>'
+        : '';
+  }
+
+  function syncTakeCardDetails(card, take, index, selectedTakeId) {
+    var identity = card.querySelector('.storyboard-take-identity');
+    var select = card.querySelector('[data-take-action="select"]');
+    if (!identity || !select) throw new Error('Storyboard Take card controls are missing.');
+    var heading = identity.querySelector('strong');
+    var metadata = identity.querySelector('span');
+    if (!heading || !metadata) throw new Error('Storyboard Take identity is missing.');
+    heading.textContent = 'Take ' + String(index + 1).padStart(2, '0');
+    metadata.textContent = takeMetaLabel(take);
+    identity.title = take.sourceFilename || '';
+    var selected = take.id === selectedTakeId;
+    card.classList.toggle('selected', selected);
+    select.disabled = selected;
+    select.textContent = selected ? 'Selected' : 'Select';
+    var rating = Math.max(0, Math.min(5, Number(take.rating || 0)));
+    card.querySelectorAll('[data-take-rating][data-rating-value]').forEach(function (star) {
+      var active = Number(star.dataset.ratingValue) <= rating;
+      star.classList.toggle('active', active);
+      star.textContent = active ? '★' : '☆';
+    });
+    var label = card.querySelector('[data-take-label]');
+    if (label && document.activeElement !== label) label.value = take.label || '';
+  }
+
   function renderScenes() {
     var host = el('storyboard-scenes-list');
     if (!host || !storyState.story) return;
@@ -4069,32 +4131,7 @@
       if (sceneLoras.length) conditioningSummaryParts.push(String(sceneLoras.length) + ' Scene');
       if (sceneReferences.length) conditioningSummaryParts.push(String(sceneReferences.length) + ' ref' + (sceneReferences.length === 1 ? '' : 's'));
       var conditioningSummary = conditioningSummaryParts.length ? conditioningSummaryParts.join(' · ') : 'None';
-      var removedTakeIds = Object.keys(removedTakes);
-      var removedTakesHtml = removedTakeIds.length
-        ? '<section class="storyboard-removed-takes">' +
-            '<header class="storyboard-removed-takes-header">' +
-              '<strong>Removed Takes</strong>' +
-              '<span>' + String(removedTakeIds.length) + '</span>' +
-            '</header>' +
-            '<div class="storyboard-removed-takes-list">' +
-              removedTakeIds.map(function (takeId) {
-                var take = removedTakes[takeId] || {};
-                var filename = String(take.sourceFilename || takeId);
-                return '<div class="storyboard-removed-take-row">' +
-                  '<span class="storyboard-removed-take-name" title="' + escapeHtml(filename) + '">' +
-                    escapeHtml(filename) +
-                  '</span>' +
-                  '<div class="storyboard-removed-take-actions">' +
-                    '<button type="button" class="review-captions-btn" data-take-action="restore" data-take-id="' +
-                      escapeHtml(takeId) + '">Restore</button>' +
-                    '<button type="button" class="review-captions-btn storyboard-take-delete" data-take-action="delete" data-take-id="' +
-                      escapeHtml(takeId) + '">Delete</button>' +
-                  '</div>' +
-                '</div>';
-              }).join('') +
-            '</div>' +
-          '</section>'
-        : '';
+      var removedTakesHtml = removedTakesMarkup(removedTakes);
       var takesHtml = takeOrder.map(function (takeId, takeIndex) {
         var take = takes[takeId];
         return take ? takeCardHtml(story.id, sceneId, takeId, take, takeIndex, scene.selectedTakeId) : '';
@@ -4102,13 +4139,6 @@
       var pendingTakesHtml = sceneGenerationJobs.map(function (job, pendingIndex) {
         return pendingTakeCardHtml(job, takeOrder.length + pendingIndex);
       }).join('');
-      var takeSummaryParts = [
-        String(takeOrder.length) + ' Take' + (takeOrder.length === 1 ? '' : 's')
-      ];
-      if (scene.selectedTakeId) takeSummaryParts.push('1 selected');
-      if (sceneGenerationJobs.length) {
-        takeSummaryParts.push(String(sceneGenerationJobs.length) + ' pending');
-      }
       var takesInitiallyOpen = takeOrder.length > 0 || sceneGenerationJobs.length > 0;
       return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<div class="storyboard-scene-body">' +
@@ -4225,7 +4255,7 @@
           '</aside>' +
         '</div>' +
         '<details class="storyboard-takes"' + (takesInitiallyOpen ? ' open' : '') + '>' +
-          '<summary class="storyboard-takes-summary"><strong>Takes</strong><span>' + escapeHtml(takeSummaryParts.join(' · ')) + '</span>' +
+          '<summary class="storyboard-takes-summary"><strong>Takes</strong><span>' + escapeHtml(takeSummaryText(scene, sceneGenerationJobs.length)) + '</span>' +
             '<label class="review-captions-btn storyboard-take-upload-btn" title="Import existing image or video media as a Take for this Scene. Imported media is copied into this Story and keeps a frozen Scene snapshot.">Import Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
           '</summary>' +
           '<div class="storyboard-takes-content">' +
@@ -4994,8 +5024,8 @@
         });
       });
     }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
       refreshLibrary();
     }).catch(reportError);
@@ -5010,8 +5040,8 @@
       takeId: takeId,
       label: String(label || '').trim()
     }); }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -5025,8 +5055,8 @@
       takeId: takeId,
       rating: rating === '' ? null : Number(rating)
     }); }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -5039,10 +5069,10 @@
       sceneId: sceneId,
       takeId: takeId
     }); }).then(function (payload) {
-      storyState.story = payload.story;
+
       storyState.sequenceEncodingWarnings = [];
       storyState.sequenceWarningsVisible = false;
-      renderStory();
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -5055,8 +5085,8 @@
       sceneId: sceneId,
       takeId: takeId
     }); }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -5080,8 +5110,8 @@
       sceneId: sceneId,
       takeId: takeId
     }); }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -5094,8 +5124,8 @@
       sceneId: sceneId,
       takeId: takeId
     }); }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -5409,10 +5439,13 @@
     var root = sceneElement(sceneId);
     if (!root) return;
     var grid = root.querySelector('.storyboard-takes-grid');
-    if (!grid) throw new Error('Storyboard Takes grid is missing.');
+    var content = root.querySelector('.storyboard-takes-content');
+    var summary = root.querySelector('.storyboard-takes-summary > span');
+    if (!grid || !content || !summary) throw new Error('Storyboard Takes markup is missing.');
 
     var scene = storyState.story.scenes[sceneId] || {};
     var takes = scene.takes && typeof scene.takes === 'object' ? scene.takes : {};
+    var removedTakes = scene.removedTakes && typeof scene.removedTakes === 'object' ? scene.removedTakes : {};
     var takeOrder = Array.isArray(scene.takeOrder) ? scene.takeOrder : [];
     var jobs = generationJobsForScene(sceneId);
     var activeJobIds = {};
@@ -5420,13 +5453,26 @@
     var empty = grid.querySelector('.storyboard-takes-empty');
     if ((takeOrder.length || jobs.length) && empty) empty.remove();
 
+    // Preserve every surviving video element, playback position, and open Advanced panel.
+    var changedTakeList = false;
+    Array.prototype.forEach.call(grid.querySelectorAll('.storyboard-take[data-take-id]'), function (card) {
+      if (takes[card.dataset.takeId] && takeOrder.indexOf(card.dataset.takeId) !== -1) return;
+      card.remove();
+      changedTakeList = true;
+    });
     takeOrder.forEach(function (takeId, takeIndex) {
       var take = takes[takeId];
-      if (!take || sceneTakeCardById(grid, takeId)) return;
-      var pending = grid.querySelector('[data-generation-job-id]');
-      var html = takeCardHtml(storyState.story.id, sceneId, takeId, take, takeIndex, scene.selectedTakeId);
-      if (pending) pending.insertAdjacentHTML('beforebegin', html);
-      else grid.insertAdjacentHTML('beforeend', html);
+      if (!take) throw new Error('Storyboard Take order references a missing Take: ' + takeId);
+      var card = sceneTakeCardById(grid, takeId);
+      if (!card) {
+        var pending = grid.querySelector('[data-generation-job-id]');
+        var html = takeCardHtml(storyState.story.id, sceneId, takeId, take, takeIndex, scene.selectedTakeId);
+        if (pending) pending.insertAdjacentHTML('beforebegin', html);
+        else grid.insertAdjacentHTML('beforeend', html);
+        card = sceneTakeCardById(grid, takeId);
+        changedTakeList = true;
+      }
+      syncTakeCardDetails(card, take, takeIndex, scene.selectedTakeId);
     });
 
     jobs.forEach(function (job, pendingIndex) {
@@ -5436,9 +5482,10 @@
         grid.insertAdjacentHTML('beforeend', pendingTakeCardHtml(job, takeOrder.length + pendingIndex));
         card = sceneGenerationCardById(grid, job.jobId);
       }
+      var pendingTitle = card.querySelector('.storyboard-take-identity strong');
+      if (pendingTitle) pendingTitle.textContent = 'Take ' + String(takeOrder.length + pendingIndex + 1).padStart(2, '0');
       syncGenerationJobCard(job, card);
     });
-
     Array.prototype.forEach.call(grid.querySelectorAll('[data-generation-job-id]'), function (card) {
       if (!activeJobIds[card.dataset.generationJobId]) card.remove();
     });
@@ -5447,15 +5494,43 @@
       grid.insertAdjacentHTML('beforeend', '<div class="storyboard-takes-empty">No Takes yet.</div>');
     }
 
+    var removedIds = Object.keys(removedTakes);
+    var removed = content.querySelector('.storyboard-removed-takes');
+    var renderedIds = removed ? Array.prototype.map.call(removed.querySelectorAll('[data-take-action="restore"]'), function (node) {
+      return node.dataset.takeId;
+    }) : [];
+    if (removedIds.join('|') !== renderedIds.join('|')) {
+      if (removed) removed.remove();
+      if (removedIds.length) content.insertAdjacentHTML('beforeend', removedTakesMarkup(removedTakes));
+    }
+    summary.textContent = takeSummaryText(scene, jobs.length);
+    if (changedTakeList) {
+      var referenceSource = root.querySelector('[data-reference-source]');
+      if (referenceSource) {
+        var chosen = referenceSource.value;
+        referenceSource.innerHTML = activeTakeOptions(storyState.story, '');
+        referenceSource.value = chosen;
+      }
+    }
+
     if (hadNoTakeActivity && (takeOrder.length || jobs.length)) {
       var takesDetails = root.querySelector('.storyboard-takes');
       if (!takesDetails) throw new Error('Storyboard Takes disclosure is missing.');
       takesDetails.open = true;
     }
-
     var generateButton = root.querySelector('[data-scene-generate]');
     if (generateButton) generateButton.textContent = (takeOrder.length || jobs.length) ? 'Generate Another Take' : 'Generate Take';
     syncPromptTakeStatus(sceneId);
+  }
+
+  function applyTakeMutation(sceneId, payload) {
+    if (!payload || !payload.story) throw new Error('Storyboard Take mutation returned no Story.');
+    if (!storyState.story || storyState.story.id !== payload.story.id) return;
+    storyState.story = payload.story;
+    syncSceneTakeDom(sceneId);
+    syncSceneProgressionCard(sceneId);
+    renderStoryReadiness();
+    renderSequencePreview();
   }
 
   function mergeFetchedSceneTakeState(storyId, sceneId, latestStory) {
@@ -5470,6 +5545,8 @@
     currentScene.updatedAt = latestScene.updatedAt || currentScene.updatedAt;
     storyState.story.updatedAt = latestStory.updatedAt || storyState.story.updatedAt;
     syncSceneTakeDom(sceneId);
+    syncSceneProgressionCard(sceneId);
+    renderStoryReadiness();
   }
 
   function syncGenerationJobCard(job, card) {
@@ -6526,7 +6603,9 @@
       if (upload) {
         var uploadScene = upload.closest('.storyboard-scene[data-scene-id]');
         if (!uploadScene) throw new Error('Take upload Scene is missing.');
-        uploadTake(uploadScene.dataset.sceneId, upload.files && upload.files[0]);
+        var uploadFile = upload.files && upload.files[0];
+        upload.value = '';
+        uploadTake(uploadScene.dataset.sceneId, uploadFile);
         return;
       }
       var takeLabel = event.target.closest('[data-take-label]');

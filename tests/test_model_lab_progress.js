@@ -4,7 +4,10 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 const scope = vm.createContext({});
-vm.runInContext(fs.readFileSync('tool/js/model_lab.js', 'utf8'), scope);
+const source = fs.readFileSync('tool/js/model_lab.js', 'utf8');
+assert.match(source, /initializeModelLab\(\);\s*$/);
+// Exercise production functions without running browser-only event wiring.
+vm.runInContext(source.replace(/initializeModelLab\(\);\s*$/, ''), scope);
 
 const running = {
   id: 'assessment-1', status: 'running',

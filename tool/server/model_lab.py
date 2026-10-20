@@ -724,7 +724,11 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                 failure_kind = ""
                 if kind.startswith("director_scene_plan_"):
                     text = str(result.get("text") or "")
-                    if not text.strip():
+                    if str(result.get("finishReason") or "").lower() in {"length", "max_tokens"}:
+                        # Exhausting a requested budget is not evidence of
+                        # empty/garbled model behavior, even if reasoning used it.
+                        failure_kind = "capacity"
+                    elif not text.strip():
                         failure_kind = "empty"
                     elif text.count("\ufffd") >= 2:
                         failure_kind = "garbled"

@@ -475,6 +475,7 @@
   }
   function labResults(){
     var points=labPoints(),ranked=labRanked(),visible=labShowAll?ranked:ranked.slice(0,12);
+    var ratedLeaders=ranked.slice().sort(function(a,b){return b.allManualAverage-a.allManualAverage||b.ratedCount-a.ratedCount;});
     labFeatured(ranked);
     lab('contenders').innerHTML=ranked.length?visible.map(function(p,i){
       return '<div class="run-lab-contender"><b class="run-lab-position">'+(i+1)+'</b><div><strong>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</strong><small>'+p.ratedCount+' of '+p.testCount+' Test renders rated · '+p.sessions.length+' sessions</small></div><div class="run-lab-score"><b>'+p.allManualAverage.toFixed(2)+'/5</b><small>'+p.ratedCount+' ratings</small></div><button data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect</button></div>';
@@ -492,9 +493,9 @@
       lab('challenge-title').textContent='Improve your evidence: '+(total-rated)+' unrated records';
       lab('challenge-description').textContent='Rate a blind batch from available saved Test files before generating more. '+rated+' of '+total+' linked Test records are rated.';
       lab('challenge-actions').innerHTML='<button type="button" data-lab-action="review">Blind-rate five</button><button type="button" data-lab-action="inspect">Inspect a contender</button>';
-    }else if(ranked.length>=2){
-      lab('challenge-title').textContent='Compare your two strongest rated contenders';
-      lab('challenge-description').textContent='Leader '+ranked[0].allManualAverage.toFixed(2)+'/5 ('+ranked[0].ratedCount+' ratings) versus runner-up '+ranked[1].allManualAverage.toFixed(2)+'/5 ('+ranked[1].ratedCount+' ratings). Sample size matters.';
+    }else if(ratedLeaders.length>=2){
+      lab('challenge-title').textContent='Compare your two highest-rated contenders';
+      lab('challenge-description').textContent='Leader '+ratedLeaders[0].allManualAverage.toFixed(2)+'/5 ('+ratedLeaders[0].ratedCount+' ratings) versus runner-up '+ratedLeaders[1].allManualAverage.toFixed(2)+'/5 ('+ratedLeaders[1].ratedCount+' ratings). Sample size matters.';
       lab('challenge-actions').innerHTML='<button type="button" data-lab-action="inspect">Inspect leader</button><button type="button" data-lab-action="challenger">Inspect runner-up</button>'+(total>rated?'<button type="button" data-lab-action="review">Blind-rate five</button>':'');
     }else{
       lab('challenge-title').textContent=total>rated?'Review the remaining unrated Test renders':'Explore what your training history reveals';
@@ -544,7 +545,7 @@
     if(labAiJob)return;
     var model=getDirectorModelPreference('webcap.director.model');
     if(!model){error(new Error('Select a Director model in the app header before requesting AI Insights.'));return;}
-    var origin=folder,requestVersion=labRequest;
+    var origin=folder;
     lab('ai-panel').classList.remove('hidden');
     lab('ai-result').replaceChildren();
     lab('ai-facts').textContent='';
@@ -559,7 +560,7 @@
         });});
     }
     send({previewOnly:true}).then(function(preview){
-      if(origin!==folder||requestVersion!==labRequest)throw new Error('Insights Set changed during evidence collection.');
+      if(origin!==folder)throw new Error('Insights Set changed during evidence collection.');
       lab('ai-facts').textContent=JSON.stringify(preview.facts,null,2);
       lab('ai-status').textContent='Submitting reviewed facts to Director…';
       return send({directorModel:model,reviewedFacts:JSON.stringify(preview.facts)});
@@ -584,7 +585,7 @@
       }
       return poll();
     }).then(function(result){
-      if(origin!==folder||requestVersion!==labRequest)return;
+      if(origin!==folder)return;
       var interpretation=result&&result.analysis;
       if(!interpretation)throw new Error('Director produced no structured AI Insights.');
       lab('ai-status').textContent='AI interpretation complete — hypotheses require validation.';
@@ -769,7 +770,7 @@
     if(action==='detail'){labDetail();return;}
     if(action==='review'){labReviewOpen();return;}
     if(action==='ai'){labAiStart();return;}
-    var list=labRanked(),p=action==='challenger'?list[1]:(list[0]||labPoints()[0]);
+    var list=labRanked().slice().sort(function(a,b){return b.allManualAverage-a.allManualAverage||b.ratedCount-a.ratedCount;}),p=action==='challenger'?list[1]:(list[0]||labPoints()[0]);
     if(p)window.runAnalyticsViewEpoch(p.jobId,p.epoch);else labDetail();
   };
 })();

@@ -118,7 +118,7 @@ def test_reused_attempt_is_preserved_during_export_and_source_deletion():
                                         director()["modelRef"])["id"] == "completed-scene"
 
 
-def test_mixed_assessment_pairs_schema_assist_with_existing_vision():
+def test_mixed_assessment_pairs_schema_assist_with_existing_vision(isolated):
     for name in ("one.jpg", "two.jpg"):
         (isolated / name).write_bytes(b"jpeg")
     run = model_lab._new_run_payload({

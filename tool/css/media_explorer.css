@@ -187,9 +187,9 @@
 .media-explorer-grid.explorer-list .media-explorer-card-meta { display:grid; flex:1; min-width:0; grid-template-columns:minmax(120px, 1fr) minmax(90px, 1fr) minmax(100px, 180px); align-items:center; gap:12px; padding:3px; }
 .media-explorer-grid.explorer-list .media-explorer-card-path,.media-explorer-grid.explorer-list .media-explorer-card-sub { margin:0; }
 .media-explorer-grid.explorer-list .media-explorer-card-check { top:50%; transform:translateY(-50%); left:11px; }
-.media-explorer-grid.explorer-single { grid-template-columns:minmax(0, 1fr); max-width:960px; margin:0 auto; }
-.media-explorer-grid.explorer-single .media-explorer-card { display:none; }
-.media-explorer-grid.explorer-single .media-explorer-card.active { display:block; }
-.media-explorer-grid.explorer-single .media-explorer-card-thumb { aspect-ratio:16/9; }
-.media-explorer-grid.explorer-single .media-explorer-card-meta { padding:15px; }
 @media(max-width:760px) { .media-explorer-grid.explorer-list .media-explorer-card-meta { grid-template-columns:minmax(0, 1fr); gap:3px; } .media-explorer-external-path-bar { flex-wrap:wrap; } .media-explorer-external-path-bar input { flex-basis:100%; } }
+
+/* External Grid uses a lightweight video placeholder; files load only in the inspector/viewer. */
+.media-explorer-card-thumb .external-video-placeholder { position:absolute; inset:0; display:grid; place-items:center; font-size:14px; font-weight:600; color:var(--muted); }
+.media-explorer-grid.explorer-list .media-explorer-card-thumb { display:none; }
+.media-explorer-grid.explorer-list .media-explorer-card-open { padding-left:36px; }

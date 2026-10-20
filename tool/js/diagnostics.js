@@ -59,7 +59,8 @@ function diagnosticsAssessmentCounts(row, tests) {
     span.title = hint;
     host.appendChild(span);
   }
-  mark((role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') + state,
+  mark((role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') +
+    (state === 'Passed' ? 'Technical pass' : state),
     state === 'Passed' ? 'passed' : state === 'Issues' ? 'issues' : 'untested',
     role === 'both' ? 'Requires verified Storyboard JSON and Schema Assist plus Vision.' : role === 'director' ? 'Requires Storyboard JSON and Schema Assist; quality judgment is separate.' : 'Requires completed open and group-aware Vision probes; this is not caption-accuracy grading.');
   // Historical prose calibrations are not proof of structured Scene capacity.

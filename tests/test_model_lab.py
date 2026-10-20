@@ -106,6 +106,7 @@ def _director(ref="local::director.gguf"):
 def test_model_lab_freezes_deterministic_set_sample_and_models(monkeypatch):
     files = ["{:02d}.jpg".format(index) for index in range(20)]
     monkeypatch.setattr(model_lab, "_supported_media", lambda folder, values: list(values))
+    monkeypatch.setattr(model_lab, "_media_signatures", lambda folder, files: {})
 
     run = model_lab._new_run_payload({
         "folder": "set",
@@ -312,6 +313,7 @@ def test_capability_summaries_do_not_expose_model_text(monkeypatch):
 
 def test_deep_assessment_freezes_depth_and_expanded_sample(monkeypatch):
     monkeypatch.setattr(model_lab, "_supported_media", lambda folder, values: list(values))
+    monkeypatch.setattr(model_lab, "_media_signatures", lambda folder, files: {})
     files = ["{:02d}.jpg".format(i) for i in range(24)]
     base = {"folder": "set", "files": files, "directorModels": [_director()], "visionModels": [_vision()]}
     quick = model_lab._new_run_payload(base)
@@ -451,6 +453,7 @@ def test_assessment_skips_and_resume_have_real_determinate_progress():
 
 def test_vision_progress_plans_only_supported_probes_for_selected_groups(monkeypatch):
     monkeypatch.setattr(model_lab, "_supported_media", lambda folder, values: list(values))
+    monkeypatch.setattr(model_lab, "_media_signatures", lambda folder, files: {})
     basic = model_lab._new_run_payload({
         "folder": "set", "files": ["a.jpg", "b.jpg"], "visionModels": [_vision()],
     })
@@ -464,6 +467,7 @@ def test_vision_progress_plans_only_supported_probes_for_selected_groups(monkeyp
 
 def test_dependent_reference_probes_included_in_expected_total(monkeypatch):
     monkeypatch.setattr(model_lab, "_supported_media", lambda folder, values: list(values))
+    monkeypatch.setattr(model_lab, "_media_signatures", lambda folder, files: {})
     run = model_lab._new_run_payload({
         "folder": "set", "files": ["a.jpg", "b.jpg"],
         "visionModels": [_vision()], "directorModels": [_director()],

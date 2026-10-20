@@ -28,3 +28,13 @@ def test_storyboard_header_summary_and_library_toggle_layout():
     assert "max-width: none;" in summary
     actions = css.split("/* Scenes header: no clipped Sequence action or full-width Director Tools button. */", 1)[1]
     assert "margin-left: auto;" in actions.split(".storyboard-scenes-heading-actions {", 1)[1].split("}", 1)[0]
+
+
+def test_storyboard_director_scene_progress_uses_single_column_grid():
+    css = (ROOT / "tool/css/storyboard.css").read_text(encoding="utf-8")
+    marker = "/* The compact blocker has one column; no empty telemetry column. */"
+    assert marker in css
+    compact = css.split(marker, 1)[1].split("#storyboard-director-view-activity {", 1)[0]
+    assert 'grid-template-columns: minmax(0, 1fr);' in compact
+    assert 'grid-template-areas: "label" "phase" "detail" "scene-progress" "action" "stop";' in compact
+    assert ".storyboard-director-scene-progress {grid-area:scene-progress;" in css

@@ -124,7 +124,7 @@ def _discover(snapshot):
                     continue
                 relative = file_path.relative_to(root).as_posix()
                 entry = {
-                    "id": "external:" + relative, "source": "external", "role": "source",
+                    "id": "external:" + str(root) + "/" + relative, "source": "external", "role": "source",
                     "mediaKind": "video" if file_path.suffix.lower() in VIDEO_EXTS else "image",
                     "fileName": name, "relativePath": relative,
                     "fileSize": stat.st_size, "mtime": int(stat.st_mtime),
@@ -132,7 +132,7 @@ def _discover(snapshot):
                 }
                 previous = cache.get(name)
                 if _fresh(entry, previous):
-                    entry["metadata"] = previous
+                    entry["metadata"] = {k: previous[k] for k in ("size", "mtime", "resolution", "duration") if k in previous}
                     entry["metadataCached"] = True
                 batch.append(entry)
                 if len(batch) >= 64:

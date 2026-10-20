@@ -184,12 +184,12 @@ function diagnosticsRenderAssessmentProgress(run) {
   ProgressCard.update(card, modelLabProgressSnapshot(run), {
     compact: terminal,
     className: 'model-assessment-progress-card',
-    onOpen: function () { setDiagnosticsTab('model-lab', true, run.id); }
+    onOpen: function () { setDiagnosticsTab('assessment', true); }
   });
   card.querySelector('[data-progress-dot]').className = 'activity-monitor-dot ' +
     (run.status === 'completed' ? 'assessment-finished' :
       terminal ? 'assessment-terminal' : 'active');
-  card.querySelector('[data-progress-open]').textContent = 'View probes';
+  card.querySelector('[data-progress-open]').textContent = 'View assessment';
   var wasRunning = diagnosticsAssessmentRunStatus === 'running';
   diagnosticsAssessmentRunStatus = String(run.status);
   diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running';
@@ -515,14 +515,6 @@ function refreshUnifiedModelAssessment() {
         judgeButton.disabled = !!(qualityReview && qualityReview.status === 'running');
         judgeButton.addEventListener('click', function () { diagnosticsAssessmentJudge(evidence.id, ref); });
         panel.appendChild(judgeButton);
-      }
-      if (evidence) {
-        var view = document.createElement('button');
-        view.type = 'button';
-        view.className = 'review-captions-btn';
-        view.textContent = 'View probes';
-        view.addEventListener('click', function () { setDiagnosticsTab('model-lab', true, evidence.id); });
-        panel.appendChild(view);
       }
       expanded.appendChild(panel);
       row.appendChild(expanded);
@@ -1144,9 +1136,6 @@ function wireDiagnosticsUi() {
   diagnosticsEl('diagnostics-assessment-import-cancel').onclick = function () {
     diagnosticsAssessmentImportBundle = null; diagnosticsEl('diagnostics-assessment-transfer').classList.add('hidden');
   };
-  diagnosticsEl('diagnostics-assessment-director').onclick = function () { setDiagnosticsTab('models', true); };
-  diagnosticsEl('diagnostics-assessment-lab').onclick = function () { setDiagnosticsTab('model-lab', true); };
-  diagnosticsEl('diagnostics-assessment-benchmark').onclick = function () { setDiagnosticsTab('benchmark', true); };
 
   Array.prototype.forEach.call(document.querySelectorAll('[data-diagnostics-tab]'), function (button) {
     button.onclick = function () {

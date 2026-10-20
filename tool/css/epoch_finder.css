@@ -338,7 +338,7 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .run-analytics-run-choice small{font-size:10px;margin-top:2px;line-height:1.2}
 
 /* One permanent Test workspace navigation: never moved or recreated on tab changes. */
-#test-generations-pane { position:relative; --test-workspace-sidebar-width:clamp(430px,23vw,560px); }
+#test-generations-pane { position:relative; --test-workspace-sidebar-width:390px; }
 #test-workspace-main-tabs {
   position:absolute;top:0;left:0;z-index:6;
   display:flex;align-items:center;gap:4px;
@@ -372,9 +372,6 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
   min-height:0;overflow-y:auto;padding:16px 20px 30px;
 }
 .test-workspace-campaign-tools {display:flex;gap:7px;flex-wrap:wrap;margin:8px 0;}
-@media(max-width:1050px) {
-  #test-generations-pane {--test-workspace-sidebar-width:390px;}
-}
 
 /* The permanent tabs replace old mode shortcuts, without removing wired controls. */
 #test-generations-pane #epoch-finder-back-to-tests {display:none;}

@@ -5240,6 +5240,39 @@
     refreshActivityButton();
   }
 
+  window.testGenerationsPrepareContender = function (jobId, epoch, repeat) {
+    var requestedJob=String(jobId||''),requestedEpoch=Number(epoch),amount=Number(repeat);
+    if(!requestedJob||!Number.isInteger(requestedEpoch)||!Number.isInteger(amount)||amount<1||amount>20){
+      throw new Error('Choose a valid training epoch and 1–20 Test repeats.');
+    }
+    openPane();
+    window.epochFinderShowMode('tests');
+    var targetFolder=String(launchFolder),modelId=currentTestModelId();
+    return request('test_prepare',{modelId:modelId}).then(function(payload){
+      if(String(launchFolder)!==targetFolder||currentTestModelId()!==modelId)return;
+      var metadata=payload.candidateMetadata||{};
+      var candidate=(payload.files||[]).find(function(name){
+        var source=metadata[name]||{};
+        return String(source.sourceJobId||source.jobId||'')===requestedJob&&
+          Number(source.epoch)===requestedEpoch&&
+          String(source.folder||'').replace(/\\/g,'/').replace(/^\/+|\/+$/g,'')===targetFolder.replace(/\\/g,'/').replace(/^\/+|\/+$/g,'');
+      });
+      if(!candidate){
+        throw new Error('Epoch '+requestedEpoch+' from this run is not staged for Test. Use Runs to stage the checkpoint first. Nothing was launched.');
+      }
+      prepared=payload;
+      selectedCandidates=new Set([candidate]);
+      sweepMode=false;
+      renderStagedFiles(payload);
+      syncSweepControls();
+      el('test-generations-base-include').checked=false;
+      el('test-generations-inline-count').value=String(amount);
+      el('test-generations-inline-count').dispatchEvent(new Event('input',{bubbles:true}));
+      saveTestBenchState();
+      reportConsoleInfo('Insights','Prepared '+amount+' Test repeats for epoch '+requestedEpoch+'. Verify the current wildcard prompt and press Run Tests when ready.');
+    }).catch(function(exc){showError(exc);});
+  };
+
   window.getTestGenerationPlanningVocabulary = testPlanningVocabulary;
   window.testGenerationsFolderLoaded = testGenerationsFolderLoaded;
   window.prepareTestBenchSetSwitch = prepareTestBenchSetSwitch;

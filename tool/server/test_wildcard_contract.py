@@ -12,23 +12,6 @@ def _clean_context(value):
     return " ".join(str(value or "").strip().split())
 
 
-def observed_group_combinations(annotations, eligible_media):
-    """Actual co-occurring scoped tag sets, scoped to eligible Set media."""
-    observed = {}
-    for media in eligible_media:
-        scoped = annotations.get(media, {})
-        if not isinstance(scoped, dict):
-            continue
-        for group, tags in scoped.items():
-            if not isinstance(tags, list):
-                continue
-            values = tuple(sorted({tag for tag in tags if isinstance(tag, str) and tag.strip()}))
-            if values:
-                observed.setdefault(group, set()).add(values)
-    return {group: [list(combo) for combo in sorted(combos)]
-            for group, combos in sorted(observed.items())}
-
-
 def _representative_captions(captions, max_items=150, max_chars=24000):
     """Bound Director input while retaining examples across the whole Set."""
     counts = Counter(captions)
@@ -45,7 +28,7 @@ def _representative_captions(captions, max_items=150, max_chars=24000):
         count -= 1
 
 
-def build_request(captions, set_name="", focus="", vocabulary=None, group_combinations=None):
+def build_request(captions, set_name="", focus="", vocabulary=None):
     cleaned = [_clean_caption(value) for value in (captions or [])]
     cleaned = [value for value in cleaned if value]
     if not cleaned:
@@ -181,74 +164,6 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "prompt": prompt,
         "response_schema": schema,
     }
-
-
-def validate_group_compatibility(data, combinations):
-    """Reject proposed same-group choices with unobserved co-occurrence.
-
-    The explicit annotationGroup field is the identity contract. Unmapped
-    dimensions are general prompt variation, not inferred trained tags.
-    """
-    groups = data.get("variationGroups") if isinstance(data, dict) else None
-    if not isinstance(groups, list):
-        raise ValueError("Wildcard proposal must include variation groups.")
-    from .epoch_test_bench import (
-        _parse_wildcard_nodes, _expand_wildcard_option,
-        _normalize_wildcard_text, _strip_wildcard_comments,
-    )
-    nodes = _parse_wildcard_nodes(_strip_wildcard_comments(str(data.get("wildcard") or "")))
-    resolved = []
-    for kind, alternatives in nodes:
-        if kind != "group":
-            continue
-        options = []
-        for alternative in alternatives:
-            for value in _expand_wildcard_option(alternative):
-                value = _normalize_wildcard_text(value)
-                if value not in options:
-                    options.append(value)
-        resolved.append(options)
-    if len(resolved) != len(groups):
-        raise ValueError("Wildcard group count does not match its annotation dimensions.")
-    assigned = {}
-    for index, item in enumerate(groups):
-        if not isinstance(item, dict):
-            raise ValueError("Invalid wildcard dimension.")
-        if [str(option).strip() for option in (item.get("options") or [])] != resolved[index]:
-            raise ValueError("Wildcard group options do not match the generated prompt.")
-        group = str(item.get("annotationGroup") or "").strip()
-        if not group:
-            continue
-        if group not in combinations:
-            raise ValueError("Unknown wildcard annotation group: " + group)
-        allowed = {tag for combo in combinations[group] for tag in combo}
-        options = item.get("options") or []
-        if not isinstance(options, list):
-            raise ValueError("Wildcard options must be a list in group " + group)
-        missing = [option for option in options if option not in allowed]
-        if missing:
-            available = sorted(allowed)
-            sample = ", ".join(repr(tag) for tag in available[:8])
-            if len(available) > 8:
-                sample += ", ..."
-            raise ValueError(
-                "Wildcard values must be exact tags in group " + group +
-                " (not found in selected training media: " +
-                ", ".join(repr(tag) for tag in missing[:5]) +
-                (", ..." if len(missing) > 5 else "") +
-                "; available tags: " + (sample or "(none)") + ")"
-            )
-        assigned.setdefault(group, []).append(options)
-    from itertools import product
-    for group, dimensions in assigned.items():
-        if len(dimensions) < 2:
-            continue
-        observed = [set(combo) for combo in combinations[group]]
-        for selected in product(*dimensions):
-            if not any(set(selected).issubset(combo) for combo in observed):
-                raise ValueError("Unobserved same-group wildcard combination in " +
-                                 group + ": " + " + ".join(selected))
-    return True
 
 
 def normalize_result(data):

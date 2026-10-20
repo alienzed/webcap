@@ -255,11 +255,9 @@ function refreshUnifiedModelAssessment() {
     table.className = 'model-assessment-table';
     var head = document.createElement('thead');
     var header = document.createElement('tr');
-    [{key: '', name: 'Select'}, {key: 'model', name: 'Model'}, {key: 'role', name: 'Role'},
-      {key: 'size', name: 'Size'}, {key: 'output', name: 'Verified output'},
-      {key: 'speed', name: 'tok/s'}, {key: 'result', name: 'Assessment'},
-      {key: 'thinking', name: 'Thinking'}, {key: 'quality', name: 'Quality review'},
-      {key: 'tested', name: 'Last tested'}].forEach(function (column) {
+    [{key: '', name: 'Select'}, {key: 'model', name: 'Model'},
+      {key: 'output', name: 'Valid output'}, {key: 'speed', name: 'tok/s'},
+      {key: 'result', name: 'Assessment'}].forEach(function (column) {
       var th = document.createElement('th');
       th.scope = 'col';
       if (column.key) {
@@ -348,17 +346,16 @@ function refreshUnifiedModelAssessment() {
       expand.setAttribute('aria-expanded', String(diagnosticsAssessmentExpanded.has(key)));
       name.appendChild(expand);
       line.appendChild(name);
-      cell('Role', supportsDirector && supportsVision ? 'Director · Vision' : supportsVision ? 'Vision' : 'Director');
+      var roleLabel = supportsDirector && supportsVision ? 'Director · Vision' : supportsVision ? 'Vision' : 'Director';
       var model = (kind === 'director' ? directors : vision).find(function (entry) {
         return String(kind === 'director' ? entry.id || '' : entry.modelRef || '') === ref;
       }) || {};
       var size = Number(model.sizeBytes || 0);
-      cell('Size', diagnosticsAssessmentSize(size));
+      var sizeLabel = diagnosticsAssessmentSize(size);
       row.assessmentSort.size = size > 0 ? size : null;
       var qualification = cell('Qualified for', '', 'qualification');
       qualification.className = 'model-assessment-qualifications';
-      var thinkingCell = cell('Thinking', supportsDirector ? 'No' : '—', 'thinking');
-      thinkingCell.title = kind === 'director' ? 'No positive thinking support recorded yet.' : 'Thinking applies to Director models.';
+      var thinkingLabel = supportsDirector ? 'Not verified' : 'N/A';
       var speedCell = cell('Speed', '—', 'speed');
       speedCell.title = 'Runtime-reported generation throughput when available; different probes and runtimes may not be directly comparable.';
       var outputCell = cell('Output', '—', 'output');
@@ -366,7 +363,8 @@ function refreshUnifiedModelAssessment() {
       // Put headline metrics before assessment; secondary fields are details-only.
       line.insertBefore(outputCell, qualification);
       line.insertBefore(speedCell, qualification);
-      var qualityCell = cell('Quality review', 'Not judged', 'quality');
+      var qualityLabel = 'Not judged';
+      var qualityReason = '';
       var evidence = capabilityRuns.filter(function (run) {
         return run.models && run.models[ref] && Object.keys(run.models[ref]).some(function (probe) {
           var isVision = ['vision_open', 'vision_group_aware', 'vision_model_error'].indexOf(probe) !== -1;
@@ -384,27 +382,25 @@ function refreshUnifiedModelAssessment() {
       var thinking = tests.director_thinking;
       if (supportsDirector) {
         var supported = thinking ? thinking.supported === true : !!(report && report.thinking);
-        thinkingCell.textContent = supported ? 'Yes' : 'No';
-        thinkingCell.title = thinking ? 'Unified thinking probe: ' + (supported ? 'reasoning observed' : 'not verified') : 'Saved Director assessment result';
+        thinkingLabel = supported ? 'Yes' : 'Not verified';
         row.assessmentSort.thinking = supported ? 1 : 0;
       }
       var testedAt = evidence && evidence.startedAt || (report && report.finishedAt) || '';
       var date = testedAt ? new Date(testedAt) : null;
       var validDate = date && !isNaN(date.getTime());
-      var tested = cell('Last tested', validDate ? date.toLocaleDateString() : '—');
-      tested.title = validDate ? date.toLocaleString() : 'No saved evidence';
+      var testedLabel = validDate ? date.toLocaleDateString() : '—';
       row.assessmentSort.tested = validDate ? date.getTime() : null;
       row.appendChild(line);
       diagnosticsAssessmentCounts(row, tests);
       var qualityReview = evidence && (evidence.qualityReviews || {})[ref];
-      qualityCell.textContent = diagnosticsAssessmentReviewLabel(qualityReview);
+      qualityLabel = diagnosticsAssessmentReviewLabel(qualityReview);
       if (qualityReview && qualityReview.status === 'completed') {
-        qualityCell.title = (qualityReview.tasks || []).map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');
+        qualityReason = (qualityReview.tasks || []).map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');
         row.assessmentSort.quality = (qualityReview.tasks || []).reduce(function (total, item) { return total + item.score; }, 0) / Math.max(1, (qualityReview.tasks || []).length);
         var qualityBadge = document.createElement('span');
         qualityBadge.className = 'model-assessment-qualification model-assessment-' + (row.assessmentSort.quality >= 3 ? 'passed' : 'issues');
         qualityBadge.textContent = 'Quality ' + row.assessmentSort.quality.toFixed(1) + '/5';
-        qualityBadge.title = 'Advisory LLM review, separate from technical qualification: ' + qualityCell.title;
+        qualityBadge.title = 'Advisory LLM review, separate from technical qualification: ' + qualityReason;
         qualification.appendChild(qualityBadge);
       }
 
@@ -434,7 +430,12 @@ function refreshUnifiedModelAssessment() {
       expanded.className = 'model-assessment-evidence';
       expanded.hidden = !diagnosticsAssessmentExpanded.has(key);
       var panel = document.createElement('td');
-      panel.colSpan = 10;
+      panel.colSpan = 5;
+      var metadata = document.createElement('div');
+      metadata.textContent = 'Role: ' + roleLabel + ' · Size: ' + sizeLabel +
+        ' · Thinking: ' + thinkingLabel + ' · Last tested: ' + testedLabel +
+        ' · Quality review: ' + qualityLabel;
+      panel.appendChild(metadata);
       var provenance = document.createElement('div');
       provenance.dataset.assessmentProvenance = '';
       provenance.textContent = evidence ? 'Model Lab run: ' + evidence.id + ' · ' + (evidence.status || 'unknown') +

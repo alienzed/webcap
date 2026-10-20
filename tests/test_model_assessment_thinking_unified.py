@@ -23,11 +23,12 @@ def test_actual_diagnostics_table_has_thinking_column():
     assert "tests.director_thinking" in source
 
 
-def test_legacy_model_lab_tab_removed_but_advanced_access_preserved():
+def test_legacy_model_lab_launcher_retired_without_removing_pending_compatibility_panel():
     html = Path("tool/tool.html").read_text(encoding="utf-8")
     assert 'id="diagnostics-tab-model-lab"' not in html
-    assert 'id="diagnostics-assessment-lab"' in html
+    assert 'id="diagnostics-assessment-lab"' not in html
     assert 'id="diagnostics-panel-model-lab"' in html
+    assert 'id="diagnostics-assessment-run"' in html
 
 
 def test_model_assessment_bulk_selection_uses_header_checkbox():

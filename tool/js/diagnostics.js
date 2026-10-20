@@ -635,10 +635,10 @@ function runUnifiedModelAssessment() {
       config: {
         folder: sourceFolder, files: files, groups: modelLabGroups(), depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
         visionModels: visions, directorModels: directors,
-        referenceVisionRef: visions.length ? String(visions[0].modelRef) : '',
-        referenceDirectorRef: directors.length ? String(directors[0].modelRef) : '',
-        referenceVision: visions.length ? visions[0] : null,
-        referenceDirector: directors.length ? directors[0] : null
+        referenceVisionRef: '',
+        referenceDirectorRef: '',
+        referenceVision: null,
+        referenceDirector: null
       }
     }).then(function (payload) {
       diagnosticsAssessmentRunId = String(payload.run.id);

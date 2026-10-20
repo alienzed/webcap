@@ -353,6 +353,23 @@ def _model_by_ref(models, model_ref):
     return next((model for model in models if model.get("modelRef") == model_ref), None)
 
 
+def _media_signatures(folder, files):
+    """Use the media's existing filesystem metadata; no extra scan or database."""
+    from .caption_ops import _resolve_folder
+    root = _resolve_folder(folder)
+    signatures = {}
+    for name in files:
+        path = root / name
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            # Unit fixtures can supply logical filenames; such evidence is
+            # intentionally ineligible for cross-run Vision reuse.
+            continue
+        signatures[name] = [stat.st_size, stat.st_mtime_ns]
+    return signatures
+
+
 def _reusable_evidence(run):
     """Index saved completed probes once; never repeat them or copy large model outputs.
 
@@ -379,6 +396,9 @@ def _reusable_evidence(run):
                 if kind not in {"vision_open", "vision_group_aware"}:
                     continue
                 if previous.get("folder") != run["folder"] or filename not in run["files"]:
+                    continue
+                signature = (run.get("mediaSignatures") or {}).get(filename)
+                if not signature or signature != (previous.get("mediaSignatures") or {}).get(filename):
                     continue
                 if kind == "vision_group_aware" and previous.get("groups") != run["groups"]:
                     continue
@@ -457,6 +477,7 @@ def _new_run_payload(config):
         "folder": folder,
         "depth": depth,
         "files": sample_files,
+        "mediaSignatures": _media_signatures(folder, sample_files) if sample_files else {},
         "groups": groups,
         "visionModels": vision_models,
         "directorModels": director_models,

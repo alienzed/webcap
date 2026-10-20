@@ -339,21 +339,9 @@ def create_campaign(folder_path, criteria):
     for round_plan in plans:
         model.normalize_settings(template, lambda: 1, dict(round_plan["settings"], seed=1))
     from .epoch_reference import verified_reference, reference_vocabulary
-    scoped = reference_vocabulary(folder, job_id)
-    primary_groups = {}
-    for dimension in dimensions:
-        if dimension["role"] != "primary":
-            continue
-        for option in dimension["options"]:
-            matches = {group["group"] for group in scoped
-                       if any(term["term"] == option for term in group["terms"])}
-            if not matches:
-                raise ValueError("No trained annotation group contains exact tag " +
-                                 repr(option) + " for Primary attribute " + dimension["label"] + ".")
-            primary_groups[(dimension["label"], option)] = matches
     reference_choices = criteria.get("referencePlan")
     if not isinstance(reference_choices, list):
-        raise ValueError("Approve a training reference for every Primary wildcard option.")
+        raise ValueError("Reference selections must be a list.")
     approved = {}
     for entry in reference_choices:
         if not isinstance(entry, dict):
@@ -369,11 +357,15 @@ def create_campaign(folder_path, criteria):
     evaluation = criteria.get("referenceEvaluation")
     if not isinstance(evaluation, dict) or any(type(evaluation.get(k)) is not bool for k in ("rvn", "dino")):
         raise ValueError("Select reference evaluation mechanisms explicitly.")
-    if (evaluation["rvn"] or evaluation["dino"]) and set(approved) != required:
-        raise ValueError("Approve an exact trained reference for every Primary wildcard option.")
+    scoped = reference_vocabulary(folder, job_id) if approved else []
+    reference_groups = {
+        (attribute, option): {group["group"] for group in scoped
+                              if any(term["term"] == option for term in group["terms"])}
+        for attribute, option in approved
+    }
     references = []
     for (attribute, option), entry in sorted(approved.items()):
-        if str(entry.get("group") or "") not in primary_groups[(attribute, option)] or str(entry.get("tag") or option) != option:
+        if str(entry.get("group") or "") not in reference_groups[(attribute, option)] or str(entry.get("tag") or option) != option:
             raise ValueError("Primary reference must use its exact annotated group and tag.")
         group = str(entry.get("group") or "")
         media = str(entry.get("media") or "")

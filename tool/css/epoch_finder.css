@@ -563,3 +563,42 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .test-preview-card-epoch-metrics.hidden{display:none}
 .test-preview-card-epoch-metrics .test-generations-result-epoch-metrics{display:flex;gap:8px;flex-wrap:wrap;overflow:visible}
 .test-preview-card-epoch-metrics .test-generations-vl-epoch-score{margin:0}
+
+
+/* Insights enhancement: keep detail tools, foreground decisions and review. */
+#run-analytics-screen .run-lab-featured{margin:12px 0}
+#run-analytics-screen #run-lab-featured{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+#run-analytics-screen .run-lab-feature{padding:17px 19px;border-radius:10px;background:var(--panel-bg,#1c2834);border:1px solid var(--border-color,#384653);min-width:0}
+#run-analytics-screen .run-lab-feature small{font-size:12px;color:var(--muted,#b5c4d2)}
+#run-analytics-screen .run-lab-feature h3{font-size:16px;margin:9px 0}
+#run-analytics-screen .run-lab-feature strong{font-size:28px;line-height:1.1}
+#run-analytics-screen .run-lab-feature p{font-size:13px;margin:7px 0;color:var(--muted,#b5c4d2)}
+#run-analytics-screen .run-lab-feature-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+#run-analytics-screen .run-lab-feature-actions button{width:auto;min-height:32px;padding:7px 10px}
+#run-analytics-screen .run-lab-details{margin:12px 0;border:1px solid var(--border-color,#384653);border-radius:10px}
+#run-analytics-screen .run-lab-details>summary{padding:14px 18px;font-size:14px;font-weight:650;cursor:pointer}
+#run-analytics-screen .run-lab-details>.run-lab-two-col{padding:0 10px 10px}
+#run-analytics-screen .run-lab-insight-choice{display:flex;align-items:center;gap:9px;min-width:0}
+#run-analytics-screen .run-lab-insight-choice input{flex:none;width:16px;height:16px}
+#run-analytics-screen .run-lab-insight.is-muted{opacity:.55}
+#run-analytics-screen .run-lab-insight.is-muted .run-lab-meter{opacity:.35}
+#run-analytics-screen .run-lab-insight-choice strong{font-size:13px}
+#run-analytics-screen .run-lab-feature-actions button,#run-analytics-screen .run-lab-review-actions button{background:var(--panel-bg,#1c2834);color:inherit;border:1px solid var(--border-color,#536578);border-radius:6px;cursor:pointer}
+#run-analytics-screen .run-lab-feature-actions button:hover{border-color:var(--accent-color,#e5a954)}
+#run-analytics-screen .run-lab-review-dialog{position:fixed;width:min(860px,calc(100vw - 24px));max-height:calc(100vh - 24px);background:var(--panel-bg,#192733);color:inherit;border:1px solid var(--border-color,#536578);border-radius:12px;padding:18px;overflow:auto}
+#run-analytics-screen .run-lab-review-dialog::backdrop{background:rgba(0,0,0,.7)}
+#run-analytics-screen .run-lab-review-head{display:flex;justify-content:space-between;gap:18px;align-items:start}
+#run-analytics-screen .run-lab-review-head h3{font-size:18px;margin:0}
+#run-analytics-screen .run-lab-review-head p{font-size:13px;margin:7px 0}
+#run-analytics-screen .run-lab-review-media{display:grid;place-items:center;background:#101a24;border-radius:8px;min-height:210px;margin:10px 0}
+#run-analytics-screen .run-lab-review-media img,#run-analytics-screen .run-lab-review-media video{max-height:min(53vh,550px);max-width:100%;object-fit:contain}
+#run-analytics-screen .run-lab-review-wildcards{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0;font-size:13px}
+#run-analytics-screen .run-lab-review-wildcards span{padding:5px 9px;border-radius:6px;background:var(--surface-bg,#293849)}
+#run-analytics-screen .run-lab-review-reveal{font-size:13px;margin:8px 0;min-height:18px}
+#run-analytics-screen .run-lab-review-stars{display:flex;justify-content:center;gap:10px;margin:15px 0}
+#run-analytics-screen .run-lab-review-stars button{font-size:32px;color:#e5ad4f;min-height:46px;min-width:50px;width:auto;padding:4px;background:transparent;border:1px solid var(--border-color,#536578);border-radius:6px;cursor:pointer}
+#run-analytics-screen .run-lab-review-stars button:disabled{opacity:.4;cursor:default}
+#run-analytics-screen .run-lab-review-actions{display:flex;justify-content:center;gap:9px;flex-wrap:wrap;margin:12px 0}
+#run-analytics-screen .run-lab-review-actions button{width:auto;min-width:95px}
+#run-analytics-screen #run-lab-review-status{text-align:center;font-size:13px}
+@media(max-width:820px){#run-analytics-screen #run-lab-featured{grid-template-columns:1fr}}

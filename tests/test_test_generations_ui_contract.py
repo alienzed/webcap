@@ -1485,7 +1485,8 @@ def test_launch_action_stays_inside_repeat_and_vl_panel():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     launch = html.split('<div class="test-generations-launch-options">', 1)[1]
     launch = launch.split('<div id="test-generations-status"', 1)[0]
-    assert launch.index('id="test-generations-inline-launch-summary"') < launch.index('id="test-generations-run-btn"')
+    assert launch.index('id="test-generations-inline-count"') < launch.index('id="test-generations-inline-auto-vl"')
+    assert launch.index('id="test-generations-inline-auto-vl"') < launch.index('id="test-generations-run-btn"')
     assert launch.index('id="test-generations-run-btn"') < launch.index('</section>')
 
 
@@ -1512,3 +1513,11 @@ def test_selected_session_restores_new_automatic_vl_evidence():
     assert "testVl.loadedEvidence = evidence;" in restore
     assert 'visible["testVision"] = _session_vision_state(session_directory)' in backend
     assert "def complete_test_auto_vl(context, answer, elapsed_ms):" in backend
+
+
+def test_compact_test_launch_omits_redundant_summary():
+    html = (ROOT / 'tool/tool.html').read_text(encoding='utf-8')
+    script = (ROOT / 'tool/js/test_generations.js').read_text(encoding='utf-8')
+    css = (ROOT / 'tool/css/styles.css').read_text(encoding='utf-8')
+    assert 'test-generations-inline-launch-summary' not in html + script + css
+    assert '.test-generations-launch-options .test-generations-actions {margin-left:auto;flex:0 0 auto;}' in css

@@ -2355,11 +2355,17 @@ def test_generations_wildcard_route():
             str(load_caption_text(folder, name).get("caption") or "").strip()
             for name in media
         ]
-        captions = [caption for caption in captions if caption]
+        # One read of existing Set annotations; compile concept coverage only in memory.
+        from .caption_ops import _resolve_folder
+        scoped = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+        if not isinstance(scoped, dict):
+            raise ValueError("Scoped Set annotation map is invalid.")
+        annotations = [scoped.get(name, {}) for name in media]
         focus = str(data.get("focus") or "").strip()
         set_name = Path(folder.rstrip("/\\")).name or folder
         contract = test_wildcard_build_request(
-            captions, set_name=set_name, focus=focus, vocabulary=data.get("vocabulary"),
+            captions, set_name=set_name, focus=focus,
+            vocabulary=data.get("vocabulary"), annotations=annotations,
         )
         job = enqueue_llm(
             "test",
@@ -2370,7 +2376,7 @@ def test_generations_wildcard_route():
         )
         return jsonify({
             "ok": True,
-            "captionCount": len(captions),
+            "captionCount": sum(bool(caption) for caption in captions),
             "trainingMediaCount": len(media),
             "setName": set_name,
             "focus": focus,

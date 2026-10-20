@@ -131,48 +131,6 @@ function diagnosticsAssessmentSortAndFilter() {
   });
 }
 
-function diagnosticsUpdateAssessmentMetrics(run) {
-  if (!Array.isArray(run.attempts)) return;
-  diagnosticsEl('diagnostics-assessment-results').querySelectorAll('tbody[data-assessment-model]').forEach(function (row) {
-    var role = row.dataset.assessmentModel.split(':')[0];
-    var ref = row.dataset.assessmentModel.slice(role.length + 1);
-    var attempts = run.attempts.filter(function (item) { return item.role === role && item.modelRef === ref; });
-    if (!attempts.length) return;
-    var tests = {};
-    attempts.forEach(function (item) {
-      var group = tests[item.kind] || (tests[item.kind] = {counts: {}, errors: new Set()});
-      group.counts[item.status] = (group.counts[item.status] || 0) + 1;
-      if (item.error) group.errors.add(item.error);
-    });
-    diagnosticsAssessmentCounts(row, tests);
-    row.querySelector('[data-assessment-provenance]').textContent = 'Model Lab run: ' + run.id + ' · ' + run.status +
-      (run.importedFrom ? ' · Imported from ' + run.importedFrom.host + ' (source runtime measurements)' : '');
-    row.querySelector('[data-assessment-capabilities]').textContent = Object.keys(tests).map(function (kind) {
-      var group = tests[kind];
-      return modelLabAttemptLabel(kind) + ': ' + Object.keys(group.counts).map(function (status) {
-        return group.counts[status] + ' ' + status;
-      }).join(', ') + (group.errors.size ? ' · ' + Array.from(group.errors).join(' · ') : '');
-    }).join(' · ') + ' · Context limit: not established by this assessment';
-    row.querySelectorAll('[data-assessment-initial-evidence]').forEach(function (line) { line.remove(); });
-    var measured = attempts.filter(function (item) { return item.finishedAt && diagnosticsProbeMetrics(item).tokens > 0; });
-    if (measured.length) {
-      var last = diagnosticsProbeMetrics(measured[measured.length - 1]);
-      if (last.speed > 0) {
-        var speed = row.querySelector('[data-assessment-speed]');
-        speed.textContent = last.speed.toFixed(1);
-        speed.title = last.hint;
-        row.assessmentSort.speed = last.speed;
-      }
-      var largest = Math.max.apply(null, measured.map(function (item) { return diagnosticsProbeMetrics(item).tokens; }));
-      var output = row.querySelector('[data-assessment-output]');
-      output.textContent = largest.toLocaleString();
-      output.title = 'Largest observed output in the current run; may include reasoning tokens. Not a verified maximum.';
-      row.assessmentSort.output = largest;
-    }
-  });
-  diagnosticsAssessmentSortAndFilter();
-}
-
 function diagnosticsRenderAssessmentProgress(run) {
   if (String(run.id) !== diagnosticsAssessmentRunId || diagnosticsActiveTab !== 'assessment' ||
       diagnosticsEl('diagnostics-modal').classList.contains('hidden')) return;
@@ -183,13 +141,11 @@ function diagnosticsRenderAssessmentProgress(run) {
   var terminal = ['completed', 'failed', 'error', 'stopped', 'interrupted', 'cancelled'].indexOf(String(run.status)) !== -1;
   ProgressCard.update(card, modelLabProgressSnapshot(run), {
     compact: terminal,
-    className: 'model-assessment-progress-card',
-    onOpen: function () { setDiagnosticsTab('assessment', true); }
+    className: 'model-assessment-progress-card'
   });
   card.querySelector('[data-progress-dot]').className = 'activity-monitor-dot ' +
     (run.status === 'completed' ? 'assessment-finished' :
       terminal ? 'assessment-terminal' : 'active');
-  card.querySelector('[data-progress-open]').textContent = 'View assessment';
   var wasRunning = diagnosticsAssessmentRunStatus === 'running';
   diagnosticsAssessmentRunStatus = String(run.status);
   diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running';
@@ -199,7 +155,6 @@ function diagnosticsRenderAssessmentProgress(run) {
   stop.hidden = run.status !== 'running';
   stop.disabled = run.status !== 'running' || diagnosticsAssessmentStoppingId === String(run.id);
   stop.textContent = diagnosticsAssessmentStoppingId === String(run.id) ? 'Stopping…' : 'Stop Assessment';
-  diagnosticsUpdateAssessmentMetrics(run);
   if (wasRunning && run.status !== 'running') refreshUnifiedModelAssessment().catch(function () {});
 }
 

@@ -31,7 +31,7 @@ function diagnosticsProbeMetrics(attempt) {
 
 function diagnosticsAssessmentCounts(row, tests) {
   var families = {
-    writing: ['director_writing', 'director_writing_1024', 'director_writing_4096', 'director_writing_8192', 'director_writing_16384'],
+    writing: ['director_scene_plan_2048'],
     structured: ['language_synthesis', 'language_challenge'],
     vision: ['vision_open', 'vision_group_aware']
   };
@@ -51,7 +51,7 @@ function diagnosticsAssessmentCounts(row, tests) {
       });
     });
     var requiredKinds = families[family].filter(function (kind) {
-      return kind === 'director_writing' || kind === 'language_synthesis' || kind === 'language_challenge' ||
+      return kind === 'director_scene_plan_2048' || kind === 'language_synthesis' || kind === 'language_challenge' ||
         kind === 'vision_open' || kind === 'vision_group_aware';
     });
     var coverage = requiredKinds.every(function (kind) { return (tests[kind] || {}).counts && Number((tests[kind].counts || {}).completed || 0) > 0; });
@@ -74,15 +74,8 @@ function diagnosticsAssessmentCounts(row, tests) {
   }
   mark((role === 'both' ? 'Director + Vision ' : role === 'director' ? 'Director ' : 'Vision ') + state,
     state === 'Passed' ? 'passed' : state === 'Issues' ? 'issues' : 'untested',
-    role === 'both' ? 'Requires Director writing and structured probes plus open and group-aware Vision probes.' : role === 'director' ? 'Requires successful writing and structured synthesis/challenge probes; this is a technical sanity check, not a quality score.' : 'Requires completed open and group-aware Vision probes; this is not caption-accuracy grading.');
-  var report = row.assessmentReport;
-  var abilities = report && report.abilities || {};
-  var longform = Number(abilities.coherentOutputTokens || 0);
-  if (role !== 'vision' && report && report.assessmentKind !== 'confirmation') {
-    if (longform >= 16384) mark('16K proven', 'passed', 'A 16K-target prose calibration passed its explicit completeness checks.');
-    else if (longform >= 8192) mark('8K proven', 'passed', 'An 8K-target prose calibration passed its explicit completeness checks.');
-    else if (longform >= 4096) mark('4K proven', 'passed', 'A 4K-target prose calibration passed.');
-  }
+    role === 'both' ? 'Requires verified Storyboard JSON and Schema Assist plus Vision.' : role === 'director' ? 'Requires Storyboard JSON and Schema Assist; quality judgment is separate.' : 'Requires completed open and group-aware Vision probes; this is not caption-accuracy grading.');
+  // Historical prose calibrations are not proof of structured Scene capacity.
   row.dataset.assessmentSanity = state;
 }
 function diagnosticsAssessmentSize(bytes) {
@@ -453,9 +446,11 @@ function refreshUnifiedModelAssessment() {
       }
 
       var allTests = Object.keys(tests).map(function (probe) { return tests[probe]; });
-      var rates = allTests.flatMap(function (entry) { return entry.throughputSamples || []; })
+      var structuredTests = Object.keys(tests).filter(function (kind) { return kind.indexOf('director_scene_plan_') === 0 && Number((tests[kind].counts || {}).completed || 0) > 0; }).map(function (kind) { return tests[kind]; });
+      var speedTests = supportsDirector ? structuredTests : allTests;
+      var rates = speedTests.flatMap(function (entry) { return entry.throughputSamples || []; })
         .filter(function (value) { return Number(value) > 0; });
-      var outputs = allTests.flatMap(function (entry) { return entry.outputTokenSamples || []; })
+      var outputs = structuredTests.map(function (entry) { return Number(entry.verifiedOutputTokens || 0); }).filter(function (v) { return v > 0; });
         .filter(function (value) { return Number(value) > 0; });
       var legacyAttempts = report && Array.isArray(report.attempts) ? report.attempts : [];
       var legacyRates = legacyAttempts.filter(function (attempt) { return attempt.status === 'passed' && Number(attempt.tokensPerSecond) > 0; });
@@ -472,10 +467,10 @@ function refreshUnifiedModelAssessment() {
         speedCell.title = 'Legacy calibration throughput on its source runtime; may not be directly comparable.';
         row.assessmentSort.speed = legacyRate;
       }
-      var legacyOutput = Number((report && report.abilities || {}).coherentOutputTokens || 0);
-      var maxOutput = outputs.length ? Math.max.apply(null, outputs.map(Number)) : legacyOutput;
+      var maxOutput = outputs.length ? Math.max.apply(null, outputs.map(Number)) : 0;
       if (maxOutput > 0) {
         outputCell.textContent = maxOutput.toLocaleString();
+        outputCell.title = 'Observed completion tokens in a complete, validated Storyboard JSON response; not a proven hardware or model ceiling.';
         row.assessmentSort.output = maxOutput;
       }
 

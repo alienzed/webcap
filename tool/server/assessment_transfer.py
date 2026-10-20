@@ -6,13 +6,29 @@ import socket
 from . import model_lab, director_model_calibration
 
 
+def _portable_run(run):
+    """Keep referenced successful evidence inside an export, without changing local journals."""
+    payload = model_lab._copy(run)
+    for key, source in list((payload.get("reused") or {}).items()):
+        original = model_lab.get_run(source["runId"])
+        attempt = next((a for a in original.get("attempts") or []
+                        if a.get("id") == source["attemptId"] and a.get("status") == "completed"), None)
+        if attempt is None:
+            raise RuntimeError("Reused assessment evidence is missing: " + key)
+        payload.setdefault("attempts", []).append(model_lab._copy(attempt))
+    payload["reused"] = {}
+    payload["previousFailures"] = {}
+    payload["summary"] = model_lab._summarize(payload)
+    return payload
+
+
 def export_results():
     with model_lab._lock:
         rows = model_lab.list_runs()
         return {
             "format": "webcap-assessments", "version": 1,
             "sourceHost": socket.gethostname(), "exportedAt": model_lab._now_iso(),
-            "runs": [model_lab.get_run(row["id"]) for row in rows if not row["active"]],
+            "runs": [_portable_run(model_lab.get_run(row["id"])) for row in rows if not row["active"]],
             "reports": director_model_calibration.list_reports(),
             "activeRunsExcluded": sum(bool(row["active"]) for row in rows),
         }
@@ -63,6 +79,11 @@ def import_results(bundle, runtime_map):
             if kind.startswith("vision:") and ":vocab_" in kind:
                 ref, suffix = kind[7:].rsplit(":vocab_", 1)
                 attempt["kind"] = "vision:" + remap(ref) + ":vocab_" + suffix
+        # An imported host has different journal IDs and timings.
+        # Portable exports materialize completed evidence, so never preserve
+        # dangling cross-host reused-run references.
+        run["reused"] = {}
+        run["previousFailures"] = {}
         run["progress"] = {}
         run["summary"] = model_lab._summarize(run)
         run["importedFrom"] = original.get("importedFrom") or {**source, "runId": original["id"]}

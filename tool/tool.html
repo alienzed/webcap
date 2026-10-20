@@ -1326,7 +1326,23 @@
                             <section class="epoch-finder-panel"><h3>Evidence filters</h3><label>Campaign<select id="run-analytics-campaign"><option value="">No campaign (independent signals)</option></select></label><label>Test session<select id="run-analytics-session"><option value="">All sessions (descriptive only)</option></select></label><label>Comparable Test cohort<select id="run-analytics-cohort"><option value="">Automatic (only if comparable)</option></select></label><p class="epoch-finder-muted">Changing filters never starts inference.</p></section>
                           </aside>
                           <main class="epoch-finder-dashboard">
-                            <div id="run-analytics-report-surface" class="epoch-info-report-surface">
+                            <div id="run-analytics-lab" class="run-analytics-lab">
+                              <header class="run-lab-heading"><div><span class="run-lab-eyebrow">TEST GENERATIONS / ANALYTICS</span><h2>Your Testing Lab</h2><p>What your recorded experiments tell us — and what to investigate next.</p></div><button type="button" id="run-lab-refresh" class="review-captions-btn">Refresh evidence</button></header>
+                              <p id="run-lab-status" role="status">Reading recorded testing evidence…</p>
+                              <div id="run-lab-summary" class="run-lab-summary"></div>
+                              <section class="run-lab-challenge"><div><span class="run-lab-eyebrow">NEXT CHALLENGE</span><h3 id="run-lab-challenge-title">Find your next useful test</h3><p id="run-lab-challenge-description">Reviewing saved evidence…</p><div id="run-lab-challenge-actions"></div></div><div class="run-lab-steps"><strong>How you progress</strong><p>Test → Discover → Compare → Refine</p><small>Evidence-backed guidance, not an invented score.</small></div></section>
+                              <div class="run-lab-two-col">
+                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>★ The Contenders</h3><p>Best observed epochs in a comparable test group</p></div><label>Rank by <select id="run-lab-sort"><option value="manual">Manual ratings</option><option value="vl">Test VL agreement</option></select></label></div><div class="run-lab-filters"><label>Comparable group <select id="run-lab-cohort"></select></label><label>Run <select id="run-lab-run"></select></label></div><div id="run-lab-contenders"></div><p class="run-lab-footnote">Manual ratings and VL are separate. Ranks are descriptive, not proof of a winning epoch.</p></section>
+                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Where the evidence points</h3><p>Repeated assessed attributes, scoped to the chosen group</p></div></div><div id="run-lab-discoveries"></div></section>
+                              </div>
+                              <div class="run-lab-two-col run-lab-lower">
+                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Performance trajectory</h3><p>Measured epochs only, separated by run</p></div><label>Metric <select id="run-lab-metric"><option value="manual">Manual</option><option value="vl">Test VL</option></select></label></div><div id="run-lab-chart"></div></section>
+                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>How much do we actually know?</h3><p>Preview coverage, without synthetic confidence scores</p></div></div><div id="run-lab-coverage"></div></section>
+                              </div>
+                              <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Evidence Explorer</h3><p>Recorded epochs and generated results</p></div><button type="button" class="review-captions-btn" id="run-lab-detail">Detailed Analytics</button></div><div id="run-lab-explorer"></div></section>
+                              <p id="run-lab-warnings" class="run-lab-footnote"></p>
+                            </div>
+                            <div id="run-analytics-report-surface" class="epoch-info-report-surface hidden">
                             <section class="epoch-finder-panel"><h3>Evidence coverage</h3><div id="run-analytics-coverage">Choose a training run to begin.</div></section>
                             <section class="epoch-finder-panel"><h3>Checkpoint trajectory</h3><p id="run-analytics-chart-note" class="epoch-finder-muted"></p><div id="run-analytics-chart"></div></section>
                             <section class="epoch-finder-panel"><h3>Checkpoints</h3><div id="run-analytics-table"></div></section>

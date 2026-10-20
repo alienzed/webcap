@@ -527,3 +527,4 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .epoch-finder-sidebar>.epoch-finder-panel details>summary{cursor:pointer;font-weight:700;font-size:13px;padding:2px 0}
 #run-analytics-screen .epoch-finder-sidebar>.epoch-finder-panel details[open]>summary{margin-bottom:12px}
 #run-analytics-screen #run-analytics-report-surface:not(.hidden){grid-column:1/-1;min-width:0}
+#run-analytics-screen .epoch-finder-dashboard:has(#run-analytics-epoch-info:not(.hidden))>.run-analytics-lab{display:none}

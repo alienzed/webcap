@@ -1,28 +1,36 @@
-# Test Generations wildcard compatibility — phased implementation
+# Test Generations wildcard generation: concise, editable evidence
 
-Ownership: Test Generations generates wildcards. Epoch Finder consumes those wildcards and alone validates references against the selected training run.
+The previous mandatory observed-tag combination check was removed. It rejected
+otherwise useful natural-language wildcard drafts (for example `standing upright`
+when the Set Position tag is `standing`). This check was not a training
+integrity guarantee; it was a post-hoc gate on an editable Director suggestion.
 
-## Phase 1 — Supply observations at generation time (implemented)
-- Read existing `.webcap_state.json` scoped tag annotations for actual Set media.
-- Compute observed same-group tag sets; keep different groups independent.
-- Supply the observations and exclusivity rule to the shared wildcard Director proposal.
-- Preserve the existing Test Generations parser, captions, inference behavior, and saved campaigns.
+## Current behavior
 
-## Phase 2 — Deterministic structured validation (implemented)
-- Require group identity on each learned-tag dimension in the structured wildcard proposal, not an inferred relationship from phrase overlap.
-- Validate proposal groups/options against the scoped Set vocabulary and observed combinations, checking all resolved within-group choices. For multi-value group options, only accept combinations actually observed in a single item.
-- Resolve and reject invalid proposal combinations before accepting the proposal in Test Generations. Preserve cross-group combinations even if unobserved.
-- Avoid broad substring matching in natural prompt prose: tag identity must be explicit.
-- Do not silently drop or rewrite incompatible alternatives; show a useful actionable error.
+- Scope caption examples to media captured by the **selected training run**.
+- Drop duplicate captions into one example with a frequency count.
+- Sample evenly across the Set when needed, at most 150 distinct examples and
+  approximately 24,000 caption characters, rather than truncating to early filenames.
+- Send the Set tag-group glossary **once**, with aliases and terms, not a
+  per-item group map or all combinations observed in individual images.
+- Ask Director to prioritize the learned subject/component construction, and
+  keep incidental hair, pose, setting, lighting, and camera variation secondary.
+- Preserve exact annotation-group identity in the Director draft where it is
+  genuinely supported, but make it optional for natural-language alternatives.
+- Return the Director proposal for user editing and preview. No second
+  exact-tag/observed-combination gate after completion.
+- Existing generated Test media, saved wildcards and manual prompt editing
+  remain unchanged. Epoch Finder still validates user-approved reference media
+  against the actual selected Set group/tag.
 
-## Phase 3 — Epoch Finder ownership boundary (preserved)
-- Consume the validated structured wildcard contract. Keep run-specific training membership and reference checks in Epoch Finder.
-- Do not reintroduce an Epoch Finder-only compatibility implementation; the earlier `fix/epoch-finder-group-compatibility` branch is superseded and unmerged.
+## Boundaries and testing
 
-## Phase 4 — Real-case QA (pending)
-- Test a multi-tag group with observed and unobserved combinations, overlapping text in different groups, and a run with fewer images than the Set.
-- Verify generated wildcard expansion never produces forbidden same-group pairs, including nested alternatives; verify no cross-group exclusion.
-- Verify actual browser workflow without starting generation/training.
+The 24,000-character caption limit is a conservative **input-size heuristic**,
+not an exact 16K-token guarantee across different local model tokenizers. The
+one-time vocabulary, instructions, schema and output also consume context.
+Large configurations should be measured against the selected Director model's
+actual tokenizer/runtime context before claiming a guaranteed fit.
 
-## Verification boundary
-The Director receives observed within-group combinations; its returned proposal must declare annotation-group identities and pass deterministic comparison against resolved wildcard options before the Test Generations UI accepts it. Manually edited wildcards and legacy saved sessions are intentionally unaffected. Automated tests and browser QA have not been executed in this environment.
+Unit tests cover representative examples, edge-of-Set retention, source-run
+filtering, optional semantic identity and editable natural-language drafts.
+Real model/browser QA is still required to verify result quality.

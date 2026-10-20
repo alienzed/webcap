@@ -49,6 +49,21 @@ def test_reference_prepare_preserves_option_vocabulary(tmp_path, monkeypatch):
     assert "1=v-front" in result["messages"][0]["content"][0]["text"]
 
 
+def test_reference_vl_question_uses_selected_group_alias(tmp_path, monkeypatch):
+    folder, session, media = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(test_reference, "vision_resized_image_data_url",
+                        lambda source: "data:image/png;base64,AAA")
+    result = test_reference.prepare(folder, {
+        "method": "rvn", "session": "test", "media": media.name,
+        "group": "BT Back", "groupAlias": "Bikini tops",
+        "option": "simple string straps", "reference": "ref.png",
+        "choices": ["simple string straps", "metal ring"],
+    })
+    question = result["messages"][0]["content"][0]["text"]
+    assert '"Bikini tops" with "simple string straps"' in question
+    assert "BT Back" in question
+
+
 def test_dino_result_is_saved_without_altering_legacy_vl(tmp_path, monkeypatch):
     folder, session, media = _setup(tmp_path, monkeypatch)
     from tool.server import epoch_dino

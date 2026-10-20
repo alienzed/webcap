@@ -602,3 +602,28 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .run-lab-review-actions button{width:auto;min-width:95px}
 #run-analytics-screen #run-lab-review-status{text-align:center;font-size:13px}
 @media(max-width:820px){#run-analytics-screen #run-lab-featured{grid-template-columns:1fr}}
+
+
+/* Insights: purposeful emphasis, no changes to existing evidence widgets. */
+#run-analytics-screen .run-lab-heading-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+#run-analytics-screen #run-lab-ai{width:auto;min-width:128px}
+#run-analytics-screen .run-lab-ai-panel{padding:16px 18px;margin:12px 0}
+#run-analytics-screen .run-lab-ai-panel .run-lab-card-heading{padding:0;margin:0 0 12px}
+#run-analytics-screen .run-lab-ai-panel #run-lab-ai-status{margin:10px 0;font-size:13px}
+#run-analytics-screen #run-lab-ai-result{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#run-analytics-screen #run-lab-ai-result section{padding:12px;background:var(--surface-bg,#263643);border-radius:8px;min-width:0}
+#run-analytics-screen #run-lab-ai-result h4{margin:0 0 6px;font-size:14px}
+#run-analytics-screen #run-lab-ai-result p{font-size:13px;white-space:pre-wrap;line-height:1.5;margin:0}
+#run-analytics-screen .run-lab-ai-panel details{margin-top:12px;font-size:12px}
+#run-analytics-screen #run-lab-ai-facts{max-height:240px;overflow:auto;white-space:pre-wrap;font-size:11px}
+#run-analytics-screen .run-lab-history{margin:12px 0}
+#run-analytics-screen .run-lab-history-summary{display:flex;align-items:baseline;gap:15px;flex-wrap:wrap;padding:4px 16px 14px}
+#run-analytics-screen .run-lab-history-summary strong{font-size:17px}
+#run-analytics-screen .run-lab-history-summary span{font-size:13px;color:var(--muted,#b5c4d2)}
+#run-analytics-screen .run-lab-history details{margin:0 16px 12px}
+#run-analytics-screen .run-lab-history summary{cursor:pointer;font-size:13px}
+#run-analytics-screen .run-lab-history-row{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:10px 4px;border-bottom:1px solid var(--border-color,#384653)}
+#run-analytics-screen .run-lab-history-row strong{display:block;font-size:13px}
+#run-analytics-screen .run-lab-history-row small{display:block;font-size:12px;line-height:1.5}
+#run-analytics-screen .run-lab-history>.run-lab-footnote{padding:0 16px 12px}
+@media(max-width:850px){#run-analytics-screen #run-lab-ai-result{grid-template-columns:1fr}}

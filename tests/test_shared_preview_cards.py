@@ -70,3 +70,16 @@ def test_epoch_paging_preserves_nodes_and_empty_message_is_unique():
     assert "if(card!==at)gallery.insertBefore(card,at);" in epochs
     assert "gallery.querySelector('.epoch-info-empty')" in epochs
     assert "if(!items.length&&!empty)" in epochs
+
+
+def test_compact_footer_keeps_vl_controls_and_discloses_extra_chips():
+    shared = read("tool/js/test_preview_card.js")
+    tests = read("tool/js/test_generations.js")
+    assert "extra.length + ' more'" in shared
+    assert "aria-expanded" in shared
+    assert "test-preview-card-epoch-metrics" in shared
+    assert "utility.appendChild(evaluation);" in shared
+    assert "utility.appendChild(details);" in shared
+    assert "utility.appendChild(menu);" in shared
+    assert "row.classList.toggle('hidden', !item);" in tests
+    assert "{label:'Checkpoint file',value:identity.secondary}" in tests

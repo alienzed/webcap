@@ -3237,7 +3237,6 @@
     var mediaFile = resultMediaFile(result), session = String(status && status.session || '');
     var identity = candidateIdentity(result), provenance = result && result.provenance || {};
     var title = identity.primary;
-    if (result && result.strength != null) title += ' · Weight ' + result.strength;
     var epochText = provenance.sourceJobId && Number.isInteger(provenance.sourceEpoch)
       ? 'Epoch ' + provenance.sourceEpoch : '';
     var metrics = [];

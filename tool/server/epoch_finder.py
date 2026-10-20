@@ -1207,10 +1207,79 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
     return response
 
 
+
+def checkpoint_workspace(folder_path, job_id, epoch, offset=0, limit=24):
+    """Existing checkpoint evidence, enriched only for the requested visible page."""
+    from . import run_analytics
+    if not str(job_id or "").strip() or type(epoch) is not int:
+        raise ValueError("Select a training run and epoch.")
+    page = workspace_gallery(folder_path, checkpoints=[str(job_id) + ":" + str(epoch)],
+                             generated_only=True, include_epoch_index=True,
+                             offset=offset, limit=limit)
+    sessions, campaigns = {}, {}
+    for item in page["media"]:
+        if item["source"] == "test":
+            session = item["session"]
+            if session not in sessions:
+                directory = test_bench._session_directory(folder_path, session)
+                stored = test_bench._read_status(directory)
+                if not stored:
+                    raise FileNotFoundError("Test session unavailable: " + session)
+                sessions[session] = (test_bench._session_rating_map(directory),
+                                     test_bench._session_vision_state(directory),
+                                     test_bench._project_wildcard_fields(dict(stored)))
+            ratings, vision, stored = sessions[session]
+            name = item["mediaFile"]
+            item["rating"] = ratings.get(name)
+            item["assessment"] = (vision.get("byMedia") or {}).get(name)
+            item["wildcards"] = stored.get("wildcardSummary") or stored.get("wildcardValues") or []
+            item["settings"] = stored.get("settings") or {}
+        else:
+            cid = item["campaignId"]
+            if cid not in campaigns:
+                campaigns[cid] = _load(folder_path, cid)
+            campaign = campaigns[cid]
+            index = int(item["id"].rsplit(":", 1)[-1])
+            unit = campaign["units"][index]
+            item["wildcards"] = [
+                {"label": g.get("label") or g.get("id") or "Attribute",
+                 "value": g["options"][g["expected"] - 1]}
+                for g in unit.get("groups") or [] if isinstance(g, dict)
+                and type(g.get("expected")) is int and isinstance(g.get("options"), list)
+                and 1 <= g["expected"] <= len(g["options"])]
+            rounds, number = campaign.get("rounds") or [], unit.get("round")
+            item["settings"] = (rounds[number - 1].get("settings") or {}
+                                if type(number) is int and 1 <= number <= len(rounds) else {})
+    if offset == 0:
+        record = next((r for r in page["resultEpochs"]
+                       if r["jobId"] == job_id and r["epoch"] == epoch), {})
+        try:
+            report = run_analytics.report(folder_path, job_id)
+        except ValueError:
+            report = None
+        test = next((p for p in report["testPoints"] if p["epoch"] == epoch), {}) if report else {}
+        page["summary"] = dict(record, manualAverage=test.get("manual"),
+                               rated=test.get("manualCount", 0), testVl=test.get("testVl"),
+                               testVlJudgments=test.get("testVlCount", 0),
+                               campaignScores=[
+                                   {"id": c["id"], "name": c["name"], **p}
+                                   for c in (report["campaigns"] if report else [])
+                                   for p in c["points"] if p["epoch"] == epoch])
+        page["training"] = ({
+            "run": report["run"], "lossPoints": report["lossPoints"],
+            "selectedEpoch": report["selectedEpoch"]} if report else None)
+        if report:
+            page["warnings"].extend(report["warnings"])
+    return page
+
+
 def command(folder_path, operation, criteria=None):
     criteria = criteria if isinstance(criteria, dict) else {}
     if operation == "list":
         return list_campaigns(folder_path)
+    if operation == "checkpoint_workspace":
+        return checkpoint_workspace(folder_path, criteria.get("jobId"), criteria.get("epoch"),
+                                    offset=criteria.get("offset", 0), limit=criteria.get("limit", 24))
     if operation == "workspace_gallery":
         return workspace_gallery(folder_path, criteria.get("modelId"), limit=criteria.get("limit", 48), offset=criteria.get("offset", 0), collection_id=criteria.get("collectionId"), checkpoints=criteria.get("checkpoints"), include_epoch_index=bool(criteria.get("includeEpochIndex")), generated_only=bool(criteria.get("generatedOnly")))
     if operation == "checkpoint_evidence":

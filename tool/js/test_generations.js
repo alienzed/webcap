@@ -4848,6 +4848,7 @@
   }
 
   function openSession(sessionName) {
+    window.epochInfoShowSession();
     request('test_open_session', { session: String(sessionName || '') }).then(function (status) {
       showSessionError = true;
       selectSessionStatus(status);
@@ -5173,6 +5174,19 @@
       syncActiveRunControls(currentStatus);
     });
     el('test-generations-files').onclick = function (event) {
+      var identity = event.target.closest('[data-staged-file] .test-generations-staged-copy');
+      if (identity && !event.target.closest('button, input, select, a, summary, details')) {
+        var row = identity.closest('[data-staged-file]');
+        var metadata = prepared && prepared.candidateMetadata && prepared.candidateMetadata[row.dataset.stagedFile];
+        var jobId = metadata && (metadata.sourceJobId || metadata.jobId);
+        var epoch = metadata && metadata.epoch;
+        if (jobId && Number.isInteger(Number(epoch))) {
+          window.epochInfoOpen('tests', owningSetFolder(launchFolder), jobId, Number(epoch)).catch(showError);
+        } else {
+          showError(new Error('This candidate has no recorded training epoch provenance.'));
+        }
+        return;
+      }
       var archiveButton = event.target.closest('[data-archive-candidate]');
       if (archiveButton) {
         var archiveFileName = String(archiveButton.dataset.archiveCandidate || '');

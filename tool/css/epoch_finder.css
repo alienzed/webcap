@@ -358,3 +358,60 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 
 /* The permanent tabs replace old mode shortcuts, without removing wired controls. */
 #test-generations-pane #epoch-finder-back-to-tests {display:none;}
+
+
+/* Shared checkpoint inspector: one owner rendered in either Test right pane. */
+.epoch-info-workspace{min-width:0;padding:18px 20px 30px;overflow:auto}
+#test-generations-epoch-info{height:100%;box-sizing:border-box}
+#run-analytics-screen .epoch-finder-dashboard:has(#run-analytics-epoch-info:not(.hidden)){display:block}
+#run-analytics-screen .epoch-info-workspace{padding:0}
+#run-analytics-screen .epoch-info-report-surface{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+#run-analytics-screen .epoch-info-report-surface>.epoch-finder-panel{min-width:0;margin:0}
+#run-analytics-screen .epoch-info-report-surface>.epoch-finder-panel:nth-of-type(2),
+#run-analytics-screen .epoch-info-report-surface>.epoch-finder-panel:nth-of-type(3),
+#run-analytics-screen .epoch-info-report-surface>.epoch-finder-panel:nth-of-type(4),
+#run-analytics-screen .epoch-info-report-surface>.epoch-finder-panel:nth-of-type(5){grid-column:1/-1}
+#run-analytics-screen .epoch-info-report-surface>p[role="alert"]{grid-column:1/-1}
+#run-analytics-screen .epoch-info-report-surface #run-analytics-chart{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px}
+#run-analytics-screen .epoch-info-report-surface .run-analytics-table-wrap{max-height:60vh;overflow:auto}
+.epoch-info-header{margin-bottom:16px}.epoch-info-header h3{font-size:23px;margin:0 0 5px}
+.epoch-info-header p{opacity:.7;margin:0;font-size:12px}
+.epoch-info-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:9px;margin-bottom:12px}
+.epoch-info-stat{border:1px solid var(--border-color,var(--border));border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:3px}
+.epoch-info-stat strong{font-size:21px;font-variant-numeric:tabular-nums}.epoch-info-stat span{font-size:11px;opacity:.7}
+.epoch-info-training{border:1px solid var(--border-color,var(--border));border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.epoch-info-training svg{height:95px;width:100%;max-width:900px}
+.epoch-info-campaign-score{font-size:12px;margin:5px 0}
+.epoch-info-toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:20px 0 13px}
+.epoch-info-toolbar strong{margin-right:auto;font-size:16px}
+.epoch-info-toolbar select{max-width:190px}
+.epoch-info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:15px;align-items:start;margin-bottom:16px}
+.epoch-info-card{min-width:0;border:1px solid var(--border-color,var(--border));border-radius:10px;overflow:hidden}
+.epoch-info-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;font-size:12px;flex-wrap:wrap}
+.epoch-info-card-head span{opacity:.7}
+.epoch-info-media{background:#141820;min-height:190px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.epoch-info-media img,.epoch-info-media video{display:block;width:100%;max-height:440px;object-fit:contain}
+.epoch-info-media p{padding:18px;color:#d0d5db}
+.epoch-info-card-info{padding:12px;display:flex;flex-direction:column;gap:9px}
+.epoch-info-rating{display:flex;gap:3px;align-items:center}
+.epoch-info-rating button{font-size:21px;background:transparent;border:0;padding:3px;cursor:pointer}
+.epoch-info-clear{align-self:start;border:0;background:transparent;color:inherit;text-decoration:underline;font-size:11px;cursor:pointer}
+.epoch-info-readonly,.epoch-info-meta{font-size:11px;opacity:.75}
+.epoch-info-wildcards{display:flex;flex-wrap:wrap;gap:5px}
+.epoch-info-wildcards strong{flex-basis:100%;font-size:12px}
+.epoch-info-wildcards span{padding:4px 7px;border-radius:5px;border:1px solid var(--border-color,var(--border));font-size:11px}
+.epoch-info-assessment{font-size:12px;min-width:0}
+.epoch-info-assessment summary{cursor:pointer}
+.epoch-info-assessment pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto}
+.epoch-info-assessment p{margin:5px 0}
+.epoch-info-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
+.epoch-info-actions button{font-size:11px}
+#test-generations-files .test-generations-staged-copy{cursor:pointer}
+@media(max-width:800px){.epoch-info-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))}}
+
+/* Preserve original session gallery flex/scroll behavior inside its switchable pane. */
+#test-generations-session-surface{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+#test-generations-session-surface.hidden{display:none}
+#test-generations-epoch-info{flex:1 1 auto;min-height:0;overflow-y:auto}
+#run-analytics-report-surface.hidden{display:none!important}
+#run-analytics-epoch-info.hidden{display:none!important}

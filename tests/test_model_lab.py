@@ -119,7 +119,6 @@ def test_model_lab_freezes_deterministic_set_sample_and_models(monkeypatch):
         "visionModels": [_vision()],
         "directorModels": [_director()],
         "referenceVisionRef": "local::vision.gguf",
-        "referenceDirectorRef": "local::director.gguf",
     })
 
     assert run["status"] == "running"
@@ -472,9 +471,8 @@ def test_dependent_reference_probes_included_in_expected_total(monkeypatch):
         "folder": "set", "files": ["a.jpg", "b.jpg"],
         "visionModels": [_vision()], "directorModels": [_director()],
         "referenceVisionRef": "local::vision.gguf",
-        "referenceDirectorRef": "local::director.gguf",
     })
     keys = model_lab._planned_probes(run)
-    assert len(keys) == 8  # two Vision, thinking, Scene JSON, two distinct reference pairs
+    assert len(keys) == 6  # two Vision, Scene JSON, thinking and Set Schema Assist pair
     assert "set_vocabulary_challenge|local::director.gguf|" in keys
-    assert "vision:local::vision.gguf:vocab_challenge|local::director.gguf|" in keys
+    assert not any(kind.startswith("vision:") for kind in keys)

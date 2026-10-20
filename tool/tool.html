@@ -1336,7 +1336,7 @@
                                 <button id="run-analytics-epoch-media-more" class="review-captions-btn hidden" type="button">Load 8 more</button>
                               </dialog>
                             <dialog id="run-lab-review-dialog" class="run-lab-review-dialog" aria-label="Blind render rating">
-                              <header class="run-lab-review-head"><div><h3>Blind render review</h3><p id="run-lab-review-progress" role="status">Preparing review…</p></div><button type="button" id="run-lab-review-close" class="review-captions-btn">Close</button></header>
+                              <header class="run-lab-review-head"><div><h3>Blind render review</h3><p id="run-lab-review-progress" role="status">Preparing review…</p></div><div class="run-lab-review-meter-wrap"><progress id="run-lab-review-meter" max="5" value="0" aria-label="Blind rating batch progress"></progress><small>1–5 rate · S skip · → next</small></div><button type="button" id="run-lab-review-close" class="review-captions-btn">Close</button></header>
                               <div id="run-lab-review-media" class="run-lab-review-media"></div>
                               <div id="run-lab-review-wildcards" class="run-lab-review-wildcards"></div>
                               <div id="run-lab-review-reveal" class="run-lab-review-reveal" aria-live="polite"></div>
@@ -1349,7 +1349,8 @@
                             <div id="run-analytics-lab" class="run-analytics-lab">
                               <header class="run-lab-heading"><div><span class="run-lab-eyebrow">TEST GENERATIONS / INSIGHTS</span><h2>Insights</h2><p>Review what you have, find promising epochs, and choose the next useful action.</p></div><div class="run-lab-heading-actions"><button type="button" id="run-lab-ai" class="training-btn training-launch-btn">✦ AI Insights</button><button type="button" id="run-lab-refresh" class="review-captions-btn">Refresh evidence</button></div></header>
                               <p id="run-lab-status" role="status">Reading recorded testing evidence…</p>
-                              <div id="run-lab-summary" class="run-lab-summary"></div>
+                              <section class="run-lab-challenge"><div><span class="run-lab-eyebrow">NEXT CHALLENGE</span><h3 id="run-lab-challenge-title">Review five unrated renders</h3><p id="run-lab-challenge-description">Rate existing results before spending more GPU time.</p><div id="run-lab-challenge-actions"></div></div><div class="run-lab-steps"><strong>Rating progress</strong><p id="run-lab-mission-metrics" role="status">Reading saved ratings…</p><progress id="run-lab-mission-meter" max="100" value="0" aria-label="Linked Test rating coverage"></progress><small id="run-lab-mission-hint">Rate renders to strengthen your comparisons.</small></div></section>
+                              <section class="run-lab-featured" aria-label="Leading epochs"><div id="run-lab-featured"></div></section>
                               <section id="run-lab-ai-panel" class="run-lab-card run-lab-ai-panel hidden" aria-live="polite">
                                 <div class="run-lab-card-heading"><div><h3>AI Insights — Training history</h3><p>Grounded interpretation of saved Test ratings and active / archived training data, not a measured score.</p></div><button id="run-lab-ai-stop" class="review-captions-btn hidden" type="button">Stop</button></div>
                                 <p id="run-lab-ai-status" role="status"></p>
@@ -1357,19 +1358,22 @@
                                 <details><summary>Evidence supplied to Director</summary><pre id="run-lab-ai-facts"></pre></details>
                               </section>
                               <section class="run-lab-card run-lab-history"><div class="run-lab-card-heading"><div><h3>Training history</h3><p>Same-Set runs and archives, including gaps in surviving quality evidence</p></div></div><div id="run-lab-history"></div></section>
-                              <section class="run-lab-featured" aria-label="Leading epochs"><div id="run-lab-featured"></div></section>
-                              <section class="run-lab-challenge"><div><span class="run-lab-eyebrow">NEXT CHALLENGE</span><h3 id="run-lab-challenge-title">Review five unrated renders</h3><p id="run-lab-challenge-description">Rate existing results before spending more GPU time.</p><div id="run-lab-challenge-actions"></div></div><div class="run-lab-steps"><strong>How you progress</strong><p>Test → Discover → Compare → Refine</p><small>Evidence-backed guidance, not an invented score.</small></div></section>
+                              <details class="run-lab-details"><summary>More evidence: totals, trajectory and coverage</summary><div class="run-lab-evidence-details">
+                              <div id="run-lab-summary" class="run-lab-summary"></div>
                               <div class="run-lab-two-col run-lab-lower">
                                 <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Performance trajectory</h3><p>Saved manual ratings by epoch; select a run to see its trend</p></div><label>Run <select id="run-lab-run"></select></label></div><div id="run-lab-chart"></div></section>
                                 <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>How much do we actually know?</h3><p>Preview coverage, without synthetic confidence scores</p></div></div><div id="run-lab-coverage"></div></section>
                               </div>
+                              </div></details>
                               <details class="run-lab-details"><summary>Full epoch rankings and VL diagnostics</summary>
                               <div class="run-lab-two-col">
                                 <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>★ The Contenders</h3><p>Best-rated epochs across all saved Test sessions</p></div><label>Rank by <select id="run-lab-sort"><option value="manual">Average rating</option><option value="count">Number rated</option></select></label></div><div id="run-lab-contenders"></div><p class="run-lab-footnote">A single 5/5 rating is less evidence than repeated strong ratings. All saved Test ratings count, regardless of prompt or VL settings.</p></section>
                                 <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Where the evidence points</h3><p>Separate VL observations — not part of manual ratings</p></div><label>VL group <select id="run-lab-cohort"></select></label></div><div id="run-lab-discoveries"></div></section>
                               </div>
                               </details>
+                              <details class="run-lab-details"><summary>Browse recorded results</summary><div class="run-lab-evidence-details">
                               <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Evidence Explorer</h3><p>Recorded epochs and generated results</p></div><button type="button" class="review-captions-btn" id="run-lab-detail">Detailed Analytics</button></div><div id="run-lab-explorer"></div></section>
+                              </div></details>
                               <p id="run-lab-warnings" class="run-lab-footnote"></p>
                             </div>
                             <div id="run-analytics-report-surface" class="epoch-info-report-surface hidden">

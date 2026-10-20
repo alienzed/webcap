@@ -1449,11 +1449,31 @@ def delete_run(run_id):
     with _lock:
         if _active_record(run_id):
             raise RuntimeError("Active Model Lab run cannot be deleted.")
-        path = _run_path(run_id)
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            raise FileNotFoundError("Model Lab run does not exist: " + str(run_id))
+        source = _read_raw(run_id)
+        updates = []
+        for row in list_runs():
+            if row["id"] == run_id:
+                continue
+            saved = _read_raw(row["id"])
+            refs = {key: value for key, value in (saved.get("reused") or {}).items()
+                    if value.get("runId") == run_id}
+            if not refs:
+                continue
+            if _active_record(row["id"]):
+                raise RuntimeError("Stop the running assessment that is using this evidence first.")
+            for key, value in refs.items():
+                attempt = next((item for item in source.get("attempts") or []
+                                if item.get("id") == value.get("attemptId")
+                                and item.get("status") == "completed"), None)
+                if attempt is None:
+                    raise RuntimeError("Missing reused assessment evidence: " + key)
+                saved.setdefault("attempts", []).append(_copy(attempt))
+                saved["reused"].pop(key)
+            saved["summary"] = _summarize(saved)
+            updates.append(saved)
+        for saved in updates:
+            _write_run(saved)
+        _run_path(run_id).unlink()
     return True
 
 

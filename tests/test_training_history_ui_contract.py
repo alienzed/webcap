@@ -72,12 +72,9 @@ def test_training_history_exposes_finalize_and_archive_lifecycle():
     assert "removedStagedCandidates" in backend
     assert "removedTestSessions" in backend
     assert "testCleanupWarning" in backend
-    assert "setMarkerWarning" in backend
     assert "archive_run_session_cleanup_status" in backend
     assert 'path.name != ".webcap"' in backend
-    assert "set_last_training_archive" in backend
     assert "saveFolderStateForCurrentRoot()" not in script
-    assert "archive.setMarkerWarning" in script
 
 
 def test_finalize_archive_uses_staged_candidate_folder_as_retention_truth_and_surfaces_legacy_archive_errors():

@@ -1487,3 +1487,28 @@ def test_launch_action_stays_inside_repeat_and_vl_panel():
     launch = launch.split('<div id="test-generations-status"', 1)[0]
     assert launch.index('id="test-generations-inline-launch-summary"') < launch.index('id="test-generations-run-btn"')
     assert launch.index('id="test-generations-run-btn"') < launch.index('</section>')
+
+
+def test_preview_footer_epoch_navigation_and_compact_controls():
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
+    footer = script.split("function buildResultFooter(result, options)", 1)[1].split("function syncResultElapsed", 1)[0]
+    assert "label.appendChild(browse);" in footer
+    assert "secondaryRow.appendChild(browse);" not in footer
+    assert "browse.className = 'test-generations-epoch-link';" in footer
+    assert "browse.dataset.testEpochMediaJob = String(provenance.sourceJobId);" in footer
+    assert "secondaryRow.appendChild(rating);" in footer
+    assert "evaluation.appendChild(vlButton);" in footer
+    assert ".test-generations-epoch-link { display:inline; width:auto;" in css
+    assert ".test-generations-result-evaluation .test-generations-vl-result { width:auto;" in css
+
+
+def test_selected_session_restores_new_automatic_vl_evidence():
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool/server/epoch_test_bench.py").read_text(encoding="utf-8")
+    restore = script.split("function restoreTestVl(status)", 1)[1].split("function syncVisibleTestVlRun", 1)[0]
+    assert "var evidence = JSON.stringify(saved);" in restore
+    assert "testVl.loadedScope === scope && !testVl.running && testVl.loadedEvidence === evidence" in restore
+    assert "testVl.loadedEvidence = evidence;" in restore
+    assert 'visible["testVision"] = _session_vision_state(session_directory)' in backend
+    assert "def complete_test_auto_vl(context, answer, elapsed_ms):" in backend

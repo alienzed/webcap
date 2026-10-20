@@ -32,7 +32,9 @@ function diagnosticsProbeMetrics(attempt) {
 function diagnosticsAssessmentCounts(row, tests) {
   var families = {
     writing: ['director_scene_plan_2048'],
-    structured: ['language_synthesis', 'language_challenge'],
+    structured: row.assessmentHasSetVocabulary
+      ? ['set_vocabulary_synthesis', 'set_vocabulary_challenge']
+      : ['language_synthesis', 'language_challenge'],
     vision: row.assessmentNeedsGroupAware ? ['vision_open', 'vision_group_aware'] : ['vision_open']
   };
   var role = row.dataset.assessmentRole;
@@ -372,6 +374,9 @@ function refreshUnifiedModelAssessment() {
         });
       })[0];
       row.assessmentNeedsGroupAware = !!(evidence && evidence.groupsConfigured);
+      row.assessmentHasSetVocabulary = capabilityRuns.some(function (saved) {
+        return !!((saved.models || {})[ref] || {}).set_vocabulary_synthesis;
+      });
       var tests = {};
       capabilityRuns.slice().reverse().forEach(function (saved) {
         var byKind = saved.models && saved.models[ref] || {};

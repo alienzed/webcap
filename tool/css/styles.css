@@ -7275,11 +7275,13 @@ html[data-theme="dark"] iframe {
 .test-generations-result-name { display:block; }
 .test-generations-result-name .test-generations-result-source { font-weight:400; }
 .test-generations-result-secondary { min-height:20px; }
-.test-generations-result-metadata { min-width:0; }
+.test-generations-result-metadata { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.test-generations-epoch-link { display:inline; width:auto; margin:0; padding:0; border:0; background:transparent; color:inherit; font:inherit; line-height:inherit; cursor:pointer; text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:2px; }
+.test-generations-epoch-link:hover,.test-generations-epoch-link:focus-visible { color:var(--accent); text-decoration-color:currentColor; }
 .test-generations-result-evaluation { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
 .test-generations-result-epoch-metrics { display:flex; align-items:center; gap:10px; min-width:0; overflow:hidden; }
 .test-generations-result-epoch-metrics .test-generations-vl-epoch-score { display:inline; margin:0; color:var(--muted); font-size:12px; white-space:nowrap; }
-.test-generations-result-evaluation .test-generations-vl-result { flex:0 0 auto; margin:0; align-self:center; white-space:nowrap; }
+.test-generations-result-evaluation .test-generations-vl-result { width:auto; flex:0 0 auto; margin:0; align-self:center; white-space:nowrap; }
 .test-generations-vl-model-line { color:var(--muted); font-size:12px; margin-bottom:10px; overflow-wrap:anywhere; }
 
 /* Test Generations Phase 1: reversible, presentation-only gallery perspective. */

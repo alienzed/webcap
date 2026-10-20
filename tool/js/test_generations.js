@@ -3262,7 +3262,20 @@
       testEvaluation: !failed && mediaFile ? {mediaFile: mediaFile} : null,
       epochLink: epochText ? {text: epochText, jobId: provenance.sourceJobId, epoch: provenance.sourceEpoch} : null,
       videoTransport: appendTestPreviewVideo,
-      dataset: { testVlFile: mediaFile }
+      dataset: { testVlFile: mediaFile },
+      wildcards: !failed && status && result && result.prompt && result.prompt===status.resolvedPrompt
+        ? (status.wildcardSummary || []) : [],
+      details: failed ? [] : [
+        {label:'Resolved prompt',value:result && result.prompt || status && status.resolvedPrompt || '',pre:true},
+        {label:'Seed',value:result && result.seed!=null?String(result.seed):''},
+        {label:'Model',value:status && status.modelId || ''}
+      ],
+      actions: failed || !session || !mediaFile ? [] : [
+        {label:'Ask VL for this render',onClick:function(){
+          queueTestVlForSession(status,[result]);
+        }},
+        {label:'Open original',url:mediaUrl(session,mediaFile)}
+      ]
     });
   }
 

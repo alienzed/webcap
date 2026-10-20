@@ -512,6 +512,36 @@ def write_media_metadata_file(metadata_path, metadata):
                 pass
 
 
+
+def merge_technical_media_metadata(folder_path, results):
+    """Merge a bounded batch under Prep's existing metadata lock and atomic writer.
+
+    Preserve expensive analysis only for identical source bytes. This method
+    never calls the scene-complexity, pose, face, or vision analysis paths.
+    """
+    folder_path = Path(folder_path)
+    metadata_path = folder_path / "media_metadata.json"
+    with _media_metadata_lock:
+        if metadata_path.exists():
+            with open(metadata_path, "r", encoding="utf-8") as handle:
+                metadata = json.load(handle)
+            if not isinstance(metadata, dict):
+                raise ValueError(f"media_metadata.json must contain an object: {metadata_path}")
+        else:
+            metadata = {}
+        for name, details in results.items():
+            if Path(name).name != name or not isinstance(details, dict):
+                raise ValueError("Invalid technical metadata entry.")
+            previous = metadata.get(name)
+            same_file = (isinstance(previous, dict)
+                         and previous.get("mtime") == details.get("mtime")
+                         and previous.get("size") == details.get("size"))
+            metadata[name] = {**previous, **details} if same_file else dict(details)
+        if results:
+            write_media_metadata_file(metadata_path, metadata)
+    return len(results)
+
+
 def set_media_metadata_analysis_block(folder_path, file_name, block_name, block):
     folder_path = Path(folder_path)
     file_name = str(file_name or "").strip()

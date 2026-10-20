@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 from . import config as app_config
 from .execution_queue import lane_snapshot as execution_lane_snapshot
 from .folder_state_store import set_last_training_archive
-from .epoch_test_bench import clear_sessions as clear_test_sessions, session_cleanup_status as test_session_cleanup_status
+from .epoch_test_bench import archive_run_session_cleanup_status, clear_archived_run_sessions
 from .training_action import read_action
 from .training_candidates import aggregate_detailed_loss_by_epoch, map_detailed_loss_to_epochs, read_loss_events, smooth_step_loss
 from .training_history import all_history_payload, clear_history_job
@@ -273,10 +273,10 @@ def _context(folder, job_id="", stage="", staged_file_name=""):
         raise RuntimeError("Training action still has live or queued work: " + ", ".join(live_jobs))
     staged = _staged_candidates(folder, run_dir, action_id, str(run.get("stages") or "").strip().lower())
     set_folder = app_config.safe_join_fs_root(folder)
-    test_cleanup = test_session_cleanup_status(set_folder)
+    test_cleanup = archive_run_session_cleanup_status(set_folder, run_dir, action_id)
     if test_cleanup["active"]:
         raise RuntimeError(
-            "Stop active or queued Test Generations work before archiving this Set: "
+            "Stop active or queued Test Generations work for this run before archiving: "
             + ", ".join(test_cleanup["active"])
         )
     active_test = _active_test_candidate_names(folder)
@@ -475,8 +475,10 @@ def finalize(folder, job_id, archive_name, retain_epochs=None, stage="", staged_
         set_marker_warning = str(exc)
     test_cleanup_warning = ""
     removed_test_sessions = 0
+    removed_test_session_names = []
     try:
-        removed_test_sessions = clear_test_sessions(set_folder)
+        removed_test_session_names = clear_archived_run_sessions(set_folder, context["testCleanup"]["sessions"])
+        removed_test_sessions = len(removed_test_session_names)
     except (OSError, RuntimeError, ValueError) as exc:
         test_cleanup_warning = str(exc)
     return {
@@ -486,6 +488,7 @@ def finalize(folder, job_id, archive_name, retain_epochs=None, stage="", staged_
         "retainedAlternateEpochs": retained,
         "removedStagedCandidates": len(context["staged"]),
         "removedTestSessions": removed_test_sessions,
+        "removedTestSessionNames": removed_test_session_names,
         "setMarkerWarning": set_marker_warning,
         "testCleanupWarning": test_cleanup_warning,
         "lastTrainingArchive": last_training_archive,

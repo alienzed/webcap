@@ -212,6 +212,14 @@ def test_campaign_director_keeps_exact_tag_group_when_text_occurs_twice():
     ]
 
 
+def test_campaign_one_image_question_prefers_exact_source_group():
+    groups = [{"id": "G3", "label": "Attribute 3", "annotationGroup": "BT Back",
+               "options": ["simple string straps", "metal ring"]}]
+    question = epoch_finder._question(groups)
+    assert "G3 (BT Back)" in question
+    assert "Attribute 3" not in question
+
+
 def test_campaign_director_uses_compiled_tags_and_default_roles():
     from tool.server.epoch_finder_plan import build_proposal
     contract = build_proposal(

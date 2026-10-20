@@ -1286,7 +1286,7 @@ def test_test_vl_comparison_heading_and_table_share_one_grid_item():
         ("unclear", "Unclear", "unclear"),
     ):
         expected = (
-            f"if ({condition}.length) visible += '<div class=\\\"test-generations-vl-comparison-group\\\"><strong>{heading}</strong>' "
+            f"""if ({condition}.length) visible += '<div class="test-generations-vl-comparison-group"><strong>{heading}</strong>' """
             f"+ testVlComparisonTable({rows}, groups, entry) + '</div>';")
         assert expected in script
     assert ".test-generations-vl-comparison { display:grid;" in css

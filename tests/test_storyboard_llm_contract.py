@@ -178,9 +178,10 @@ def test_insert_scene_uses_adjacent_scenes_as_relationship_context_not_bridge_re
     assert set(scene_schema["required"]) == {"title", "summary", "prompt", "suggestedDurationSeconds"}
     assert "[SCENE BEFORE]" in prompt
     assert "[SCENE AFTER]" in prompt
-    assert "Treat the adjacent Scenes as relationship and contrast context" in prompt
-    assert "continue, contrast, vary, repeat a format, jump, or remain relatively independent" in prompt
+    assert "Treat the adjacent Scenes as relationship and contrast context, not templates to copy" in prompt
+    assert "continue, contrast, vary, repeat a format with fresh content, jump, or remain relatively independent" in prompt
     assert "meaningfully distinct from both adjacent Scenes" in prompt
+    assert "For independent vignettes, vary the people, action, or staging" in prompt
     assert "USE EACH GENERATION UNIT WELL." in prompt
 
 

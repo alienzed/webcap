@@ -448,7 +448,7 @@ def _new_run_payload(config):
         raise ValueError("Choose at least one Vision or Director model for Model Assessment.")
     if vision_models and not folder:
         raise ValueError("Vision assessment needs a Set folder.")
-    files = _supported_media(folder, config.get("files")) if folder else []
+    files = _supported_media(folder, config.get("files")) if vision_models else []
     if vision_models and len(files) < 2:
         raise ValueError("Vision assessment needs at least two supported Set media items.")
     sample_files = _even_sample(files, sample_count) if vision_models else []

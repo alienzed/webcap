@@ -655,6 +655,11 @@ def test_storyboard_takes_can_be_named_and_loras_filtered():
     assert 'if operation == "label_take":' in app
     assert "def label_take(" in store
     assert "takeMetaLabel(take)" in storyboard
+    take_meta = storyboard.split("function takeMetaLabel(take) {", 1)[1].split("function takeEffectiveInputHtml", 1)[0]
+    assert "elapsed + ' elapsed'" in take_meta
+    assert "Seed ' + String(take.seed)" not in take_meta
+    assert "Elapsed —" in take_meta
+    assert "'Seed: ' + String(input.seed" in storyboard
     assert "data-scene-lora-picker" in storyboard
     assert "function loraOptions(selectedName)" in storyboard
     assert "function loraNamesMatching(query, excludedNames)" in storyboard

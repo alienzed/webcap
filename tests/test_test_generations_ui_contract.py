@@ -311,14 +311,13 @@ def test_test_generations_compare_mode_reuses_current_session_results():
     assert "video.addEventListener('pause'" in script
     assert "video.addEventListener('seeked'" in script
     assert "video.addEventListener('ratechange'" in script
-    assert "function buildResultFooter(result, options)" in script
+    assert "function sharedTestCard(result, status, className, muted, failed)" in script
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
     result_block = script.split("function renderResults(status)", 1)[1].split("function syncActiveRunControls(status)", 1)[0]
-    assert "var remove = buildResultRemoveButton(result);" in compare_block
-    assert "if (remove) item.appendChild(remove);" in compare_block
-    assert "var remove = buildResultRemoveButton(result);" in result_block
-    assert "if (remove) card.appendChild(remove);" in result_block
-    assert "var remove = buildResultRemoveButton(failure);" in result_block
+    assert "sharedTestCard(result, status, 'test-generations-compare-item', true)" in compare_block
+    assert "sharedTestCard(result, status, 'test-generations-result-card', false)" in result_block
+    assert "sharedTestCard(failure, status, 'test-generations-result-card is-failed', false, true)" in result_block
+    assert "removeNode: buildResultRemoveButton(result)" in script
     assert "remove.dataset.removeCandidate = candidateFile" in script
     assert ".test-generations-compare-stage" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
@@ -464,12 +463,13 @@ def test_test_result_footer_identity_timing_and_remove_contract():
     assert "return hours + 'h ' + minutes + 'm';" in script
     assert "return minutes + 'm ' + seconds + 's';" in script
     assert "return seconds + 's';" in script
-    assert "opts.failed ? 'Failed after ' + elapsed : elapsed" in script
-    assert "source.title = identity.secondary;" in script
+    assert "failed && elapsed ? 'Failed after ' + elapsed : elapsed" in script
+    assert "sourceTooltip: identity.secondary" in script
     assert "function buildResultRemoveButton(result)" in script
     assert "remove.textContent = '×';" in script
     assert "Remove this staged candidate and its result from this session." in script
-    assert "secondaryRow.className = 'test-generations-result-secondary';" in script
+    shared = (ROOT / 'tool/js/test_preview_card.js').read_text(encoding='utf-8')
+    assert "'test-generations-result-secondary'" in shared
     assert ".test-generations-result-source" in css
     assert ".test-generations-result-elapsed" in css
     assert ".test-generations-result-secondary" in css
@@ -482,17 +482,15 @@ def test_test_result_stars_are_shared_by_grid_and_compare():
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
     backend = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
-    assert "function buildResultRating(result, sessionName)" in script
+    shared = (ROOT / 'tool/js/test_preview_card.js').read_text(encoding='utf-8')
+    assert "function createTestPreviewCard(options)" in shared
     assert "function rateTestResult(button)" in script
     assert "function syncResultRatingButtons(sessionName, mediaFile, rating)" in script
     assert "request('test_rate_result'" in script
-    assert "star.dataset.testSession = session;" in script
-    assert "var rating = buildResultRating(result, opts.sessionName);" in script
-    assert "star.textContent = value <= currentRating ? '★' : '☆';" in script
-    assert "if (!opts.failed)" in script
-
-    footer_block = script.split("function buildResultFooter(result, options)", 1)[1].split("function formatTestVideoTime", 1)[0]
-    assert "secondaryRow.appendChild(rating);" in footer_block
+    assert "star.dataset.testSession = text(o.rating.session);" in shared
+    assert "rating: !failed && session && mediaFile" in script
+    assert "star.textContent = active ? '★' : '☆';" in shared
+    assert "second.appendChild(rating);" in shared
 
     grid_handler = script.split("el('test-generations-results').onclick", 1)[1].split("el('test-generations-compare').onclick", 1)[0]
     compare_handler = script.split("el('test-generations-compare').onclick", 1)[1].split("el('test-generations-prompt').addEventListener", 1)[0]
@@ -518,7 +516,7 @@ def test_test_rating_refresh_preserves_preview_dom():
     assert "star.classList.toggle('active', active);" in sync_block
     assert "star.textContent = active ? '★' : '☆';" in sync_block
 
-    rate_block = script.split("function rateTestResult(button)", 1)[1].split("function buildResultFooter", 1)[0]
+    rate_block = script.split("function rateTestResult(button)", 1)[1].split("function sharedTestCard", 1)[0]
     assert "var sessionName = String(button && button.dataset.testSession || '').trim();" in rate_block
     assert "request('test_rate_result'" in rate_block
     assert "syncResultRatingButtons(sessionName, mediaFile, payload && payload.rating);" in rate_block
@@ -549,9 +547,10 @@ def test_compare_videos_start_muted():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
     compare_block = script.split("function renderCompare(status)", 1)[1].split("function renderResults(status)", 1)[0]
-    preview_block = script.split("function appendTestPreview(container, sessionName, result, options)", 1)[1].split("function candidateFileForResult", 1)[0]
-    assert "appendTestPreview(item, sessionName, result, { muted: true })" in compare_block
-    assert "video.muted = !!(options && options.muted);" in preview_block
+    shared = (ROOT / 'tool/js/test_preview_card.js').read_text(encoding='utf-8')
+    assert "sharedTestCard(result, status, 'test-generations-compare-item', true)" in compare_block
+    assert "muted: !!muted" in script
+    assert "preview.muted = !!media.muted;" in shared
 
 
 

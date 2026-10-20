@@ -373,7 +373,14 @@ function refreshUnifiedModelAssessment() {
           return supportsVision && isVision || supportsDirector && !isVision;
         });
       })[0];
-      var tests = evidence && evidence.models[ref] || {};
+      var tests = {};
+      capabilityRuns.slice().reverse().forEach(function (saved) {
+        var byKind = saved.models && saved.models[ref] || {};
+        Object.keys(byKind).forEach(function (kind) {
+          var probe = byKind[kind];
+          if (!tests[kind] || Number((probe.counts || {}).completed || 0) > 0) tests[kind] = probe;
+        });
+      });
       var thinking = tests.director_thinking;
       if (supportsDirector) {
         var supported = thinking ? thinking.supported === true : !!(report && report.thinking);

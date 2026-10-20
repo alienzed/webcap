@@ -13,12 +13,12 @@ def _clean_context(value):
 
 
 # Generic Set attributes are background context, not the learned concept.
-_CORE_GROUPS = frozenset({
-    "viewpoint", "position", "hair", "body", "clothing", "lighting", "background",
-})
+_VARY_GROUPS = frozenset({"viewpoint", "background", "lighting"})
+_LEAKAGE_GROUPS = frozenset({"position", "hair", "body", "clothing"})
+_CORE_GROUPS = _VARY_GROUPS | _LEAKAGE_GROUPS
 
 
-def _concept_tags(annotations):
+def _concept_tags(annotations, focus=""):
     """Read exact Set annotations, retaining group identity for duplicate tag text."""
     if not isinstance(annotations, dict):
         raise ValueError("Scoped Set annotations must be a group-to-tags mapping.")
@@ -28,7 +28,9 @@ def _concept_tags(annotations):
             not isinstance(value, str) for value in values
         ):
             raise ValueError("Invalid scoped Set annotation group or tag list.")
-        if group.strip().casefold() in _CORE_GROUPS:
+        # Explicitly focusing a generic group overrides the usual secondary role.
+        name = group.strip().casefold()
+        if name in _CORE_GROUPS and name not in focus.casefold():
             continue
         tags.update((group, value) for value in values if value.strip())
     return tags
@@ -132,7 +134,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, annotations=
             json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"
         )
     else:
-        scoped = [_concept_tags(entry) for entry in annotations]
+        scoped = [_concept_tags(entry, focus) for entry in annotations]
         frequencies = Counter(tag for tags in scoped for tag in tags)
         aliases = {
             _clean_context(entry.get("group")): _clean_context(entry.get("alias"))
@@ -210,6 +212,12 @@ def build_request(captions, set_name="", focus="", vocabulary=None, annotations=
         "[GOAL]\n"
         "Identify the Set's dominant trained concept, decompose its meaningful variation into reusable composable dimensions, "
         "and express those dimensions as one natural wildcard caption. Keep useful secondary dimensions too when the captions support them.\n\n"
+        "[DIMENSION ROLE DEFAULTS]\n"
+        "- Vary only (unscored): Viewpoint, Background, Lighting.\n"
+        "- Leakage (secondary independence): Position, Hair, Body, Clothing.\n"
+        "- Primary: the other observed concept groups when they describe the learned subject.\n"
+        "- These are proposed defaults, not restrictions: an explicit focus can promote a generic group.\n"
+        "- Keep every dimension's exact annotationGroup when using tags; shared tag text across top and bottom groups does NOT merge their meanings.\n\n"
         "[FOCUS PRIORITY]\n"
         "- If Explicit focus is provided, treat it as the primary concept to mine deeply.\n"
         "- Otherwise infer the primary concept from the Set name first, then from repeated caption language and frequency.\n"

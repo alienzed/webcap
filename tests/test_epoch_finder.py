@@ -229,7 +229,7 @@ def test_reference_vl_does_not_conflate_identical_labels_and_tags(tmp_path, monk
     monkeypatch.setattr(epoch_finder, "llm_job_status",
                         lambda *_args, **_kwargs: {
                             "status": "completed",
-                            "result": {"text": "OPTION: 1\\nVERDICT: MATCH"},
+                            "result": {"text": "OPTION: 1\nVERDICT: MATCH"},
                         })
     monkeypatch.setattr(epoch_finder, "_save", lambda *_args: None)
 

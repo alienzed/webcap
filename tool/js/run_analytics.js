@@ -423,7 +423,10 @@
     labResults();
   }
   function labFeatured(ranked){
-    var best=ranked[0],backed=ranked.slice().sort(function(a,b){
+    var best=ranked.slice().sort(function(a,b){
+      return b.allManualAverage-a.allManualAverage||b.ratedCount-a.ratedCount;
+    })[0];
+    var backed=ranked.slice().sort(function(a,b){
       return b.ratedCount-a.ratedCount||b.allManualAverage-a.allManualAverage;
     }).find(function(p){return !best||p.jobId!==best.jobId||p.epoch!==best.epoch;});
     var picks=[{point:best,label:'Highest rated',note:'An average based on '+(best?best.ratedCount:0)+' saved ratings'},

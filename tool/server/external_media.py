@@ -48,6 +48,8 @@ def _source_file(root, relative):
 
 def _read_cache(directory):
     path = directory / "media_metadata.json"
+    if path.is_symlink():
+        raise ValueError("Refusing symlinked metadata sidecar: " + str(path))
     if not path.exists():
         return {}
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -60,8 +62,16 @@ def _fresh(entry, meta):
     return (isinstance(meta, dict)
             and meta.get("size") == entry["fileSize"]
             and meta.get("mtime") == entry["mtime"]
-            and bool(meta.get("resolution"))
+            and _dimensions(meta.get("resolution")) is not None
             and not meta.get("error"))
+
+
+def _dimensions(value):
+    try:
+        width, height = (int(value) for value in str(value or "").lower().split("x"))
+        return (width, height) if width > 0 and height > 0 else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _warning(snapshot, message):
@@ -181,16 +191,19 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
 
         def matches_metadata(item):
             meta = item.get("metadata") or {}
-            dimensions = str(meta.get("resolution") or "").lower().split("x")
+            dimensions = _dimensions(meta.get("resolution"))
             if min_side or min_mp:
-                if len(dimensions) != 2:
+                if dimensions is None:
                     return False
-                width, height = int(dimensions[0]), int(dimensions[1])
+                width, height = dimensions
                 if min(width, height) < min_side or width * height / 1000000 < min_mp:
                     return False
             if min_duration or max_duration:
-                length = meta.get("duration")
-                if length is None or (min_duration and length < min_duration) or (max_duration and length > max_duration):
+                try:
+                    length = float(meta["duration"])
+                except (KeyError, TypeError, ValueError):
+                    return False
+                if (min_duration and length < min_duration) or (max_duration and length > max_duration):
                     return False
             return True
 
@@ -209,10 +222,10 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
             meta = item.get("metadata") or {}
             if sort == "duration":
                 return float(meta.get("duration") or 0)
-            dimensions = str(meta.get("resolution") or "").lower().split("x")
-            if len(dimensions) != 2:
+            dimensions = _dimensions(meta.get("resolution"))
+            if dimensions is None:
                 return 0
-            width, height = int(dimensions[0]), int(dimensions[1])
+            width, height = dimensions
             return min(width, height) if sort == "resolution" else width * height
         items.sort(key=lambda item: (-metric(item), item["relativePath"]))
     elif sort == "newest":
@@ -354,9 +367,11 @@ def register_routes(app):
     @app.get("/fs/media_explorer/external/status")
     def external_status():
         try:
-            snapshot = _ensure_index(request.args.get("path"))
+            root = _root(request.args.get("path"))
             with _LOCK:
-                return jsonify(_snapshot_status(snapshot))
+                if _index is None or _index["root"] != root:
+                    raise ValueError("External folder is no longer active.")
+                return jsonify(_snapshot_status(_index))
         except Exception as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
 
@@ -376,8 +391,11 @@ def register_routes(app):
         global _metadata_job
         try:
             data = request.get_json(silent=True) or {}
-            snapshot = _ensure_index(data.get("path"))
+            path = _root(data.get("path"))
             with _LOCK:
+                if _index is None or _index["root"] != path:
+                    raise ValueError("External folder changed; select Browse before analyzing.")
+                snapshot = _index
                 if data.get("scope") == "loaded":
                     targets = set(str(name) for name in (data.get("files") or []))
                     source = [snapshot["by_path"][name] for name in targets if name in snapshot["by_path"]]
@@ -388,7 +406,8 @@ def register_routes(app):
                 paths = sorted((item["relativePath"] for item in source
                                if not (item.get("metadataCached") and _fresh(item, item.get("metadata")))),
                                key=lambda name: (str(Path(name).parent), name))
-                if _metadata_job and _metadata_job["running"] and _metadata_job["snapshot"] is snapshot:
+                if (_metadata_job and _metadata_job["running"] and
+                        not _metadata_job["cancel"].is_set() and _metadata_job["snapshot"] is snapshot):
                     job = _metadata_job
                     additions = [name for name in paths if name not in job["seen"]]
                     job["pending"].extend(additions)

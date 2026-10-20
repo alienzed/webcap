@@ -13,7 +13,8 @@ class RunAnalyticsNextTests(unittest.TestCase):
             "reports": [{
                 "jobId": value, "run": {"label": value, "stage": "h3", "archive": None},
                 "coverage": {"campaigns": 1}, "campaigns": [{
-                    "id": "campaign-a", "status": "complete", "visionModel": "vl",
+                    "id": "campaign-a", "name": "Same campaign", "modelId": "h3",
+                    "status": "complete", "visionModel": "vl",
                     "points": [{"epoch": 12, "score": .9, "observations": 8, "renders": 2}]}],
                 "testPoints": [], "lossPoints": [], "warnings": []
             } for value in ids],

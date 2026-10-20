@@ -125,7 +125,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "For natural-language caption phrases use an empty annotationGroup; never map paraphrases to exact tag identifiers.\n"
         "- Position/pose wildcard options may be descriptive phrases rather than exact Position tags. "
         "For example 'standing upright' is not the same tag as 'standing'. If ANY option is not an exact "
-        "tag name, leave annotationGroup empty for that dimension rather than claiming a tag mapping.\\n"
+        "tag name, leave annotationGroup empty for that dimension rather than claiming a tag mapping.\n"
         "- For tags in the SAME annotation group, only use joint combinations observed together in the selected training media. "
         "If a pair was never observed together in that group, treat it as mutually exclusive. "
         "Prefer one option from that group in each resolved caption unless an observed tag combination requires several. "

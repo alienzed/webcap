@@ -2102,7 +2102,7 @@
       ? payload.candidateRuns.filter(function (run) { return run && run.jobId && run.folder; })
       : [];
     button.classList.toggle('hidden', !runs.length);
-    button.textContent = 'Runs';
+    button.textContent = 'Training Runs';
     button.title = runs.length > 1
       ? 'Choose which training run to open'
       : 'Open the training candidates for this Set';
@@ -5258,7 +5258,7 @@
           String(source.folder||'').replace(/\\/g,'/').replace(/^\/+|\/+$/g,'')===targetFolder.replace(/\\/g,'/').replace(/^\/+|\/+$/g,'');
       });
       if(!candidate){
-        throw new Error('Epoch '+requestedEpoch+' from this run is not staged for Test. Use Runs to stage the checkpoint first. Nothing was launched.');
+        throw new Error('Epoch '+requestedEpoch+' from this run is not staged for Test. Use Training Runs to stage the checkpoint first. Nothing was launched.');
       }
       prepared=payload;
       selectedCandidates=new Set([candidate]);

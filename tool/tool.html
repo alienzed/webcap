@@ -1273,32 +1273,36 @@
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
                                 </nav>
                                 <section class="epoch-finder-panel">
-                                    <h3>Find training examples</h3>
-                                    <label>Source training run<select id="test-references-run"><option value="">Loading runs…</option></select></label>
-                                    <label>Scoped Set group<select id="test-references-group" disabled><option value="">Select a run first</option></select></label>
-                                    <label>Tagged option<select id="test-references-option" disabled><option value="">Select a group first</option></select></label>
-                                    <div class="test-references-nav" aria-label="Tagged option navigation">
-                                        <button type="button" id="test-references-previous" disabled>← Previous</button>
-                                        <button type="button" id="test-references-skip" disabled>Skip →</button>
+                                    <div class="epoch-finder-panel-heading">
+                                        <h3>Training examples</h3>
+                                        <button id="test-references-refresh" type="button" class="review-captions-btn">Refresh</button>
                                     </div>
-                                    <button id="test-references-refresh" type="button" class="review-captions-btn">Refresh references</button>
-                                    <p class="epoch-finder-muted">Only images actually included in the selected run and carrying this exact annotation are shown. A tag is not proof that a feature is visible.</p>
+                                    <label>Training run<select id="test-references-run"><option value="">Loading runs…</option></select></label>
+                                    <p id="test-references-run-status" class="epoch-finder-muted" aria-live="polite"></p>
+                                    <h4>Annotation groups</h4>
+                                    <div id="test-references-groups" class="test-references-groups" aria-label="Annotation groups"></div>
+                                    <div class="test-references-tag-heading">
+                                        <h4>Tags</h4><span id="test-references-tag-progress" aria-live="polite"></span>
+                                    </div>
+                                    <div id="test-references-tags" class="test-references-tags" aria-label="Tagged options"></div>
+                                    <p class="epoch-finder-muted">Matches are exact Set annotations from images captured by this run; a tag does not guarantee visibility.</p>
                                 </section>
                                 <section class="epoch-finder-panel">
                                     <div class="epoch-finder-panel-heading"><h3>Chosen examples</h3><span id="test-references-selected-count"></span></div>
                                     <div id="test-references-selections" class="test-references-selections epoch-finder-muted">Choose an example to use for its tag.</div>
-                                    <p class="epoch-finder-muted">Choices are temporary until a campaign is launched. Its approved references are then stored with that campaign.</p>
+                                    <p class="epoch-finder-muted">Selections are saved to this Set and can be reused by campaigns.</p>
                                 </section>
                             </aside>
                             <main class="epoch-finder-dashboard">
                                 <section class="epoch-finder-reference-workspace">
                                     <div class="epoch-finder-panel-heading"><h3>Matching images</h3><span id="test-references-count"></span></div>
                                     <div class="test-references-workflow-heading">
-                                        <span id="test-references-tag-progress" aria-live="polite"></span>
-                                        <button type="button" id="test-references-next" disabled>Next tag →</button>
+                                        <span id="test-references-status" class="epoch-finder-muted" aria-live="polite">Finding training references…</span>
+                                        <nav class="test-references-nav" aria-label="Tag navigation">
+                                            <button type="button" id="test-references-previous" disabled>← Previous</button>
+                                            <button type="button" id="test-references-next" disabled>Next →</button>
+                                        </nav>
                                     </div>
-                                    <div id="test-references-tags" class="test-references-tags" aria-label="Tagged options"></div>
-                                    <p id="test-references-status" class="epoch-finder-muted" aria-live="polite">Select a training run to explore its references.</p>
                                     <div id="test-references-gallery" class="epoch-finder-reference-gallery"></div>
                                 </section>
                                 <p id="test-references-error" class="epoch-finder-error hidden" role="alert"></p>

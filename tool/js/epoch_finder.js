@@ -374,9 +374,17 @@
       referenceItems.forEach(function (item) {
         var saved = referenceSelections[item.key];
         if (!saved) {
-          var chosen = window.testReferencesChoice(els('run').value, item.group, item.option);
-          if (chosen) saved = {attribute:item.attribute, option:item.option,
-            group:item.group, tag:item.option, media:chosen.media};
+          // A wildcard term may belong to more than one scoped group.
+          // Reuse the first saved choice still represented in this campaign's candidates.
+          item.groups.some(function (group) {
+            var chosen = window.testReferencesChoice(els('run').value, group, item.option);
+            if (!chosen || !item.candidates.some(function (candidate) {
+              return candidate.group === group && candidate.media === chosen.media;
+            })) return false;
+            saved = {attribute:item.attribute, option:item.option,
+              group:group, tag:item.option, media:chosen.media};
+            return true;
+          });
         }
         var valid = item.candidates.some(function (candidate) {
           return saved && candidate.media === saved.media && candidate.group === saved.group && candidate.tag === saved.tag;

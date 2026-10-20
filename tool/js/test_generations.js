@@ -374,8 +374,8 @@
     var candidate = String(result.candidateFile || result.sourceLoRA || '').trim();
     var manual = prepared && prepared.candidateScores && prepared.candidateScores[candidate];
     var epochScore = candidateScores[candidate];
-    var manualLabel = row.querySelector('[data-test-manual-epoch-score]');
-    var epochLabel = row.querySelector('[data-test-vl-epoch-score]');
+    var manualLabel = card.querySelector('[data-test-manual-epoch-score]');
+    var epochLabel = card.querySelector('[data-test-vl-epoch-score]');
     var button = row.querySelector('[data-test-vl-result]');
     if (!manualLabel || !epochLabel || !button) throw new Error('Test result evaluation controls are missing.');
 

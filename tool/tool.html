@@ -1148,7 +1148,7 @@
                         <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Tests</button>
                         <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Campaigns</button>
                         <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
-                        <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
+                        <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
                     </nav>
                     <section id="epoch-finder-screen" class="epoch-finder-screen hidden" aria-label="Epoch Finder">
                         <div class="epoch-finder-intro">
@@ -1163,7 +1163,7 @@
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
                                     <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="finder" aria-pressed="true">Epoch Finder</button>
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
-                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
                                 </nav>
                                 <section class="epoch-finder-panel">
                                     <h3>New campaign</h3>
@@ -1270,7 +1270,7 @@
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
                                     <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="references" aria-pressed="true">References</button>
-                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
                                 </nav>
                                 <section class="epoch-finder-panel">
                                     <div class="epoch-finder-panel-heading">
@@ -1315,7 +1315,7 @@
                             <a id="test-references-preview-original" target="_blank" rel="noopener noreferrer">Open original image ↗</a>
                         </dialog>
                     </section>
-                    <section id="run-analytics-screen" class="epoch-finder-screen hidden" aria-label="Run Analytics">
+                    <section id="run-analytics-screen" class="epoch-finder-screen hidden" aria-label="Run Insights">
                         
                         <div class="epoch-finder-layout">
                           <aside class="epoch-finder-sidebar">
@@ -1323,7 +1323,7 @@
                               <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
                               <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
                               <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
-                              <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="analytics" aria-pressed="true">Analytics</button>
+                              <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="analytics" aria-pressed="true">Insights</button>
                             </nav>
                             <section class="epoch-finder-panel"><details><summary>Browse epochs with results</summary><p class="epoch-finder-muted">Recorded Test and Campaign outputs, grouped by training run. Select an epoch to inspect its results.</p><div id="run-analytics-result-epochs" aria-live="polite">Finding saved generated results…</div><p id="run-analytics-result-epochs-note" class="epoch-finder-muted"></p></details></section>
                             <section class="epoch-finder-panel"><details><summary>Compare selected runs</summary><p class="epoch-finder-muted">Choose up to six runs from this Set. Campaign results are comparable only when they come from the same campaign.</p><div id="run-analytics-run-choices" class="epoch-finder-run-choices"></div><p id="run-analytics-selection-count" class="epoch-finder-muted" aria-live="polite">0 / 6 runs selected</p><button id="run-analytics-analyze" class="training-btn training-launch-btn" type="button">Analyze selected</button></details></section>
@@ -1335,19 +1335,33 @@
                                 <div id="run-analytics-epoch-media-grid" class="run-analytics-epoch-media-grid" aria-live="polite"></div>
                                 <button id="run-analytics-epoch-media-more" class="review-captions-btn hidden" type="button">Load 8 more</button>
                               </dialog>
+                            <dialog id="run-lab-review-dialog" class="run-lab-review-dialog" aria-label="Blind render rating">
+                              <header class="run-lab-review-head"><div><h3>Blind render review</h3><p id="run-lab-review-progress" role="status">Preparing review…</p></div><button type="button" id="run-lab-review-close" class="review-captions-btn">Close</button></header>
+                              <div id="run-lab-review-media" class="run-lab-review-media"></div>
+                              <div id="run-lab-review-wildcards" class="run-lab-review-wildcards"></div>
+                              <div id="run-lab-review-reveal" class="run-lab-review-reveal" aria-live="polite"></div>
+                              <div id="run-lab-review-stars" class="run-lab-review-stars" aria-label="Rate this render from one to five stars">
+                                <button type="button" data-insights-rating="1" aria-label="1 star">★</button><button type="button" data-insights-rating="2" aria-label="2 stars">★</button><button type="button" data-insights-rating="3" aria-label="3 stars">★</button><button type="button" data-insights-rating="4" aria-label="4 stars">★</button><button type="button" data-insights-rating="5" aria-label="5 stars">★</button>
+                              </div>
+                              <div class="run-lab-review-actions"><button id="run-lab-review-undo" type="button" class="review-captions-btn hidden">Undo rating</button><button id="run-lab-review-skip" type="button" class="review-captions-btn">Skip</button><button id="run-lab-review-next" type="button" class="review-captions-btn hidden">Next render</button></div>
+                              <p id="run-lab-review-status" role="status"></p>
+                            </dialog>
                             <div id="run-analytics-lab" class="run-analytics-lab">
-                              <header class="run-lab-heading"><div><span class="run-lab-eyebrow">TEST GENERATIONS / ANALYTICS</span><h2>Your Testing Lab</h2><p>What your recorded experiments tell us — and what to investigate next.</p></div><button type="button" id="run-lab-refresh" class="review-captions-btn">Refresh evidence</button></header>
+                              <header class="run-lab-heading"><div><span class="run-lab-eyebrow">TEST GENERATIONS / INSIGHTS</span><h2>Insights</h2><p>Review what you have, find promising epochs, and choose the next useful action.</p></div><button type="button" id="run-lab-refresh" class="review-captions-btn">Refresh evidence</button></header>
                               <p id="run-lab-status" role="status">Reading recorded testing evidence…</p>
                               <div id="run-lab-summary" class="run-lab-summary"></div>
-                              <section class="run-lab-challenge"><div><span class="run-lab-eyebrow">NEXT CHALLENGE</span><h3 id="run-lab-challenge-title">Find your next useful test</h3><p id="run-lab-challenge-description">Reviewing saved evidence…</p><div id="run-lab-challenge-actions"></div></div><div class="run-lab-steps"><strong>How you progress</strong><p>Test → Discover → Compare → Refine</p><small>Evidence-backed guidance, not an invented score.</small></div></section>
-                              <div class="run-lab-two-col">
-                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>★ The Contenders</h3><p>Best-rated epochs across all saved Test sessions</p></div><label>Rank by <select id="run-lab-sort"><option value="manual">Average rating</option><option value="count">Number rated</option></select></label></div><div class="run-lab-filters"><label>Run <select id="run-lab-run"></select></label></div><div id="run-lab-contenders"></div><p class="run-lab-footnote">A single 5/5 rating is less evidence than repeated strong ratings. All saved Test ratings count, regardless of prompt or VL settings.</p></section>
-                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Where the evidence points</h3><p>Separate VL observations — not part of manual ratings</p></div><label>VL group <select id="run-lab-cohort"></select></label></div><div id="run-lab-discoveries"></div></section>
-                              </div>
+                              <section class="run-lab-featured" aria-label="Leading epochs"><div id="run-lab-featured"></div></section>
+                              <section class="run-lab-challenge"><div><span class="run-lab-eyebrow">NEXT CHALLENGE</span><h3 id="run-lab-challenge-title">Review five unrated renders</h3><p id="run-lab-challenge-description">Rate existing results before spending more GPU time.</p><div id="run-lab-challenge-actions"></div></div><div class="run-lab-steps"><strong>How you progress</strong><p>Test → Discover → Compare → Refine</p><small>Evidence-backed guidance, not an invented score.</small></div></section>
                               <div class="run-lab-two-col run-lab-lower">
                                 <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Performance trajectory</h3><p>Saved manual ratings by epoch; select a run to see its trend</p></div></div><div id="run-lab-chart"></div></section>
                                 <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>How much do we actually know?</h3><p>Preview coverage, without synthetic confidence scores</p></div></div><div id="run-lab-coverage"></div></section>
                               </div>
+                              <details class="run-lab-details"><summary>Full epoch rankings and VL diagnostics</summary>
+                              <div class="run-lab-two-col">
+                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>★ The Contenders</h3><p>Best-rated epochs across all saved Test sessions</p></div><label>Rank by <select id="run-lab-sort"><option value="manual">Average rating</option><option value="count">Number rated</option></select></label></div><div class="run-lab-filters"><label>Run <select id="run-lab-run"></select></label></div><div id="run-lab-contenders"></div><p class="run-lab-footnote">A single 5/5 rating is less evidence than repeated strong ratings. All saved Test ratings count, regardless of prompt or VL settings.</p></section>
+                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Where the evidence points</h3><p>Separate VL observations — not part of manual ratings</p></div><label>VL group <select id="run-lab-cohort"></select></label></div><div id="run-lab-discoveries"></div></section>
+                              </div>
+                              </details>
                               <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Evidence Explorer</h3><p>Recorded epochs and generated results</p></div><button type="button" class="review-captions-btn" id="run-lab-detail">Detailed Analytics</button></div><div id="run-lab-explorer"></div></section>
                               <p id="run-lab-warnings" class="run-lab-footnote"></p>
                             </div>
@@ -1367,7 +1381,7 @@
                     <div id="test-unified-workspace" class="test-unified-workspace hidden" aria-label="Unified Test Generations">
                         <aside class="test-unified-rail">
                             <h3>Test Generations</h3>
-                            <div class="test-unified-switch"><button id="test-unified-explore" type="button">Explore</button><button id="test-unified-build" type="button">Build</button><button id="test-unified-analytics" type="button">Analytics</button></div>
+                            <div class="test-unified-switch"><button id="test-unified-explore" type="button">Explore</button><button id="test-unified-build" type="button">Build</button><button id="test-unified-analytics" type="button">Insights</button></div>
                             <div class="test-unified-switch"><button id="test-unified-experiments" type="button">Experiments</button><button id="test-unified-checkpoints" type="button">Checkpoints</button></div>
                             <div id="test-unified-list" class="test-unified-list"></div>
                             <button id="test-unified-reload" class="review-captions-btn" type="button">Refresh results</button>
@@ -1390,7 +1404,7 @@
                                 <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Tests</button>
                                 <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
                                 <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
-                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
                             </nav>
                             <section class="test-generations-controls">
                                 <section class="test-generations-next-run" aria-label="Next Test run">

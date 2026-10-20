@@ -1067,10 +1067,10 @@ def test_test_result_cards_show_frozen_megapixels_and_candidate_strength():
 
     assert "function testResultMegapixels(status)" in script
     assert "function testResultStrength(status, result)" in script
-    assert "metadata.push(String(megapixels) + ' MP');" in script
-    assert "metadata.push('Strength ' + String(strength));" in script
-    assert "buildResultFooter(result, { sessionName: sessionName, status: status })" in script
-    assert "buildResultFooter(failure, { failed: true, status: status })" in script
+    assert "metrics.push(megapixels + ' MP');" in script
+    assert "metrics.push('Strength ' + strength);" in script
+    assert "sharedTestCard(result, status, 'test-generations-result-card', false)" in script
+    assert "sharedTestCard(failure, status, 'test-generations-result-card is-failed', false, true)" in script
     assert ".test-generations-result-metadata" in css
 
 
@@ -1489,13 +1489,12 @@ def test_launch_action_stays_inside_repeat_and_vl_panel():
 def test_preview_footer_epoch_navigation_and_compact_controls():
     script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
-    footer = script.split("function buildResultFooter(result, options)", 1)[1].split("function syncResultElapsed", 1)[0]
-    assert "label.appendChild(browse);" in footer
-    assert "secondaryRow.appendChild(browse);" not in footer
-    assert "browse.className = 'test-generations-epoch-link';" in footer
-    assert "browse.dataset.testEpochMediaJob = String(provenance.sourceJobId);" in footer
-    assert "secondaryRow.appendChild(rating);" in footer
-    assert "evaluation.appendChild(vlButton);" in footer
+    shared = (ROOT / 'tool/js/test_preview_card.js').read_text(encoding='utf-8')
+    assert "name.appendChild(jump);" in shared
+    assert "jump.className" not in shared
+    assert "jump.dataset.testEpochMediaJob = text(epoch.jobId);" in shared
+    assert "second.appendChild(rating);" in shared
+    assert "evaluation.appendChild(action);" in shared
     assert ".test-generations-epoch-link { display:inline; width:auto;" in css
     assert ".test-generations-result-evaluation .test-generations-vl-result { width:auto;" in css
 

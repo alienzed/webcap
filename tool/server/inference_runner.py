@@ -169,7 +169,10 @@ def _job_view(job):
         "modelId": str(metadata.get("modelId") or ""),
         "mediaKind": str(metadata.get("mediaKind") or ""),
         "storyId": str(metadata.get("storyId") or ""),
+        "storyTitle": str(metadata.get("storyTitle") or ""),
         "sceneId": str(metadata.get("sceneId") or ""),
+        "sceneNumber": int(metadata.get("sceneNumber") or 0),
+        "sceneTitle": str(metadata.get("sceneTitle") or ""),
         "sessionId": str(metadata.get("sessionId") or ""),
         "folder": str(metadata.get("folder") or ""),
         "source": str(metadata.get("source") or ""),
@@ -641,6 +644,10 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
     scene_id = str(scene_id or "").strip()
     if not story_id or not scene_id:
         raise ValueError("Storyboard inference requires Story and Scene IDs.")
+    from .storyboard_store import load_story
+    story = load_story(story_id)
+    scene_order = list(story.get("sceneOrder") or [])
+    scene = (story.get("scenes") or {}).get(scene_id) or {}
     context = {
         "storyId": story_id,
         "sceneId": scene_id,
@@ -665,7 +672,10 @@ def enqueue_storyboard(request, story_id, scene_id, label="", migrated_from_job_
             "modelId": str(request.get("modelId") or ""),
             "mediaKind": str(request.get("mediaKind") or ""),
             "storyId": story_id,
+            "storyTitle": str(story.get("title") or "Untitled Story"),
             "sceneId": scene_id,
+            "sceneNumber": scene_order.index(scene_id) + 1 if scene_id in scene_order else 0,
+            "sceneTitle": str(scene.get("title") or ""),
             "migratedFromJobId": str(migrated_from_job_id or ""),
         },
         initial_status=status,

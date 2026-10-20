@@ -6,7 +6,7 @@ from tool.server import epoch_finder, epoch_test_bench, run_analytics
 
 def test_checkpoint_workspace_reads_saved_test_ratings_and_wildcards(tmp_path, monkeypatch):
     result = {"id": "test:s:one.png", "source": "test", "session": "s",
-              "mediaFile": "one.png", "jobId": "job-a", "epoch": 12}
+              "mediaFile": "one.png", "jobId": "job-a", "epoch": 12, "prompt": "Scene blue"}
     def gallery(*args, **kwargs):
         assert kwargs["checkpoints"] == ["job-a:12"]
         assert kwargs["generated_only"] is True
@@ -21,6 +21,7 @@ def test_checkpoint_workspace_reads_saved_test_ratings_and_wildcards(tmp_path, m
     monkeypatch.setattr(epoch_test_bench, "_session_rating_map", lambda *args: {"one.png": 4})
     monkeypatch.setattr(epoch_test_bench, "_session_vision_state", lambda *args: {
         "byMedia": {"one.png": {"comparison": [{"id": "G1", "result": "match"}]}}})
+    monkeypatch.setattr(epoch_test_bench, "_resolved_wildcard_summary", lambda source, resolved, owner: ["blue"] if resolved == "Scene blue" else [])
     monkeypatch.setattr(epoch_test_bench, "_project_wildcard_fields", lambda stored: {
         **stored, "wildcardSummary": ["blue"]})
     monkeypatch.setattr(run_analytics, "report", lambda *args: {

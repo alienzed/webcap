@@ -1242,7 +1242,12 @@ def checkpoint_workspace(folder_path, job_id, epoch, offset=0, limit=24):
                                             if isinstance(v, dict) and v.get("method") == "rvn"]
             item["dinoAssessments"] = [v for v in records.values()
                                        if isinstance(v, dict) and v.get("method") == "dino"]
-            item["wildcards"] = stored.get("wildcardSummary") or stored.get("wildcardValues") or []
+            # A repeated session can have a distinct resolved prompt per render.
+            # Never attribute the session's selection to a different generated image.
+            item["wildcards"] = test_bench._resolved_wildcard_summary(
+                stored.get("sourcePrompt"), item.get("prompt"),
+                stored.get("ownerFolder"),
+            ) if item.get("prompt") else []
             item["settings"] = stored.get("settings") or {}
         else:
             cid = item["campaignId"]

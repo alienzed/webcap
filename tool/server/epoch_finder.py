@@ -13,7 +13,7 @@ from pathlib import Path
 from . import config as app_config
 from . import epoch_test_bench as test_bench
 from .epoch_finder_plan import normalize_dimensions
-from .caption_vision import build_vision_question_messages, build_reference_comparison_messages, vision_resized_image_data_url
+from .caption_vision import build_vision_question_messages, build_reference_comparison_messages, reference_comparison_feature, vision_resized_image_data_url
 from .llm_runner import enqueue as enqueue_llm, job_status as llm_job_status
 from .test_models import get_test_model_for_staging_key
 from .training_history import all_history_payload
@@ -372,7 +372,7 @@ def create_campaign(folder_path, criteria):
         tag = str(entry.get("tag") or option)
         reference = verified_reference(folder, group, tag, media, job_id)
         references.append({"attribute": attribute, "option": option, "group": group,
-                           "tag": tag, **reference})
+                           "tag": tag, "alias": str(entry.get("alias") or "").strip(), **reference})
     if evaluation["dino"]:
         from .epoch_dino import preflight as dino_preflight
         dino_preflight()
@@ -675,9 +675,8 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
         if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
             raise ValueError("Training reference changed after campaign approval.")
         reference = folder_path / assigned["media"]
-        question = (group["label"] + " — training reference demonstrates " + expected + ". "
-                    "Select the visible option in B from: " +
-                    "; ".join(str(index + 1) + "=" + option for index, option in enumerate(group["options"])))
+        question = reference_comparison_feature(
+            assigned["group"], expected, group["options"], assigned.get("alias"))
         messages = build_reference_comparison_messages(
             question,
             vision_resized_image_data_url(reference, int(campaign.get("vlImageMP", .45) * 1000000)),

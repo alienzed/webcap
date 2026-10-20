@@ -703,7 +703,10 @@
     button.addEventListener('click', function () {
       source = button.dataset.mediaSource;
       stopExternalTimers();
-      if (isExternal()) explorerMode = 'list';
+      if (isExternal()) {
+        explorerMode = 'list';
+        if (!['newest', 'oldest', 'name', 'path', 'resolution', 'megapixels', 'duration'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
+      } else if (!['newest', 'oldest', 'name', 'rating'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
       setExplorerMode(explorerMode);
       syncExternalControls();
       artifact = ''; owner = '';

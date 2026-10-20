@@ -9,6 +9,14 @@
   }
   function stat(title,value){var box=element('div','epoch-info-stat');box.appendChild(element('strong','',value));box.appendChild(element('span','',title));return box;}
   function renderHeader(root,view) {
+    // Only the first render rebuilds the shell; subsequent pages update keyed cards.
+    if(view.rendered){
+      view.refreshCards();
+      var more=view.moreButton;
+      if(more)more.hidden=view.offset>=view.total;
+      return;
+    }
+    view.rendered=true;
     root.replaceChildren();
     var header=element('div','epoch-info-header');
     header.appendChild(element('h3','', 'Epoch '+view.epoch));
@@ -51,20 +59,33 @@
     var sort=element('select');sort.setAttribute('aria-label','Sort generation evidence');
     [['original','Original order'],['rating','Highest rated'],['recent','Newest first']].forEach(function(p){var opt=element('option','',p[1]);opt.value=p[0];sort.appendChild(opt);});
     toolbar.appendChild(source);toolbar.appendChild(sort);root.appendChild(toolbar);
-    var gallery=element('div','epoch-info-grid');root.appendChild(gallery);
+    var gallery=view.gallery||element('div','epoch-info-grid');
+    view.gallery=gallery;
+    root.appendChild(gallery);
     function refreshCards(){
       var items=view.items.filter(function(x){return (x.source==='test'?x.mediaAvailable!==false:!!x.frame&&!x.framePruned) && (source.value==='all'||x.source===source.value||(source.value==='rated'&&x.source==='test'&&x.rating>0));});
       if(sort.value==='rating')items.sort(function(a,b){return Number(b.rating||0)-Number(a.rating||0);});
       if(sort.value==='recent')items.sort(function(a,b){return Number(b.startedAt||0)-Number(a.startedAt||0);});
-      // Sorting or explicit filter changes are the only reasons to reconstruct cards.
-      gallery.replaceChildren();
-      items.forEach(function(item){var card=renderCard(item,view);if(card)gallery.appendChild(card);});
+      // Keyed reuse preserves video playback and open Details during paging/refresh.
+      var ordered=new Set();
+      items.forEach(function(item){
+        if(!item||!item.id)return;
+        ordered.add(item.id);
+        var card=view.cards.get(item.id);
+        if(!card){card=renderCard(item,view);if(card)view.cards.set(item.id,card);}
+        if(card)gallery.appendChild(card);
+      });
+      Array.from(gallery.children).forEach(function(card){
+        if(card.dataset.resultKey&&!ordered.has(card.dataset.resultKey))card.remove();
+      });
       if(!items.length)gallery.appendChild(element('p','', 'No matching recorded generations.'));
     }
     source.onchange=refreshCards;sort.onchange=refreshCards;refreshCards();
     view.refreshCards=refreshCards;
-    if(view.offset<view.total) {
+    {
       var more=element('button','review-captions-btn','Load more');
+      view.moreButton=more;
+      more.hidden=view.offset>=view.total;
       more.type='button';root.appendChild(more);
       more.onclick=function(){more.disabled=true;load(view,true).catch(function(e){showError(root,e);}).finally(function(){more.disabled=false;});};
     }
@@ -156,7 +177,7 @@
   window.epochInfoOpen=function(mode,folder,jobId,epoch){
     if(mode!=='tests'&&mode!=='analytics')throw new Error('Unknown epoch inspector view: '+mode);
     var host=mode==='tests'?'test-generations-epoch-info':'run-analytics-epoch-info';
-    var view={mode:mode,host:host,folder:folder,jobId:String(jobId),epoch:Number(epoch),items:[],offset:0,total:0};
+    var view={mode:mode,host:host,folder:folder,jobId:String(jobId),epoch:Number(epoch),items:[],offset:0,total:0,cards:new Map(),rendered:false};
     state[mode]=view;
     if(mode==='tests') {
       document.getElementById('test-generations-session-surface').classList.add('hidden');

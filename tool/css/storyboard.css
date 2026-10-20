@@ -1463,9 +1463,18 @@
 }
 
 .storyboard-lora-row > .review-captions-btn {
+  box-sizing: border-box;
   width: 34px;
-  min-width: 0;
+  min-width: 34px;
+  height: 34px;
   padding: 0;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--input-bg, var(--panel));
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
 }
 
 .storyboard-lora-subsection {

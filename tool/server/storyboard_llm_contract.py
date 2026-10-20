@@ -596,7 +596,16 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             "operation": operation,
             "output": "json",
             "prompt": "\n\n".join(blocks).strip() + "\n",
-            "response_schema": _read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema"),
+            "response_schema": {
+                **_read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema"),
+                "properties": {
+                    "scenes": {
+                        **_read_json(SCENE_PLAN_SCHEMA_PATH, "Storyboard Scene plan schema")["properties"]["scenes"],
+                        "minItems": scene_count,
+                        "maxItems": scene_count,
+                    }
+                },
+            },
         }
 
     if operation == "repair_scenes":

@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import threading
+from collections import deque
 from pathlib import Path
 from urllib.parse import quote
 
@@ -101,6 +102,7 @@ def _discover(snapshot):
                 if _index is not snapshot:
                     return
                 snapshot["items"].extend(incoming)
+                snapshot["by_path"].update({item["relativePath"]: item for item in incoming})
                 snapshot["directories"] += 1
     except Exception as exc:
         with _LOCK:
@@ -118,7 +120,7 @@ def _ensure_index(path):
             return _index
         if _index:
             _index["cancel"].set()
-        _index = {"root": root, "items": [], "directories": 0, "complete": False,
+        _index = {"root": root, "items": [], "by_path": {}, "directories": 0, "complete": False,
                   "error": "", "cancel": threading.Event()}
         _metadata_job = None
         snapshot = _index
@@ -210,12 +212,11 @@ def _metadata_worker(snapshot, job):
                 job["running"] = False
                 job["current"] = ""
                 return
-            relative = job["pending"].pop(0)
+            relative = job["pending"].popleft()
             job["current"] = relative
         try:
             path = _source_file(root, relative)
-            stat = path.stat()
-            entry = next((item for item in snapshot["items"] if item["relativePath"] == relative), None)
+            entry = snapshot["by_path"].get(relative)
             if entry is None:
                 raise ValueError("External media no longer indexed: " + relative)
             if _fresh(entry, entry.get("metadata")):
@@ -290,7 +291,7 @@ def register_routes(app):
                     job["seen"].update(additions)
                     job["total"] += len(additions)
                 else:
-                    job = {"snapshot": snapshot, "running": bool(paths), "pending": paths,
+                    job = {"snapshot": snapshot, "running": bool(paths), "pending": deque(paths),
                            "seen": set(paths), "total": len(paths), "completed": 0,
                            "failed": 0, "current": "", "lastError": ""}
                     _metadata_job = job

@@ -567,6 +567,11 @@ def _set_current_job(run_id, job_id):
 def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
     if _attempt_completed(run, kind, model_ref, file_name):
         return _completed_attempt(run, kind, model_ref, file_name)
+    key = _attempt_key(kind, model_ref, file_name)
+    # Failed probes wait until all missing work for this model has been attempted.
+    if not run.get("retryPhase") and (run.get("previousFailures") or {}).get(key):
+        run.setdefault("deferredRetries", []).append({"kind": kind, "role": role, "modelRef": model_ref, "file": file_name})
+        return {"kind": kind, "status": "deferred", "modelRef": model_ref, "file": file_name}
 
     stop_event = _active_stop_event(run["id"])
     if stop_event is not None and stop_event.is_set():
@@ -1153,6 +1158,21 @@ def _runner(run_id):
                 )
             if _active_stop_event(run_id).is_set():
                 raise ModelLabStopped("Model Lab stop requested.")
+
+        # A single deferred retry pass; no automatic repeated failure loops.
+        # Re-run each model's existing probe routine with deferred work enabled:
+        # completed probes are reused, so only deferred failures are executed.
+        if run.get("deferredRetries"):
+            run["retryPhase"] = True
+            _persist_progress(run, phase="retry", currentModelRef="", currentFile="", currentKind="")
+            for model in run.get("allVisionModels") or []:
+                if any(row["modelRef"] == model["modelRef"] for row in run["deferredRetries"]):
+                    _run_vision_model(run, model)
+            for model in run.get("directorModels") or []:
+                if any(row["modelRef"] == model["modelRef"] for row in run["deferredRetries"]):
+                    _run_director_model(run, model)
+            run.pop("retryPhase", None)
+            run.pop("deferredRetries", None)
 
         run["status"] = "completed"
         run["finishedAt"] = _now_iso()

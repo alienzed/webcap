@@ -3070,26 +3070,6 @@
       '&media=' + encodeURIComponent(String(fileName || ''));
   }
 
-  function appendTestPreview(container, sessionName, result, options) {
-    var fileName = resultMediaFile(result);
-    var kind = resultMediaKind(result);
-    if (!container || !sessionName || !fileName) return null;
-    if (kind === 'image') {
-      var image = document.createElement('img');
-      image.src = mediaUrl(sessionName, fileName);
-      image.alt = 'Test preview image';
-      image.loading = 'lazy';
-      container.appendChild(image);
-      return image;
-    }
-    var video = document.createElement('video');
-    video.preload = 'metadata';
-    video.muted = !!(options && options.muted);
-    video.src = mediaUrl(sessionName, fileName);
-    appendTestPreviewVideo(container, video);
-    return video;
-  }
-
   function candidateFileForResult(result) {
     var candidateFile = String(result && result.candidateFile || '');
     if (!candidateFile && String(result && result.kind || '') !== 'base' && /\.safetensors$/i.test(String(result && result.sourceLoRA || ''))) {
@@ -3152,31 +3132,6 @@
     if (explicitKind) return explicitKind;
     var fileName = resultMediaFile(result).toLowerCase();
     return /\.(?:png|jpe?g|webp|gif|bmp|avif)$/.test(fileName) ? 'image' : (fileName ? 'video' : '');
-  }
-
-  function buildResultRating(result, sessionName) {
-    var mediaFile = resultMediaFile(result);
-    var session = String(sessionName || '').trim();
-    if (!mediaFile || !session) return null;
-
-    var currentRating = Math.max(0, Math.min(5, Number(result && result.rating || 0)));
-    var stars = document.createElement('div');
-    stars.className = 'test-generations-result-rating';
-    stars.setAttribute('aria-label', 'Rate this Test result');
-
-    for (var value = 1; value <= 5; value += 1) {
-      var star = document.createElement('button');
-      star.type = 'button';
-      star.className = 'test-generations-result-star' + (value <= currentRating ? ' active' : '');
-      star.dataset.testRating = String(value);
-      star.dataset.mediaFile = mediaFile;
-      star.dataset.testSession = session;
-      star.title = 'Rate ' + value + ' star' + (value === 1 ? '' : 's');
-      star.setAttribute('aria-label', star.title);
-      star.textContent = value <= currentRating ? '★' : '☆';
-      stars.appendChild(star);
-    }
-    return stars;
   }
 
   function syncResultRatingButtons(sessionName, mediaFile, rating) {
@@ -3309,113 +3264,6 @@
       videoTransport: appendTestPreviewVideo,
       dataset: { testVlFile: mediaFile }
     });
-  }
-
-  function buildResultFooter(result, options) {
-    var opts = options || {};
-    var footer = document.createElement('div');
-    footer.className = 'test-generations-result-footer' + (opts.failed ? ' test-generations-failure-footer' : '');
-
-    var copy = document.createElement('div');
-    copy.className = opts.failed ? 'test-generations-failure-copy' : 'test-generations-result-copy';
-
-    var identity = candidateIdentity(result);
-    if (result && result.strength !== undefined && result.strength !== null) {
-      identity.primary += ' · Weight ' + String(result.strength);
-    }
-    var primaryRow = document.createElement('div');
-    primaryRow.className = 'test-generations-result-primary';
-
-    var label = document.createElement('div');
-    label.className = 'test-generations-result-name';
-    label.title = identity.secondary ? identity.primary + ' · ' + identity.secondary : identity.primary;
-    var provenance = !opts.failed && result && result.provenance;
-    var epochText = provenance && String(provenance.sourceJobId || '') && Number.isInteger(provenance.sourceEpoch)
-      ? 'Epoch ' + provenance.sourceEpoch : '';
-    var epochAt = epochText ? identity.primary.indexOf(epochText) : -1;
-    if (epochAt >= 0) {
-      label.appendChild(document.createTextNode(identity.primary.slice(0, epochAt)));
-      var browse = document.createElement('button');
-      browse.type = 'button';
-      browse.className = 'test-generations-epoch-link';
-      browse.dataset.testEpochMediaJob = String(provenance.sourceJobId);
-      browse.dataset.testEpochMediaEpoch = String(provenance.sourceEpoch);
-      browse.textContent = epochText;
-      browse.title = 'See all recorded results for this training checkpoint';
-      label.appendChild(browse);
-      label.appendChild(document.createTextNode(identity.primary.slice(epochAt + epochText.length)));
-    } else {
-      label.appendChild(document.createTextNode(identity.primary));
-    }
-    if (identity.secondary) {
-      var source = document.createElement('span');
-      source.className = 'test-generations-result-source';
-      source.textContent = ' · ' + (stagedFileParts(identity.secondary).detail || identity.secondary.replace(/\.safetensors$/i, ''));
-      source.title = identity.secondary;
-      label.appendChild(source);
-    }
-    primaryRow.appendChild(label);
-
-    var elapsed = result && result.elapsedMs != null ? formatCandidateElapsed(result.elapsedMs) : '';
-    if (elapsed) {
-      var timing = document.createElement('span');
-      timing.className = 'test-generations-result-elapsed';
-      timing.textContent = opts.failed ? 'Failed after ' + elapsed : elapsed;
-      primaryRow.appendChild(timing);
-    }
-    copy.appendChild(primaryRow);
-
-    var secondaryRow = document.createElement('div');
-    secondaryRow.className = 'test-generations-result-secondary';
-    var metadata = [];
-    var megapixels = testResultMegapixels(opts.status);
-    var strength = testResultStrength(opts.status, result);
-    if (megapixels !== null) metadata.push(String(megapixels) + ' MP');
-    if (strength !== null) metadata.push('Strength ' + String(strength));
-    if (metadata.length) {
-      var metadataRow = document.createElement('div');
-      metadataRow.className = 'test-generations-result-metadata';
-      metadataRow.textContent = metadata.join(' · ');
-      metadataRow.title = metadataRow.textContent;
-      secondaryRow.appendChild(metadataRow);
-    }
-
-    if (!opts.failed) {
-      var rating = buildResultRating(result, opts.sessionName);
-      if (rating) secondaryRow.appendChild(rating);
-    }
-    if (secondaryRow.childNodes.length) copy.appendChild(secondaryRow);
-
-    if (opts.failed) {
-      var detail = document.createElement('div');
-      detail.className = 'test-generations-result-error';
-      detail.textContent = String(result && result.error || 'Generation failed.');
-      copy.appendChild(detail);
-    } else {
-      // Third line: source epoch averages on the left, this preview's VL action on the right.
-      var evaluation = document.createElement('div');
-      evaluation.className = 'test-generations-result-evaluation hidden';
-      var metrics = document.createElement('div');
-      metrics.className = 'test-generations-result-epoch-metrics';
-      var manualScore = document.createElement('span');
-      manualScore.dataset.testManualEpochScore = '1';
-      manualScore.className = 'test-generations-vl-epoch-score hidden';
-      var vlScore = document.createElement('span');
-      vlScore.dataset.testVlEpochScore = '1';
-      vlScore.className = 'test-generations-vl-epoch-score hidden';
-      metrics.appendChild(manualScore);
-      metrics.appendChild(vlScore);
-      evaluation.appendChild(metrics);
-      var vlButton = document.createElement('button');
-      vlButton.type = 'button';
-      vlButton.className = 'review-captions-btn test-generations-vl-result hidden';
-      vlButton.dataset.testVlResult = resultMediaFile(result);
-      evaluation.appendChild(vlButton);
-      copy.appendChild(evaluation);
-    }
-
-    footer.appendChild(copy);
-    return footer;
   }
 
   function syncResultElapsed(card, result, failed) {

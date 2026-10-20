@@ -52,7 +52,7 @@ def test_no_new_storage_and_pruned_frames_remain_without_cards():
     epoch_info = read("tool/js/epoch_info.js")
     assert "from . import test_reference" in backend
     assert "test_reference.read(folder_path, session)" in backend
-    assert "not u.framePruned" in finder
+    assert "!u.framePruned" in finder
     assert "return null;" in epoch_info
     assert "if(!card){card=renderCard(item,view)" in epoch_info
     assert "card.dataset.cardVersion===version" in finder

@@ -1379,7 +1379,10 @@ def _assessment_signal(model_ref, evidence=None):
     coherent = int(old_abilities.get("coherentOutputTokens") or 0)
     limited = old_health == "limited"
     scene = probes.get("director_scene_plan_2048") or {}
-    schema = [probes.get("language_synthesis") or {}, probes.get("language_challenge") or {}]
+    schema_kinds = ("set_vocabulary_synthesis", "set_vocabulary_challenge") if (
+        "set_vocabulary_synthesis" in probes or "set_vocabulary_challenge" in probes
+    ) else ("language_synthesis", "language_challenge")
+    schema = [probes.get(kind) or {} for kind in schema_kinds]
     qualified = scene.get("status") == "completed" and all(
         probe.get("status") == "completed" for probe in schema
     )

@@ -5,7 +5,7 @@
   var source = '', pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
   var needsLoad = true;
   var explorerMode = 'grid', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null;
-  var autoMetadataRequested = new Set(), externalRevision = -1, externalOverview = '', externalJobSummary = '', lastExternalError = '';
+  var autoMetadataRequested = new Set(), externalRevision = -1, externalPendingRefresh = false, externalOverview = '', externalJobSummary = '', lastExternalError = '';
   function externalSummary() {
     var node = el('media-explorer-metadata-progress');
     text(node, [externalOverview, externalJobSummary].filter(Boolean).join(' · '));
@@ -33,8 +33,9 @@
         if (data.revision !== externalRevision) {
           if (canRefreshExternalPage()) load(true, {soft:true});
           else {
+            externalPendingRefresh = true;
             externalOverview += ' · Refresh to include changes';
-            externalSummary();
+            externalSummary(); count();
           }
         }
         if (!data.complete) externalDiscoveryTimer = setTimeout(pollExternalDiscovery, 1400);
@@ -121,8 +122,9 @@
       if (job.running) externalMetadataTimer = setTimeout(externalMetadataStatus, 1600);
       else if (job.total && canRefreshExternalPage() && externalRevision !== -1) load(true, {soft:true});
       else if (job.total) {
+        externalPendingRefresh = true;
         externalJobSummary += ' · Refresh to show updated metadata';
-        externalSummary();
+        externalSummary(); count();
       }
     }).catch(report);
   }
@@ -566,7 +568,8 @@
   }
   function count() {
     text(el('media-explorer-count'), items.length + (items.length < total ? ' of ' + total : '') + (total === 1 ? ' item' : ' items') + (isExternal() ? (complete ? '' : ' · discovering…') : (complete ? '' : ' · recent')));
-    el('media-explorer-more-btn').classList.toggle('hidden', offset >= total);
+    el('media-explorer-more-btn').classList.toggle('hidden', offset >= total && !externalPendingRefresh);
+    text(el('media-explorer-more-btn'), externalPendingRefresh ? 'Refresh results' : 'Load more');
     el('media-explorer-scope').classList.toggle('hidden', complete || isExternal());
   }
   var facetIds = ['kind', 'model', 'folder', 'rating', 'date'];
@@ -673,6 +676,7 @@
     }).then(function (data) {
       if (request !== serial || !visible) return;
       total = data.total;
+      if (reset && isExternal()) externalPendingRefresh = false;
       complete = !!data.complete;
       if (isExternal()) {
         externalRevision = data.revision;
@@ -843,7 +847,7 @@
     var nextPath = el('media-explorer-external-path').value.trim();
     externalPath = nextPath;
     mediaFacts.clear();
-    autoMetadataRequested.clear(); externalRevision = -1; externalOverview = ''; externalJobSummary = ''; externalJobRunning = false;
+    autoMetadataRequested.clear(); externalRevision = -1; externalPendingRefresh = false; externalOverview = ''; externalJobSummary = ''; externalJobRunning = false;
     stopExternalTimers(); selected.clear(); updateSelection();
     load(true, {refreshFilesystem:true});
   });
@@ -878,11 +882,11 @@
   });
   el('media-explorer-compare-close').addEventListener('click', function () { el('media-explorer-compare-dialog').close(); });
   el('media-explorer-refresh').addEventListener('click', function () {
-    if (isExternal()) { autoMetadataRequested.clear(); mediaFacts.clear(); externalRevision = -1; load(true, {refreshFilesystem:true}); }
+    if (isExternal()) { autoMetadataRequested.clear(); mediaFacts.clear(); externalRevision = -1; externalPendingRefresh = false; load(true, {refreshFilesystem:true}); }
     else load(true);
   });
   el('media-explorer-scan-all').addEventListener('click', function () { full = true; load(true); });
-  el('media-explorer-more-btn').addEventListener('click', function () { load(false); });
+  el('media-explorer-more-btn').addEventListener('click', function () { load(externalPendingRefresh, externalPendingRefresh ? {} : undefined); });
   var debounce;
   el('media-explorer-search').addEventListener('input', function () {
     artifact = ''; owner = '';

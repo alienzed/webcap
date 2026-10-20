@@ -21,7 +21,7 @@ def test_paired_vision_request_keeps_image_order_and_vocabulary():
 
 @pytest.mark.parametrize("feature,a,b", [
     ("", "a", "b"), ("bottom", "", "b"), ("bottom", "a", ""),
-    ("x" * 241, "a", "b"),
+    ("x" * 2001, "a", "b"),
 ])
 def test_paired_vision_rejects_missing_or_oversized_inputs(feature, a, b):
     with pytest.raises(ValueError):

@@ -60,6 +60,9 @@ def run_summary_from_capture(record_path, stage, captured_items=0):
     if isinstance(shift, (int, float)):
         summary["shift"] = shift
     adapter = parsed.get("adapter") if isinstance(parsed.get("adapter"), dict) else {}
+    rank = adapter.get("rank")
+    if isinstance(rank, int) and rank > 0:
+        summary["rank"] = rank
     dropout = adapter.get("dropout")
     if isinstance(dropout, (int, float)):
         summary["dropout"] = dropout

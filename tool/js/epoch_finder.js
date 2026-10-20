@@ -747,7 +747,8 @@
       return (inspectedEpoch==null||u.epoch===inspectedEpoch)&&!!u.frame&&!u.framePruned;
     });
     var key=campaign.id+':'+inspectedEpoch+':'+units.map(function(u){
-      return u.frame+':'+(u.assessment?'1':'0')+':'+(u.error||'');
+      return [u.frame,!!u.assessment,(u.referenceAssessments||[]).length,
+        (u.dinoAssessments||[]).length,u.error||''].join(':');
     }).join('|');
     if(lastFrameKey===key)return;
     lastFrameKey=key;
@@ -809,6 +810,7 @@
         actions:[{label:'Open original',url:url}],
       });
       card.dataset.cardVersion=version;
+      if(prior)prior.remove(); // Replace a changed card; never leave its old copy behind.
       host.appendChild(card);
     });
     preserved.forEach(function(card,id){if(!keep.has(id))card.remove();});

@@ -251,3 +251,84 @@ def test_testing_lab_aggregates_independent_sessions_and_protocols(tmp_path, mon
     assert rows["run-b", 67]["ratedCount"] == 1
     assert snapshot["coverage"]["unlinkedPreviews"] == 1
     assert sum(row["ratedCount"] for row in rows.values()) == 5
+
+
+def test_insights_review_reuses_available_unrated_results_and_wildcards(tmp_path, monkeypatch):
+    from tool.server import run_analytics as analytics
+    first, second = tmp_path / "one", tmp_path / "two"
+    first.mkdir()
+    second.mkdir()
+
+    def result(name, epoch=67, job="run-a", kind="lora", folder="set/a"):
+        return {"kind": kind, "mediaFile": name, "prompt": "a red bikini", "provenance": {
+            "sourceJobId": job, "sourceFolder": folder, "sourceEpoch": epoch}}
+    status = {
+        first: {"sourcePrompt": "a {red|blue} bikini", "results": [
+            result("rated.png"), result("a.png"), result("b.png"),
+            result("base.png", kind="base"), result("wrong.png", folder="other/set")]},
+        second: {"sourcePrompt": "a {red|blue} bikini", "results": [
+            result("c.png"), result("d.png"), result("e.png"),
+            result("f.png"), result("missing.png")]},
+    }
+    for path, name in ((first, "rated.png"), (first, "a.png"), (first, "b.png"),
+                       (first, "base.png"), (first, "wrong.png"),
+                       (second, "c.png"), (second, "d.png"), (second, "e.png"),
+                       (second, "f.png")):
+        (path / name).touch()
+    monkeypatch.setattr(analytics, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(analytics.bench, "_session_directories", lambda _: [first, second])
+    monkeypatch.setattr(analytics.bench, "_read_status", lambda directory: status[directory])
+    monkeypatch.setattr(analytics.bench, "_session_rating_map",
+                        lambda directory: {"rated.png": 4} if directory == first else {})
+    monkeypatch.setattr(analytics.bench, "_resolved_wildcard_summary",
+                        lambda source, resolved, folder: [{"phrase": "red bikini"}])
+
+    first_batch = analytics.insights_review_batch(tmp_path)
+    assert len(first_batch["items"]) == 5
+    assert first_batch["remaining"] == 6
+    assert first_batch["unavailable"] == 1
+    assert all(item["jobId"] == "run-a" and item["epoch"] == 67 for item in first_batch["items"])
+    assert all(item["wildcards"] == [{"phrase": "red bikini"}] for item in first_batch["items"])
+    assert not {"rated.png", "base.png", "wrong.png", "missing.png"} & {
+        item["mediaFile"] for item in first_batch["items"]}
+    skipped = first_batch["items"][0]["id"]
+    next_batch = analytics.insights_review_batch(tmp_path, excluded=[skipped])
+    assert skipped not in {item["id"] for item in next_batch["items"]}
+    assert next_batch["remaining"] == 5
+
+
+def test_insights_vl_visibility_is_set_scoped_and_keeps_original_state(tmp_path):
+    import json
+    from tool.server import run_analytics as analytics
+    from tool.server.folder_state_store import read_folder_state
+    state_path = tmp_path / ".webcap_state.json"
+    state_path.write_text(json.dumps({"ratings_by_media": {"old.png": 5},
+                                      "test_vision": {"byMedia": {"old.png": {"comparison": []}}}}),
+                          encoding="utf-8")
+    result = analytics.save_insights_groups(tmp_path, ["background", "bust", "background"])
+    assert result["hiddenVlGroups"] == ["background", "bust"]
+    saved = read_folder_state(state_path)
+    assert saved["ratings_by_media"]["old.png"] == 5
+    assert "old.png" in saved["test_vision"]["byMedia"]
+    assert analytics.save_insights_groups(tmp_path, [])["hiddenVlGroups"] == []
+    assert read_folder_state(state_path)["insightsHiddenVlGroups"] == []
+
+
+def test_insights_ui_reuses_existing_evaluation_and_test_launch_contracts():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    test_js = (root / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    finder = (root / "tool/server/epoch_finder.py").read_text(encoding="utf-8")
+    for phrase in ("run_insights_review", "run_insights_groups", "test_rate_result"):
+        assert phrase in js and phrase in finder + js
+    assert "window.testGenerationsPrepareContender" in test_js
+    assert "source.sourceJobId" in test_js
+    assert "selectedCandidates=new Set([candidate])" in test_js
+    assert "saveTestBenchState()" in test_js
+    assert "test_enqueue" not in js  # no automatic GPU work in Insights
+    assert 'id="run-lab-review-dialog"' in html
+    assert 'id="run-lab-featured"' in html
+    assert 'data-test-workspace-mode="analytics"' in html  # internal routing unchanged
+    assert ">Insights</button>" in html

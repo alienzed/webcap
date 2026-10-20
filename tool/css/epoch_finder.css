@@ -521,3 +521,9 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .run-lab-explorer-row small{font-size:11px;opacity:.7;margin-top:4px}
 @media(max-width:1300px){#run-analytics-screen .run-lab-summary{grid-template-columns:repeat(2,minmax(0,1fr))}#run-analytics-screen .run-lab-two-col{grid-template-columns:1fr}}
 @media(max-width:700px){#run-analytics-screen .run-lab-challenge{grid-template-columns:1fr}#run-analytics-screen .run-lab-steps{border-left:0;border-top:1px solid #6a614f;padding:14px 0 0}#run-analytics-screen .run-lab-contender{grid-template-columns:29px minmax(0,1fr) auto;gap:8px}#run-analytics-screen .run-lab-score{grid-column:2;justify-self:start;text-align:left}#run-analytics-screen .run-lab-contender button{grid-column:3;grid-row:1}}
+
+#run-analytics-screen .epoch-finder-dashboard>.run-analytics-lab{grid-column:1/-1;min-width:0}
+#run-analytics-screen .epoch-finder-sidebar>.epoch-finder-panel details{min-width:0}
+#run-analytics-screen .epoch-finder-sidebar>.epoch-finder-panel details>summary{cursor:pointer;font-weight:700;font-size:13px;padding:2px 0}
+#run-analytics-screen .epoch-finder-sidebar>.epoch-finder-panel details[open]>summary{margin-bottom:12px}
+#run-analytics-screen #run-analytics-report-surface:not(.hidden){grid-column:1/-1;min-width:0}

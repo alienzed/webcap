@@ -494,3 +494,13 @@ def test_insights_rating_missions_use_real_saved_coverage_and_batch_progress():
     assert "data-lab-action=\"review\"" in js
     assert "ratingDistribution" in js
     assert "test_rate_result" in js
+
+
+def test_insights_archive_warnings_do_not_fill_landing_page():
+    from pathlib import Path
+    script = (Path(__file__).resolve().parents[1] / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    history = script[script.index("  function labHistory(){"):script.index("  function labDiscoveries(){")]
+    assert "<details><summary>" in history
+    assert "training-history notice" in history
+    assert "labInventory.warnings.join(' · ')" in history
+    assert "labInventory.warnings.length" in history

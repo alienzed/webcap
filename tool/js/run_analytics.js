@@ -457,7 +457,8 @@
       }).join('')+'</details>':'<p class="run-lab-footnote">No archived runs were found for this Set.</p>')+
       '<p class="run-lab-footnote">Archived selection is not a measured quality result. Detailed loss and timing are read only when you request AI Insights.</p>';
     if(labInventory.warnings&&labInventory.warnings.length){
-      host.insertAdjacentHTML('beforeend','<p class="run-lab-footnote">'+esc(labInventory.warnings.join(' · '))+'</p>');
+      var count=labInventory.warnings.length;
+      host.insertAdjacentHTML('beforeend','<details><summary>'+count+' training-history notice'+(count===1?'':'s')+'</summary><p class="run-lab-footnote">'+esc(labInventory.warnings.join(' · '))+'</p></details>');
     }
   }
   function labDiscoveries(){

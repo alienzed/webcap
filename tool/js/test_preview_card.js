@@ -131,31 +131,55 @@
 
     if (Array.isArray(o.wildcards) && o.wildcards.length) {
       var chips = node('div', 'test-preview-card-chips');
+      var extra = [];
       o.wildcards.forEach(function (choice) {
         var value = typeof choice === 'string' ? choice : text(choice.value || choice.text);
         if (!value) return;
         var chip = node('span', 'test-preview-card-chip', value);
         if (choice && typeof choice === 'object' && choice.label) chip.title = text(choice.label);
+        if (chips.querySelectorAll('.test-preview-card-chip').length >= 2) {
+          chip.classList.add('hidden');
+          extra.push(chip);
+        }
         chips.appendChild(chip);
       });
+      if (extra.length) {
+        var expand = node('button', 'test-preview-card-chip-more', '+' + extra.length + ' more');
+        expand.type = 'button';
+        expand.setAttribute('aria-expanded', 'false');
+        expand.title = 'Show all wildcard choices';
+        expand.addEventListener('click', function (event) {
+          event.stopPropagation();
+          var open = expand.getAttribute('aria-expanded') !== 'true';
+          extra.forEach(function (chip) { chip.classList.toggle('hidden', !open); });
+          expand.setAttribute('aria-expanded', String(open));
+          expand.textContent = open ? 'Show less' : '+' + extra.length + ' more';
+        });
+        chips.appendChild(expand);
+      }
       if (chips.childNodes.length) copy.appendChild(chips);
     }
 
+    // The compact bottom row owns per-render evaluations, Details and actions.
+    // Epoch-wide averages remain queryable but live inside Details, not beside
+    // the per-render VL score.
+    var utility = node('div', 'test-preview-card-utility');
+    var metrics = null;
     if (o.testEvaluation) {
-      // Keep established selectors for the existing Test session's live VL updates.
       var evaluation = node('div', 'test-generations-result-evaluation hidden');
-      var metrics = node('div', 'test-generations-result-epoch-metrics');
-      var manual = node('span', 'test-generations-vl-epoch-score hidden');
-      manual.dataset.testManualEpochScore = '1';
-      var vl = node('span', 'test-generations-vl-epoch-score hidden');
-      vl.dataset.testVlEpochScore = '1';
-      metrics.appendChild(manual); metrics.appendChild(vl);
-      evaluation.appendChild(metrics);
       var action = node('button', 'review-captions-btn test-generations-vl-result hidden');
       action.type = 'button';
       action.dataset.testVlResult = text(o.testEvaluation.mediaFile);
       evaluation.appendChild(action);
-      copy.appendChild(evaluation);
+      utility.appendChild(evaluation);
+
+      metrics = node('div', 'test-generations-result-epoch-metrics');
+      var manual = node('span', 'test-generations-vl-epoch-score hidden');
+      manual.dataset.testManualEpochScore = '1';
+      var vl = node('span', 'test-generations-vl-epoch-score hidden');
+      vl.dataset.testVlEpochScore = '1';
+      metrics.appendChild(manual);
+      metrics.appendChild(vl);
     } else if (o.evaluations && o.evaluations.length) {
       var row = node('div', 'test-preview-card-evaluations');
       o.evaluations.forEach(function (entry) {
@@ -164,44 +188,48 @@
         if (entry.title) badge.title = entry.title;
         row.appendChild(badge);
       });
-      if (row.childNodes.length) copy.appendChild(row);
+      if (row.childNodes.length) utility.appendChild(row);
     }
 
-    if (Array.isArray(o.details) && o.details.length || Array.isArray(o.actions) && o.actions.length) {
-      var utility = node('div', 'test-preview-card-utility');
-      if (o.details && o.details.length) {
-        var details = node('details','test-preview-card-details');
-        details.appendChild(node('summary','', 'Details'));
-        var inner = node('div','test-preview-card-details-content');
-        o.details.forEach(function (entry) {
-          if (!entry || entry.value == null || entry.value === '') return;
-          var section = node('section');
-          if (entry.label) section.appendChild(node('strong','',entry.label));
-          if (Array.isArray(entry.value)) entry.value.forEach(function (line) {
-            section.appendChild(node('p','',line));
-          });
-          else section.appendChild(node(entry.pre ? 'pre' : 'p','',entry.value));
-          inner.appendChild(section);
-        });
-        details.appendChild(inner);utility.appendChild(details);
+    if (o.details && o.details.length || metrics) {
+      var details = node('details','test-preview-card-details');
+      details.appendChild(node('summary','', 'Details'));
+      var inner = node('div','test-preview-card-details-content');
+      if (metrics) {
+        var epochSection = node('section','test-preview-card-epoch-metrics hidden');
+        epochSection.appendChild(node('strong','', 'Epoch averages'));
+        epochSection.appendChild(metrics);
+        inner.appendChild(epochSection);
       }
-      if (o.actions && o.actions.length) {
-        var menu = node('details','test-preview-card-menu');
-        var trigger = node('summary','','⋯');trigger.title = 'More render actions';
-        trigger.setAttribute('aria-label','More render actions');
-        menu.appendChild(trigger);
-        var items = node('div','test-preview-card-menu-items');
-        o.actions.forEach(function (action) {
-          var item = node(action.url ? 'a' : 'button', '',action.label);
-          if (action.url) {item.href = action.url;item.target='_blank';item.rel='noopener noreferrer';}
-          else {item.type='button';item.addEventListener('click', function (event) {event.stopPropagation();menu.open=false;action.onClick();});}
-          if (action.dataset) Object.keys(action.dataset).forEach(function (key) {item.dataset[key] = text(action.dataset[key]);});
-          items.appendChild(item);
+      (o.details || []).forEach(function (entry) {
+        if (!entry || entry.value == null || entry.value === '') return;
+        var section = node('section');
+        if (entry.label) section.appendChild(node('strong','',entry.label));
+        if (Array.isArray(entry.value)) entry.value.forEach(function (line) {
+          section.appendChild(node('p','',line));
         });
-        menu.appendChild(items);utility.appendChild(menu);
-      }
-      copy.appendChild(utility);
+        else section.appendChild(node(entry.pre ? 'pre' : 'p','',entry.value));
+        inner.appendChild(section);
+      });
+      details.appendChild(inner);
+      utility.appendChild(details);
     }
+    if (o.actions && o.actions.length) {
+      var menu = node('details','test-preview-card-menu');
+      var trigger = node('summary','','⋯');trigger.title = 'More render actions';
+      trigger.setAttribute('aria-label','More render actions');
+      menu.appendChild(trigger);
+      var items = node('div','test-preview-card-menu-items');
+      o.actions.forEach(function (action) {
+        var item = node(action.url ? 'a' : 'button', '',action.label);
+        if (action.url) {item.href = action.url;item.target='_blank';item.rel='noopener noreferrer';}
+        else {item.type='button';item.addEventListener('click', function (event) {event.stopPropagation();menu.open=false;action.onClick();});}
+        if (action.dataset) Object.keys(action.dataset).forEach(function (key) {item.dataset[key] = text(action.dataset[key]);});
+        items.appendChild(item);
+      });
+      menu.appendChild(items);utility.appendChild(menu);
+    }
+    if (utility.childNodes.length) copy.appendChild(utility);
     footer.appendChild(copy);card.appendChild(footer);
     return card;
   }

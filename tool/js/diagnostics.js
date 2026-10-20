@@ -381,8 +381,17 @@ function refreshUnifiedModelAssessment() {
       capabilityRuns.slice().reverse().forEach(function (saved) {
         var byKind = saved.models && saved.models[ref] || {};
         Object.keys(byKind).forEach(function (kind) {
+          // Old Scene prompts did not use WebCap's real production contract.
+          if (kind.indexOf('director_scene_plan_') === 0 &&
+              saved.protocol !== 'webcap-model-assessment-structured-v2') return;
           var probe = byKind[kind];
-          if (!tests[kind] || Number((probe.counts || {}).completed || 0) > 0) tests[kind] = probe;
+          var passed = Number((probe.counts || {}).completed || 0) > 0;
+          var selected = tests[kind];
+          var selectedPassed = selected && Number((selected.counts || {}).completed || 0) > 0;
+          if (!selected || (passed && !selectedPassed) ||
+              (passed && selected._imported && !saved.importedFrom)) {
+            tests[kind] = Object.assign({}, probe, {_imported: !!saved.importedFrom});
+          }
         });
       });
       var thinking = tests.director_thinking;
@@ -415,7 +424,9 @@ function refreshUnifiedModelAssessment() {
 
       var allTests = Object.keys(tests).map(function (probe) { return tests[probe]; });
       var structuredTests = Object.keys(tests).filter(function (kind) { return kind.indexOf('director_scene_plan_') === 0 && Number((tests[kind].counts || {}).completed || 0) > 0; }).map(function (kind) { return tests[kind]; });
-      var speedTests = supportsDirector ? structuredTests : allTests;
+      var speedTests = (supportsDirector ? structuredTests : allTests).filter(function (item) {
+        return !item._imported;
+      });
       var nativeRates = speedTests.flatMap(function (entry) { return entry.generationSpeedSamples || []; }).filter(function (v) { return Number(v) > 0; });
       var rates = nativeRates.length ? nativeRates : speedTests.flatMap(function (entry) { return entry.throughputSamples || []; })
         .filter(function (value) { return Number(value) > 0; });

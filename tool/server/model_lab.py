@@ -579,13 +579,22 @@ def _set_current_job(run_id, job_id):
             active["jobId"] = str(job_id or "")
 
 
+def _mark_retry(run, kind, role, model_ref, file_name):
+    if run.get("retryPhase"):
+        return
+    key = _attempt_key(kind, model_ref, file_name)
+    deferred = run.setdefault("deferredRetries", [])
+    if not any(_attempt_key(row["kind"], row["modelRef"], row["file"]) == key for row in deferred):
+        deferred.append({"kind": kind, "role": role, "modelRef": model_ref, "file": file_name})
+
+
 def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
     if _attempt_completed(run, kind, model_ref, file_name):
         return _completed_attempt(run, kind, model_ref, file_name)
     key = _attempt_key(kind, model_ref, file_name)
     # Failed probes wait until all missing work for this model has been attempted.
     if not run.get("retryPhase") and (run.get("previousFailures") or {}).get(key):
-        run.setdefault("deferredRetries", []).append({"kind": kind, "role": role, "modelRef": model_ref, "file": file_name})
+        _mark_retry(run, kind, role, model_ref, file_name)
         return {"kind": kind, "status": "deferred", "modelRef": model_ref, "file": file_name}
 
     stop_event = _active_stop_event(run["id"])
@@ -697,6 +706,8 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                     finishedAt=_now_iso(),
                     result=result,
                 )
+                if validation_error:
+                    _mark_retry(run, kind, role, model_ref, file_name)
                 try:
                     job_status(job_id, consume=True)
                 except Exception:
@@ -720,6 +731,7 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
             finishedAt=_now_iso(),
             error=str(exc),
         )
+        _mark_retry(run, kind, role, model_ref, file_name)
         return next(row for row in run["attempts"] if row.get("id") == attempt_id)
     finally:
         _set_current_job(run["id"], "")

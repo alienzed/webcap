@@ -56,3 +56,17 @@ def test_no_new_storage_and_pruned_frames_remain_without_cards():
     assert "return null;" in epoch_info
     assert "if(!card){card=renderCard(item,view)" in epoch_info
     assert "prior.dataset.cardVersion===version" in finder
+
+
+def test_campaign_changed_cards_replace_prior_and_reference_updates_refresh():
+    finder = read("tool/js/epoch_finder.js")
+    assert "if(prior)prior.remove();" in finder
+    assert "(u.referenceAssessments||[]).length" in finder.split("var key=",1)[1].split("if(lastFrameKey===key)",1)[0]
+    assert "(u.dinoAssessments||[]).length" in finder.split("var key=",1)[1].split("if(lastFrameKey===key)",1)[0]
+
+
+def test_epoch_paging_preserves_nodes_and_empty_message_is_unique():
+    epochs = read("tool/js/epoch_info.js")
+    assert "if(card!==at)gallery.insertBefore(card,at);" in epochs
+    assert "gallery.querySelector('.epoch-info-empty')" in epochs
+    assert "if(!items.length&&!empty)" in epochs

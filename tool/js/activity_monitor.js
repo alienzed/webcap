@@ -401,13 +401,16 @@
       var measured = bytesLabel(item.bytesScanned);
       if (measured) parts.push(measured + ' scanned');
     } else {
-      if (item.modelId) parts.push(item.modelId);
+      if (item.modelLabel || item.modelId) parts.push(item.modelLabel || item.modelId);
+      if (item.storyTitle) parts.push(item.storyTitle);
+      if (Number(item.sceneNumber) > 0) parts.push('Scene ' + Number(item.sceneNumber) + (item.sceneTitle ? ': ' + item.sceneTitle : ''));
+      else if (item.sceneTitle) parts.push(item.sceneTitle);
       if (item.operation) parts.push(String(item.operation).replace(/_/g, ' '));
       if (item.kind === 'director' && item.finishReason) parts.push('finish=' + String(item.finishReason));
       if (item.kind === 'director' && Number(item.promptTokens) > 0) parts.push('prompt=' + String(item.promptTokens));
       if (item.kind === 'director' && Number(item.outputTokens) > 0) parts.push('output=' + String(item.outputTokens));
       if (item.folder) parts.push(item.folder);
-      if (item.sceneId && !item.label) parts.push('Scene ' + item.sceneId);
+      if (item.sceneId && !item.sceneTitle && !item.sceneNumber && !item.label) parts.push('Scene ' + item.sceneId);
     }
     return parts.join(' · ');
   }
@@ -867,8 +870,11 @@
 
       var detail = document.createElement('small');
       var parts = [];
-      if (job.sceneId) parts.push('Scene ' + String(job.sceneId));
-      if (job.modelId) parts.push(String(job.modelId));
+      if (job.storyTitle) parts.push(String(job.storyTitle));
+      if (Number(job.sceneNumber) > 0) parts.push('Scene ' + Number(job.sceneNumber) + (job.sceneTitle ? ': ' + job.sceneTitle : ''));
+      else if (job.sceneTitle) parts.push(String(job.sceneTitle));
+      else if (job.sceneId) parts.push('Scene ' + String(job.sceneId));
+      if (job.modelLabel || job.modelId) parts.push(String(job.modelLabel || job.modelId));
       detail.textContent = parts.join(' · ') || 'Waiting';
 
       copy.appendChild(title);

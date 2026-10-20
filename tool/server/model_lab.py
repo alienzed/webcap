@@ -714,7 +714,15 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                 result = job.get("result") if isinstance(job.get("result"), dict) else {}
                 required_result = {"vision_open": "sight", "vision_group_aware": "vocabularySight"}.get(kind)
                 validation_error = ""
+                failure_kind = ""
                 if kind.startswith("director_scene_plan_"):
+                    text = str(result.get("text") or "")
+                    if not text.strip():
+                        failure_kind = "empty"
+                    elif text.count("\ufffd") >= 2:
+                        failure_kind = "garbled"
+                    elif "<think>" in text.lower():
+                        failure_kind = "leakage"
                     try:
                         expected = int(kind.rsplit("_", 1)[-1]) // 256
                         plan = json.loads(str(result.get("text") or ""))
@@ -729,7 +737,15 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                                 raise ValueError("Storyboard Scene is incomplete.")
                             if len(scene["prompt"].split()) < 80 or not 6 <= scene["suggestedDurationSeconds"] <= 15:
                                 raise ValueError("Storyboard Scene has insufficient prompt detail or invalid duration.")
-                        if str(result.get("finishReason") or "").lower() == "length":
+                        if len(scenes) >= 3 and any(
+                            scenes[i]["prompt"].strip() == scenes[i + 1]["prompt"].strip()
+                            == scenes[i + 2]["prompt"].strip()
+                            for i in range(len(scenes) - 2)
+                        ):
+                            failure_kind = "looping"
+                            raise ValueError("Model repeated identical full Scene prompts.")
+                        if str(result.get("finishReason") or "").lower() in {"length", "max_tokens"}:
+                            failure_kind = "capacity"
                             raise ValueError("Structured response was truncated at its token budget.")
                         # Provider completion usage may include hidden/separate reasoning.
                         # Do not call those tokens verified answer output.
@@ -754,7 +770,11 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                         else:
                             result["verifiedOutputTokens"] = 0
                     except (ValueError, TypeError, KeyError) as exc:
+                        if not failure_kind:
+                            failure_kind = "contract"
                         validation_error = "Storyboard structured-output validation failed: " + str(exc)
+                    if failure_kind in {"empty", "garbled", "leakage"} and not validation_error:
+                        validation_error = "Storyboard output pathology: " + failure_kind
                 if required_result and not isinstance(result.get(required_result), dict):
                     validation_error = result.get("structureWarning") or "Vision returned no usable structured evidence."
                     if not str(result.get("text") or "").strip():
@@ -767,6 +787,7 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                     attempt_id,
                     status="failed" if validation_error else "completed",
                     error=validation_error,
+                    failureKind=failure_kind if validation_error else "",
                     finishedAt=_now_iso(),
                     result=result,
                 )
@@ -794,6 +815,7 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
             status="failed",
             finishedAt=_now_iso(),
             error=str(exc),
+            failureKind="runtime",
         )
         _mark_retry(run, kind, role, model_ref, file_name)
         return next(row for row in run["attempts"] if row.get("id") == attempt_id)

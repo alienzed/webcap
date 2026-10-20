@@ -4960,9 +4960,6 @@
       var valid=Number.isInteger(count)&&count>=1&&count<=20;
       var autoVl=el('test-generations-inline-auto-vl').checked;
       el('test-generations-run-btn').textContent=!valid?'Run Tests':count>1?'Run '+count+' Tests':autoVl?'Run Test + VL':'Run Test';
-      el('test-generations-inline-launch-summary').textContent=!valid?'Choose 1–20 sessions'
-        :count>1?count+' sessions, with a fresh seed for each'+(autoVl?' · VL assessment after generation':'')
-        :'One session using the selected seed'+(autoVl?' · VL assessment after generation':'');
     }
     ['test-generations-inline-count','test-generations-inline-auto-vl'].forEach(function(id){
       el(id).addEventListener('input',syncInlineLaunch);

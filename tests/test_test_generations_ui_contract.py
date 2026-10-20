@@ -241,7 +241,7 @@ def test_test_generation_sessions_and_candidate_removal_contract():
     assert removal.index("if (!confirmed) return;") < removal.index("removeCandidate(candidateFile, currentSession)")
     assert "window.confirm(" in removal
     assert "row.dataset.sessionName = name;" in script
-    assert "row.dataset.queueJobId = String(job.id || '');" in script
+    assert "row.dataset.queueJobId = jobId;" in script
     assert ".test-generations-session-row" in css
     assert ".test-generations-session-progress" in css
 
@@ -759,7 +759,8 @@ def test_test_generations_queue_contract():
     for method in ("enqueue", "queued_jobs", "cancel_queued", "clear_queued"):
         assert f"def {method}(" in backend
     assert 'SHARED_EXECUTION_LANE = "inference"' in backend
-    assert "execution_enqueue(" in backend
+    assert "from .inference_runner import enqueue_test" in backend
+    assert "latest = _enqueue_frozen_test_request(" in backend
     assert 'operation == "test_enqueue"' in backend
     assert 'operation == "test_queue"' in backend
     assert 'operation == "test_queue_cancel"' in backend
@@ -1056,7 +1057,7 @@ def test_test_generations_exposes_training_candidates_link_from_unique_run_prove
     script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     candidates = (ROOT / "tool/js/training_candidates.js").read_text(encoding="utf-8")
     assert 'id="test-generations-candidates-btn"' in html
-    block = script.split("function syncCandidatesButton(payload)", 1)[1].split("function", 1)[0]
+    block = script.split("function syncCandidatesButton(payload)", 1)[1].split("\n  function ", 1)[0]
     assert "payload.candidateRuns" in block
     assert "run.jobId && run.folder" in block
     assert "button.classList.toggle('hidden', !runs.length);" in block

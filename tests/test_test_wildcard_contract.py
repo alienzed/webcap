@@ -218,6 +218,9 @@ def test_core_group_defaults_are_guidance_and_explicit_focus_can_promote_them():
     assert "- Vary only (unscored): Viewpoint, Background, Lighting." in prompt
     assert "- Leakage (secondary independence): Position, Hair, Body, Clothing." in prompt
     assert "explicit focus can promote a generic group" in prompt
+    incidental = build_request(["A person with blonde hair in a chair."],
+                               focus="chair", annotations=[{"Hair": ["blonde"]}])
+    assert '"group":"Hair"' not in incidental["prompt"]
 
 
 def test_wildcard_schema_does_not_require_every_phrase_to_be_a_set_tag():

@@ -4,7 +4,7 @@
   var selected = new Set(), anchor = -1;
   var source = '', pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
   var needsLoad = true;
-  var explorerMode = 'grid', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null;
+  var explorerMode = 'grid', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null, autoMetadataRequested = new Set();
   function isExternal() { return source === 'external'; }
   function externalParams() { return {path:externalPath, min_side:el('media-explorer-min-side').value, min_mp:el('media-explorer-min-mp').value, min_duration:el('media-explorer-min-duration').value, max_duration:el('media-explorer-max-duration').value}; }
   function syncExternalControls() {
@@ -46,7 +46,10 @@
       var summary = job.total ? 'Technical metadata ' + job.completed + '/' + job.total + ' · ' + job.failed + ' failed' : '';
       node.textContent = job.running ? summary + (job.current ? ' · ' + job.current : '') : summary;
       node.classList.toggle('hidden', !summary);
-      if (job.lastError) node.title = job.lastError;
+      if (job.lastError) {
+        node.title = job.lastError;
+        if (!job.running && job.failed) window.reportConsoleError('Media Explorer metadata', job.lastError);
+      }
       if (job.running) externalMetadataTimer = setTimeout(externalMetadataStatus, 1600);
       else if (job.total) load(true);
     }).catch(report);
@@ -611,8 +614,11 @@
       if (isExternal()) {
         if (!data.complete) { clearTimeout(externalDiscoveryTimer); externalDiscoveryTimer = setTimeout(function () { load(true); }, 1200); }
         else if (incoming.length && !el('media-explorer-min-side').value && !el('media-explorer-min-mp').value && !el('media-explorer-min-duration').value && !el('media-explorer-max-duration').value) {
-          var unanalyzed = incoming.filter(function (item) { return !item.metadata; });
-          if (unanalyzed.length) requestExternalMetadata('loaded', unanalyzed.map(function (item) { return item.relativePath; }));
+          var unanalyzed = incoming.filter(function (item) { return !item.metadata && !autoMetadataRequested.has(item.relativePath); });
+          if (unanalyzed.length) {
+            unanalyzed.forEach(function (item) { autoMetadataRequested.add(item.relativePath); });
+            requestExternalMetadata('loaded', unanalyzed.map(function (item) { return item.relativePath; }));
+          }
         }
       }
       text(el('media-explorer-status'), '');
@@ -708,7 +714,9 @@
   });
   document.querySelectorAll('[data-explorer-mode]').forEach(function (btn) { btn.addEventListener('click', function () { setExplorerMode(btn.dataset.explorerMode); }); });
   el('media-explorer-open-path').addEventListener('click', function () {
-    externalPath = el('media-explorer-external-path').value.trim();
+    var nextPath = el('media-explorer-external-path').value.trim();
+    if (nextPath !== externalPath) autoMetadataRequested.clear();
+    externalPath = nextPath;
     stopExternalTimers(); selected.clear(); updateSelection();
     load(true);
   });

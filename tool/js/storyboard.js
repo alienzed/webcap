@@ -2079,6 +2079,11 @@
         throw new Error('Director returned an empty Story outline.');
       }
       storyState.director.individualDevelopmentProgress = { completed: 0, total: outline.scenes.length, phase: 'developing' };
+      window.publishActivityProgress({ id: 'storyboard:individual:' + storyId, kind: 'storyboard', lane: 'background',
+        title: 'Develop Scenes one at a time', storyId: storyId, status: 'running',
+        phase: 'Developing Scene 1 of ' + outline.scenes.length,
+        progress: { completed: 0, total: outline.scenes.length },
+        progressLabel: '0 of ' + outline.scenes.length + ' Scenes developed' });
       return consumeDirectorJob(outlineResult.jobId);
     }).then(function () {
       return outline.scenes.reduce(function (promise, _plannedScene, index) {
@@ -2099,6 +2104,12 @@
             }
             authoredScenes.push(sceneResult.scene);
             storyState.director.individualDevelopmentProgress.completed = authoredScenes.length;
+            window.publishActivityProgress({ id: 'storyboard:individual:' + storyId, kind: 'storyboard', lane: 'background',
+              title: 'Develop Scenes one at a time', storyId: storyId, status: 'running',
+              phase: authoredScenes.length < outline.scenes.length
+                ? 'Developing Scene ' + (authoredScenes.length + 1) + ' of ' + outline.scenes.length : 'Applying Scenes',
+              progress: { completed: authoredScenes.length, total: outline.scenes.length },
+              progressLabel: authoredScenes.length + ' of ' + outline.scenes.length + ' Scenes developed' });
             return consumeDirectorJob(sceneResult.jobId);
           });
         });
@@ -2315,6 +2326,7 @@
         reportError(err);
       }
     }).finally(function () {
+      window.finishActivityProgress('storyboard:individual:' + storyId);
       storyState.director.individualDevelopmentProgress = null;
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();

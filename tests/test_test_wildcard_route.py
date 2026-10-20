@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import pytest
 
@@ -14,6 +15,12 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     (set_root / "two.txt").write_text("subject sitting on a couch", encoding="utf-8")
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members", lambda folder, job_id: {"one.png", "two.jpg"})
+    (set_root / ".webcap_state.json").write_text(json.dumps({
+        "caption_group_tags_by_media": {
+            "one.png": {"Shirt Shape": ["fitted"], "Clothing": ["shirt"]},
+            "two.jpg": {"Shirt Shape": ["loose"], "Background": ["studio"]},
+        }
+    }), encoding="utf-8")
 
     seen = {}
     monkeypatch.setattr(
@@ -34,7 +41,10 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
         "jobId": "run-1",
         "directorModel": "director.gguf",
         "focus": "shirt",
-        "vocabulary": [{"group": "Clothing", "alias": "Garment type", "terms": ["shirt", "jacket"]}],
+        "vocabulary": [
+            {"group": "Clothing", "alias": "Garment type", "terms": ["shirt", "jacket"]},
+            {"group": "Shirt Shape", "alias": "Shirt construction", "terms": ["fitted", "loose"]},
+        ],
     })
 
     assert response.status_code == 202
@@ -45,7 +55,9 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     assert "subject standing in a kitchen" in seen["contract"]["prompt"]
     assert "subject sitting on a couch" in seen["contract"]["prompt"]
     assert "Explicit focus: shirt" in seen["contract"]["prompt"]
-    assert '"terms": ["shirt", "jacket"]' in seen["contract"]["prompt"]
+    assert '"group":"Shirt Shape"' in seen["contract"]["prompt"]
+    assert '"alias":"Shirt construction"' in seen["contract"]["prompt"]
+    assert '"group":"Clothing"' not in seen["contract"]["prompt"]
     assert "Set name: set" in seen["contract"]["prompt"]
     assert response.get_json()["focus"] == "shirt"
     assert response.get_json()["setName"] == "set"

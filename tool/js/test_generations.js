@@ -3278,6 +3278,39 @@
     return isFinite(value) ? value : null;
   }
 
+  function sharedTestCard(result, status, className, muted, failed) {
+    var mediaFile = resultMediaFile(result), session = String(status && status.session || '');
+    var identity = candidateIdentity(result), provenance = result && result.provenance || {};
+    var title = identity.primary;
+    if (result && result.strength != null) title += ' · Weight ' + result.strength;
+    var epochText = provenance.sourceJobId && Number.isInteger(provenance.sourceEpoch)
+      ? 'Epoch ' + provenance.sourceEpoch : '';
+    var metrics = [];
+    var megapixels = testResultMegapixels(status), strength = testResultStrength(status, result);
+    if (megapixels != null) metrics.push(megapixels + ' MP');
+    if (strength != null) metrics.push('Strength ' + strength);
+    var elapsed = result && result.elapsedMs != null ? formatCandidateElapsed(result.elapsedMs) : '';
+    return createTestPreviewCard({
+      className: className, failed: !!failed, title: title,
+      titleTooltip: identity.primary + (identity.secondary ? ' · ' + identity.secondary : ''),
+      sourceDetail: identity.secondary ? (stagedFileParts(identity.secondary).detail || identity.secondary.replace(/\.safetensors$/i,'')) : '',
+      sourceTooltip: identity.secondary,
+      elapsed: failed && elapsed ? 'Failed after ' + elapsed : elapsed,
+      metadata: failed ? [] : metrics,
+      media: !failed && session && mediaFile ? {
+        kind: resultMediaKind(result), url: mediaUrl(session, mediaFile), muted: !!muted, alt: 'Test preview image'
+      } : null,
+      placeholder: failed ? 'Generation failed' : (!mediaFile ? 'Preview unavailable' : null),
+      error: failed ? String(result.error || 'Generation failed.') : '',
+      removeNode: buildResultRemoveButton(result),
+      rating: !failed && session && mediaFile ? { value: result.rating, session: session, mediaFile: mediaFile } : null,
+      testEvaluation: !failed && mediaFile ? {mediaFile: mediaFile} : null,
+      epochLink: epochText ? {text: epochText, jobId: provenance.sourceJobId, epoch: provenance.sourceEpoch} : null,
+      videoTransport: appendTestPreviewVideo,
+      dataset: { testVlFile: mediaFile }
+    });
+  }
+
   function buildResultFooter(result, options) {
     var opts = options || {};
     var footer = document.createElement('div');
@@ -3657,16 +3690,10 @@
     var videos = [];
 
     pair.forEach(function (result) {
-      var item = document.createElement('article');
-      item.className = 'test-generations-compare-item';
-      item.dataset.testVlFile = resultMediaFile(result);
+      var item = sharedTestCard(result, status, 'test-generations-compare-item', true);
 
-      var preview = appendTestPreview(item, sessionName, result, { muted: true });
-      if (preview && preview.tagName === 'VIDEO') videos.push(preview);
-
-      var remove = buildResultRemoveButton(result);
-      if (remove) item.appendChild(remove);
-      item.appendChild(buildResultFooter(result, { sessionName: sessionName, status: status }));
+      var preview = item.querySelector('video');
+      if (preview) videos.push(preview);
       renderTestVlCard(item, result, candidateScores);
       stage.appendChild(item);
     });
@@ -3747,23 +3774,8 @@
         return;
       }
 
-      var card = document.createElement('article');
-      card.className = 'test-generations-result-card';
+      var card = sharedTestCard(result, status, 'test-generations-result-card', false);
       card.dataset.resultKey = resultKey;
-      card.dataset.testVlFile = mediaFile;
-
-      if (sessionName && mediaFile) {
-        appendTestPreview(card, sessionName, result);
-      } else {
-        var placeholder = document.createElement('div');
-        placeholder.className = 'test-generations-preview-placeholder';
-        placeholder.textContent = 'Preview unavailable';
-        card.appendChild(placeholder);
-      }
-
-      var remove = buildResultRemoveButton(result);
-      if (remove) card.appendChild(remove);
-      card.appendChild(buildResultFooter(result, { sessionName: sessionName, status: status }));
       renderTestVlCard(card, result, candidateScores);
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
@@ -3792,18 +3804,8 @@
         return;
       }
 
-      var card = document.createElement('article');
-      card.className = 'test-generations-result-card is-failed';
+      var card = sharedTestCard(failure, status, 'test-generations-result-card is-failed', false, true);
       card.dataset.resultKey = failureKey;
-
-      var placeholder = document.createElement('div');
-      placeholder.className = 'test-generations-preview-placeholder test-generations-failure-placeholder';
-      placeholder.textContent = 'Generation failed';
-      card.appendChild(placeholder);
-
-      var remove = buildResultRemoveButton(failure);
-      if (remove) card.appendChild(remove);
-      card.appendChild(buildResultFooter(failure, { failed: true, status: status }));
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);

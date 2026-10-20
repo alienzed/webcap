@@ -121,6 +121,7 @@ function modelLabAttemptLabel(kind) {
     set_vocabulary_challenge: 'Set vocabulary challenge'
   };
   if (labels[kind]) return labels[kind];
+  if (String(kind || '').indexOf('director_scene_plan_') === 0) return 'Storyboard JSON · ' + kind.split('_').pop() + ' tokens';
   if (String(kind || '').indexOf('vision:') === 0) {
     return String(kind).endsWith('_challenge') ? 'Vision vocabulary challenge' : 'Vision vocabulary synthesis';
   }
@@ -128,15 +129,24 @@ function modelLabAttemptLabel(kind) {
 }
 
 function modelLabRunProgress(run) {
+  var work = run && run.work;
+  if (work && Number(work.planned) > 0) {
+    var bits = [
+      Number(work.completed) + '/' + Number(work.planned) + ' completed',
+      Number(work.remaining) + ' remaining'
+    ];
+    if (work.reused) bits.push(work.reused + ' reused');
+    if (work.skipped) bits.push(work.skipped + ' skipped');
+    if (work.deferred) bits.push(work.deferred + ' retry pending');
+    if (work.failed) bits.push(work.failed + ' failed');
+    return bits.join(' · ');
+  }
+  // Historical runs without a frozen assessment protocol have no provable total.
   var summary = run && run.summary || {};
-  var completed = Number(summary.completed || 0);
-  var failed = Number(summary.failed || 0);
-  var skipped = Number(summary.skipped || 0);
-  var interrupted = Number(summary.interrupted || 0);
-  var bits = [completed + ' completed'];
-  if (failed) bits.push(failed + ' failed');
-  if (skipped) bits.push(skipped + ' skipped');
-  if (interrupted) bits.push(interrupted + ' interrupted');
+  var bits = [Number(summary.completed || 0) + ' completed'];
+  if (summary.failed) bits.push(summary.failed + ' failed');
+  if (summary.skipped) bits.push(summary.skipped + ' skipped');
+  if (summary.interrupted) bits.push(summary.interrupted + ' interrupted');
   return bits.join(' · ');
 }
 
@@ -147,17 +157,39 @@ function modelLabProgressSnapshot(run) {
   var start = Date.parse(run.startedAt || '');
   var finish = Date.parse(run.finishedAt || '');
   var status = String(run.status || '');
+  var models = (run.allVisionModels || []).concat(run.allDirectorModels || []);
+  var currentRef = String(current && current.modelRef || progress.currentModelRef || '');
+  var model = models.find(function (candidate) { return String(candidate.modelRef || '') === currentRef; });
+  var modelName = model ? String(model.label || model.modelId || currentRef) : currentRef;
+  var jobState = String(progress.executionStatus || '');
+  var execution = {
+    submitting: 'Submitting', queued: 'Queued', starting: 'Starting',
+    running: 'Running', completed: 'Finishing', stopping: 'Stopping'
+  }[jobState] || (jobState ? jobState.charAt(0).toUpperCase() + jobState.slice(1) : 'Running');
+  var phase = '';
+  if (status === 'running' && current) {
+    phase = [
+      progress.phase === 'retry' ? 'Retry' : (current.role === 'vision' ? 'Vision' : 'Director'),
+      modelLabAttemptLabel(current.kind),
+      execution
+    ].join(' · ');
+  } else if (status === 'running') {
+    phase = progress.phase === 'retry' ? 'Preparing deferred retries' :
+      progress.phase === 'starting' ? 'Preparing assessment' : 'Preparing next probe';
+  } else {
+    phase = status.charAt(0).toUpperCase() + status.slice(1);
+  }
+  var work = run.work;
+  var planned = work && Number(work.planned);
+  var resolved = work && Number(work.resolved);
+  var determinate = work && planned > 0 && isFinite(resolved) && resolved >= 0 && resolved <= planned;
   return {
     id: 'model-lab:' + String(run.id), kind: 'model-lab', title: 'Model Assessment',
     status: status === 'error' ? 'failed' : status,
-    phase: status === 'running'
-      ? [String(progress.phase || 'Running').replace(/_/g, ' '),
-        progress.currentKind ? modelLabAttemptLabel(progress.currentKind) : ''].filter(Boolean).join(' · ')
-      : status.charAt(0).toUpperCase() + status.slice(1),
-    detail: run.error || [progress.currentModelRef, progress.currentFile].filter(Boolean).join(' · '),
+    phase: phase,
+    detail: run.error || (current ? [modelName, current.file].filter(Boolean).join(' · ') : ''),
     progressLabel: modelLabRunProgress(run),
-    // Probe count is not a known total; do not invent a percentage or ETA.
-    progress: null,
+    progress: determinate ? {completed: resolved, total: planned} : null,
     startedAt: isFinite(start) && start > 0 ? start / 1000 : 0,
     finishedAt: isFinite(finish) && finish > 0 ? finish / 1000 : 0,
     childJobId: String(current && current.jobId || '')

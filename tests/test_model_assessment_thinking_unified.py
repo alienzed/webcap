@@ -16,11 +16,12 @@ def test_unified_assessment_thinking_visible_without_legacy_report(monkeypatch):
     assert models[1]["assessment"]["thinking"] is False
 
 
-def test_actual_diagnostics_table_has_thinking_column():
+def test_assessment_table_is_compact_and_retains_thinking_as_context():
     source = Path("tool/js/diagnostics.js").read_text(encoding="utf-8")
-    assert "{key: 'thinking', name: 'Thinking'}" in source
-    assert "panel.colSpan = 10" in source
+    assert "{key: 'output', name: 'Valid output'}" in source
+    assert "panel.colSpan = 5" in source
     assert "tests.director_thinking" in source
+    assert "' · Thinking: ' + thinkingLabel" in source
 
 
 def test_legacy_model_lab_launcher_retired_without_removing_pending_compatibility_panel():

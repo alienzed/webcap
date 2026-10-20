@@ -3531,6 +3531,10 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   flex-wrap: wrap;
 }
 #storyboard-story-show {
+  width: auto;
+  min-height: 30px;
+  padding: 4px 10px;
+  white-space: nowrap;
   flex: 0 0 auto;
 }
 /* The Scene column can be narrow even on a wide desktop when Story is visible. */

@@ -916,7 +916,7 @@
           '<div>' + escape(v.response) + '</div><small>Reference: ' + escape(v.reference) +
           ' · ' + escape(v.elapsedSeconds) + 's</small></div>';
         }).join('') + '</details>' : '') +
-      ((unit.dinoAssessments || []).length ? '<details open><summary>DINOv2 similarity (' +
+      ((unit.dinoAssessments || []).length ? '<details open><summary>DINOv2 whole-image similarity (' +
         unit.dinoAssessments.length + ' distinct references)</summary>' + unit.dinoAssessments.map(function (v) {
           return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.reference) +
             '</strong><span>' + Number(v.similarity).toFixed(3) + '</span><div>' +

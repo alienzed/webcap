@@ -206,13 +206,13 @@
   }
   window.runAnalyticsPrepare=function(next){
     if(next===folder)return;folder=next;generation++;resultEpochGeneration++;runs=[];selection=new Set();report=null;sessionFilter='';
-    labRequest++;labSnapshot=null;lab('status').textContent='Open Analytics to read saved evidence.';el('report-surface').classList.add('hidden');
+    labRequest++;labSnapshot=null;labDiscovered=false;lab('status').textContent='Open Analytics to read saved evidence.';el('report-surface').classList.add('hidden');
     el('run-choices').innerHTML='';el('result-epochs').textContent='Open Analytics to discover results.';el('result-epochs-note').textContent='';el('coverage').textContent='Choose a run to begin.';
     el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';el('warnings').innerHTML='';
     el('campaign').innerHTML='<option value="">No campaign</option>';el('session').innerHTML='<option value="">All sessions</option>';
     el('director').disabled=true;updateScopeUi();previewGeneration++;previewFacts=null;previewKey='';el('director-result').textContent='';el('director-status').textContent='';clearError();
   };
-  window.runAnalyticsOpen=function(){discover();labLoad();};
+  window.runAnalyticsOpen=function(){labLoad();};
   window.runAnalyticsFolder=function(){return folder;};
   el('result-epochs').onclick=function(event){
     var button=event.target.closest('[data-result-epoch-job]');
@@ -386,12 +386,13 @@
     if(session)window.openTestBenchAnalyticsSession(session.dataset.openSession);
   };
 
-  var labSnapshot=null,labRequest=0;
+  var labSnapshot=null,labRequest=0,labDiscovered=false;
+  function labEnsureDetailIndex(){if(!labDiscovered){labDiscovered=true;discover();}}
   function lab(id){return document.getElementById('run-lab-'+id);}
   function labGroup(){return (labSnapshot&&labSnapshot.cohorts||[]).find(function(g){return g.id===lab('cohort').value;});}
   function labPoints(){var g=labGroup(),id=lab('run').value;return (g&&g.points||[]).filter(function(p){return !id||p.jobId===id;});}
   function labEmpty(message){return '<p class="run-lab-empty">'+esc(message)+'</p>';}
-  function labDetail(){el('report-surface').classList.remove('hidden');el('report-surface').scrollIntoView({behavior:'smooth'});}
+  function labDetail(){labEnsureDetailIndex();el('report-surface').classList.remove('hidden');el('report-surface').scrollIntoView({behavior:'smooth'});}
   function labGroupRender(){
     var group=labGroup(),prior=lab('run').value;
     var identities=new Map((group&&group.points||[]).map(function(p){return [p.jobId,p.runName||'Run '+p.jobId.slice(-8)];}));
@@ -457,6 +458,7 @@
       .catch(function(e){if(serial!==labRequest)return;lab('status').textContent='Overview failed: '+String(e.message||e);error(e);});
   }
   lab('refresh').onclick=labLoad;
+  Array.prototype.forEach.call(document.querySelectorAll('#run-analytics-screen .epoch-finder-sidebar details'),function(details){details.addEventListener('toggle',function(){if(details.open)labEnsureDetailIndex();});});
   lab('cohort').onchange=labGroupRender;
   lab('run').onchange=labResults;
   lab('sort').onchange=labResults;

@@ -220,6 +220,7 @@ def capability_run_summaries():
             "id": row["id"], "status": row.get("status"),
             "startedAt": row.get("startedAt"), "folder": row.get("folder"),
             "depth": run.get("depth", "quick"),
+            "protocol": run.get("assessmentProtocol"),
             "groupsConfigured": bool(run.get("groups")),
             "error": row.get("error", ""), "models": models,
             "importedFrom": run.get("importedFrom"),
@@ -732,9 +733,26 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                             raise ValueError("Structured response was truncated at its token budget.")
                         # Provider completion usage may include hidden/separate reasoning.
                         # Do not call those tokens verified answer output.
-                        result["verifiedOutputTokens"] = (int(
-                            (result.get("usage") or {}).get("completion_tokens") or 0
-                        ) if not str(result.get("reasoning") or "").strip() else 0)
+                        result["visibleOutputWords"] = sum(
+                            len(scene["prompt"].split()) for scene in scenes
+                        )
+                        result["visibleOutputCharacters"] = len(str(result.get("text") or ""))
+                        usage = result.get("usage") or {}
+                        details = usage.get("completion_tokens_details") or {}
+                        reasoning_tokens = details.get("reasoning_tokens")
+                        total_tokens = usage.get("completion_tokens")
+                        # Reasoning-aware token reports have an explicit visible
+                        # fraction. Otherwise show words/chars, not a made-up
+                        # output token count.
+                        if isinstance(total_tokens, int) and (
+                            not str(result.get("reasoning") or "").strip()
+                            or isinstance(reasoning_tokens, int)
+                        ):
+                            result["verifiedOutputTokens"] = max(
+                                0, total_tokens - int(reasoning_tokens or 0)
+                            )
+                        else:
+                            result["verifiedOutputTokens"] = 0
                     except (ValueError, TypeError, KeyError) as exc:
                         validation_error = "Storyboard structured-output validation failed: " + str(exc)
                 if required_result and not isinstance(result.get(required_result), dict):

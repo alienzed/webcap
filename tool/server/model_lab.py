@@ -155,6 +155,12 @@ def capability_run_summaries():
         for source in (run.get("reused") or {}).values():
             previous = get_run(source["runId"])
             attempts.extend(a for a in previous.get("attempts") or [] if a.get("id") == source["attemptId"])
+        emitted_pathologies = {}
+        for attempt in attempts:
+            kind = str(attempt.get("kind") or "")
+            reason = str(attempt.get("failureKind") or "")
+            if kind.startswith("director_scene_plan_") and reason in {"empty", "garbled", "leakage", "looping"}:
+                emitted_pathologies.setdefault((attempt.get("modelRef"), kind), set()).add(reason)
         # Keep one effective outcome per exact probe identity. A recovered failure
         # is not an enduring failure, and historical retries are not extra coverage.
         by_probe = {}
@@ -170,6 +176,7 @@ def capability_run_summaries():
                 continue
             by_kind = models.setdefault(ref, {})
             entry = by_kind.setdefault(kind, {"status": "", "error": "", "counts": {}})
+            entry["pathologies"] = sorted(emitted_pathologies.get((ref, kind), set()))
             status = str(attempt.get("status") or "interrupted")
             entry["counts"][status] = entry["counts"].get(status, 0) + 1
             result = attempt.get("result") or {}

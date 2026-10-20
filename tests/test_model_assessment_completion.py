@@ -129,4 +129,4 @@ def test_mixed_assessment_pairs_schema_assist_with_existing_vision(isolated):
     planned = model_lab._planned_probes(run)
     assert model_lab._attempt_key("set_vocabulary_synthesis", director()["modelRef"]) in planned
     assert model_lab._attempt_key("language_synthesis", director()["modelRef"]) not in planned
-    assert len(planned) == 8  # 2 Vision + 2 Set Schema Assist + 4 Director
+    assert len(planned) == 6  # 2 Vision, 2 Set Schema Assist, Scene JSON and thinking

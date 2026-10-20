@@ -113,7 +113,8 @@ def test_large_wildcard_corpus_is_sampled_without_losing_end_of_set():
     assert "150 representative examples from 220 distinct captions" in prompt
     assert "caption number 000" in prompt
     assert "caption number 219" in prompt
-    assert prompt.count("[count=") == 151  # header plus 150 examples
+    caption_section = prompt.split("[SET CAPTIONS]\\n", 1)[1].split("\\n\\n[OUTPUT]", 1)[0]
+    assert caption_section.count("[count=") == 150
     assert "Observed same-group tag combinations:" not in prompt
 
 

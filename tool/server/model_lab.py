@@ -155,7 +155,15 @@ def capability_run_summaries():
         for source in (run.get("reused") or {}).values():
             previous = get_run(source["runId"])
             attempts.extend(a for a in previous.get("attempts") or [] if a.get("id") == source["attemptId"])
+        # Keep one effective outcome per exact probe identity. A recovered failure
+        # is not an enduring failure, and historical retries are not extra coverage.
+        by_probe = {}
         for attempt in attempts:
+            key = _attempt_key(attempt.get("kind"), attempt.get("modelRef"), attempt.get("file"))
+            prior = by_probe.get(key)
+            if prior is None or attempt.get("status") == "completed" or prior.get("status") != "completed":
+                by_probe[key] = attempt
+        for attempt in by_probe.values():
             ref = str(attempt.get("modelRef") or "")
             kind = str(attempt.get("kind") or "")
             if not ref or not kind:

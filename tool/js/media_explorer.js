@@ -32,7 +32,10 @@
         if (data.lastWarning && data.lastWarning !== lastExternalError) { lastExternalError = data.lastWarning; window.reportConsoleError('External media discovery', data.lastWarning); }
         if (data.revision !== externalRevision) {
           if (canRefreshExternalPage()) load(true, {soft:true});
-          else externalOverview += ' · Refresh to include changes';
+          else {
+            externalOverview += ' · Refresh to include changes';
+            externalSummary();
+          }
         }
         if (!data.complete) externalDiscoveryTimer = setTimeout(pollExternalDiscovery, 1400);
       }).catch(report);
@@ -49,6 +52,11 @@
     el('media-explorer-rating').classList.toggle('hidden', external);
     el('media-explorer-date').classList.toggle('hidden', external);
     el('media-explorer-size').disabled = explorerMode !== 'grid';
+    el('media-explorer-workspace').querySelector('.media-explorer-size-label').classList.toggle('hidden', explorerMode !== 'grid');
+    el('media-explorer-workspace').querySelector('.media-explorer-fit-controls').classList.toggle('hidden', explorerMode !== 'grid');
+    el('media-explorer-metadata-progress').classList.toggle('hidden', !external || !(externalOverview || externalJobSummary));
+    el('media-explorer-stop-metadata').classList.toggle('hidden', !external || !externalJobRunning);
+    el('media-explorer-search').placeholder = external ? 'Search filenames and relative paths…' : 'Search generated media, prompts, models…';
     ['path', 'type', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
       var option = el('media-explorer-sort').querySelector('option[value="' + value + '"]');
       option.hidden = !external;
@@ -773,7 +781,8 @@
     el('app-frame').classList.add('workspace-media-explorer-open');
     window.syncApplicationShellContext();
     window.syncShellLocationRoute();
-    if (needsLoad) load(true);
+    if (needsLoad || isExternal()) load(true);
+    if (isExternal() && externalPath) externalMetadataStatus();
   }
   function close() {
     visible = false; serial++;
@@ -793,7 +802,11 @@
       role = button.dataset.mediaRole;
       artifact = ''; owner = '';
       source = '';
+      if (!['newest', 'oldest', 'name', 'rating'].includes(el('media-explorer-sort').value)) {
+        el('media-explorer-sort').value = 'newest';
+      }
       stopExternalTimers(); externalJobRunning = false;
+      autoMetadataRequested.clear();
       syncExternalControls();
       Array.prototype.forEach.call(document.querySelectorAll('.media-explorer-source'), function (node) {
         node.classList.toggle('active', node === button);
@@ -805,6 +818,7 @@
     button.addEventListener('click', function () {
       source = button.dataset.mediaSource;
       stopExternalTimers(); externalJobRunning = false;
+      if (!isExternal()) autoMetadataRequested.clear();
       if (isExternal()) {
         explorerMode = 'list';
         facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).value = ''; });
@@ -822,6 +836,7 @@
   el('media-explorer-open-path').addEventListener('click', function () {
     var nextPath = el('media-explorer-external-path').value.trim();
     externalPath = nextPath;
+    mediaFacts.clear();
     autoMetadataRequested.clear(); externalRevision = -1; externalOverview = ''; externalJobSummary = ''; externalJobRunning = false;
     stopExternalTimers(); selected.clear(); updateSelection();
     load(true, {refreshFilesystem:true});
@@ -857,7 +872,7 @@
   });
   el('media-explorer-compare-close').addEventListener('click', function () { el('media-explorer-compare-dialog').close(); });
   el('media-explorer-refresh').addEventListener('click', function () {
-    if (isExternal()) { autoMetadataRequested.clear(); externalRevision = -1; load(true, {refreshFilesystem:true}); }
+    if (isExternal()) { autoMetadataRequested.clear(); mediaFacts.clear(); externalRevision = -1; load(true, {refreshFilesystem:true}); }
     else load(true);
   });
   el('media-explorer-scan-all').addEventListener('click', function () { full = true; load(true); });

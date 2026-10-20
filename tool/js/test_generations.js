@@ -59,7 +59,7 @@
   };
 
   // VL assessments belong to Test sessions; scoring remains derived in the UI.
-  var testVl = { scope: '', entries: Object.create(null), disabledGroups: new Set(), running: false, token: 0, jobId: '', done: 0, total: 0, question: '', loadedScope: '' };
+  var testVl = { scope: '', entries: Object.create(null), disabledGroups: new Set(), running: false, token: 0, jobId: '', done: 0, total: 0, question: '', loadedScope: '', loadedEvidence: '' };
   // Session-scoped browser controllers. Every request uses the existing LLM queue.
   var testVlRuns = Object.create(null);
   var testVlElapsedTimer = setInterval(refreshTestVlElapsedButtons, 1000);
@@ -83,14 +83,17 @@
       testVl.question = running.question;
       return;
     }
-    if (testVl.loadedScope === scope && !testVl.running) return;
+    // Automatic VL saves may arrive for the already selected session.
+    var saved = status && status.testVision || {};
+    var evidence = JSON.stringify(saved);
+    if (testVl.loadedScope === scope && !testVl.running && testVl.loadedEvidence === evidence) return;
     testVl.loadedScope = scope;
+    testVl.loadedEvidence = evidence;
     testVl.scope = scope;
     testVl.running = false;
     testVl.jobId = '';
     testVl.entries = Object.create(null);
     testVl.disabledGroups = new Set();
-    var saved = status && status.testVision || {};
     testVl.disabledGroups = new Set(saved.disabledGroups || []);
     var byMedia = saved.byMedia || {};
     Object.keys(byMedia).forEach(function (file) {
@@ -3318,7 +3321,24 @@
     var label = document.createElement('div');
     label.className = 'test-generations-result-name';
     label.title = identity.secondary ? identity.primary + ' · ' + identity.secondary : identity.primary;
-    label.appendChild(document.createTextNode(identity.primary));
+    var provenance = !opts.failed && result && result.provenance;
+    var epochText = provenance && String(provenance.sourceJobId || '') && Number.isInteger(provenance.sourceEpoch)
+      ? 'Epoch ' + provenance.sourceEpoch : '';
+    var epochAt = epochText ? identity.primary.indexOf(epochText) : -1;
+    if (epochAt >= 0) {
+      label.appendChild(document.createTextNode(identity.primary.slice(0, epochAt)));
+      var browse = document.createElement('button');
+      browse.type = 'button';
+      browse.className = 'test-generations-epoch-link';
+      browse.dataset.testEpochMediaJob = String(provenance.sourceJobId);
+      browse.dataset.testEpochMediaEpoch = String(provenance.sourceEpoch);
+      browse.textContent = epochText;
+      browse.title = 'See all recorded results for this training checkpoint';
+      label.appendChild(browse);
+      label.appendChild(document.createTextNode(identity.primary.slice(epochAt + epochText.length)));
+    } else {
+      label.appendChild(document.createTextNode(identity.primary));
+    }
     if (identity.secondary) {
       var source = document.createElement('span');
       source.className = 'test-generations-result-source';
@@ -3348,23 +3368,13 @@
       var metadataRow = document.createElement('div');
       metadataRow.className = 'test-generations-result-metadata';
       metadataRow.textContent = metadata.join(' · ');
+      metadataRow.title = metadataRow.textContent;
       secondaryRow.appendChild(metadataRow);
     }
 
     if (!opts.failed) {
       var rating = buildResultRating(result, opts.sessionName);
       if (rating) secondaryRow.appendChild(rating);
-      var provenance = result && result.provenance;
-      if (provenance && String(provenance.sourceJobId || '') && Number.isInteger(provenance.sourceEpoch)) {
-        var browse = document.createElement('button');
-        browse.type = 'button';
-        browse.className = 'review-captions-btn test-generations-epoch-link';
-        browse.dataset.testEpochMediaJob = String(provenance.sourceJobId);
-        browse.dataset.testEpochMediaEpoch = String(provenance.sourceEpoch);
-        browse.textContent = 'Epoch ' + provenance.sourceEpoch + ' · All results';
-        browse.title = 'See all recorded results for this training checkpoint';
-        secondaryRow.appendChild(browse);
-      }
     }
     if (secondaryRow.childNodes.length) copy.appendChild(secondaryRow);
 

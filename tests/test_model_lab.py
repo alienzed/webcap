@@ -360,3 +360,28 @@ def test_failed_probe_is_deferred_until_retry_pass():
     )
     assert outcome["status"] == "deferred"
     assert len(run["deferredRetries"]) == 1
+
+
+def test_completed_assessment_has_no_pending_probes():
+    director = _director()
+    run = model_lab._new_run_payload({"directorModels": [director]})
+    keys = ("director_thinking", "director_scene_plan_2048", "language_synthesis", "language_challenge")
+    run["reused"] = {
+        model_lab._attempt_key(kind, director["modelRef"]): {"runId": "previous", "attemptId": kind}
+        for kind in keys
+    }
+    assert model_lab._pending_probe_plan(run) == {"missing": 0, "retry": 0, "total": 0}
+
+
+def test_failed_and_missing_probes_are_counted_separately():
+    director = _director()
+    run = model_lab._new_run_payload({"directorModels": [director]})
+    key = model_lab._attempt_key("director_thinking", director["modelRef"])
+    run["previousFailures"] = {key: True}
+    assert model_lab._pending_probe_plan(run) == {"missing": 3, "retry": 1, "total": 4}
+
+
+def test_assessment_does_not_consider_historical_prose_structured_evidence():
+    run = model_lab._new_run_payload({"directorModels": [_director()]})
+    run["reused"] = {"director_writing|local::director.gguf|": {"runId": "previous", "attemptId": "a"}}
+    assert model_lab._pending_probe_plan(run)["missing"] == 4

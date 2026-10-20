@@ -190,6 +190,49 @@ def test_wizard_proposal_normalization_enforces_alignment():
         })
 
 
+def test_campaign_director_keeps_exact_tag_group_when_text_occurs_twice():
+    from tool.server.epoch_finder_plan import normalize_proposal
+    result = normalize_proposal({
+        "concept": "Micro bikini construction",
+        "wildcard": "A {simple string straps|ring connectors} top and "
+                    "{simple string straps|ring connectors} bottom.",
+        "stableTerms": ["bikini"],
+        "variationGroups": [
+            {"label": "Top straps", "annotationGroup": "BT Back",
+             "role": "primary", "options": ["simple string straps", "ring connectors"]},
+            {"label": "Bottom straps", "annotationGroup": "BB Back",
+             "role": "primary", "options": ["simple string straps", "ring connectors"]},
+        ],
+    })
+    assert [group["annotationGroup"] for group in result["variationGroups"]] == [
+        "BT Back", "BB Back"
+    ]
+    assert [group["role"] for group in result["variationGroups"]] == [
+        "primary", "primary"
+    ]
+
+
+def test_campaign_director_uses_compiled_tags_and_default_roles():
+    from tool.server.epoch_finder_plan import build_proposal
+    contract = build_proposal(
+        ["A woman in a black bikini with simple string straps and blonde hair."],
+        annotations=[{"BT Back": ["simple string straps"],
+                      "BB Back": ["simple string straps"],
+                      "Hair": ["blonde"], "Background": ["studio"]}],
+        vocabulary=[{"group": "BT Back", "alias": "Bikini top straps"},
+                    {"group": "BB Back", "alias": "Bikini bottom straps"}],
+        focus="micro bikini",
+    )
+    prompt = contract["prompt"]
+    assert "Observed concept tags" in prompt
+    assert '"group":"BT Back"' in prompt and '"group":"BB Back"' in prompt
+    assert '"group":"Hair"' not in prompt and '"group":"Background"' not in prompt
+    assert "Default Leakage: Position, Hair, Body, Clothing" in prompt
+    assert "Default Vary only: Viewpoint, Background, Lighting" in prompt
+    assert "annotationGroup" in prompt
+    assert "[ACTUAL SET REFERENCE TAGS]" not in prompt
+
+
 def test_wizard_cumulative_score_uses_primary_and_leakage_weights():
     campaign = {
         "rounds": [{"epochs": [1, 2]}],

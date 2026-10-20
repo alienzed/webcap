@@ -12,6 +12,9 @@ from .permissions import normalize_path_permissions
 
 
 RUN_VERSION = 1
+ASSESSMENT_PROTOCOL = "webcap-model-assessment-structured-v1"
+# Existing identical production probes can be reused; legacy prose never qualifies as JSON evidence.
+LEGACY_COMPATIBLE_KINDS = {"director_thinking", "language_synthesis", "language_challenge", "vision_open", "vision_group_aware"}
 ROOT_NAME = "model-lab-runs"
 DEFAULT_SAMPLE_COUNT = 8
 MAX_SAMPLE_COUNT = 24
@@ -332,11 +335,51 @@ def _model_by_ref(models, model_ref):
     return next((model for model in models if model.get("modelRef") == model_ref), None)
 
 
+def _reusable_evidence(run):
+    """Index saved completed probes once; never repeat them or copy large model outputs.
+
+    Only identical local evidence can satisfy a new assessment. Imported evidence
+    describes another host; its timing is not a local speed measurement.
+    """
+    reused = {}
+    failures = {}
+    selected = {m["modelRef"] for m in run["directorModels"] + run["allVisionModels"]}
+    for item in list_runs():
+        if item.get("status") in {"running", "error"}:
+            continue
+        previous = get_run(item["id"])
+        if previous.get("importedFrom"):
+            continue
+        same_protocol = previous.get("assessmentProtocol") == ASSESSMENT_PROTOCOL
+        for attempt in reversed(previous.get("attempts") or []):
+            kind = str(attempt.get("kind") or "")
+            ref = str(attempt.get("modelRef") or "")
+            filename = str(attempt.get("file") or "")
+            if ref not in selected or not (same_protocol or kind in LEGACY_COMPATIBLE_KINDS):
+                continue
+            if kind.startswith("vision_"):
+                if kind not in {"vision_open", "vision_group_aware"}:
+                    continue
+                if previous.get("folder") != run["folder"] or filename not in run["files"]:
+                    continue
+                if kind == "vision_group_aware" and previous.get("groups") != run["groups"]:
+                    continue
+            elif kind.startswith("set_") or kind.startswith("vision:"):
+                continue
+            key = _attempt_key(kind, ref, filename)
+            if key in reused:
+                continue
+            if attempt.get("status") == "completed":
+                reused[key] = {"runId": previous["id"], "attemptId": attempt["id"]}
+                failures.pop(key, None)
+            elif attempt.get("status") == "failed" and key not in failures:
+                failures[key] = True
+    return reused, failures
+
+
 def _new_run_payload(config):
     config = config if isinstance(config, dict) else {}
     folder = str(config.get("folder") or "").strip()
-    if not folder:
-        raise ValueError("Model Lab needs a Set folder.")
 
     try:
         sample_count = int(config.get("sampleCount") or DEFAULT_SAMPLE_COUNT)
@@ -347,15 +390,16 @@ def _new_run_payload(config):
     if depth not in {"quick", "deep"}:
         raise ValueError("Model Lab depth must be quick or deep.")
 
-    files = _supported_media(folder, config.get("files"))
-    if len(files) < 2:
-        raise ValueError("Model Lab needs at least two supported media items in the Set.")
-    sample_files = _even_sample(files, sample_count)
-
     vision_models = _normalize_models(config.get("visionModels"), "Vision")
     director_models = _normalize_models(config.get("directorModels"), "Director")
     if not vision_models and not director_models:
-        raise ValueError("Choose at least one Vision or Director model for Model Lab.")
+        raise ValueError("Choose at least one Vision or Director model for Model Assessment.")
+    if vision_models and not folder:
+        raise ValueError("Vision assessment needs a Set folder.")
+    files = _supported_media(folder, config.get("files")) if folder else []
+    if vision_models and len(files) < 2:
+        raise ValueError("Vision assessment needs at least two supported Set media items.")
+    sample_files = _even_sample(files, sample_count) if vision_models else []
 
     groups = _normalize_groups(config.get("groups"))
     reference_vision_ref = str(config.get("referenceVisionRef") or "").strip()
@@ -385,8 +429,9 @@ def _new_run_payload(config):
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_id = stamp + "-" + secrets.token_hex(4)
-    return {
+    run = {
         "version": RUN_VERSION,
+        "assessmentProtocol": ASSESSMENT_PROTOCOL,
         "id": run_id,
         "status": "running",
         "startedAt": _now_iso(),
@@ -417,6 +462,8 @@ def _new_run_payload(config):
         "attempts": [],
         "qualityReviews": {},
     }
+    run["reused"], run["previousFailures"] = _reusable_evidence(run)
+    return run
 
 
 def _write_run(run):
@@ -428,13 +475,7 @@ def _attempt_key(kind, model_ref, file_name=""):
 
 
 def _attempt_completed(run, kind, model_ref, file_name=""):
-    key = _attempt_key(kind, model_ref, file_name)
-    return any(
-        isinstance(attempt, dict)
-        and _attempt_key(attempt.get("kind"), attempt.get("modelRef"), attempt.get("file")) == key
-        and attempt.get("status") == "completed"
-        for attempt in run.get("attempts") or []
-    )
+    return _completed_attempt(run, kind, model_ref, file_name) is not None
 
 
 def _completed_attempt(run, kind, model_ref, file_name=""):
@@ -446,6 +487,11 @@ def _completed_attempt(run, kind, model_ref, file_name=""):
             and attempt.get("status") == "completed"
         ):
             return attempt
+    reused = (run.get("reused") or {}).get(key)
+    if reused:
+        source = get_run(reused["runId"])
+        return next((attempt for attempt in source.get("attempts") or []
+                     if attempt.get("id") == reused["attemptId"] and attempt.get("status") == "completed"), None)
     return None
 
 

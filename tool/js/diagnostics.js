@@ -393,7 +393,10 @@ function refreshUnifiedModelAssessment() {
       row.assessmentSort.tested = validDate ? date.getTime() : null;
       row.appendChild(line);
       diagnosticsAssessmentCounts(row, tests);
-      var qualityReview = evidence && (evidence.qualityReviews || {})[ref];
+      var qualityRun = capabilityRuns.find(function (run) {
+        return ((run.qualityReviews || {})[ref] || {}).status === 'completed';
+      });
+      var qualityReview = qualityRun && qualityRun.qualityReviews[ref];
       qualityLabel = diagnosticsAssessmentReviewLabel(qualityReview);
       if (qualityReview && qualityReview.status === 'completed') {
         qualityReason = (qualityReview.tasks || []).map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');

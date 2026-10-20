@@ -475,6 +475,6 @@ def test_dependent_reference_probes_included_in_expected_total(monkeypatch):
         "referenceDirectorRef": "local::director.gguf",
     })
     keys = model_lab._planned_probes(run)
-    assert len(keys) == 10  # two Vision + four Director + two pairs of reference probes
+    assert len(keys) == 8  # two Vision, thinking, Scene JSON, two distinct reference pairs
     assert "set_vocabulary_challenge|local::director.gguf|" in keys
     assert "vision:local::vision.gguf:vocab_challenge|local::director.gguf|" in keys

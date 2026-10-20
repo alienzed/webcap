@@ -57,7 +57,7 @@ def test_caption_wildcard_contract_prioritizes_primary_concept_without_dropping_
     prompt = request["prompt"]
     assert "Set name: micro_bikini_set" in prompt
     assert "Explicit focus: bikini" in prompt
-    assert "primary concept should receive the richest decomposition" in prompt
+    assert "Prioritize the trained subject\'s construction" in prompt
     assert "Pose, hair, setting, lighting and camera are context" in prompt
     assert "separate color, pattern, trim, top shape, and bottom shape" in prompt
     assert "Never emit category placeholders" in prompt

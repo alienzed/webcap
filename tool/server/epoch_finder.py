@@ -100,6 +100,7 @@ def _runs(folder_path, require_saved_checkpoints=True):
                 "folder": folder, "jobId": job_id, "runName": run.get("runName") or job.get("runName") or "",
                 "runSequence": run.get("sequence") or job.get("sequence") or run.get("runSequence") or job.get("runSequence") or "",
                 "setName": Path(folder).name,
+                "createdAt": job.get("createdAt") or run.get("createdAt") or 0,
                 "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
                 "runSummary": run.get("runSummary") or job.get("runSummary") or {},
                 "currentEpoch": run.get("currentEpoch"),
@@ -1312,7 +1313,8 @@ def command(folder_path, operation, criteria=None):
         from .training_reference_selections import command as selection_command
         return selection_command(_folder_key(folder_path), operation, criteria)
     if operation == "reference_runs":
-        return {"runs": candidate_runs(folder_path)}
+        runs = candidate_runs(folder_path)
+        return {"runs": sorted(runs, key=lambda run: float(run.get("createdAt") or 0), reverse=True)}
     if operation == "reference_vocabulary":
         from .epoch_reference import reference_vocabulary
         return {"vocabulary": reference_vocabulary(_folder_key(folder_path), criteria.get("jobId"))}

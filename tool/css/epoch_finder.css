@@ -467,3 +467,16 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .test-preview-card-menu{flex:0 0 auto;margin-left:auto}
 .epoch-info-card,.epoch-finder-frame{border-radius:9px}
 .epoch-info-card>img,.epoch-info-card>video,.epoch-finder-frame>img{border-radius:8px 8px 0 0}
+
+/* Compact footer: two visible chips, one evaluation/details/actions row. */
+.test-preview-card-chip-more{border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text);font-size:12px;padding:3px 7px;line-height:1.4;cursor:pointer}
+.test-preview-card-chip.hidden{display:none}
+.test-preview-card-utility{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0;flex-wrap:nowrap}
+.test-preview-card-utility>.test-generations-result-evaluation,
+.test-preview-card-utility>.test-preview-card-evaluations{flex:0 1 auto;min-width:0;margin-right:auto}
+.test-preview-card-utility>.test-preview-card-details{flex:0 0 auto;margin-left:auto}
+.test-preview-card-utility>.test-preview-card-menu{flex:0 0 auto;margin-left:0}
+.test-preview-card-utility .test-generations-vl-result{margin:0;white-space:nowrap;width:auto}
+.test-preview-card-epoch-metrics.hidden{display:none}
+.test-preview-card-epoch-metrics .test-generations-result-epoch-metrics{display:flex;gap:8px;flex-wrap:wrap;overflow:visible}
+.test-preview-card-epoch-metrics .test-generations-vl-epoch-score{margin:0}

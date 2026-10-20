@@ -220,6 +220,7 @@ def capability_run_summaries():
             "id": row["id"], "status": row.get("status"),
             "startedAt": row.get("startedAt"), "folder": row.get("folder"),
             "depth": run.get("depth", "quick"),
+            "groupsConfigured": bool(run.get("groups")),
             "error": row.get("error", ""), "models": models,
             "importedFrom": run.get("importedFrom"),
             "qualityReviews": _copy(run.get("qualityReviews") or {}),

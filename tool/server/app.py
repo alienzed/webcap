@@ -2563,9 +2563,16 @@ def run_analytics_interpret_route():
     try:
         data = request.get_json(silent=True) or {}
         folder_path = safe_join_fs_root(str(data.get("folder") or "").strip())
-        from .run_analytics import report_selected, director_facts, director_contract
-        snapshot = report_selected(folder_path, data.get("jobIds"), data.get("session"))
-        facts = director_facts(snapshot, data.get("campaignId"))
+        from .run_analytics import (
+            report_selected, director_facts, director_contract,
+            insights_director_facts, insights_director_contract,
+        )
+        insights = data.get("mode") == "insights"
+        if insights:
+            facts = insights_director_facts(folder_path)
+        else:
+            snapshot = report_selected(folder_path, data.get("jobIds"), data.get("session"))
+            facts = director_facts(snapshot, data.get("campaignId"))
         if bool(data.get("previewOnly")):
             return jsonify({"ok": True, "facts": facts})
         import json
@@ -2575,7 +2582,8 @@ def run_analytics_interpret_route():
             raise ValueError("The reviewed Analytics evidence changed. Preview the latest facts before running Director.")
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(),
-            director_contract(facts), context={}, label="Run Analytics: interpret evidence",
+            (insights_director_contract(facts) if insights else director_contract(facts)),
+            context={}, label=("Insights: training evidence" if insights else "Run Analytics: interpret evidence"),
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:

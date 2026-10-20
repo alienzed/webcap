@@ -149,3 +149,36 @@ def test_natural_prompt_variation_without_group_identity_is_allowed():
     assert validate_group_compatibility({"wildcard":"{triangle|teardrop}", "variationGroups":[
         {"label":"Shape", "annotationGroup":"", "options":["triangle","teardrop"]}
     ]}, {"Shape":[["triangle"],["teardrop"]]})
+
+
+def test_position_phrase_mismatch_reports_actual_tag_options():
+    import pytest
+    from tool.server.test_wildcard_contract import validate_group_compatibility
+
+    proposal = {
+        "wildcard": "person {standing upright|sitting down}",
+        "variationGroups": [{
+            "label": "Position", "annotationGroup": "Position",
+            "options": ["standing upright", "sitting down"],
+        }],
+    }
+    with pytest.raises(ValueError, match="standing upright") as error:
+        validate_group_compatibility(
+            proposal, {"Position": [["standing"], ["sitting"]]}
+        )
+    assert "available tags: 'sitting', 'standing'" in str(error.value)
+
+
+def test_position_natural_language_variants_can_remain_unmapped():
+    from tool.server.test_wildcard_contract import validate_group_compatibility
+
+    proposal = {
+        "wildcard": "person {standing upright|sitting down}",
+        "variationGroups": [{
+            "label": "Position", "annotationGroup": "",
+            "options": ["standing upright", "sitting down"],
+        }],
+    }
+    assert validate_group_compatibility(
+        proposal, {"Position": [["standing"], ["sitting"]]}
+    )

@@ -551,6 +551,7 @@
     if(!model){error(new Error('Select a Director model in the app header before requesting AI Insights.'));return;}
     var origin=folder;
     lab('ai-panel').classList.remove('hidden');
+    lab('ai-panel').scrollIntoView({behavior:'smooth',block:'start'});
     lab('ai-result').replaceChildren();
     lab('ai-facts').textContent='';
     lab('ai-status').textContent='Collecting archived training metrics and saved ratings…';

@@ -99,7 +99,7 @@ def test_test_generations_uses_training_pane_and_core_controls():
         assert f'id="{control}"' in html
     assert "card.dataset.resultKey = resultKey" in script
     assert "host.insertBefore(card, pending || null)" in script
-    assert "placeholder.textContent = 'Generation failed';" in script
+    assert "placeholder: failed ? 'Generation failed'" in script
     assert "function renderResults(status)" in script
     assert ".test-generations-result-card video" in css
     assert ".test-generations-result-card img" in css

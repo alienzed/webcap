@@ -2514,17 +2514,21 @@ def epoch_finder_propose_route():
         data = request.get_json(silent=True) or {}
         folder = str(data.get("folder") or "").strip()
         safe_join_fs_root(folder)
-        from .epoch_reference import training_wildcard_members
         job_id = str(data.get("jobId") or "").strip()
         trained_images = training_image_members(folder, job_id)
+        media = [name for name in list_media_files(folder) if name in trained_images]
         captions = [
             str(load_caption_text(folder, name).get("caption") or "").strip()
-            for name in list_media_files(folder) if name in trained_images
+            for name in media
         ]
+        from .caption_ops import _resolve_folder
+        scoped = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+        if not isinstance(scoped, dict):
+            raise ValueError("Scoped Set annotation map is invalid.")
         contract = epoch_finder_build_proposal(
             captions, set_name=Path(folder).name,
             focus=data.get("focus"), vocabulary=data.get("vocabulary"),
-            reference_vocabulary=epoch_reference_vocabulary(folder, job_id),
+            annotations=[scoped.get(name, {}) for name in media],
         )
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(), contract,

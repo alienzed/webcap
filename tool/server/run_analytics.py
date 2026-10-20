@@ -531,7 +531,7 @@ def overview(folder_path):
             epochs[key] = {
                 "jobId": job_id, "epoch": epoch, "runName": name,
                 "testCount": 0, "campaignCount": 0, "ratedCount": 0,
-                "vlReviewedCount": 0, "sessions": set(),
+                "ratingSum": 0, "vlReviewedCount": 0, "sessions": set(),
             }
         elif name and not epochs[key]["runName"]:
             epochs[key]["runName"] = name
@@ -594,6 +594,7 @@ def overview(folder_path):
             entry["sessions"].add(directory.name)
             if rated:
                 entry["ratedCount"] += 1
+                entry["ratingSum"] += ratings[media]
             if judgments:
                 entry["vlReviewedCount"] += 1
 
@@ -601,6 +602,8 @@ def overview(folder_path):
             cohort = cohorts.setdefault(signature, {
                 "id": signature, "modelId": str(stored.get("modelId") or stored.get("model") or ""),
                 "strength": result.get("strength", (stored.get("settings") or {}).get("strength")),
+                "promptPreview": str(stored.get("sourcePrompt") or stored.get("resolvedPrompt") or "")[:120],
+                "vlQuestionPreview": str(assessment.get("question") or "")[:120],
                 "vlModelId": str(assessment.get("modelId") or ""),
                 "sessions": set(), "previews": 0, "ratedPreviews": 0,
                 "vlReviewedPreviews": 0, "vlJudgments": 0, "points": {}, "attributes": {},
@@ -671,6 +674,8 @@ def overview(folder_path):
         groups.append({
             "id": cohort["id"], "modelId": cohort["modelId"],
             "strength": cohort["strength"], "vlModelId": cohort["vlModelId"],
+            "promptPreview": cohort["promptPreview"],
+            "vlQuestionPreview": cohort["vlQuestionPreview"],
             "sessions": len(cohort["sessions"]), "previews": cohort["previews"],
             "ratedPreviews": cohort["ratedPreviews"],
             "vlReviewedPreviews": cohort["vlReviewedPreviews"],
@@ -681,8 +686,14 @@ def overview(folder_path):
     # Choose the most measured comparable group, not the first run or six arbitrary runs.
     groups.sort(key=lambda g: (-(g["ratedPreviews"] + g["vlReviewedPreviews"]),
                                -g["previews"], g["id"]))
-    indexed = sorted((dict(row, sessions=sorted(row["sessions"])) for row in epochs.values()),
-                     key=lambda x: (-(x["testCount"] + x["campaignCount"]), x["jobId"], x["epoch"]))
+    indexed = []
+    for row in epochs.values():
+        item = dict(row, sessions=sorted(row["sessions"]),
+                    allManualAverage=(row["ratingSum"] / row["ratedCount"]
+                                      if row["ratedCount"] else None))
+        item.pop("ratingSum")  # Internal accumulator, not a separate rating protocol.
+        indexed.append(item)
+    indexed.sort(key=lambda x: (-(x["testCount"] + x["campaignCount"]), x["jobId"], x["epoch"]))
     totals["runsWithResults"] = len(seen_runs)
     totals["epochsWithResults"] = len(indexed)
     totals["generatedPreviews"] = totals["testPreviews"] + totals["campaignPreviews"]

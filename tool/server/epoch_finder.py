@@ -1220,6 +1220,7 @@ def checkpoint_workspace(folder_path, job_id, epoch, offset=0, limit=24):
                              generated_only=True, include_epoch_index=True,
                              offset=offset, limit=limit)
     sessions, campaigns = {}, {}
+    from . import test_reference
     for item in page["media"]:
         if item["source"] == "test":
             session = item["session"]
@@ -1230,11 +1231,17 @@ def checkpoint_workspace(folder_path, job_id, epoch, offset=0, limit=24):
                     raise FileNotFoundError("Test session unavailable: " + session)
                 sessions[session] = (test_bench._session_rating_map(directory),
                                      test_bench._session_vision_state(directory),
-                                     test_bench._project_wildcard_fields(dict(stored)))
-            ratings, vision, stored = sessions[session]
+                                     test_bench._project_wildcard_fields(dict(stored)),
+                                     test_reference.read(folder_path, session))
+            ratings, vision, stored, references = sessions[session]
             name = item["mediaFile"]
             item["rating"] = ratings.get(name)
             item["assessment"] = (vision.get("byMedia") or {}).get(name)
+            records = (references.get("byMedia") or {}).get(name) or {}
+            item["referenceAssessments"] = [v for v in records.values()
+                                            if isinstance(v, dict) and v.get("method") == "rvn"]
+            item["dinoAssessments"] = [v for v in records.values()
+                                       if isinstance(v, dict) and v.get("method") == "dino"]
             item["wildcards"] = stored.get("wildcardSummary") or stored.get("wildcardValues") or []
             item["settings"] = stored.get("settings") or {}
         else:

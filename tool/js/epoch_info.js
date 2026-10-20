@@ -73,12 +73,17 @@
         ordered.add(item.id);
         var card=view.cards.get(item.id);
         if(!card){card=renderCard(item,view);if(card)view.cards.set(item.id,card);}
-        if(card)gallery.appendChild(card);
+        if(card){
+          var previous=gallery.children[gallery.children.length-1];
+          if(card!==previous)gallery.appendChild(card);
+        }
       });
       Array.from(gallery.children).forEach(function(card){
         if(card.dataset.resultKey&&!ordered.has(card.dataset.resultKey))card.remove();
       });
-      if(!items.length)gallery.appendChild(element('p','', 'No matching recorded generations.'));
+      var empty=gallery.querySelector('.epoch-info-empty');
+      if(items.length&&empty)empty.remove();
+      if(!items.length&&!empty)gallery.appendChild(element('p','epoch-info-empty', 'No matching recorded generations.'));
     }
     source.onchange=refreshCards;sort.onchange=refreshCards;refreshCards();
     view.refreshCards=refreshCards;

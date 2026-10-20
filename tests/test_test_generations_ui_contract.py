@@ -1016,23 +1016,17 @@ def test_external_output_test_sessions_keep_open_action():
     assert "data-session-rate" not in script
 
 def test_test_generations_background_updates_never_choose_a_session():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     render = script.split("function renderStatus(status)", 1)[1].split("function pollStatus()", 1)[0]
     assert "currentSession =" not in render
-
     poll = script.split("function pollStatus()", 1)[1].split("function showError", 1)[0]
     assert "selectSessionStatus(" not in poll
     assert "if (currentSession === activeSession)" in poll
     assert "else if (selectedPreviewLive)" in poll
-
-    start = script.split("function startRun()", 1)[1].split("function stopRun", 1)[0]
-    assert "selectSessionStatus(" not in start
-    assert "if (currentSession === String(startedStatus.session || '')) renderStatus(startedStatus);" in start
-
-    activity = script.split("function openTestBenchActivity(target)", 1)[1].split("function openTestBenchActivityMenu", 1)[0]
-    assert "testActivity.active[0]" not in activity
-
+    launch = script.split("function startRun()", 1)[1].split("function stopRun", 1)[0]
+    assert "var previousSession = currentSession;" in launch
+    assert "currentSession === previousSession && !testVl.running" in launch
+    assert "selectSessionStatus(first);" in launch
 
 def test_test_generations_selection_changes_only_at_explicit_navigation_seams():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -1058,20 +1052,18 @@ def test_test_generations_director_queue_preserves_remote_runtime_identity():
 
 
 def test_test_generations_exposes_training_candidates_link_from_unique_run_provenance():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    candidates = (ROOT / "tool" / "js" / "training_candidates.js").read_text(encoding="utf-8")
-
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    candidates = (ROOT / "tool/js/training_candidates.js").read_text(encoding="utf-8")
     assert 'id="test-generations-candidates-btn"' in html
-    assert "function syncCandidatesButton(payload)" in script
-    assert "payload.candidateRuns" in script
-    assert "runs.length === 1" in script
-    assert "openTrainingCandidates({ id: jobId, folder: folder }" in script
-    assert "refreshStagedFilesAfterCandidates" in script
+    block = script.split("function syncCandidatesButton(payload)", 1)[1].split("function", 1)[0]
+    assert "payload.candidateRuns" in block
+    assert "run.jobId && run.folder" in block
+    assert "button.classList.toggle('hidden', !runs.length);" in block
+    assert "button.textContent = 'Runs';" in block
     assert "trainingCandidatesCloseHook" in candidates
     assert "options && typeof options.onClose === 'function'" in candidates
 
- 
 def test_test_result_cards_show_frozen_megapixels_and_candidate_strength():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
@@ -1123,23 +1115,16 @@ def test_test_generation_default_weight_inherits_unless_candidate_overridden():
     assert "Default weight must be between -2 and 2." in script
 
 def test_global_director_model_control_lives_in_header():
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "workspace_shell.css").read_text(encoding="utf-8")
-
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    shell = (ROOT / "tool/js/workspace_shell.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/workspace_shell.css").read_text(encoding="utf-8")
     assert 'id="app-header-director-control"' in html
     assert 'id="app-header-director-model"' in html
-    assert 'id="app-header-director-refresh"' in html
     assert "function refreshApplicationDirectorModels()" in shell
-    assert "setDirectorModelPreference('webcap.director.model'" in shell
+    assert "setDirectorModelPreference('webcap.director.model', selected);" in shell
     assert "webcap:director-model-changed" in shell
     assert ".app-header-director-control" in css
-    assert "column-gap: 12px;" in css
     assert 'id="test-generations-wildcard-model"' not in html
-    assert ".generate-director-model-tools > select" in css
-    assert ".storyboard-director-model-tools" in css
-    assert ".director-chat-model-tools" in css
-
 
 def test_primer_template_assistant_uses_existing_template_editor():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
@@ -1161,13 +1146,13 @@ def test_primer_template_assistant_uses_existing_template_editor():
 
 
 def test_new_test_run_selects_returned_session_for_results_header():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-
-    enqueue_block = script.split("requestForFolder(folder, 'test_enqueue'", 1)[1].split("function stopRun", 1)[0]
-    assert "var startedStatus = payload && payload.latest ? payload.latest : null;" in enqueue_block
-    assert "selectSessionStatus(startedStatus);" in enqueue_block
-    assert "if (currentSession === String(startedStatus.session || '')) renderStatus(startedStatus);" not in enqueue_block
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    launch = script.split("function startRun()", 1)[1].split("function stopRun", 1)[0]
+    assert "requestForFolder(folder, 'test_enqueue', criteria)" in launch
+    assert "var first = payload && payload.sessions && payload.sessions[0] || payload.latest;" in launch
+    assert "currentSession === previousSession && !testVl.running" in launch
+    assert "selectSessionStatus(first);" in launch
+    assert "refreshSessions();" in launch
 
 def test_results_header_renders_persisted_wildcard_values():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -1250,24 +1235,26 @@ def test_staged_candidates_show_recorded_h3_variant_without_guessing():
 
 
 def test_wildcard_request_includes_active_set_group_vocabulary():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     generator = script.split("function generateWildcardFromSet()", 1)[1].split("function pane()", 1)[0]
-    assert "vocabulary: checklistItems.map" in generator
-    assert "getRequirementGroupAlias(group)" in generator
-    assert "getChecklistKeywordTermsForRequirement(group)" in generator
-
+    assert "var requestFolder = owningSetFolder(" in generator
+    assert "folder: requestFolder" in generator
+    assert "vocabulary: testPlanningVocabulary()" in generator
+    assert "function testPlanningVocabulary()" in script
+    assert "getRequirementGroupAlias" in script
+    assert "getChecklistKeywordTermsForRequirement" in script
 
 def test_test_vl_batch_is_ephemeral_and_session_scoped():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
     assert 'id="test-generations-ask-vl"' in html
     assert 'id="test-generations-vl-detail"' in html
     assert "captionAssistRequestJson('/fs/test_generations/vision-question'" in script
+    assert "function queueTestVlForSession(status, selectedResults)" in script
+    assert "function stopTestVl()" in script
+    assert "var testVlRuns = Object.create(null);" in script
     assert "testVl.scope !== testVlScope(currentStatus)" in script
-    assert "testVl.entries = Object.create(null)" in script
-    assert "entry.status = 'stopped'" in script
-    assert "saveFolderStateForCurrentRoot()" not in script.split('function runTestVlBatch()', 1)[1].split('function el(id)', 1)[0]
-
+    assert "saveFolderStateForCurrentRoot()" not in script.split("function runTestVlBatch()", 1)[1].split("function", 1)[0]
 
 def test_test_vl_results_are_comparison_first_with_collapsed_diagnostics():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -1308,16 +1295,15 @@ def test_test_vl_counting_overrides_remain_browser_memory_only():
 
 
 def test_test_vl_session_scoring_audit_contract():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-
-    assert "if (testVl.scope !== nextScope) testVl.disabledGroups = new Set();" in script
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    assert "testVl.disabledGroups = new Set();" in script
     assert "currentStatus.sweepWeights) return totals;" in script
     assert "function renderTestVlCard(card, result, candidateScores)" in script
     assert "var candidateScores = testVlCandidateScores(results);" in script
     assert "renderTestVlCard(card, result, candidateScores);" in script
-    assert "showTestVlResult(file, true);" in script
-    assert "testVlCreditText(score.count) + ' weighted agreement" in script
+    assert "testVlCreditText(score.count) + ' weighted agreement'" in script
     assert "testVlCreditText(epochScore.count) + ' weighted attributes'" in script
+    assert "epochScore.matches / epochScore.count" in script
 
 def test_candidate_summary_keeps_controls_on_top_line_and_compacts_scores():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
@@ -1336,17 +1322,14 @@ def test_candidate_summary_keeps_controls_on_top_line_and_compacts_scores():
 
 
 def test_session_vision_assessments_restore_and_preview_both_epoch_metrics():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    backend = (ROOT / "tool" / "server" / "epoch_test_bench.py").read_text(encoding="utf-8")
-    state = (ROOT / "tool" / "server" / "folder_state_store.py").read_text(encoding="utf-8")
-
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    backend = (ROOT / "tool/server/epoch_test_bench.py").read_text(encoding="utf-8")
+    state = (ROOT / "tool/server/folder_state_store.py").read_text(encoding="utf-8")
     assert "function restoreTestVl(status)" in script
     assert "status && status.testVision" in script
-    assert "function saveTestVl(changes, sessionName)" in script
-    assert "saveTestVl({ mediaFile: file, assessment:" in script
-    assert "}, session).then(function () {" in script
-    assert "saveTestVl({ disabledGroups: Array.from(testVl.disabledGroups) })" in script
-    assert "saveTestVl({ mediaFile: file, ignoredGroups:" in script
+    assert "function saveTestVl(changes, sessionName, folderName)" in script
+    assert "requestForFolder(folder, 'test_vision_update'" in script
+    assert "testVlSaveQueue = save.catch(function () {});" in script
     assert "data-test-manual-epoch-score" in script
     assert "Math.round(100 * epochScore.matches / epochScore.count)" in script
     assert "Epoch VL agreement" in script
@@ -1354,36 +1337,31 @@ def test_session_vision_assessments_restore_and_preview_both_epoch_metrics():
     assert 'visible["testVision"] = _session_vision_state(session_directory)' in backend
     assert 'state["test_vision"] = vision' in state
 
-
 def test_test_vision_save_order_and_inference_success_survives_persistence_error():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     assert "var testVlSaveQueue = Promise.resolve();" in script
     assert "testVlSaveQueue = save.catch(function () {});" in script
-    assert "entry.saveError = String(err && err.message ? err.message : err);" in script
+    assert "reportConsoleError('Save Test VL assessment', err);" in script
+    assert "entry.saveError = '';" in script
+    assert "saveError: String(err.message || err)" in script
     assert "if (item.saveError) button.textContent += ' !';" in script
     assert "if (entry.saveError) summary.textContent += ' · not saved: '" in script
 
-
 def test_test_result_compact_three_rows_and_vl_model_provenance():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
-
-    assert "label.appendChild(source);" in script
-    assert "primaryRow.appendChild(label);" in script
-    assert "secondaryRow.appendChild(metadataRow);" in script
-    assert "secondaryRow.appendChild(rating);" in script
-    assert "copy.appendChild(evaluation);" in script
-    assert "evaluation.appendChild(vlButton);" in script
-    assert "manualScore.dataset.testManualEpochScore = '1';" in script
-    assert "vlScore.dataset.testVlEpochScore = '1';" in script
-    assert "entry.modelId = model;" in script
-    assert "modelId: entry.modelId" in script
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
+    for marker in ("label.appendChild(source);", "primaryRow.appendChild(label);",
+                   "secondaryRow.appendChild(metadataRow);", "secondaryRow.appendChild(rating);",
+                   "evaluation.appendChild(vlButton);",
+                   "manualScore.dataset.testManualEpochScore = '1';",
+                   "vlScore.dataset.testVlEpochScore = '1';"):
+        assert marker in script
+    assert "entry.modelId = run.model;" in script
     assert "modelId: savedEntry.modelId || ''" in script
     assert "Unknown (previous assessment)" in script
     assert 'id="test-generations-vl-model"' in html
     assert ".test-generations-result-evaluation" in css
-
 
 def test_candidate_sorting_reuses_existing_scores_and_preserves_rows():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

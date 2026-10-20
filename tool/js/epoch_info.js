@@ -56,17 +56,35 @@
       var items=view.items.filter(function(x){return source.value==='all'||x.source===source.value||(source.value==='rated'&&x.source==='test'&&x.rating>0);});
       if(sort.value==='rating')items.sort(function(a,b){return Number(b.rating||0)-Number(a.rating||0);});
       if(sort.value==='recent')items.sort(function(a,b){return Number(b.startedAt||0)-Number(a.startedAt||0);});
+      // Sorting or explicit filter changes are the only reasons to reconstruct cards.
       gallery.replaceChildren();
       items.forEach(function(item){gallery.appendChild(renderCard(item,view));});
       if(!items.length)gallery.appendChild(element('p','', 'No matching recorded generations.'));
     }
     source.onchange=refreshCards;sort.onchange=refreshCards;refreshCards();
+    view.refreshCards=refreshCards;
     if(view.offset<view.total) {
       var more=element('button','review-captions-btn','Load more');
       more.type='button';root.appendChild(more);
       more.onclick=function(){more.disabled=true;load(view,true).catch(function(e){showError(root,e);}).finally(function(){more.disabled=false;});};
     }
     if(view.warnings&&view.warnings.length){var d=element('details','epoch-info-warnings');d.appendChild(element('summary','', 'Evidence limitations'));view.warnings.forEach(function(w){d.appendChild(element('p','',w));});root.appendChild(d);}
+  }
+  function syncRatingSummary(view){
+    // Refresh aggregate stats without recreating media elements, interactive
+    // controls, filters or playback state.
+    return request(view.folder,'checkpoint_workspace',{jobId:view.jobId,epoch:view.epoch,offset:0,limit:1})
+      .then(function(data){
+        if(state[view.mode]!==view)return;
+        view.summary=data.summary||view.summary;
+        var host=document.getElementById(view.host);
+        var grid=host.querySelector('.epoch-info-stats');
+        if(!grid)return;
+        var cells=grid.querySelectorAll('.epoch-info-stat strong');
+        if(cells[2])cells[2].textContent=view.summary.manualAverage==null?'—':Number(view.summary.manualAverage).toFixed(2)+' / 5';
+        if(cells[3])cells[3].textContent=String(view.summary.rated||0);
+        // Keep playback and current filter controls untouched.
+      }).catch(function(e){showError(document.getElementById(view.host),e);});
   }
   function showError(root,e){root.appendChild(element('p','epoch-finder-error',e.message||e));window.reportConsoleError('Epoch Info',e);}
   function renderCard(item,view) {
@@ -92,7 +110,7 @@
       function setRating(v){Array.from(rating.querySelectorAll('button')).forEach(function(b){b.disabled=true;});
         fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder:view.folder,operation:'test_rate_result',criteria:{session:item.session,mediaFile:item.mediaFile,rating:v}})})
           .then(function(r){return r.json().then(function(data){if(!r.ok||!data.ok)throw new Error(data.error||'Rating failed');return data;});})
-          .then(function(data){item.rating=data.rating;stars(data.rating);return load(view,false,true);})
+          .then(function(data){item.rating=data.rating;stars(data.rating);syncRatingSummary(view);})
           .catch(function(e){stars(item.rating||0);showError(meta,e);});}
       stars(item.rating||0);meta.appendChild(rating);
       if(item.rating){var clear=element('button','epoch-info-clear','Clear rating');clear.type='button';clear.onclick=function(){setRating(0);};meta.appendChild(clear);}

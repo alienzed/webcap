@@ -110,10 +110,10 @@
       function setRating(v){Array.from(rating.querySelectorAll('button')).forEach(function(b){b.disabled=true;});
         fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder:view.folder,operation:'test_rate_result',criteria:{session:item.session,mediaFile:item.mediaFile,rating:v}})})
           .then(function(r){return r.json().then(function(data){if(!r.ok||!data.ok)throw new Error(data.error||'Rating failed');return data;});})
-          .then(function(data){item.rating=data.rating;stars(data.rating);syncRatingSummary(view);})
+          .then(function(data){item.rating=data.rating;stars(data.rating);clear.hidden=!data.rating;syncRatingSummary(view);})
           .catch(function(e){stars(item.rating||0);showError(meta,e);});}
       stars(item.rating||0);meta.appendChild(rating);
-      if(item.rating){var clear=element('button','epoch-info-clear','Clear rating');clear.type='button';clear.onclick=function(){setRating(0);};meta.appendChild(clear);}
+      var clear=element('button','epoch-info-clear','Clear rating');clear.type='button';clear.hidden=!item.rating;clear.onclick=function(){setRating(0);};meta.appendChild(clear);
     }else meta.appendChild(element('span','epoch-info-readonly','Campaign VL · no manual rating'));
     var wildcard=item.wildcards||[];
     if(wildcard.length){var list=element('div','epoch-info-wildcards');list.appendChild(element('strong','', 'Resolved wildcard choices'));wildcard.forEach(function(entry){list.appendChild(element('span','',typeof entry==='string'?entry:(entry.label+': '+entry.value)));});meta.appendChild(list);}

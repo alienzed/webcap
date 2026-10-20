@@ -522,6 +522,8 @@ def merge_technical_media_metadata(folder_path, results):
     folder_path = Path(folder_path)
     metadata_path = folder_path / "media_metadata.json"
     with _media_metadata_lock:
+        if metadata_path.is_symlink():
+            raise ValueError(f"Refusing symlinked media_metadata.json: {metadata_path}")
         if metadata_path.exists():
             with open(metadata_path, "r", encoding="utf-8") as handle:
                 metadata = json.load(handle)

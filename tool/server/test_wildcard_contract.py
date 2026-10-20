@@ -12,45 +12,114 @@ def _clean_context(value):
     return " ".join(str(value or "").strip().split())
 
 
-def _representative_captions(captions, max_items=150, max_chars=24000):
-    """Bound Director input while retaining examples across the whole Set."""
-    counts = Counter(captions)
-    unique = list(counts)
-    if not unique:
+# Generic Set attributes are background context, not the learned concept.
+_CORE_GROUPS = frozenset({
+    "viewpoint", "position", "hair", "body", "clothing", "lighting", "background",
+})
+
+
+def _concept_tags(annotations):
+    """Read exact Set annotations, retaining group identity for duplicate tag text."""
+    if not isinstance(annotations, dict):
+        raise ValueError("Scoped Set annotations must be a group-to-tags mapping.")
+    tags = set()
+    for group, values in annotations.items():
+        if not isinstance(group, str) or not isinstance(values, list) or any(
+            not isinstance(value, str) for value in values
+        ):
+            raise ValueError("Invalid scoped Set annotation group or tag list.")
+        if group.strip().casefold() in _CORE_GROUPS:
+            continue
+        tags.update((group, value) for value in values if value.strip())
+    return tags
+
+
+def _sample_caption_examples(rows, max_items=24, max_chars=7200):
+    """Prefer examples covering previously unseen, especially rare, concept tags."""
+    counts = Counter()
+    distinct = {}
+    for caption, tags in rows:
+        if not caption:
+            continue
+        counts[caption] += 1
+        distinct.setdefault(caption, set()).update(tags)
+    captions = list(distinct)
+    if not captions:
         return [], 0
-    count = min(len(unique), max_items)
-    while True:
-        indices = [index * (len(unique) - 1) // (count - 1) for index in range(count)] if count > 1 else [0]
-        examples = ["[count=" + str(counts[unique[index]]) + "] " + unique[index]
-                    for index in indices]
-        if sum(len(example) + 2 for example in examples) <= max_chars or count == 1:
-            return examples, len(unique)
-        count -= 1
+    tag_frequency = Counter(tag for _, tags in rows for tag in tags)
+    chosen, covered, remaining, used_chars = [], set(), list(range(len(captions))), 0
+
+    while remaining and len(chosen) < max_items:
+        candidates = []
+        for index in remaining:
+            fresh = distinct[captions[index]] - covered
+            # Gain is about group/tag diversity, never incidental wording.
+            gain = sum(1 / tag_frequency[tag] for tag in fresh)
+            size = len(captions[index]) + 22
+            if size + used_chars <= max_chars:
+                candidates.append((gain, len(fresh), -index, index, size))
+        if not candidates:
+            break
+        winner = max(candidates)
+        if chosen and winner[0] <= 0:
+            break
+        index, size = winner[3], winner[4]
+        chosen.append(index)
+        remaining.remove(index)
+        covered.update(distinct[captions[index]])
+        used_chars += size
+
+    # A few spread-out examples retain caption style even when tags are sparse.
+    target = min(6, len(captions), max_items)
+    if len(chosen) < target:
+        indices = [i * (len(captions) - 1) // (target - 1)
+                   for i in range(target)] if target > 1 else [0]
+        for index in indices:
+            if len(chosen) >= target:
+                break
+            if index in chosen:
+                continue
+            size = len(captions[index]) + 22
+            if size + used_chars <= max_chars:
+                chosen.append(index)
+                used_chars += size
+
+    examples = ["[count=" + str(counts[captions[i]]) + "] " + captions[i]
+                for i in chosen]
+    return examples, len(captions)
 
 
-def build_request(captions, set_name="", focus="", vocabulary=None):
+def build_request(captions, set_name="", focus="", vocabulary=None, annotations=None):
+    if annotations is not None and len(annotations) != len(captions):
+        raise ValueError("Wildcard annotations must align with Set captions.")
     cleaned = [_clean_caption(value) for value in (captions or [])]
-    cleaned = [value for value in cleaned if value]
-    if not cleaned:
+    if not any(cleaned):
         raise ValueError("This Set has no captions to analyze.")
 
     set_name = _clean_context(set_name)
     focus = _clean_context(focus)
-
+    scoped = [_concept_tags(entry) for entry in annotations] if annotations is not None else [
+        set() for _ in cleaned
+    ]
+    # Aggregate actual trained-media annotations, not the entire configured vocabulary.
+    frequencies = Counter(tag for tags in scoped for tag in tags)
+    aliases = {
+        _clean_context(entry.get("group")): _clean_context(entry.get("alias"))
+        for entry in vocabulary or [] if isinstance(entry, dict) and
+        _clean_context(entry.get("group"))
+    }
     groups = []
-    for raw in vocabulary if isinstance(vocabulary, list) else []:
-        if not isinstance(raw, dict):
-            continue
-        group = _clean_context(raw.get("group"))
-        if not group:
-            continue
-        terms = (
-            [_clean_context(term) for term in raw.get("terms", []) if str(term or "").strip()]
-            if isinstance(raw.get("terms"), list) else []
+    for group in sorted({name for name, _ in frequencies}):
+        terms = sorted(
+            ((term, count) for (name, term), count in frequencies.items() if name == group),
+            key=lambda item: (-item[1], item[0]),
         )
-        groups.append({"group": group, "alias": _clean_context(raw.get("alias")), "terms": terms})
+        groups.append({
+            "group": group, "alias": aliases.get(group, ""),
+            "terms": [{"term": term, "count": count} for term, count in terms],
+        })
 
-    corpus, unique_count = _representative_captions(cleaned)
+    corpus, unique_count = _sample_caption_examples(list(zip(cleaned, scoped)))
 
     schema = {
         "type": "object",
@@ -91,7 +160,8 @@ def build_request(captions, set_name="", focus="", vocabulary=None):
     context_lines = [
         "Set name: " + (set_name or "(not supplied)"),
         "Explicit focus: " + (focus or "(auto - infer from Set name and repeated caption language)"),
-        "Annotation groups and terms: " + (json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"),
+        "Observed concept tags (selected run; counts are annotated media): " +
+        (json.dumps(groups, ensure_ascii=False, separators=(",", ":")) if groups else "(no scoped concept tags)"),
         "Caption sampling: " + str(len(corpus)) + " representative examples from " +
         str(unique_count) + " distinct captions. [count=N] indicates exact duplicates.",
     ]
@@ -130,8 +200,9 @@ def build_request(captions, set_name="", focus="", vocabulary=None):
         "Independently vary actual components, but keep each resolved prompt physically meaningful.\n"
         "- Recombine attributes across dimensions so tests exercise independently selectable properties, "
         "not merely replay complete caption fragments.\n"
-        "- The one-time group vocabulary is semantic context, not per-item truth. "
-        "The caption examples are selected-run evidence; omitted captions may contain additional variations.\n"
+        "- The observed concept-tag inventory is the main evidence: each group and tag is distinct, "
+        "and counts describe prevalence in the selected run. "
+        "The sampled captions illustrate natural phrasing, not an exhaustive list.\n"
         "- Prefer observed variations. If a useful value is unsupported by these examples, do not claim it was trained.\n"
         "- Use supplied garment-construction terms accurately; do not invent nonsensical hardware or garment structures.\n"
         "- Every wildcard option must itself be usable prompt text. Never emit category placeholders such as 'various styles', "

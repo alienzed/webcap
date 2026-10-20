@@ -346,12 +346,15 @@ def create_campaign(folder_path, criteria):
     for entry in reference_choices:
         if not isinstance(entry, dict):
             raise ValueError("Invalid reference selection.")
-        key = (str(entry.get("attribute") or ""), str(entry.get("option") or ""))
+        key = (str(entry.get("dimensionId") or entry.get("attribute") or ""),
+               str(entry.get("option") or ""))
         if key in approved:
             raise ValueError("Duplicate approved reference.")
         approved[key] = entry
-    required = {(dimension["label"], option) for dimension in dimensions
-                if _requires_reference(dimension["role"]) for option in dimension["options"]}
+    required = {(identity, option) for dimension in dimensions
+                if _requires_reference(dimension["role"])
+                for identity in (dimension["id"], dimension["label"])
+                for option in dimension["options"]}
     if not set(approved).issubset(required):
         raise ValueError("Only Primary wildcard choices may have training references.")
     evaluation = criteria.get("referenceEvaluation")
@@ -364,14 +367,16 @@ def create_campaign(folder_path, criteria):
         for attribute, option in approved
     }
     references = []
-    for (attribute, option), entry in sorted(approved.items()):
-        if str(entry.get("group") or "") not in reference_groups[(attribute, option)] or str(entry.get("tag") or option) != option:
+    for (identity, option), entry in sorted(approved.items()):
+        if str(entry.get("group") or "") not in reference_groups[(identity, option)] or str(entry.get("tag") or option) != option:
             raise ValueError("Primary reference must use its exact annotated group and tag.")
         group = str(entry.get("group") or "")
         media = str(entry.get("media") or "")
         tag = str(entry.get("tag") or option)
         reference = verified_reference(folder, group, tag, media, job_id)
-        references.append({"attribute": attribute, "option": option, "group": group,
+        references.append({"attribute": str(entry.get("attribute") or identity),
+                           "dimensionId": str(entry.get("dimensionId") or ""),
+                           "option": option, "group": group,
                            "tag": tag, "alias": str(entry.get("alias") or "").strip(), **reference})
     if evaluation["dino"]:
         from .epoch_dino import preflight as dino_preflight
@@ -661,7 +666,8 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
     if not frame.is_file():
         raise FileNotFoundError("Generated comparison frame is unavailable.")
     from .epoch_reference import verified_reference
-    references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
+    references = {(entry.get("dimensionId") or entry["attribute"], entry["option"]): entry
+                  for entry in campaign["referencePlan"]}
     outcomes = list(unit.get("referenceAssessments") or [])
     completed_groups = {row["groupId"] for row in outcomes}
     for group in unit.get("groups", []):
@@ -670,7 +676,7 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
         if not _requires_reference(group.get("role")) or group.get("expected") is None:
             continue
         expected = group["options"][group["expected"] - 1]
-        assigned = references.get((group["label"], expected))
+        assigned = references.get((group["id"], expected)) or references.get((group["label"], expected))
         if assigned is None:
             continue
         verified = verified_reference(_folder_key(folder_path), assigned["group"], assigned.get("tag") or expected, assigned["media"], campaign["jobId"])
@@ -727,13 +733,14 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
     frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
     if not frame.is_file():
         raise FileNotFoundError("Generated DINO comparison frame is unavailable.")
-    references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
+    references = {(entry.get("dimensionId") or entry["attribute"], entry["option"]): entry
+                  for entry in campaign["referencePlan"]}
     unique = {}
     for group in unit.get("groups", []):
         if not _requires_reference(group.get("role")) or group.get("expected") is None:
             continue
         option = group["options"][group["expected"] - 1]
-        entry = references.get((group["label"], option))
+        entry = references.get((group["id"], option)) or references.get((group["label"], option))
         if entry is None:
             continue
         actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"], campaign["jobId"])

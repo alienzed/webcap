@@ -3834,6 +3834,10 @@
 
   function takeMetaLabel(take) {
     var parts = [take && take.generated ? 'Generated' : 'Imported'];
+    if (take && take.generated) {
+      var elapsed = take.elapsedMs == null ? '' : formatGenerationElapsedMs(take.elapsedMs);
+      parts.push(elapsed ? elapsed + ' elapsed' : 'Elapsed —');
+    }
     var createdAt = take && take.createdAt ? new Date(take.createdAt) : null;
     if (createdAt && !Number.isNaN(createdAt.getTime())) {
       parts.push(createdAt.toLocaleString([], {
@@ -3856,12 +3860,7 @@
         parts.push(width + '×' + height);
       }
     }
-    if (take && take.generated && take.seed !== undefined && take.seed !== null && take.seed !== '') {
-      parts.push('Seed ' + String(take.seed));
-    }
     if (take && take.mediaPurged) parts.push('Media reclaimed');
-    var elapsed = formatGenerationElapsedMs(take && take.elapsedMs);
-    if (elapsed) parts.push(elapsed);
     return parts.join(' · ');
   }
 

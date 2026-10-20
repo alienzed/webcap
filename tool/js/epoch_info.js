@@ -68,14 +68,14 @@
       if(sort.value==='recent')items.sort(function(a,b){return Number(b.startedAt||0)-Number(a.startedAt||0);});
       // Keyed reuse preserves video playback and open Details during paging/refresh.
       var ordered=new Set();
-      items.forEach(function(item){
+      items.forEach(function(item,index){
         if(!item||!item.id)return;
         ordered.add(item.id);
         var card=view.cards.get(item.id);
         if(!card){card=renderCard(item,view);if(card)view.cards.set(item.id,card);}
         if(card){
-          var previous=gallery.children[gallery.children.length-1];
-          if(card!==previous)gallery.appendChild(card);
+          var at=gallery.children[index]||null;
+          if(card!==at)gallery.insertBefore(card,at);
         }
       });
       Array.from(gallery.children).forEach(function(card){

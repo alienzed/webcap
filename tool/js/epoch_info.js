@@ -97,7 +97,7 @@
     var available=item.source==='test'?item.mediaAvailable!==false:!!item.frame&&!item.framePruned;
     var uri=item.source==='test'?'/fs/test_generations/media?folder='+encodeURIComponent(view.folder)+'&session='+encodeURIComponent(item.session)+'&media='+encodeURIComponent(item.mediaFile):'/fs/epoch_finder/frame?folder='+encodeURIComponent(view.folder)+'&campaign='+encodeURIComponent(item.campaignId)+'&frame='+encodeURIComponent(item.frame||'');
     if(available) {
-      var isVideo=item.source==='test'&&(item.mediaKind==='video'||/\\.(mp4|webm|mov|mkv)$/i.test(item.mediaFile||''));
+      var isVideo=item.source==='test'&&(item.mediaKind==='video'||/\.(mp4|webm|mov|mkv)$/i.test(item.mediaFile||''));
       var preview=element(isVideo?'video':'img');
       preview.src=uri;if(isVideo){preview.controls=true;preview.preload='metadata';preview.playsInline=true;}else{preview.loading='lazy';preview.alt='Saved checkpoint render';}
       media.appendChild(preview);

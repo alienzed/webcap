@@ -332,23 +332,24 @@
     return api('reference_vocabulary', {jobId: els('run').value}).then(function (response) {
       var vocabulary = response.vocabulary || [];
       referenceItems.forEach(function (item) {
-        var dimension = dimensions.find(function (d) { return d.label === item.attribute && d.role === 'primary'; });
-        var matches = vocabulary.filter(function (group) {
-          var terms = (group.terms || []).map(function (term) { return term.term; });
-          return dimension && dimension.options.every(function (option) { return terms.includes(option); });
-        });
-        if (matches.length !== 1) {
-          throw new Error('Primary attribute "' + item.attribute + '" must use exact tags from one training annotation group. Found ' +
-            matches.length + ' matching groups. Edit the wildcard or mark this attribute Leakage/Vary.');
+        item.groups = vocabulary.filter(function (group) {
+          return (group.terms || []).some(function (term) { return term.term === item.option; });
+        }).map(function (group) { return group.group; });
+        if (!item.groups.length) {
+          throw new Error('No trained annotation group contains exact tag "' + item.option +
+            '" for Primary attribute "' + item.attribute + '".');
         }
-        item.group = matches[0].group;
       });
       return Promise.all(referenceItems.map(function (item) {
-        return api('reference_candidates', {jobId: els('run').value, group: item.group, term: item.option}).then(function (response) {
-          item.candidates = (response.references || []).map(function (candidate) {
-            return Object.assign({}, candidate, {tag:item.option});
+        return Promise.all(item.groups.map(function (group) {
+          return api('reference_candidates', {jobId: els('run').value, group: group, term: item.option}).then(function (response) {
+            return (response.references || []).map(function (candidate) {
+              return Object.assign({}, candidate, {tag:item.option});
+            });
           });
-          if (!item.candidates.length) throw new Error('No trained reference for ' + item.group + ' / ' + item.option + '.');
+        })).then(function (candidateGroups) {
+          item.candidates = candidateGroups.flat();
+          if (!item.candidates.length) throw new Error('No trained reference for ' + item.attribute + ' / ' + item.option + '.');
         });
       }));
     }).then(function () {
@@ -401,6 +402,7 @@
           '&media=' + encodeURIComponent(candidate.media);
         return '<div class="epoch-finder-reference-tile' + (active ? ' selected' : '') + '">' +
           '<img loading="lazy" src="' + media + '" alt="' + escape(candidate.media) + '">' +
+          (item.groups.length > 1 ? '<span>' + escape(candidate.group) + '</span>' : '') +
           '<div class="epoch-finder-reference-tile-actions"><button type="button" data-reference-pick="' + i +
           '" aria-pressed="' + !!active + '">' + (active ? '✓ Selected' : 'Select') +
           '</button><button type="button" data-reference-preview="' + i + '">Preview</button></div></div>';

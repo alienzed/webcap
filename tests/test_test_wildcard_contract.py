@@ -13,7 +13,7 @@ def test_caption_wildcard_contract_reports_stable_and_variable_content():
     assert request["response_schema"]["required"] == ["wildcard", "stableTerms", "variationGroups"]
     assert "[count=2] mikeperson standing in a kitchen" in request["prompt"]
     assert "frequency metadata" in request["prompt"]
-    assert "Do not invent unseen values" in request["prompt"]
+    assert "prioritize" in request["prompt"].lower()
     assert "Each wildcard group must vary exactly one attribute" in request["prompt"]
 
 
@@ -58,22 +58,22 @@ def test_caption_wildcard_contract_prioritizes_primary_concept_without_dropping_
     assert "Set name: micro_bikini_set" in prompt
     assert "Explicit focus: bikini" in prompt
     assert "primary concept should receive the richest decomposition" in prompt
-    assert "physical appearance, background, and lighting are valid and useful" in prompt
+    assert "Pose, hair, setting, lighting and camera are context" in prompt
     assert "separate color, pattern, trim, top shape, and bottom shape" in prompt
     assert "Never emit category placeholders" in prompt
 
 
-def test_caption_wildcard_result_rejects_generic_placeholder_options():
+def test_caption_wildcard_result_remains_editable_for_generic_placeholder_options():
     import pytest
 
-    with pytest.raises(ValueError, match="generic placeholder"):
-        normalize_result({
-            "wildcard": "wearing a {micro bikini|various bikini styles}",
-            "stableTerms": ["wearing"],
-            "variationGroups": [
-                {"label": "style", "options": ["micro bikini", "various bikini styles"]},
-            ],
-        })
+    draft = normalize_result({
+        "wildcard": "wearing a {micro bikini|various bikini styles}",
+        "stableTerms": ["wearing"],
+        "variationGroups": [
+            {"label": "style", "options": ["micro bikini", "various bikini styles"]},
+        ],
+    })
+    assert "various bikini styles" in draft["wildcard"]
 
 
 def test_caption_wildcard_result_allows_optional_empty_alternative():
@@ -101,84 +101,49 @@ def test_wildcard_vocabulary_supplies_independent_dimensions_without_closing_opt
     assert '"group": "BT Shape"' in prompt
     assert '"alias": "Bikini top shape"' in prompt
     assert '"terms": ["triangle", "teardrop"]' in prompt
-    assert "not proof of training membership" in prompt
+    assert "one-time group vocabulary" in prompt
     assert "{brown|black|blonde|ginger} hair" in prompt
 
 
-def test_wildcard_proposal_observes_same_group_pairs_only():
-    from tool.server.test_wildcard_contract import observed_group_combinations
-    tagged = {
-        "a.png": {"BT Shape": ["triangle"], "BT Back": ["dual-ring"]},
-        "b.png": {"BT Shape": ["teardrop"], "BT Back": ["dual-ring"]},
-        "c.png": {"BT Shape": ["triangle", "micro"], "BT Back": ["string"]},
-    }
-    combos = observed_group_combinations(tagged, ["a.png", "b.png", "c.png"])
-    assert combos["BT Shape"] == [["micro", "triangle"], ["teardrop"], ["triangle"]]
-    assert ["dual-ring", "triangle"] not in combos["BT Shape"]
-    request = build_request(["a triangle bikini"], group_combinations=combos)
-    assert "Observed same-group tag combinations:" in request["prompt"]
-    assert "mutually exclusive" in request["prompt"]
-    assert "cross-group recombination" in request["prompt"]
+def test_large_wildcard_corpus_is_sampled_without_losing_end_of_set():
+    captions = ["caption number " + str(i).zfill(3) + " with a garment description."
+                for i in range(220)]
+    request = build_request(captions)
+    prompt = request["prompt"]
+    assert "150 representative examples from 220 distinct captions" in prompt
+    assert "caption number 000" in prompt
+    assert "caption number 219" in prompt
+    assert prompt.count("[count=") == 151  # header plus 150 examples
+    assert "Observed same-group tag combinations:" not in prompt
 
 
-def test_within_group_unobserved_wildcard_pair_rejected():
-    import pytest
-    from tool.server.test_wildcard_contract import validate_group_compatibility
-    observations = {"Shape": [["triangle"], ["teardrop"], ["triangle", "micro"]]}
-    data = {"wildcard":"{triangle|teardrop} {micro|triangle}", "variationGroups": [
-        {"label":"Shape", "annotationGroup":"Shape", "options":["triangle","teardrop"]},
-        {"label":"Detail", "annotationGroup":"Shape", "options":["micro","triangle"]},
-    ]}
-    with pytest.raises(ValueError, match="Unobserved same-group"):
-        validate_group_compatibility(data, observations)
+def test_verbose_wildcard_corpus_uses_character_budget():
+    captions = ["item " + str(i) + " " + ("distinct construction " * 12)
+                for i in range(140)]
+    request = build_request(captions)
+    part = request["prompt"].split("[SET CAPTIONS]\\n", 1)[1].split("\\n\\n[OUTPUT]", 1)[0]
+    assert len(part) <= 24000
+    assert "item 0 " in part
+    assert "item 139 " in part
 
 
-def test_cross_group_recombination_is_allowed():
-    from tool.server.test_wildcard_contract import validate_group_compatibility
-    observations = {"Shape":[["triangle"],["teardrop"]], "Back":[["ring"],["string"]]}
-    data = {"wildcard":"{triangle|teardrop} {ring|string}", "variationGroups":[
-        {"label":"Shape", "annotationGroup":"Shape", "options":["triangle","teardrop"]},
-        {"label":"Back", "annotationGroup":"Back", "options":["ring","string"]},
-    ]}
-    assert validate_group_compatibility(data, observations)
+def test_generated_phrases_keep_optional_group_identity_without_gates():
+    draft = normalize_result({
+        "wildcard": "wearing {black|red} top, {standing upright|sitting down}",
+        "stableTerms": ["top"],
+        "variationGroups": [
+            {"label": "Top color", "annotationGroup": "BT Color",
+             "options": ["black", "red"]},
+            {"label": "Position", "annotationGroup": "",
+             "options": ["standing upright", "sitting down"]},
+        ],
+    })
+    assert draft["variationGroups"][0]["annotationGroup"] == "BT Color"
+    assert draft["variationGroups"][1]["annotationGroup"] == ""
 
 
-def test_natural_prompt_variation_without_group_identity_is_allowed():
-    import pytest
-    from tool.server.test_wildcard_contract import validate_group_compatibility
-    assert validate_group_compatibility({"wildcard":"{triangle|teardrop}", "variationGroups":[
-        {"label":"Shape", "annotationGroup":"", "options":["triangle","teardrop"]}
-    ]}, {"Shape":[["triangle"],["teardrop"]]})
-
-
-def test_position_phrase_mismatch_reports_actual_tag_options():
-    import pytest
-    from tool.server.test_wildcard_contract import validate_group_compatibility
-
-    proposal = {
-        "wildcard": "person {standing upright|sitting down}",
-        "variationGroups": [{
-            "label": "Position", "annotationGroup": "Position",
-            "options": ["standing upright", "sitting down"],
-        }],
-    }
-    with pytest.raises(ValueError, match="standing upright") as error:
-        validate_group_compatibility(
-            proposal, {"Position": [["standing"], ["sitting"]]}
-        )
-    assert "available tags: 'sitting', 'standing'" in str(error.value)
-
-
-def test_position_natural_language_variants_can_remain_unmapped():
-    from tool.server.test_wildcard_contract import validate_group_compatibility
-
-    proposal = {
-        "wildcard": "person {standing upright|sitting down}",
-        "variationGroups": [{
-            "label": "Position", "annotationGroup": "",
-            "options": ["standing upright", "sitting down"],
-        }],
-    }
-    assert validate_group_compatibility(
-        proposal, {"Position": [["standing"], ["sitting"]]}
-    )
+def test_wildcard_schema_does_not_require_every_phrase_to_be_a_set_tag():
+    schema = build_request(["A woman wearing a black bikini in a studio."])["response_schema"]
+    fields = schema["properties"]["variationGroups"]["items"]
+    assert "annotationGroup" in fields["properties"]
+    assert "annotationGroup" not in fields["required"]

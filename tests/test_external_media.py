@@ -193,3 +193,29 @@ def test_symlinks_cannot_escape_source_root(tmp_path):
         pass
     else:
         raise AssertionError("Symlink escaped external media source root.")
+
+
+def test_external_item_ids_are_unique_across_roots(tmp_path):
+    root_one = tmp_path / "one"
+    root_two = tmp_path / "two"
+    _file(root_one / "same.png")
+    _file(root_two / "same.png")
+    first = _finished_snapshot(root_one)["items"][0]
+    second = _finished_snapshot(root_two)["items"][0]
+    assert first["id"] != second["id"]
+
+
+def test_list_items_only_expose_technical_metadata(tmp_path):
+    root = tmp_path / "cached"
+    image = _file(root / "portrait.jpg")
+    metadata = {
+        "size": image.stat().st_size,
+        "mtime": int(image.stat().st_mtime),
+        "resolution": "1920x1080",
+        "vision_sight": {"raw": "x" * 50000},
+        "scene_complexity": {"bucket": "high"},
+    }
+    (root / "media_metadata.json").write_text(json.dumps({"portrait.jpg": metadata}))
+    indexed = _finished_snapshot(root)["items"][0]
+    assert indexed["metadata"]["resolution"] == "1920x1080"
+    assert not any(key in indexed["metadata"] for key in ("vision_sight", "scene_complexity"))

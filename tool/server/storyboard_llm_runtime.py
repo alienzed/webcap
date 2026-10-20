@@ -1373,7 +1373,9 @@ def _assessment_signal(model_ref, evidence=None):
     probes = evidence or {}
     report = get_report(model_ref) or {}
     old_abilities = report.get("abilities") or {}
-    pathologies = list(report.get("pathologies") or [])
+    pathologies = sorted(set(report.get("pathologies") or []) | set(
+        (probes.get("_observedPathologies") or {}).get("values") or []
+    ))
     old_health = str(report.get("health") or "")
     serious = bool(pathologies) or old_health == "likely-unusable"
     coherent = int(old_abilities.get("coherentOutputTokens") or 0)
@@ -1420,6 +1422,10 @@ def _attach_assessment_signals(models):
     for run in reversed(capability_run_summaries()):
         for ref, probes in (run.get("models") or {}).items():
             merged = by_model.setdefault(ref, {})
+            observed = set((merged.get("_observedPathologies") or {}).get("values") or [])
+            for probe in probes.values():
+                observed.update(probe.get("pathologies") or [])
+            merged["_observedPathologies"] = {"values": sorted(observed)}
             for kind, probe in probes.items():
                 if (kind.startswith("director_scene_plan_") and
                     run.get("protocol") != "webcap-model-assessment-structured-v2"):

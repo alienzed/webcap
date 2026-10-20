@@ -854,13 +854,12 @@ def test_archive_cleanup_preserves_other_runs_mixed_sessions_and_workspace(tmp_p
         lambda provenance: (tmp_path / provenance["run"], {"actionId": "action"}),
     )
     status = bench.archive_run_session_cleanup_status(set_folder, tmp_path / "own", "action")
-    assert status["count"] == 2
-    assert {session.name for session in status["sessions"]} == {"own", "own-with-base"}
+    assert status["count"] == 1
+    assert {session.name for session in status["sessions"]} == {"own"}
     assert status["active"] == []
-    assert set(bench.clear_archived_run_sessions(set_folder, status["sessions"])) == {"own", "own-with-base"}
+    assert bench.clear_archived_run_sessions(set_folder, status["sessions"]) == ["own"]
     assert not own.exists()
-    assert not combined_base.exists()
-    assert all(session.exists() for session in (other, mixed, ambiguous, base))
+    assert all(session.exists() for session in (other, mixed, ambiguous, base, combined_base))
     assert bench.workspace_prompt(set_folder, "minimax_h3")["prompt"] == "keep this prompt"
 
 

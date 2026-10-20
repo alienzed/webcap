@@ -1302,6 +1302,9 @@ def command(folder_path, operation, criteria=None):
     if operation == "run_analytics":
         from .run_analytics import report
         return report(folder_path, criteria.get("jobId"))
+    if operation == "run_analytics_overview":
+        from .run_analytics import overview
+        return overview(folder_path)
     if operation == "run_analytics_selected":
         from .run_analytics import report_selected
         return report_selected(folder_path, criteria.get("jobIds"), criteria.get("session"))

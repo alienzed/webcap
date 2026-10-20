@@ -106,3 +106,60 @@ def test_run_analytics_guides_selection_and_empty_evidence_states():
     assert "el(name).disabled = !report" in script
     assert "No checkpoint observations match the current evidence filters." in script
     assert "Expand to load and review the numerical facts before interpreting." in script
+
+
+def test_testing_lab_isolated_to_analytics_and_read_only():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    js = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    routing = (root / "tool/server/epoch_finder.py").read_text(encoding="utf-8")
+    region = html.split('id="run-analytics-screen"', 1)[1].split('</section>\n', 1)[0]
+    assert 'id="run-analytics-lab"' in region or 'id="run-analytics-lab"' in html
+    for element in ("summary", "challenge-title", "contenders", "discoveries",
+                    "chart", "coverage", "explorer", "refresh"):
+        assert 'id="run-lab-' + element + '"' in html
+    assert "window.runAnalyticsOpen=function(){labLoad();};" in js
+    assert "window.runAnalyticsViewEpoch" in js
+    assert "operation:'run_analytics_overview'" in js
+    assert "el('report-surface').classList.remove('hidden')" in js
+    assert 'if operation == "run_analytics_overview":' in routing
+    assert '#run-analytics-screen .run-lab-' in css
+
+
+def test_testing_lab_overview_groups_saved_test_evidence(tmp_path, monkeypatch):
+    from tool.server import run_analytics as analytics
+    from types import SimpleNamespace
+    session = tmp_path / "session"
+    session.mkdir()
+    source = {"sourceJobId": "job-1", "sourceFolder": "set/a", "sourceEpoch": 85,
+              "sourceRunName": "Run 039"}
+    stored = {"modelId": "h3", "settings": {"strength": .9}, "results": [
+        {"kind": "lora", "mediaFile": "a.png", "provenance": source, "strength": .9},
+        {"kind": "lora", "mediaFile": "b.png", "provenance": source, "strength": .9},
+        {"kind": "base", "mediaFile": "base.png"},
+    ]}
+    monkeypatch.setattr(analytics, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(analytics.bench, "_session_directories", lambda _: [session])
+    monkeypatch.setattr(analytics.bench, "_read_status", lambda _: stored)
+    monkeypatch.setattr(analytics.bench, "_session_rating_map", lambda _: {"a.png": 5})
+    monkeypatch.setattr(analytics.bench, "_session_vision_state", lambda _: {"byMedia": {
+        "a.png": {"modelId": "vl", "comparison": [
+            {"id": "cloth", "expectedText": "red", "result": "match"}]},
+    }})
+    monkeypatch.setattr(analytics, "_campaigns", lambda _, warnings: [])
+    result = analytics.overview(tmp_path)
+    cov = result["coverage"]
+    assert cov["sessions"] == 1
+    assert cov["testPreviews"] == 3
+    assert cov["ratedPreviews"] == 1
+    assert cov["vlReviewedPreviews"] == 1
+    assert cov["vlJudgments"] == 1
+    assert cov["runsWithResults"] == 1
+    assert cov["epochsWithResults"] == 1
+    assert len(result["cohorts"]) == 2  # VL-reviewed and non-reviewed are separate protocols
+    scored = next(g for g in result["cohorts"] if g["vlJudgments"])
+    assert scored["points"][0]["manual"] == 5
+    assert scored["points"][0]["testVl"] == 1
+    assert result["epochs"][0]["testCount"] == 2

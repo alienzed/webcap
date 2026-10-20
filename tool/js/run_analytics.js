@@ -133,7 +133,7 @@
     fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({folder:folder,operation:'run_analytics_selected',criteria:{jobIds:ids,session:sessionFilter}})})
       .then(function(response){return response.json().then(function(data){if(!response.ok||!data.ok)throw new Error(data.error||'Analytics failed.');return data;});})
-      .then(function(data){if(token===generation&&origin===folder){report=data;render();}})
+      .then(function(data){if(token===generation&&origin===folder){report=data;render();el('report-surface').classList.remove('hidden');}})
       .catch(function(exc){if(token===generation)error(exc);})
       .finally(function(){if(token===generation){el('analyze').textContent='Analyze selected';updateScopeUi();}});
   }
@@ -206,12 +206,13 @@
   }
   window.runAnalyticsPrepare=function(next){
     if(next===folder)return;folder=next;generation++;resultEpochGeneration++;runs=[];selection=new Set();report=null;sessionFilter='';
+    labRequest++;labSnapshot=null;labDiscovered=false;lab('status').textContent='Open Analytics to read saved evidence.';el('report-surface').classList.add('hidden');
     el('run-choices').innerHTML='';el('result-epochs').textContent='Open Analytics to discover results.';el('result-epochs-note').textContent='';el('coverage').textContent='Choose a run to begin.';
     el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';el('warnings').innerHTML='';
     el('campaign').innerHTML='<option value="">No campaign</option>';el('session').innerHTML='<option value="">All sessions</option>';
     el('director').disabled=true;updateScopeUi();previewGeneration++;previewFacts=null;previewKey='';el('director-result').textContent='';el('director-status').textContent='';clearError();
   };
-  window.runAnalyticsOpen=discover;
+  window.runAnalyticsOpen=function(){labLoad();};
   window.runAnalyticsFolder=function(){return folder;};
   el('result-epochs').onclick=function(event){
     var button=event.target.closest('[data-result-epoch-job]');
@@ -221,7 +222,7 @@
   el('run-choices').onchange=function(event){
     var cb=event.target.closest('[data-analytics-run]');if(!cb)return;
     if(cb.checked)selection.add(cb.dataset.analyticsRun);else selection.delete(cb.dataset.analyticsRun);
-    generation++;report=null;previewGeneration++;previewFacts=null;previewKey='';el('director').disabled=true;el('analyze').disabled=false;el('analyze').textContent='Analyze selected';el('coverage').textContent='Selection changed — Analyze selected to refresh.';el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';
+    generation++;report=null;previewGeneration++;previewFacts=null;previewKey='';el('director').disabled=true;el('analyze').disabled=false;el('analyze').textContent='Analyze selected';el('coverage').textContent='Selection changed — Analyze selected to refresh.';el('report-surface').classList.add('hidden');el('chart').innerHTML='';el('table').innerHTML='';el('findings').innerHTML='';
     if(selection.size>6){selection.delete(cb.dataset.analyticsRun);cb.checked=false;error(new Error('Select up to six runs.'));}
     updateScopeUi();
   };
@@ -384,4 +385,85 @@
     var session=event.target.closest('[data-open-session]');
     if(session)window.openTestBenchAnalyticsSession(session.dataset.openSession);
   };
+
+  var labSnapshot=null,labRequest=0,labDiscovered=false;
+  function labEnsureDetailIndex(){if(!labDiscovered){labDiscovered=true;discover();}}
+  function lab(id){return document.getElementById('run-lab-'+id);}
+  function labGroup(){return (labSnapshot&&labSnapshot.cohorts||[]).find(function(g){return g.id===lab('cohort').value;});}
+  function labPoints(){var g=labGroup(),id=lab('run').value;return (g&&g.points||[]).filter(function(p){return !id||p.jobId===id;});}
+  function labEmpty(message){return '<p class="run-lab-empty">'+esc(message)+'</p>';}
+  function labDetail(){labEnsureDetailIndex();var scope=document.querySelector('#run-analytics-screen .epoch-finder-sidebar .epoch-finder-panel:nth-of-type(2) details');if(scope){scope.open=true;scope.scrollIntoView({behavior:'smooth',block:'start'});}lab('status').textContent='Select 1–6 runs and click Analyze selected to inspect detailed evidence.';}
+  function labGroupRender(){
+    var group=labGroup(),prior=lab('run').value;
+    var identities=new Map((group&&group.points||[]).map(function(p){return [p.jobId,p.runName||'Run '+p.jobId.slice(-8)];}));
+    lab('run').innerHTML='<option value="">All runs (separately)</option>'+Array.from(identities).map(function(pair){return '<option value="'+esc(pair[0])+'">'+esc(pair[1])+'</option>';}).join('');
+    if(identities.has(prior))lab('run').value=prior;
+    labResults();
+  }
+  function labResults(){
+    var group=labGroup(),points=labPoints(),byVl=lab('sort').value==='vl',key=byVl?'testVl':'manual';
+    var ranked=points.filter(function(p){return p[key]!=null;}).sort(function(a,b){return b[key]-a[key] || b.previews-a.previews;});
+    lab('contenders').innerHTML=ranked.length?ranked.slice(0,6).map(function(p,i){
+      return '<div class="run-lab-contender"><b class="run-lab-position">'+(i+1)+'</b><div><strong>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</strong><small>'+p.previews+' previews · '+p.sessions.length+' sessions</small></div><div class="run-lab-score"><b>'+(p.manual==null?'—':p.manual.toFixed(2)+'/5')+'</b><small>'+p.manualCount+' ratings</small></div><div class="run-lab-score"><b>'+(p.testVl==null?'—':(100*p.testVl).toFixed(1)+'%')+'</b><small>'+p.vlReviewedPreviews+' previews · '+p.testVlCount+' checks</small></div><button data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect</button></div>';
+    }).join(''):labEmpty('No recorded '+(byVl?'VL':'manual')+' measurements in this group. Try another metric or group.');
+    var attributes=(group&&group.attributes||[]).slice(0,5);
+    lab('discoveries').innerHTML=attributes.length?attributes.map(function(a){return '<div class="run-lab-insight"><div><strong>'+esc(a.label)+'</strong><span>'+(100*a.matched).toFixed(0)+'% · '+a.judgments+' judgments</span></div><div class="run-lab-meter"><i style="width:'+(100*a.matched)+'%"></i></div></div>';}).join('')+
+      '<p class="run-lab-footnote">Observations within this evaluation protocol, not a universal score.</p>':
+      labEmpty('No comparable attribute-level VL judgments in this group.');
+    var total=group?group.previews:0,rated=group?group.ratedPreviews:0,reviewed=group?group.vlReviewedPreviews:0;
+    lab('coverage').innerHTML=total?[['Manually rated',rated],['VL-reviewed',reviewed]].map(function(p){
+      return '<div class="run-lab-progress"><div><b>'+p[0]+'</b><span>'+p[1]+' / '+total+' previews</span></div><div class="run-lab-meter"><i style="width:'+(100*p[1]/total)+'%"></i></div></div>';
+    }).join('')+'<p class="run-lab-footnote">A preview may appear in both coverage measures.</p>':labEmpty('No comparable results.');
+    lab('challenge-title').textContent=!total?'Run your first experiment':rated<total?'Review '+(total-rated)+' unrated previews':'Inspect your strongest contenders';
+    lab('challenge-description').textContent=!total?'Generate Test results and return here.':rated<total?'Strengthen the evidence you already generated before spending GPU time.':'Compare real measured results, then choose the next experiment.';
+    lab('challenge-actions').innerHTML='<button type="button" data-lab-action="inspect">Inspect a contender</button><button type="button" data-lab-action="detail">Detailed Analytics</button>';
+    labChart();
+  }
+  function labChart(){
+    var key=lab('metric').value==='vl'?'testVl':'manual';
+    var points=labPoints().filter(function(p){return p[key]!=null;});
+    if(!points.length){lab('chart').innerHTML=labEmpty('No measured points for this metric.');return;}
+    var lo=Math.min.apply(null,points.map(function(p){return p.epoch;})),hi=Math.max.apply(null,points.map(function(p){return p.epoch;}));
+    var runs=new Map();points.forEach(function(p){if(!runs.has(p.jobId))runs.set(p.jobId,[]);runs.get(p.jobId).push(p);});
+    var palette=['#f3b657','#83c6e9','#8bd6a7','#c4acef'];
+    var paths=Array.from(runs.values()).map(function(series,i){
+      series.sort(function(a,b){return a.epoch-b.epoch;});
+      var xy=function(p){return [36+(p.epoch-lo)/(hi-lo||1)*600,175-(p[key]/(key==='manual'?5:1))*148];};
+      var path=series.map(function(p,j){var a=xy(p);return (j?'L':'M')+a[0].toFixed(1)+','+a[1].toFixed(1);}).join(' ');
+      return '<path d="'+path+'" fill="none" stroke="'+palette[i%palette.length]+'" stroke-width="2.5"/>'+
+        series.map(function(p){var a=xy(p);return '<circle cx="'+a[0]+'" cy="'+a[1]+'" r="4" fill="'+palette[i%palette.length]+'"><title>Epoch '+p.epoch+': '+p[key].toFixed(2)+'</title></circle>';}).join('');
+    });
+    lab('chart').innerHTML='<svg viewBox="0 0 680 195" role="img" aria-label="Recorded epoch measurements, separated by run"><path d="M36 15V175H645" stroke="currentColor" stroke-opacity=".25" fill="none"/>'+paths.join('')+'</svg><p class="run-lab-footnote">'+runs.size+' independent run(s). Only observed epochs are plotted.</p>';
+  }
+  function labRender(){
+    var totals=labSnapshot.coverage||{},groups=labSnapshot.cohorts||[];
+    lab('summary').innerHTML=[['Test sessions',totals.sessions],['Generated results',totals.generatedPreviews],['Rated previews',totals.ratedPreviews],['VL-reviewed previews',totals.vlReviewedPreviews]].map(function(pair){
+      return '<div class="run-lab-stat"><small>'+pair[0]+'</small><strong>'+Number(pair[1]||0).toLocaleString()+'</strong></div>';
+    }).join('');
+    var old=lab('cohort').value;
+    lab('cohort').innerHTML=groups.length?groups.map(function(g){return '<option value="'+esc(g.id)+'">'+esc((g.modelId||'Test')+' · strength '+(g.strength==null?'default':g.strength)+' · '+(g.vlModelId||'manual')+' · '+g.previews+' previews')+'</option>';}).join(''):'<option value="">No comparable groups</option>';
+    if(groups.some(function(g){return g.id===old;}))lab('cohort').value=old;
+    labGroupRender();
+    lab('explorer').innerHTML=(labSnapshot.epochs||[]).length?labSnapshot.epochs.slice(0,15).map(function(p){
+      return '<div class="run-lab-explorer-row"><div><strong>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</strong><small>'+p.testCount+' Test · '+p.campaignCount+' Campaign results</small></div><button data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect results</button></div>';
+    }).join(''):labEmpty('No saved generated epoch results in this Set.');
+    lab('warnings').textContent=(labSnapshot.warnings||[]).join(' · ');
+    lab('status').textContent=totals.generatedPreviews?'Showing recorded results for this Set.':'No recorded Test or Campaign previews yet.';
+  }
+  function labLoad(){
+    var serial=++labRequest,scope=folder;lab('status').textContent='Reading recorded Test and Campaign evidence…';
+    fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder:scope,operation:'run_analytics_overview'})})
+      .then(function(r){return r.json().then(function(d){if(!r.ok||!d.ok)throw Error(d.error||'Could not load evidence');return d;});})
+      .then(function(d){if(serial!==labRequest||scope!==folder)return;labSnapshot=d;labRender();})
+      .catch(function(e){if(serial!==labRequest)return;lab('status').textContent='Overview failed: '+String(e.message||e);error(e);});
+  }
+  lab('refresh').onclick=labLoad;
+  Array.prototype.forEach.call(document.querySelectorAll('#run-analytics-screen .epoch-finder-sidebar details'),function(details){details.addEventListener('toggle',function(){if(details.open)labEnsureDetailIndex();});});
+  lab('cohort').onchange=labGroupRender;
+  lab('run').onchange=labResults;
+  lab('sort').onchange=labResults;
+  lab('metric').onchange=labChart;
+  lab('detail').onclick=labDetail;
+  ['contenders','explorer'].forEach(function(id){lab(id).onclick=function(event){var b=event.target.closest('[data-lab-job]');if(b)window.runAnalyticsViewEpoch(b.dataset.labJob,Number(b.dataset.labEpoch));};});
+  lab('challenge-actions').onclick=function(event){var b=event.target.closest('[data-lab-action]');if(!b)return;if(b.dataset.labAction==='detail'){labDetail();return;}var p=labPoints()[0];if(p)window.runAnalyticsViewEpoch(p.jobId,p.epoch);else labDetail();};
 })();

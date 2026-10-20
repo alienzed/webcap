@@ -1234,13 +1234,13 @@
       inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = null; refreshStatus().catch(error);
       return;
     }
-    if (event.target.closest('[data-frame-original]')) return;
+    if (event.target.closest('.test-preview-card-utility, .test-preview-card-details')) return;
     var frame = event.target.closest('[data-gallery-epoch]');
     if (frame) selectGalleryFrame(frame);
   };
   els('frames').onkeydown = function (event) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    if (event.target.closest('[data-frame-original]')) return;
+    if (event.target.closest('.test-preview-card-utility, .test-preview-card-details')) return;
     var frame = event.target.closest('[data-gallery-epoch]');
     if (!frame) return;
     event.preventDefault();

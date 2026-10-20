@@ -346,3 +346,18 @@ def test_epoch_primary_prompt_instructions_require_exact_single_group_tags():
     assert "exact text of one tag" in contract["prompt"]
     assert "never combine, rephrase, or infer tags" in contract["prompt"]
     assert "ACTUAL SET REFERENCE TAGS" in contract["prompt"]
+
+
+def test_campaign_run_choices_use_saved_sequence_and_training_details():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    backend = (root / "tool/server/epoch_finder.py").read_text(encoding="utf-8")
+    history = (root / "tool/server/training_history.py").read_text(encoding="utf-8")
+    assert 'run.get("sequence") or job.get("sequence")' in backend
+    assert '"runSummary": run.get("runSummary")' in backend
+    assert '"currentEpoch": run.get("currentEpoch")' in backend
+    assert 'summary["rank"] = rank' in history
+    assert "function runIdentity(run)" in js
+    assert "function runDetails(run)" in js
+    assert "escape(runDetails(run))" in js

@@ -788,7 +788,8 @@
             ' · ' + choice.group + ': ' + choice.term;
           var payload = await testReferenceRequest({
             folder:folder, session:session, action:'evaluate', method:method, media:previews[i],
-            group:choice.group, option:choice.term, reference:choice.media, jobId:choice.runId,
+            group:choice.group, groupAlias:getRequirementGroupAlias(choice.group), option:choice.term,
+            reference:choice.media, jobId:choice.runId,
             choices:attribute.options, model:method === 'rvn' ? getCaptionVisionModelId() : ''
           });
           if (method === 'rvn') {

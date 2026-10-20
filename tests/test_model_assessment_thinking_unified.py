@@ -27,7 +27,8 @@ def test_legacy_model_lab_launcher_retired_without_removing_pending_compatibilit
     html = Path("tool/tool.html").read_text(encoding="utf-8")
     assert 'id="diagnostics-tab-model-lab"' not in html
     assert 'id="diagnostics-assessment-lab"' not in html
-    assert 'id="diagnostics-panel-model-lab"' in html
+    assert 'id="diagnostics-panel-model-lab"' not in html
+    assert 'id="diagnostics-panel-assessment"' in html
     assert 'id="diagnostics-assessment-run"' in html
 
 

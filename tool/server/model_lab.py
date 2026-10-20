@@ -484,6 +484,8 @@ def _new_run_payload(config):
 
 
 def _write_run(run):
+    if run.get("assessmentProtocol") == ASSESSMENT_PROTOCOL:
+        run["work"] = _assessment_work(run)
     _write(_run_path(run["id"]), run)
 
 
@@ -616,14 +618,16 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
         "jobId": "",
         "error": "",
         "result": {},
+        "retry": bool(run.get("retryPhase")),
     }
     _append_attempt(run, attempt)
     _persist_progress(
         run,
-        phase=role,
+        phase="retry" if run.get("retryPhase") else role,
         currentModelRef=model_ref,
         currentFile=file_name,
         currentKind=kind,
+        executionStatus="submitting",
     )
 
     job_id = ""
@@ -636,6 +640,7 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
         _update_attempt(run, attempt_id, jobId=job_id)
 
         active_started = None
+        last_job_status = ""
         while True:
             if stop_event is not None and stop_event.is_set():
                 from .llm_runner import cancel_job
@@ -648,6 +653,9 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
             from .llm_runner import job_status
             job = job_status(job_id, consume=False)
             status = str(job.get("status") or "")
+            if status != last_job_status:
+                last_job_status = status
+                _persist_progress(run, executionStatus=status)
             started_at = float(job.get("startedAt") or 0)
             if started_at > 0 and active_started is None:
                 active_started = time.monotonic()
@@ -1266,21 +1274,26 @@ def _start_thread(run_id):
         thread.start()
 
 
-def _pending_probe_plan(run):
-    """Count only requested, unevidenced work; no new inference or journal writes."""
-    missing, failed = 0, 0
-    reused = run.get("reused") or {}
-    previous_failures = run.get("previousFailures") or {}
+def _planned_probes(run):
+    """Frozen logical work units; a retry never adds another unit."""
+    probes = []
 
     def include(kind, ref, file_name=""):
-        nonlocal missing, failed
-        key = _attempt_key(kind, ref, file_name)
-        if key in reused:
-            return
-        if key in previous_failures:
-            failed += 1
-        else:
-            missing += 1
+        probes.append(_attempt_key(kind, ref, file_name))
+
+    for model in run.get("allVisionModels") or []:
+        ref = model["modelRef"]
+        for file_name in run.get("files") or []:
+            include("vision_open", ref, file_name)
+            if run.get("groups"):
+                include("vision_group_aware", ref, file_name)
+
+    reference_director = str(run.get("referenceDirectorRef") or "")
+    if reference_director:
+        for vision_model in run.get("visionModels") or []:
+            prefix = "vision:" + vision_model["modelRef"] + ":vocab"
+            include(prefix + "_synthesis", reference_director)
+            include(prefix + "_challenge", reference_director)
 
     for model in run.get("directorModels") or []:
         ref = model["modelRef"]
@@ -1291,15 +1304,71 @@ def _pending_probe_plan(run):
                 include("director_scene_plan_" + str(budget), ref)
         include("language_synthesis", ref)
         include("language_challenge", ref)
+        if run.get("referenceVisionRef"):
+            include("set_vocabulary_synthesis", ref)
+            include("set_vocabulary_challenge", ref)
+    return list(dict.fromkeys(probes))
 
-    for model in run.get("visionModels") or []:
-        ref = model["modelRef"]
-        for filename in run.get("files") or []:
-            include("vision_open", ref, filename)
-            if run.get("groups"):
-                include("vision_group_aware", ref, filename)
 
-    return {"missing": missing, "retry": failed, "total": missing + failed}
+def _assessment_work(run):
+    """Only count planned probes, never incidental retries or stage errors."""
+    planned = _planned_probes(run)
+    keys = set(planned)
+    latest = {}
+    for attempt in run.get("attempts") or []:
+        if not isinstance(attempt, dict):
+            continue
+        key = _attempt_key(attempt.get("kind"), attempt.get("modelRef"), attempt.get("file"))
+        if key in keys and latest.get(key, {}).get("status") != "completed":
+            latest[key] = attempt
+
+    reused = run.get("reused") or {}
+    previous_failures = run.get("previousFailures") or {}
+    completed = reused_count = skipped = failed = deferred = running = 0
+    for key in planned:
+        attempt = latest.get(key)
+        if key in reused or (attempt and attempt.get("status") == "completed"):
+            completed += 1
+            if key in reused:
+                reused_count += 1
+        elif not attempt:
+            if key in previous_failures:
+                deferred += 1
+        elif attempt.get("status") == "skipped":
+            skipped += 1
+        elif attempt.get("status") == "running":
+            running += 1
+        elif attempt.get("status") == "failed":
+            if run.get("status") == "completed" or attempt.get("retry"):
+                failed += 1
+            else:
+                deferred += 1
+    resolved = completed + skipped + failed
+    return {
+        "planned": len(planned),
+        "completed": completed,
+        "reused": reused_count,
+        "skipped": skipped,
+        "failed": failed,
+        "deferred": deferred,
+        "running": running,
+        "remaining": len(planned) - resolved,
+        "resolved": resolved,
+    }
+
+
+def _pending_probe_plan(run):
+    """Only schedule missing/failed work, using the same plan as progress."""
+    missing = retry = 0
+    for key in _planned_probes(run):
+        if key in (run.get("reused") or {}):
+            continue
+        if key in (run.get("previousFailures") or {}):
+            retry += 1
+        else:
+            missing += 1
+    return {"missing": missing, "retry": retry, "total": missing + retry}
+
 
 
 def start_run(config):
@@ -1309,6 +1378,7 @@ def start_run(config):
         run["status"] = "completed"
         run["finishedAt"] = _now_iso()
         run["noWork"] = True
+        run["work"] = _assessment_work(run)
         return run
     with _lock:
         _write_run(run)

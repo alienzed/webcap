@@ -3999,7 +3999,6 @@
     '</details>';
   }
 
-
   function takeSummaryText(scene, pendingCount) {
     var count = Array.isArray(scene.takeOrder) ? scene.takeOrder.length : 0;
     var parts = [String(count) + ' Take' + (count === 1 ? '' : 's')];
@@ -5024,7 +5023,6 @@
         });
       });
     }).then(function (payload) {
-
       applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
       refreshLibrary();

@@ -295,10 +295,14 @@ def test_discover_queued_resume_run_with_saved_epochs(tmp_path, monkeypatch):
     monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
                         lambda path: [{"epoch": 60, "status": "available"},
                                       {"epoch": 65, "status": "missing"}])
-    assert epoch_finder._runs(tmp_path) == [{
+    runs = epoch_finder._runs(tmp_path)
+    assert len(runs) == 1
+    assert {key: runs[0][key] for key in ("jobId", "runName", "modelId", "stage", "epochs")} == {
         "jobId": "queued-1", "runName": "Waiting H3", "modelId": "minimax_h3",
         "stage": "h3", "epochs": [60],
-    }]
+    }
+    assert runs[0]["folder"] == "set/a"
+    assert runs[0]["setName"] == "a"
 
 
 def test_discover_history_run_and_queue_only_once(tmp_path, monkeypatch):

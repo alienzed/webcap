@@ -2318,6 +2318,28 @@
                 </footer>
             </section>
         </div>
+        <div id="storyboard-scene-creation-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-scene-creation-close">
+            <section class="keep-lora-dialog storyboard-scene-creation-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-scene-creation-title">
+                <header class="keep-lora-header">
+                    <h2 id="storyboard-scene-creation-title">Insert Scene After</h2>
+                    <button id="storyboard-scene-creation-close" type="button" class="training-review-modal-close" aria-label="Close">&times;</button>
+                </header>
+                <div class="keep-lora-content">
+                    <div id="storyboard-scene-creation-count-wrap" class="keep-lora-field">
+                        <label for="storyboard-scene-creation-count">New scenes</label>
+                        <input id="storyboard-scene-creation-count" type="number" min="1" step="1" value="3">
+                    </div>
+                    <div class="keep-lora-field">
+                        <label for="storyboard-scene-creation-instruction">Creative direction (optional)</label>
+                        <textarea id="storyboard-scene-creation-instruction" rows="4" placeholder="e.g. Introduce another employee in a different situation."></textarea>
+                    </div>
+                </div>
+                <footer class="keep-lora-footer">
+                    <button id="storyboard-scene-creation-cancel" type="button" class="review-captions-btn">Cancel</button>
+                    <button id="storyboard-scene-creation-run" type="button" class="training-btn">Insert Scene</button>
+                </footer>
+            </section>
+        </div>
         <div id="storyboard-director-tools-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-director-tools-close">
             <section class="keep-lora-dialog storyboard-director-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-director-tools-title">
                 <header class="keep-lora-header">

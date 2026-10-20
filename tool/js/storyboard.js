@@ -4985,14 +4985,15 @@
   function deleteTake(sceneId, takeId) {
     var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
     var take = scene && scene.takes ? scene.takes[takeId] : null;
-    if (!take && scene && scene.removedTakes) take = scene.removedTakes[takeId];
+    var isRemoved = !take && !!(scene && scene.removedTakes && scene.removedTakes[takeId]);
+    if (isRemoved) take = scene.removedTakes[takeId];
     var label = take && (take.label || take.sourceFilename) ? (take.label || take.sourceFilename) : 'this Take';
     var selected = !!(scene && scene.selectedTakeId === takeId);
     var message = 'Delete "' + label + '" permanently? This deletes its media and metadata and cannot be undone.';
     if (selected) {
       message += '\n\nThis Take is currently selected. Deleting it will leave the Scene without a selected Take.';
     }
-    if (!window.confirm(message)) return;
+    if (!isRemoved && !window.confirm(message)) return;
     setSaveState('Deleting...');
     flushPendingSaves().then(function () { return request({
       operation: 'delete_take',

@@ -317,7 +317,7 @@ def _metadata_worker(snapshot, job):
                     flush()
                 batch_folder = path.parent
                 batch[path.name] = details
-                if len(batch) >= 32:
+                if len(batch) >= 256:
                     flush()
             except Exception as exc:
                 with _LOCK:

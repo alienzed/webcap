@@ -11,6 +11,12 @@ on:
       - 'tests/test_generations_unified_dom.test.cjs'
       - 'tests/test_test_generations_unified_*.py'
       - 'tests/test_test_generations_ui_contract.py'
+      - 'tests/test_test_generations_route.py'
+      - 'tests/test_test_generations_ask_vl_navigation_contract.py'
+      - 'tests/test_test_repeat.py'
+      - 'tests/test_epoch_finder.py'
+      - 'tests/test_epoch_finder_multirun.py'
+      - 'tests/test_run_analytics_next.py'
       - '.github/workflows/revamp-validation.yml'
   push:
     branches:
@@ -63,14 +69,6 @@ jobs:
       - name: Current native Test and Repeat contracts (must pass)
         run: |
           python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py tests/test_test_workspace_permanent_tabs.py tests/test_test_generations_revamp_parity.py
-      - name: Legacy regression comparison (no new failures)
+      - name: Native Test, VL, Finder and Analytics regressions
         run: |
-          git fetch origin main
-          git worktree add /tmp/webcap-revamp-baseline origin/main
-          cp tool/config.example.json /tmp/webcap-revamp-baseline/tool/config.json
-          set +e
-          python -m pytest -q --tb=no tests/test_test_generations_ui_contract.py tests/test_test_generations_route.py tests/test_test_generations_ask_vl_navigation_contract.py tests/test_epoch_finder.py tests/test_epoch_finder_multirun.py tests/test_run_analytics_next.py > /tmp/feature-test-results.txt 2>&1
-          (cd /tmp/webcap-revamp-baseline && python -m pytest -q --tb=no tests/test_test_generations_ui_contract.py tests/test_test_generations_route.py tests/test_test_generations_ask_vl_navigation_contract.py tests/test_epoch_finder.py tests/test_epoch_finder_multirun.py tests/test_run_analytics_next.py) > /tmp/baseline-test-results.txt 2>&1
-          set -e
-          tail -n 12 /tmp/feature-test-results.txt
-          python tests/compare_revamp_regressions.py /tmp/baseline-test-results.txt /tmp/feature-test-results.txt
+          python -m pytest -q tests/test_test_generations_ui_contract.py tests/test_test_generations_route.py tests/test_test_generations_ask_vl_navigation_contract.py tests/test_test_repeat.py tests/test_epoch_finder.py tests/test_epoch_finder_multirun.py tests/test_run_analytics_next.py

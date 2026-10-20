@@ -467,3 +467,57 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .test-preview-card-menu{flex:0 0 auto;margin-left:auto}
 .epoch-info-card,.epoch-finder-frame{border-radius:9px}
 .epoch-info-card>img,.epoch-info-card>video,.epoch-finder-frame>img{border-radius:8px 8px 0 0}
+
+
+/* Testing Lab is Analytics-local; shared shell, tabs and other workspaces are untouched. */
+#run-analytics-screen .run-analytics-lab{display:grid;gap:15px;min-width:0;padding:0 0 22px}
+#run-analytics-screen .run-lab-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+#run-analytics-screen .run-lab-heading h2{font-size:26px;margin:3px 0 5px}
+#run-analytics-screen .run-lab-heading p{font-size:13px;opacity:.74;margin:0}
+#run-analytics-screen .run-lab-eyebrow{font-size:11px;font-weight:800;letter-spacing:.09em;color:var(--accent-color,#e9ae53)}
+#run-analytics-screen #run-lab-status{font-size:12px;opacity:.75;margin:0}
+#run-analytics-screen .run-lab-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+#run-analytics-screen .run-lab-stat,#run-analytics-screen .run-lab-card,#run-analytics-screen .run-lab-challenge{background:var(--panel-bg,#1c2834);border:1px solid var(--border-color,#384653);border-radius:10px}
+#run-analytics-screen .run-lab-stat{padding:14px;min-width:0}
+#run-analytics-screen .run-lab-stat small{display:block;color:var(--muted,#a1b2c4);font-size:12px}
+#run-analytics-screen .run-lab-stat strong{display:block;font-size:27px;margin-top:5px;font-variant-numeric:tabular-nums}
+#run-analytics-screen .run-lab-challenge{display:grid;grid-template-columns:minmax(0,2fr) minmax(180px,1fr);padding:20px;gap:24px;border-color:#966d3a;background:linear-gradient(110deg,#302c28,#1b2a37)}
+#run-analytics-screen .run-lab-challenge h3{font-size:21px;margin:9px 0}
+#run-analytics-screen .run-lab-challenge p{font-size:13px;color:#ccdae4;line-height:1.5}
+#run-analytics-screen .run-lab-steps{border-left:1px solid #6a614f;padding-left:18px;font-size:12px}
+#run-analytics-screen .run-lab-steps p{font-weight:700;color:#f2c780}
+#run-analytics-screen .run-lab-steps small{opacity:.73}
+#run-analytics-screen #run-lab-challenge-actions{display:flex;gap:8px;flex-wrap:wrap}
+#run-analytics-screen #run-lab-challenge-actions button{width:auto;min-height:32px}
+#run-analytics-screen .run-lab-two-col{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(270px,1fr);gap:14px}
+#run-analytics-screen .run-lab-lower{grid-template-columns:minmax(0,1.3fr) minmax(270px,1fr)}
+#run-analytics-screen .run-lab-card{min-width:0;overflow:hidden}
+#run-analytics-screen .run-lab-card-heading{display:flex;align-items:start;justify-content:space-between;gap:12px;padding:17px}
+#run-analytics-screen .run-lab-card-heading h3{font-size:16px;margin:0 0 5px}
+#run-analytics-screen .run-lab-card-heading p{font-size:12px;opacity:.7;margin:0}
+#run-analytics-screen .run-lab-card-heading label,#run-analytics-screen .run-lab-filters label{font-size:12px;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+#run-analytics-screen .run-lab-filters{display:flex;gap:8px;flex-wrap:wrap;padding:0 17px 13px}
+#run-analytics-screen .run-lab-filters select{max-width:240px}
+#run-analytics-screen .run-lab-card select{min-width:0;background:var(--panel-bg,#17212c);color:inherit;border:1px solid var(--border-color,#384653);border-radius:6px;padding:6px}
+#run-analytics-screen .run-lab-contender{display:grid;grid-template-columns:29px minmax(0,1fr) auto auto auto;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--border-color,#384653)}
+#run-analytics-screen .run-lab-position{display:grid;place-items:center;border-radius:6px;width:28px;height:28px;background:#55472e;color:#efc77a}
+#run-analytics-screen .run-lab-contender strong{display:block;font-size:12px}
+#run-analytics-screen .run-lab-contender small{display:block;font-size:11px;opacity:.7}
+#run-analytics-screen .run-lab-score{text-align:right;white-space:nowrap}
+#run-analytics-screen .run-lab-score b{font-size:14px}
+#run-analytics-screen .run-lab-contender button,#run-analytics-screen .run-lab-explorer-row button{width:auto;border:1px solid var(--border-color,#536578);border-radius:6px;padding:7px 9px;background:transparent;color:inherit;cursor:pointer;font-size:12px}
+#run-analytics-screen .run-lab-contender button:hover,#run-analytics-screen .run-lab-explorer-row button:hover{border-color:var(--accent-color,#e5a954)}
+#run-analytics-screen .run-lab-footnote,#run-analytics-screen .run-lab-empty{padding:10px 17px;color:var(--muted,#b5c4d2);font-size:12px;line-height:1.5;margin:0}
+#run-analytics-screen .run-lab-insight,#run-analytics-screen .run-lab-progress{padding:10px 17px}
+#run-analytics-screen .run-lab-insight>div:first-child,#run-analytics-screen .run-lab-progress>div:first-child{display:flex;justify-content:space-between;gap:9px;align-items:center;font-size:12px}
+#run-analytics-screen .run-lab-insight span,#run-analytics-screen .run-lab-progress span{opacity:.74;font-size:11px}
+#run-analytics-screen .run-lab-meter{height:7px;background:#101a24;border-radius:8px;overflow:hidden;margin-top:9px}
+#run-analytics-screen .run-lab-meter i{display:block;height:100%;background:var(--accent-color,#e8b663);border-radius:8px}
+#run-analytics-screen #run-lab-chart{padding:8px 17px}
+#run-analytics-screen #run-lab-chart svg{width:100%;display:block;max-height:230px}
+#run-analytics-screen .run-lab-explorer-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;border-top:1px solid var(--border-color,#384653)}
+#run-analytics-screen .run-lab-explorer-row strong,#run-analytics-screen .run-lab-explorer-row small{display:block}
+#run-analytics-screen .run-lab-explorer-row strong{font-size:13px}
+#run-analytics-screen .run-lab-explorer-row small{font-size:11px;opacity:.7;margin-top:4px}
+@media(max-width:1300px){#run-analytics-screen .run-lab-summary{grid-template-columns:repeat(2,minmax(0,1fr))}#run-analytics-screen .run-lab-two-col{grid-template-columns:1fr}}
+@media(max-width:700px){#run-analytics-screen .run-lab-challenge{grid-template-columns:1fr}#run-analytics-screen .run-lab-steps{border-left:0;border-top:1px solid #6a614f;padding:14px 0 0}#run-analytics-screen .run-lab-contender{grid-template-columns:29px minmax(0,1fr) auto;gap:8px}#run-analytics-screen .run-lab-score{grid-column:2;justify-self:start;text-align:left}#run-analytics-screen .run-lab-contender button{grid-column:3;grid-row:1}}

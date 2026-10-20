@@ -16,7 +16,7 @@ def _setup(tmp_path, monkeypatch, name="preview.png"):
                         lambda folder_path, session_name, media_name: media)
     monkeypatch.setattr("tool.server.epoch_finder._folder_key", lambda path: "set")
     monkeypatch.setattr(test_reference, "verified_reference",
-                        lambda folder_key, group, term, filename: {
+                        lambda folder_key, group, term, filename, job_id: {
                             "media": "ref.png", "group": group, "term": term})
     return folder, session, media
 

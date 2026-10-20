@@ -1266,8 +1266,50 @@ def _start_thread(run_id):
         thread.start()
 
 
+def _pending_probe_plan(run):
+    """Count only requested, unevidenced work; no new inference or journal writes."""
+    missing, failed = 0, 0
+    reused = run.get("reused") or {}
+    previous_failures = run.get("previousFailures") or {}
+
+    def include(kind, ref, file_name=""):
+        nonlocal missing, failed
+        key = _attempt_key(kind, ref, file_name)
+        if key in reused:
+            return
+        if key in previous_failures:
+            failed += 1
+        else:
+            missing += 1
+
+    for model in run.get("directorModels") or []:
+        ref = model["modelRef"]
+        include("director_thinking", ref)
+        include("director_scene_plan_2048", ref)
+        if run.get("depth") == "deep":
+            for budget in (4096, 8192, 16384):
+                include("director_scene_plan_" + str(budget), ref)
+        include("language_synthesis", ref)
+        include("language_challenge", ref)
+
+    for model in run.get("visionModels") or []:
+        ref = model["modelRef"]
+        for filename in run.get("files") or []:
+            include("vision_open", ref, filename)
+            if run.get("groups"):
+                include("vision_group_aware", ref, filename)
+
+    return {"missing": missing, "retry": failed, "total": missing + failed}
+
+
 def start_run(config):
     run = _new_run_payload(config)
+    run["plan"] = _pending_probe_plan(run)
+    if not run["plan"]["total"]:
+        run["status"] = "completed"
+        run["finishedAt"] = _now_iso()
+        run["noWork"] = True
+        return run
     with _lock:
         _write_run(run)
         try:
@@ -1404,7 +1446,8 @@ def register_routes(app):
                 return jsonify({"ok": True, "run": run, "runs": list_runs()})
             if action == "start":
                 run = start_run(data.get("config"))
-                return jsonify({"ok": True, "run": run, "runs": list_runs()}), 201
+                return jsonify({"ok": True, "run": run, "noWork": bool(run.get("noWork")),
+                                "plan": run.get("plan"), "runs": list_runs()}), (200 if run.get("noWork") else 201)
             if action == "resume":
                 run = resume_run(data.get("runId"))
                 return jsonify({"ok": True, "run": run, "runs": list_runs()})

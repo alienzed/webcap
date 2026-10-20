@@ -138,7 +138,7 @@
   function suggestedRole(label, options) {
     var text = String(label || '').toLowerCase();
     if (/background|setting|lighting|surface|camera|viewpoint|environment|scenery|location/.test(text)) return 'vary';
-    if (/hair|skin|eye|face|expression|pose|position|body|age|ethnicity/.test(text)) return 'leakage';
+    if (/hair|skin|eye|face|expression|pose|position|body|clothing|age|ethnicity/.test(text)) return 'leakage';
     return 'primary';
   }
   function updateDimensions() {
@@ -146,9 +146,12 @@
     dimensions = groups.map(function (g, index) {
       var prev = dimensions[index] || {};
       var oldValues = (prev.options || []).join('|');
+      var unchanged = oldValues === g.options.join('|');
       return {label: String(prev.label || ('Attribute ' + (index + 1))),
         options: g.options.slice(),
-        role: oldValues && oldValues !== g.options.join('|') ? suggestedRole(prev.label, g.options) : (prev.role || suggestedRole(prev.label, g.options)), nested: g.nested};
+        annotationGroup: unchanged ? (prev.annotationGroup || '') : '',
+        role: oldValues && !unchanged ? suggestedRole(prev.annotationGroup || prev.label, g.options) :
+          (prev.role || suggestedRole(prev.annotationGroup || prev.label, g.options)), nested: g.nested};
     });
     renderDimensions();
   }
@@ -156,6 +159,7 @@
     els('attributes').innerHTML = dimensions.map(function (group, index) {
       return '<div class="epoch-finder-attribute" data-index="' + index + '">' +
         '<label>Attribute <input data-attr-name value="' + escape(group.label) + '"></label>' +
+        (group.annotationGroup ? '<small class="epoch-finder-muted">Set group: ' + escape(group.annotationGroup) + '</small>' : '') +
         '<label>Role <select data-attr-role>' +
         [['primary', 'Primary · 2×'], ['leakage', 'Leakage · 1×'], ['vary', 'Vary only · unscored']].map(function (item) {
           return '<option value="' + item[0] + '"' + (group.role === item[0] ? ' selected' : '') +
@@ -177,7 +181,11 @@
           values.some(function (x) { return /[{}|]/.test(x); })) throw new Error('Attribute ' + (index + 1) + ' has invalid values.');
       var label = row.querySelector('[data-attr-name]').value.trim();
       if (!label) throw new Error('Every attribute needs a name.');
-      return {label: label, role: row.querySelector('[data-attr-role]').value, options: values};
+      var original = dimensions[index] || {};
+      var annotationGroup = (original.options || []).join('|') === values.join('|')
+        ? (original.annotationGroup || '') : '';
+      return {label: label, role: row.querySelector('[data-attr-role]').value,
+        options: values, annotationGroup: annotationGroup};
     });
     if (!edits.some(function (entry) { return entry.role !== 'vary'; })) {
       throw new Error('Mark at least one concept or leakage attribute for scoring.');
@@ -238,7 +246,8 @@
       els('concept').value = analysis.concept || els('concept').value;
       els('prompt').value = analysis.wildcard;
       dimensions = analysis.variationGroups.map(function (g) {
-        return {label: g.label, options: g.options, role: g.role || suggestedRole(g.label, g.options)};
+        return {label: g.label, options: g.options, annotationGroup: g.annotationGroup || '',
+          role: g.role || suggestedRole(g.annotationGroup || g.label, g.options)};
       });
       renderDimensions();
       els('proposal-status').textContent = 'Proposed tests ready. Edit values and scoring roles freely.';
@@ -336,10 +345,11 @@
   var referencePlanSignature = '';
   function prepareReferences() {
     var version = ++referenceGeneration;
-    referencePlanSignature = JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options]; })]);
+    referencePlanSignature = JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options,d.annotationGroup]; })]);
     referenceItems = dimensions.flatMap(function (d) {
       return d.role === 'primary' ? d.options.map(function (option) {
-        return {attribute:d.label, option:option, key:JSON.stringify([d.label,option]), candidates:[]};
+        return {attribute:d.label, option:option, annotationGroup:d.annotationGroup || '',
+          key:JSON.stringify([d.label,option]), candidates:[]};
       }) : [];
     });
     referenceIndex = 0;
@@ -351,6 +361,10 @@
         item.groups = vocabulary.filter(function (group) {
           return (group.terms || []).some(function (term) { return term.term === item.option; });
         }).map(function (group) { return group.group; });
+        // The Director's scoped group is a preference, not a restriction on manual choice.
+        item.groups.sort(function (a, b) {
+          return Number(b === item.annotationGroup) - Number(a === item.annotationGroup);
+        });
       });
       return Promise.all(referenceItems.map(function (item) {
         return Promise.all(item.groups.map(function (group) {
@@ -370,24 +384,30 @@
         var saved = referenceSelections[item.key];
         var cleared = Object.prototype.hasOwnProperty.call(referenceSelections, item.key) && saved === null;
         if (!saved && !cleared) {
-          // A wildcard term may belong to more than one scoped group.
-          // Reuse the first saved choice still represented in this campaign's candidates.
-          item.groups.some(function (group) {
+          // Never guess which of two identically named tags a saved choice meant.
+          var savedMatches = item.groups.map(function (group) {
             var chosen = window.testReferencesChoice(els('run').value, group, item.option);
             if (!chosen || !item.candidates.some(function (candidate) {
               return candidate.group === group && candidate.media === chosen.media;
-            })) return false;
-            saved = {attribute:item.attribute, option:item.option,
+            })) return null;
+            return {attribute:item.attribute, option:item.option,
               group:group, tag:item.option, media:chosen.media};
-            return true;
-          });
+          }).filter(Boolean);
+          saved = savedMatches.find(function (entry) {
+            return entry.group === item.annotationGroup;
+          }) || (savedMatches.length === 1 ? savedMatches[0] : null);
         }
         var selectedIndex = !cleared && item.candidates.length ? item.candidates.findIndex(function (candidate) {
           return saved && candidate.media === saved.media && candidate.group === saved.group && candidate.tag === saved.tag;
         }) : -1;
-        if (selectedIndex < 0 && !cleared && item.candidates.length) selectedIndex = 0;
+        if (selectedIndex < 0 && !cleared && item.annotationGroup) {
+          selectedIndex = item.candidates.findIndex(function (candidate) {
+            return candidate.group === item.annotationGroup;
+          });
+        }
+        if (selectedIndex < 0 && !cleared && item.groups.length === 1 && item.candidates.length) selectedIndex = 0;
         var candidate = item.candidates[selectedIndex];
-        // Keep explicitly cleared choices cleared; otherwise default to the first exact-tag match.
+        // Ambiguous options remain unselected unless the source group is known.
         referenceSelections[item.key] = candidate ? {
           attribute:item.attribute, option:item.option,
           group:candidate.group, tag:candidate.tag, media:candidate.media
@@ -424,7 +444,7 @@
           '&media=' + encodeURIComponent(candidate.media);
         return '<div class="epoch-finder-reference-tile' + (active ? ' selected' : '') + '">' +
           '<img loading="lazy" src="' + media + '" alt="' + escape(candidate.media) + '">' +
-          (item.groups.length > 1 ? '<span>' + escape(candidate.group) + '</span>' : '') +
+          '<span title="' + escape(getRequirementGroupAlias(candidate.group)) + '">' + escape(candidate.group) + '</span>' +
           '<div class="epoch-finder-reference-tile-actions"><button type="button" data-reference-pick="' + i +
           '" aria-pressed="' + !!active + '">' + (active ? '✓ Selected' : 'Select') +
           '</button><button type="button" data-reference-preview="' + i + '">Preview</button></div></div>';
@@ -454,7 +474,7 @@
     els('next').classList.toggle('hidden', value === 4);
     els('start').classList.toggle('hidden', value !== 4);
     if (value === 3) roundPlan();
-    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options]; })])) prepareReferences(); else renderReferenceStep(); }
+    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options,d.annotationGroup]; })])) prepareReferences(); else renderReferenceStep(); }
   }
   function advance() {
     try {

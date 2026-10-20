@@ -351,10 +351,6 @@
         item.groups = vocabulary.filter(function (group) {
           return (group.terms || []).some(function (term) { return term.term === item.option; });
         }).map(function (group) { return group.group; });
-        if (!item.groups.length) {
-          throw new Error('No trained annotation group contains exact tag "' + item.option +
-            '" for Primary attribute "' + item.attribute + '".');
-        }
       });
       return Promise.all(referenceItems.map(function (item) {
         return Promise.all(item.groups.map(function (group) {
@@ -365,7 +361,6 @@
           });
         })).then(function (candidateGroups) {
           item.candidates = candidateGroups.flat();
-          if (!item.candidates.length) throw new Error('No trained reference for ' + item.attribute + ' / ' + item.option + '.');
         });
       }));
     }).then(function () {
@@ -373,7 +368,8 @@
       referenceDraftChoices = {};
       referenceItems.forEach(function (item) {
         var saved = referenceSelections[item.key];
-        if (!saved) {
+        var cleared = Object.prototype.hasOwnProperty.call(referenceSelections, item.key) && saved === null;
+        if (!saved && !cleared) {
           // A wildcard term may belong to more than one scoped group.
           // Reuse the first saved choice still represented in this campaign's candidates.
           item.groups.some(function (group) {
@@ -386,16 +382,16 @@
             return true;
           });
         }
-        var valid = item.candidates.some(function (candidate) {
+        var selectedIndex = !cleared && item.candidates.length ? item.candidates.findIndex(function (candidate) {
           return saved && candidate.media === saved.media && candidate.group === saved.group && candidate.tag === saved.tag;
-        });
-        var selectedIndex = valid ? item.candidates.findIndex(function (candidate) { return saved.media === candidate.media; }) : 0;
+        }) : -1;
+        if (selectedIndex < 0 && !cleared && item.candidates.length) selectedIndex = 0;
         var candidate = item.candidates[selectedIndex];
-        // Deterministic default: explicit user selection wins; otherwise first exact-tag match.
-        referenceSelections[item.key] = valid ? saved : {
+        // Keep explicitly cleared choices cleared; otherwise default to the first exact-tag match.
+        referenceSelections[item.key] = candidate ? {
           attribute:item.attribute, option:item.option,
           group:candidate.group, tag:candidate.tag, media:candidate.media
-        };
+        } : null;
         referenceDraftChoices[item.key] = selectedIndex;
       });
       renderReferenceStep();
@@ -411,15 +407,17 @@
       els('start').disabled = false;
       return;
     }
-    var selected = referenceDraftChoices[item.key] == null ? 0 : referenceDraftChoices[item.key];
+    var selected = referenceDraftChoices[item.key] == null ? -1 : referenceDraftChoices[item.key];
     host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' + escape(item.attribute) +
       ' · ' + escape(item.option) + '</strong><span>' + (referenceIndex+1) + ' / ' +
-      referenceItems.length + '</span></div><p class="epoch-finder-muted">Auto-selected from matching tags. Review or change as needed.</p>' +
+      referenceItems.length + '</span></div><p class="epoch-finder-muted">Matching references are selected by default. Click Selected to clear; unselected options skip reference comparisons.</p>' +
       '<div class="epoch-finder-reference-nav"><button type="button" data-reference-nav="prev"' +
       (referenceIndex===0?' disabled':'') + '>← Previous</button><button type="button" data-reference-nav="next">' +
       (referenceIndex===referenceItems.length-1?'Finish':'Next →') + '</button></div>';
     galleryHost.innerHTML = '<h3>' + escape(item.attribute) + ' · ' + escape(item.option) +
-      '</h3><p class="epoch-finder-muted">Click Select to choose, or Preview to inspect a larger image.</p>' +
+      '</h3><p class="epoch-finder-muted">' + (item.candidates.length ?
+        'Click Select to choose, or Preview to inspect a larger image.' :
+        'No exact-tag training images available for this option. Reference comparisons will skip it.') + '</p>' +
       '<div class="epoch-finder-reference-gallery">' + item.candidates.map(function (candidate,i) {
         var active = selected === i;
         var media = '/caption/media?folder=' + encodeURIComponent(currentFolder) +
@@ -435,8 +433,8 @@
   }
   function updateReferenceStatus() {
     var chosen = referenceItems.filter(function (item) { return !!referenceSelections[item.key]; }).length;
-    els('reference-choices').textContent = chosen + ' / ' + referenceItems.length + ' auto-selected · optional review';
-    els('start').disabled = referenceItems.length > 0 && chosen !== referenceItems.length;
+    els('reference-choices').textContent = chosen + ' / ' + referenceItems.length + ' references selected · others skipped';
+    els('start').disabled = false;
   }
   function approvedReferences() {
     return referenceItems.map(function (item) { return referenceSelections[item.key]; }).filter(Boolean);
@@ -1027,6 +1025,9 @@
     els('enable-rvn').checked = !!source.referenceEvaluation.rvn;
     els('enable-dino').checked = !!source.referenceEvaluation.dino;
     referenceSelections = {};
+    source.dimensions.filter(function (item) { return item.role === 'primary'; }).forEach(function (item) {
+      item.options.forEach(function (option) { referenceSelections[JSON.stringify([item.label, option])] = null; });
+    });
     (source.referencePlan || []).forEach(function (ref) {
       referenceSelections[JSON.stringify([ref.attribute,ref.option])] = {
         attribute:ref.attribute, option:ref.option, group:ref.group, tag:ref.tag, media:ref.media
@@ -1162,23 +1163,23 @@
     var pick = event.target.closest('[data-reference-pick]');
     if (pick) {
       var item = referenceItems[referenceIndex];
-      var candidate = item.candidates[Number(pick.dataset.referencePick)];
-      referenceDraftChoices[item.key] = Number(pick.dataset.referencePick);
-      referenceSelections[item.key] = {attribute:item.attribute, option:item.option,
-        group:candidate.group, tag:candidate.tag, media:candidate.media};
+      var index = Number(pick.dataset.referencePick);
+      var candidate = item.candidates[index];
+      if (referenceDraftChoices[item.key] === index) {
+        referenceDraftChoices[item.key] = -1;
+        referenceSelections[item.key] = null;
+      } else {
+        referenceDraftChoices[item.key] = index;
+        referenceSelections[item.key] = {attribute:item.attribute, option:item.option,
+          group:candidate.group, tag:candidate.tag, media:candidate.media};
+      }
       renderReferenceStep();
       return;
     }
     var nav = event.target.closest('[data-reference-nav]');
     if (!nav) return;
     if (nav.dataset.referenceNav === 'prev') referenceIndex = Math.max(0,referenceIndex-1);
-    else {
-      var item = referenceItems[referenceIndex];
-      var candidate = item.candidates[referenceDraftChoices[item.key] == null ? 0 : referenceDraftChoices[item.key]];
-      referenceSelections[item.key] = {attribute:item.attribute,option:item.option,
-        group:candidate.group,tag:candidate.tag,media:candidate.media};
-      if (referenceIndex < referenceItems.length-1) referenceIndex++;
-    }
+    else if (referenceIndex < referenceItems.length-1) referenceIndex++;
     renderReferenceStep();
   }
   els('reference-options').addEventListener('click', referenceClick);

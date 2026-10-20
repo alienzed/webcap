@@ -1,3 +1,5 @@
+import json
+
 from tool.server.test_wildcard_contract import build_request, normalize_result
 
 
@@ -91,17 +93,25 @@ def test_caption_wildcard_result_allows_optional_empty_alternative():
 
 def test_wildcard_vocabulary_supplies_independent_dimensions_without_closing_options():
     request = build_request(
-        ["A person with brown wavy hair in a red bikini."],
+        ["A person with brown wavy hair in a red bikini.",
+         "A person with dark hair in a teardrop bikini."],
         vocabulary=[
             {"group": "Hair", "alias": "Hair colour and style", "terms": ["brown", "wavy"]},
             {"group": "BT Shape", "alias": "Bikini top shape", "terms": ["triangle", "teardrop"]},
         ],
+        annotations=[
+            {"Hair": ["brown", "wavy"], "BT Shape": ["triangle"]},
+            {"Hair": ["black"], "BT Shape": ["teardrop"]},
+        ],
     )
     prompt = request["prompt"]
-    assert '"group": "BT Shape"' in prompt
-    assert '"alias": "Bikini top shape"' in prompt
-    assert '"terms": ["triangle", "teardrop"]' in prompt
-    assert "one-time group vocabulary" in prompt
+    evidence = json.loads(prompt.split(
+        "Observed concept tags (selected run; counts are annotated media): ", 1
+    )[1].split("\nCaption sampling:", 1)[0])
+    assert evidence == [{"group": "BT Shape", "alias": "Bikini top shape",
+                         "terms": [{"term": "teardrop", "count": 1},
+                                   {"term": "triangle", "count": 1}]}]
+    assert '"group":"Hair"' not in prompt
     assert "{brown|black|blonde|ginger} hair" in prompt
 
 
@@ -110,11 +120,11 @@ def test_large_wildcard_corpus_is_sampled_without_losing_end_of_set():
                 for i in range(220)]
     request = build_request(captions)
     prompt = request["prompt"]
-    assert "150 representative examples from 220 distinct captions" in prompt
+    assert "6 representative examples from 220 distinct captions" in prompt
     assert "caption number 000" in prompt
     assert "caption number 219" in prompt
     caption_section = prompt.split("[SET CAPTIONS]\n", 1)[1].split("\n\n[OUTPUT]", 1)[0]
-    assert caption_section.count("[count=") == 150
+    assert caption_section.count("[count=") == 6
     assert "Observed same-group tag combinations:" not in prompt
 
 
@@ -123,9 +133,59 @@ def test_verbose_wildcard_corpus_uses_character_budget():
                 for i in range(140)]
     request = build_request(captions)
     part = request["prompt"].split("[SET CAPTIONS]\n", 1)[1].split("\n\n[OUTPUT]", 1)[0]
-    assert len(part) <= 24000
+    assert len(part) <= 7200
     assert "item 0 " in part
     assert "item 139 " in part
+
+
+
+def test_concept_tags_distinguish_top_and_bottom_with_same_term():
+    captions = [
+        "A black micro bikini with a micro triangle top and simple string straps.",
+        "A blue micro bikini with a ring top and simple string straps bottom.",
+        "A red micro bikini with a ring top and simple string straps bottom.",
+    ]
+    request = build_request(captions, annotations=[
+        {"BT Back": ["simple string straps"], "BB Back": ["simple string straps"],
+         "Position": ["standing"], "Background": ["studio"]},
+        {"BT Back": ["ring connectors"], "BB Back": ["simple string straps"],
+         "Position": ["walking"]},
+        {"BT Back": ["ring connectors"], "BB Back": ["simple string straps"],
+         "Clothing": ["bikini"]},
+    ], vocabulary=[
+        {"group": "BT Back", "alias": "Bikini top straps"},
+        {"group": "BB Back", "alias": "Bikini bottom straps"},
+        {"group": "Position", "alias": "Pose"},
+    ])
+    summary = json.loads(request["prompt"].split(
+        "Observed concept tags (selected run; counts are annotated media): ", 1
+    )[1].split("\nCaption sampling:", 1)[0])
+    assert summary == [
+        {"group": "BB Back", "alias": "Bikini bottom straps",
+         "terms": [{"term": "simple string straps", "count": 3}]},
+        {"group": "BT Back", "alias": "Bikini top straps",
+         "terms": [{"term": "ring connectors", "count": 2},
+                   {"term": "simple string straps", "count": 1}]},
+    ]
+    assert '"group":"Position"' not in request["prompt"]
+    assert '"group":"Background"' not in request["prompt"]
+    assert '"group":"Clothing"' not in request["prompt"]
+
+
+def test_rare_construction_is_represented_not_lost_to_scene_variation():
+    captions = [
+        "A woman wearing a bikini, studio pose " + str(index) + "."
+        for index in range(90)
+    ]
+    annotations = [
+        {"BT Back": ["simple string straps"], "Lighting": ["studio"]}
+        for _ in range(89)
+    ] + [{"BT Back": ["dual-ring connectors"], "Lighting": ["outdoor"]}]
+    result = build_request(captions, annotations=annotations)
+    examples = result["prompt"].split("[SET CAPTIONS]\n", 1)[1].split("\n\n[OUTPUT]", 1)[0]
+    assert "studio pose 89" in examples
+    assert examples.count("[count=") <= 24
+    assert len(examples) <= 7200
 
 
 def test_generated_phrases_keep_optional_group_identity_without_gates():

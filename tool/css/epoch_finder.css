@@ -395,7 +395,6 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-info-card-info{padding:12px;display:flex;flex-direction:column;gap:9px}
 .epoch-info-rating{display:flex;gap:3px;align-items:center}
 .epoch-info-rating button{font-size:21px;background:transparent;border:0;padding:3px;cursor:pointer}
-.epoch-info-clear{align-self:start;border:0;background:transparent;color:inherit;text-decoration:underline;font-size:11px;cursor:pointer}
 .epoch-info-readonly,.epoch-info-meta{font-size:11px;opacity:.75}
 .epoch-info-wildcards{display:flex;flex-wrap:wrap;gap:5px}
 .epoch-info-wildcards strong{flex-basis:100%;font-size:12px}

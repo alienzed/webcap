@@ -30,7 +30,7 @@ def _concept_tags(annotations, focus=""):
             raise ValueError("Invalid scoped Set annotation group or tag list.")
         # Explicitly focusing a generic group overrides the usual secondary role.
         name = group.strip().casefold()
-        if name in _CORE_GROUPS and name not in focus.casefold():
+        if name in _CORE_GROUPS and not re.search(r"\b" + re.escape(name) + r"\b", focus.casefold()):
             continue
         tags.update((group, value) for value in values if value.strip())
     return tags

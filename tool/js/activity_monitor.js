@@ -426,7 +426,7 @@
       title: activityTitle(item),
       status: String(item.status || 'running'),
       startedAt: item.startedAt,
-      detail: String(item.folder || ''),
+      detail: item.kind === 'storyboard' ? activityDetail(item) : String(item.folder || ''),
       phase: '',
       progressLabel: '',
       progress: null

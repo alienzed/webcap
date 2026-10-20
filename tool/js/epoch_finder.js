@@ -752,8 +752,13 @@
     if(lastFrameKey===key)return;
     lastFrameKey=key;
     var host=els('frames');
-    host.replaceChildren();
-    var heading=document.createElement('div');heading.className='epoch-finder-gallery-heading';
+    var preserved=new Map();
+    host.querySelectorAll('[data-gallery-epoch]').forEach(function(card){
+      preserved.set(card.dataset.galleryEpoch+':'+card.dataset.galleryRound+':'+card.dataset.galleryCase,card);
+    });
+    var heading=host.querySelector('.epoch-finder-gallery-heading');
+    if(!heading){heading=document.createElement('div');heading.className='epoch-finder-gallery-heading';}
+    heading.replaceChildren();
     var label=document.createElement('strong');
     label.textContent=inspectedEpoch==null?'Recent retained frames':candidateLabel(campaign,inspectedEpoch)+' · Available renders';
     heading.appendChild(label);
@@ -763,7 +768,13 @@
     }
     host.appendChild(heading);
     var shown=inspectedEpoch==null?units.slice(-40).reverse():units.slice().sort(function(a,b){return a.round-b.round||a.case-b.case;});
+    var keep=new Set();
     shown.forEach(function(unit){
+      var identity=unit.epoch+':'+unit.round+':'+unit.case;
+      keep.add(identity);
+      var version=[unit.frame,!!unit.assessment,(unit.referenceAssessments||[]).length,(unit.dinoAssessments||[]).length,unit.error||''].join('|');
+      var prior=preserved.get(identity);
+      if(prior&&prior.dataset.cardVersion===version){host.appendChild(prior);return;}
       var url='/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+'&campaign='+encodeURIComponent(campaign.id)+'&frame='+encodeURIComponent(unit.frame);
       var checks=unit.assessment&&unit.assessment.comparison||[];
       var matched=checks.filter(function(c){return c.result==='match';}).length;
@@ -797,8 +808,10 @@
         wildcards:selection,evaluations:evidence,details:details,
         actions:[{label:'Open original',url:url}],
       });
+      card.dataset.cardVersion=version;
       host.appendChild(card);
     });
+    preserved.forEach(function(card,id){if(!keep.has(id))card.remove();});
   }
   function evidenceSection(campaign) {
     if (inspectedEpoch == null) return '';

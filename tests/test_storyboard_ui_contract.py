@@ -1450,3 +1450,9 @@ def test_individual_scene_development_tracks_real_completion_in_director_activit
     assert "sceneProgressBar.value = developed;" in script
     assert "sceneProgressBar.max = individual.total;" in script
     assert "individualDevelopmentProgress = null;" in script
+
+
+def test_individual_develop_mirrors_progress_to_existing_activity():
+    script = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    assert "window.publishActivityProgress({ id: 'storyboard:individual:' + storyId" in script
+    assert "window.finishActivityProgress('storyboard:individual:' + storyId)" in script

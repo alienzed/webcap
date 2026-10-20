@@ -702,7 +702,7 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
                 verdict = verdict_line.partition(":")[2].strip().upper()
                 if verdict not in {"MATCH", "PARTIAL", "MISMATCH", "UNCLEAR"}:
                     verdict = "UNCLEAR"
-                outcomes.append({"groupId": group["id"], "label": group["label"], "option": expected,
+                outcomes.append({"groupId": group["id"], "label": group["label"], "group": assigned["group"], "option": expected,
                                  "reference": assigned["media"], "selected": selected, "verdict": verdict,
                                  "response": answer, "modelId": campaign["visionModel"],
                                  "elapsedSeconds": round(time.monotonic() - started, 2)})
@@ -736,7 +736,7 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
         actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"], campaign["jobId"])
         if actual["size"] != entry["size"] or actual["mtimeNs"] != entry["mtimeNs"]:
             raise ValueError("Training reference changed since approval.")
-        unique.setdefault(entry["media"], []).append(group["label"] + ": " + option)
+        unique.setdefault(entry["media"], []).append(entry["group"] + ": " + option)
     results = unit.get("dinoAssessments", [])
     completed = {item["reference"] for item in results}
     for name, attributes in unique.items():

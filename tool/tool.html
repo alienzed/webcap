@@ -1326,6 +1326,11 @@
                             <section class="epoch-finder-panel"><details><summary>Detailed evidence filters</summary><label>Campaign<select id="run-analytics-campaign"><option value="">No campaign (independent signals)</option></select></label><label>Test session<select id="run-analytics-session"><option value="">All sessions (descriptive only)</option></select></label><label>Comparable Test cohort<select id="run-analytics-cohort"><option value="">Automatic (only if comparable)</option></select></label><p class="epoch-finder-muted">Changing filters never starts inference.</p></details></section>
                           </aside>
                           <main class="epoch-finder-dashboard">
+                            <dialog id="run-analytics-epoch-media-dialog" class="run-analytics-epoch-media-dialog" aria-label="Generated results for checkpoint">
+                                <div class="run-analytics-epoch-media-head"><div><h3 id="run-analytics-epoch-media-title">Checkpoint results</h3><p class="run-analytics-epoch-media-description">Generated tests and campaign frames recorded for this checkpoint.</p><p id="run-analytics-epoch-media-status" role="status" aria-live="polite"></p></div><button id="run-analytics-epoch-media-close" type="button" class="review-captions-btn">← Back to Analytics</button></div>
+                                <div id="run-analytics-epoch-media-grid" class="run-analytics-epoch-media-grid" aria-live="polite"></div>
+                                <button id="run-analytics-epoch-media-more" class="review-captions-btn hidden" type="button">Load 8 more</button>
+                              </dialog>
                             <div id="run-analytics-lab" class="run-analytics-lab">
                               <header class="run-lab-heading"><div><span class="run-lab-eyebrow">TEST GENERATIONS / ANALYTICS</span><h2>Your Testing Lab</h2><p>What your recorded experiments tell us — and what to investigate next.</p></div><button type="button" id="run-lab-refresh" class="review-captions-btn">Refresh evidence</button></header>
                               <p id="run-lab-status" role="status">Reading recorded testing evidence…</p>
@@ -1346,11 +1351,7 @@
                             <section class="epoch-finder-panel"><h3>Evidence coverage</h3><div id="run-analytics-coverage">Choose a training run to begin.</div></section>
                             <section class="epoch-finder-panel"><h3>Checkpoint trajectory</h3><p id="run-analytics-chart-note" class="epoch-finder-muted"></p><div id="run-analytics-chart"></div></section>
                             <section class="epoch-finder-panel"><h3>Checkpoints</h3><div id="run-analytics-table"></div></section>
-                            <dialog id="run-analytics-epoch-media-dialog" class="run-analytics-epoch-media-dialog" aria-label="Generated results for checkpoint">
-                                <div class="run-analytics-epoch-media-head"><div><h3 id="run-analytics-epoch-media-title">Checkpoint results</h3><p class="run-analytics-epoch-media-description">Generated tests and campaign frames recorded for this checkpoint.</p><p id="run-analytics-epoch-media-status" role="status" aria-live="polite"></p></div><button id="run-analytics-epoch-media-close" type="button" class="review-captions-btn">← Back to Analytics</button></div>
-                                <div id="run-analytics-epoch-media-grid" class="run-analytics-epoch-media-grid" aria-live="polite"></div>
-                                <button id="run-analytics-epoch-media-more" class="review-captions-btn hidden" type="button">Load 8 more</button>
-                              </dialog>
+
                             <section class="epoch-finder-panel"><h3>Findings and limits</h3><div id="run-analytics-findings"></div><div id="run-analytics-warnings"></div></section>
                             <section class="epoch-finder-panel"><h3>Director interpretation</h3><p class="epoch-finder-muted">Optional analysis of the visible numeric evidence only. No captions, prompts, images or raw logs are sent.</p><details><summary>Preview numerical evidence sent to Director</summary><pre id="run-analytics-director-preview" class="run-analytics-evidence-preview">Select runs and Analyze first.</pre></details><button id="run-analytics-director" type="button" class="review-captions-btn" disabled>Interpret with Director</button><button id="run-analytics-director-stop" type="button" class="review-captions-btn hidden">Stop</button><p id="run-analytics-director-status" aria-live="polite"></p><div id="run-analytics-director-result"></div></section>
                             <p id="run-analytics-error" class="epoch-finder-error hidden" role="alert"></p>

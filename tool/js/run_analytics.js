@@ -212,6 +212,7 @@
     el('director').disabled=true;updateScopeUi();previewGeneration++;previewFacts=null;previewKey='';el('director-result').textContent='';el('director-status').textContent='';clearError();
   };
   window.runAnalyticsOpen=discover;
+  window.runAnalyticsFolder=function(){return folder;};
   el('result-epochs').onclick=function(event){
     var button=event.target.closest('[data-result-epoch-job]');
     if(!button)return;

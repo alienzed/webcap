@@ -163,33 +163,6 @@ def reconcile_startup():
     _ensure_monitor_started()
 
 
-def _assert_storyboard_contract_current(context, frozen_contract):
-    if context.get("deferredApply") is True:
-        return
-    if "sourceInstruction" not in context:
-        return
-
-    from .storyboard_llm_contract import build_request
-    from .storyboard_store import load_story
-
-    story_id = str(context.get("storyId") or "").strip()
-    scene_id = str(context.get("sceneId") or "").strip()
-    operation = str(context.get("operation") or "").strip()
-    current_story = load_story(story_id)
-    current_contract = build_request(
-        current_story,
-        scene_id,
-        operation,
-        instruction=str(context.get("sourceInstruction") or ""),
-        **({"scene_count": context.get("sceneCount")} if operation == "extend_story" else {}),
-    )
-    if current_contract != frozen_contract:
-        raise RuntimeError(
-            "Storyboard Director inputs changed while the request was running. "
-            "The stale result was not applied; run the Director action again against the current Story state."
-        )
-
-
 def _client_result(client, context, llm_result, job_id="", frozen_contract=None):
     if client in {"chat", "caption"}:
         if client == "caption" and context.get("testAutoVl") is True:
@@ -378,7 +351,6 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         raise RuntimeError("Storyboard LLM job is missing its Story ID.")
     if frozen_contract is None:
         raise RuntimeError("Storyboard LLM job is missing its frozen contract.")
-    _assert_storyboard_contract_current(context, frozen_contract)
 
     if operation == "interpret_atmosphere":
         suggestion = str(llm_result.get("text") or "").strip()

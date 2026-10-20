@@ -9,6 +9,7 @@ from pathlib import Path
 from . import epoch_finder as finder
 from . import epoch_test_bench as bench
 from .training_archive import archive_metrics, list_archives
+from .folder_state_store import read_folder_state, set_insights_hidden_vl_groups
 
 
 def _folder_key(folder_path):
@@ -506,6 +507,97 @@ def normalize_director_response(payload):
     return {field: payload[field][:3000] for field in fields}
 
 
+
+def _insights_state_path(folder_path):
+    return bench._owning_set_directory(folder_path) / ".webcap_state.json"
+
+
+def save_insights_groups(folder_path, groups):
+    """Persist display-only VL exclusions for this Set."""
+    return {"hiddenVlGroups": set_insights_hidden_vl_groups(_insights_state_path(folder_path), groups)}
+
+
+def insights_review_batch(folder_path, excluded=None):
+    """Five existing, unrated, available Test renders, selected without inference.
+
+    Favor epochs with some evidence but few ratings; take one render per epoch
+    before repeating an epoch. Missing media and unlinked results are not
+    silently counted as reviewable.
+    """
+    if excluded is None:
+        excluded = []
+    if not isinstance(excluded, list) or any(not isinstance(item, str) for item in excluded):
+        raise ValueError("Excluded review items must be a list.")
+    excluded_ids = set(excluded)
+    set_folder = _folder_key(folder_path)
+    observed_counts = {}
+    candidates = []
+    unavailable = 0
+    for session in bench._session_directories(folder_path):
+        status = bench._read_status(session) or {}
+        if status.get("campaignStaging"):
+            continue
+        ratings = bench._session_rating_map(session)
+        for result in status.get("results") or []:
+            if not isinstance(result, dict) or result.get("kind") == "base":
+                continue
+            source = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
+            job_id = str(source.get("sourceJobId") or "").strip()
+            folder = str(source.get("sourceFolder") or "").replace(chr(92), "/").strip("/")
+            epoch = source.get("sourceEpoch")
+            if not job_id or folder != set_folder or type(epoch) is not int or epoch < 0:
+                continue
+            media = bench._result_media_file(result)
+            if not media:
+                continue
+            key = (job_id, epoch)
+            if media in ratings:
+                observed_counts[key] = observed_counts.get(key, 0) + 1
+                continue
+            if not (session / media).is_file():
+                unavailable += 1
+                continue
+            identity = session.name + "/" + media
+            if identity in excluded_ids:
+                continue
+            resolved_prompt = str(result.get("prompt") or status.get("resolvedPrompt") or "")
+            source_prompt = status.get("sourcePrompt")
+            candidates.append({
+                "id": identity, "session": session.name, "mediaFile": media,
+                "mediaKind": str(result.get("mediaKind") or status.get("mediaKind") or ""),
+                "jobId": job_id, "epoch": epoch,
+                "runName": str(source.get("sourceRunName") or ""),
+                "wildcards": bench._resolved_wildcard_summary(
+                    source_prompt, resolved_prompt, status.get("ownerFolder") or set_folder),
+                "_key": key,
+            })
+    candidates.sort(key=lambda item: (
+        observed_counts.get(item["_key"], 0) == 0,
+        observed_counts.get(item["_key"], 0),
+        item["jobId"], item["epoch"], item["session"], item["mediaFile"],
+    ))
+    chosen = []
+    seen = set()
+    for item in candidates:
+        if item["_key"] in seen:
+            continue
+        chosen.append(item)
+        seen.add(item["_key"])
+        if len(chosen) == 5:
+            break
+    if len(chosen) < 5:
+        for item in candidates:
+            if item in chosen:
+                continue
+            chosen.append(item)
+            if len(chosen) == 5:
+                break
+    for item in chosen:
+        item.pop("_key")
+    return {"items": chosen, "remaining": len(candidates),
+            "unavailable": unavailable}
+
+
 def overview(folder_path):
     """Read-only Set-wide Testing Lab summary. No inference, filesystem writes, or checkpoint scans.
 
@@ -515,6 +607,7 @@ def overview(folder_path):
     warnings = []
     folder = _folder_key(folder_path)
     sessions = bench._session_directories(folder_path)
+    hidden_groups = read_folder_state(_insights_state_path(folder_path)).get('insightsHiddenVlGroups') or []
     cohorts = {}
     epochs = {}
     seen_runs = set()
@@ -631,6 +724,7 @@ def overview(folder_path):
                 point["vlCount"] += 1
                 identity = (str(group.get("id") or ""), str(group.get("expectedText") or ""))
                 attribute = cohort["attributes"].setdefault(identity, {
+                    "id": str(group.get("id") or group.get("label") or group.get("name") or "Attribute")[:100],
                     "label": str(group.get("label") or group.get("name") or group.get("id") or "Attribute")[:100],
                     "matched": 0.0, "count": 0,
                 })
@@ -669,7 +763,7 @@ def overview(folder_path):
                 "vlReviewedPreviews": point["vlReviewedPreviews"],
                 "sessions": sorted(point["sessions"]),
             })
-        attrs = [{"label": a["label"], "matched": a["matched"] / a["count"],
+        attrs = [{"id": a["id"], "label": a["label"], "matched": a["matched"] / a["count"],
                   "judgments": a["count"]} for a in cohort["attributes"].values() if a["count"]]
         groups.append({
             "id": cohort["id"], "modelId": cohort["modelId"],
@@ -699,6 +793,7 @@ def overview(folder_path):
     totals["generatedPreviews"] = totals["testPreviews"] + totals["campaignPreviews"]
     return {
         "coverage": totals, "cohorts": groups, "epochs": indexed,
+        "hiddenVlGroups": hidden_groups,
         "recentSessions": sorted(recent, key=lambda x: (-x["startedAt"], x["name"]))[:8],
         "warnings": warnings,
     }

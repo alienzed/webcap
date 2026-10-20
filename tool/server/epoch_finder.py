@@ -340,13 +340,13 @@ def create_campaign(folder_path, criteria):
     for dimension in dimensions:
         if dimension["role"] != "primary":
             continue
-        matches = [group["group"] for group in scoped
-                   if all(option in {term["term"] for term in group["terms"]}
-                          for option in dimension["options"])]
-        if len(matches) != 1:
-            raise ValueError("Primary attribute " + dimension["label"] +
-                             " must match exact tags in one trained annotation group.")
-        primary_groups[dimension["label"]] = matches[0]
+        for option in dimension["options"]:
+            matches = {group["group"] for group in scoped
+                       if any(term["term"] == option for term in group["terms"])}
+            if not matches:
+                raise ValueError("No trained annotation group contains exact tag " +
+                                 repr(option) + " for Primary attribute " + dimension["label"] + ".")
+            primary_groups[(dimension["label"], option)] = matches[0]
     reference_choices = criteria.get("referencePlan")
     if not isinstance(reference_choices, list):
         raise ValueError("Approve a training reference for every Primary wildcard option.")
@@ -369,7 +369,7 @@ def create_campaign(folder_path, criteria):
         raise ValueError("Approve an exact trained reference for every Primary wildcard option.")
     references = []
     for (attribute, option), entry in sorted(approved.items()):
-        if str(entry.get("group") or "") != primary_groups[attribute] or str(entry.get("tag") or option) != option:
+        if str(entry.get("group") or "") not in primary_groups[(attribute, option)] or str(entry.get("tag") or option) != option:
             raise ValueError("Primary reference must use its exact annotated group and tag.")
         group = str(entry.get("group") or "")
         media = str(entry.get("media") or "")

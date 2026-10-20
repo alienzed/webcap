@@ -385,7 +385,8 @@
         var selectedIndex = !cleared && item.candidates.length ? item.candidates.findIndex(function (candidate) {
           return saved && candidate.media === saved.media && candidate.group === saved.group && candidate.tag === saved.tag;
         }) : -1;
-        if (selectedIndex < 0 && !cleared && item.candidates.length) selectedIndex = 0;
+        // Identically named tags in multiple Set groups need an explicit choice.
+        if (selectedIndex < 0 && !cleared && item.groups.length === 1 && item.candidates.length) selectedIndex = 0;
         var candidate = item.candidates[selectedIndex];
         // Keep explicitly cleared choices cleared; otherwise default to the first exact-tag match.
         referenceSelections[item.key] = candidate ? {
@@ -424,7 +425,7 @@
           '&media=' + encodeURIComponent(candidate.media);
         return '<div class="epoch-finder-reference-tile' + (active ? ' selected' : '') + '">' +
           '<img loading="lazy" src="' + media + '" alt="' + escape(candidate.media) + '">' +
-          (item.groups.length > 1 ? '<span>' + escape(candidate.group) + '</span>' : '') +
+          '<span title="' + escape(getRequirementGroupAlias(candidate.group)) + '">' + escape(candidate.group) + '</span>' +
           '<div class="epoch-finder-reference-tile-actions"><button type="button" data-reference-pick="' + i +
           '" aria-pressed="' + !!active + '">' + (active ? '✓ Selected' : 'Select') +
           '</button><button type="button" data-reference-preview="' + i + '">Preview</button></div></div>';
@@ -437,7 +438,10 @@
     els('start').disabled = false;
   }
   function approvedReferences() {
-    return referenceItems.map(function (item) { return referenceSelections[item.key]; }).filter(Boolean);
+    return referenceItems.map(function (item) {
+      var chosen = referenceSelections[item.key];
+      return chosen ? Object.assign({}, chosen, {alias: getRequirementGroupAlias(chosen.group)}) : null;
+    }).filter(Boolean);
   }
   function showStep(value) {
     wizardStep = value;

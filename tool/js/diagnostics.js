@@ -31,7 +31,7 @@ function diagnosticsProbeMetrics(attempt) {
 
 function diagnosticsAssessmentCounts(row, tests) {
   var families = {
-    writing: ['director_writing', 'director_writing_1024', 'director_writing_4096'],
+    writing: ['director_writing', 'director_writing_1024', 'director_writing_4096', 'director_writing_8192', 'director_writing_16384'],
     structured: ['language_synthesis', 'language_challenge'],
     vision: ['vision_open', 'vision_group_aware']
   };
@@ -622,8 +622,8 @@ function runUnifiedModelAssessment() {
   var files = modelLabCurrentFiles();
   var canLab = !!sourceFolder && files.length >= 2;
   var status = diagnosticsEl('diagnostics-assessment-selection');
-  if (!canLab) throw new Error('Open a Set with at least two media items to run the assessment.');
-  status.textContent = 'Starting ' + (deep ? 'deep' : 'quick') + ' assessment…';
+  if (visions.length && !canLab) throw new Error('Open a Set with at least two media items to assess Vision models. Director assessment needs no Set.');
+  status.textContent = 'Checking saved results and scheduling outstanding ' + (deep ? 'deep' : 'quick') + ' tests…';
   var runButton = diagnosticsEl('diagnostics-assessment-run');
   runButton.disabled = true;
   return Promise.resolve().then(function () {
@@ -650,7 +650,7 @@ function runUnifiedModelAssessment() {
       if (payload.run.status === 'error' || payload.run.status === 'interrupted') {
         throw new Error(payload.run.error || 'Assessment failed before probes could complete.');
       }
-      diagnosticsEl('diagnostics-assessment-summary').textContent = 'Live assessment progress · findings update when the run finishes.';
+      diagnosticsEl('diagnostics-assessment-summary').textContent = 'Existing successful tests are reused · only missing or failed probes run.';
       reportConsoleInfo('Model Assessment', 'Started persistent ' + (deep ? 'deep' : 'quick') + ' Model Lab run ' + payload.run.id + '.');
       return payload.run;
     });

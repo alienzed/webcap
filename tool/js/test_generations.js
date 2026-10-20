@@ -2133,19 +2133,6 @@
     });
   }
 
-  function lastTrainingArchiveText() {
-    var archive = state && state.lastTrainingArchive && typeof state.lastTrainingArchive === 'object'
-      ? state.lastTrainingArchive
-      : null;
-    if (!archive) return '';
-    var parts = ['Last archived'];
-    var epoch = Number(archive.selectedEpoch || 0);
-    if (epoch > 0) parts.push('Epoch ' + Math.round(epoch));
-    var archivedAt = Number(archive.archivedAt || 0);
-    if (archivedAt > 0) parts.push(new Date(archivedAt * 1000).toLocaleString());
-    return parts.join(' · ');
-  }
-
   function stagedFileParts(fileName) {
     var name = String(fileName || '');
     var match = name.match(/^(.*)__epoch(\d+)\.safetensors$/i);
@@ -2345,18 +2332,6 @@
     syncStagedSummary(payload);
     if (!host) return;
     host.innerHTML = '';
-
-    var archiveText = lastTrainingArchiveText();
-    if (archiveText) {
-      var archiveFact = document.createElement('div');
-      archiveFact.className = 'test-generations-library-empty test-generations-archive-fact';
-      archiveFact.textContent = archiveText;
-      var archive = state && state.lastTrainingArchive && typeof state.lastTrainingArchive === 'object'
-        ? state.lastTrainingArchive
-        : {};
-      if (archive.productionFileName) archiveFact.title = 'Production LoRA: ' + String(archive.productionFileName);
-      host.appendChild(archiveFact);
-    }
 
     var baseRow = document.createElement('div');
     baseRow.className = 'test-generations-staged-row test-generations-base-row';

@@ -9,7 +9,6 @@ from pathlib import Path, PurePosixPath
 
 from . import config as app_config
 from .execution_queue import lane_snapshot as execution_lane_snapshot
-from .folder_state_store import set_last_training_archive
 from .epoch_test_bench import archive_run_session_cleanup_status, clear_archived_run_sessions
 from .training_action import read_action
 from .training_candidates import aggregate_detailed_loss_by_epoch, map_detailed_loss_to_epochs, read_loss_events, smooth_step_loss
@@ -460,19 +459,6 @@ def finalize(folder, job_id, archive_name, retain_epochs=None, stage="", staged_
     set_folder = app_config.safe_join_fs_root(folder)
     if context.get("jobId"):
         clear_history_job(set_folder, context["jobId"])
-    last_training_archive = {
-        "archivedAt": archived_at,
-        "archiveName": destination_name,
-        "runName": str(context["run"].get("runName") or ""),
-        "stage": str(context["run"].get("stages") or ""),
-        "selectedEpoch": context["selectedEpoch"],
-        "productionFileName": context["production"].name,
-    }
-    set_marker_warning = ""
-    try:
-        set_last_training_archive(set_folder / ".webcap_state.json", last_training_archive)
-    except (OSError, RuntimeError, ValueError) as exc:
-        set_marker_warning = str(exc)
     test_cleanup_warning = ""
     removed_test_sessions = 0
     removed_test_session_names = []
@@ -489,9 +475,7 @@ def finalize(folder, job_id, archive_name, retain_epochs=None, stage="", staged_
         "removedStagedCandidates": len(context["staged"]),
         "removedTestSessions": removed_test_sessions,
         "removedTestSessionNames": removed_test_session_names,
-        "setMarkerWarning": set_marker_warning,
         "testCleanupWarning": test_cleanup_warning,
-        "lastTrainingArchive": last_training_archive,
         "actionRemoved": action_removed,
     }
 

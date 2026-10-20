@@ -163,12 +163,6 @@ def test_finalize_persists_resume_branch_boundary(tmp_path, monkeypatch):
         lambda folder, sessions: cleared_test_workspace.update({"folder": folder, "sessions": sessions}) or [],
     )
     monkeypatch.setattr(training_archive.app_config, "safe_join_fs_root", lambda _folder: tmp_path / "set")
-    saved_marker = {}
-    monkeypatch.setattr(
-        training_archive,
-        "set_last_training_archive",
-        lambda state_path, marker: saved_marker.update({"statePath": state_path, "marker": dict(marker)}),
-    )
     monkeypatch.setattr(training_archive, "_move_archive", lambda _source, _destination: None)
     monkeypatch.setattr(training_archive, "_epoch_directories", lambda _directory: {})
     monkeypatch.setattr(training_archive, "_global_step_directories", lambda _directory: [])
@@ -177,9 +171,6 @@ def test_finalize_persists_resume_branch_boundary(tmp_path, monkeypatch):
 
     assert captured["resumeCheckpointWallTime"] == 150.0
     assert captured["resumeBranchStartedAt"] == 250.0
-    assert saved_marker["statePath"] == tmp_path / "set" / ".webcap_state.json"
-    assert saved_marker["marker"]["archiveName"] == "resumed-archive"
-    assert saved_marker["marker"]["selectedEpoch"] == 6
     assert cleared_test_workspace == {"folder": tmp_path / "set", "sessions": []}
 
 

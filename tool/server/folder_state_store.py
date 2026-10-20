@@ -141,18 +141,6 @@ def set_test_vision_assessment(
     return vision
 
 
-def set_last_training_archive(state_path, archive_fact):
-    if not isinstance(archive_fact, dict) or not archive_fact:
-        raise ValueError("Training archive marker must be a non-empty object.")
-
-    path = Path(state_path)
-    with _folder_state_mutation_lock:
-        state = read_folder_state(path)
-        state["last_training_archive"] = dict(archive_fact)
-        write_folder_state_atomic(path, state)
-    return dict(archive_fact)
-
-
 def reject_wholesale_state_map_clear(previous_state, next_state):
     """Reject an ordinary save that would erase a populated protected map."""
     protected_maps = (

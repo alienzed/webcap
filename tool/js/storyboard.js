@@ -62,7 +62,8 @@
       requestByJobId: {},
       developIndividuallyOverride: null,
       developStrategyModelId: '',
-      individualDevelopmentProgress: null
+      individualDevelopmentProgress: null,
+      sceneCreation: null
     }
   };
 
@@ -507,7 +508,7 @@
   function directorTargetFromJob(job) {
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
     if (job.operation === 'interpret_atmosphere' || job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
-    if (job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene') return { kind: 'scenes', storyId: job.storyId };
+    if (job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene' || job.operation === 'extend_story') return { kind: 'scenes', storyId: job.storyId };
     if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence' || job.operation === 'check_coherence_sequence') return { kind: 'repair', storyId: job.storyId };
     if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId, operation: job.operation };
@@ -565,12 +566,14 @@
           syncSceneRefineState(sceneId);
           updateSceneDirectorStatus(sceneId, 'Director completed.');
         }
-      } else if (operation === 'insert_scene') {
+      } else if (operation === 'insert_scene' || operation === 'extend_story') {
         storyState.story.sceneOrder = canonical.sceneOrder || [];
         storyState.story.scenes = canonical.scenes || {};
         storyState.story.updatedAt = canonical.updatedAt;
         var anchorIndex = storyState.story.sceneOrder.indexOf(sceneId);
-        var insertedSceneId = anchorIndex >= 0 ? storyState.story.sceneOrder[anchorIndex + 1] : '';
+        var insertedSceneId = operation === 'extend_story'
+          ? storyState.story.sceneOrder[storyState.story.sceneOrder.length - 1]
+          : (anchorIndex >= 0 ? storyState.story.sceneOrder[anchorIndex + 1] : '');
         if (insertedSceneId) {
           storyState.sceneViewMode = 'focus';
           storyState.activeSceneId = insertedSceneId;
@@ -2783,7 +2786,9 @@
           '<summary title="Scene actions" aria-label="Scene actions">•••</summary>' +
           '<div class="storyboard-scene-menu-popover">' +
             '<button type="button" data-scene-action="duplicate">Duplicate Scene</button>' +
-            '<button type="button" data-scene-action="insert-director"' + (index === order.length - 1 ? ' disabled' : '') + '>Insert Director Scene After</button>' +
+            '<button type="button" data-scene-action="insert-director">Insert Scene After</button>' +
+            '<button type="button" data-scene-action="insert-director-custom">Insert Scene After…</button>' +
+            (index === order.length - 1 ? '<button type="button" data-scene-action="extend-story">Extend Story…</button>' : '') +
             '<button type="button" data-scene-action="up"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
             '<button type="button" data-scene-action="down"' + (index === order.length - 1 ? ' disabled' : '') + '>Move later</button>' +
             '<button type="button" class="danger" data-scene-action="delete">Remove Scene</button>' +
@@ -2791,7 +2796,8 @@
         '</details>' +
       '</div>';
     }).join('') +
-      '<button type="button" class="storyboard-scene-progress-add" data-scene-progress-add title="Add Scene" aria-label="Add Scene">+</button>';
+      '<button type="button" class="storyboard-scene-progress-add" data-scene-progress-add title="Add blank Scene" aria-label="Add blank Scene">+</button>' +
+      (order.length ? '<button type="button" class="review-captions-btn storyboard-extend-story" data-extend-story>Extend Story…</button>' : '');
   }
 
   function syncSceneViewControls(order) {
@@ -4803,13 +4809,13 @@
     }).catch(reportError);
   }
 
-  function insertDirectorSceneAfter(sceneId) {
+  function insertDirectorSceneAfter(sceneId, instruction) {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
     var order = Array.isArray(storyState.story.sceneOrder) ? storyState.story.sceneOrder : [];
     var index = order.indexOf(sceneId);
-    if (index < 0 || index + 1 >= order.length) {
-      reportError(new Error('Insert Director Scene requires a following Scene.'));
+    if (index < 0) {
+      reportError(new Error('Insert Director Scene requires an existing Scene.'));
       return;
     }
     var directorTarget = { kind: 'scenes', storyId: storyId };
@@ -4832,6 +4838,7 @@
         storyId: storyId,
         sceneId: sceneId,
         operation: 'insert_scene',
+        instruction: instruction || '',
         model: modelId
       });
     }).then(function (payload) {
@@ -4852,6 +4859,75 @@
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
     });
+  }
+
+  function openSceneCreation(mode, sceneId) {
+    if (!storyState.story) return;
+    var order = storyState.story.sceneOrder || [];
+    if (mode === 'extend' && !order.length) return;
+    storyState.director.sceneCreation = { mode: mode, sceneId: sceneId || '' };
+    var modal = el('storyboard-scene-creation-modal');
+    el('storyboard-scene-creation-title').textContent = mode === 'extend' ? 'Extend Story' : 'Insert Scene After';
+    el('storyboard-scene-creation-count-wrap').classList.toggle('hidden', mode !== 'extend');
+    el('storyboard-scene-creation-count').value = '3';
+    el('storyboard-scene-creation-instruction').value = '';
+    el('storyboard-scene-creation-run').textContent = mode === 'extend' ? 'Extend Story' : 'Insert Scene';
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    el(mode === 'extend' ? 'storyboard-scene-creation-count' : 'storyboard-scene-creation-instruction').focus();
+  }
+
+  function closeSceneCreation() {
+    var modal = el('storyboard-scene-creation-modal');
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    storyState.director.sceneCreation = null;
+  }
+
+  function extendStory(sceneCount, instruction) {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    var modelId = storyState.director.modelId;
+    if (!modelId) return reportError(new Error('Choose a Storyboard Director model first.'));
+    var target = { kind: 'scenes', storyId: storyId };
+    if (directorTargetBlocked(target)) return reportError(new Error('This Story already has conflicting Director work.'));
+    setDirectorPending(target, true);
+    setSaveState('Director extending Story…');
+    startDirectorActivity();
+    flushPendingSaves().then(function () {
+      return directorRequest({
+        storyId: storyId, operation: 'extend_story', model: modelId,
+        sceneCount: sceneCount, instruction: instruction
+      });
+    }).then(function (payload) {
+      return applyDirectorResultToVisibleStory({
+        storyId: storyId, operation: 'extend_story', jobId: payload.jobId
+      }).then(function () { return consumeDirectorJob(payload.jobId); });
+    }).then(function () {
+      setSaveState('Saved');
+      return refreshLibrary();
+    }).catch(function (err) {
+      if (!directorWasStopped(err)) reportError(err);
+    }).finally(function () {
+      setDirectorPending(target, false);
+      finishDirectorActivity();
+    });
+  }
+
+  function runSceneCreation() {
+    var state = storyState.director.sceneCreation;
+    if (!state) return;
+    var instruction = el('storyboard-scene-creation-instruction').value.trim();
+    var count = Number(el('storyboard-scene-creation-count').value);
+    if (state.mode === 'extend' && (!Number.isInteger(count) || count < 1)) {
+      el('storyboard-scene-creation-count').setCustomValidity('Enter a positive whole number.');
+      el('storyboard-scene-creation-count').reportValidity();
+      return;
+    }
+    el('storyboard-scene-creation-count').setCustomValidity('');
+    closeSceneCreation();
+    if (state.mode === 'extend') extendStory(count, instruction);
+    else insertDirectorSceneAfter(state.sceneId, instruction);
   }
 
   function duplicateScene(sceneId) {
@@ -5699,6 +5775,8 @@
     else if (action === 'down') reorderScene(sceneId, 1);
     else if (action === 'duplicate') duplicateScene(sceneId);
     else if (action === 'insert-director') insertDirectorSceneAfter(sceneId);
+    else if (action === 'insert-director-custom') openSceneCreation('insert', sceneId);
+    else if (action === 'extend-story') openSceneCreation('extend');
     else if (action === 'delete') deleteScene(sceneId);
   }
 
@@ -6001,6 +6079,9 @@
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
     el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
     el('storyboard-director-tools-btn').onclick = openDirectorTools;
+    el('storyboard-scene-creation-close').onclick = closeSceneCreation;
+    el('storyboard-scene-creation-cancel').onclick = closeSceneCreation;
+    el('storyboard-scene-creation-run').onclick = runSceneCreation;
     el('storyboard-director-tools-close').onclick = closeDirectorTools;
     el('storyboard-director-tools-cancel').onclick = closeDirectorTools;
     el('storyboard-director-tools-preset').onchange = function () {
@@ -6068,6 +6149,7 @@
         return;
       }
       if (event.target.closest('[data-scene-progress-add]')) addScene();
+      if (event.target.closest('[data-extend-story]')) openSceneCreation('extend');
     });
     sceneProgression.addEventListener('contextmenu', function (event) {
       var card = event.target.closest('.storyboard-scene-progress-card[data-scene-id]');

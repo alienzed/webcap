@@ -1606,33 +1606,19 @@ def test_candidate_sorting_reuses_existing_scores_and_preserves_rows():
     assert "candidateSort = 'rating';" in script
 
 
-def test_browser_test_batch_is_navigation_independent_and_uses_existing_queues():
-    script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
-    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
-    css = (ROOT / "tool" / "css" / "styles.css").read_text(encoding="utf-8")
-    assert "function runTestBatch(count)" in script
-    assert "function testBatchPoll(batch)" in script
-    assert "function testBatchEvaluateSession(batch, session)" in script
-    assert "function stopTestBatch()" in script
-    assert "requestForFolder(batch.folder, 'test_enqueue', sessionCriteria)" in script
-    assert "requestForFolder(batch.folder, 'test_open_session', { session: session })" in script
-    assert "requestForFolder(batch.folder, 'test_vision_update'" in script
-    assert "askVlForTestPreview(batch.folder, session, file, batch.vlModel, question" in script
-    assert "askVlForTestPreview(folder, session, file, model, testVl.question" in script
-    assert "new Set()" in script
-    assert "settings: requestSettings" in script
-    assert "testBatchRecalculate(batch);" in script
-    assert "testBatchSort = sort.dataset.testBatchSort" in script
-    assert "batch.active = false;" in script
-    assert "if (testBatchTimer) clearTimeout(testBatchTimer);" in script
-    assert "stopTestBatch();" not in script.split("function closePane()", 1)[1].split("function populateControls", 1)[0]
-    assert "stopTestBatch();" not in script.split("function openPane()", 1)[1].split("function startRun()", 1)[0]
-    assert "test-generations-batch-divider" in html
-    assert 'id="test-generations-batch-modal"' in html
-    assert 'id="test-generations-batch-summary"' in html
-    assert ".test-generations-batch-summary" in css
-    assert "window.localStorage" not in script
-
+def test_repeat_has_no_separate_batch_lifecycle():
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    backend = (ROOT / "tool/server/epoch_test_bench.py").read_text(encoding="utf-8")
+    assert "criteria.repeat = repeat;" in script
+    assert "criteria.autoVl = autoVl;" in script
+    assert "def enqueue_repeated(folder_path, criteria):" in backend
+    assert 'id="test-generations-inline-count"' in html
+    assert 'id="test-generations-inline-auto-vl"' in html
+    assert "runTestBatch(" not in script
+    assert "refreshServerTestBatches(" not in script
+    assert 'id="test-generations-batch-modal"' not in html
+    assert not (ROOT / "tool/server/test_batch.py").exists()
 
 def test_candidate_vl_aggregates_use_saved_scores_not_selected_session():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")

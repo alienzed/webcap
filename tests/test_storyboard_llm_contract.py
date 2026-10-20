@@ -194,7 +194,7 @@ def test_insert_scene_can_use_optional_direction():
     request = storyboard_llm_contract.build_request(
         _story(), "scene-1", "insert_scene", instruction="Introduce a new employee."
     )
-    assert "[USER DIRECTION]\\nIntroduce a new employee." in request["prompt"]
+    assert "[USER DIRECTION]\nIntroduce a new employee." in request["prompt"]
 
 
 def test_extend_story_preserves_distinction_from_redevelopment():
@@ -204,7 +204,7 @@ def test_extend_story_preserves_distinction_from_redevelopment():
     assert request["operation"] == "extend_story"
     assert "Append exactly 3 new Scenes" in request["prompt"]
     assert "[EXISTING SCENE OUTLINE]" in request["prompt"]
-    assert "[USER DIRECTION]\\nDifferent cubicle vignettes." in request["prompt"]
+    assert "[USER DIRECTION]\nDifferent cubicle vignettes." in request["prompt"]
     assert "new Scenes as JSON" in request["prompt"]
 
 

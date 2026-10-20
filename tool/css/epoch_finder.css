@@ -408,3 +408,10 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-info-actions button{font-size:11px}
 #test-generations-files .test-generations-staged-copy{cursor:pointer}
 @media(max-width:800px){.epoch-info-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))}}
+
+/* Preserve original session gallery flex/scroll behavior inside its switchable pane. */
+#test-generations-session-surface{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+#test-generations-session-surface.hidden{display:none}
+#test-generations-epoch-info{flex:1 1 auto;min-height:0;overflow-y:auto}
+#run-analytics-report-surface.hidden{display:none!important}
+#run-analytics-epoch-info.hidden{display:none!important}

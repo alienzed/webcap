@@ -104,3 +104,29 @@ def test_candidates_curve_lists_available_queue_and_history_runs_without_saved_e
     assert [(run["folder"], run["jobId"]) for run in result] == [
         ("sets/subject", "run-live"), ("sets/subject", "run-old"),
     ]
+
+
+def test_campaign_run_discovery_uses_recorded_training_sequence(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "sets/bikini")
+    monkeypatch.setattr(epoch_finder, "passive_status_snapshot", lambda: ({
+        "ok": True, "jobs": [{"id": "job-12", "folder": "sets/bikini",
+                             "runName": "Run train", "sequence": "012"}],
+    }, 200))
+    monkeypatch.setattr(epoch_finder, "all_history_payload", lambda **kwargs: {"jobs": []})
+    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot", lambda *_: (
+        "/training/12", {"stages": "h3", "runName": "Run train", "sequence": "012"},
+    ))
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key", lambda _: SimpleNamespace(
+        PROFILE_ID="minimax_h3", STAGING_KEY="h3",
+    ))
+    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda *_: "/training/12")
+    monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run", lambda *_: [
+        {"epoch": 50, "status": "available"},
+    ])
+    runs = epoch_finder._runs("unused")
+    assert len(runs) == 1
+    assert runs[0]["runSequence"] == "012"
+    assert runs[0]["runName"] == "Run train"
+    assert runs[0]["epochs"] == [50]

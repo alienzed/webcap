@@ -130,3 +130,59 @@ def test_mixed_assessment_pairs_schema_assist_with_existing_vision(isolated):
     assert model_lab._attempt_key("set_vocabulary_synthesis", director()["modelRef"]) in planned
     assert model_lab._attempt_key("language_synthesis", director()["modelRef"]) not in planned
     assert len(planned) == 6  # 2 Vision, 2 Set Schema Assist, Scene JSON and thinking
+
+
+@pytest.mark.parametrize("text,finish,expected", [
+    ("<think>Internal reasoning leaked</think>", "stop", "leakage"),
+    ("\\ufffd\\ufffd\\ufffd broken", "stop", "garbled"),
+    ("", "stop", "empty"),
+])
+def test_actual_scene_output_pathologies_are_classified(monkeypatch, text, finish, expected):
+    run = model_lab._new_run_payload({"directorModels": [director()]})
+    monkeypatch.setattr(llm_runner, "job_status", lambda _job, consume=False: {
+        "status": "completed", "result": {
+            "text": text, "finishReason": finish, "usage": {"completion_tokens": 64},
+        },
+    })
+    attempt = model_lab._probe_job(
+        run, kind="director_scene_plan_2048", role="director",
+        model_ref=director()["modelRef"], enqueue=lambda: {"jobId": "job"},
+    )
+    assert attempt["status"] == "failed"
+    assert attempt["failureKind"] == expected
+
+
+def test_reasoning_aware_visible_output_count_is_not_full_completion_usage(monkeypatch):
+    run = model_lab._new_run_payload({"directorModels": [director()]})
+    import json
+    scenes = [
+        {"title": "Scene " + str(i), "summary": "Scene intent",
+         "prompt": " ".join(["Specific visual detail"] * 30) + " " + str(i),
+         "suggestedDurationSeconds": 8}
+        for i in range(8)
+    ]
+    monkeypatch.setattr(llm_runner, "job_status", lambda _job, consume=False: {
+        "status": "completed", "result": {
+            "text": json.dumps({"scenes": scenes}), "reasoning": "separate reasoning",
+            "finishReason": "stop",
+            "usage": {
+                "completion_tokens": 1234,
+                "completion_tokens_details": {"reasoning_tokens": 234},
+            },
+        },
+    })
+    attempt = model_lab._probe_job(
+        run, kind="director_scene_plan_2048", role="director",
+        model_ref=director()["modelRef"], enqueue=lambda: {"jobId": "job"},
+    )
+    assert attempt["status"] == "completed"
+    assert attempt["result"]["verifiedOutputTokens"] == 1000
+    assert attempt["result"]["visibleOutputWords"] >= 640
+
+
+def test_new_model_pathology_warning_does_not_require_legacy_calibration():
+    signal = storyboard_llm_runtime._assessment_signal("local::director", {
+        "_observedPathologies": {"values": ["looping"]},
+    })
+    assert signal["seriousWarning"] is True
+    assert signal["pathologies"] == ["looping"]

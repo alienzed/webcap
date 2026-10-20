@@ -1497,3 +1497,23 @@ def test_storyboard_take_mutations_preserve_video_elements():
 
     assert "syncSceneProgressionCard(sceneId);" in storyboard.split("function applyTakeMutation(", 1)[1].split("  function ", 1)[0]
     assert "renderStoryReadiness();" in storyboard.split("function applyTakeMutation(", 1)[1].split("  function ", 1)[0]
+
+
+def test_storyboard_queue_context_and_director_text_model_contract():
+    from pathlib import Path
+    root = ROOT
+    app = (root / "tool/server/app.py").read_text(encoding="utf-8")
+    inference = (root / "tool/server/inference_runner.py").read_text(encoding="utf-8")
+    llm = (root / "tool/server/llm_runner.py").read_text(encoding="utf-8")
+    activity = (root / "tool/js/activity_monitor.js").read_text(encoding="utf-8")
+    queue = (root / "tool/js/inference_queue.js").read_text(encoding="utf-8")
+    storyboard = (root / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    assert '"storyTitle": str(story.get("title") or "Untitled Story")' in app
+    assert '"sceneNumber": scene_number' in app
+    assert '"storyTitle": str(story.get("title") or "Untitled Story")' in inference
+    assert '"sceneNumber": scene_order.index(scene_id) + 1 if scene_id in scene_order else 0' in inference
+    assert '"storyTitle": str(context.get("storyTitle") or "")' in llm
+    assert 'if (job.storyTitle) parts.push(job.storyTitle);' in queue
+    assert "item.kind === 'storyboard' ? activityDetail(item)" in activity
+    assert 'if (item.storyTitle) parts.push(item.storyTitle);' in activity
+    assert "modalities.indexOf('image') === -1" in storyboard

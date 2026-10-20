@@ -197,7 +197,7 @@ Create exactly one new Scene between two existing Scenes.
 
 Director receives the complete concept plus the Scene before and Scene after as relationship/contrast context.
 
-The inserted Scene is **not required to bridge them narratively**. It may continue, contrast, vary, repeat a format, jump, or remain relatively independent as the concept warrants.
+The inserted Scene is **not required to bridge them narratively**. It may continue, contrast, vary, repeat a format with fresh content, jump, or remain relatively independent as the concept warrants. For independent vignettes, vary people, action, or staging instead of echoing an adjacent Scene; recurring characters remain appropriate when the concept calls for them.
 
 WebCap inserts the returned Scene at that exact gap.
 

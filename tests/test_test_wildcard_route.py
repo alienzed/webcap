@@ -58,6 +58,8 @@ def test_test_wildcard_route_counts_only_nonempty_captions(tmp_path, monkeypatch
     (set_root / "one.txt").write_text("subject standing", encoding="utf-8")
     (set_root / "two.jpg").write_bytes(b"image")
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members",
+                        lambda folder, job_id: {"one.png", "two.jpg"})
     monkeypatch.setattr(
         app_module,
         "enqueue_llm",
@@ -67,6 +69,7 @@ def test_test_wildcard_route_counts_only_nonempty_captions(tmp_path, monkeypatch
     client = app_module.app.test_client()
     response = client.post("/fs/test_generations/wildcard", json={
         "folder": "set",
+        "jobId": "run-1",
         "directorModel": "director.gguf",
     })
 
@@ -79,6 +82,8 @@ def test_test_wildcard_route_rejects_set_without_captions(tmp_path, monkeypatch)
     set_root.mkdir()
     (set_root / "one.png").write_bytes(b"image")
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members",
+                        lambda folder, job_id: {"one.png"})
 
     client = app_module.app.test_client()
     response = client.post("/fs/test_generations/wildcard", json={

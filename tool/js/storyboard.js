@@ -3746,6 +3746,10 @@
 
   function syncStoryLorasIntoScenes() {
     var storyLoras = storyLorasFromUi();
+    var status = el('storyboard-story-lora-status');
+    if (status && storyState.generationCapabilities.available) {
+      status.textContent = storyLoras.length ? 'Applied to every Scene by default.' : 'No Story-wide LoRAs.';
+    }
     var storyNames = storyLoras.map(function (item) { return item.name; });
     Array.prototype.forEach.call(document.querySelectorAll('.storyboard-scene[data-scene-id]'), function (root) {
       var list = root.querySelector('[data-story-lora-inherited-list]');

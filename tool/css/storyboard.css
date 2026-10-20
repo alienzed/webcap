@@ -1432,13 +1432,13 @@
 
 .storyboard-lora-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px auto;
+  grid-template-columns: minmax(0, 1fr) 34px 72px 34px;
   gap: 5px;
+  align-items: center;
 }
 
 .storyboard-lora-row-story {
-  grid-template-columns: auto minmax(0, 1fr) 72px auto;
-  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) 34px 72px 34px;
 }
 
 .storyboard-lora-story-enabled {
@@ -1450,7 +1450,7 @@
 }
 
 .storyboard-lora-row select,
-.storyboard-lora-row input {
+.storyboard-lora-row input[type="number"] {
   min-width: 0;
   min-height: 34px;
   border: 1px solid var(--border);
@@ -1460,6 +1460,12 @@
   padding: 7px;
   font: inherit;
   font-size: 13px;
+}
+
+.storyboard-lora-row > .review-captions-btn {
+  width: 34px;
+  min-width: 0;
+  padding: 0;
 }
 
 .storyboard-lora-subsection {
@@ -2920,6 +2926,7 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 .storyboard-scene-defaults-drawer > summary {
+  order: 2;
   min-height: 44px;
   padding: 9px 22px;
 }
@@ -2931,10 +2938,12 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 .storyboard-scene-defaults-drawer[open] > summary {
+  border-top: 1px solid var(--border);
   border-bottom: 0;
 }
 
 .storyboard-scene-defaults-drawer > .storyboard-scene-defaults-body {
+  order: 1;
   position: static;
   min-height: 0;
   max-height: min(52vh, 520px);
@@ -2942,10 +2951,9 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
   overscroll-behavior: contain;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 10px;
   padding: 14px 22px 18px;
   border: 0;
-  border-top: 1px solid var(--border);
   border-radius: 0;
   background: var(--panel);
   box-shadow: none;
@@ -2977,7 +2985,27 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 
 .storyboard-scene-defaults-body {
   grid-template-columns: 1fr;
-  gap: 14px;
+  gap: 10px;
+}
+
+.storyboard-director-lora-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.storyboard-director-lora-controls > .storyboard-develop-individual {
+  margin: 0;
+}
+
+.storyboard-director-lora-controls > .review-captions-btn {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.storyboard-scene-defaults-body > #storyboard-director-lora-status:empty {
+  display: none;
 }
 
 .storyboard-story-lora-section-body {
@@ -2996,14 +3024,15 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 .storyboard-scene-defaults-subheading {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px;
 }
 
 .storyboard-scene-defaults-subheading > strong {
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .storyboard-scene-defaults-subheading > span {
@@ -3013,7 +3042,8 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 .storyboard-scene-defaults-subheading > .review-captions-btn {
-  margin-left: auto;
+  width: auto;
+  margin-left: 0;
 }
 
 .storyboard-scene-defaults-drawer #storyboard-story-lora-status {

@@ -538,9 +538,9 @@
 
     // Only differences and unresolved observations demand immediate attention.
     var visible = '';
-    if (mismatches.length) visible += '<strong>Differences</strong>' + testVlComparisonTable(mismatches, groups, entry);
-    if (nearMatches.length) visible += '<strong>Related colors · partial credit</strong>' + testVlComparisonTable(nearMatches, groups, entry);
-    if (unclear.length) visible += '<strong>Unclear</strong>' + testVlComparisonTable(unclear, groups, entry);
+    if (mismatches.length) visible += '<div class="test-generations-vl-comparison-group"><strong>Differences</strong>' + testVlComparisonTable(mismatches, groups, entry) + '</div>';
+    if (nearMatches.length) visible += '<div class="test-generations-vl-comparison-group"><strong>Related colors · partial credit</strong>' + testVlComparisonTable(nearMatches, groups, entry) + '</div>';
+    if (unclear.length) visible += '<div class="test-generations-vl-comparison-group"><strong>Unclear</strong>' + testVlComparisonTable(unclear, groups, entry) + '</div>';
     if (groups.length && !mismatches.length && !nearMatches.length && !unclear.length) visible = '<p>No differences reported.</p>';
     comparison.innerHTML = visible;
     comparison.classList.toggle('hidden', !groups.length);

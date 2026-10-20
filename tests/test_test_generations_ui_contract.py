@@ -1275,6 +1275,24 @@ def test_test_vl_results_are_comparison_first_with_collapsed_diagnostics():
     assert ".test-generations-vl-table" in css
 
 
+def test_test_vl_comparison_heading_and_table_share_one_grid_item():
+    script = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
+    # The grid must position entire sections, not headings in one column and
+    # their tables in the next. Cover all three independently displayed groups.
+    for condition, heading, rows in (
+        ("mismatches", "Differences", "mismatches"),
+        ("nearMatches", "Related colors · partial credit", "nearMatches"),
+        ("unclear", "Unclear", "unclear"),
+    ):
+        expected = (
+            f"""if ({condition}.length) visible += '<div class="test-generations-vl-comparison-group"><strong>{heading}</strong>' """
+            f"+ testVlComparisonTable({rows}, groups, entry) + '</div>';")
+        assert expected in script
+    assert ".test-generations-vl-comparison { display:grid;" in css
+    assert ".test-generations-vl-comparison-group { min-width:0; }" in css
+
+
 def test_test_vl_counting_overrides_remain_browser_memory_only():
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")

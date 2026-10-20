@@ -1298,6 +1298,9 @@ def command(folder_path, operation, criteria=None):
     if operation == "run_analytics_overview":
         from .run_analytics import overview
         return overview(folder_path)
+    if operation == "run_insights_inventory":
+        from .run_analytics import insights_inventory
+        return insights_inventory(folder_path)
     if operation == "run_insights_review":
         from .run_analytics import insights_review_batch
         return insights_review_batch(folder_path, criteria.get("excluded"))

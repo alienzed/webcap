@@ -311,7 +311,7 @@ def test_capability_summaries_do_not_expose_model_text(monkeypatch):
 def test_deep_assessment_freezes_depth_and_expanded_sample(monkeypatch):
     monkeypatch.setattr(model_lab, "_supported_media", lambda folder, values: list(values))
     files = ["{:02d}.jpg".format(i) for i in range(24)]
-    base = {"folder": "set", "files": files, "directorModels": [_director()]}
+    base = {"folder": "set", "files": files, "directorModels": [_director()], "visionModels": [_vision()]}
     quick = model_lab._new_run_payload(base)
     deep = model_lab._new_run_payload(dict(base, depth="deep", sampleCount=16))
     assert quick["depth"] == "quick"
@@ -385,3 +385,90 @@ def test_assessment_does_not_consider_historical_prose_structured_evidence():
     run = model_lab._new_run_payload({"directorModels": [_director()]})
     run["reused"] = {"director_writing|local::director.gguf|": {"runId": "previous", "attemptId": "a"}}
     assert model_lab._pending_probe_plan(run)["missing"] == 4
+
+
+def test_planned_work_counts_actual_probe_suite_and_reused_evidence():
+    run = model_lab._new_run_payload({"directorModels": [_director()], "depth": "deep"})
+    planned = model_lab._planned_probes(run)
+    assert len(planned) == 7  # thinking, four JSON tiers, two Schema Assist probes
+    run["reused"] = {
+        planned[0]: {"runId": "earlier", "attemptId": "a"},
+        planned[1]: {"runId": "earlier", "attemptId": "b"},
+    }
+    run["previousFailures"] = {planned[2]: True}
+    work = model_lab._assessment_work(run)
+    assert work == {
+        "planned": 7, "completed": 2, "reused": 2, "skipped": 0,
+        "failed": 0, "deferred": 1, "running": 0, "remaining": 5, "resolved": 2,
+    }
+    assert model_lab._pending_probe_plan(run) == {"missing": 4, "retry": 1, "total": 5}
+
+
+def test_attempts_and_retries_never_inflate_assessment_denominator():
+    run = model_lab._new_run_payload({"directorModels": [_director()]})
+    kind, model_ref = "director_scene_plan_2048", "local::director.gguf"
+    run["attempts"] = [
+        {"id": "initial", "kind": kind, "modelRef": model_ref, "status": "failed"},
+        {"id": "retry", "kind": kind, "modelRef": model_ref, "status": "running", "retry": True},
+        {"id": "unexpected", "kind": "director_model_error",
+         "modelRef": model_ref, "status": "failed"},
+    ]
+    work = model_lab._assessment_work(run)
+    assert work["planned"] == 4
+    assert work["running"] == 1
+    assert work["remaining"] == 4
+    run["attempts"][1]["status"] = "completed"
+    work = model_lab._assessment_work(run)
+    assert work["completed"] == 1
+    assert work["remaining"] == 3
+    assert work["resolved"] == 1
+    run["attempts"][1]["status"] = "failed"
+    work = model_lab._assessment_work(run)
+    assert work["failed"] == 1
+    assert work["resolved"] == 1  # Final failed retry is terminal work, not a success.
+
+
+def test_assessment_skips_and_resume_have_real_determinate_progress():
+    run = model_lab._new_run_payload({"directorModels": [_director()]})
+    run["attempts"] = [
+        {"id": "s1", "kind": "language_synthesis",
+         "modelRef": "local::director.gguf", "status": "completed"},
+        {"id": "s2", "kind": "language_challenge",
+         "modelRef": "local::director.gguf", "status": "skipped"},
+        {"id": "s3", "kind": "director_scene_plan_2048",
+         "modelRef": "local::director.gguf", "status": "interrupted"},
+    ]
+    model_lab._write_run(run)
+    restored = model_lab.get_run(run["id"])
+    assert restored["work"]["planned"] == 4
+    assert restored["work"]["completed"] == 1
+    assert restored["work"]["skipped"] == 1
+    assert restored["work"]["remaining"] == 2
+    assert restored["work"]["resolved"] == 2
+
+
+def test_vision_progress_plans_only_supported_probes_for_selected_groups(monkeypatch):
+    monkeypatch.setattr(model_lab, "_supported_media", lambda folder, values: list(values))
+    basic = model_lab._new_run_payload({
+        "folder": "set", "files": ["a.jpg", "b.jpg"], "visionModels": [_vision()],
+    })
+    assert model_lab._assessment_work(basic)["planned"] == 2
+    guided = model_lab._new_run_payload({
+        "folder": "set", "files": ["a.jpg", "b.jpg"],
+        "visionModels": [_vision()], "groups": [{"group": "Viewpoint", "terms": ["front"]}],
+    })
+    assert model_lab._assessment_work(guided)["planned"] == 4
+
+
+def test_dependent_reference_probes_included_in_expected_total(monkeypatch):
+    monkeypatch.setattr(model_lab, "_supported_media", lambda folder, values: list(values))
+    run = model_lab._new_run_payload({
+        "folder": "set", "files": ["a.jpg", "b.jpg"],
+        "visionModels": [_vision()], "directorModels": [_director()],
+        "referenceVisionRef": "local::vision.gguf",
+        "referenceDirectorRef": "local::director.gguf",
+    })
+    keys = model_lab._planned_probes(run)
+    assert len(keys) == 10  # two Vision + four Director + two pairs of reference probes
+    assert "set_vocabulary_challenge|local::director.gguf|" in keys
+    assert "vision:local::vision.gguf:vocab_challenge|local::director.gguf|" in keys

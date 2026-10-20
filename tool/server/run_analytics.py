@@ -504,3 +504,190 @@ def normalize_director_response(payload):
     if any(not isinstance(payload.get(field), str) for field in fields):
         raise ValueError("Director Analytics response is missing a required section.")
     return {field: payload[field][:3000] for field in fields}
+
+
+def overview(folder_path):
+    """Read-only Set-wide Testing Lab summary. No inference, filesystem writes, or checkpoint scans.
+
+    Scores are grouped by exact frozen Test protocol, then by recorded run/epoch.
+    Campaign evaluations are counted separately and never pooled with Test VL.
+    """
+    warnings = []
+    folder = _folder_key(folder_path)
+    sessions = bench._session_directories(folder_path)
+    cohorts = {}
+    epochs = {}
+    seen_runs = set()
+    totals = {
+        "sessions": 0, "testPreviews": 0, "campaignPreviews": 0,
+        "ratedPreviews": 0, "vlReviewedPreviews": 0, "vlJudgments": 0,
+        "unlinkedPreviews": 0, "campaigns": 0,
+    }
+    recent = []
+
+    def epoch_record(job_id, epoch, name=""):
+        key = (job_id, epoch)
+        if key not in epochs:
+            epochs[key] = {
+                "jobId": job_id, "epoch": epoch, "runName": name,
+                "testCount": 0, "campaignCount": 0, "ratedCount": 0,
+                "vlReviewedCount": 0, "sessions": set(),
+            }
+        elif name and not epochs[key]["runName"]:
+            epochs[key]["runName"] = name
+        return epochs[key]
+
+    for directory in sessions:
+        stored = bench._read_status(directory) or {}
+        if stored.get("campaignStaging"):
+            continue
+        totals["sessions"] += 1
+        started = stored.get("startedAt")
+        recent.append({
+            "name": directory.name, "startedAt": started if isinstance(started, (int, float)) else 0,
+            "status": str(stored.get("status") or ""),
+            "results": len(stored.get("results") or []),
+        })
+        ratings = bench._session_rating_map(directory)
+        vision = bench._session_vision_state(directory)
+        by_media = vision.get("byMedia") if isinstance(vision.get("byMedia"), dict) else {}
+        disabled = set(vision.get("disabledGroups") or [])
+        for result in stored.get("results") or []:
+            if not isinstance(result, dict):
+                continue
+            totals["testPreviews"] += 1
+            media = bench._result_media_file(result)
+            rated = media in ratings
+            if rated:
+                totals["ratedPreviews"] += 1
+            assessment = by_media.get(media)
+            assessment = assessment if isinstance(assessment, dict) else {}
+            ignored = set(assessment.get("ignoredGroups") or [])
+            judgments = []
+            for group in assessment.get("comparison") or []:
+                if not isinstance(group, dict) or group.get("id") in disabled | ignored:
+                    continue
+                outcome = group.get("result")
+                if outcome == "match":
+                    credit = 1.0
+                elif outcome == "mismatch":
+                    credit = bench._test_vl_partial_credit(group.get("expectedText"), group.get("selectedText"))
+                else:
+                    continue
+                judgments.append((group, float(credit)))
+            if judgments:
+                totals["vlReviewedPreviews"] += 1
+                totals["vlJudgments"] += len(judgments)
+            if result.get("kind") == "base":
+                continue
+            source = result.get("provenance") if isinstance(result.get("provenance"), dict) else {}
+            job_id = str(source.get("sourceJobId") or "").strip()
+            source_folder = str(source.get("sourceFolder") or "").replace("\\", "/").strip("/")
+            epoch = source.get("sourceEpoch")
+            if not job_id or source_folder != folder or type(epoch) is not int or epoch < 0:
+                totals["unlinkedPreviews"] += 1
+                continue
+            seen_runs.add(job_id)
+            name = str(source.get("sourceRunName") or "").strip()
+            entry = epoch_record(job_id, epoch, name)
+            entry["testCount"] += 1
+            entry["sessions"].add(directory.name)
+            if rated:
+                entry["ratedCount"] += 1
+            if judgments:
+                entry["vlReviewedCount"] += 1
+
+            signature = _cohort_key(stored, result, assessment, vision)
+            cohort = cohorts.setdefault(signature, {
+                "id": signature, "modelId": str(stored.get("modelId") or stored.get("model") or ""),
+                "strength": result.get("strength", (stored.get("settings") or {}).get("strength")),
+                "vlModelId": str(assessment.get("modelId") or ""),
+                "sessions": set(), "previews": 0, "ratedPreviews": 0,
+                "vlReviewedPreviews": 0, "vlJudgments": 0, "points": {}, "attributes": {},
+            })
+            cohort["sessions"].add(directory.name)
+            cohort["previews"] += 1
+            cohort["ratedPreviews"] += int(rated)
+            cohort["vlReviewedPreviews"] += int(bool(judgments))
+            cohort["vlJudgments"] += len(judgments)
+            point = cohort["points"].setdefault((job_id, epoch), {
+                "jobId": job_id, "epoch": epoch, "runName": name,
+                "previews": 0, "manualSum": 0, "manualCount": 0,
+                "vlSum": 0.0, "vlCount": 0, "vlReviewedPreviews": 0, "sessions": set(),
+            })
+            if name and not point["runName"]:
+                point["runName"] = name
+            point["previews"] += 1
+            point["sessions"].add(directory.name)
+            if rated:
+                point["manualSum"] += ratings[media]
+                point["manualCount"] += 1
+            point["vlReviewedPreviews"] += int(bool(judgments))
+            for group, credit in judgments:
+                point["vlSum"] += credit
+                point["vlCount"] += 1
+                identity = (str(group.get("id") or ""), str(group.get("expectedText") or ""))
+                attribute = cohort["attributes"].setdefault(identity, {
+                    "label": str(group.get("label") or group.get("name") or group.get("id") or "Attribute")[:100],
+                    "matched": 0.0, "count": 0,
+                })
+                attribute["matched"] += credit
+                attribute["count"] += 1
+
+    campaigns = _campaigns(folder_path, warnings)
+    totals["campaigns"] = len(campaigns)
+    for campaign in campaigns:
+        candidate_map = campaign.get("candidateMap") or {}
+        for unit in campaign.get("units") or []:
+            if not isinstance(unit, dict) or not (unit.get("frame") or unit.get("framePruned") or unit.get("captured")):
+                continue
+            totals["campaignPreviews"] += 1
+            identity = candidate_map.get(str(unit.get("epoch"))) if candidate_map else None
+            job_id = str((identity.get("jobId") if identity else campaign.get("jobId")) or "").strip()
+            epoch = identity.get("epoch") if identity else unit.get("epoch")
+            if not job_id or type(epoch) is not int or epoch < 0:
+                continue
+            seen_runs.add(job_id)
+            entry = epoch_record(job_id, epoch,
+                                 str((identity.get("runName") if identity else campaign.get("runName")) or ""))
+            entry["campaignCount"] += 1
+
+    groups = []
+    for cohort in cohorts.values():
+        points = []
+        for point in cohort["points"].values():
+            points.append({
+                "jobId": point["jobId"], "epoch": point["epoch"],
+                "runName": point["runName"], "previews": point["previews"],
+                "manual": point["manualSum"] / point["manualCount"] if point["manualCount"] else None,
+                "manualCount": point["manualCount"],
+                "testVl": point["vlSum"] / point["vlCount"] if point["vlCount"] else None,
+                "testVlCount": point["vlCount"],
+                "vlReviewedPreviews": point["vlReviewedPreviews"],
+                "sessions": sorted(point["sessions"]),
+            })
+        attrs = [{"label": a["label"], "matched": a["matched"] / a["count"],
+                  "judgments": a["count"]} for a in cohort["attributes"].values() if a["count"]]
+        groups.append({
+            "id": cohort["id"], "modelId": cohort["modelId"],
+            "strength": cohort["strength"], "vlModelId": cohort["vlModelId"],
+            "sessions": len(cohort["sessions"]), "previews": cohort["previews"],
+            "ratedPreviews": cohort["ratedPreviews"],
+            "vlReviewedPreviews": cohort["vlReviewedPreviews"],
+            "vlJudgments": cohort["vlJudgments"],
+            "points": sorted(points, key=lambda p: (p["jobId"], p["epoch"])),
+            "attributes": sorted(attrs, key=lambda a: (a["matched"], -a["judgments"], a["label"])),
+        })
+    # Choose the most measured comparable group, not the first run or six arbitrary runs.
+    groups.sort(key=lambda g: (-(g["ratedPreviews"] + g["vlReviewedPreviews"]),
+                               -g["previews"], g["id"]))
+    indexed = sorted((dict(row, sessions=sorted(row["sessions"])) for row in epochs.values()),
+                     key=lambda x: (-(x["testCount"] + x["campaignCount"]), x["jobId"], x["epoch"]))
+    totals["runsWithResults"] = len(seen_runs)
+    totals["epochsWithResults"] = len(indexed)
+    totals["generatedPreviews"] = totals["testPreviews"] + totals["campaignPreviews"]
+    return {
+        "coverage": totals, "cohorts": groups, "epochs": indexed,
+        "recentSessions": sorted(recent, key=lambda x: (-x["startedAt"], x["name"]))[:8],
+        "warnings": warnings,
+    }

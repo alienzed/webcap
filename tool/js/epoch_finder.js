@@ -261,18 +261,34 @@
     var run = String(source.runName || (source.runSequence ? 'Run ' + source.runSequence : source.jobId));
     return run + ' · Epoch ' + source.epoch;
   }
+  function runIdentity(run) {
+    var sequence = String(run.runSequence || '').trim().replace(/^0+(?=\d)/, '');
+    var name = String(run.runName || '').trim();
+    var identity = sequence ? 'Run ' + sequence : 'Run ' + String(run.jobId).slice(-8);
+    if (name && name !== identity) identity += ' · ' + name;
+    return identity;
+  }
+  function runDetails(run) {
+    var summary = run.runSummary || {};
+    var saved = Array.isArray(run.epochs) && run.epochs.length ? Math.max.apply(null, run.epochs) : 0;
+    var current = Number(run.currentEpoch) || 0;
+    var planned = Number(run.plannedEpochs || summary.epochs) || 0;
+    var observed = Math.max(saved, current);
+    var parts = [String(run.stage || run.modelId || '').toUpperCase(), run.epochs.length + ' checkpoints'];
+    if (observed > 0) parts.push('E' + observed + (planned > 0 ? '/' + planned : ''));
+    if (summary.lr != null && Number.isFinite(Number(summary.lr))) parts.push('LR ' + Number(summary.lr).toExponential(1).replace('.0e', 'e').replace('e+', 'e'));
+    if (Number(summary.rank) > 0) parts.push('Rank ' + Number(summary.rank));
+    return parts.filter(Boolean).join(' · ');
+  }
   function drawRuns() {
     var model = String(window.getWorkingModelProfileId() || '');
     var options = runs.filter(function (run) { return run.modelId === model; });
-    els('run-choices').innerHTML = options.length ? options.map(function (run,index) {
+    els('run-choices').innerHTML = options.length ? options.map(function (run) {
       var chosen = runEpochSelections[run.jobId] instanceof Set;
-      var identity = run.runName || '';
-      if (run.runSequence) identity += (identity ? ' · ' : '') + 'Run ' + run.runSequence;
-      if (!identity) identity = 'Run ' + String(run.jobId).slice(-8);
-      var label = [run.setName, identity].filter(Boolean).join(' · ');
+      var label = [run.setName, runIdentity(run)].filter(Boolean).join(' · ');
       return '<label class="epoch-finder-run-choice"><input type="checkbox" data-run-id="' + escape(run.jobId) +
         '"' + (chosen ? ' checked' : '') + '><span><strong>' + escape(label) + '</strong>' +
-        '<small>' + escape(run.stage || run.modelId) + ' · ' + run.epochs.length + ' checkpoints</small></span></label>';
+        '<small>' + escape(runDetails(run)) + '</small></span></label>';
     }).join('') : '<p class="epoch-finder-muted">No available saved checkpoints for this model.</p>';
     var selected = selectedRunEntries();
     els('run').value = selected.length ? selected[0].jobId : '';
@@ -285,7 +301,7 @@
     host.innerHTML = selected.map(function (choice) {
       var run = runs.find(function (item) { return item.jobId === choice.jobId; });
       return '<section class="epoch-finder-run-epochs" data-epoch-run="' + escape(run.jobId) + '">' +
-        '<strong>' + escape(run.runName || run.runSequence || run.jobId) + ' · ' + choice.epochs.length + '/' + run.epochs.length + ' selected</strong>' +
+        '<strong>' + escape(runIdentity(run)) + ' · ' + choice.epochs.length + '/' + run.epochs.length + ' selected</strong>' +
         '<div class="epoch-finder-epoch-timeline">' + run.epochs.map(function (epoch) {
           return '<button type="button" class="epoch-finder-epoch-tick' + (runEpochSelections[run.jobId].has(epoch) ? ' is-selected' : '') +
             '" data-epoch-choice="' + epoch + '" aria-pressed="' + runEpochSelections[run.jobId].has(epoch) + '"> ' + epoch + '</button>';

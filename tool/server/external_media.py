@@ -106,7 +106,7 @@ def _discover(snapshot):
             try:
                 cache = _read_cache(directory)
             except (OSError, ValueError) as exc:
-                _warning(snapshot, exc)
+                _warning(snapshot, "Could not read " + str(directory / "media_metadata.json") + ": " + str(exc))
                 cache = {}
             batch = []
             for name in names:

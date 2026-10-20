@@ -415,3 +415,32 @@ def test_insights_ai_is_explicit_and_keeps_existing_director_path():
     assert 'director_contract(facts)' in app
     assert 'insights_director_contract(facts)' in app
     assert "test_enqueue" not in js
+
+
+def test_insights_reviewable_count_requires_available_unrated_linked_test_media(tmp_path, monkeypatch):
+    session = tmp_path / "test-session"
+    session.mkdir()
+    (session / "review.png").touch()
+    (session / "rated.png").touch()
+    (session / "base.png").touch()
+
+    def render(name, folder="set/a", kind="lora"):
+        return {"kind": kind, "mediaFile": name, "provenance": {
+            "sourceJobId": "run-a", "sourceFolder": folder, "sourceEpoch": 50}}
+    status = {"sourcePrompt": "sample", "results": [
+        render("review.png"), render("rated.png"), render("missing.png"),
+        render("base.png", kind="base"), render("unlinked.png", folder="elsewhere")]}
+
+    monkeypatch.setattr(analytics, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(analytics.bench, "_session_directories", lambda _: [session])
+    monkeypatch.setattr(analytics.bench, "_read_status", lambda _: status)
+    monkeypatch.setattr(analytics.bench, "_session_rating_map", lambda _: {"rated.png": 5})
+    monkeypatch.setattr(analytics.bench, "_session_vision_state", lambda _: {})
+    monkeypatch.setattr(analytics, "_campaigns", lambda *_: [])
+
+    evidence = analytics.overview(tmp_path)
+    assert evidence["coverage"]["reviewableUnrated"] == 1
+    assert evidence["epochs"][0]["testCount"] == 3
+    assert evidence["epochs"][0]["ratedCount"] == 1
+    assert evidence["epochs"][0]["ratingDistribution"]["5"] == 1
+    assert sum(evidence["epochs"][0]["ratingDistribution"].values()) == 1

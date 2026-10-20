@@ -219,9 +219,6 @@ def test_test_generation_archive_lifecycle_is_visible_and_clearable():
     assert "function forgetTrackedTestSessions(folder, sessionName)" in script
     assert "delete trackedTestInferenceSessions[key];" in script
     assert "webcap:test-sessions-cleared" in script
-    assert "function lastTrainingArchiveText()" in script
-    assert "state.lastTrainingArchive" in script
-    assert "last_training_archive" in folder_state
     assert 'operation == "test_clear_sessions"' in backend
     assert "def clear_sessions(folder_path):" in backend
 
@@ -1521,3 +1518,13 @@ def test_compact_test_launch_omits_redundant_summary():
     css = (ROOT / 'tool/css/styles.css').read_text(encoding='utf-8')
     assert 'test-generations-inline-launch-summary' not in html + script + css
     assert '.test-generations-launch-options .test-generations-actions {margin-left:auto;flex:0 0 auto;}' in css
+
+
+def test_candidates_header_count_is_next_to_candidate_label():
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
+    header = html.split('class="test-generations-library-heading-primary"', 1)[1].split('</div>', 1)[0]
+    assert '<strong>Candidates</strong>' in header
+    assert 'id="test-generations-files-count"' in header
+    assert '.test-generations-library-heading-primary > span' in css
+    assert 'lastTrainingArchiveText' not in (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")

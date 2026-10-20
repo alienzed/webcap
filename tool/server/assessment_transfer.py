@@ -57,6 +57,7 @@ def import_results(bundle, runtime_map):
         model["runtimeId"] = model["modelRef"].split("::", 1)[0]
         # Keep the source runtime name as evidence; the destination owns its label.
 
+    source_runs = {item.get("id"): item for item in bundle["runs"] if isinstance(item, dict)}
     runs, reports = [], []
     for original in bundle["runs"]:
         if not isinstance(original, dict) or original.get("version") != model_lab.RUN_VERSION:
@@ -67,6 +68,16 @@ def import_results(bundle, runtime_map):
         run = model_lab._copy(original)
         if not isinstance(run.get("attempts"), list):
             raise ValueError("Assessment run is missing probe evidence.")
+        # Read old bundles that carried run-ID references before portable
+        # exports were self-contained. Missing sources are real invalid evidence.
+        for key, source in (run.get("reused") or {}).items():
+            earlier = source_runs.get(source.get("runId"))
+            attempt = next((a for a in (earlier or {}).get("attempts") or []
+                            if a.get("id") == source.get("attemptId") and
+                            a.get("status") == "completed"), None)
+            if attempt is None:
+                raise ValueError("Assessment export lacks reused evidence: " + key)
+            run["attempts"].append(model_lab._copy(attempt))
         for field in ("visionModels", "directorModels", "allVisionModels", "allDirectorModels"):
             for model in run.get(field) or []:
                 remap_model(model)

@@ -471,13 +471,20 @@ function refreshUnifiedModelAssessment() {
           panel.appendChild(detail);
         });
       }
-      if (supportsDirector && evidence && evidence.status === 'completed') {
+      var judgeSource = capabilityRuns.find(function (saved) {
+        return saved.status === 'completed' && Object.keys((saved.models || {})[ref] || {}).some(function (kind) {
+          var item = saved.models[ref][kind];
+          return kind.indexOf('director_scene_plan_') === 0 &&
+            Number((item.counts || {}).completed || 0) > 0;
+        });
+      });
+      if (supportsDirector && judgeSource) {
         var judgeButton = document.createElement('button');
         judgeButton.type = 'button';
         judgeButton.className = 'review-captions-btn';
         judgeButton.textContent = qualityReview && qualityReview.status === 'completed' ? 'Reassess with LLM' : 'Assess with LLM';
         judgeButton.disabled = !!(qualityReview && qualityReview.status === 'running');
-        judgeButton.addEventListener('click', function () { diagnosticsAssessmentJudge(evidence.id, ref); });
+        judgeButton.addEventListener('click', function () { diagnosticsAssessmentJudge(judgeSource.id, ref); });
         panel.appendChild(judgeButton);
       }
       expanded.appendChild(panel);

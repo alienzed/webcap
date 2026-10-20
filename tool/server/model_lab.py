@@ -110,7 +110,7 @@ def _reconcile_interrupted(payload):
             review["error"] = "Quality review interrupted by restart; run it again explicitly."
             changed_reviews = True
     if changed_reviews:
-        _write(_run_path(run_id), payload)
+        _write_run(payload)
     if payload.get("status") != "running" or _active_record(run_id):
         return payload
 
@@ -129,7 +129,7 @@ def _reconcile_interrupted(payload):
     )
     changed = True
     if changed:
-        _write(_run_path(run_id), payload)
+        _write_run(payload)
     return payload
 
 

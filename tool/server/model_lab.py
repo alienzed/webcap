@@ -416,7 +416,7 @@ def _reusable_evidence(run):
                     or previous.get("mediaSignatures") != run.get("mediaSignatures")
                     or previous.get("groups") != run["groups"]
                     or previous.get("referenceVisionRef") != run.get("referenceVisionRef")
-                    or previous.get("referenceDirectorRef") != run.get("referenceDirectorRef")):
+):
                     continue
             key = _attempt_key(kind, ref, filename)
             if key in reused:
@@ -459,7 +459,6 @@ def _new_run_payload(config):
         # The Vision assessment has already gathered precisely the Sight
         # observations Schema Assist needs. Do not generate another fixture.
         reference_vision_ref = vision_models[0]["modelRef"]
-    reference_director_ref = str(config.get("referenceDirectorRef") or "").strip()
 
     all_vision = list(vision_models)
     reference_vision = config.get("referenceVision") if isinstance(config.get("referenceVision"), dict) else None
@@ -473,15 +472,6 @@ def _new_run_payload(config):
             raise ValueError("Reference Vision model details are required.")
 
     all_directors = list(director_models)
-    reference_director = config.get("referenceDirector") if isinstance(config.get("referenceDirector"), dict) else None
-    if reference_director_ref and not _model_by_ref(all_directors, reference_director_ref):
-        if reference_director:
-            model = _normalize_model(reference_director, "reference Director")
-            if model["modelRef"] != reference_director_ref:
-                raise ValueError("Reference Director model does not match referenceDirectorRef.")
-            all_directors.append(model)
-        else:
-            raise ValueError("Reference Director model details are required.")
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_id = stamp + "-" + secrets.token_hex(4)
@@ -502,7 +492,6 @@ def _new_run_payload(config):
         "allVisionModels": all_vision,
         "allDirectorModels": all_directors,
         "referenceVisionRef": reference_vision_ref,
-        "referenceDirectorRef": reference_director_ref,
         "options": {
             "sampleCount": len(sample_files),
             "activeTimeoutSeconds": DEFAULT_ACTIVE_TIMEOUT_SECONDS,
@@ -1144,23 +1133,6 @@ def _run_schema_pair(run, model_ref, analysis, existing_groups, prefix):
     )
 
 
-def _run_reference_director_for_vision(run, vision_model):
-    model_ref = str(run.get("referenceDirectorRef") or "")
-    if not model_ref:
-        return
-    open_records, vocabulary_records = _vision_records(run, vision_model["modelRef"])
-    prefix = "vision:{}:vocab".format(vision_model["modelRef"])
-    if len(open_records) < 2:
-        for kind in (prefix + "_synthesis", prefix + "_challenge"):
-            _skip_attempt(
-                run, kind, "director", model_ref, "",
-                "Not enough completed open Vision probes for this Vision model.",
-            )
-        return
-    analysis = _analysis_from_records(open_records, vocabulary_records, vision_model["modelRef"])
-    _run_schema_pair(run, model_ref, analysis, run["groups"], prefix)
-
-
 def _run_director_model(run, model):
     model_ref = model["modelRef"]
     from .llm_runner import enqueue
@@ -1276,24 +1248,6 @@ def _runner(run_id):
             if _active_stop_event(run_id).is_set():
                 raise ModelLabStopped("Model Lab stop requested.")
 
-        if run.get("referenceDirectorRef"):
-            for model in run.get("visionModels") or []:
-                try:
-                    _run_reference_director_for_vision(run, model)
-                except ModelLabStopped:
-                    raise
-                except Exception as exc:
-                    _failed_attempt(
-                        run,
-                        "vision_vocabulary_error",
-                        "director",
-                        run.get("referenceDirectorRef"),
-                        model["modelRef"],
-                        "Vision vocabulary evaluation failed: " + str(exc),
-                    )
-                if _active_stop_event(run_id).is_set():
-                    raise ModelLabStopped("Model Lab stop requested.")
-
         _persist_progress(run, phase="director", currentModelRef="", currentFile="", currentKind="")
         for model in run.get("directorModels") or []:
             try:
@@ -1367,13 +1321,6 @@ def _planned_probes(run):
             include("vision_open", ref, file_name)
             if run.get("groups"):
                 include("vision_group_aware", ref, file_name)
-
-    reference_director = str(run.get("referenceDirectorRef") or "")
-    if reference_director:
-        for vision_model in run.get("visionModels") or []:
-            prefix = "vision:" + vision_model["modelRef"] + ":vocab"
-            include(prefix + "_synthesis", reference_director)
-            include(prefix + "_challenge", reference_director)
 
     for model in run.get("directorModels") or []:
         ref = model["modelRef"]

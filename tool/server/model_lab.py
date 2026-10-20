@@ -869,7 +869,7 @@ def _run_vision_model(run, model):
         )
         if attempt.get("status") == "completed":
             consecutive_failures = 0
-        else:
+        elif attempt.get("status") != "deferred":
             consecutive_failures += 1
 
         if not run["groups"]:
@@ -907,7 +907,7 @@ def _run_vision_model(run, model):
         )
         if attempt.get("status") == "completed":
             consecutive_failures = 0
-        else:
+        elif attempt.get("status") != "deferred":
             consecutive_failures += 1
 
 
@@ -1113,9 +1113,28 @@ def _run_director_model(run, model):
     _run_schema_pair(run, model_ref, analysis, run["groups"], "set_vocabulary")
 
 
+def _retry_failed_model(run, model, role):
+    ref = model["modelRef"]
+    if not any(row["modelRef"] == ref for row in run.get("deferredRetries") or []):
+        return
+    run["retryPhase"] = True
+    _persist_progress(run, phase="retry", currentModelRef=ref, currentFile="", currentKind="")
+    try:
+        if role == "vision":
+            _run_vision_model(run, model)
+        else:
+            _run_director_model(run, model)
+    finally:
+        run.pop("retryPhase", None)
+        run["deferredRetries"] = [row for row in run.get("deferredRetries") or []
+                                  if row["modelRef"] != ref]
+
+
 def _runner(run_id):
     try:
         run = _read_raw(run_id)
+        run.pop("retryPhase", None)
+        run["deferredRetries"] = []
         run["status"] = "running"
         run["finishedAt"] = ""
         run["error"] = ""
@@ -1128,6 +1147,7 @@ def _runner(run_id):
             vision_refs.append(model["modelRef"])
             try:
                 _run_vision_model(run, model)
+                _retry_failed_model(run, model, "vision")
             except ModelLabStopped:
                 raise
             except Exception as exc:
@@ -1164,6 +1184,7 @@ def _runner(run_id):
         for model in run.get("directorModels") or []:
             try:
                 _run_director_model(run, model)
+                _retry_failed_model(run, model, "director")
             except ModelLabStopped:
                 raise
             except Exception as exc:
@@ -1177,21 +1198,6 @@ def _runner(run_id):
                 )
             if _active_stop_event(run_id).is_set():
                 raise ModelLabStopped("Model Lab stop requested.")
-
-        # A single deferred retry pass; no automatic repeated failure loops.
-        # Re-run each model's existing probe routine with deferred work enabled:
-        # completed probes are reused, so only deferred failures are executed.
-        if run.get("deferredRetries"):
-            run["retryPhase"] = True
-            _persist_progress(run, phase="retry", currentModelRef="", currentFile="", currentKind="")
-            for model in run.get("allVisionModels") or []:
-                if any(row["modelRef"] == model["modelRef"] for row in run["deferredRetries"]):
-                    _run_vision_model(run, model)
-            for model in run.get("directorModels") or []:
-                if any(row["modelRef"] == model["modelRef"] for row in run["deferredRetries"]):
-                    _run_director_model(run, model)
-            run.pop("retryPhase", None)
-            run.pop("deferredRetries", None)
 
         run["status"] = "completed"
         run["finishedAt"] = _now_iso()

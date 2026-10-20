@@ -39,7 +39,9 @@ def test_epoch_media_is_explicitly_scoped_and_bounded():
     assert 'data-epoch-media-job' in js
     assert 'data-epoch-media-epoch' in js
     assert "limit:8" in js
-    assert "checkpoints:[scope.jobId+':'+scope.epoch]" in js
+    assert "operation:'checkpoint_workspace'" in js
+    assert "jobId:scope.jobId,epoch:scope.epoch,limit:8" in js
+    assert 'def checkpoint_workspace(folder_path, job_id, epoch,' in server
     assert "epochMediaLoad(false)" in js
     assert "window.runAnalyticsViewEpoch" in js
     assert "data-view-epoch-media" in (ROOT / "tool/js/epoch_finder.js").read_text(encoding="utf-8")

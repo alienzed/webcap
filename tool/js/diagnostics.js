@@ -11,6 +11,7 @@ var diagnosticsAssessmentReviewRefresh = 0;
 var diagnosticsAssessmentRuntime = 'local';
 var diagnosticsAssessmentPreviewKey = '';
 var diagnosticsAssessmentPreviewVersion = 0;
+var diagnosticsAssessmentPlanTotal = null;
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
@@ -138,7 +139,7 @@ function diagnosticsRenderAssessmentProgress(run) {
       terminal ? 'assessment-terminal' : 'active');
   var wasRunning = diagnosticsAssessmentRunStatus === 'running';
   diagnosticsAssessmentRunStatus = String(run.status);
-  diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running';
+  diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running' || !diagnosticsAssessmentPlanTotal;
   if (run.status !== 'running' && diagnosticsAssessmentStoppingId === String(run.id)) diagnosticsAssessmentStoppingId = '';
   var stop = diagnosticsEl('diagnostics-assessment-stop');
   stop.classList.toggle('hidden', run.status !== 'running');
@@ -190,11 +191,15 @@ function setDiagnosticsTab(tabName, focusTab) {
 }
 
 function selectUnifiedAssessmentModels(select) {
-  document.querySelectorAll('#diagnostics-assessment-results tbody[data-assessment-model]:not([hidden]) input[data-assessment-select]').forEach(function (input) {
-    if (input.checked !== select) {
-      input.checked = select;
-      input.dispatchEvent(new Event('change'));
-    }
+  document.querySelectorAll('#diagnostics-assessment-results tbody[data-assessment-model]:not([hidden])').forEach(function (body) {
+    var input = body.querySelector('input[data-assessment-select]');
+    input.checked = select;
+    var ref = body.dataset.assessmentModel;
+    ['director', 'vision'].forEach(function (role) {
+      if (body.dataset.assessmentRole !== role && body.dataset.assessmentRole !== 'both') return;
+      if (select) diagnosticsAssessmentSelected[role].add(ref);
+      else diagnosticsAssessmentSelected[role].delete(ref);
+    });
   });
   diagnosticsAssessmentSyncHeaderSelection();
   diagnosticsRefreshSelectionPlan();
@@ -562,6 +567,77 @@ function refreshUnifiedModelAssessment() {
   });
 }
 
+function diagnosticsRefreshSelectionPlan() {
+  var count = new Set([
+    ...diagnosticsAssessmentSelected.director,
+    ...diagnosticsAssessmentSelected.vision
+  ]).size;
+  var status = diagnosticsEl('diagnostics-assessment-selection');
+  var button = diagnosticsEl('diagnostics-assessment-run');
+  var labels = document.querySelectorAll('#diagnostics-assessment-results [data-assessment-work]');
+  if (diagnosticsAssessmentRunStatus === 'running') return;
+
+  if (!count) {
+    diagnosticsAssessmentPreviewVersion += 1;
+    diagnosticsAssessmentPreviewKey = '';
+    diagnosticsAssessmentPlanTotal = null;
+    labels.forEach(function (label) { label.hidden = true; label.textContent = ''; });
+    status.textContent = 'Select models to see what remains.';
+    button.textContent = 'Complete Missing Tests';
+    button.disabled = true;
+    return;
+  }
+
+  var config;
+  try {
+    config = diagnosticsAssessmentConfig();
+  } catch (error) {
+    diagnosticsAssessmentPreviewVersion += 1;
+    diagnosticsAssessmentPreviewKey = '';
+    diagnosticsAssessmentPlanTotal = null;
+    labels.forEach(function (label) { label.hidden = true; label.textContent = ''; });
+    status.textContent = error.message;
+    button.textContent = 'Complete Missing Tests';
+    button.disabled = true;
+    return;
+  }
+  var key = JSON.stringify(config);
+  if (key === diagnosticsAssessmentPreviewKey) return;
+  diagnosticsAssessmentPreviewKey = key;
+  diagnosticsAssessmentPlanTotal = null;
+  var version = ++diagnosticsAssessmentPreviewVersion;
+  button.textContent = 'Checking Tests…';
+  button.disabled = true;
+  status.textContent = count + ' model(s) selected · Checking saved tests…';
+  labels.forEach(function (label) { label.hidden = true; label.textContent = ''; });
+  modelLabPost({action: 'preview', config: config}).then(function (data) {
+    if (version !== diagnosticsAssessmentPreviewVersion || diagnosticsAssessmentRunStatus === 'running') return;
+    var plan = data.plan;
+    diagnosticsAssessmentPlanTotal = plan.total;
+    button.textContent = plan.total ? 'Complete ' + plan.total + (plan.total === 1 ? ' Test' : ' Tests') : 'Already Complete';
+    button.disabled = !plan.total;
+    status.textContent = count + ' model(s) selected · ' + data.reused + ' already complete · ' +
+      plan.missing + ' missing · ' + plan.retry + ' retry';
+    labels.forEach(function (label) {
+      var item = data.models[label.dataset.assessmentWork];
+      label.hidden = !item;
+      if (!item) return;
+      label.textContent = item.missing || item.retry
+        ? [item.missing ? item.missing + ' missing' : '', item.retry ? item.retry + ' retry' : ''].filter(Boolean).join(' · ')
+        : 'Tests complete';
+      label.title = item.complete + ' of ' + item.planned + ' planned tests already complete.';
+    });
+  }).catch(function (error) {
+    if (version !== diagnosticsAssessmentPreviewVersion || diagnosticsAssessmentRunStatus === 'running') return;
+    diagnosticsAssessmentPreviewKey = '';
+    diagnosticsAssessmentPlanTotal = null;
+    status.textContent = 'Could not check outstanding tests: ' + error.message;
+    button.textContent = 'Complete Missing Tests';
+    button.disabled = true;
+    reportConsoleError('Model Assessment preview', error);
+  });
+}
+
 function diagnosticsAssessmentConfig() {
   var selectedDirectors = diagnosticsAssessmentCatalog.directors.filter(function (model) {
     return diagnosticsAssessmentSelected.director.has(String(model.id || ''));
@@ -603,6 +679,7 @@ function runUnifiedModelAssessment() {
   var status = diagnosticsEl('diagnostics-assessment-selection');
   diagnosticsAssessmentPreviewKey = '';
   diagnosticsAssessmentPreviewVersion += 1;
+  diagnosticsAssessmentPlanTotal = null;
   status.textContent = 'Checking saved results and scheduling outstanding ' + (deep ? 'deep' : 'quick') + ' tests…';
   var runButton = diagnosticsEl('diagnostics-assessment-run');
   runButton.disabled = true;

@@ -25,19 +25,23 @@ def _read(path):
     if not path.exists():
         return {}
     data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("selections"), list):
+    if not isinstance(data, dict) or data.get("version") not in {1, 2} or not isinstance(data.get("selections"), list):
         raise ValueError("Invalid saved training references.")
     result = {}
     for row in data["selections"]:
-        if not isinstance(row, dict) or any(not isinstance(row.get(k), str) or not row[k] for k in ("runId", "group", "term", "media")):
+        required = ("group", "term", "media") + (("runId",) if data["version"] == 1 else ())
+        if not isinstance(row, dict) or any(not isinstance(row.get(k), str) or not row[k].strip() for k in required):
             raise ValueError("Invalid saved training reference entry.")
-        result[(row["runId"], row["group"], row["term"])] = {k: row[k] for k in ("runId", "group", "term", "media")}
+        # V1 was inadvertently keyed per run. The most recent saved entry for
+        # a Set/group/tag takes precedence when collapsing that legacy format.
+        key = (row["group"], row["term"])
+        result[key] = {k: row[k] for k in ("group", "term", "media")}
     return result
 
 
 def _write(path, values):
     from .epoch_test_bench import _atomic_write_json
-    _atomic_write_json(path, {"version": 1, "selections": list(values.values())})
+    _atomic_write_json(path, {"version": 2, "selections": list(values.values())})
 
 
 def command(folder, operation, criteria):
@@ -48,16 +52,16 @@ def command(folder, operation, criteria):
         return {"selections": rows}
     if operation not in {"reference_selection_save", "reference_selection_remove"}:
         raise ValueError("Unsupported reference selection operation.")
-    fields = ("runId", "group", "term")
+    fields = ("group", "term")
     values = {k: criteria.get(k) for k in fields}
     if any(not isinstance(v, str) or not v.strip() for v in values.values()):
-        raise ValueError("A training run, group and tag are required.")
-    key = tuple(values[k] for k in fields)
+        raise ValueError("A reference group and tag are required.")
+    key = (values["group"], values["term"])
     if operation == "reference_selection_save":
         media = criteria.get("media")
         if not isinstance(media, str) or not media.strip():
             raise ValueError("Select a reference image.")
-        verified_reference(folder, values["group"], values["term"], media, values["runId"])
+        verified_reference(folder, values["group"], values["term"], media, None)
     with _lock:
         selections = _read(path)
         if operation == "reference_selection_save":

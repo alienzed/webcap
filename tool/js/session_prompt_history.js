@@ -15,10 +15,15 @@
       return cursor;
     }
 
-    function remember(value) {
+    function remember(value, input) {
       var instruction = String(value || '').trim();
       if (!instruction) return;
       if (entries[entries.length - 1] !== instruction) entries.push(instruction);
+      if (input) reset(input);
+    }
+
+    function reset(input) {
+      cursors.set(input, {index: entries.length, draft: input.value, version: entries.length, applying: false});
     }
 
     function handleInput(event) {
@@ -68,6 +73,6 @@
       input.addEventListener('keydown', handleKeydown);
     }
 
-    return {remember: remember, bind: bind, handleInput: handleInput, handleKeydown: handleKeydown};
+    return {remember: remember, reset: reset, bind: bind, handleInput: handleInput, handleKeydown: handleKeydown};
   };
 })();

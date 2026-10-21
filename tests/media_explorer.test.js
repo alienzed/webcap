@@ -461,6 +461,8 @@ test('external folder navigation stays with the file pane and recent count is no
   const listIndex = main.indexOf('id="media-explorer-gallery-area"');
   assert.ok(navIndex > toolbarEnd && navIndex < listIndex, 'folder navigation is immediately above the file list, outside search toolbar');
   assert.match(css, /\.media-explorer-browser > \.media-explorer-external-navigation/);
+  assert.match(css, /--explorer-list-width: 292px;/);
+  assert.match(source, /setProperty\('--explorer-list-width', '292px'\)/);
   assert.match(source, /el\('media-explorer-directory-label'\)\.title = '\/' \+ externalDirectory;/);
   const f = fixture();
   f.window.openMediaExplorerActivity();

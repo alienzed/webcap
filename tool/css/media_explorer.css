@@ -286,3 +286,193 @@
 .media-explorer-selection-hint,.media-explorer-inspector-section summary { font-size:14px; }
 .media-explorer-use-link,.media-explorer-scope { font-size:14px; }
 .media-explorer-card-badge { font-size:12px; }
+
+
+/* Prep visual language for Explorer's existing list pane.
+   Shared surface tokens, compact hierarchy and row behavior; no DOM/layout ownership changes. */
+.media-explorer-workspace .media-explorer-sources {
+  padding: 13px 9px 12px;
+}
+.media-explorer-workspace .media-explorer-rail-title {
+  padding: 0 8px 8px;
+  letter-spacing: .07em;
+}
+.media-explorer-workspace .media-explorer-workflow-title {
+  padding-top: 19px;
+}
+.media-explorer-workspace .media-explorer-source {
+  padding: 8px 9px;
+  margin-bottom: 2px;
+  border-radius: 3px;
+  line-height: 1.25;
+}
+.media-explorer-workspace .media-explorer-source.active {
+  padding-left: 7px;
+  border-left: 3px solid var(--explorer-accent);
+  border-top-color: transparent;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+.media-explorer-workspace .media-explorer-browser,
+.media-explorer-workspace .media-explorer-toolbar,
+.media-explorer-workspace .media-explorer-gallery-area {
+  background: var(--panel);
+}
+.media-explorer-workspace .media-explorer-toolbar {
+  padding: 9px 9px 5px;
+  border-bottom-color: var(--border-soft);
+}
+.media-explorer-workspace .media-explorer-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.media-explorer-workspace .media-explorer-header h2 {
+  font-size: 16px;
+  line-height: 1.3;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+.media-explorer-workspace .media-explorer-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  min-width: 0;
+  gap: 5px;
+}
+.media-explorer-workspace .media-explorer-toolbar .review-captions-btn {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 3px;
+  border-left: 3px solid var(--accent);
+  font-weight: 600;
+  background: var(--panel);
+  color: var(--text);
+}
+.media-explorer-workspace .media-explorer-toolbar .review-captions-btn:hover {
+  background: var(--hover);
+}
+.media-explorer-workspace #media-explorer-scan-all {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--border);
+  border-left-color: var(--accent);
+}
+.media-explorer-workspace .media-explorer-search-field {
+  min-height: 35px;
+  padding: 0 8px;
+  border-radius: 3px;
+  background: var(--panel);
+}
+.media-explorer-workspace .media-explorer-search-field > span {
+  font-size: 16px;
+}
+.media-explorer-workspace .media-explorer-search-field input {
+  padding: 6px 0;
+  font-size: 16px;
+}
+.media-explorer-workspace .media-explorer-searchbar select,
+.media-explorer-workspace .media-explorer-facets select,
+.media-explorer-workspace .media-explorer-source-chooser,
+.media-explorer-workspace .media-explorer-external-path-bar input {
+  box-sizing: border-box;
+  min-height: 35px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  border-radius: 3px;
+  background-color: var(--panel);
+  color: var(--text);
+  font-size: 16px;
+}
+.media-explorer-workspace .media-explorer-toolbar > .media-explorer-facets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+.media-explorer-workspace .media-explorer-toolbar > .media-explorer-facets select {
+  width: 100%;
+  max-width: none;
+}
+.media-explorer-workspace .media-explorer-gallery-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  margin: 5px 0 0;
+}
+.media-explorer-workspace .media-explorer-count-group {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.media-explorer-workspace .media-explorer-view-controls {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+.media-explorer-workspace .media-explorer-modes button,
+.media-explorer-workspace .media-explorer-fit-controls button {
+  padding: 5px 9px;
+  border-radius: 3px;
+  font-size: 15px;
+}
+.media-explorer-workspace .media-explorer-modes button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--explorer-accent) 12%, var(--panel));
+}
+.media-explorer-workspace .media-explorer-gallery-area {
+  padding: 7px 8px 12px;
+}
+.media-explorer-workspace .media-explorer-scope {
+  display: block;
+  padding: 5px 0 9px;
+  margin-bottom: 9px;
+  border-bottom: 1px solid var(--border-soft);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.media-explorer-workspace .media-explorer-scope > span:first-child {
+  display: inline-block;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+.media-explorer-workspace .media-explorer-scope > span:last-child {
+  display: block;
+  font-size: 14px;
+}
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card {
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: transparent;
+}
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card:hover,
+.media-explorer-workspace .media-explorer-side-row:hover {
+  background: var(--hover);
+}
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card.active {
+  box-shadow: none;
+  border-left: 3px solid var(--explorer-accent);
+  background: color-mix(in srgb, var(--explorer-accent) 12%, var(--panel));
+}
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card-name {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.3;
+}
+.media-explorer-workspace .media-explorer-side-row {
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+}
+.media-explorer-workspace .media-explorer-side-row.active {
+  border-left: 3px solid var(--explorer-accent);
+  background: color-mix(in srgb, var(--explorer-accent) 12%, var(--panel));
+}
+.media-explorer-workspace .media-explorer-side-open {
+  padding: 7px 5px 7px 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.3;
+}

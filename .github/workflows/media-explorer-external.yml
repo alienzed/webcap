@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'tool/server/external_media.py'
+      - 'tool/server/external_exports.py'
       - 'tool/server/media.py'
       - 'tool/server/media_explorer.py'
       - 'tool/server/app.py'
@@ -11,6 +12,7 @@ on:
       - 'tool/tool.html'
       - 'tool/css/media_explorer.css'
       - 'tests/test_external_media.py'
+      - 'tests/test_external_exports.py'
       - 'tests/test_media_explorer.py'
       - '.github/workflows/media-explorer-external.yml'
 
@@ -29,7 +31,7 @@ jobs:
         with:
           node-version: '22'
       - run: node --check tool/js/media_explorer.js
-      - run: python -m compileall -q tool/server/external_media.py tool/server/media.py tool/server/app.py tests/test_external_media.py
+      - run: python -m compileall -q tool/server/external_media.py tool/server/external_exports.py tool/server/media.py tool/server/app.py tests/test_external_media.py tests/test_external_exports.py
       - run: cp tool/config.example.json tool/config.json
       - run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
-      - run: python -m pytest -q tests/test_external_media.py tests/test_media_explorer.py
+      - run: python -m pytest -q tests/test_external_media.py tests/test_external_exports.py tests/test_media_explorer.py

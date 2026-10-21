@@ -13,8 +13,20 @@ from .external_media import _root, _source_file, VIDEO_EXTS
 from .permissions import normalize_path_permissions
 
 
+def _safe_destination_dir(relative):
+    value = str(relative or "").replace("\\\\", "/").strip()
+    path = Path(value)
+    if path.is_absolute() or any(part == ".." for part in path.parts):
+        raise ValueError("Destination must be within the WebCap root")
+    root = app_config.FS_ROOT.resolve()
+    result = (root / path).resolve()
+    if not result.is_relative_to(root):
+        raise ValueError("Destination must be within the WebCap root")
+    return result
+
+
 def _destination(data):
-    parent = app_config.safe_join_fs_root(str(data.get("destination") or ""))
+    parent = _safe_destination_dir(data.get("destination"))
     if not parent.is_dir():
         raise ValueError("Destination folder does not exist")
     name = str(data.get("newSet") or "").strip()
@@ -119,7 +131,7 @@ def register_routes(app):
     def explorer_destinations():
         try:
             relative = str(request.args.get("destination") or "")
-            folder = app_config.safe_join_fs_root(relative)
+            folder = _safe_destination_dir(relative)
             if not folder.is_dir():
                 raise ValueError("Destination directory not found")
             dirs = sorted((child.name for child in folder.iterdir()

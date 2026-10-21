@@ -174,6 +174,17 @@ def _ensure_index(raw_path, *, refresh=False):
 
 def _query_items(snapshot, args, *, ignore_metadata=False):
     items = list(snapshot["items"])
+    # The discovery index is recursive, but navigation defaults to one directory.
+    # Legacy/internal callers without a directory argument retain recursive queries.
+    directory = args.get("directory")
+    recursive = str(args.get("recursive") or "0") == "1"
+    if directory is not None and not recursive:
+        folder = str(directory or "").replace("\\", "/").strip("/")
+        parts = Path(folder).parts
+        if any(part in (".", "..") for part in parts):
+            raise ValueError("Invalid directory")
+        items = [item for item in items
+                 if str(Path(item["relativePath"]).parent).replace("\\", "/") == (folder or ".")]
     kind = str(args.get("kind") or "")
     query = str(args.get("search") or "").casefold().split()
     if kind:
@@ -228,11 +239,26 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
             width, height = dimensions
             return min(width, height) if sort == "resolution" else width * height
         items.sort(key=lambda item: (-metric(item), item["relativePath"]))
+    elif sort == "size":
+        items.sort(key=lambda item: (-item["fileSize"], item["relativePath"]))
     elif sort == "newest":
         items.sort(key=lambda item: (-item["createdAt"], item["id"]))
     else:
         raise ValueError("Unsupported external media sort: " + sort)
+    if str(args.get("direction") or "desc") == "asc":
+        items.reverse()
     return items
+
+
+def _child_directories(snapshot, directory):
+    """Immediate subfolders from the indexed source, including empty folders."""
+    root = snapshot["root"]
+    folder = str(directory or "").replace("\\", "/").strip("/")
+    target = (root / folder).resolve()
+    if not target.is_relative_to(root) or not target.is_dir():
+        raise ValueError("Directory is outside the selected root")
+    return sorted((child.name for child in target.iterdir()
+                   if child.is_dir() and not child.is_symlink()), key=str.casefold)
 
 
 def _technical_probe(path):

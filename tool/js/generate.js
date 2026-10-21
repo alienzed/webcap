@@ -2,6 +2,7 @@
   'use strict';
 
   var TAKE_BATCH_SIZE = 5;
+  var promptAssistantInstructionHistory;
 
   var generateState = {
     models: [],
@@ -2351,6 +2352,7 @@
     var promptNode = el('generate-prompt');
     var prompt = String(promptNode.value || '').trim();
     var instruction = String(el('generate-director-instruction').value || '').trim();
+    promptAssistantInstructionHistory.remember(instruction, el('generate-director-instruction'));
     var previousPrompt = promptNode.value;
     var requestModelId = String(generateState.modelId || '');
     generateState.director.busy = true;
@@ -2507,6 +2509,8 @@
   function bindUi() {
     var workspace = el('generate-workspace');
     if (!workspace) throw new Error('Generate workspace markup is missing.');
+    promptAssistantInstructionHistory = createSessionPromptHistory();
+    promptAssistantInstructionHistory.bind(el('generate-director-instruction'));
     bindReferenceDropzones();
 
     el('generate-create-mode-btn').onclick = function () {

@@ -5977,6 +5977,7 @@
     if (!modal || !input || !preset || !status) throw new Error('Director Tools modal markup is missing.');
     preset.value = '';
     input.value = '';
+    sceneRevisionHistory.reset(input);
     input.readOnly = false;
     el('storyboard-director-tools-run').textContent = 'Revise Scenes';
     el('storyboard-director-tools-generate-takes').closest('label').classList.remove('hidden');

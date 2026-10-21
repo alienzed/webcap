@@ -62,7 +62,7 @@ test('records submitted instructions, walks backward, and restores unsubmitted d
   assert.equal(input.key('ArrowDown'), true);
   assert.equal(input.value, 'new draft');
   assert.equal(input.key('ArrowDown'), false, 'returned to draft');
-  assert.equal(input.inputEvents, 6, 'recalling dispatches input events');
+  assert.equal(input.inputEvents, 7, 'three edits plus four recalled entries dispatch input events');
 });
 
 test('editing recalled content exits history until the next Up', () => {

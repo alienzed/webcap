@@ -38,7 +38,7 @@ function harness(failDino = false) {
     getCaptionVisionModelId: () => 'vision-A',
     getRequirementGroupAlias: group => group === 'color' ? 'Garment color' : '',
     drawReferenceResults: () => {},
-    showReferencePair: (file, value) => shownPairs.push({ file, value }),
+    showLiveReferencePair: (file, value) => shownPairs.push({ file, value }),
     reportConsoleError: (...args) => errors.push(args),
     testVlRuns: {},
     testVlScope: () => 'key',
@@ -75,4 +75,55 @@ test('Evaluation control retains compare access while Original VL is running', (
   assert.ok(script.includes("button.textContent = 'Evaluate ▾';"));
   assert.ok(script.includes("testVl.running ? 'Stop Original VL' : 'Ask VL · Original'"));
   assert.ok(!script.includes("if (testVl.running) { try { stopTestVl(); }"));
+});
+
+
+test('Training Reference viewer shows the exact A/B media and restores latest saved evidence', async () => {
+  const { JSDOM } = require('jsdom');
+  const dom = new JSDOM('<div id="test-generations-reference-pair"></div><div id="test-generations-reference-results"></div>');
+  const readStart = script.indexOf('  var referenceCompare = ');
+  const readEnd = script.indexOf('  function openReferenceDialog() {', readStart);
+  assert.ok(readStart >= 0 && readEnd > readStart);
+  const saved = {references:{byMedia:{
+    'render.png':{
+      'rvn|Shape|rear':{method:'rvn',group:'Shape',option:'rear',reference:'ref.png',
+        verdict:'UNCLEAR',response:'OPTION: 1\nVERDICT: UNCLEAR\nREASON: Rear detail is not visible.',
+        at:10},
+      'dino|Shape|rear':{method:'dino',group:'Shape',option:'rear',reference:'ref.png',
+        similarity:0.78,at:20}
+    }
+  }}};
+  const sandbox = {
+    document:dom.window.document,
+    el:id=>dom.window.document.getElementById(id),
+    captionAssistRequestJson:async()=>saved,
+    escapeHtml:value=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'),
+    showError:error=>{throw error}
+  };
+  vm.runInNewContext(script.slice(readStart, readEnd) +
+    '\nthis.referenceCompare = referenceCompare;this.showReferencePair = showReferencePair;' +
+    '\nthis.showLiveReferencePair = showLiveReferencePair;this.drawReferenceResults = drawReferenceResults;',sandbox);
+  const compare = sandbox.referenceCompare;
+  compare.folder = 'set1'; compare.session = 'session1'; compare.resultMethod = 'all';
+  sandbox.showReferencePair('render.png', {reference:'ref.png',group:'Shape',option:'rear',
+    method:'rvn',previewOnly:true});
+  const pair = dom.window.document.getElementById('test-generations-reference-pair');
+  assert.match(pair.textContent, /Preview only/);
+  const images = Array.from(pair.querySelectorAll('img'));
+  assert.equal(images.length, 2);
+  assert.equal(images[0].getAttribute('src'), '/caption/media?folder=set1&media=ref.png');
+  assert.equal(images[1].getAttribute('src'),
+    '/fs/test_generations/media?folder=set1&session=session1&media=render.png');
+  sandbox.drawReferenceResults();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(compare.rows.length, 2);
+  assert.match(pair.textContent, /DINO cosine 0\.780/);
+  assert.ok(!pair.textContent.includes('Comparing…'));
+  sandbox.showReferencePair('render.png', compare.rows[0].value);
+  assert.match(pair.textContent, /Rear detail is not visible/);
+  compare.pinned = true;
+  sandbox.showLiveReferencePair('render2.png', {reference:'ref2.png',group:'Shape',option:'front',method:'rvn'});
+  assert.match(pair.textContent, /Rear detail is not visible/);
+  assert.equal(compare.livePair.file,'render2.png');
 });

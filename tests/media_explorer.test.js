@@ -34,8 +34,8 @@ function fixture(hash = '#/media') {
       s = s.trim();
       if (s.startsWith('.')) return this.classList.contains(s.slice(1));
       if (s.startsWith('#')) return this.id === s.slice(1);
-      const attr = s.match(/^option\\[value="([^"]*)"\\]$/);
-      if (attr) return this.tagName === 'OPTION' && this.value === attr[1];
+      if (s.startsWith('option[value="') && s.endsWith('"]'))
+        return this.tagName === 'OPTION' && this.value === s.slice('option[value="'.length, -2);
       return s.toUpperCase() === this.tagName;
     }); }
     closest(selector) { return this.matches(selector) ? this : this.parent?.closest(selector) || null; }

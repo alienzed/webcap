@@ -74,7 +74,7 @@
       }).catch(report);
   }
   function isExternal() { return source === 'external'; }
-  function externalParams() { return {path:externalPath, min_side:el('media-explorer-min-side').value, min_mp:el('media-explorer-min-mp').value, min_duration:el('media-explorer-min-duration').value, max_duration:el('media-explorer-max-duration').value}; }
+  function externalParams() { return {directory:externalDirectory, recursive:el('media-explorer-recursive').checked ? '1' : '0', path:externalPath, min_side:el('media-explorer-min-side').value, min_mp:el('media-explorer-min-mp').value, min_duration:el('media-explorer-min-duration').value, max_duration:el('media-explorer-max-duration').value}; }
   function syncExternalControls() {
     var external = isExternal();
     el('media-explorer-external-path-bar').classList.toggle('hidden', !external);

@@ -239,7 +239,6 @@ def _previous_scene_context(story, scene_id):
         ("Summary / intent", scene.get("summary")),
         ("Entry state", scene.get("entryState")),
         ("Exit state", scene.get("exitState")),
-        ("Generation prompt", scene.get("prompt")),
     )
     return "\n".join(
         label + ": " + _clean(value)
@@ -264,7 +263,7 @@ def approved_lora_vocabulary(story, scene_id):
             "with the Scene: " + ", ".join(chosen) + "\nNever write loader syntax.") if chosen else ""
 
 
-def build_request(story, scene_id, operation, instruction="", development=None, scene_count=1):
+def build_request(story, scene_id, operation, instruction="", development=None, scene_count=1, continuity_context=False):
     if not isinstance(story, dict):
         raise ValueError("Story data must be an object.")
     operation = _clean(operation).lower()
@@ -536,39 +535,49 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if not isinstance(before_scene, dict) or (after_scene is not None and not isinstance(after_scene, dict)):
             raise RuntimeError("Storyboard Scene order is invalid.")
 
-        blocks = ["[DIRECTOR CONTEXT]\n" + director_context]
+        custom_instruction = _clean(instruction)
+        blocks = []
+        if custom_instruction:
+            blocks.append("[USER DIRECTION - PRIMARY CREATIVE BRIEF]\n" + custom_instruction)
+        blocks.append("[DIRECTOR CONTEXT]\n" + director_context)
         title = _clean(story.get("title"))
         if title:
             blocks.append("[STORY TITLE]\n" + title)
         concept = _clean(story.get("concept"))
-        if concept:
+        if concept and not custom_instruction:
             blocks.append("[STORY CONCEPT]\n" + concept)
         style = _clean(story.get("style"))
         if style:
-            blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
+            blocks.append("[STORY VISUAL / ATMOSPHERE - CONSTRAINT]\n" + style)
         invariants = _story_invariants_text(story)
         if invariants:
-            blocks.append("[STORY INVARIANTS]\n" + invariants)
+            blocks.append("[STORY INVARIANTS - CONSTRAINTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
         _add_model_limitations(blocks, "minimax_h3")
-        blocks.append("[SCENE BEFORE]\n" + _scene_context(before_scene) + "\nGeneration prompt: " + _clean(before_scene.get("prompt")))
+        blocks.append("[SCENE BEFORE - PLACEMENT CONTEXT]\n" + _scene_context(before_scene))
         if after_scene is not None:
-            blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene) + "\nGeneration prompt: " + _clean(after_scene.get("prompt")))
-        blocks.append("[EXISTING SCENE OUTLINE]\n" + "\n".join(
-            str(number) + ". " + _clean(scenes.get(ordered_id, {}).get("title"))
-            + ": " + _clean(scenes.get(ordered_id, {}).get("summary"))
-            for number, ordered_id in enumerate(order, start=1)
-        ))
-        if _clean(instruction):
-            blocks.append("[USER DIRECTION]\n" + _clean(instruction))
+            blocks.append("[SCENE AFTER - PLACEMENT CONTEXT]\n" + _scene_context(after_scene))
+        if not custom_instruction:
+            blocks.append("[EXISTING SCENE OUTLINE]\n" + "\n".join(
+                str(number) + ". " + _clean(scenes.get(ordered_id, {}).get("title"))
+                + ": " + _clean(scenes.get(ordered_id, {}).get("summary"))
+                for number, ordered_id in enumerate(order, start=1)
+            ))
         blocks.append(
             "[CURRENT TASK]\nCreate exactly one new Scene after SCENE BEFORE"
             + (" and before SCENE AFTER. " if after_scene is not None else ", at the end of the Story. ")
-            + "Use the complete concept to decide what belongs here. Treat neighbouring Scenes as relationship and contrast context, not templates to copy. "
-            "The new Scene may continue a narrative, contrast, vary a repeated format with fresh content, jump, or remain independent as the concept warrants. "
-            "Make it meaningfully distinct while preserving intentional recurring characters or state. "
-            "Use entry and exit state when a real handoff matters. "
-            "Write the complete H3 prompt exactly as it should be used, following the supplied Director and H3 guidance. Return only JSON matching the supplied schema."
+            + (
+                "Follow USER DIRECTION as the source of the new Scene's content. "
+                "Other Story and Scene details are constraints for visual consistency or placement, not alternative creative briefs. "
+                if custom_instruction else
+                "Use the complete Story concept and outline to decide what fresh Scene belongs here. "
+            )
+            + "Neighbouring Scene descriptions are placement/continuity context, not templates to copy. "
+            "A new Scene may progress, contrast, or stand independently as the concept or user direction warrants. "
+            "Do not rephrase neighbouring actions to create a superficially different Scene. "
+            "Use entry and exit state only when a real handoff matters. "
+            "Write the complete standalone H3 prompt following the supplied Director and H3 guidance. "
+            "Return only JSON matching the supplied schema."
         )
         return {
             "operation": operation,
@@ -688,25 +697,23 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
     vocabulary = approved_lora_vocabulary(story, scene_id)
     h3_mode = mode_from_reference_roles(_reference_roles(scene))
 
-    blocks = [
-        "[DIRECTOR CONTEXT]\n" + director_context,
-    ]
+    blocks = ["[DIRECTOR CONTEXT]\n" + director_context] if operation == "write_prompt" else []
     concept = _clean(story.get("concept"))
-    if concept:
+    if concept and operation == "write_prompt":
         blocks.append("[STORY CONCEPT / OVERVIEW]\n" + concept)
     if style:
         blocks.append("[STORY VISUAL / ATMOSPHERE]\n" + style)
     if story_invariants:
         blocks.append(
-            "[STORY INVARIANTS]\n"
-            + story_invariants
-            + "\n\nUse these as concise context where relevant, carrying the details that materially help the Scene."
+            "[STORY INVARIANTS]\n" + story_invariants
+            + "\n\nTreat these as established constraints, not material to add to this Scene."
         )
     if scene_context:
         blocks.append("[SCENE]\n" + scene_context)
     if vocabulary:
         blocks.append(vocabulary)
-    blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+    if operation == "write_prompt":
+        blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
     _add_model_limitations(blocks, "minimax_h3")
     blocks.append("[REFERENCE MODE]\n" + h3_mode)
 
@@ -725,21 +732,22 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
             raise ValueError("Scene generation prompt is required to refine a prompt.")
         if not correction:
             raise ValueError("A refinement instruction is required.")
-        previous_scene_context = _previous_scene_context(story, scene_id)
-        if previous_scene_context:
-            blocks.append(
-                "[PREVIOUS SCENE - RELATIONSHIP CONTEXT]\n"
-                + previous_scene_context
-                + "\n\nUse the previous Scene to judge the appropriate relationship and distinctness of this Scene. "
-                "Preserve continuity when the concept implies continuation. When it does not, choose an appropriate relationship such as variation, contrast, repetition, or independence, keeping the Scene meaningfully distinct."
-            )
+        if continuity_context:
+            previous_scene_context = _previous_scene_context(story, scene_id)
+            if previous_scene_context:
+                blocks.append(
+                    "[PREVIOUS SCENE - CONTINUITY FACTS ONLY]\n" + previous_scene_context
+                    + "\n\nUse these facts only when the correction requires a real Scene handoff."
+                )
         blocks.append("[EXISTING PROMPT]\n" + existing_prompt)
         blocks.append(
-            "[CURRENT TASK]\nApply the requested correction faithfully to this Scene:\n"
+            "[CURRENT TASK]\nMake the smallest necessary edit to this Scene's EXISTING PROMPT for this user correction:\n"
             + correction
-            + "\n\nReturn changed=false and reproduce the existing prompt unchanged when no edit is needed. "
-            "Otherwise return the complete revised prompt exactly as it should be used, plus only any optional Scene fields the correction actually requires. "
-            "Preserve unrelated prompt details and follow the supplied Director and H3 guidance. "
+            + "\n\nKeep this Scene's original subject, action, chronology, staging, visual details, and H3 prompt organization. "
+            "Do not invent a different Scene, expand the Story, or rewrite unrelated passages. "
+            "For a localized request (for example, add a smile at the end), change only the relevant action/shot. "
+            "Return changed=false and reproduce the existing prompt unchanged when the correction already holds or does not apply. "
+            "Otherwise return the complete minimally revised H3 prompt, plus only any optional Scene fields the correction actually requires. "
             "If the change materially alters the needed screen time, you may include durationSeconds between 6 and 15 seconds."
         )
 

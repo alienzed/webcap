@@ -280,7 +280,6 @@ function renderTrainingHistory() {
             (job.folder && job.outputRoot && job.outputAvailable !== false ? '<button type="button" data-training-history-output="' + escapeHtml(job.id || '') + '">&#128193; Open output</button>' : '') +
             (job.actionAvailable !== false && job.actionPath ? '<button type="button" data-training-history-action="' + escapeHtml(job.id || '') + '">&#128451; Open action folder</button>' : '') +
             '<button type="button" data-training-history-delete="' + escapeHtml(job.id || '') + '">Delete run and files…</button>' +
-            '<button type="button" data-training-history-clear="' + escapeHtml(job.id || '') + '">Remove from Training History</button>' +
           '</div></details>' +
         '</div>' +
       '</div>' +
@@ -649,34 +648,6 @@ function finalizeTrainingArchive() {
     els.archiveModalConfirm.disabled = false;
     setStatus('Finalize & Archive failed: ' + String(err.message || err));
     throw err;
-  });
-}
-
-function clearTrainingHistory() {
-  if (!window.confirm('Clear all Training History? Output files, logs, and checkpoints will remain.')) return;
-  trainingRunnerRequest('/fs/training_history/clear', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
-  }).then(function () {
-    setStatus('Training History cleared. Training files were kept.');
-    refreshTrainingHistory(true);
-  }).catch(function (err) {
-    setStatus('Could not clear Training History: ' + String(err.message || err));
-  });
-}
-
-function clearTrainingHistoryJob(jobId) {
-  var jobs = trainingWorkspaceState.history && Array.isArray(trainingWorkspaceState.history.jobs)
-    ? trainingWorkspaceState.history.jobs : [];
-  var job = jobs.filter(function (item) { return item.id === jobId; })[0];
-  if (!job || !job.folder) throw new Error('Training History entry does not identify its set folder.');
-  trainingRunnerRequest('/fs/training_history/job/clear', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: job.folder, jobId: jobId })
-  }).then(function (payload) {
-    if (!payload.cleared) throw new Error('Training History entry was not found.');
-    setStatus('Removed the run from Training History. Training files were kept.');
-    refreshTrainingHistory(true);
-  }).catch(function (err) {
-    setStatus('Could not remove Training History entry: ' + String(err.message || err));
   });
 }
 

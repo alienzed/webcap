@@ -120,7 +120,7 @@ test('Training Reference viewer shows the exact A/B media and restores latest sa
   assert.equal(compare.rows.length, 2);
   assert.match(pair.textContent, /DINO cosine 0\.780/);
   assert.ok(!pair.textContent.includes('Comparing…'));
-  sandbox.showReferencePair('render.png', compare.rows[0].value);
+  sandbox.showReferencePair('render.png', compare.rows.find(row=>row.value.method==='rvn').value);
   assert.match(pair.textContent, /Rear detail is not visible/);
   compare.pinned = true;
   sandbox.showLiveReferencePair('render2.png', {reference:'ref2.png',group:'Shape',option:'front',method:'rvn'});

@@ -428,7 +428,7 @@ def recover_state_response():
 
 
 def _sync_job_history(job):
-    if job.get("historyHidden") or job.get("status") not in HISTORY_STATUSES:
+    if job.get("status") not in HISTORY_STATUSES:
         return ""
     folder = str(job.get("folder") or "").strip()
     if not folder:
@@ -3195,23 +3195,6 @@ def passive_status_snapshot():
 def status_response():
     _ensure_monitor_started()
     return passive_status_snapshot()
-
-
-def clear_history_response(folder, job_id):
-    folder_text = str(folder or "").strip()
-    job_id = str(job_id or "").strip()
-    if not folder_text or not job_id:
-        return {"ok": False, "error": "Folder and job ID are required."}, 400
-    with _lock:
-        folder_path = app_config.safe_join_fs_root(folder_text)
-        state = _read_state()
-        job = _find_job(state, job_id)
-        if job and str(job.get("folder") or "") == folder_text:
-            job["historyHidden"] = True
-            job["updatedAt"] = time.time()
-        cleared = clear_history_job(folder_path, job_id)
-        _write_state(state)
-        return {"ok": True, "cleared": cleared}, 200
 
 
 def gpu_status_response():

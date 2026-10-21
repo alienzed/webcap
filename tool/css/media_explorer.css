@@ -193,3 +193,46 @@
 .media-explorer-card-thumb .external-video-placeholder { position:absolute; inset:0; display:grid; place-items:center; font-size:14px; font-weight:600; color:var(--muted); }
 .media-explorer-grid.explorer-list .media-explorer-card-thumb { display:none; }
 .media-explorer-grid.explorer-list .media-explorer-card-open { padding-left:36px; }
+
+/* Prep-aligned Explorer surface: source rail, resizable list, preview, inspector. */
+.media-explorer-workspace { --explorer-list-width: 260px; --explorer-inspector-width: 350px; }
+.media-explorer-main { display:grid; grid-template-columns: minmax(220px,var(--explorer-list-width)) 6px minmax(0,1fr); height:100%; min-height:0; overflow:hidden; scrollbar-gutter:auto; scroll-padding-top:0; }
+.media-explorer-browser { min-width:0; min-height:0; display:flex; flex-direction:column; border-right:1px solid var(--border); overflow:hidden; }
+.media-explorer-toolbar { position:static; padding:9px 9px 0; flex:none; background:var(--bg); }
+.media-explorer-header { margin-bottom:7px; }
+.media-explorer-header h2 { font-size:16px; }
+.media-explorer-searchbar { gap:6px; }
+.media-explorer-searchbar select { width:120px; }
+.media-explorer-facets { gap:5px; }
+.media-explorer-facets select { flex:1 1 115px; max-width:none; }
+.media-explorer-gallery-toolbar { min-height:32px; }
+.media-explorer-gallery-area { flex:1; overflow:auto; min-height:0; padding:7px 9px; }
+.media-explorer-resizer { cursor:col-resize; background:var(--border); min-height:0; }
+.media-explorer-resizer:hover,.media-explorer-resizer.dragging { background:var(--explorer-accent); }
+.media-explorer-preview { min-width:0; min-height:0; display:flex; overflow:hidden; background:#101725; }
+.media-explorer-preview-stage { display:grid; place-items:center; width:100%; height:100%; min-width:0; min-height:0; color:var(--muted); }
+.media-explorer-preview-stage img,.media-explorer-preview-stage video { width:100%; height:100%; object-fit:contain; min-height:0; }
+.media-explorer-workspace:has(.media-explorer-inspector:not(.hidden)) .media-explorer-main { margin-right:var(--explorer-inspector-width); }
+.media-explorer-inspector { width:var(--explorer-inspector-width); box-shadow:none; padding:12px; }
+.media-explorer-inspector-preview { display:none; }
+.media-explorer-external-navigation { display:flex; align-items:center; gap:7px; margin:5px 0; font-size:14px; }
+.media-explorer-directory-label { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.media-explorer-external-navigation label { white-space:nowrap; }
+.media-explorer-folder-rows { display:flex; flex-direction:column; }
+.media-explorer-folder-rows button { text-align:left; width:100%; padding:7px; border:0; background:transparent; color:var(--text); font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.media-explorer-folder-rows button:hover { background:var(--panel); }
+.media-explorer-workspace .review-captions-btn,.media-explorer-source,.media-explorer-search-field input,.media-explorer-searchbar select,.media-explorer-facets select { font-size:16px; }
+.media-explorer-card-name { font-size:15px; }
+.media-explorer-card-sub,.media-explorer-card-path,.media-explorer-count-group { font-size:13px; }
+.media-explorer-grid.explorer-list { gap:2px; }
+.media-explorer-grid.explorer-list .media-explorer-card-open { padding:7px 6px 7px 34px; }
+.media-explorer-grid.explorer-list .media-explorer-card-meta { display:block; }
+.media-explorer-grid.explorer-list .media-explorer-card-path { display:none; }
+.media-explorer-grid.explorer-list .media-explorer-card-sub { margin-top:3px; }
+.media-explorer-workspace.explorer-grid-mode .media-explorer-main { grid-template-columns:minmax(220px,var(--explorer-list-width)) 6px minmax(0,1fr); }
+.media-explorer-workspace.explorer-grid-mode .media-explorer-gallery-area { overflow:hidden; }
+.media-explorer-workspace.explorer-grid-mode .media-explorer-preview { overflow:auto; }
+.media-explorer-workspace.explorer-grid-mode #media-explorer-grid { padding:10px; }
+.media-explorer-workspace.explorer-grid-mode .media-explorer-browser .media-explorer-gallery-area { display:none; }
+@media(max-width:1050px) { .media-explorer-workspace:has(.media-explorer-inspector:not(.hidden)) .media-explorer-main { margin-right:0; } .media-explorer-inspector { box-shadow:-10px 0 25px #0006; } }
+@media(max-width:800px) { .media-explorer-main { min-height:0; } }

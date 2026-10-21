@@ -123,11 +123,12 @@
     el('media-explorer-metadata-progress').classList.toggle('hidden', !external || !(externalOverview || externalJobSummary));
     el('media-explorer-stop-metadata').classList.toggle('hidden', !external || !externalJobRunning);
     el('media-explorer-search').placeholder = external ? 'Search filenames and relative paths…' : 'Search generated media, prompts, models…';
-    ['path', 'type', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
+    ['path', 'type', 'size', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
       var option = el('media-explorer-sort').querySelector('option[value="' + value + '"]');
       option.hidden = !external;
     });
     el('media-explorer-sort').querySelector('option[value="rating"]').hidden = external;
+    el('media-explorer-sort-reverse').classList.toggle('hidden', !external);
   }
   function setExplorerMode(next) {
     if (next === 'single') {

@@ -255,3 +255,27 @@ def test_external_directory_does_not_escape_root(tmp_path):
             pass
         else:
             raise AssertionError("Directory escaped root or accepted traversal: " + value)
+
+
+def test_external_endpoint_lists_immediate_folders_even_with_zero_files(tmp_path):
+    from flask import Flask
+
+    root = tmp_path / "browse"
+    _file(root / "top.jpg")
+    _file(root / "subfolder" / "child.jpg")
+    (root / "empty").mkdir()
+    _finished_snapshot(root)
+    app = Flask(__name__)
+    external_media.register_routes(app)
+    response = app.test_client().get("/fs/media_explorer/external", query_string={
+        "path": str(root), "directory": "", "sort": "name"
+    })
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["folders"] == ["empty", "subfolder"]
+    assert [item["fileName"] for item in data["items"]] == ["top.jpg"]
+    response = app.test_client().get("/fs/media_explorer/external", query_string={
+        "path": str(root), "directory": "subfolder"
+    })
+    assert response.status_code == 200
+    assert [item["relativePath"] for item in response.get_json()["items"]] == ["subfolder/child.jpg"]

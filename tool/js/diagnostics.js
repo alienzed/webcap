@@ -689,6 +689,9 @@ function runUnifiedModelAssessment() {
     // not block a new assessment after its worker has already failed.
     return modelLabPost({action: 'start', config: config}).then(function (payload) {
       if (payload.noWork) {
+        diagnosticsAssessmentPlanTotal = 0;
+        runButton.textContent = 'Already Complete';
+        runButton.disabled = true;
         status.textContent = 'Already assessed · 0 tests needed. Existing results are preserved.';
         diagnosticsAssessmentRunId = '';
         diagnosticsAssessmentRunStatus = 'completed';
@@ -718,7 +721,7 @@ function runUnifiedModelAssessment() {
     reportConsoleError('Model Assessment', error);
     throw error;
   }).finally(function () {
-    runButton.disabled = diagnosticsAssessmentRunStatus === 'running';
+    runButton.disabled = diagnosticsAssessmentRunStatus === 'running' || diagnosticsAssessmentPlanTotal === 0;
   });
 }
 

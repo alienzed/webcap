@@ -115,6 +115,8 @@
   function syncExternalControls() {
     var external = isExternal();
     el('media-explorer-external-path-bar').classList.toggle('hidden', !external);
+    el('media-explorer-external-navigation').classList.toggle('hidden', !external);
+    el('media-explorer-folder-rows').classList.toggle('hidden', !external);
     el('media-explorer-external-filters').classList.toggle('hidden', !external);
     el('media-explorer-scan-all').classList.toggle('hidden', external);
     el('media-explorer-model').classList.toggle('hidden', external);
@@ -728,6 +730,7 @@
     syncExternalControls();
     if (isExternal() && !externalPath) {
       items = []; total = 0; active = -1; selected.clear();
+      selectItem(-1); renderExternalFolders();
       el('media-explorer-grid').replaceChildren();
       text(el('media-explorer-count'), 'No folder selected');
       text(el('media-explorer-status'), 'Enter a folder path and select Browse.');

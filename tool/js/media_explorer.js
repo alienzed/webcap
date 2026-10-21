@@ -1055,10 +1055,10 @@
   grip.addEventListener('pointerup', endResize);
   grip.addEventListener('pointercancel', endResize);
   grip.addEventListener('lostpointercapture', endResize);
-  grip.addEventListener('dblclick', function () { explorerWorkspace.style.setProperty('--explorer-list-width', '260px'); });
+  grip.addEventListener('dblclick', function () { explorerWorkspace.style.setProperty('--explorer-list-width', '292px'); });
   grip.addEventListener('keydown', function (e) {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault();
-    var width = parseInt(explorerWorkspace.style.getPropertyValue('--explorer-list-width'), 10) || 260;
+    var width = parseInt(explorerWorkspace.style.getPropertyValue('--explorer-list-width'), 10) || 292;
     explorerWorkspace.style.setProperty('--explorer-list-width', Math.max(220, Math.min(650, width + (e.key === 'ArrowRight' ? 20 : -20))) + 'px');
   });
   el('media-explorer-generate-metadata').addEventListener('click', function () { requestExternalMetadata('filtered'); });

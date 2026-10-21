@@ -15,6 +15,11 @@ on:
       - 'tests/test_test_repeat.py'
       - 'tool/server/epoch_test_bench.py'
       - 'tool/server/llm_runner.py'
+      - 'tool/js/inference_queue.js'
+      - 'tool/server/inference_runtime.py'
+      - 'tool/css/workspace_shell.css'
+      - 'tests/inference_error_passthrough.test.cjs'
+      - 'tests/test_inference_error_passthrough.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,8 +40,11 @@ jobs:
           node --check tool/js/epoch_finder.js
           node --check tool/js/test_references.js
           node --check tool/js/run_analytics.js
+          node --check tool/js/inference_queue.js
+          node --test tests/inference_error_passthrough.test.cjs
       - name: Install tests
         run: python -m pip install pytest
       - name: Focused regression
         run: |
           python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py tests/test_training_references_browser.py
+          python -m pytest -q tests/test_inference_error_passthrough.py

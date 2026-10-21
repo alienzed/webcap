@@ -560,7 +560,7 @@ def test_insights_previews_reuse_existing_media_and_enlarge_landing_only():
     root = Path(__file__).resolve().parents[1]
     js = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
     css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
-    assert "(p.topRenders||[])" in js
+    assert "var renders=p.topRenders||[]" in js
     assert "'/fs/test_generations/media?folder='" in js
     assert 'loading="lazy"' in js
     assert 'preload="metadata" muted playsinline' in js

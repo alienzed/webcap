@@ -691,7 +691,10 @@ def _execute_claimed(job_id, gpu_reserved):
                         "phase": "Revising Scenes", "sceneId": scene_id,
                     }
                 story = load_story(str(context.get("storyId") or ""))
-                scene_contract = build_request(story, scene_id, "refine_prompt", instruction=instruction)
+                scene_contract = build_request(
+                    story, scene_id, "refine_prompt", instruction=instruction,
+                    continuity_context=context.get("continuityContext") is True,
+                )
                 result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True)
                 with _enqueue_lock:
                     if execution_get_job(job_id).get("status") == "stopping":

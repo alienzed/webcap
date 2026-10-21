@@ -1,7 +1,7 @@
 """Wildcard mining should remain usable without a resolvable training-run filter."""
 
 from tool.server import app as app_module
-from tool.server import epoch_reference
+from tool.server import epoch_reference, caption_ops
 
 
 def _request(monkeypatch, *, job_id="", members=None, failure=None):
@@ -9,7 +9,7 @@ def _request(monkeypatch, *, job_id="", members=None, failure=None):
     monkeypatch.setattr(app_module, "list_media_files", lambda folder: ["one.png", "two.png"])
     monkeypatch.setattr(app_module, "load_caption_text",
                         lambda folder, name: {"caption": "Caption " + name})
-    monkeypatch.setattr(app_module, "_resolve_folder", lambda folder: __import__("pathlib").Path("/tmp"))
+    monkeypatch.setattr(caption_ops, "_resolve_folder", lambda folder: __import__("pathlib").Path("/tmp"))
     monkeypatch.setattr(app_module, "read_folder_state", lambda path: {
         "caption_group_tags_by_media": {
             "one.png": {"Shape": ["triangle"]},

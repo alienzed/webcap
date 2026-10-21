@@ -11,7 +11,7 @@ assert.ok(start >= 0 && end > start, 'Reference evaluation function must exist')
 const source = script.slice(start, end) + '\nthis.run = runReferenceComparison;';
 
 function harness(failDino = false) {
-  const requests = [], errors = [], payloads = [];
+  const requests = [], errors = [], payloads = [], shownPairs = [];
   const elements = {
     'test-generations-evaluator': { value: 'rvn', disabled: false },
     'test-generations-reference-run': { disabled: false },
@@ -38,13 +38,14 @@ function harness(failDino = false) {
     getCaptionVisionModelId: () => 'vision-A',
     getRequirementGroupAlias: group => group === 'color' ? 'Garment color' : '',
     drawReferenceResults: () => {},
+    showReferencePair: (file, value) => shownPairs.push({ file, value }),
     reportConsoleError: (...args) => errors.push(args),
     testVlRuns: {},
     testVlScope: () => 'key',
     runTestVlBatch: () => requests.push('queue:original'),
   };
   vm.runInNewContext(source, sandbox);
-  return { run: sandbox.run, requests, errors, references, elements, payloads };
+  return { run: sandbox.run, requests, errors, references, elements, payloads, shownPairs };
 }
 
 test('Evaluate All saves VL reference, runs DINO, then queues Original VL', async () => {
@@ -52,6 +53,11 @@ test('Evaluate All saves VL reference, runs DINO, then queues Original VL', asyn
   await h.run();
   assert.deepEqual(h.requests, ['evaluate:rvn', 'save:save', 'evaluate:dino', 'queue:original']);
   assert.equal(h.payloads[0].groupAlias, 'Garment color');
+  assert.equal(h.shownPairs.length, 3);
+  assert.equal(h.shownPairs[0].file, 'media.png');
+  assert.equal(h.shownPairs[0].value.reference, 'ref.png');
+  assert.equal(h.shownPairs[1].value.verdict, 'MATCH');
+  assert.equal(h.shownPairs[2].value.method, 'dino');
   assert.equal(h.references.busy, false);
   assert.equal(h.references.runAll, false);
 });

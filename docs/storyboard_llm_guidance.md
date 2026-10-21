@@ -179,15 +179,15 @@ The returned prompt is stored as authored.
 
 Apply one explicit correction to an existing Scene prompt.
 
-Preserve unrelated prompt details. Previous-Scene context may be supplied to help judge appropriate relationship/distinctness, not to force continuity.
+Use the current Scene's title/summary, full existing prompt, optional visual constraints, and the requested correction. Do not send the full Story concept, other Scene prompts, or H3 example guidance for a local refinement. Apply the smallest necessary edit, preserving the Scene's action and structure. Only an explicit Continuity pass includes short preceding-Scene facts (summary/entry/exit state), never its generation prompt.
 
 Director may optionally update Scene summary, Entry/Exit state, or duration when the requested correction genuinely requires it.
 
 ### `repair_scenes` / Revise Scenes
 
-Apply sparse targeted changes to an existing Scene plan.
+The user-facing Revise Scenes action applies the same isolated `refine_prompt` correction to each Scene, one call per Scene. Revisions do not inherit the preceding Scene's rewritten prompt. Optional Continuity pass supplies short handoff facts only.
 
-This is not an autonomous semantic-validator loop. Director returns only fields that actually need changing.
+The separate internal `repair_scenes` contract supports sparse targeted Scene-plan patches. It is not used by the Revise Scenes batch action.
 
 WebCap does not run hidden recursive review/repair passes.
 
@@ -195,7 +195,7 @@ WebCap does not run hidden recursive review/repair passes.
 
 Create exactly one new Scene immediately after the selected Scene, including after the final Scene.
 
-Director receives the complete concept, the preceding Scene, any following Scene, and a concise outline of the existing sequence. Optional user direction may guide the new Scene.
+With no user direction, Director receives the concept, a concise outline, and adjacent Scene facts (title/summary/entry/exit state). With custom direction, that instruction is the primary creative brief: omit the full Story concept and outline. Both modes retain only relevant visual constraints and adjacent placement facts, never adjacent generation prompts.
 
 The inserted Scene is **not required to bridge them narratively**. It may continue, contrast, vary a repeated format with fresh content, or remain independent as the concept warrants. Neighbouring Scenes provide context, not templates to copy.
 

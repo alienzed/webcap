@@ -650,3 +650,32 @@
     margin-left: 0;
   }
 }
+
+/* Prep's dense list affordance without fetching full-size images into the rail. */
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card-open {
+  gap: 6px;
+}
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card-open::before {
+  content: '▧';
+  flex: 0 0 17px;
+  color: var(--muted);
+  font-size: 15px;
+  text-align: center;
+}
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card[data-media-kind='video'] .media-explorer-card-open::before {
+  content: '▶';
+  font-size: 12px;
+}
+.media-explorer-workspace .media-explorer-side-open::before {
+  content: '▧';
+  display: inline-block;
+  width: 17px;
+  margin-right: 5px;
+  color: var(--muted);
+  font-size: 15px;
+  text-align: center;
+}
+.media-explorer-workspace .media-explorer-side-row[data-media-kind='video'] .media-explorer-side-open::before {
+  content: '▶';
+  font-size: 12px;
+}

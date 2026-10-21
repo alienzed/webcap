@@ -394,6 +394,13 @@ def validate_config_payload(payload):
                 + str(minimum) + " and " + str(maximum) + "."
             )
         normalized_director[key] = value
+    guidance = out.get("generation_model_guidance", {})
+    if not isinstance(guidance, dict):
+        raise ValueError("Config.generation_model_guidance must be an object.")
+    allowed = {"minimax_h3", "krea2_raw"}
+    if any(key not in allowed or not isinstance(value, str) for key, value in guidance.items()):
+        raise ValueError("Config.generation_model_guidance must contain text for supported generation models.")
+    out["generation_model_guidance"] = {key: value for key, value in guidance.items() if value.strip()}
     out["storyboard"] = {"director": normalized_director}
 
     analysis = out.get("analysis")

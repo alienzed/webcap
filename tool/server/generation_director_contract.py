@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from .h3_prompt_contract import mode_from_reference_roles
+from . import config as app_config
 
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
@@ -55,6 +56,11 @@ def build_request(model_id, operation, prompt="", instruction="", settings=None,
             "environment, lighting, composition, camera/view, and texture details that materially help the requested image. "
             "Do not add video timing, shot progression, dialogue, or sound."
         )
+
+    guidance = app_config.config.get("generation_model_guidance", {})
+    guidance_text = str(guidance.get(model_id) or "").strip() if isinstance(guidance, dict) else ""
+    if guidance_text:
+        blocks.append("[MODEL CAPABILITIES & LIMITATIONS]\nAccount for these model limitations while preserving creative intent.\n" + guidance_text)
 
     if operation == "write_prompt":
         if not prompt:

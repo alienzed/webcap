@@ -2,6 +2,22 @@ import json
 from pathlib import Path
 
 from .h3_prompt_contract import mode_from_reference_roles
+from . import config as app_config
+
+
+def _model_limitations(model_id):
+    guidance = app_config.config.get("generation_model_guidance", {})
+    if not isinstance(guidance, dict):
+        return ""
+    return str(guidance.get(model_id) or "").strip()
+
+
+def _add_model_limitations(blocks, model_id):
+    guidance = _model_limitations(model_id)
+    if guidance:
+        blocks.append("[MODEL CAPABILITIES & LIMITATIONS]\nAccount for these model limitations while preserving creative intent.\n" + guidance)
+
+
 
 
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
@@ -388,6 +404,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        _add_model_limitations(blocks, "minimax_h3")
         target_scene_count = story.get("targetSceneCount")
         scene_count_guidance = (
             "Create exactly " + str(int(target_scene_count)) + " Scenes. "
@@ -426,6 +443,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         invariants = _story_invariants_text(story)
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
+        _add_model_limitations(blocks, "minimax_h3")
         target_scene_count = story.get("targetSceneCount")
         scene_count_guidance = (
             "Create exactly " + str(int(target_scene_count)) + " planned Scenes. "
@@ -478,6 +496,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        _add_model_limitations(blocks, "minimax_h3")
         blocks.append("[COMPLETE SCENE OUTLINE]\n" + json.dumps(outline, indent=2, ensure_ascii=False))
         blocks.append(
             "[CURRENT PLANNED SCENE]\nScene "
@@ -531,6 +550,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        _add_model_limitations(blocks, "minimax_h3")
         blocks.append("[SCENE BEFORE]\n" + _scene_context(before_scene) + "\nGeneration prompt: " + _clean(before_scene.get("prompt")))
         if after_scene is not None:
             blocks.append("[SCENE AFTER]\n" + _scene_context(after_scene) + "\nGeneration prompt: " + _clean(after_scene.get("prompt")))
@@ -576,6 +596,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+        _add_model_limitations(blocks, "minimax_h3")
         blocks.append("[EXISTING SCENE OUTLINE]\n" + "\n".join(
             str(number) + ". " + _scene_context(scenes[ordered_id])
             for number, ordered_id in enumerate(order, start=1)
@@ -630,6 +651,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         if invariants:
             blocks.append("[STORY INVARIANTS]\n" + invariants)
         blocks.append("[H3 WRITING RULES]\n" + h3_runtime_context)
+        _add_model_limitations(blocks, "minimax_h3")
         blocks.append("[CURRENT SCENE PLAN]\n" + json.dumps(scene_plan, indent=2, ensure_ascii=False))
         blocks.append(
             "[USER REPAIR INSTRUCTION]\n" + correction
@@ -679,6 +701,7 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
     if vocabulary:
         blocks.append(vocabulary)
     blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
+    _add_model_limitations(blocks, "minimax_h3")
     blocks.append("[REFERENCE MODE]\n" + h3_mode)
 
     if operation == "write_prompt":

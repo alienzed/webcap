@@ -411,3 +411,21 @@ def test_check_coherence_only_sees_existing_prompt():
     assert "OLD FIRST PROMPT" not in text
     assert "EXISTING SECOND PROMPT" in text
     assert prompt["response_schema"]["required"] == ["prompt"]
+
+
+def test_model_guidance_only_for_h3_authoring(monkeypatch):
+    from tool.server import config as app_config
+    monkeypatch.setitem(app_config.config, "generation_model_guidance", {"minimax_h3": "Prefer simple staging."})
+    story = _story()
+    for operation in ("develop_story", "develop_story_outline", "repair_scenes"):
+        instruction = "Adjust staging." if operation == "repair_scenes" else ""
+        prompt = storyboard_llm_contract.build_request(story, "", operation, instruction)["prompt"]
+        assert prompt.count("Prefer simple staging.") == 1
+    for operation in ("insert_scene", "extend_story"):
+        prompt = storyboard_llm_contract.build_request(story, "scene-1", operation)["prompt"]
+        assert prompt.count("Prefer simple staging.") == 1
+    for operation in ("write_prompt", "refine_prompt"):
+        prompt = storyboard_llm_contract.build_request(story, "scene-2", operation, "Adjust staging.")["prompt"]
+        assert prompt.count("Prefer simple staging.") == 1
+    assert "Prefer simple staging." not in storyboard_llm_contract.build_request(story, "scene-2", "check_coherence")["prompt"]
+

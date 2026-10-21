@@ -4,7 +4,39 @@
   var selected = new Set(), anchor = -1;
   var source = '', pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
   var needsLoad = true;
-  var explorerMode = 'grid', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null;
+  var externalDirectory = '', externalFolders = [], reverseSort = false, galleryHome = null;
+  function setExternalDirectory(path) {
+    externalDirectory = path; selected.clear(); anchor = -1;
+    el('media-explorer-recursive').checked = false; selectItem(-1); load(true);
+  }
+  function renderExternalFolders() {
+    var host = el('media-explorer-folder-rows'); host.replaceChildren();
+    el('media-explorer-external-navigation').classList.toggle('hidden', !isExternal());
+    el('media-explorer-directory-label').textContent = '/' + externalDirectory;
+    el('media-explorer-up').disabled = !externalDirectory;
+    if (!isExternal() || el('media-explorer-recursive').checked) return;
+    externalFolders.forEach(function (name) {
+      var button = document.createElement('button');
+      button.type = 'button'; button.textContent = '📁 ' + name;
+      button.onclick = function () { setExternalDirectory([externalDirectory, name].filter(Boolean).join('/')); };
+      host.appendChild(button);
+    });
+  }
+  function renderMainPreview() {
+    var stage = el('media-explorer-preview-stage');
+    if (explorerMode === 'grid') return;
+    stage.replaceChildren();
+    if (active >= 0 && items[active]) stage.appendChild(mediaElement(items[active], true));
+    else { var label = document.createElement('span'); label.textContent = 'Select a file to preview'; stage.appendChild(label); }
+  }
+  function placeGallery() {
+    var gallery = el('media-explorer-grid'), stage = el('media-explorer-preview-stage');
+    if (!galleryHome) galleryHome = el('media-explorer-gallery-area');
+    el('media-explorer-workspace').classList.toggle('explorer-grid-mode', explorerMode === 'grid');
+    if (explorerMode === 'grid') { stage.replaceChildren(); stage.appendChild(gallery); }
+    else { galleryHome.appendChild(gallery); renderMainPreview(); }
+  }
+  var explorerMode = 'list', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null;
   var autoMetadataRequested = new Set(), externalRevision = -1, externalPendingRefresh = false, externalOverview = '', externalJobSummary = '', lastExternalError = '';
   function externalSummary() {
     var node = el('media-explorer-metadata-progress');
@@ -84,7 +116,7 @@
       if (next !== 'list' && !media) frame.prepend(
         item.source === 'external' ? externalTileMedia(item) : mediaElement(item, false));
     });
-    syncExternalControls();
+    syncExternalControls(); placeGallery();
   }
   function externalTileMedia(item) {
     if (item.mediaKind === 'video') {
@@ -266,7 +298,7 @@
     }
     host.dataset.id = items[index] ? items[index].id : '';
     host.replaceChildren();
-    if (index < 0 || !items[index]) { inspector.classList.add('hidden'); return; }
+    if (index < 0 || !items[index]) { inspector.classList.add('hidden'); renderMainPreview(); return; }
     var item = items[index], preview = mediaElement(item, true);
     text(el('media-explorer-inspector-name'), item.fileName);
     el('media-explorer-inspector-name').title = item.fileName;
@@ -499,7 +531,7 @@
     open.className = 'review-captions-btn'; text(open, 'View full size');
     open.addEventListener('click', function () { openLoupe(); }); actions.appendChild(open);
     if (typeof related !== 'undefined') actions.appendChild(related);
-    inspector.classList.remove('hidden');
+    inspector.classList.remove('hidden'); renderMainPreview();
   }
   function openLoupe(index) {
     var dlg = el('media-explorer-loupe');
@@ -666,7 +698,12 @@
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
       sort:el('media-explorer-sort').value, source:source, full:full ? '1' : '0',
       storyboard_type:storyboardType(), model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, date:el('media-explorer-date').value, artifact:artifact, owner:owner});
-    if (isExternal()) Object.entries(externalParams()).forEach(function (entry) { qs.set(entry[0], entry[1]); });
+    if (isExternal()) {
+      Object.entries(externalParams()).forEach(function (entry) { qs.set(entry[0], entry[1]); });
+      qs.set('directory', externalDirectory);
+      qs.set('recursive', el('media-explorer-recursive').checked ? '1' : '0');
+      qs.set('direction', reverseSort ? 'asc' : 'desc');
+    }
     if (isExternal() && options.refreshFilesystem) qs.set('refresh', '1');
     fetch((isExternal() ? '/fs/media_explorer/external?' : '/fs/media_explorer?') + qs, {signal: controller.signal}).then(function (res) {
       return res.json().catch(function (err) { throw new Error('Media discovery HTTP ' + res.status + ': ' + err.message); }).then(function (data) {
@@ -679,6 +716,7 @@
       if (reset && isExternal()) externalPendingRefresh = false;
       complete = !!data.complete;
       if (isExternal()) {
+        externalFolders = data.folders || []; renderExternalFolders();
         externalRevision = data.revision;
         externalOverview = data.discovered + ' found · ' + data.analyzed + ' analyzed' + (data.complete ? '' : ' · discovering');
         if (data.warnings) externalOverview += ' · ' + data.warnings + ' warnings';
@@ -724,7 +762,7 @@
         });
         offset += incoming.length;
       }
-      count(); updateSelection();
+      count(); updateSelection(); renderMainPreview();
       if (!isExternal()) facets(data.facets);
       needsLoad = false;
       if (isExternal()) {
@@ -830,9 +868,9 @@
       stopExternalTimers(); externalJobRunning = false;
       if (!isExternal()) autoMetadataRequested.clear();
       if (isExternal()) {
-        explorerMode = 'list';
+        explorerMode = 'list'; externalDirectory = ''; externalFolders = [];
         facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).value = ''; });
-        if (!['newest', 'oldest', 'name', 'path', 'type', 'resolution', 'megapixels', 'duration'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
+        if (!['newest', 'oldest', 'name', 'path', 'type', 'size', 'resolution', 'megapixels', 'duration'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
       } else if (!['newest', 'oldest', 'name', 'rating'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
       setExplorerMode(explorerMode);
       syncExternalControls();
@@ -845,13 +883,32 @@
   document.querySelectorAll('[data-explorer-mode]').forEach(function (btn) { btn.addEventListener('click', function () { setExplorerMode(btn.dataset.explorerMode); }); });
   el('media-explorer-open-path').addEventListener('click', function () {
     var nextPath = el('media-explorer-external-path').value.trim();
-    externalPath = nextPath;
+    externalPath = nextPath; externalDirectory = ''; externalFolders = [];
     mediaFacts.clear();
     autoMetadataRequested.clear(); externalRevision = -1; externalPendingRefresh = false; externalOverview = ''; externalJobSummary = ''; externalJobRunning = false;
     stopExternalTimers(); selected.clear(); updateSelection();
     load(true, {refreshFilesystem:true});
   });
   el('media-explorer-external-path').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('media-explorer-open-path').click(); });
+  el('media-explorer-up').addEventListener('click', function () { setExternalDirectory(externalDirectory.split('/').slice(0, -1).join('/')); });
+  el('media-explorer-recursive').addEventListener('change', function () { renderExternalFolders(); load(true); });
+  el('media-explorer-sort-reverse').addEventListener('click', function () {
+    reverseSort = !reverseSort; el('media-explorer-sort-reverse').setAttribute('aria-pressed', String(reverseSort)); load(true);
+  });
+  var grip = el('media-explorer-resizer'), explorerWorkspace = el('media-explorer-workspace'), resizing = false;
+  grip.addEventListener('pointerdown', function (e) { resizing = true; grip.setPointerCapture(e.pointerId); });
+  grip.addEventListener('pointermove', function (e) {
+    if (!resizing) return;
+    var rect = explorerWorkspace.querySelector('.media-explorer-main').getBoundingClientRect();
+    explorerWorkspace.style.setProperty('--explorer-list-width', Math.max(220, Math.min(650, e.clientX - rect.left)) + 'px');
+  });
+  grip.addEventListener('pointerup', function () { resizing = false; });
+  grip.addEventListener('dblclick', function () { explorerWorkspace.style.setProperty('--explorer-list-width', '260px'); });
+  grip.addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault();
+    var width = parseInt(explorerWorkspace.style.getPropertyValue('--explorer-list-width'), 10) || 260;
+    explorerWorkspace.style.setProperty('--explorer-list-width', Math.max(220, Math.min(650, width + (e.key === 'ArrowRight' ? 20 : -20))) + 'px');
+  });
   el('media-explorer-generate-metadata').addEventListener('click', function () { requestExternalMetadata('filtered'); });
   el('media-explorer-stop-metadata').addEventListener('click', function () {
     fetch('/fs/media_explorer/external/metadata/stop', {method:'POST'}).then(function (res) {

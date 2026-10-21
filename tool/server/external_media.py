@@ -371,6 +371,9 @@ def _snapshot_status(snapshot):
 
 
 def register_routes(app):
+    from .external_exports import register_routes as register_export_routes
+    register_export_routes(app)
+
     @app.get("/fs/media_explorer/external")
     def external_list():
         try:

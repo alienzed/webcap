@@ -52,15 +52,20 @@ def normalize_dimensions(prompt, dimensions=None):
         name = str(supplied.get("label") or "").strip()
         if not name:
             raise ValueError("Every attribute needs a name.")
-        normalized.append({"id": "G" + str(index), "label": name[:100], "options": choices,
-                           "role": role, "weight": _ROLES[role]})
+        entry = {"id": "G" + str(index), "label": name[:100], "options": choices,
+                 "role": role, "weight": _ROLES[role]}
+        if str(supplied.get("annotationGroup") or "").strip():
+            entry["annotationGroup"] = str(supplied["annotationGroup"]).strip()
+        normalized.append(entry)
     if not any(item["weight"] > 0 for item in normalized):
         raise ValueError("Mark at least one attribute Primary or Leakage so VL has something to score.")
     return normalized
 
 
-def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_vocabulary=None):
-    contract = build_wildcard_request(captions, set_name=set_name, focus=focus, vocabulary=vocabulary)
+def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_vocabulary=None,
+                   annotations=None):
+    contract = build_wildcard_request(captions, set_name=set_name, focus=focus,
+                                     vocabulary=vocabulary, annotations=annotations)
     contract["operation"] = "propose_epoch_finder_plan"
     schema = contract["response_schema"]
     schema["required"] = ["wildcard", "stableTerms", "variationGroups", "concept"]
@@ -69,7 +74,9 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_v
     group["required"] = ["label", "options", "role"]
     group["properties"]["role"] = {"type": "string", "enum": ["primary", "leakage", "vary"]}
     import json
-    contract["prompt"] += "\n[ACTUAL SET REFERENCE TAGS]\n" + json.dumps(reference_vocabulary or [], ensure_ascii=False) + "\n"
+    # Annotated proposals already contain the run-scoped concept inventory.
+    if annotations is None:
+        contract["prompt"] += "\n[ACTUAL SET REFERENCE TAGS]\n" + json.dumps(reference_vocabulary or [], ensure_ascii=False) + "\n"
     contract["prompt"] += (
         "\n\n[EPOCH FINDER ADDITION]\n"
         "You are proposing a *reviewable test plan*, not launching a campaign. "
@@ -79,10 +86,15 @@ def build_proposal(captions, set_name="", focus="", vocabulary=None, reference_v
         "Assign role 'primary' for distinguishing features of the learned concept; "
         "'leakage' for secondary traits that should vary independently of the learned concept; "
         "'vary' for prompts' incidental variety (background, lighting, etc.) not worth scoring. "
-        "Treat background, setting, lighting, and camera as Vary by default; hair, pose, and general appearance as Leakage by default, unless the user focus explicitly targets those traits. " 
+        "Default Vary only: Viewpoint, Background, Lighting. "
+        "Default Leakage: Position, Hair, Body, Clothing. "
+        "All other actual learned-concept groups are Primary by default. "
+        "Explicit training focus may override any role; these are editable recommendations, not validation gates. " 
         "Reserve Primary for distinctive learned construction, shape, and key subject attributes. " 
         "Prefer precise independent construction/color/shape attributes to whole-product alternatives. "
-        "Build each Primary variation group from one actual scoped annotation group in ACTUAL SET REFERENCE TAGS. "
+        "Build each Primary variation group from one actual scoped annotation group in the supplied concept-tag inventory. "
+        "Return that exact name as annotationGroup on each tag-grounded dimension; "
+        "never infer the group by matching option text later. "
         "Each Primary option must be the exact text of one tag from that same group: never combine, rephrase, or infer tags. "
         "If a concept has multiple independent tag groups, make separate wildcard dimensions. "
         "Do not invent untrained Primary features or treat generalization-only values as learned Primary options. "

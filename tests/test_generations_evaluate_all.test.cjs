@@ -11,7 +11,7 @@ assert.ok(start >= 0 && end > start, 'Reference evaluation function must exist')
 const source = script.slice(start, end) + '\nthis.run = runReferenceComparison;';
 
 function harness(failDino = false) {
-  const requests = [], errors = [];
+  const requests = [], errors = [], payloads = [];
   const elements = {
     'test-generations-evaluator': { value: 'rvn', disabled: false },
     'test-generations-reference-run': { disabled: false },
@@ -28,6 +28,7 @@ function harness(failDino = false) {
     currentStatus: { session: 'session1', results: [{ mediaFile: 'media.png' }] },
     resultMediaFile: item => item.mediaFile,
     testReferenceRequest: async args => {
+      payloads.push(args);
       requests.push(args.action + ':' + (args.method || 'save'));
       if (failDino && args.method === 'dino') throw Error('DINO failed');
       return args.action === 'evaluate' && args.method === 'rvn' ? { job: { jobId: 'llm1' } } : {};
@@ -35,6 +36,7 @@ function harness(failDino = false) {
     trackTransientLlmJob: () => {},
     waitForCaptionAssistJob: async () => ({ result: { text: 'OPTION: 1\nVERDICT: MATCH' } }),
     getCaptionVisionModelId: () => 'vision-A',
+    getRequirementGroupAlias: group => group === 'color' ? 'Garment color' : '',
     drawReferenceResults: () => {},
     reportConsoleError: (...args) => errors.push(args),
     testVlRuns: {},
@@ -42,13 +44,14 @@ function harness(failDino = false) {
     runTestVlBatch: () => requests.push('queue:original'),
   };
   vm.runInNewContext(source, sandbox);
-  return { run: sandbox.run, requests, errors, references, elements };
+  return { run: sandbox.run, requests, errors, references, elements, payloads };
 }
 
 test('Evaluate All saves VL reference, runs DINO, then queues Original VL', async () => {
   const h = harness();
   await h.run();
   assert.deepEqual(h.requests, ['evaluate:rvn', 'save:save', 'evaluate:dino', 'queue:original']);
+  assert.equal(h.payloads[0].groupAlias, 'Garment color');
   assert.equal(h.references.busy, false);
   assert.equal(h.references.runAll, false);
 });

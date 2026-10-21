@@ -12,49 +12,151 @@ def _clean_context(value):
     return " ".join(str(value or "").strip().split())
 
 
-def observed_group_combinations(annotations, eligible_media):
-    """Actual co-occurring scoped tag sets, scoped to eligible Set media."""
-    observed = {}
-    for media in eligible_media:
-        scoped = annotations.get(media, {})
-        if not isinstance(scoped, dict):
+# Generic Set attributes are background context, not the learned concept.
+_VARY_GROUPS = frozenset({"viewpoint", "background", "lighting"})
+_LEAKAGE_GROUPS = frozenset({"position", "hair", "body", "clothing"})
+_CORE_GROUPS = _VARY_GROUPS | _LEAKAGE_GROUPS
+
+
+def _concept_tags(annotations, focus=""):
+    """Read exact Set annotations, retaining group identity for duplicate tag text."""
+    if not isinstance(annotations, dict):
+        raise ValueError("Scoped Set annotations must be a group-to-tags mapping.")
+    tags = set()
+    for group, values in annotations.items():
+        if not isinstance(group, str) or not isinstance(values, list) or any(
+            not isinstance(value, str) for value in values
+        ):
+            raise ValueError("Invalid scoped Set annotation group or tag list.")
+        # Explicitly focusing a generic group overrides the usual secondary role.
+        name = group.strip().casefold()
+        if name in _CORE_GROUPS and not re.search(r"\b" + re.escape(name) + r"\b", focus.casefold()):
             continue
-        for group, tags in scoped.items():
-            if not isinstance(tags, list):
+        tags.update((group, value) for value in values if value.strip())
+    return tags
+
+
+def _spread_caption_examples(captions, max_items=150, max_chars=24000):
+    """Existing unannotated Director request behavior (also used by Epoch Finder)."""
+    counts = Counter(captions)
+    unique = list(counts)
+    count = min(len(unique), max_items)
+    while True:
+        indices = [index * (len(unique) - 1) // (count - 1)
+                   for index in range(count)] if count > 1 else [0]
+        examples = ["[count=" + str(counts[unique[index]]) + "] " + unique[index]
+                    for index in indices]
+        if sum(len(example) + 2 for example in examples) <= max_chars or count == 1:
+            return examples, len(unique)
+        count -= 1
+
+
+def _sample_caption_examples(rows, max_items=24, max_chars=7200):
+    """Prefer examples covering previously unseen, especially rare, concept tags."""
+    counts = Counter()
+    distinct = {}
+    for caption, tags in rows:
+        if not caption:
+            continue
+        counts[caption] += 1
+        distinct.setdefault(caption, set()).update(tags)
+    captions = list(distinct)
+    if not captions:
+        return [], 0
+    tag_frequency = Counter(tag for _, tags in rows for tag in tags)
+    chosen, covered, remaining, used_chars = [], set(), list(range(len(captions))), 0
+
+    while remaining and len(chosen) < max_items:
+        candidates = []
+        for index in remaining:
+            fresh = distinct[captions[index]] - covered
+            # Gain is about group/tag diversity, never incidental wording.
+            gain = sum(1 / tag_frequency[tag] for tag in fresh)
+            size = len(captions[index]) + 22
+            if size + used_chars <= max_chars:
+                candidates.append((gain, len(fresh), -index, index, size))
+        if not candidates:
+            break
+        winner = max(candidates)
+        if chosen and winner[0] <= 0:
+            break
+        index, size = winner[3], winner[4]
+        chosen.append(index)
+        remaining.remove(index)
+        covered.update(distinct[captions[index]])
+        used_chars += size
+
+    # A few spread-out examples retain caption style even when tags are sparse.
+    target = min(6, len(captions), max_items)
+    if len(chosen) < target:
+        indices = [i * (len(captions) - 1) // (target - 1)
+                   for i in range(target)] if target > 1 else [0]
+        for index in indices:
+            if len(chosen) >= target:
+                break
+            if index in chosen:
                 continue
-            values = tuple(sorted({tag for tag in tags if isinstance(tag, str) and tag.strip()}))
-            if values:
-                observed.setdefault(group, set()).add(values)
-    return {group: [list(combo) for combo in sorted(combos)]
-            for group, combos in sorted(observed.items())}
+            size = len(captions[index]) + 22
+            if size + used_chars <= max_chars:
+                chosen.append(index)
+                used_chars += size
+
+    examples = ["[count=" + str(counts[captions[i]]) + "] " + captions[i]
+                for i in chosen]
+    return examples, len(captions)
 
 
-def build_request(captions, set_name="", focus="", vocabulary=None, group_combinations=None):
+def build_request(captions, set_name="", focus="", vocabulary=None, annotations=None):
+    if annotations is not None and len(annotations) != len(captions):
+        raise ValueError("Wildcard annotations must align with Set captions.")
     cleaned = [_clean_caption(value) for value in (captions or [])]
-    cleaned = [value for value in cleaned if value]
-    if not cleaned:
+    if not any(cleaned):
         raise ValueError("This Set has no captions to analyze.")
 
     set_name = _clean_context(set_name)
     focus = _clean_context(focus)
-
-    groups = []
-    for raw in vocabulary if isinstance(vocabulary, list) else []:
-        if not isinstance(raw, dict):
-            continue
-        group = _clean_context(raw.get("group"))
-        if not group:
-            continue
-        terms = (
-            [_clean_context(term) for term in raw.get("terms", []) if str(term or "").strip()]
-            if isinstance(raw.get("terms"), list) else []
+    if annotations is None:
+        # Epoch Finder and other unannotated callers retain the existing request.
+        groups = []
+        for raw in vocabulary if isinstance(vocabulary, list) else []:
+            if not isinstance(raw, dict):
+                continue
+            group = _clean_context(raw.get("group"))
+            if not group:
+                continue
+            terms = ([_clean_context(term) for term in raw.get("terms", [])
+                      if str(term or "").strip()]
+                     if isinstance(raw.get("terms"), list) else [])
+            groups.append({"group": group, "alias": _clean_context(raw.get("alias")),
+                           "terms": terms})
+        corpus, unique_count = _spread_caption_examples([text for text in cleaned if text])
+        inventory_context = "Annotation groups and terms: " + (
+            json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"
         )
-        groups.append({"group": group, "alias": _clean_context(raw.get("alias")), "terms": terms})
-
-    counts = Counter(cleaned)
-    corpus = []
-    for caption, count in counts.most_common():
-        corpus.append("[count=" + str(count) + "] " + caption)
+    else:
+        scoped = [_concept_tags(entry, focus) for entry in annotations]
+        frequencies = Counter(tag for tags in scoped for tag in tags)
+        aliases = {
+            _clean_context(entry.get("group")): _clean_context(entry.get("alias"))
+            for entry in vocabulary or [] if isinstance(entry, dict) and
+            _clean_context(entry.get("group"))
+        }
+        groups = []
+        for group in sorted({name for name, _ in frequencies}):
+            terms = sorted(
+                ((term, count) for (name, term), count in frequencies.items()
+                 if name == group),
+                key=lambda item: (-item[1], item[0]),
+            )
+            groups.append({
+                "group": group, "alias": aliases.get(group, ""),
+                "terms": [{"term": term, "count": count} for term, count in terms],
+            })
+        corpus, unique_count = _sample_caption_examples(list(zip(cleaned, scoped)))
+        inventory_context = "Observed concept tags (selected run; counts are annotated media): " + (
+            json.dumps(groups, ensure_ascii=False, separators=(",", ":"))
+            if groups else "(no scoped concept tags)"
+        )
 
     schema = {
         "type": "object",
@@ -76,7 +178,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["label", "options", "annotationGroup"],
+                    "required": ["label", "options"],
                     "properties": {
                         "label": {"type": "string", "minLength": 1},
                         "annotationGroup": {"type": "string", "description": "Exact Set annotation group name when options are tags; empty for free prompt variation."},
@@ -95,8 +197,9 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
     context_lines = [
         "Set name: " + (set_name or "(not supplied)"),
         "Explicit focus: " + (focus or "(auto - infer from Set name and repeated caption language)"),
-        "Annotation groups and terms: " + (json.dumps(groups, ensure_ascii=False) if groups else "(none supplied)"),
-        "Observed same-group tag combinations: " + json.dumps(group_combinations or {}, ensure_ascii=False),
+        inventory_context,
+        "Caption sampling: " + str(len(corpus)) + " representative examples from " +
+        str(unique_count) + " distinct captions. [count=N] indicates exact duplicates.",
     ]
 
     prompt = (
@@ -109,11 +212,20 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "[GOAL]\n"
         "Identify the Set's dominant trained concept, decompose its meaningful variation into reusable composable dimensions, "
         "and express those dimensions as one natural wildcard caption. Keep useful secondary dimensions too when the captions support them.\n\n"
+        "[DIMENSION ROLE DEFAULTS]\n"
+        "- Vary only (unscored): Viewpoint, Background, Lighting.\n"
+        "- Leakage (secondary independence): Position, Hair, Body, Clothing.\n"
+        "- Primary: the other observed concept groups when they describe the learned subject.\n"
+        "- These are proposed defaults, not restrictions: an explicit focus can promote a generic group.\n"
+        "- Keep every dimension's exact annotationGroup when using tags; shared tag text across top and bottom groups does NOT merge their meanings.\n\n"
         "[FOCUS PRIORITY]\n"
         "- If Explicit focus is provided, treat it as the primary concept to mine deeply.\n"
         "- Otherwise infer the primary concept from the Set name first, then from repeated caption language and frequency.\n"
-        "- The primary concept should receive the richest decomposition. Secondary recurring dimensions such as pose, camera/view, "
-        "physical appearance, background, and lighting are valid and useful, but they must not crowd out the primary concept.\n\n"
+        "- Prioritize the trained subject's construction, distinct components, shape, material, and color. "
+        "A description may mention both a top and a bottom with identically named strap types: "
+        "treat those as different attributes tied to their respective components.\n"
+        "- Pose, hair, setting, lighting and camera are context. Keep them stable or, at most, "
+        "include one or two useful secondary variations; do not build a wildcard around every detail.\n\n"
         "[COMPOSITION RULES]\n"
         "- Each wildcard group must vary exactly one attribute, even when captions combine several. "
         "For example write '{brown|black|blonde|ginger} hair', not "
@@ -121,20 +233,19 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "Keep hair style and hair color separate.\n"
         "- Prefer independent, composable attributes over whole-phrase alternatives. "
         "For example, separate color, pattern, trim, top shape, and bottom shape rather than collapsing them into a single 'style' wildcard.\n"
-        "- Set annotationGroup to the exact group name ONLY if every option is an exact observed tag in that group. "
-        "For natural-language caption phrases use an empty annotationGroup; never map paraphrases to exact tag identifiers.\n"
+        "- Set annotationGroup to a Set group ONLY when every option is an exact observed tag of that group. "
+        "Otherwise use an empty annotationGroup. Never infer group identity from shared words alone.\n"
         "- Position/pose wildcard options may be descriptive phrases rather than exact Position tags. "
         "For example 'standing upright' is not the same tag as 'standing'. If ANY option is not an exact "
         "tag name, leave annotationGroup empty for that dimension rather than claiming a tag mapping.\n"
-        "- For tags in the SAME annotation group, only use joint combinations observed together in the selected training media. "
-        "If a pair was never observed together in that group, treat it as mutually exclusive. "
-        "Prefer one option from that group in each resolved caption unless an observed tag combination requires several. "
-        "Do not apply this restriction across DIFFERENT annotation groups; cross-group recombination tests generalization.\n"
+        "- Do not recombine mutually exclusive shapes into one choice. "
+        "Independently vary actual components, but keep each resolved prompt physically meaningful.\n"
         "- Recombine attributes across dimensions so tests exercise independently selectable properties, "
         "not merely replay complete caption fragments.\n"
-        "- Annotation groups, aliases, and terms identify important dimensions, but are not proof of training membership. "
-        "Only the supplied selected-run captions and observed tag combinations provide evidence for values.\n"
-        "- Do not invent unseen values or generalization probes. Every option must be evidenced in the training captions or scoped tags.\n"
+        "- The observed concept-tag inventory is the main evidence: each group and tag is distinct, "
+        "and counts describe prevalence in the selected run. "
+        "The sampled captions illustrate natural phrasing, not an exhaustive list.\n"
+        "- Prefer observed variations. If a useful value is unsupported by these examples, do not claim it was trained.\n"
         "- Use supplied garment-construction terms accurately; do not invent nonsensical hardware or garment structures.\n"
         "- Every wildcard option must itself be usable prompt text. Never emit category placeholders such as 'various styles', "
         "'other background', 'different poses', 'multiple colors', 'etc.', or similar descriptions of options you failed to enumerate.\n"
@@ -145,7 +256,7 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "[GENERAL RULES]\n"
         "- Each caption is prefixed with [count=N] frequency metadata. Use the count as evidence of prevalence; it is not caption text.\n"
         "- Keep stable subject tokens, identity terms, and consistently recurring descriptors outside wildcard braces.\n"
-        "- Put evidenced alternatives in {a|b|c} groups; do not add new values absent from training.\n"
+        "- Put concrete interchangeable alternatives in {a|b|c} groups; leave consistent terms outside braces.\n"
         "- Consolidate obvious synonymous wording only when the alternatives mean the same thing.\n"
         "- Put shared nouns and grammar outside braces; use the shortest interchangeable option that keeps every result natural. "
         "Whole phrases are appropriate only for a genuinely inseparable single attribute.\n"
@@ -166,74 +277,6 @@ def build_request(captions, set_name="", focus="", vocabulary=None, group_combin
         "prompt": prompt,
         "response_schema": schema,
     }
-
-
-def validate_group_compatibility(data, combinations):
-    """Reject proposed same-group choices with unobserved co-occurrence.
-
-    The explicit annotationGroup field is the identity contract. Unmapped
-    dimensions are general prompt variation, not inferred trained tags.
-    """
-    groups = data.get("variationGroups") if isinstance(data, dict) else None
-    if not isinstance(groups, list):
-        raise ValueError("Wildcard proposal must include variation groups.")
-    from .epoch_test_bench import (
-        _parse_wildcard_nodes, _expand_wildcard_option,
-        _normalize_wildcard_text, _strip_wildcard_comments,
-    )
-    nodes = _parse_wildcard_nodes(_strip_wildcard_comments(str(data.get("wildcard") or "")))
-    resolved = []
-    for kind, alternatives in nodes:
-        if kind != "group":
-            continue
-        options = []
-        for alternative in alternatives:
-            for value in _expand_wildcard_option(alternative):
-                value = _normalize_wildcard_text(value)
-                if value not in options:
-                    options.append(value)
-        resolved.append(options)
-    if len(resolved) != len(groups):
-        raise ValueError("Wildcard group count does not match its annotation dimensions.")
-    assigned = {}
-    for index, item in enumerate(groups):
-        if not isinstance(item, dict):
-            raise ValueError("Invalid wildcard dimension.")
-        if [str(option).strip() for option in (item.get("options") or [])] != resolved[index]:
-            raise ValueError("Wildcard group options do not match the generated prompt.")
-        group = str(item.get("annotationGroup") or "").strip()
-        if not group:
-            continue
-        if group not in combinations:
-            raise ValueError("Unknown wildcard annotation group: " + group)
-        allowed = {tag for combo in combinations[group] for tag in combo}
-        options = item.get("options") or []
-        if not isinstance(options, list):
-            raise ValueError("Wildcard options must be a list in group " + group)
-        missing = [option for option in options if option not in allowed]
-        if missing:
-            available = sorted(allowed)
-            sample = ", ".join(repr(tag) for tag in available[:8])
-            if len(available) > 8:
-                sample += ", ..."
-            raise ValueError(
-                "Wildcard values must be exact tags in group " + group +
-                " (not found in selected training media: " +
-                ", ".join(repr(tag) for tag in missing[:5]) +
-                (", ..." if len(missing) > 5 else "") +
-                "; available tags: " + (sample or "(none)") + ")"
-            )
-        assigned.setdefault(group, []).append(options)
-    from itertools import product
-    for group, dimensions in assigned.items():
-        if len(dimensions) < 2:
-            continue
-        observed = [set(combo) for combo in combinations[group]]
-        for selected in product(*dimensions):
-            if not any(set(selected).issubset(combo) for combo in observed):
-                raise ValueError("Unobserved same-group wildcard combination in " +
-                                 group + ": " + " + ".join(selected))
-    return True
 
 
 def normalize_result(data):

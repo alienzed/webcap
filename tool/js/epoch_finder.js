@@ -138,7 +138,7 @@
   function suggestedRole(label, options) {
     var text = String(label || '').toLowerCase();
     if (/background|setting|lighting|surface|camera|viewpoint|environment|scenery|location/.test(text)) return 'vary';
-    if (/hair|skin|eye|face|expression|pose|position|body|age|ethnicity/.test(text)) return 'leakage';
+    if (/hair|skin|eye|face|expression|pose|position|body|clothing|age|ethnicity/.test(text)) return 'leakage';
     return 'primary';
   }
   function updateDimensions() {
@@ -146,9 +146,12 @@
     dimensions = groups.map(function (g, index) {
       var prev = dimensions[index] || {};
       var oldValues = (prev.options || []).join('|');
+      var unchanged = oldValues === g.options.join('|');
       return {label: String(prev.label || ('Attribute ' + (index + 1))),
         options: g.options.slice(),
-        role: oldValues && oldValues !== g.options.join('|') ? suggestedRole(prev.label, g.options) : (prev.role || suggestedRole(prev.label, g.options)), nested: g.nested};
+        annotationGroup: unchanged ? (prev.annotationGroup || '') : '',
+        role: oldValues && !unchanged ? suggestedRole(prev.annotationGroup || prev.label, g.options) :
+          (prev.role || suggestedRole(prev.annotationGroup || prev.label, g.options)), nested: g.nested};
     });
     renderDimensions();
   }
@@ -156,6 +159,7 @@
     els('attributes').innerHTML = dimensions.map(function (group, index) {
       return '<div class="epoch-finder-attribute" data-index="' + index + '">' +
         '<label>Attribute <input data-attr-name value="' + escape(group.label) + '"></label>' +
+        (group.annotationGroup ? '<small class="epoch-finder-muted">Set group: ' + escape(group.annotationGroup) + '</small>' : '') +
         '<label>Role <select data-attr-role>' +
         [['primary', 'Primary · 2×'], ['leakage', 'Leakage · 1×'], ['vary', 'Vary only · unscored']].map(function (item) {
           return '<option value="' + item[0] + '"' + (group.role === item[0] ? ' selected' : '') +
@@ -177,7 +181,11 @@
           values.some(function (x) { return /[{}|]/.test(x); })) throw new Error('Attribute ' + (index + 1) + ' has invalid values.');
       var label = row.querySelector('[data-attr-name]').value.trim();
       if (!label) throw new Error('Every attribute needs a name.');
-      return {label: label, role: row.querySelector('[data-attr-role]').value, options: values};
+      var original = dimensions[index] || {};
+      // Option edits do not change which Set component this dimension describes.
+      var annotationGroup = original.annotationGroup || '';
+      return {label: label, role: row.querySelector('[data-attr-role]').value,
+        options: values, annotationGroup: annotationGroup};
     });
     if (!edits.some(function (entry) { return entry.role !== 'vary'; })) {
       throw new Error('Mark at least one concept or leakage attribute for scoring.');
@@ -238,7 +246,8 @@
       els('concept').value = analysis.concept || els('concept').value;
       els('prompt').value = analysis.wildcard;
       dimensions = analysis.variationGroups.map(function (g) {
-        return {label: g.label, options: g.options, role: g.role || suggestedRole(g.label, g.options)};
+        return {label: g.label, options: g.options, annotationGroup: g.annotationGroup || '',
+          role: g.role || suggestedRole(g.annotationGroup || g.label, g.options)};
       });
       renderDimensions();
       els('proposal-status').textContent = 'Proposed tests ready. Edit values and scoring roles freely.';
@@ -336,10 +345,12 @@
   var referencePlanSignature = '';
   function prepareReferences() {
     var version = ++referenceGeneration;
-    referencePlanSignature = JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options]; })]);
-    referenceItems = dimensions.flatMap(function (d) {
+    referencePlanSignature = JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options,d.annotationGroup]; })]);
+    referenceItems = dimensions.flatMap(function (d, index) {
       return d.role === 'primary' ? d.options.map(function (option) {
-        return {attribute:d.label, option:option, key:JSON.stringify([d.label,option]), candidates:[]};
+        return {attribute:d.label, dimensionId:'G' + (index + 1),
+          option:option, annotationGroup:d.annotationGroup || '',
+          key:JSON.stringify([index,option]), candidates:[]};
       }) : [];
     });
     referenceIndex = 0;
@@ -351,6 +362,10 @@
         item.groups = vocabulary.filter(function (group) {
           return (group.terms || []).some(function (term) { return term.term === item.option; });
         }).map(function (group) { return group.group; });
+        // The Director's scoped group is a preference, not a restriction on manual choice.
+        item.groups.sort(function (a, b) {
+          return Number(b === item.annotationGroup) - Number(a === item.annotationGroup);
+        });
       });
       return Promise.all(referenceItems.map(function (item) {
         return Promise.all(item.groups.map(function (group) {
@@ -370,26 +385,37 @@
         var saved = referenceSelections[item.key];
         var cleared = Object.prototype.hasOwnProperty.call(referenceSelections, item.key) && saved === null;
         if (!saved && !cleared) {
-          // A wildcard term may belong to more than one scoped group.
-          // Reuse the first saved choice still represented in this campaign's candidates.
-          item.groups.some(function (group) {
+          // Never guess which of two identically named tags a saved choice meant.
+          var savedMatches = item.groups.map(function (group) {
             var chosen = window.testReferencesChoice(els('run').value, group, item.option);
             if (!chosen || !item.candidates.some(function (candidate) {
               return candidate.group === group && candidate.media === chosen.media;
-            })) return false;
-            saved = {attribute:item.attribute, option:item.option,
+            })) return null;
+            return {attribute:item.attribute, dimensionId:item.dimensionId, option:item.option,
               group:group, tag:item.option, media:chosen.media};
-            return true;
-          });
+          }).filter(Boolean);
+          saved = item.annotationGroup
+            ? (savedMatches.find(function (entry) {
+                return entry.group === item.annotationGroup;
+              }) || null)
+            : (savedMatches.length === 1 ? savedMatches[0] : null);
         }
+        if (item.annotationGroup && saved && saved.group !== item.annotationGroup &&
+            !Object.prototype.hasOwnProperty.call(referenceSelections, item.key)) saved = null;
         var selectedIndex = !cleared && item.candidates.length ? item.candidates.findIndex(function (candidate) {
           return saved && candidate.media === saved.media && candidate.group === saved.group && candidate.tag === saved.tag;
         }) : -1;
-        if (selectedIndex < 0 && !cleared && item.candidates.length) selectedIndex = 0;
+        if (selectedIndex < 0 && !cleared && item.annotationGroup) {
+          selectedIndex = item.candidates.findIndex(function (candidate) {
+            return candidate.group === item.annotationGroup;
+          });
+        }
+        if (selectedIndex < 0 && !cleared && !item.annotationGroup &&
+            item.groups.length === 1 && item.candidates.length) selectedIndex = 0;
         var candidate = item.candidates[selectedIndex];
-        // Keep explicitly cleared choices cleared; otherwise default to the first exact-tag match.
+        // Ambiguous options remain unselected unless the source group is known.
         referenceSelections[item.key] = candidate ? {
-          attribute:item.attribute, option:item.option,
+          attribute:item.attribute, dimensionId:item.dimensionId, option:item.option,
           group:candidate.group, tag:candidate.tag, media:candidate.media
         } : null;
         referenceDraftChoices[item.key] = selectedIndex;
@@ -408,13 +434,18 @@
       return;
     }
     var selected = referenceDraftChoices[item.key] == null ? -1 : referenceDraftChoices[item.key];
-    host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' + escape(item.attribute) +
-      ' · ' + escape(item.option) + '</strong><span>' + (referenceIndex+1) + ' / ' +
-      referenceItems.length + '</span></div><p class="epoch-finder-muted">Matching references are selected by default. Click Selected to clear; unselected options skip reference comparisons.</p>' +
+    var selectedCandidate = item.candidates[selected];
+    var sourceGroup = selectedCandidate ? selectedCandidate.group
+      : item.annotationGroup || (item.groups.length === 1 ? item.groups[0] : '');
+    var heading = (sourceGroup || (item.groups.length > 1 ? 'Choose Set group' : item.attribute)) +
+      ' · ' + item.option;
+    host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' + escape(heading) +
+      '</strong><span>' + (referenceIndex+1) + ' / ' +
+      referenceItems.length + '</span></div><p class="epoch-finder-muted">References are optional; identically named tags in different groups are separate features.</p>' +
       '<div class="epoch-finder-reference-nav"><button type="button" data-reference-nav="prev"' +
       (referenceIndex===0?' disabled':'') + '>← Previous</button><button type="button" data-reference-nav="next">' +
       (referenceIndex===referenceItems.length-1?'Finish':'Next →') + '</button></div>';
-    galleryHost.innerHTML = '<h3>' + escape(item.attribute) + ' · ' + escape(item.option) +
+    galleryHost.innerHTML = '<h3>' + escape(heading) +
       '</h3><p class="epoch-finder-muted">' + (item.candidates.length ?
         'Click Select to choose, or Preview to inspect a larger image.' :
         'No exact-tag training images available for this option. Reference comparisons will skip it.') + '</p>' +
@@ -424,7 +455,7 @@
           '&media=' + encodeURIComponent(candidate.media);
         return '<div class="epoch-finder-reference-tile' + (active ? ' selected' : '') + '">' +
           '<img loading="lazy" src="' + media + '" alt="' + escape(candidate.media) + '">' +
-          (item.groups.length > 1 ? '<span>' + escape(candidate.group) + '</span>' : '') +
+          '<span title="' + escape(getRequirementGroupAlias(candidate.group)) + '">' + escape(candidate.group) + '</span>' +
           '<div class="epoch-finder-reference-tile-actions"><button type="button" data-reference-pick="' + i +
           '" aria-pressed="' + !!active + '">' + (active ? '✓ Selected' : 'Select') +
           '</button><button type="button" data-reference-preview="' + i + '">Preview</button></div></div>';
@@ -437,7 +468,10 @@
     els('start').disabled = false;
   }
   function approvedReferences() {
-    return referenceItems.map(function (item) { return referenceSelections[item.key]; }).filter(Boolean);
+    return referenceItems.map(function (item) {
+      var chosen = referenceSelections[item.key];
+      return chosen ? Object.assign({}, chosen, {alias:getRequirementGroupAlias(chosen.group)}) : null;
+    }).filter(Boolean);
   }
   function showStep(value) {
     wizardStep = value;
@@ -454,7 +488,7 @@
     els('next').classList.toggle('hidden', value === 4);
     els('start').classList.toggle('hidden', value !== 4);
     if (value === 3) roundPlan();
-    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options]; })])) prepareReferences(); else renderReferenceStep(); }
+    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options,d.annotationGroup]; })])) prepareReferences(); else renderReferenceStep(); }
   }
   function advance() {
     try {
@@ -799,7 +833,7 @@
         return (c.label||c.id||'Attribute')+': '+c.result+' · expected '+(c.expectedText||'')+' · observed '+(c.selectedText||'');
       })});
       if((unit.referenceAssessments||[]).length)details.push({label:'Reference VL',value:unit.referenceAssessments.map(function(r){
-        return (r.label||'Reference')+': '+r.verdict+' · '+(r.reference||'');
+        return (r.group||r.label||'Reference')+' · '+r.option+': '+r.verdict+' · '+(r.reference||'');
       })});
       if((unit.dinoAssessments||[]).length)details.push({label:'DINOv2',value:unit.dinoAssessments.map(function(r){
         return (r.reference||'Reference')+': '+Number(r.similarity).toFixed(3);
@@ -906,13 +940,13 @@
       escape(unit.prompt || 'Not yet resolved') + '</p></details>' +
       ((unit.referenceAssessments || []).length ? '<details open><summary>Training-reference comparisons (' +
         unit.referenceAssessments.length + ')</summary>' + unit.referenceAssessments.map(function (v) {
-          return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.label) +
+          return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.group || v.label) +
           ' · ' + escape(v.option) + '</strong><span>' + escape(v.verdict) + '</span>' +
           '<small>Selected in render: ' + escape(v.selected == null ? 'unclear' : ((unit.groups || []).find(function (g) { return g.id === v.groupId; })?.options || [])[v.selected - 1] || 'unclear') + '</small>' +
           '<div>' + escape(v.response) + '</div><small>Reference: ' + escape(v.reference) +
           ' · ' + escape(v.elapsedSeconds) + 's</small></div>';
         }).join('') + '</details>' : '') +
-      ((unit.dinoAssessments || []).length ? '<details open><summary>DINOv2 similarity (' +
+      ((unit.dinoAssessments || []).length ? '<details open><summary>DINOv2 whole-image similarity (' +
         unit.dinoAssessments.length + ' distinct references)</summary>' + unit.dinoAssessments.map(function (v) {
           return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.reference) +
             '</strong><span>' + Number(v.similarity).toFixed(3) + '</span><div>' +
@@ -1170,8 +1204,8 @@
         referenceSelections[item.key] = null;
       } else {
         referenceDraftChoices[item.key] = index;
-        referenceSelections[item.key] = {attribute:item.attribute, option:item.option,
-          group:candidate.group, tag:candidate.tag, media:candidate.media};
+        referenceSelections[item.key] = {attribute:item.attribute, dimensionId:item.dimensionId,
+          option:item.option, group:candidate.group, tag:candidate.tag, media:candidate.media};
       }
       renderReferenceStep();
       return;

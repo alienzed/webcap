@@ -788,7 +788,8 @@
             ' · ' + choice.group + ': ' + choice.term;
           var payload = await testReferenceRequest({
             folder:folder, session:session, action:'evaluate', method:method, media:previews[i],
-            group:choice.group, option:choice.term, reference:choice.media, jobId:choice.runId,
+            group:choice.group, groupAlias:getRequirementGroupAlias(choice.group), option:choice.term,
+            reference:choice.media, jobId:choice.runId,
             choices:attribute.options, model:method === 'rvn' ? getCaptionVisionModelId() : ''
           });
           if (method === 'rvn') {
@@ -1666,20 +1667,6 @@
       wildcardDirector.requestDiagnostic = payload.job && payload.job.request || null;
       trackTransientLlmJob(payload.job);
       return waitForWildcardJob(payload.job);
-    }).then(function (result) {
-      var analysis = result && result.analysis;
-      if (!analysis) throw new Error('Wildcard proposal has no analysis.');
-      return wildcardPostJson('/fs/test_generations/wildcard/validate', {
-        folder: requestFolder, jobId: trainingJobId, analysis: analysis
-      }).then(function () { return result; }).catch(function (err) {
-        // Keep the Director's complete draft editable when its annotation
-        // metadata fails compatibility validation. Never silently remap tags.
-        if (result && result.analysis && String(result.analysis.wildcard || '').trim()) {
-          wildcardDirector.analysis = result.analysis;
-          renderWildcardAnalysis(result.analysis);
-        }
-        throw err;
-      });
     }).then(function (result) {
       var analysis = result && result.analysis;
       if (!analysis || !String(analysis.wildcard || '').trim()) {

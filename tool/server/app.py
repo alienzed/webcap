@@ -2357,17 +2357,17 @@ def test_generations_wildcard_route():
             str(load_caption_text(folder, name).get("caption") or "").strip()
             for name in media
         ]
-        captions = [caption for caption in captions if caption]
-        focus = str(data.get("focus") or "").strip()
-        set_name = Path(folder.rstrip("/\\")).name or folder
-        from .test_wildcard_contract import observed_group_combinations
-        from .folder_state_store import read_folder_state
+        # One read of existing Set annotations; compile concept coverage only in memory.
         from .caption_ops import _resolve_folder
         scoped = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
-        combinations = observed_group_combinations(scoped, media)
+        if not isinstance(scoped, dict):
+            raise ValueError("Scoped Set annotation map is invalid.")
+        annotations = [scoped.get(name, {}) for name in media]
+        focus = str(data.get("focus") or "").strip()
+        set_name = Path(folder.rstrip("/\\")).name or folder
         contract = test_wildcard_build_request(
-            captions, set_name=set_name, focus=focus, vocabulary=data.get("vocabulary"),
-            group_combinations=combinations,
+            captions, set_name=set_name, focus=focus,
+            vocabulary=data.get("vocabulary"), annotations=annotations,
         )
         job = enqueue_llm(
             "test",
@@ -2378,7 +2378,7 @@ def test_generations_wildcard_route():
         )
         return jsonify({
             "ok": True,
-            "captionCount": len(captions),
+            "captionCount": sum(bool(caption) for caption in captions),
             "trainingMediaCount": len(media),
             "setName": set_name,
             "focus": focus,
@@ -2386,28 +2386,6 @@ def test_generations_wildcard_route():
         }), 202
     except Exception as exc:
         app.logger.exception("TEST WILDCARD GENERATION FAILED: %s", exc)
-        return jsonify({"ok": False, "error": str(exc)}), 400
-
-
-@app.route("/fs/test_generations/wildcard/validate", methods=["POST"])
-def test_generations_wildcard_validate_route():
-    try:
-        data = request.get_json(silent=True) or {}
-        folder = str(data.get("folder") or "").strip()
-        from .caption_ops import _resolve_folder
-        from .folder_state_store import read_folder_state
-        from .test_wildcard_contract import observed_group_combinations, validate_group_compatibility
-        annotations = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
-        from .epoch_reference import training_wildcard_members
-        job_id = str(data.get("jobId") or "").strip()
-        trained = training_wildcard_members(folder, job_id)
-        combinations = observed_group_combinations(
-            annotations, [name for name in list_media_files(folder) if name in trained]
-        )
-        validate_group_compatibility(data.get("analysis"), combinations)
-        return jsonify({"ok": True})
-    except Exception as exc:
-        app.logger.exception("TEST WILDCARD COMPATIBILITY FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
@@ -2538,17 +2516,21 @@ def epoch_finder_propose_route():
         data = request.get_json(silent=True) or {}
         folder = str(data.get("folder") or "").strip()
         safe_join_fs_root(folder)
-        from .epoch_reference import training_wildcard_members
         job_id = str(data.get("jobId") or "").strip()
         trained_images = training_image_members(folder, job_id)
+        media = [name for name in list_media_files(folder) if name in trained_images]
         captions = [
             str(load_caption_text(folder, name).get("caption") or "").strip()
-            for name in list_media_files(folder) if name in trained_images
+            for name in media
         ]
+        from .caption_ops import _resolve_folder
+        scoped = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+        if not isinstance(scoped, dict):
+            raise ValueError("Scoped Set annotation map is invalid.")
         contract = epoch_finder_build_proposal(
             captions, set_name=Path(folder).name,
             focus=data.get("focus"), vocabulary=data.get("vocabulary"),
-            reference_vocabulary=epoch_reference_vocabulary(folder, job_id),
+            annotations=[scoped.get(name, {}) for name in media],
         )
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(), contract,

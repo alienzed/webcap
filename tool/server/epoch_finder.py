@@ -13,7 +13,7 @@ from pathlib import Path
 from . import config as app_config
 from . import epoch_test_bench as test_bench
 from .epoch_finder_plan import normalize_dimensions
-from .caption_vision import build_vision_question_messages, build_reference_comparison_messages, vision_resized_image_data_url
+from .caption_vision import build_vision_question_messages, build_reference_comparison_messages, reference_comparison_feature, vision_resized_image_data_url
 from .llm_runner import enqueue as enqueue_llm, job_status as llm_job_status
 from .test_models import get_test_model_for_staging_key
 from .training_history import all_history_payload
@@ -346,12 +346,15 @@ def create_campaign(folder_path, criteria):
     for entry in reference_choices:
         if not isinstance(entry, dict):
             raise ValueError("Invalid reference selection.")
-        key = (str(entry.get("attribute") or ""), str(entry.get("option") or ""))
+        key = (str(entry.get("dimensionId") or entry.get("attribute") or ""),
+               str(entry.get("option") or ""))
         if key in approved:
             raise ValueError("Duplicate approved reference.")
         approved[key] = entry
-    required = {(dimension["label"], option) for dimension in dimensions
-                if _requires_reference(dimension["role"]) for option in dimension["options"]}
+    required = {(identity, option) for dimension in dimensions
+                if _requires_reference(dimension["role"])
+                for identity in (dimension["id"], dimension["label"])
+                for option in dimension["options"]}
     if not set(approved).issubset(required):
         raise ValueError("Only Primary wildcard choices may have training references.")
     evaluation = criteria.get("referenceEvaluation")
@@ -364,15 +367,17 @@ def create_campaign(folder_path, criteria):
         for attribute, option in approved
     }
     references = []
-    for (attribute, option), entry in sorted(approved.items()):
-        if str(entry.get("group") or "") not in reference_groups[(attribute, option)] or str(entry.get("tag") or option) != option:
+    for (identity, option), entry in sorted(approved.items()):
+        if str(entry.get("group") or "") not in reference_groups[(identity, option)] or str(entry.get("tag") or option) != option:
             raise ValueError("Primary reference must use its exact annotated group and tag.")
         group = str(entry.get("group") or "")
         media = str(entry.get("media") or "")
         tag = str(entry.get("tag") or option)
         reference = verified_reference(folder, group, tag, media, job_id)
-        references.append({"attribute": attribute, "option": option, "group": group,
-                           "tag": tag, **reference})
+        references.append({"attribute": str(entry.get("attribute") or identity),
+                           "dimensionId": str(entry.get("dimensionId") or ""),
+                           "option": option, "group": group,
+                           "tag": tag, "alias": str(entry.get("alias") or "").strip(), **reference})
     if evaluation["dino"]:
         from .epoch_dino import preflight as dino_preflight
         dino_preflight()
@@ -494,7 +499,7 @@ def _question(groups):
         'or "unclear" if you cannot see it, or "none" if no option fits. '
         'If "(absent)" is an option, select its number when that attribute is absent. '
         "Do not assume any option is present; use only visible evidence.\n\n" +
-        "\n".join(g["id"] + " (" + g["label"] + "): " +
+        "\n".join(g["id"] + " (" + (g.get("annotationGroup") or g["label"]) + "): " +
                   "; ".join(str(i + 1) + "=" + (value or "(absent)")
                             for i, value in enumerate(g["options"]))
                   for g in groups)
@@ -584,7 +589,9 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     for group, dimension in zip(unit["groups"], campaign["dimensions"]):
         if group.get("options") != dimension["options"]:
             raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
-        group.update({"label": dimension["label"], "role": dimension["role"], "weight": dimension["weight"]})
+        group.update({"label": dimension["label"], "role": dimension["role"],
+                      "weight": dimension["weight"],
+                      "annotationGroup": dimension.get("annotationGroup", "")})
     unit["question"] = _question(unit["groups"])
     unit["prompt"] = status.get("resolvedPrompt") or status.get("prompt") or ""
     _save(folder_path, campaign)
@@ -659,7 +666,8 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
     if not frame.is_file():
         raise FileNotFoundError("Generated comparison frame is unavailable.")
     from .epoch_reference import verified_reference
-    references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
+    references = {(entry.get("dimensionId") or entry["attribute"], entry["option"]): entry
+                  for entry in campaign["referencePlan"]}
     outcomes = list(unit.get("referenceAssessments") or [])
     completed_groups = {row["groupId"] for row in outcomes}
     for group in unit.get("groups", []):
@@ -668,16 +676,15 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
         if not _requires_reference(group.get("role")) or group.get("expected") is None:
             continue
         expected = group["options"][group["expected"] - 1]
-        assigned = references.get((group["label"], expected))
+        assigned = references.get((group["id"], expected)) or references.get((group["label"], expected))
         if assigned is None:
             continue
         verified = verified_reference(_folder_key(folder_path), assigned["group"], assigned.get("tag") or expected, assigned["media"], campaign["jobId"])
         if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
             raise ValueError("Training reference changed after campaign approval.")
         reference = folder_path / assigned["media"]
-        question = (group["label"] + " — training reference demonstrates " + expected + ". "
-                    "Select the visible option in B from: " +
-                    "; ".join(str(index + 1) + "=" + option for index, option in enumerate(group["options"])))
+        question = reference_comparison_feature(
+            assigned["group"], expected, group["options"], assigned.get("alias"))
         messages = build_reference_comparison_messages(
             question,
             vision_resized_image_data_url(reference, int(campaign.get("vlImageMP", .45) * 1000000)),
@@ -703,7 +710,8 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
                 verdict = verdict_line.partition(":")[2].strip().upper()
                 if verdict not in {"MATCH", "PARTIAL", "MISMATCH", "UNCLEAR"}:
                     verdict = "UNCLEAR"
-                outcomes.append({"groupId": group["id"], "label": group["label"], "option": expected,
+                outcomes.append({"groupId": group["id"], "label": group["label"],
+                                 "group": assigned["group"], "option": expected,
                                  "reference": assigned["media"], "selected": selected, "verdict": verdict,
                                  "response": answer, "modelId": campaign["visionModel"],
                                  "elapsedSeconds": round(time.monotonic() - started, 2)})
@@ -725,19 +733,20 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
     frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
     if not frame.is_file():
         raise FileNotFoundError("Generated DINO comparison frame is unavailable.")
-    references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
+    references = {(entry.get("dimensionId") or entry["attribute"], entry["option"]): entry
+                  for entry in campaign["referencePlan"]}
     unique = {}
     for group in unit.get("groups", []):
         if not _requires_reference(group.get("role")) or group.get("expected") is None:
             continue
         option = group["options"][group["expected"] - 1]
-        entry = references.get((group["label"], option))
+        entry = references.get((group["id"], option)) or references.get((group["label"], option))
         if entry is None:
             continue
         actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"], campaign["jobId"])
         if actual["size"] != entry["size"] or actual["mtimeNs"] != entry["mtimeNs"]:
             raise ValueError("Training reference changed since approval.")
-        unique.setdefault(entry["media"], []).append(group["label"] + ": " + option)
+        unique.setdefault(entry["media"], []).append(entry["group"] + ": " + option)
     results = unit.get("dinoAssessments", [])
     completed = {item["reference"] for item in results}
     for name, attributes in unique.items():

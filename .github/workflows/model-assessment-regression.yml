@@ -10,6 +10,7 @@ on:
       - 'tool/js/diagnostics.js'
       - 'tool/js/progress_card.js'
       - 'tests/test_model_lab.py'
+      - 'tests/model_assessment_preview_ui.test.js'
       - 'tests/test_model_assessment_completion.py'
       - 'tests/test_assessment_transfer.py'
       - 'tests/test_director_model_calibration.py'
@@ -24,6 +25,7 @@ on:
       - 'tool/js/diagnostics.js'
       - 'tool/js/progress_card.js'
       - 'tests/test_model_lab.py'
+      - 'tests/model_assessment_preview_ui.test.js'
       - 'tests/test_model_assessment_completion.py'
       - 'tests/test_assessment_transfer.py'
       - 'tests/test_director_model_calibration.py'
@@ -52,3 +54,4 @@ jobs:
           node --check tool/js/diagnostics.js
           node --check tool/js/progress_card.js
           node tests/test_model_lab_progress.js
+          node --test tests/model_assessment_preview_ui.test.js

@@ -290,6 +290,7 @@ def test_insights_review_reuses_available_unrated_results_and_wildcards(tmp_path
     assert first_batch["unavailable"] == 1
     assert all(item["jobId"] == "run-a" and item["epoch"] == 67 for item in first_batch["items"])
     assert all(item["wildcards"] == [{"phrase": "red bikini"}] for item in first_batch["items"])
+    assert all(item["prompt"] == "a red bikini" for item in first_batch["items"])
     assert not {"rated.png", "base.png", "wrong.png", "missing.png"} & {
         item["mediaFile"] for item in first_batch["items"]}
     skipped = first_batch["items"][0]["id"]
@@ -632,3 +633,26 @@ def test_blind_five_rating_uses_full_height_without_hiding_rating_controls():
     assert "max-height:min(53vh,550px)" not in css
     for control in ("review-media", "review-stars", "review-skip", "review-next", "review-close"):
         assert 'id="run-lab-' + control + '"' in review
+
+def test_blind_review_keeps_wildcard_strings_and_actual_render_prompt(tmp_path, monkeypatch):
+    from tool.server import run_analytics as analytics
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "render.png").touch()
+    status = {
+        "sourcePrompt": "a {red|blue} bikini",
+        "resolvedPrompt": "a blue bikini",
+        "results": [{
+            "kind": "lora", "mediaFile": "render.png", "prompt": "a red bikini",
+            "provenance": {"sourceJobId": "run-a", "sourceFolder": "set/a", "sourceEpoch": 17},
+        }],
+    }
+    monkeypatch.setattr(analytics, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(analytics.bench, "_session_directories", lambda _: [session])
+    monkeypatch.setattr(analytics.bench, "_read_status", lambda _: status)
+    monkeypatch.setattr(analytics.bench, "_session_rating_map", lambda _: {})
+    monkeypatch.setattr(analytics.bench, "_resolved_wildcard_summary",
+                        lambda source, resolved, folder: ["red bikini"] if resolved == "a red bikini" else [])
+    item = analytics.insights_review_batch(tmp_path)["items"][0]
+    assert item["prompt"] == "a red bikini"
+    assert item["wildcards"] == ["red bikini"]

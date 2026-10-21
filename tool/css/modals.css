@@ -513,6 +513,24 @@
   background: color-mix(in srgb, var(--accent) 2.5%, transparent);
 }
 
+.app-settings-runtime-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+.app-settings-runtime-controls .review-captions-btn {
+  width: auto;
+  min-height: 38px;
+  font-size: 16px;
+  padding: 8px 14px;
+}
+.app-settings-runtime-controls .review-captions-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+#app-settings-llama-status { font-size: 16px; }
+
 .app-settings-runtime-card-header {
   display: flex;
   align-items: flex-end;

@@ -66,6 +66,7 @@ function fixture(hash = '#/media') {
   });
   const workspace = nodes['media-explorer-workspace'];
   const main = new Element('main'); main.className = 'media-explorer-main';
+  const preview = new Element('section'); preview.className = 'media-explorer-preview';
   const sizeLabel = new Element('label'); sizeLabel.className = 'media-explorer-size-label';
   const fitControls = new Element('div'); fitControls.className = 'media-explorer-fit-controls';
   nodes['media-explorer-sort'].value = 'newest';
@@ -73,11 +74,11 @@ function fixture(hash = '#/media') {
   workspace.appendChild(main);
   workspace.appendChild(sizeLabel); workspace.appendChild(fitControls);
   main.appendChild(nodes['media-explorer-gallery-area']);
-  main.appendChild(nodes['media-explorer-preview']);
+  main.appendChild(preview);
   nodes['media-explorer-gallery-area'].appendChild(nodes['media-explorer-folder-rows']);
   nodes['media-explorer-gallery-area'].appendChild(nodes['media-explorer-side-list']);
   nodes['media-explorer-gallery-area'].appendChild(nodes['media-explorer-grid']);
-  nodes['media-explorer-preview'].appendChild(nodes['media-explorer-preview-stage']);
+  preview.appendChild(nodes['media-explorer-preview-stage']);
   workspace.appendChild(nodes['media-explorer-inspector']);
   nodes['media-explorer-inspector'].appendChild(nodes['media-explorer-inspector-body']);
   workspace.appendChild(nodes['media-explorer-loupe']); workspace.appendChild(nodes['media-explorer-compare-dialog']);

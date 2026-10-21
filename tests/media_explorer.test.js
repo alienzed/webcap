@@ -379,3 +379,94 @@ test('External subfolder checkbox broadens scope only when selected', async () =
   f.nodes['media-explorer-recursive'].emit('change');
   assert.equal(new URL(f.pending.at(-1).url,'http://localhost').searchParams.get('recursive'), '1');
 });
+
+
+test('Explorer workspace toolbar spans the list and preview without relocating owned controls', () => {
+  const html = fs.readFileSync('tool/tool.html', 'utf8');
+  const css = fs.readFileSync('tool/css/media_explorer.css', 'utf8');
+  const main = html.slice(html.indexOf('<main class="media-explorer-main"'), html.indexOf('</main>', html.indexOf('<main class="media-explorer-main"')));
+  const toolbarStart = main.indexOf('<div class="media-explorer-toolbar">');
+  const toolbarEnd = main.indexOf('<aside class="media-explorer-browser"');
+  const listStart = main.indexOf('<div id="media-explorer-gallery-area"');
+  const separatorStart = main.indexOf('<div id="media-explorer-resizer"');
+  const previewStart = main.indexOf('<section class="media-explorer-preview"');
+  assert.ok(toolbarStart > 0 && toolbarStart < toolbarEnd, 'toolbar is the first layout row');
+  assert.ok(toolbarEnd < listStart && listStart < separatorStart && separatorStart < previewStart, 'file list and preview remain separate resizable panes');
+  for (const id of ['media-explorer-heading', 'media-explorer-search', 'media-explorer-sort', 'media-explorer-kind',
+    'media-explorer-model', 'media-explorer-folder', 'media-explorer-date', 'media-explorer-rating',
+    'media-explorer-filter-chips', 'media-explorer-count', 'media-explorer-selection']) {
+    assert.ok(main.indexOf('id="' + id + '"') > toolbarStart && main.indexOf('id="' + id + '"') < toolbarEnd,
+      id + ' stays in the shared toolbar');
+  }
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-toolbar\s*\{\s*grid-column:\s*1\s*\/\s*-1;/);
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-browser\s*\{\s*grid-column:\s*1;\s*grid-row:\s*2;/);
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-resizer\s*\{\s*grid-column:\s*2;\s*grid-row:\s*2;/);
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-preview\s*\{\s*grid-column:\s*3;\s*grid-row:\s*2;/);
+});
+
+
+test('Explorer IA keeps full-size viewer an action and recent discovery in the header', () => {
+  const html = fs.readFileSync('tool/tool.html', 'utf8');
+  const mainStart = html.indexOf('<main class="media-explorer-main"');
+  const mainEnd = html.indexOf('</main>', mainStart);
+  const main = html.slice(mainStart, mainEnd);
+  const toolbarEnd = main.indexOf('<aside class="media-explorer-browser"');
+  assert.ok(main.indexOf('id="media-explorer-scope"') > 0 && main.indexOf('id="media-explorer-scope"') < toolbarEnd,
+    'partial history is explained by the result count, not as a row inside the media list');
+  assert.match(main, /role="group" aria-label="Media list or grid view"/);
+  assert.match(main, /class="media-explorer-viewer-action" data-explorer-mode="single"/);
+  const modeGroup = main.slice(main.indexOf('aria-label="Media list or grid view"'), main.indexOf('</div>', main.indexOf('aria-label="Media list or grid view"')));
+  assert.ok(!modeGroup.includes('data-explorer-mode="single"'), 'full-size viewer must not masquerade as a persisted view mode');
+  const css = fs.readFileSync('tool/css/media_explorer.css', 'utf8');
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-toolbar\s*\{\s*max-height:/);
+  assert.match(css, /@media \(max-width: 760px\)/);
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-resizer\s*\{\s*display: none;/);
+});
+
+test('Explorer file lists expose media type without loading thumbnails in List mode', () => {
+  const source = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
+  assert.match(source, /row\.dataset\.mediaKind = item\.mediaKind/);
+  assert.match(source, /card\.dataset\.mediaKind = item\.mediaKind/);
+  assert.match(source, /if \(next === 'list' && media\) media\.remove\(\)/);
+});
+
+test('full-size viewer action is disabled without a file and enabled after discovery', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  assert.equal(f.nodes['media-explorer-view-full-size'].disabled, true);
+  f.nodes['media-explorer-refresh'].click();
+  await f.settle(f.pending[1], [media('ready')]);
+  assert.equal(f.nodes['media-explorer-view-full-size'].disabled, false);
+});
+
+test('partial generated discovery notice does not leak into external-folder navigation', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], [media('recent')], true, {complete:false, total:150});
+  assert.equal(f.nodes['media-explorer-scope'].classList.contains('hidden'), false);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  assert.equal(f.nodes['media-explorer-scope'].classList.contains('hidden'), true);
+  assert.equal(f.nodes['media-explorer-view-full-size'].disabled, true);
+});
+
+
+test('external folder navigation stays with the file pane and recent count is not duplicated', async () => {
+  const html = fs.readFileSync('tool/tool.html', 'utf8');
+  const source = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
+  const css = fs.readFileSync('tool/css/media_explorer.css', 'utf8');
+  const main = html.slice(html.indexOf('<main class="media-explorer-main"'), html.indexOf('</main>', html.indexOf('<main class="media-explorer-main"')));
+  const toolbarEnd = main.indexOf('<aside class="media-explorer-browser"');
+  const navIndex = main.indexOf('id="media-explorer-external-navigation"');
+  const listIndex = main.indexOf('id="media-explorer-gallery-area"');
+  assert.ok(navIndex > toolbarEnd && navIndex < listIndex, 'folder navigation is immediately above the file list, outside search toolbar');
+  assert.match(css, /\.media-explorer-browser > \.media-explorer-external-navigation/);
+  assert.match(css, /--explorer-list-width: 292px;/);
+  assert.match(source, /setProperty\('--explorer-list-width', '292px'\)/);
+  assert.match(source, /el\('media-explorer-directory-label'\)\.title = '\/' \+ externalDirectory;/);
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], [media('recent')], true, {total:150, complete:false});
+  assert.doesNotMatch(f.nodes['media-explorer-count'].textContent, /recent/i, 'scope label carries recent status instead of repeating it in count');
+  assert.equal(f.nodes['media-explorer-scope'].classList.contains('hidden'), false);
+});

@@ -219,3 +219,39 @@ def test_list_items_only_expose_technical_metadata(tmp_path):
     indexed = _finished_snapshot(root)["items"][0]
     assert indexed["metadata"]["resolution"] == "1920x1080"
     assert not any(key in indexed["metadata"] for key in ("vision_sight", "scene_complexity"))
+
+
+def test_directory_scope_recursion_and_sorting(tmp_path):
+    root = tmp_path / "library"
+    _file(root / "root.jpg")
+    _file(root / "nested" / "child.jpg")
+    _file(root / "nested" / "deeper" / "grandchild.jpg")
+    snapshot = _finished_snapshot(root)
+    assert external_media._child_directories(snapshot, "") == ["nested"]
+    assert external_media._child_directories(snapshot, "nested") == ["deeper"]
+    assert [i["fileName"] for i in external_media._query_items(
+        snapshot, {"directory": "", "sort": "name"})] == ["root.jpg"]
+    assert [i["fileName"] for i in external_media._query_items(
+        snapshot, {"directory": "nested", "sort": "name"})] == ["child.jpg"]
+    assert len(external_media._query_items(
+        snapshot, {"directory": "", "recursive": "1"})) == 3
+    assert len(external_media._query_items(snapshot, {})) == 3
+    assert [i["fileName"] for i in external_media._query_items(
+        snapshot, {"directory": "", "recursive": "1", "sort": "size"})] == [
+        "root.jpg", "child.jpg", "grandchild.jpg"]
+    assert [i["fileName"] for i in external_media._query_items(
+        snapshot, {"directory": "", "recursive": "1", "sort": "name", "direction": "asc"})] == [
+        "root.jpg", "grandchild.jpg", "child.jpg"]
+
+
+def test_external_directory_does_not_escape_root(tmp_path):
+    root = tmp_path / "root"
+    _file(root / "safe.jpg")
+    snapshot = _finished_snapshot(root)
+    for value in ("../", "../../outside", "/../../", "nested/../"):
+        try:
+            external_media._child_directories(snapshot, value)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Directory escaped root or accepted traversal: " + value)

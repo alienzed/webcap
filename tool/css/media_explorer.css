@@ -230,10 +230,19 @@
 .media-explorer-grid.explorer-list .media-explorer-card-path { display:none; }
 .media-explorer-grid.explorer-list .media-explorer-card-sub { margin-top:3px; }
 .media-explorer-workspace.explorer-grid-mode .media-explorer-main { grid-template-columns:minmax(220px,var(--explorer-list-width)) 6px minmax(0,1fr); }
-.media-explorer-workspace.explorer-grid-mode .media-explorer-gallery-area { overflow:hidden; }
+.media-explorer-workspace.explorer-grid-mode .media-explorer-gallery-area { overflow:auto; }
 .media-explorer-workspace.explorer-grid-mode .media-explorer-preview { overflow:auto; }
 .media-explorer-workspace.explorer-grid-mode #media-explorer-grid { padding:10px; }
-.media-explorer-workspace.explorer-grid-mode .media-explorer-browser .media-explorer-gallery-area { display:none; }
+.media-explorer-workspace.explorer-grid-mode .media-explorer-preview-stage { display:block; height:auto; min-height:100%; }
+.media-explorer-workspace.explorer-grid-mode #media-explorer-grid { box-sizing:border-box; width:100%; }
+.media-explorer-side-list { display:flex; flex-direction:column; gap:2px; }
+.media-explorer-side-row { display:flex; align-items:center; min-width:0; gap:7px; border:1px solid transparent; border-radius:5px; }
+.media-explorer-side-row:hover { background:var(--panel); }
+.media-explorer-side-row.active { background:var(--panel); border-color:var(--explorer-accent); }
+.media-explorer-side-row.selected { box-shadow:inset 3px 0 0 var(--explorer-accent); }
+.media-explorer-side-row input { width:17px; height:17px; flex:none; margin:0 0 0 6px; accent-color:var(--explorer-accent); }
+.media-explorer-side-open { min-width:0; flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:16px; padding:8px 5px 8px 0; border:0; background:transparent; color:var(--text); cursor:pointer; }
+.media-explorer-side-row.active .media-explorer-side-open { font-weight:650; }
 @media(max-width:1050px) { .media-explorer-workspace:has(.media-explorer-inspector:not(.hidden)) .media-explorer-main { margin-right:0; } .media-explorer-inspector { box-shadow:-10px 0 25px #0006; } }
 @media(max-width:800px) { .media-explorer-main { min-height:0; } }
 

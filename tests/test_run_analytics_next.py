@@ -545,13 +545,14 @@ def test_insights_featured_previews_use_highest_rated_surviving_test_media(tmp_p
     snapshot = analytics.overview(tmp_path)
     epoch = snapshot["epochs"][0]
     assert epoch["ratedCount"] == 7  # Existing rating math is unchanged.
-    assert len(epoch["topRenders"]) == 3
+    assert len(epoch["topRenders"]) == 4
     assert [(item["mediaFile"], item["rating"], item["mediaKind"]) for item in epoch["topRenders"]] == [
         ("best-video.mp4", 5, "video"),
         ("also-best.webp", 5, "image"),
         ("good-image.jpg", 4, "image"),
+        ("ok-image.png", 3, "image"),
     ]
-    assert [item["session"] for item in epoch["topRenders"]] == ["a", "b", "a"]
+    assert [item["session"] for item in epoch["topRenders"]] == ["a", "b", "a", "b"]
 
 
 def test_insights_previews_reuse_existing_media_and_enlarge_landing_only():
@@ -559,13 +560,59 @@ def test_insights_previews_reuse_existing_media_and_enlarge_landing_only():
     root = Path(__file__).resolve().parents[1]
     js = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
     css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
-    assert "(p.topRenders||[])" in js
+    assert "var renders=p.topRenders||[]" in js
     assert "'/fs/test_generations/media?folder='" in js
     assert 'loading="lazy"' in js
     assert 'preload="metadata" muted playsinline' in js
     assert "#t=0.1" in js
     assert 'class="run-lab-feature-preview"' in js
+    assert 'class="run-lab-feature-preview-footer"' in js
+    assert "VL '+render.vlAgreement+'%" in js
+    assert "render.rating==null?'Unrated'" in js
+    assert "--preview-count:" in js
     assert 'data-lab-feature="inspect"' in js
     assert "#run-analytics-screen .run-lab-feature-previews" in css
     assert "#run-analytics-screen .run-lab-feature strong{font-size:34px}" in css
+    assert "#run-analytics-screen .run-lab-feature.has-previews{display:grid" in css
+    assert "repeat(var(--preview-count),minmax(0,1fr))" in css
     assert "#run-analytics-screen .run-lab-details>summary{font-size:16px}" in css
+
+
+def test_insights_featured_previews_fill_unrated_slots_and_keep_vl_per_render(tmp_path, monkeypatch):
+    from tool.server import run_analytics as analytics
+    session = tmp_path / "session"
+    session.mkdir()
+    for name in ("high.png", "medium.png", "unrated-reviewed.png", "unrated-plain.png"):
+        (session / name).touch()
+    origin = {"sourceJobId": "run-epoch", "sourceFolder": "set/a",
+              "sourceEpoch": 47}
+    results = [{"kind": "lora", "mediaFile": name, "provenance": origin}
+               for name in ("unrated-plain.png", "medium.png", "high.png",
+                            "unrated-reviewed.png")]
+    comparisons = {
+        "high.png": {"comparison": [
+            {"id": "top", "result": "match"},
+            {"id": "bottom", "result": "mismatch",
+             "expectedText": "black", "selectedText": "white"},
+            {"id": "background", "result": "match"},
+        ], "ignoredGroups": ["background"]},
+        "unrated-reviewed.png": {"comparison": [{"id": "top", "result": "match"}]},
+    }
+    monkeypatch.setattr(analytics, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(analytics.bench, "_session_directories", lambda _: [session])
+    monkeypatch.setattr(analytics.bench, "_read_status", lambda _: {"results": results})
+    monkeypatch.setattr(analytics.bench, "_session_rating_map",
+                        lambda _: {"high.png": 5, "medium.png": 4})
+    monkeypatch.setattr(analytics.bench, "_session_vision_state",
+                        lambda _: {"byMedia": comparisons})
+    monkeypatch.setattr(analytics, "_campaigns", lambda *_: [])
+
+    epoch = analytics.overview(tmp_path)["epochs"][0]
+    assert epoch["ratedCount"] == 2
+    assert epoch["testCount"] == 4
+    previews = epoch["topRenders"]
+    assert [preview["mediaFile"] for preview in previews] == [
+        "high.png", "medium.png", "unrated-reviewed.png", "unrated-plain.png"]
+    assert [preview["rating"] for preview in previews] == [5, 4, None, None]
+    assert [(preview["vlAgreement"], preview["vlJudgments"]) for preview in previews] == [
+        (50, 2), (None, 0), (100, 1), (None, 0)]

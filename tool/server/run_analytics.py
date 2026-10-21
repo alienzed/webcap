@@ -803,25 +803,29 @@ def overview(folder_path):
                 entry["ratedCount"] += 1
                 entry["ratingSum"] += ratings[media]
                 entry["ratingDistribution"][str(ratings[media])] += 1
-                # The landing page shows only the three best-rated surviving Test
-                # files. Reuse the existing media route; never decode or scan video.
-                supported_media = media.lower().endswith((
-                    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif",
-                    ".mp4", ".webm", ".mov", ".mkv",
-                )) if media else False
-                media_path = directory / media if media else None
-                if (supported_media and media_path.is_file()
-                        and not media_path.is_symlink()):
-                    preview = {
-                        "session": directory.name, "mediaFile": media,
-                        "rating": ratings[media],
-                        "mediaKind": ("video" if media.lower().endswith(
-                            (".mp4", ".webm", ".mov", ".mkv")) else "image"),
-                    }
-                    entry["topRenders"].append(preview)
-                    entry["topRenders"].sort(key=lambda item: (
-                        -item["rating"], item["session"], item["mediaFile"]))
-                    del entry["topRenders"][3:]
+            # Show four real surviving examples: rated first, then unrated
+            # examples if an epoch has fewer than four ratings. Each VL match
+            # percentage is per-image evidence, never a cross-protocol score.
+            video_exts = (".mp4", ".webm", ".mov", ".mkv")
+            supported_media = media.lower().endswith((
+                ".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif",
+            ) + video_exts) if media else False
+            media_path = directory / media if media else None
+            if (supported_media and media_path.is_file()
+                    and not media_path.is_symlink()):
+                preview = {
+                    "session": directory.name, "mediaFile": media,
+                    "rating": ratings[media] if rated else None,
+                    "mediaKind": "video" if media.lower().endswith(video_exts) else "image",
+                    "vlAgreement": round(100 * sum(credit for _, credit in judgments) / len(judgments))
+                    if judgments else None,
+                    "vlJudgments": len(judgments),
+                }
+                entry["topRenders"].append(preview)
+                entry["topRenders"].sort(key=lambda item: (
+                    -(item["rating"] or 0), -item["vlJudgments"],
+                    item["session"], item["mediaFile"]))
+                del entry["topRenders"][4:]
             if judgments:
                 entry["vlReviewedCount"] += 1
 

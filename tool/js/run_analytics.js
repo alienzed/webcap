@@ -433,17 +433,21 @@
       var p=item.point;
       if(!p)return '<div class="run-lab-feature"><small>'+esc(item.label)+'</small><p>Rate more saved renders to reveal another contender.</p></div>';
       var bins=p.ratingDistribution||{},strong=(bins['4']||0)+(bins['5']||0),weak=(bins['1']||0)+(bins['2']||0);
-      var examples=(p.topRenders||[]).map(function(render){
+      var renders=p.topRenders||[];
+      var examples=renders.map(function(render){
         var url='/fs/test_generations/media?folder='+encodeURIComponent(folder)+
           '&session='+encodeURIComponent(render.session)+'&media='+encodeURIComponent(render.mediaFile);
         var media=render.mediaKind==='video'
           ?'<video src="'+esc(url+'#t=0.1')+'" preload="metadata" muted playsinline aria-hidden="true"></video>'
           :'<img src="'+esc(url)+'" loading="lazy" decoding="async" alt="">';
-        return '<button type="button" class="run-lab-feature-preview" data-lab-feature="inspect" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'" aria-label="Inspect epoch '+p.epoch+' rated '+render.rating+' out of 5">'+
-          media+'<span class="run-lab-feature-preview-rating">'+render.rating+' ★</span></button>';
+        var rating=render.rating==null?'Unrated':render.rating+' ★';
+        var vl=render.vlAgreement==null?'VL —':'VL '+render.vlAgreement+'%';
+        var vlTitle=render.vlJudgments?'Saved VL attribute agreement across '+render.vlJudgments+' checks; not a human rating':'No saved VL attribute checks';
+        return '<button type="button" class="run-lab-feature-preview" data-lab-feature="inspect" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'" aria-label="Inspect epoch '+p.epoch+'; '+esc(rating)+'; '+esc(vl)+'">'+
+          media+'<span class="run-lab-feature-preview-footer"><span class="run-lab-feature-preview-rating">'+esc(rating)+'</span><span class="run-lab-feature-preview-vl" title="'+esc(vlTitle)+'">'+esc(vl)+'</span></span></button>';
       }).join('');
-      return '<div class="run-lab-feature"><div class="run-lab-feature-main"><small>'+esc(item.label)+'</small><h3>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</h3><strong>'+p.allManualAverage.toFixed(2)+'/5</strong><p>'+p.ratedCount+' of '+p.testCount+' Test renders rated · '+p.sessions.length+' sessions</p><p>'+strong+' rated 4–5★ · '+weak+' rated 1–2★</p><small>'+esc(item.note)+'</small><div class="run-lab-feature-actions"><button type="button" data-lab-feature="inspect" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect renders</button><button type="button" data-lab-feature="test" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Prepare 10 tests</button></div></div>'+
-        (examples?'<div class="run-lab-feature-previews" aria-label="Top-rated saved Test renders">'+examples+'</div>':'')+'</div>';
+      return '<div class="run-lab-feature'+(examples?' has-previews':'')+'"><div class="run-lab-feature-main"><small>'+esc(item.label)+'</small><h3>'+esc(p.runName||'Run '+p.jobId.slice(-8))+' · Epoch '+p.epoch+'</h3><strong>'+p.allManualAverage.toFixed(2)+'/5</strong><p>'+p.ratedCount+' of '+p.testCount+' Test renders rated · '+p.sessions.length+' sessions</p><p>'+strong+' rated 4–5★ · '+weak+' rated 1–2★</p><small>'+esc(item.note)+'</small><div class="run-lab-feature-actions"><button type="button" data-lab-feature="inspect" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Inspect renders</button><button type="button" data-lab-feature="test" data-lab-job="'+esc(p.jobId)+'" data-lab-epoch="'+p.epoch+'">Prepare 10 tests</button></div></div>'+
+        (examples?'<div class="run-lab-feature-previews" style="--preview-count:'+renders.length+'" aria-label="Saved Test render examples, rated first">'+examples+'</div>':'')+'</div>';
     }).join('');
   }
   function labHistory(){

@@ -245,7 +245,10 @@ def _submit_workflow(workflow, prompt_id):
     )
     returned_id = str(response.get("prompt_id") or "").strip() if isinstance(response, dict) else ""
     if returned_id != prompt_id:
-        raise RuntimeError("ComfyUI did not accept the requested inference job ID.")
+        raise RuntimeError(
+            "ComfyUI did not accept the requested inference job ID. Response: "
+            + json.dumps(response, ensure_ascii=False)
+        )
     return prompt_id
 
 

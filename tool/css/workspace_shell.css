@@ -1823,6 +1823,17 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
   white-space: nowrap;
 }
 
+/* Show provider failures in the existing queue summary without truncating them. */
+.inference-queue-header-copy #inference-queue-summary.inference-queue-failure {
+  color: var(--text);
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
 .inference-queue-header-actions {
   flex: 0 0 auto;
   display: flex;

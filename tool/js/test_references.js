@@ -144,7 +144,7 @@
         '<span class="test-references-filename" title="' + esc(candidate.media) + '">' + esc(candidate.media) + '</span>' +
         '<div class="epoch-finder-reference-tile-actions">' +
         '<button type="button" data-select-reference="' + i + '" aria-pressed="' + !!active + '">' +
-        (active ? '✓ Chosen' : 'Choose this') + '</button>' +
+        (active ? 'Unselect' : 'Choose this') + '</button>' +
         '<button type="button" data-preview-reference="' + i + '">Preview</button></div></div>';
     }).join('');
     drawSelections();
@@ -272,8 +272,13 @@
     if (!candidate) throw new Error('Reference candidate no longer exists.');
     if (pick) {
       var choice = currentChoice();
-      changeSelection('reference_selection_save', {runId:runId,group:choice.group,term:choice.term,media:candidate.media},
-        advanceAfterPick);
+      var chosen = selected[key(choice.group, choice.term)];
+      if (chosen && chosen.media === candidate.media) {
+        changeSelection('reference_selection_remove', chosen);
+      } else {
+        changeSelection('reference_selection_save', {runId:runId,group:choice.group,term:choice.term,media:candidate.media},
+          advanceAfterPick);
+      }
     } else {
       el('preview-image').src = mediaUrl(candidate.media);
       el('preview-image').alt = candidate.media;

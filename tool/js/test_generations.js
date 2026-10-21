@@ -1265,7 +1265,7 @@
 
   function wildcardRunId() {
     var selector = el('test-generations-wildcard-run');
-    if (!selector || !selector.value) throw new Error('Choose the training run used to build this wildcard.');
+    if (!selector) throw new Error('Wildcard training scope selector is missing.');
     return selector.value;
   }
 
@@ -1284,7 +1284,7 @@
     runPicker.replaceChildren();
     var blank = document.createElement('option');
     blank.value = '';
-    blank.textContent = runs.length ? 'Choose training run' : 'No linked training runs';
+    blank.textContent = 'All Set media (no run filter)';
     runPicker.appendChild(blank);
     runs.forEach(function (run, index) {
       var option = document.createElement('option');
@@ -1775,6 +1775,7 @@
     if (!wildcardDirector.modelId) throw new Error('Choose a Director model.');
     var requestFolder = owningSetFolder(launchFolder || (state && state.folder) || '');
     var trainingJobId = wildcardRunId();
+    var sourceWarning = '';
     var focus = String(el('test-generations-wildcard-focus') && el('test-generations-wildcard-focus').value || '').trim();
     wildcardDirector.busy = true;
     wildcardDirector.requestFolder = requestFolder;
@@ -1792,6 +1793,8 @@
       focus: focus,
       vocabulary: testPlanningVocabulary()
     }).then(function (payload) {
+      sourceWarning = String(payload.warning || '');
+      if (sourceWarning) reportConsoleWarning('Test Generations', sourceWarning);
       wildcardDirector.jobId = String(payload.job && payload.job.jobId || '');
       wildcardDirector.requestDiagnostic = payload.job && payload.job.request || null;
       trackTransientLlmJob(payload.job);
@@ -1809,8 +1812,8 @@
       }
       wildcardDirector.analysis = analysis;
       renderWildcardAnalysis(analysis);
-      el('test-generations-wildcard-status').textContent = 'Wildcard generated. Review it before using it.';
-      el('test-generations-wildcard-modal-status').textContent = 'Wildcard generated. Edit it freely, preview combinations, then apply.';
+      el('test-generations-wildcard-status').textContent = 'Wildcard generated. Review it before using it.' + (sourceWarning ? ' ' + sourceWarning : '');
+      el('test-generations-wildcard-modal-status').textContent = 'Wildcard generated. Edit it freely, preview combinations, then apply.' + (sourceWarning ? ' ' + sourceWarning : '');
     }).catch(function (err) {
       if (err && ['stopped', 'cancelled'].indexOf(String(err.jobStatus || '')) !== -1) {
         el('test-generations-wildcard-status').textContent = 'Wildcard analysis stopped.';

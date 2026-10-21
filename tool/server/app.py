@@ -2352,8 +2352,23 @@ def test_generations_wildcard_route():
         folder = str(data.get("folder") or "").strip()
         from .epoch_reference import training_wildcard_members
         job_id = str(data.get("jobId") or "").strip()
-        trained = training_wildcard_members(folder, job_id)
-        media = [name for name in list_media_files(folder) if name in trained]
+        media = list_media_files(folder)
+        source_scope = "set"
+        filter_warning = ""
+        if job_id:
+            try:
+                trained = training_wildcard_members(folder, job_id)
+            except (LookupError, FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
+                filter_warning = "Training run filter unavailable (" + str(exc) + "). Mining all current Set media instead."
+                app.logger.warning("TEST WILDCARD FILTER FALLBACK: %s", filter_warning)
+            else:
+                matched = [name for name in media if name in trained]
+                if matched:
+                    media = matched
+                    source_scope = "training_run"
+                else:
+                    filter_warning = "No current Set media match this training run. Mining all current Set media instead."
+                    app.logger.warning("TEST WILDCARD FILTER FALLBACK: %s", filter_warning)
         captions = [
             str(load_caption_text(folder, name).get("caption") or "").strip()
             for name in media
@@ -2381,6 +2396,8 @@ def test_generations_wildcard_route():
             "ok": True,
             "captionCount": sum(bool(caption) for caption in captions),
             "trainingMediaCount": len(media),
+            "sourceScope": source_scope,
+            "warning": filter_warning,
             "setName": set_name,
             "focus": focus,
             "job": job,

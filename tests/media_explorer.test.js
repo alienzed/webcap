@@ -449,3 +449,22 @@ test('partial generated discovery notice does not leak into external-folder navi
   assert.equal(f.nodes['media-explorer-scope'].classList.contains('hidden'), true);
   assert.equal(f.nodes['media-explorer-view-full-size'].disabled, true);
 });
+
+
+test('external folder navigation stays with the file pane and recent count is not duplicated', async () => {
+  const html = fs.readFileSync('tool/tool.html', 'utf8');
+  const source = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
+  const css = fs.readFileSync('tool/css/media_explorer.css', 'utf8');
+  const main = html.slice(html.indexOf('<main class="media-explorer-main"'), html.indexOf('</main>', html.indexOf('<main class="media-explorer-main"')));
+  const toolbarEnd = main.indexOf('<aside class="media-explorer-browser"');
+  const navIndex = main.indexOf('id="media-explorer-external-navigation"');
+  const listIndex = main.indexOf('id="media-explorer-gallery-area"');
+  assert.ok(navIndex > toolbarEnd && navIndex < listIndex, 'folder navigation is immediately above the file list, outside search toolbar');
+  assert.match(css, /\.media-explorer-browser > \.media-explorer-external-navigation/);
+  assert.match(source, /el\('media-explorer-directory-label'\)\.title = '\/' \+ externalDirectory;/);
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], [media('recent')], true, {total:150, complete:false});
+  assert.doesNotMatch(f.nodes['media-explorer-count'].textContent, /recent/i, 'scope label carries recent status instead of repeating it in count');
+  assert.equal(f.nodes['media-explorer-scope'].classList.contains('hidden'), false);
+});

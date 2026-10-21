@@ -350,7 +350,6 @@
   var movable = [
     '.test-generations-next-run',
     '.test-generations-staged-panel',
-    '#test-generations-batch-summary',
     '#test-generations-status',
     '#test-generations-error'
   ].map(function(selector) {

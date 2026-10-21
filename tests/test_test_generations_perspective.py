@@ -15,5 +15,5 @@ def test_explore_perspective_preserves_existing_workspace():
     assert ".test-generations-explore .test-generations-next-run" in css
     assert ".test-generations-explore .test-generations-staged-panel" in css
     assert ".test-generations-explore .test-generations-sessions" not in css
-    for old in ('id="test-generations-run-btn"', 'id="test-generations-batch-btn"', 'id="test-generations-sessions-list"', 'id="epoch-finder-start"'):
+    for old in ('id="test-generations-run-btn"', 'id="test-generations-inline-count"', 'id="test-generations-sessions-list"', 'id="epoch-finder-start"'):
         assert old in html

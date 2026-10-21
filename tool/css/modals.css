@@ -862,7 +862,7 @@
 .director-model-assessment-model > summary {
   position: relative;
   display: grid;
-  grid-template-columns: 26px minmax(250px, 1.25fr) minmax(320px, 1.75fr);
+  grid-template-columns: 26px minmax(250px, 1.25fr) 100px minmax(320px, 1.75fr);
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -920,6 +920,16 @@
   font-size: 11px;
 }
 
+.director-model-assessment-thinking {
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+.director-model-assessment-thinking strong {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+}
 .director-model-assessment-capability {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -3718,10 +3728,6 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-row details summary { cursor: pointer; color: var(--muted); }
 .model-assessment-row details .app-settings-help { overflow-wrap: anywhere; }
 
-.model-assessment-bulk { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-.model-assessment-bulk button { width: auto; flex: 0 0 auto; margin: 0; padding: 5px 10px; }
-.model-assessment-bulk .app-settings-help { flex: 1 1 240px; }
-
 /* Specialist calibration and benchmark panels remain accessible from Assessment only. */
 #diagnostics-tab-models, #diagnostics-tab-benchmark { display: none; }
 
@@ -3756,3 +3762,52 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-passed { color: var(--text); background: rgba(37,146,90,.22); border: 1px solid rgba(37,146,90,.4); }
 .model-assessment-issues { color: var(--text); background: rgba(188,66,58,.18); border: 1px solid rgba(188,66,58,.35); }
 .model-assessment-untested { color: var(--muted); background: var(--surface-alt, rgba(128,128,128,.08)); border: 1px solid var(--border); }
+
+/* Terminal assessment receipts must not look like active work. */
+.model-assessment-progress-card.progress-card-compact {
+  padding: 9px 12px;
+  margin: 8px 0;
+  gap: 10px;
+  align-items: center;
+}
+.model-assessment-progress-card.progress-card-compact .activity-monitor-copy {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.model-assessment-progress-card.progress-card-compact .activity-monitor-copy strong { font-size: 13px; }
+.model-assessment-progress-card.progress-card-compact .activity-monitor-copy span,
+.model-assessment-progress-card.progress-card-compact .activity-monitor-copy small { font-size: 12px; }
+.model-assessment-progress-card .activity-monitor-dot.assessment-finished {
+  background: #28a66d;
+  box-shadow: none;
+  animation: none;
+}
+.model-assessment-progress-card .activity-monitor-dot.assessment-terminal {
+  box-shadow: none;
+  animation: none;
+}
+
+/* Assessment keeps infrequent actions in one disclosure beside Run / Stop. */
+#diagnostics-panel-assessment .app-settings-section { display: flex; flex-direction: column; gap: 10px; }
+#diagnostics-panel-assessment .model-assessment-tools { position: relative; margin: 0 0 0 auto; z-index: 4; }
+#diagnostics-panel-assessment .model-assessment-tools > summary { padding: 7px 10px; border: 1px solid var(--border); border-radius: 5px; }
+#diagnostics-panel-assessment .model-assessment-tools > .model-assessment-toolbar {
+  position: absolute; top: calc(100% + 4px); right: 0;
+  flex-direction: column; align-items: stretch; width: max-content; min-width: 225px;
+  max-width: min(360px, 85vw); padding: 8px;
+  background: var(--surface, #161c24); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.2);
+}
+#diagnostics-panel-assessment .model-assessment-tools > .model-assessment-toolbar > button { width: 100%; }
+.model-assessment-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; }
+.model-assessment-filters > label { display: inline-flex; align-items: center; gap: 7px; margin: 0; }
+.model-assessment-filters .model-assessment-search { flex: 1 1 260px; }
+.model-assessment-filters .model-assessment-search input { min-width: 120px; width: 100%; }
+.model-assessment-feedback { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; }
+.model-assessment-feedback > .app-settings-help { margin: 0; }
+#diagnostics-panel-assessment .model-assessment-table { font-size: 14px; }
+#diagnostics-panel-assessment .model-assessment-table td { padding-top: 10px; padding-bottom: 10px; }
+#diagnostics-panel-assessment .model-assessment-expand { font-size: inherit; }
+

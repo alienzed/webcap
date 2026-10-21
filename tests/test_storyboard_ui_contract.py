@@ -369,10 +369,24 @@ def test_storyboard_can_develop_concept_directly_into_scenes():
 def test_storyboard_can_insert_director_scene_between_existing_scenes():
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
 
-    assert "Insert Director Scene After" in storyboard
-    assert "function insertDirectorSceneAfter(sceneId)" in storyboard
+    assert "Insert Scene After" in storyboard
+    assert "Insert Scene After…" in storyboard
+    assert "Extend Story…" in storyboard
+    assert "function insertDirectorSceneAfter(sceneId, instruction)" in storyboard
     assert "operation: 'insert_scene'" in storyboard
-    assert "job.operation === 'develop_story' || job.operation === 'insert_scene'" in storyboard
+    assert "job.operation === 'insert_scene' || job.operation === 'extend_story'" in storyboard
+
+
+def test_atmosphere_director_proposal_survives_source_edits():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    interpret = storyboard.split("function interpretAtmosphere()", 1)[1].split("\n  function ", 1)[0]
+    apply = storyboard.split("el('storyboard-style-apply').onclick = function () {", 1)[1].split("\n    };", 1)[0]
+    input_listener = storyboard.split("el('storyboard-story-style').addEventListener('input', function () {", 1)[1].split("\n    });", 1)[0]
+
+    assert "el('storyboard-story-style').value.trim() !== input) return;" not in interpret
+    assert "el('storyboard-story-style').value.trim() !== atmosphereProposal.source" not in apply
+    assert "atmosphereProposal = null;" not in input_listener
+    assert "Apply suggestion (replaces current text)" in storyboard
 
 
 def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
@@ -384,6 +398,9 @@ def test_storyboard_can_expand_a_rough_concept_before_developing_scenes():
     assert "operation: 'expand_concept'" in storyboard
     assert "applyDirectorResultToVisibleStory" in storyboard
     assert "previousConcept" in storyboard
+    expand = storyboard.split("function expandConcept()", 1)[1].split("\n  function ", 1)[0]
+    assert "Restore the original concept before expanding again." not in expand
+    assert "el('storyboard-expand-concept-btn').classList.toggle('hidden', hasExpandedConcept)" not in storyboard
 
 
 def test_storyboard_director_captures_unsaved_target_before_locking_it():
@@ -638,6 +655,11 @@ def test_storyboard_takes_can_be_named_and_loras_filtered():
     assert 'if operation == "label_take":' in app
     assert "def label_take(" in store
     assert "takeMetaLabel(take)" in storyboard
+    take_meta = storyboard.split("function takeMetaLabel(take) {", 1)[1].split("function takeEffectiveInputHtml", 1)[0]
+    assert "elapsed + ' elapsed'" in take_meta
+    assert "Seed ' + String(take.seed)" not in take_meta
+    assert "Elapsed —" in take_meta
+    assert "'Seed: ' + String(input.seed" in storyboard
     assert "data-scene-lora-picker" in storyboard
     assert "function loraOptions(selectedName)" in storyboard
     assert "function loraNamesMatching(query, excludedNames)" in storyboard
@@ -1379,3 +1401,119 @@ def test_storyboard_sequence_encode_has_inline_pending_elapsed_and_error_feedbac
     assert "if (status && showStatus !== false)" in storyboard
     assert ".storyboard-sequence-processing" in css
     assert ".storyboard-sequence-error" in css
+
+
+def test_storyboard_repair_progress_uses_recorded_scene_counts():
+    js = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+    assert "candidateTarget.kind === 'repair'" in js
+    assert "revisionProgress: job.revisionProgress || null" in js
+    for marker in ("storyboard-director-scene-progress", "storyboard-director-scene-progress-bar",
+                   "storyboard-director-scene-progress-text"):
+        assert f'id="{marker}"' in html
+    assert "sceneProgressBar.value = completed" in js
+    assert "sceneProgressBar.max = total" in js
+    assert "completed + 1" in js
+    assert ".storyboard-director-scene-progress progress" in css
+
+
+def test_story_and_scene_right_click_use_the_existing_action_menus():
+    js = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    assert "sceneProgression.addEventListener('contextmenu', function (event)" in js
+    assert "storyLibraryList.addEventListener('contextmenu', function (event)" in js
+    assert "event.target.closest('.storyboard-scene-progress-card[data-scene-id]')" in js
+    assert "event.target.closest('.storyboard-story-row[data-story-id]')" in js
+    assert "event.target.closest('.storyboard-scene-menu-popover')" in js
+    assert "event.target.closest('.storyboard-story-menu-popover')" in js
+    assert "positionSceneActionMenu(menu, { x: event.clientX, y: event.clientY })" in js
+    assert "positionStoryActionMenu(menu, { x: event.clientX, y: event.clientY })" in js
+    assert "menu.open = true;" in js
+
+def test_storyboard_prompt_take_status_compares_original_prompt_on_live_editor_changes():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+    status = storyboard.split("function syncPromptTakeStatus(sceneId)", 1)[1].split("\n  function ", 1)[0]
+    editor = storyboard.split("function handleSceneInput(event)", 1)[1].split("\n  function ", 1)[0]
+
+    assert 'data-prompt-take-status' in storyboard
+    assert 'Updated since Take ' in status
+    assert "scene.selectedTakeId" in status
+    assert "take.sourcePrompt" in status
+    assert "!take.generated && typeof take.prompt === 'string'" in status
+    assert "editor.value.trim() !== sourcePrompt.trim()" in status
+    assert "badge.classList.toggle('hidden', !changed)" in status
+    assert "syncPromptTakeStatus(sceneId)" in editor
+    assert "if (focusedSceneId) syncPromptTakeStatus(focusedSceneId)" in storyboard
+    assert "syncPromptTakeStatus(sceneId);" in storyboard.split("function syncSceneTakeDom(sceneId)", 1)[1].split("\n  function ", 1)[0]
+    assert "storyboard-prompt-take-status" in css
+
+
+def test_individual_scene_development_tracks_real_completion_in_director_activity():
+    script = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    assert "individualDevelopmentProgress = { completed: 0, total: outline.scenes.length, phase: 'developing' }" in script
+    assert "individualDevelopmentProgress.completed = authoredScenes.length;" in script
+    assert "individualDevelopmentProgress.phase = 'applying';" in script
+    assert "sceneProgressBar.value = developed;" in script
+    assert "sceneProgressBar.max = individual.total;" in script
+    assert "individualDevelopmentProgress = null;" in script
+
+
+def test_individual_develop_mirrors_progress_to_existing_activity():
+    script = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    assert "window.publishActivityProgress({ id: 'storyboard:individual:' + storyId" in script
+    assert "window.finishActivityProgress('storyboard:individual:' + storyId)" in script
+
+
+def test_removed_takes_are_stacked_and_delete_without_reconfirmation():
+    css = (ROOT / "tool/css/storyboard.css").read_text(encoding="utf-8")
+    js = (ROOT / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    removed_css = css.split(".storyboard-removed-takes {")[-1].split("}", 1)[0]
+    assert "display: block;" in removed_css
+    delete_fn = js.split("function deleteTake(sceneId, takeId) {", 1)[1].split("function restoreTake(", 1)[0]
+    assert "var isRemoved =" in delete_fn
+    assert "if (!isRemoved && !window.confirm(message)) return;" in delete_fn
+    assert "operation: 'delete_take'" in delete_fn
+
+
+def test_storyboard_take_mutations_preserve_video_elements():
+    storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")
+    sync = storyboard.split("function syncSceneTakeDom(sceneId) {", 1)[1].split("function applyTakeMutation(", 1)[0]
+    assert "sceneTakeCardById(grid, takeId)" in sync
+    assert "syncTakeCardDetails(card, take, takeIndex, scene.selectedTakeId)" in sync
+    assert "card.remove();" in sync
+    assert "grid.innerHTML =" not in sync
+    assert "renderScenes();" not in sync
+    assert "removedTakesMarkup(removedTakes)" in sync
+    assert "summary.textContent = takeSummaryText(scene, jobs.length)" in sync
+
+    for action in (
+        "uploadTake", "labelTake", "rateTake", "selectTake",
+        "removeTake", "deleteTake", "restoreTake",
+    ):
+        body = storyboard.split("function " + action + "(", 1)[1].split("  function ", 1)[0]
+        assert "applyTakeMutation(sceneId, payload);" in body
+        assert "renderStory();" not in body
+
+    assert "syncSceneProgressionCard(sceneId);" in storyboard.split("function applyTakeMutation(", 1)[1].split("  function ", 1)[0]
+    assert "renderStoryReadiness();" in storyboard.split("function applyTakeMutation(", 1)[1].split("  function ", 1)[0]
+
+
+def test_storyboard_queue_context_and_director_text_model_contract():
+    from pathlib import Path
+    root = ROOT
+    app = (root / "tool/server/app.py").read_text(encoding="utf-8")
+    inference = (root / "tool/server/inference_runner.py").read_text(encoding="utf-8")
+    llm = (root / "tool/server/llm_runner.py").read_text(encoding="utf-8")
+    activity = (root / "tool/js/activity_monitor.js").read_text(encoding="utf-8")
+    queue = (root / "tool/js/inference_queue.js").read_text(encoding="utf-8")
+    storyboard = (root / "tool/js/storyboard.js").read_text(encoding="utf-8")
+    assert '"storyTitle": str(story.get("title") or "Untitled Story")' in app
+    assert '"sceneNumber": scene_number' in app
+    assert '"storyTitle": str(story.get("title") or "Untitled Story")' in inference
+    assert '"sceneNumber": scene_order.index(scene_id) + 1 if scene_id in scene_order else 0' in inference
+    assert '"storyTitle": str(context.get("storyTitle") or "")' in llm
+    assert 'if (job.storyTitle) parts.push(job.storyTitle);' in queue
+    assert "item.kind === 'storyboard' ? activityDetail(item)" in activity
+    assert 'if (item.storyTitle) parts.push(item.storyTitle);' in activity
+    assert "modalities.indexOf('image') === -1" in storyboard

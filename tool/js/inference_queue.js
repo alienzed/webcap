@@ -69,8 +69,12 @@
   function jobContext(job) {
     var parts = [];
     if (job.client === 'storyboard') {
-      if (job.label) parts.push(job.label);
-      else if (job.sceneId) parts.push('Scene ' + job.sceneId);
+      if (job.storyTitle) parts.push(job.storyTitle);
+      var sceneLabel = Number(job.sceneNumber) > 0 ? 'Scene ' + Number(job.sceneNumber) : '';
+      if (job.sceneTitle) sceneLabel += (sceneLabel ? ': ' : '') + job.sceneTitle;
+      if (sceneLabel) parts.push(sceneLabel);
+      if (!sceneLabel && job.label) parts.push(job.label);
+      else if (!sceneLabel && job.sceneId) parts.push('Scene ' + job.sceneId);
     } else if (job.client === 'test') {
       var wildcardSummary = testWildcardSummary(job);
       if (wildcardSummary) parts.push(wildcardSummary);

@@ -82,6 +82,20 @@ def set_media_annotation_state(
     }
 
 
+
+def set_insights_hidden_vl_groups(state_path, groups):
+    """Set-scoped display preferences; never mutate historical VL evidence."""
+    if not isinstance(groups, list) or any(not isinstance(group, str) for group in groups):
+        raise ValueError("Insights VL groups must be a list of names.")
+    values = sorted({group.strip() for group in groups if group.strip()})
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        state["insightsHiddenVlGroups"] = values
+        write_folder_state_atomic(path, state)
+    return values
+
+
 def set_media_rating(state_path, media_key, rating):
     key = str(media_key or "").strip()
     if not key:
@@ -139,18 +153,6 @@ def set_test_vision_assessment(
         state["test_vision"] = vision
         write_folder_state_atomic(path, state)
     return vision
-
-
-def set_last_training_archive(state_path, archive_fact):
-    if not isinstance(archive_fact, dict) or not archive_fact:
-        raise ValueError("Training archive marker must be a non-empty object.")
-
-    path = Path(state_path)
-    with _folder_state_mutation_lock:
-        state = read_folder_state(path)
-        state["last_training_archive"] = dict(archive_fact)
-        write_folder_state_atomic(path, state)
-    return dict(archive_fact)
 
 
 def reject_wholesale_state_map_clear(previous_state, next_state):

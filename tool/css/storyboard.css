@@ -57,6 +57,10 @@
   min-width: 30px;
   height: 30px;
   padding: 0;
+  justify-content: center;
+  border-left-width: 1px;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .storyboard-library-list {
@@ -1428,13 +1432,13 @@
 
 .storyboard-lora-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px auto;
+  grid-template-columns: minmax(0, 1fr) 34px 72px 34px;
   gap: 5px;
+  align-items: center;
 }
 
 .storyboard-lora-row-story {
-  grid-template-columns: auto minmax(0, 1fr) 72px auto;
-  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) 34px 72px 34px;
 }
 
 .storyboard-lora-story-enabled {
@@ -1446,7 +1450,7 @@
 }
 
 .storyboard-lora-row select,
-.storyboard-lora-row input {
+.storyboard-lora-row input[type="number"] {
   min-width: 0;
   min-height: 34px;
   border: 1px solid var(--border);
@@ -1456,6 +1460,21 @@
   padding: 7px;
   font: inherit;
   font-size: 13px;
+}
+
+.storyboard-lora-row > .review-captions-btn {
+  box-sizing: border-box;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--input-bg, var(--panel));
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
 }
 
 .storyboard-lora-subsection {
@@ -1540,10 +1559,40 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
+}
+
+.storyboard-prompt-label {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.storyboard-prompt-take-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid #93b8ff;
+  border-radius: 5px;
+  background: color-mix(in srgb, #3b82f6 11%, var(--panel));
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+html[data-theme="dark"] .storyboard-prompt-take-status {
+  border-color: #4f81d6;
+  background: color-mix(in srgb, #3b82f6 18%, var(--panel));
+  color: #a5c9ff;
 }
 
 .storyboard-prompt-actions {
@@ -1978,7 +2027,6 @@
   position: absolute;
   right: 6px;
   bottom: 5px;
-  z-index: 2;
 }
 
 .storyboard-scene-progress-add {
@@ -1990,6 +2038,25 @@
   color: var(--accent);
   font-size: 22px;
   cursor: pointer;
+}
+
+.storyboard-extend-story {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.storyboard-scene-creation-dialog {
+  width: min(460px, 94vw);
+}
+
+.storyboard-scene-creation-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.storyboard-scene-creation-dialog input[type="number"] {
+  width: 90px;
 }
 
 .storyboard-scenes-list.is-focus .storyboard-scene {
@@ -2413,6 +2480,7 @@
 }
 
 .storyboard-removed-takes {
+  display: block;
   margin-top: 12px;
   border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
 }
@@ -2474,6 +2542,11 @@
   min-height: 28px;
   padding: 3px 9px;
   white-space: nowrap;
+}
+
+.storyboard-removed-take-actions .storyboard-take-delete {
+  border-color: color-mix(in srgb, var(--danger, #f87171) 50%, var(--border));
+  color: var(--danger, #f87171);
 }
 
 @container (min-width: 1450px) {
@@ -2578,7 +2651,7 @@
   min-height: 0;
   margin: 0;
   grid-template-columns: 1fr;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 0;
   align-content: stretch;
   align-self: stretch;
@@ -2592,7 +2665,16 @@
   min-height: 0;
   align-content: start;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px 22px 28px;
+}
+
+/* Keep Develop Scenes available between scrolling Story content and docked Defaults. */
+.storyboard-story-authoring > .storyboard-develop-row {
+  min-width: 0;
+  padding: 10px 22px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--panel-soft);
 }
 
 .storyboard-story-fields {
@@ -2857,19 +2939,24 @@
 
 .storyboard-scene-defaults-drawer {
   position: relative;
-  z-index: 24;
-  grid-row: 2;
-  margin: 0 22px 14px;
-  overflow: visible;
+  z-index: 1;
+  grid-row: 3;
+  margin: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
+  border-top: 1px solid var(--border);
   border-radius: 0;
-  background: transparent;
+  background: var(--panel);
 }
 
 .storyboard-scene-defaults-drawer > summary {
+  order: 2;
   min-height: 44px;
-  padding: 9px 0;
+  padding: 9px 22px;
 }
 
 .storyboard-scene-defaults-drawer .storyboard-story-section-summary-copy {
@@ -2879,26 +2966,25 @@
 }
 
 .storyboard-scene-defaults-drawer[open] > summary {
+  border-top: 1px solid var(--border);
   border-bottom: 0;
 }
 
 .storyboard-scene-defaults-drawer > .storyboard-scene-defaults-body {
-  position: absolute;
-  z-index: 26;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  max-height: min(62vh, 620px);
+  order: 1;
+  position: static;
+  min-height: 0;
+  max-height: min(52vh, 520px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-bottom: 0;
-  border-radius: 9px 9px 0 0;
-  background: color-mix(in srgb, var(--panel) 98%, var(--bg));
-  box-shadow: 0 -18px 36px rgba(0, 0, 0, .28);
+  gap: 10px;
+  padding: 14px 22px 18px;
+  border: 0;
+  border-radius: 0;
+  background: var(--panel);
+  box-shadow: none;
 }
 
 .storyboard-scene-defaults-drawer:not([open]) > .storyboard-scene-defaults-body {
@@ -2927,7 +3013,27 @@
 
 .storyboard-scene-defaults-body {
   grid-template-columns: 1fr;
-  gap: 14px;
+  gap: 10px;
+}
+
+.storyboard-director-lora-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.storyboard-director-lora-controls > .storyboard-develop-individual {
+  margin: 0;
+}
+
+.storyboard-director-lora-controls > .review-captions-btn {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.storyboard-scene-defaults-body > #storyboard-director-lora-status:empty {
+  display: none;
 }
 
 .storyboard-story-lora-section-body {
@@ -2946,14 +3052,15 @@
 }
 
 .storyboard-scene-defaults-subheading {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px;
 }
 
 .storyboard-scene-defaults-subheading > strong {
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .storyboard-scene-defaults-subheading > span {
@@ -2963,7 +3070,8 @@
 }
 
 .storyboard-scene-defaults-subheading > .review-captions-btn {
-  margin-left: auto;
+  width: auto;
+  margin-left: 0;
 }
 
 .storyboard-scene-defaults-drawer #storyboard-story-lora-status {
@@ -3047,6 +3155,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -3203,16 +3312,11 @@
   }
 
   .storyboard-scene-defaults-drawer {
-    margin: 0 20px 20px;
+    margin: 0;
   }
 
   .storyboard-scene-defaults-drawer > .storyboard-scene-defaults-body {
-    position: static;
-    max-height: none;
-    border: 0;
-    border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-    border-radius: 0;
-    box-shadow: none;
+    max-height: min(52vh, 520px);
   }
 
   .storyboard-scene-workspace {
@@ -3351,7 +3455,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 10px;
 }
 
@@ -3462,12 +3566,13 @@
 .storyboard-story-heading-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
 }
 .storyboard-story-heading-actions > #storyboard-story-toggle {
+  width: auto;
   min-height: 34px;
   flex: 0 0 auto;
 }
@@ -3490,6 +3595,10 @@
   flex-wrap: wrap;
 }
 #storyboard-story-show {
+  width: auto;
+  min-height: 30px;
+  padding: 4px 10px;
+  white-space: nowrap;
   flex: 0 0 auto;
 }
 /* The Scene column can be narrow even on a wide desktop when Story is visible. */
@@ -3544,6 +3653,43 @@
 .storyboard-director-tools-dialog small {
   color: var(--muted);
   font-size: 12px;
+}
+
+.storyboard-director-tools-instruction-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.storyboard-director-tools-instruction-heading > label[for] {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.storyboard-director-tools-instruction-heading > .storyboard-director-tools-fresh-takes {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.storyboard-director-tools-instruction-heading #storyboard-director-tools-generate-takes {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.storyboard-director-tools-instruction-heading > small {
+  flex: 1 1 160px;
+  min-width: 0;
+  text-align: right;
+  font-size: 11px;
 }
 
 .storyboard-scenes-heading-actions {
@@ -3732,15 +3878,15 @@
 }
 
 @media (max-width: 1180px) {
+  /* On stacked layouts, the workspace itself scrolls. */
   .storyboard-story-authoring {
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
     overflow: visible;
   }
 
   .storyboard-story-overview-surface {
     overflow: visible;
   }
-
 }
 
 
@@ -3798,7 +3944,7 @@
 .storyboard-director-activity.is-workspace-overlay,
 .storyboard-director-activity.is-structure-overlay {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "label" "phase" "detail" "action" "stop";
+  grid-template-areas: "label" "phase" "detail" "scene-progress" "action" "stop";
   row-gap: 8px;
   align-items: start;
   min-height: 0;
@@ -3867,7 +4013,7 @@
 .storyboard-progress-summary {
   display: inline-block;
   margin-top: 0;
-  max-width: 145px;
+  max-width: none;
 }
 .storyboard-scenes-heading-actions {
   flex: 1 1 auto;
@@ -3897,6 +4043,7 @@
 .storyboard-scenes-heading-left { flex: 1 1 220px; }
 .storyboard-scenes-heading-actions {
   flex: 0 0 auto;
+  margin-left: auto;
   flex-wrap: nowrap;
   overflow: visible;
   scrollbar-width: auto;
@@ -3908,3 +4055,17 @@
   padding: 4px 10px;
   white-space: nowrap;
 }
+
+.storyboard-thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 19px;
+}
+.storyboard-thinking-toggle.hidden { display: none; }
+.storyboard-thinking-toggle input { margin: 0; }
+
+.storyboard-director-scene-progress {grid-area:scene-progress;display:grid;gap:7px;width:100%;font-size:13px;color:var(--muted);}
+.storyboard-director-scene-progress.hidden {display:none;}
+.storyboard-director-scene-progress progress {display:block;width:100%;height:9px;accent-color:var(--accent);}

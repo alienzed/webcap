@@ -21,7 +21,7 @@ def test_test_generations_route_dispatches_to_test_bench_with_existing_error_sha
     })
 
     assert response.status_code == 200
-    assert response.get_json() == {"ok": True, "prepared": True}
+    assert response.get_json() == {"ok": True, "prepared": True, "candidateRuns": []}
     assert seen == {
         "folder": root / "sets/subject",
         "operation": "test_prepare",
@@ -39,34 +39,10 @@ def test_test_generations_route_dispatches_to_test_bench_with_existing_error_sha
     assert failure.get_json() == {"ok": False, "error": "bad test request"}
 
 
-def test_test_source_route_distinguishes_set_default_from_explicit_root(monkeypatch):
-    seen = []
-
-    def browse(model_id, source, set_name):
-        seen.append({"modelId": model_id, "source": source, "setName": set_name})
-        return {
-            "operation": "test_source_browse",
-            "modelId": model_id,
-            "source": "staged/demo" if source is None else source,
-            "parent": "",
-            "folders": ["run-a"],
-            "files": ["epoch10.safetensors"],
-            "count": 1,
-        }
-
-    monkeypatch.setattr(app_module, "test_generations_browse_source", browse)
+def test_retired_source_browser_cannot_bypass_current_set_scope():
     client = app_module.app.test_client()
-
-    default_response = client.get("/fs/test_generations/source?modelId=minimax_h3&setName=demo")
-    root_response = client.get("/fs/test_generations/source?modelId=minimax_h3&source=")
-
-    assert default_response.status_code == 200
-    assert root_response.status_code == 200
-    assert seen == [
-        {"modelId": "minimax_h3", "source": None, "setName": "demo"},
-        {"modelId": "minimax_h3", "source": "", "setName": ""},
-    ]
-
+    response = client.get("/fs/test_generations/source?modelId=minimax_h3&setName=demo")
+    assert response.status_code == 404
 
 def test_test_generations_vision_question_uses_resolved_test_media_and_queues_only(monkeypatch, tmp_path):
     from tool.server import app as app_module

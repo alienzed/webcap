@@ -1,0 +1,54 @@
+name: Model Assessment regression
+
+on:
+  pull_request:
+    paths:
+      - 'tool/server/model_lab.py'
+      - 'tool/server/model_lab_quality.py'
+      - 'tool/server/llm_runner.py'
+      - 'tool/js/model_lab.js'
+      - 'tool/js/diagnostics.js'
+      - 'tool/js/progress_card.js'
+      - 'tests/test_model_lab.py'
+      - 'tests/test_model_assessment_completion.py'
+      - 'tests/test_assessment_transfer.py'
+      - 'tests/test_director_model_calibration.py'
+      - 'tests/test_model_assessment_thinking_unified.py'
+      - '.github/workflows/model-assessment-regression.yml'
+  push:
+    paths:
+      - 'tool/server/model_lab.py'
+      - 'tool/server/model_lab_quality.py'
+      - 'tool/server/llm_runner.py'
+      - 'tool/js/model_lab.js'
+      - 'tool/js/diagnostics.js'
+      - 'tool/js/progress_card.js'
+      - 'tests/test_model_lab.py'
+      - 'tests/test_model_assessment_completion.py'
+      - 'tests/test_assessment_transfer.py'
+      - 'tests/test_director_model_calibration.py'
+      - 'tests/test_model_assessment_thinking_unified.py'
+      - '.github/workflows/model-assessment-regression.yml'
+
+jobs:
+  assessment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install focused test dependencies
+        run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Prepare test configuration
+        run: cp tool/config.example.json tool/config.json
+      - name: Assessment and integration tests
+        run: python -m pytest -q tests/test_model_lab.py tests/test_model_assessment_thinking_unified.py tests/test_model_assessment_completion.py tests/test_assessment_transfer.py tests/test_director_model_calibration.py
+      - name: Historical Director cache Storage Manager integration
+        run: python -m pytest -q tests/test_storage_manager.py -k director_assessment
+      - name: Progress Card snapshot and Diagnostics JavaScript
+        run: |
+          node --check tool/js/model_lab.js
+          node --check tool/js/diagnostics.js
+          node --check tool/js/progress_card.js
+          node tests/test_model_lab_progress.js

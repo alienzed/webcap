@@ -167,7 +167,8 @@ def test_epoch_frame_uses_existing_owner_route(monkeypatch, tmp_path):
 
 
 def test_storyboard_references_and_takes_use_owner_media_route(monkeypatch, tmp_path):
-    from tool.server import storyboard_store
+    from tool.server import storyboard_store, storyboard_assembly
+    monkeypatch.setattr(storyboard_assembly, 'current_export', lambda story_id: None)
     base = tmp_path / "story"
     (base / "takes").mkdir(parents=True)
     (base / "references").mkdir()
@@ -240,7 +241,8 @@ def test_explorer_normalizes_recorded_facts_and_filters_before_paging(monkeypatc
 
 
 def test_storyboard_same_file_can_be_generated_and_a_reference(monkeypatch, tmp_path):
-    from tool.server import storyboard_store
+    from tool.server import storyboard_store, storyboard_assembly
+    monkeypatch.setattr(storyboard_assembly, 'current_export', lambda story_id: None)
     file = tmp_path/'take.jpg'
     file.write_bytes(b'image')
     monkeypatch.setattr(storyboard_store,'list_stories',lambda:[{'id':'story'}])

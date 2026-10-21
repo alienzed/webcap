@@ -69,10 +69,10 @@ from .storyboard_archive import archive_preview as storyboard_archive_preview, a
 from .storyboard_store import _mutation_lock as storyboard_mutation_lock
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_first_cut import register_routes as register_storyboard_first_cut_routes
-from .test_batch import register_routes as register_test_batch_routes
 from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .media_explorer import list_media as media_explorer_list_media
+from .external_media import register_routes as register_external_media_routes
 from .generate_store import load_result as generate_load_result
 from .generate_store import cleanup_references as generate_cleanup_references, delete_prompt as generate_delete_prompt, list_prompts as generate_list_prompts, list_results as generate_list_results, rate_result as generate_rate_result, resolve_result_media as generate_resolve_result_media, save_prompt as generate_save_prompt, save_reference as generate_save_reference
 from .generation_director_contract import build_request as generate_build_director_request
@@ -80,7 +80,6 @@ from .test_wildcard_contract import build_request as test_wildcard_build_request
 from .inference_runner import action as inference_action, cancel_storyboard_pending_jobs, enqueue_generate, job_status as inference_job_status, prepare_startup_backlog as prepare_inference_startup_backlog, snapshot as inference_snapshot, stop_storyboard_jobs
 from .llm_runner import action as llm_action, enqueue as enqueue_llm, job_status as llm_job_status, reconcile_startup as reconcile_llm_startup, snapshot as llm_snapshot, storyboard_story_busy as llm_storyboard_story_busy, storyboard_target_busy as llm_storyboard_target_busy
 from .activity_monitor import activity_snapshot
-from .director_model_test_store import register_routes as register_director_model_test_routes
 from .model_lab import register_routes as register_model_lab_routes
 from .execution_queue import ExecutionQueueStateError, recover_invalid_startup_state
 
@@ -97,7 +96,6 @@ CSS_DIR = TOOL_DIR / "css"
 TEMPLATES_DIR = TOOL_DIR / "templates"
 
 app = Flask(__name__, static_folder=None)
-register_director_model_test_routes(app)
 register_model_lab_routes(app)
 register_storyboard_first_cut_routes(app)
 
@@ -1829,6 +1827,50 @@ def storyboard_director_route():
                 "sceneCount": len(applied_story.get("sceneOrder") or []),
             })
 
+        if operation == "apply_coherence":
+            from .storyboard_store import apply_director_prompt
+            original = data.get("expectedPrompt")
+            revised = data.get("prompt")
+            if not scene_id or not isinstance(original, str) or not isinstance(revised, str) or not revised.strip():
+                raise ValueError("Check Coherence requires a Scene, original prompt, and revised prompt.")
+            if original == revised:
+                raise ValueError("Coherence review returned no changes to apply.")
+            with storyboard_mutation_lock:
+                if (llm_storyboard_target_busy(story_id, "scene-prompt", scene_id)
+                        or llm_storyboard_target_busy(story_id, "scenes")
+                        or llm_storyboard_target_busy(story_id, "repair")):
+                    raise ValueError("Wait for pending Director work before applying coherence changes.")
+                applied_story, applied_scene = apply_director_prompt(
+                    story_id, scene_id, revised, model_id=model_id,
+                    operation="refine_prompt", expected_prompt=original,
+                )
+            return jsonify({"ok": True, "story": applied_story, "scene": applied_scene})
+
+        scene_order = list(story.get("sceneOrder") or [])
+        scene_number = scene_order.index(scene_id) + 1 if scene_id in scene_order else 0
+        job_display_context = {
+            "storyTitle": str(story.get("title") or "Untitled Story"),
+            "sceneNumber": scene_number,
+            "sceneTitle": str(((story.get("scenes") or {}).get(scene_id) or {}).get("title") or ""),
+        }
+
+        if operation == "check_coherence_sequence":
+            scene_ids = list(story.get("sceneOrder") or [])
+            if not scene_ids:
+                raise ValueError("Develop Scenes before checking coherence.")
+            if not model_id:
+                raise ValueError("Choose a Director model.")
+            job = enqueue_llm(
+                "storyboard", model_id, {"operation": operation},
+                context={
+                    "storyId": story_id, "operation": operation,
+                    **job_display_context,
+                    "sceneIds": scene_ids, "thinking": data.get("thinking") is True,
+                },
+                label="Story: Check Coherence",
+            )
+            return jsonify({"ok": True, "job": job}), 202
+
         if operation == "revise_scenes_sequence":
             if not instruction:
                 raise ValueError("Enter a Revise Scenes instruction.")
@@ -1841,14 +1883,18 @@ def storyboard_director_route():
                 "storyboard", model_id, {"operation": operation},
                 context={
                     "storyId": story_id, "operation": operation,
+                    **job_display_context,
                     "sceneIds": scene_ids, "sourceInstruction": instruction,
                     "generateFreshTakes": data.get("generateFreshTakes") is True,
+                    "thinking": data.get("thinking") is True,
                 },
                 label="Story: Revise Scenes",
             )
             return jsonify({"ok": True, "job": job}), 202
 
         contract_kwargs = {"instruction": instruction}
+        if operation == "extend_story":
+            contract_kwargs["scene_count"] = data.get("sceneCount")
         if development is not None:
             contract_kwargs["development"] = development
         contract = storyboard_build_llm_request(
@@ -1918,9 +1964,12 @@ def storyboard_director_route():
             context={
                 "storyId": story_id,
                 "sceneId": scene_id,
+                **job_display_context,
                 "operation": operation,
                 "replaceExisting": replace_existing,
                 "sourceInstruction": instruction,
+                **({"sceneCount": data.get("sceneCount")} if operation == "extend_story" else {}),
+                "thinking": data.get("thinking") is True,
                 **({"deferredApply": True} if operation in {"develop_story_outline", "develop_story_scene"} else {}),
                 **({"repairBase": repair_base} if repair_base is not None else {}),
             },
@@ -2033,6 +2082,9 @@ def generate_prompt_delete_route():
     except Exception as exc:
         app.logger.exception("GENERATE PROMPT DELETE FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+register_external_media_routes(app)
 
 
 @app.route("/fs/media_explorer", methods=["GET"])
@@ -2305,17 +2357,17 @@ def test_generations_wildcard_route():
             str(load_caption_text(folder, name).get("caption") or "").strip()
             for name in media
         ]
-        captions = [caption for caption in captions if caption]
-        focus = str(data.get("focus") or "").strip()
-        set_name = Path(folder.rstrip("/\\")).name or folder
-        from .test_wildcard_contract import observed_group_combinations
-        from .folder_state_store import read_folder_state
+        # One read of existing Set annotations; compile concept coverage only in memory.
         from .caption_ops import _resolve_folder
         scoped = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
-        combinations = observed_group_combinations(scoped, media)
+        if not isinstance(scoped, dict):
+            raise ValueError("Scoped Set annotation map is invalid.")
+        annotations = [scoped.get(name, {}) for name in media]
+        focus = str(data.get("focus") or "").strip()
+        set_name = Path(folder.rstrip("/\\")).name or folder
         contract = test_wildcard_build_request(
-            captions, set_name=set_name, focus=focus, vocabulary=data.get("vocabulary"),
-            group_combinations=combinations,
+            captions, set_name=set_name, focus=focus,
+            vocabulary=data.get("vocabulary"), annotations=annotations,
         )
         job = enqueue_llm(
             "test",
@@ -2326,7 +2378,7 @@ def test_generations_wildcard_route():
         )
         return jsonify({
             "ok": True,
-            "captionCount": len(captions),
+            "captionCount": sum(bool(caption) for caption in captions),
             "trainingMediaCount": len(media),
             "setName": set_name,
             "focus": focus,
@@ -2334,28 +2386,6 @@ def test_generations_wildcard_route():
         }), 202
     except Exception as exc:
         app.logger.exception("TEST WILDCARD GENERATION FAILED: %s", exc)
-        return jsonify({"ok": False, "error": str(exc)}), 400
-
-
-@app.route("/fs/test_generations/wildcard/validate", methods=["POST"])
-def test_generations_wildcard_validate_route():
-    try:
-        data = request.get_json(silent=True) or {}
-        folder = str(data.get("folder") or "").strip()
-        from .caption_ops import _resolve_folder
-        from .folder_state_store import read_folder_state
-        from .test_wildcard_contract import observed_group_combinations, validate_group_compatibility
-        annotations = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
-        from .epoch_reference import training_wildcard_members
-        job_id = str(data.get("jobId") or "").strip()
-        trained = training_wildcard_members(folder, job_id)
-        combinations = observed_group_combinations(
-            annotations, [name for name in list_media_files(folder) if name in trained]
-        )
-        validate_group_compatibility(data.get("analysis"), combinations)
-        return jsonify({"ok": True})
-    except Exception as exc:
-        app.logger.exception("TEST WILDCARD COMPATIBILITY FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
@@ -2486,17 +2516,21 @@ def epoch_finder_propose_route():
         data = request.get_json(silent=True) or {}
         folder = str(data.get("folder") or "").strip()
         safe_join_fs_root(folder)
-        from .epoch_reference import training_wildcard_members
         job_id = str(data.get("jobId") or "").strip()
         trained_images = training_image_members(folder, job_id)
+        media = [name for name in list_media_files(folder) if name in trained_images]
         captions = [
             str(load_caption_text(folder, name).get("caption") or "").strip()
-            for name in list_media_files(folder) if name in trained_images
+            for name in media
         ]
+        from .caption_ops import _resolve_folder
+        scoped = read_folder_state(_resolve_folder(folder) / ".webcap_state.json").get("caption_group_tags_by_media") or {}
+        if not isinstance(scoped, dict):
+            raise ValueError("Scoped Set annotation map is invalid.")
         contract = epoch_finder_build_proposal(
             captions, set_name=Path(folder).name,
             focus=data.get("focus"), vocabulary=data.get("vocabulary"),
-            reference_vocabulary=epoch_reference_vocabulary(folder, job_id),
+            annotations=[scoped.get(name, {}) for name in media],
         )
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(), contract,
@@ -2513,9 +2547,16 @@ def run_analytics_interpret_route():
     try:
         data = request.get_json(silent=True) or {}
         folder_path = safe_join_fs_root(str(data.get("folder") or "").strip())
-        from .run_analytics import report_selected, director_facts, director_contract
-        snapshot = report_selected(folder_path, data.get("jobIds"), data.get("session"))
-        facts = director_facts(snapshot, data.get("campaignId"))
+        from .run_analytics import (
+            report_selected, director_facts, director_contract,
+            insights_director_facts, insights_director_contract,
+        )
+        insights = data.get("mode") == "insights"
+        if insights:
+            facts = insights_director_facts(folder_path)
+        else:
+            snapshot = report_selected(folder_path, data.get("jobIds"), data.get("session"))
+            facts = director_facts(snapshot, data.get("campaignId"))
         if bool(data.get("previewOnly")):
             return jsonify({"ok": True, "facts": facts})
         import json
@@ -2525,7 +2566,8 @@ def run_analytics_interpret_route():
             raise ValueError("The reviewed Analytics evidence changed. Preview the latest facts before running Director.")
         job = enqueue_llm(
             "test", str(data.get("directorModel") or "").strip(),
-            director_contract(facts), context={}, label="Run Analytics: interpret evidence",
+            (insights_director_contract(facts) if insights else director_contract(facts)),
+            context={}, label=("Insights: training evidence" if insights else "Run Analytics: interpret evidence"),
         )
         return jsonify({"ok": True, "job": job}), 202
     except Exception as exc:
@@ -3557,7 +3599,6 @@ def open_in_vscode():
     rel_path = data.get("path", "").strip()
     return open_in_vscode_response(rel_path)
     
-register_test_batch_routes(app, safe_join_fs_root)
 
 if __name__ == "__main__":
     try:

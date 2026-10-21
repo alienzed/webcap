@@ -30,7 +30,7 @@ def test_results_are_read_only_and_provenance_scoped():
 
 def test_original_workflows_remain_available():
     html=(ROOT/"tool/tool.html").read_text(encoding="utf-8")
-    for marker in ('id="test-generations-run-btn"','id="test-generations-batch-btn"',
+    for marker in ('id="test-generations-run-btn"','id="test-generations-inline-count"',
                    'id="epoch-finder-start"','id="epoch-finder-pause"',
                    'id="epoch-finder-resume"','id="epoch-finder-stop"',
                    'id="run-analytics-director"','id="test-references-gallery"'):

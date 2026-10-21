@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import pytest
 
@@ -14,6 +15,12 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     (set_root / "two.txt").write_text("subject sitting on a couch", encoding="utf-8")
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
     monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members", lambda folder, job_id: {"one.png", "two.jpg"})
+    (set_root / ".webcap_state.json").write_text(json.dumps({
+        "caption_group_tags_by_media": {
+            "one.png": {"Shirt Shape": ["fitted"], "Clothing": ["shirt"]},
+            "two.jpg": {"Shirt Shape": ["loose"], "Background": ["studio"]},
+        }
+    }), encoding="utf-8")
 
     seen = {}
     monkeypatch.setattr(
@@ -34,7 +41,10 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
         "jobId": "run-1",
         "directorModel": "director.gguf",
         "focus": "shirt",
-        "vocabulary": [{"group": "Clothing", "alias": "Garment type", "terms": ["shirt", "jacket"]}],
+        "vocabulary": [
+            {"group": "Clothing", "alias": "Garment type", "terms": ["shirt", "jacket"]},
+            {"group": "Shirt Shape", "alias": "Shirt construction", "terms": ["fitted", "loose"]},
+        ],
     })
 
     assert response.status_code == 202
@@ -45,7 +55,9 @@ def test_test_wildcard_route_queues_frozen_caption_analysis(tmp_path, monkeypatc
     assert "subject standing in a kitchen" in seen["contract"]["prompt"]
     assert "subject sitting on a couch" in seen["contract"]["prompt"]
     assert "Explicit focus: shirt" in seen["contract"]["prompt"]
-    assert '"terms": ["shirt", "jacket"]' in seen["contract"]["prompt"]
+    assert '"group":"Shirt Shape"' in seen["contract"]["prompt"]
+    assert '"alias":"Shirt construction"' in seen["contract"]["prompt"]
+    assert '"group":"Clothing"' not in seen["contract"]["prompt"]
     assert "Set name: set" in seen["contract"]["prompt"]
     assert response.get_json()["focus"] == "shirt"
     assert response.get_json()["setName"] == "set"
@@ -58,6 +70,8 @@ def test_test_wildcard_route_counts_only_nonempty_captions(tmp_path, monkeypatch
     (set_root / "one.txt").write_text("subject standing", encoding="utf-8")
     (set_root / "two.jpg").write_bytes(b"image")
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members",
+                        lambda folder, job_id: {"one.png", "two.jpg"})
     monkeypatch.setattr(
         app_module,
         "enqueue_llm",
@@ -67,6 +81,7 @@ def test_test_wildcard_route_counts_only_nonempty_captions(tmp_path, monkeypatch
     client = app_module.app.test_client()
     response = client.post("/fs/test_generations/wildcard", json={
         "folder": "set",
+        "jobId": "run-1",
         "directorModel": "director.gguf",
     })
 
@@ -79,6 +94,8 @@ def test_test_wildcard_route_rejects_set_without_captions(tmp_path, monkeypatch)
     set_root.mkdir()
     (set_root / "one.png").write_bytes(b"image")
     monkeypatch.setattr(app_module.app_config, "FS_ROOT", tmp_path)
+    monkeypatch.setattr("tool.server.epoch_reference.training_wildcard_members",
+                        lambda folder, job_id: {"one.png"})
 
     client = app_module.app.test_client()
     response = client.post("/fs/test_generations/wildcard", json={

@@ -304,21 +304,33 @@ def test_insert_director_scene_after_creates_one_scene_at_gap(storyboard_fs):
     assert inserted["planDirectorModel"] == "director.gguf"
 
 
-def test_insert_director_scene_after_requires_existing_gap(storyboard_fs):
+def test_insert_director_scene_after_last_appends(storyboard_fs):
     story = storyboard_store.create_story({"title": "Story"})
-    story, only = storyboard_store.add_scene(story["id"], {"title": "Only"})
+    story, first = storyboard_store.add_scene(story["id"], {"title": "First"})
+    story, inserted = storyboard_store.insert_director_scene_after(
+        story["id"], first["id"],
+        {"title": "Next", "summary": "Another moment.", "prompt": "A new moment.", "suggestedDurationSeconds": 10}
+    )
+    assert story["sceneOrder"] == [first["id"], inserted["id"]]
 
-    with pytest.raises(ValueError, match="following Scene"):
-        storyboard_store.insert_director_scene_after(
-            story["id"],
-            only["id"],
-            {
-                "title": "Inserted",
-                "summary": "Summary.",
-                "prompt": "Prompt.",
-                "suggestedDurationSeconds": 10,
-            },
-        )
+
+def test_extend_story_adds_without_changing_existing_scenes(storyboard_fs):
+    story = storyboard_store.create_story({"title": "Story"})
+    story, first = storyboard_store.add_scene(story["id"], {"title": "First", "prompt": "Original."})
+    story, second = storyboard_store.add_scene(story["id"], {"title": "Second", "prompt": "Another."})
+    original_scenes = {scene_id: story["scenes"][scene_id].copy() for scene_id in story["sceneOrder"]}
+    story, added_ids = storyboard_store.extend_director_story(
+        story["id"], {"scenes": [
+            {"title": "Third", "summary": "New situation.", "prompt": "A new situation.", "suggestedDurationSeconds": 10},
+            {"title": "Fourth", "summary": "Another variation.", "prompt": "Another variation.", "suggestedDurationSeconds": 10},
+        ]}, model_id="director.gguf"
+    )
+    assert story["sceneOrder"] == [first["id"], second["id"], *added_ids]
+    assert all(story["scenes"][sid] == snapshot for sid, snapshot in original_scenes.items())
+    assert story["scenes"][added_ids[0]]["planDirectorModel"] == "director.gguf"
+    assert len(added_ids) == 2
+
+
 
 
 def test_concept_restore_keeps_initial_prompt_as_fixed_baseline(storyboard_fs):
@@ -328,8 +340,10 @@ def test_concept_restore_keeps_initial_prompt_as_fixed_baseline(storyboard_fs):
 
     edited = storyboard_store.update_story(story["id"], {"concept": "Manual rewrite after expansion."})
     assert edited["previousConcept"] == "Original concept."
-    with pytest.raises(ValueError, match="already expanded"):
-        storyboard_store.apply_concept_expansion(story["id"], "Unexpected second expansion.")
+    second = storyboard_store.apply_concept_expansion(story["id"], "Second expanded concept.")
+    assert second["concept"] == "Second expanded concept."
+    assert second["previousConcept"] == "Original concept."
+    assert storyboard_store.load_story(story["id"])["concept"] == "Second expanded concept."
 
     restored = storyboard_store.restore_previous_concept(story["id"])
     assert restored["concept"] == "Original concept."

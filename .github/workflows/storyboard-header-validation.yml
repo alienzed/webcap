@@ -4,6 +4,18 @@ on:
     paths:
       - 'tool/css/storyboard.css'
       - 'tool/js/storyboard.js'
+      - 'tool/js/diagnostics.js'
+      - 'tool/server/model_lab.py'
+      - 'tool/server/storyboard_llm_runtime.py'
+      - 'tool/server/storyboard_llm_contract.py'
+      - 'tool/server/storyboard_store.py'
+      - 'tool/server/llm_runner.py'
+      - 'tool/server/app.py'
+      - 'tests/test_storyboard_llm_contract.py'
+      - 'tests/test_storyboard_store.py'
+      - 'tests/test_storyboard_route.py'
+      - 'tests/test_storyboard_ui_contract.py'
+      - 'tests/test_model_assessment_thinking_unified.py'
       - 'tests/test_storyboard_header_regression.py'
   workflow_dispatch:
 permissions:
@@ -19,6 +31,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: node --check tool/js/storyboard.js
-      - run: python -m pip install pytest
-      - run: python -m pytest -q tests/test_storyboard_header_regression.py
+      - run: node --check tool/js/storyboard.js && node --check tool/js/diagnostics.js
+      - run: cp tool/config.example.json tool/config.json
+      - run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - run: python -m compileall -q tool/server
+      - run: node --check tool/js/model_lab.js
+      - run: python -m pytest -q tests/test_storyboard_header_regression.py tests/test_director_thinking_mvp.py tests/test_model_assessment_thinking_unified.py
+      - name: Storyboard additive Scene regressions
+        run: |
+          python -m pytest -q tests/test_storyboard_llm_contract.py -k 'insert_scene or extend_story'
+          python -m pytest -q tests/test_storyboard_store.py -k 'insert_director_scene or extend_story'
+          python -m pytest -q tests/test_storyboard_ui_contract.py -k 'can_insert_director_scene'

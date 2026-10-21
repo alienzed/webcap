@@ -516,6 +516,8 @@ function refreshCurrentDirectory() {
               if (typeof window.restoreInitialShellLocationRoute === 'function') window.restoreInitialShellLocationRoute();
             });
             if (typeof window.testGenerationsFolderLoaded === 'function') window.testGenerationsFolderLoaded();
+            // Complete the one-time Test Generations handoff only after a valid Set has loaded.
+            window.completePendingTestGenerationsSetGuide();
             var pendingSelectFileName = window.state && state.pendingSelectFileName ? state.pendingSelectFileName : '';
             if (pendingSelectFileName) {
               state.pendingSelectFileName = undefined;

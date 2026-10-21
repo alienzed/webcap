@@ -615,7 +615,7 @@ def test_storyboard_llm_job_rejects_inconsistent_frozen_identity(llm_root, monke
     assert "Story identity is inconsistent" in finished["error"]
 
 
-def test_storyboard_llm_rejects_stale_contract_before_applying_result(llm_root, monkeypatch):
+def test_storyboard_llm_applies_expansion_when_style_changes_during_inference(llm_root, monkeypatch):
     story = storyboard_store.create_story({
         "title": "Story",
         "concept": "Original concept.",
@@ -629,7 +629,7 @@ def test_storyboard_llm_rejects_stale_contract_before_applying_result(llm_root, 
     def run_and_change_story(*_args, **_kwargs):
         storyboard_store.update_story(story["id"], {"style": "Changed while Director was running."})
         return {
-            "text": "Stale expanded concept.",
+            "text": "Expanded concept from completed Director result.",
             "model": "qwen",
             "usage": None,
             "timings": None,
@@ -652,13 +652,12 @@ def test_storyboard_llm_rejects_stale_contract_before_applying_result(llm_root, 
 
     finished = llm_runner.job_status(job["jobId"])
     stored = storyboard_store.load_story(story["id"])
-    assert finished["status"] == "failed"
-    assert "inputs changed while the request was running" in finished["error"]
-    assert stored["concept"] == "Original concept."
+    assert finished["status"] == "completed"
+    assert stored["concept"] == "Expanded concept from completed Director result."
     assert stored["style"] == "Changed while Director was running."
 
 
-def test_storyboard_develop_rejects_changed_story_inputs_before_replacing_scenes(llm_root, monkeypatch):
+def test_storyboard_develop_applies_completed_result_when_style_changes(llm_root, monkeypatch):
     story = storyboard_store.create_story({
         "title": "Story",
         "concept": "Original concept.",
@@ -677,8 +676,8 @@ def test_storyboard_develop_rejects_changed_story_inputs_before_replacing_scenes
     def run_and_change_story(*_args, **_kwargs):
         storyboard_store.update_story(story["id"], {"style": "Changed while Director was running."})
         return {
-            "text": '{"scenes":[]}',
-            "data": {"sharedContext": [], "scenes": []},
+            "text": '{"scenes":[{"title":"New Scene","summary":"New Scene summary","prompt":"Film the Scene.","suggestedDurationSeconds":10}]}',
+            "data": {"sharedContext": [], "scenes": [{"title": "New Scene", "summary": "New Scene summary", "prompt": "Film the Scene.", "suggestedDurationSeconds": 10}]},
             "model": "qwen",
             "usage": None,
             "timings": None,
@@ -702,14 +701,14 @@ def test_storyboard_develop_rejects_changed_story_inputs_before_replacing_scenes
 
     finished = llm_runner.job_status(job["jobId"])
     stored = storyboard_store.load_story(story["id"])
-    assert finished["status"] == "failed"
-    assert "inputs changed while the request was running" in finished["error"]
-    assert stored["sceneOrder"] == [original_scene["id"]]
-    assert stored["scenes"][original_scene["id"]]["title"] == "Original Scene"
+    assert finished["status"] == "completed"
+    assert len(stored["sceneOrder"]) == 1
+    assert stored["sceneOrder"][0] != original_scene["id"]
+    assert stored["scenes"][stored["sceneOrder"][0]]["title"] == "New Scene"
 
 
 
-def test_storyboard_scene_refine_rejects_changed_duration_instead_of_overwriting_it(llm_root, monkeypatch):
+def test_storyboard_scene_refine_applies_requested_duration_after_concurrent_edit(llm_root, monkeypatch):
     story = storyboard_store.create_story({"title": "Story", "style": "Grounded."})
     story, scene = storyboard_store.add_scene(story["id"], {
         "title": "Scene",
@@ -749,10 +748,9 @@ def test_storyboard_scene_refine_rejects_changed_duration_instead_of_overwriting
 
     finished = llm_runner.job_status(job["jobId"])
     stored_scene = storyboard_store.load_story(story["id"])["scenes"][scene["id"]]
-    assert finished["status"] == "failed"
-    assert "inputs changed while the request was running" in finished["error"]
-    assert stored_scene["durationSeconds"] == 14
-    assert stored_scene["prompt"] == "Original prompt."
+    assert finished["status"] == "completed"
+    assert stored_scene["durationSeconds"] == 12
+    assert stored_scene["prompt"] == "Refined prompt."
 
 
 def test_storyboard_scene_refine_no_change_does_not_mutate_scene(llm_root, monkeypatch):

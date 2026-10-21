@@ -13,7 +13,7 @@ from pathlib import Path
 from . import config as app_config
 from . import epoch_test_bench as test_bench
 from .epoch_finder_plan import normalize_dimensions
-from .caption_vision import build_vision_question_messages, build_reference_comparison_messages, vision_resized_image_data_url
+from .caption_vision import build_vision_question_messages, build_reference_comparison_messages, reference_comparison_feature, vision_resized_image_data_url
 from .llm_runner import enqueue as enqueue_llm, job_status as llm_job_status
 from .test_models import get_test_model_for_staging_key
 from .training_history import all_history_payload
@@ -98,9 +98,13 @@ def _runs(folder_path, require_saved_checkpoints=True):
         if epochs or not require_saved_checkpoints:
             result.append({
                 "folder": folder, "jobId": job_id, "runName": run.get("runName") or job.get("runName") or "",
-                "runSequence": run.get("runSequence") or job.get("runSequence") or run.get("runId") or job.get("runId") or "",
+                "runSequence": run.get("sequence") or job.get("sequence") or run.get("runSequence") or job.get("runSequence") or "",
                 "setName": Path(folder).name,
+                "createdAt": job.get("createdAt") or run.get("createdAt") or 0,
                 "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
+                "runSummary": run.get("runSummary") or job.get("runSummary") or {},
+                "currentEpoch": run.get("currentEpoch"),
+                "plannedEpochs": run.get("plannedEpochs") or (run.get("runSummary") or {}).get("epochs"),
                 "epochs": epochs,
             })
     return result
@@ -335,48 +339,45 @@ def create_campaign(folder_path, criteria):
     for round_plan in plans:
         model.normalize_settings(template, lambda: 1, dict(round_plan["settings"], seed=1))
     from .epoch_reference import verified_reference, reference_vocabulary
-    scoped = reference_vocabulary(folder, job_id)
-    primary_groups = {}
-    for dimension in dimensions:
-        if dimension["role"] != "primary":
-            continue
-        matches = [group["group"] for group in scoped
-                   if all(option in {term["term"] for term in group["terms"]}
-                          for option in dimension["options"])]
-        if len(matches) != 1:
-            raise ValueError("Primary attribute " + dimension["label"] +
-                             " must match exact tags in one trained annotation group.")
-        primary_groups[dimension["label"]] = matches[0]
     reference_choices = criteria.get("referencePlan")
     if not isinstance(reference_choices, list):
-        raise ValueError("Approve a training reference for every Primary wildcard option.")
+        raise ValueError("Reference selections must be a list.")
     approved = {}
     for entry in reference_choices:
         if not isinstance(entry, dict):
             raise ValueError("Invalid reference selection.")
-        key = (str(entry.get("attribute") or ""), str(entry.get("option") or ""))
+        key = (str(entry.get("dimensionId") or entry.get("attribute") or ""),
+               str(entry.get("option") or ""))
         if key in approved:
             raise ValueError("Duplicate approved reference.")
         approved[key] = entry
-    required = {(dimension["label"], option) for dimension in dimensions
-                if _requires_reference(dimension["role"]) for option in dimension["options"]}
+    required = {(identity, option) for dimension in dimensions
+                if _requires_reference(dimension["role"])
+                for identity in (dimension["id"], dimension["label"])
+                for option in dimension["options"]}
     if not set(approved).issubset(required):
         raise ValueError("Only Primary wildcard choices may have training references.")
     evaluation = criteria.get("referenceEvaluation")
     if not isinstance(evaluation, dict) or any(type(evaluation.get(k)) is not bool for k in ("rvn", "dino")):
         raise ValueError("Select reference evaluation mechanisms explicitly.")
-    if (evaluation["rvn"] or evaluation["dino"]) and set(approved) != required:
-        raise ValueError("Approve an exact trained reference for every Primary wildcard option.")
+    scoped = reference_vocabulary(folder, job_id) if approved else []
+    reference_groups = {
+        (attribute, option): {group["group"] for group in scoped
+                              if any(term["term"] == option for term in group["terms"])}
+        for attribute, option in approved
+    }
     references = []
-    for (attribute, option), entry in sorted(approved.items()):
-        if str(entry.get("group") or "") != primary_groups[attribute] or str(entry.get("tag") or option) != option:
+    for (identity, option), entry in sorted(approved.items()):
+        if str(entry.get("group") or "") not in reference_groups[(identity, option)] or str(entry.get("tag") or option) != option:
             raise ValueError("Primary reference must use its exact annotated group and tag.")
         group = str(entry.get("group") or "")
         media = str(entry.get("media") or "")
         tag = str(entry.get("tag") or option)
         reference = verified_reference(folder, group, tag, media, job_id)
-        references.append({"attribute": attribute, "option": option, "group": group,
-                           "tag": tag, **reference})
+        references.append({"attribute": str(entry.get("attribute") or identity),
+                           "dimensionId": str(entry.get("dimensionId") or ""),
+                           "option": option, "group": group,
+                           "tag": tag, "alias": str(entry.get("alias") or "").strip(), **reference})
     if evaluation["dino"]:
         from .epoch_dino import preflight as dino_preflight
         dino_preflight()
@@ -498,7 +499,7 @@ def _question(groups):
         'or "unclear" if you cannot see it, or "none" if no option fits. '
         'If "(absent)" is an option, select its number when that attribute is absent. '
         "Do not assume any option is present; use only visible evidence.\n\n" +
-        "\n".join(g["id"] + " (" + g["label"] + "): " +
+        "\n".join(g["id"] + " (" + (g.get("annotationGroup") or g["label"]) + "): " +
                   "; ".join(str(i + 1) + "=" + (value or "(absent)")
                             for i, value in enumerate(g["options"]))
                   for g in groups)
@@ -588,7 +589,9 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     for group, dimension in zip(unit["groups"], campaign["dimensions"]):
         if group.get("options") != dimension["options"]:
             raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
-        group.update({"label": dimension["label"], "role": dimension["role"], "weight": dimension["weight"]})
+        group.update({"label": dimension["label"], "role": dimension["role"],
+                      "weight": dimension["weight"],
+                      "annotationGroup": dimension.get("annotationGroup", "")})
     unit["question"] = _question(unit["groups"])
     unit["prompt"] = status.get("resolvedPrompt") or status.get("prompt") or ""
     _save(folder_path, campaign)
@@ -663,7 +666,8 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
     if not frame.is_file():
         raise FileNotFoundError("Generated comparison frame is unavailable.")
     from .epoch_reference import verified_reference
-    references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
+    references = {(entry.get("dimensionId") or entry["attribute"], entry["option"]): entry
+                  for entry in campaign["referencePlan"]}
     outcomes = list(unit.get("referenceAssessments") or [])
     completed_groups = {row["groupId"] for row in outcomes}
     for group in unit.get("groups", []):
@@ -672,16 +676,15 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
         if not _requires_reference(group.get("role")) or group.get("expected") is None:
             continue
         expected = group["options"][group["expected"] - 1]
-        assigned = references.get((group["label"], expected))
+        assigned = references.get((group["id"], expected)) or references.get((group["label"], expected))
         if assigned is None:
             continue
         verified = verified_reference(_folder_key(folder_path), assigned["group"], assigned.get("tag") or expected, assigned["media"], campaign["jobId"])
         if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
             raise ValueError("Training reference changed after campaign approval.")
         reference = folder_path / assigned["media"]
-        question = (group["label"] + " — training reference demonstrates " + expected + ". "
-                    "Select the visible option in B from: " +
-                    "; ".join(str(index + 1) + "=" + option for index, option in enumerate(group["options"])))
+        question = reference_comparison_feature(
+            assigned["group"], expected, group["options"], assigned.get("alias"))
         messages = build_reference_comparison_messages(
             question,
             vision_resized_image_data_url(reference, int(campaign.get("vlImageMP", .45) * 1000000)),
@@ -707,7 +710,8 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
                 verdict = verdict_line.partition(":")[2].strip().upper()
                 if verdict not in {"MATCH", "PARTIAL", "MISMATCH", "UNCLEAR"}:
                     verdict = "UNCLEAR"
-                outcomes.append({"groupId": group["id"], "label": group["label"], "option": expected,
+                outcomes.append({"groupId": group["id"], "label": group["label"],
+                                 "group": assigned["group"], "option": expected,
                                  "reference": assigned["media"], "selected": selected, "verdict": verdict,
                                  "response": answer, "modelId": campaign["visionModel"],
                                  "elapsedSeconds": round(time.monotonic() - started, 2)})
@@ -729,19 +733,20 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
     frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
     if not frame.is_file():
         raise FileNotFoundError("Generated DINO comparison frame is unavailable.")
-    references = {(entry["attribute"], entry["option"]): entry for entry in campaign["referencePlan"]}
+    references = {(entry.get("dimensionId") or entry["attribute"], entry["option"]): entry
+                  for entry in campaign["referencePlan"]}
     unique = {}
     for group in unit.get("groups", []):
         if not _requires_reference(group.get("role")) or group.get("expected") is None:
             continue
         option = group["options"][group["expected"] - 1]
-        entry = references.get((group["label"], option))
+        entry = references.get((group["id"], option)) or references.get((group["label"], option))
         if entry is None:
             continue
         actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"], campaign["jobId"])
         if actual["size"] != entry["size"] or actual["mtimeNs"] != entry["mtimeNs"]:
             raise ValueError("Training reference changed since approval.")
-        unique.setdefault(entry["media"], []).append(group["label"] + ": " + option)
+        unique.setdefault(entry["media"], []).append(entry["group"] + ": " + option)
     results = unit.get("dinoAssessments", [])
     completed = {item["reference"] for item in results}
     for name, attributes in unique.items():
@@ -1050,7 +1055,7 @@ def status(folder_path, campaign_id):
 
 
 
-def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collection_id="", checkpoints=None):
+def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collection_id="", checkpoints=None, include_epoch_index=False, generated_only=False):
     """Read-only visual index over existing Test sessions and Finder campaigns.
 
     Each result retains its native execution identity. Only recorded run/epoch
@@ -1067,6 +1072,23 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
     sessions = []
     campaigns = []
     total = 0
+    result_epochs = {}
+
+    def record_generated_epoch(job_id, epoch, source, run_name=""):
+        if not include_epoch_index or not job_id or type(epoch) is not int or epoch < 0:
+            return
+        key = (job_id, epoch)
+        if key not in result_epochs:
+            result_epochs[key] = {
+                "jobId": job_id, "epoch": epoch, "runName": str(run_name or ""),
+                "count": 0, "testCount": 0, "campaignCount": 0,
+            }
+        entry = result_epochs[key]
+        if not entry["runName"] and run_name:
+            entry["runName"] = str(run_name)
+        entry["count"] += 1
+        entry["testCount" if source == "test" else "campaignCount"] += 1
+
     for directory in bench._session_directories(folder_path):
         payload = bench._read_status(directory) or {}
         if not payload or payload.get("campaignStaging"):
@@ -1097,6 +1119,7 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
                 continue
             if checkpoint_ids and source_job + ":" + str(epoch) not in checkpoint_ids:
                 continue
+            record_generated_epoch(source_job, epoch, "test", provenance.get("sourceRunName"))
             total += 1
             if total <= offset or len(media) >= limit:
                 continue
@@ -1147,6 +1170,13 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
                     continue
                 if checkpoint_ids and job_id + ":" + str(epoch) not in checkpoint_ids:
                     continue
+                # Units exist before rendering. Only captured/pruned frames are generated results.
+                generated = bool(unit.get("frame") or unit.get("framePruned") or unit.get("captured"))
+                if generated_only and not generated:
+                    continue
+                if generated:
+                    record_generated_epoch(job_id, epoch, "campaign",
+                                           origin.get("runName") if origin else campaign.get("runName"))
                 total += 1
                 if total <= offset or len(media) >= limit:
                     continue
@@ -1173,22 +1203,119 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
     except (OSError, RuntimeError, ValueError) as exc:
         runs = []
         warnings.append("Saved checkpoint listing unavailable: " + str(exc))
-    return {"sessions": sessions, "campaigns": campaigns, "media": media,
-            "total": total, "offset": offset, "limit": limit,
-            "runs": runs, "warnings": warnings}
+    response = {"sessions": sessions, "campaigns": campaigns, "media": media,
+                "total": total, "offset": offset, "limit": limit,
+                "runs": runs, "warnings": warnings}
+    if include_epoch_index:
+        response["resultEpochs"] = sorted(result_epochs.values(),
+                                          key=lambda item: (item["jobId"], item["epoch"]))
+    return response
+
+
+
+def checkpoint_workspace(folder_path, job_id, epoch, offset=0, limit=24):
+    """Existing checkpoint evidence, enriched only for the requested visible page."""
+    from . import run_analytics
+    if not str(job_id or "").strip() or type(epoch) is not int:
+        raise ValueError("Select a training run and epoch.")
+    page = workspace_gallery(folder_path, checkpoints=[str(job_id) + ":" + str(epoch)],
+                             generated_only=True, include_epoch_index=True,
+                             offset=offset, limit=limit)
+    sessions, campaigns = {}, {}
+    from . import test_reference
+    for item in page["media"]:
+        if item["source"] == "test":
+            session = item["session"]
+            if session not in sessions:
+                directory = test_bench._session_directory(folder_path, session)
+                stored = test_bench._read_status(directory)
+                if not stored:
+                    raise FileNotFoundError("Test session unavailable: " + session)
+                sessions[session] = (test_bench._session_rating_map(directory),
+                                     test_bench._session_vision_state(directory),
+                                     test_bench._project_wildcard_fields(dict(stored)),
+                                     test_reference.read(folder_path, session))
+            ratings, vision, stored, references = sessions[session]
+            name = item["mediaFile"]
+            item["rating"] = ratings.get(name)
+            item["assessment"] = (vision.get("byMedia") or {}).get(name)
+            records = (references.get("byMedia") or {}).get(name) or {}
+            item["referenceAssessments"] = [v for v in records.values()
+                                            if isinstance(v, dict) and v.get("method") == "rvn"]
+            item["dinoAssessments"] = [v for v in records.values()
+                                       if isinstance(v, dict) and v.get("method") == "dino"]
+            # A repeated session can have a distinct resolved prompt per render.
+            # Never attribute the session's selection to a different generated image.
+            item["wildcards"] = test_bench._resolved_wildcard_summary(
+                stored.get("sourcePrompt"), item.get("prompt"),
+                stored.get("ownerFolder"),
+            ) if item.get("prompt") else []
+            item["settings"] = stored.get("settings") or {}
+        else:
+            cid = item["campaignId"]
+            if cid not in campaigns:
+                campaigns[cid] = _load(folder_path, cid)
+            campaign = campaigns[cid]
+            index = int(item["id"].rsplit(":", 1)[-1])
+            unit = campaign["units"][index]
+            item["wildcards"] = [
+                {"label": g.get("label") or g.get("id") or "Attribute",
+                 "value": g["options"][g["expected"] - 1]}
+                for g in unit.get("groups") or [] if isinstance(g, dict)
+                and type(g.get("expected")) is int and isinstance(g.get("options"), list)
+                and 1 <= g["expected"] <= len(g["options"])]
+            rounds, number = campaign.get("rounds") or [], unit.get("round")
+            item["settings"] = (rounds[number - 1].get("settings") or {}
+                                if type(number) is int and 1 <= number <= len(rounds) else {})
+    if offset == 0:
+        record = next((r for r in page["resultEpochs"]
+                       if r["jobId"] == job_id and r["epoch"] == epoch), {})
+        try:
+            report = run_analytics.report(folder_path, job_id)
+        except ValueError:
+            report = None
+        test = next((p for p in report["testPoints"] if p["epoch"] == epoch), {}) if report else {}
+        page["summary"] = dict(record, manualAverage=test.get("manual"),
+                               rated=test.get("manualCount", 0), testVl=test.get("testVl"),
+                               testVlJudgments=test.get("testVlCount", 0),
+                               campaignScores=[
+                                   {"id": c["id"], "name": c["name"], **p}
+                                   for c in (report["campaigns"] if report else [])
+                                   for p in c["points"] if p["epoch"] == epoch])
+        page["training"] = ({
+            "run": report["run"], "lossPoints": report["lossPoints"],
+            "selectedEpoch": report["selectedEpoch"]} if report else None)
+        if report:
+            page["warnings"].extend(report["warnings"])
+    return page
 
 
 def command(folder_path, operation, criteria=None):
     criteria = criteria if isinstance(criteria, dict) else {}
     if operation == "list":
         return list_campaigns(folder_path)
+    if operation == "checkpoint_workspace":
+        return checkpoint_workspace(folder_path, criteria.get("jobId"), criteria.get("epoch"),
+                                    offset=criteria.get("offset", 0), limit=criteria.get("limit", 24))
     if operation == "workspace_gallery":
-        return workspace_gallery(folder_path, criteria.get("modelId"), limit=criteria.get("limit", 48), offset=criteria.get("offset", 0), collection_id=criteria.get("collectionId"), checkpoints=criteria.get("checkpoints"))
+        return workspace_gallery(folder_path, criteria.get("modelId"), limit=criteria.get("limit", 48), offset=criteria.get("offset", 0), collection_id=criteria.get("collectionId"), checkpoints=criteria.get("checkpoints"), include_epoch_index=bool(criteria.get("includeEpochIndex")), generated_only=bool(criteria.get("generatedOnly")))
     if operation == "checkpoint_evidence":
         return checkpoint_evidence(folder_path, criteria.get("jobId"))
     if operation == "run_analytics":
         from .run_analytics import report
         return report(folder_path, criteria.get("jobId"))
+    if operation == "run_analytics_overview":
+        from .run_analytics import overview
+        return overview(folder_path)
+    if operation == "run_insights_inventory":
+        from .run_analytics import insights_inventory
+        return insights_inventory(folder_path)
+    if operation == "run_insights_review":
+        from .run_analytics import insights_review_batch
+        return insights_review_batch(folder_path, criteria.get("excluded"))
+    if operation == "run_insights_groups":
+        from .run_analytics import save_insights_groups
+        return save_insights_groups(folder_path, criteria.get("hiddenVlGroups"))
     if operation == "run_analytics_selected":
         from .run_analytics import report_selected
         return report_selected(folder_path, criteria.get("jobIds"), criteria.get("session"))
@@ -1196,7 +1323,8 @@ def command(folder_path, operation, criteria=None):
         from .training_reference_selections import command as selection_command
         return selection_command(_folder_key(folder_path), operation, criteria)
     if operation == "reference_runs":
-        return {"runs": candidate_runs(folder_path)}
+        runs = candidate_runs(folder_path)
+        return {"runs": sorted(runs, key=lambda run: float(run.get("createdAt") or 0), reverse=True)}
     if operation == "reference_vocabulary":
         from .epoch_reference import reference_vocabulary
         return {"vocabulary": reference_vocabulary(_folder_key(folder_path), criteria.get("jobId"))}

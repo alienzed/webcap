@@ -1144,12 +1144,18 @@
             </div>
             <section id="test-generations-workspace" class="test-generations-workspace" data-workspace-root="test" aria-label="Test workspace">
                 <section id="test-generations-pane" class="test-generations-pane hidden" aria-label="Test Generations">
+                    <nav id="test-workspace-main-tabs" class="test-workspace-main-tabs" aria-label="Test Generations sections">
+                        <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Tests</button>
+                        <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Campaigns</button>
+                        <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
+                        <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
+                    </nav>
                     <section id="epoch-finder-screen" class="epoch-finder-screen hidden" aria-label="Epoch Finder">
                         <div class="epoch-finder-intro">
                             <div><div class="epoch-finder-eyebrow">TEST GENERATIONS / EPOCH FINDER</div>
                             <h2>Find the strongest epoch</h2>
                             <p>Compare saved checkpoints with matching prompts and seeds. Render, evaluate, narrow, repeat.</p></div>
-                            <div class="epoch-finder-intro-actions"><button id="epoch-finder-back-to-tests" type="button" class="review-captions-btn">← Regular tests</button><button id="epoch-finder-refresh" type="button" class="review-captions-btn">Refresh</button></div>
+                            <div class="epoch-finder-intro-actions"><button id="epoch-finder-back-to-tests" type="button" class="review-captions-btn">← Regular tests</button></div>
                         </div>
                         <div class="epoch-finder-layout">
                             <aside class="epoch-finder-sidebar">
@@ -1157,7 +1163,7 @@
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
                                     <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="finder" aria-pressed="true">Epoch Finder</button>
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
-                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
                                 </nav>
                                 <section class="epoch-finder-panel">
                                     <h3>New campaign</h3>
@@ -1203,7 +1209,7 @@
                                 </section>
                                 <section class="epoch-finder-panel">
                                     <div class="epoch-finder-panel-heading"><h3>Campaigns</h3><span id="epoch-finder-count"></span></div>
-                                    <button id="epoch-finder-new" type="button" class="review-captions-btn epoch-finder-new-campaign">+ New Campaign</button>
+                                    <div class="test-workspace-campaign-tools"><button id="epoch-finder-new" type="button" class="review-captions-btn epoch-finder-new-campaign">+ New Campaign</button><button id="epoch-finder-refresh" type="button" class="review-captions-btn">Refresh</button></div>
                                     <div id="epoch-finder-campaigns" class="epoch-finder-campaigns"><span class="epoch-finder-muted">No campaigns yet.</span></div>
                                 </section>
                             </aside>
@@ -1264,35 +1270,39 @@
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
                                     <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
                                     <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="references" aria-pressed="true">References</button>
-                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
                                 </nav>
                                 <section class="epoch-finder-panel">
-                                    <h3>Find training examples</h3>
-                                    <label>Source training run<select id="test-references-run"><option value="">Loading runs…</option></select></label>
-                                    <label>Scoped Set group<select id="test-references-group" disabled><option value="">Select a run first</option></select></label>
-                                    <label>Tagged option<select id="test-references-option" disabled><option value="">Select a group first</option></select></label>
-                                    <div class="test-references-nav" aria-label="Tagged option navigation">
-                                        <button type="button" id="test-references-previous" disabled>← Previous</button>
-                                        <button type="button" id="test-references-skip" disabled>Skip →</button>
+                                    <div class="epoch-finder-panel-heading">
+                                        <h3>Training examples</h3>
+                                        <button id="test-references-refresh" type="button" class="review-captions-btn">Refresh</button>
                                     </div>
-                                    <button id="test-references-refresh" type="button" class="review-captions-btn">Refresh references</button>
-                                    <p class="epoch-finder-muted">Only images actually included in the selected run and carrying this exact annotation are shown. A tag is not proof that a feature is visible.</p>
+                                    <label>Training run<select id="test-references-run"><option value="">Loading runs…</option></select></label>
+                                    <p id="test-references-run-status" class="epoch-finder-muted" aria-live="polite"></p>
+                                    <h4>Annotation groups</h4>
+                                    <div id="test-references-groups" class="test-references-groups" aria-label="Annotation groups"></div>
+                                    <div class="test-references-tag-heading">
+                                        <h4>Tags</h4><span id="test-references-tag-progress" aria-live="polite"></span>
+                                    </div>
+                                    <div id="test-references-tags" class="test-references-tags" aria-label="Tagged options"></div>
+                                    <p class="epoch-finder-muted">Matches are exact Set annotations from images captured by this run; a tag does not guarantee visibility.</p>
                                 </section>
                                 <section class="epoch-finder-panel">
                                     <div class="epoch-finder-panel-heading"><h3>Chosen examples</h3><span id="test-references-selected-count"></span></div>
                                     <div id="test-references-selections" class="test-references-selections epoch-finder-muted">Choose an example to use for its tag.</div>
-                                    <p class="epoch-finder-muted">Choices are temporary until a campaign is launched. Its approved references are then stored with that campaign.</p>
+                                    <p class="epoch-finder-muted">Selections are saved to this Set and can be reused by campaigns.</p>
                                 </section>
                             </aside>
                             <main class="epoch-finder-dashboard">
                                 <section class="epoch-finder-reference-workspace">
                                     <div class="epoch-finder-panel-heading"><h3>Matching images</h3><span id="test-references-count"></span></div>
                                     <div class="test-references-workflow-heading">
-                                        <span id="test-references-tag-progress" aria-live="polite"></span>
-                                        <button type="button" id="test-references-next" disabled>Next tag →</button>
+                                        <span id="test-references-status" class="epoch-finder-muted" aria-live="polite">Finding training references…</span>
+                                        <nav class="test-references-nav" aria-label="Tag navigation">
+                                            <button type="button" id="test-references-previous" disabled>← Previous</button>
+                                            <button type="button" id="test-references-next" disabled>Next →</button>
+                                        </nav>
                                     </div>
-                                    <div id="test-references-tags" class="test-references-tags" aria-label="Tagged options"></div>
-                                    <p id="test-references-status" class="epoch-finder-muted" aria-live="polite">Select a training run to explore its references.</p>
                                     <div id="test-references-gallery" class="epoch-finder-reference-gallery"></div>
                                 </section>
                                 <p id="test-references-error" class="epoch-finder-error hidden" role="alert"></p>
@@ -1305,38 +1315,84 @@
                             <a id="test-references-preview-original" target="_blank" rel="noopener noreferrer">Open original image ↗</a>
                         </dialog>
                     </section>
-                    <section id="run-analytics-screen" class="epoch-finder-screen hidden" aria-label="Run Analytics">
-                        <div class="epoch-finder-intro"><div><div class="epoch-finder-eyebrow">TEST GENERATIONS / ANALYTICS</div><h2>Run Analytics</h2><p>Read-only evidence across saved campaigns, Test sessions and training archives.</p></div></div>
+                    <section id="run-analytics-screen" class="epoch-finder-screen hidden" aria-label="Run Insights">
+                        
                         <div class="epoch-finder-layout">
                           <aside class="epoch-finder-sidebar">
                             <nav class="test-workspace-pane-switcher" aria-label="Test workspace pane">
                               <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="tests" aria-pressed="false">Tests</button>
                               <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
                               <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
-                              <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="analytics" aria-pressed="true">Analytics</button>
+                              <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="analytics" aria-pressed="true">Insights</button>
                             </nav>
-                            <section class="epoch-finder-panel"><h3>Evidence scope</h3><p class="epoch-finder-muted">Choose up to six runs from this Set. Campaign results are comparable only when they come from the same campaign.</p><div id="run-analytics-run-choices" class="epoch-finder-run-choices"></div><p id="run-analytics-selection-count" class="epoch-finder-muted" aria-live="polite">0 / 6 runs selected</p><button id="run-analytics-analyze" class="training-btn training-launch-btn" type="button">Analyze selected</button></section>
-                            <section class="epoch-finder-panel"><h3>Evidence filters</h3><label>Campaign<select id="run-analytics-campaign"><option value="">No campaign (independent signals)</option></select></label><label>Test session<select id="run-analytics-session"><option value="">All sessions (descriptive only)</option></select></label><label>Comparable Test cohort<select id="run-analytics-cohort"><option value="">Automatic (only if comparable)</option></select></label><p class="epoch-finder-muted">Changing filters never starts inference.</p></section>
+                            <section class="epoch-finder-panel"><details><summary>Browse epochs with results</summary><p class="epoch-finder-muted">Recorded Test and Campaign outputs, grouped by training run. Select an epoch to inspect its results.</p><div id="run-analytics-result-epochs" aria-live="polite">Finding saved generated results…</div><p id="run-analytics-result-epochs-note" class="epoch-finder-muted"></p></details></section>
+                            <section class="epoch-finder-panel"><details><summary>Compare selected runs</summary><p class="epoch-finder-muted">Choose up to six runs from this Set. Campaign results are comparable only when they come from the same campaign.</p><div id="run-analytics-run-choices" class="epoch-finder-run-choices"></div><p id="run-analytics-selection-count" class="epoch-finder-muted" aria-live="polite">0 / 6 runs selected</p><button id="run-analytics-analyze" class="training-btn training-launch-btn" type="button">Analyze selected</button></details></section>
+                            <section class="epoch-finder-panel"><details><summary>Detailed evidence filters</summary><label>Campaign<select id="run-analytics-campaign"><option value="">No campaign (independent signals)</option></select></label><label>Test session<select id="run-analytics-session"><option value="">All sessions (descriptive only)</option></select></label><label>Comparable Test cohort<select id="run-analytics-cohort"><option value="">Automatic (only if comparable)</option></select></label><p class="epoch-finder-muted">Changing filters never starts inference.</p></details></section>
                           </aside>
                           <main class="epoch-finder-dashboard">
-                            <section class="epoch-finder-panel"><h3>Evidence coverage</h3><div id="run-analytics-coverage">Choose a training run to begin.</div></section>
-                            <section class="epoch-finder-panel"><h3>Checkpoint trajectory</h3><p id="run-analytics-chart-note" class="epoch-finder-muted"></p><div id="run-analytics-chart"></div></section>
-                            <section class="epoch-finder-panel"><h3>Checkpoints</h3><div id="run-analytics-table"></div></section>
                             <dialog id="run-analytics-epoch-media-dialog" class="run-analytics-epoch-media-dialog" aria-label="Generated results for checkpoint">
                                 <div class="run-analytics-epoch-media-head"><div><h3 id="run-analytics-epoch-media-title">Checkpoint results</h3><p class="run-analytics-epoch-media-description">Generated tests and campaign frames recorded for this checkpoint.</p><p id="run-analytics-epoch-media-status" role="status" aria-live="polite"></p></div><button id="run-analytics-epoch-media-close" type="button" class="review-captions-btn">← Back to Analytics</button></div>
                                 <div id="run-analytics-epoch-media-grid" class="run-analytics-epoch-media-grid" aria-live="polite"></div>
                                 <button id="run-analytics-epoch-media-more" class="review-captions-btn hidden" type="button">Load 8 more</button>
                               </dialog>
+                            <dialog id="run-lab-review-dialog" class="run-lab-review-dialog" aria-label="Blind render rating">
+                              <header class="run-lab-review-head"><div><h3>Blind render review</h3><p id="run-lab-review-progress" role="status">Preparing review…</p></div><div class="run-lab-review-meter-wrap"><progress id="run-lab-review-meter" max="5" value="0" aria-label="Blind rating batch progress"></progress><small>1–5 rate · S skip · → next</small></div><button type="button" id="run-lab-review-close" class="review-captions-btn">Close</button></header>
+                              <div id="run-lab-review-media" class="run-lab-review-media"></div>
+                              <div id="run-lab-review-wildcards" class="run-lab-review-wildcards"></div>
+                              <div id="run-lab-review-reveal" class="run-lab-review-reveal" aria-live="polite"></div>
+                              <div id="run-lab-review-stars" class="run-lab-review-stars" aria-label="Rate this render from one to five stars">
+                                <button type="button" data-insights-rating="1" aria-label="1 star">★</button><button type="button" data-insights-rating="2" aria-label="2 stars">★</button><button type="button" data-insights-rating="3" aria-label="3 stars">★</button><button type="button" data-insights-rating="4" aria-label="4 stars">★</button><button type="button" data-insights-rating="5" aria-label="5 stars">★</button>
+                              </div>
+                              <div class="run-lab-review-actions"><button id="run-lab-review-undo" type="button" class="review-captions-btn hidden">Undo rating</button><button id="run-lab-review-skip" type="button" class="review-captions-btn">Skip</button><button id="run-lab-review-next" type="button" class="review-captions-btn hidden">Next render</button></div>
+                              <p id="run-lab-review-status" role="status"></p>
+                            </dialog>
+                            <div id="run-analytics-lab" class="run-analytics-lab">
+                              <header class="run-lab-heading"><div><span class="run-lab-eyebrow">TEST GENERATIONS / INSIGHTS</span><h2>Insights</h2><p>Review what you have, find promising epochs, and choose the next useful action.</p></div><div class="run-lab-heading-actions"><button type="button" id="run-lab-ai" class="training-btn training-launch-btn">✦ AI Insights</button><button type="button" id="run-lab-refresh" class="review-captions-btn">Refresh evidence</button></div></header>
+                              <p id="run-lab-status" role="status">Reading recorded testing evidence…</p>
+                              <section class="run-lab-challenge"><div><span class="run-lab-eyebrow">NEXT CHALLENGE</span><h3 id="run-lab-challenge-title">Review five unrated renders</h3><p id="run-lab-challenge-description">Rate existing results before spending more GPU time.</p><div id="run-lab-challenge-actions"></div></div><div class="run-lab-steps"><strong>Rating progress</strong><p id="run-lab-mission-metrics" role="status">Reading saved ratings…</p><progress id="run-lab-mission-meter" max="100" value="0" aria-label="Linked Test rating coverage"></progress><small id="run-lab-mission-hint">Rate renders to strengthen your comparisons.</small></div></section>
+                              <section class="run-lab-featured" aria-label="Leading epochs"><div id="run-lab-featured"></div></section>
+                              <section id="run-lab-ai-panel" class="run-lab-card run-lab-ai-panel hidden" aria-live="polite">
+                                <div class="run-lab-card-heading"><div><h3>AI Insights — Training history</h3><p>Grounded interpretation of saved Test ratings and active / archived training data, not a measured score.</p></div><button id="run-lab-ai-stop" class="review-captions-btn hidden" type="button">Stop</button></div>
+                                <p id="run-lab-ai-status" role="status"></p>
+                                <div id="run-lab-ai-result"></div>
+                                <details><summary>Evidence supplied to Director</summary><pre id="run-lab-ai-facts"></pre></details>
+                              </section>
+                              <section class="run-lab-card run-lab-history"><div class="run-lab-card-heading"><div><h3>Training history</h3><p>Same-Set runs and archives, including gaps in surviving quality evidence</p></div></div><div id="run-lab-history"></div></section>
+                              <details class="run-lab-details"><summary>More evidence: totals, trajectory and coverage</summary><div class="run-lab-evidence-details">
+                              <div id="run-lab-summary" class="run-lab-summary"></div>
+                              <div class="run-lab-two-col run-lab-lower">
+                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Performance trajectory</h3><p>Saved manual ratings by epoch; select a run to see its trend</p></div><label>Run <select id="run-lab-run"></select></label></div><div id="run-lab-chart"></div></section>
+                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>How much do we actually know?</h3><p>Preview coverage, without synthetic confidence scores</p></div></div><div id="run-lab-coverage"></div></section>
+                              </div>
+                              </div></details>
+                              <details class="run-lab-details"><summary>Full epoch rankings and VL diagnostics</summary>
+                              <div class="run-lab-two-col">
+                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>★ The Contenders</h3><p>Best-rated epochs across all saved Test sessions</p></div><label>Rank by <select id="run-lab-sort"><option value="manual">Average rating</option><option value="count">Number rated</option></select></label></div><div id="run-lab-contenders"></div><p class="run-lab-footnote">A single 5/5 rating is less evidence than repeated strong ratings. All saved Test ratings count, regardless of prompt or VL settings.</p></section>
+                                <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Where the evidence points</h3><p>Separate VL observations — not part of manual ratings</p></div><label>VL group <select id="run-lab-cohort"></select></label></div><div id="run-lab-discoveries"></div></section>
+                              </div>
+                              </details>
+                              <details class="run-lab-details"><summary>Browse recorded results</summary><div class="run-lab-evidence-details">
+                              <section class="run-lab-card"><div class="run-lab-card-heading"><div><h3>Evidence Explorer</h3><p>Recorded epochs and generated results</p></div><button type="button" class="review-captions-btn" id="run-lab-detail">Detailed Analytics</button></div><div id="run-lab-explorer"></div></section>
+                              </div></details>
+                              <p id="run-lab-warnings" class="run-lab-footnote"></p>
+                            </div>
+                            <div id="run-analytics-report-surface" class="epoch-info-report-surface hidden">
+                            <section class="epoch-finder-panel"><h3>Evidence coverage</h3><div id="run-analytics-coverage">Choose a training run to begin.</div></section>
+                            <section class="epoch-finder-panel"><h3>Checkpoint trajectory</h3><p id="run-analytics-chart-note" class="epoch-finder-muted"></p><div id="run-analytics-chart"></div></section>
+                            <section class="epoch-finder-panel"><h3>Checkpoints</h3><div id="run-analytics-table"></div></section>
+
                             <section class="epoch-finder-panel"><h3>Findings and limits</h3><div id="run-analytics-findings"></div><div id="run-analytics-warnings"></div></section>
                             <section class="epoch-finder-panel"><h3>Director interpretation</h3><p class="epoch-finder-muted">Optional analysis of the visible numeric evidence only. No captions, prompts, images or raw logs are sent.</p><details><summary>Preview numerical evidence sent to Director</summary><pre id="run-analytics-director-preview" class="run-analytics-evidence-preview">Select runs and Analyze first.</pre></details><button id="run-analytics-director" type="button" class="review-captions-btn" disabled>Interpret with Director</button><button id="run-analytics-director-stop" type="button" class="review-captions-btn hidden">Stop</button><p id="run-analytics-director-status" aria-live="polite"></p><div id="run-analytics-director-result"></div></section>
                             <p id="run-analytics-error" class="epoch-finder-error hidden" role="alert"></p>
+                            </div>
+                            <section id="run-analytics-epoch-info" class="epoch-info-workspace hidden" aria-label="Checkpoint inspection"></section>
                           </main>
                         </div>
                     </section>
                     <div id="test-unified-workspace" class="test-unified-workspace hidden" aria-label="Unified Test Generations">
                         <aside class="test-unified-rail">
                             <h3>Test Generations</h3>
-                            <div class="test-unified-switch"><button id="test-unified-explore" type="button">Explore</button><button id="test-unified-build" type="button">Build</button><button id="test-unified-analytics" type="button">Analytics</button></div>
+                            <div class="test-unified-switch"><button id="test-unified-explore" type="button">Explore</button><button id="test-unified-build" type="button">Build</button><button id="test-unified-analytics" type="button">Insights</button></div>
                             <div class="test-unified-switch"><button id="test-unified-experiments" type="button">Experiments</button><button id="test-unified-checkpoints" type="button">Checkpoints</button></div>
                             <div id="test-unified-list" class="test-unified-list"></div>
                             <button id="test-unified-reload" class="review-captions-btn" type="button">Refresh results</button>
@@ -1359,23 +1415,10 @@
                                 <button type="button" class="test-workspace-pane-btn active" data-test-workspace-mode="tests" aria-pressed="true">Tests</button>
                                 <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="finder" aria-pressed="false">Epoch Finder</button>
                                 <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="references" aria-pressed="false">References</button>
-                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Analytics</button>
+                                    <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
                             </nav>
-                            <div id="test-generations-help" class="test-generations-help hidden">
-                                <strong>How Test Generations works</strong>
-                                <p>Each run freezes the selected model, prompt, generation settings, and seed across the Base render and every staged LoRA so the results are directly comparable.</p>
-                                <p>Prompt, model-specific settings, and candidate selection are remembered separately for each model. The seed is shared within a batch, then randomized for the next batch.</p>
-                                <p>The supplied ComfyUI workflow defines inference. WebCap only applies the approved Test bindings, launches it, and stores the completed media in the session.</p>
-                            </div>
                             <section class="test-generations-controls">
                                 <section class="test-generations-next-run" aria-label="Next Test run">
-                                    <div class="test-generations-form-heading">
-                                        <div class="test-generations-form-title">
-                                            <strong>Regular tests</strong><button id="test-generations-campaign-mode" type="button" class="review-captions-btn" title="Switch to the guided checkpoint campaign wizard">Switch to campaign setup →</button>
-                                            <button id="test-generations-info-btn" type="button" class="mini-info-btn" title="How Test Generations works" aria-label="How Test Generations works">i</button>
-                                        </div>
-                                        <span id="test-generations-summary" class="test-generations-summary">Loading Test folder...</span>
-                                    </div>
                                     <div class="training-run-option test-generations-prompt">
                                         <div class="test-generations-prompt-heading">
                                             <span>Prompt</span>
@@ -1383,7 +1426,6 @@
                                                 <span id="test-generations-wildcard-status" class="test-generations-wildcard-status" aria-live="polite"></span>
                                                 <button id="test-generations-recent-prompts-btn" type="button" class="review-captions-btn" title="Reuse a recent prompt">Recent</button>
                                                 <button id="test-generations-wildcard-btn" type="button" class="review-captions-btn test-generations-wildcard-wand" title="Generate a wildcard prompt from this Set's captions" aria-label="Generate wildcard prompt">&#10024;</button>
-                                                <details class="test-generations-extra-launch"><summary title="Optional detailed Batch setup">More</summary><button id="test-generations-batch-btn" type="button" class="review-captions-btn" title="Detailed Batch setup, using the same server Batch execution">Detailed Batch setup…</button></details>
                                             </div>
                                         </div>
                                         <textarea id="test-generations-prompt" rows="5"></textarea>
@@ -1397,28 +1439,14 @@
                                             <label id="test-generations-seed-field" class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="4294967295" step="1"></label>
                                         </div>
                                         <div class="test-generations-launch-options">
-                                            <label for="test-generations-inline-count">Sessions <input id="test-generations-inline-count" type="number" min="1" max="20" value="1" aria-describedby="test-generations-inline-launch-summary"></label>
+                                            <label for="test-generations-inline-count">Repeat <input id="test-generations-inline-count" type="number" min="1" max="20" value="1"></label>
                                             <label class="test-generations-inline-vl"><input id="test-generations-inline-auto-vl" type="checkbox"> Assess generated results with VL</label>
-                                            <span id="test-generations-inline-launch-summary" class="test-generations-inline-launch-summary" aria-live="polite">One session using the selected seed</span>
-                                        </div>
-                                        <div class="test-generations-actions">
-                                            <label class="test-generations-session-name">
-                                                <input id="test-generations-session-name" type="text" maxlength="120" placeholder="Session name (optional)" aria-label="Session name (optional)">
-                                            </label>
-                                            <button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button>
+                                            <div class="test-generations-actions">
+                                                <button id="test-generations-run-btn" type="button" class="training-btn training-launch-btn">Run Tests</button>
+                                            </div>
                                         </div>
                                     </div>
                                 </section>
-                                <details id="test-generations-batch-summary" class="test-generations-batch-summary hidden" open>
-                                    <summary><strong id="test-generations-batch-heading">Batch Test + VL</strong></summary>
-                                    <select id="test-generations-batch-history" class="hidden" aria-label="Select recent batch"></select>
-                                    <div id="test-generations-batch-progress" class="test-generations-batch-progress" aria-live="polite"></div>
-                                    <div class="test-generations-batch-actions">
-                                        <button id="test-generations-batch-stop" class="review-captions-btn" type="button" title="Stop submitting and assessing. Already queued Test sessions continue running.">Stop submitting / VL</button>
-                                        <button id="test-generations-batch-dismiss" class="review-captions-btn hidden" type="button">Dismiss</button>
-                                    </div>
-                                    <div id="test-generations-batch-results" class="test-generations-batch-results hidden"></div>
-                                </details>
                                 <div id="test-generations-status" class="training-command-status" aria-live="polite"></div>
                                 <div id="test-generations-error" class="training-command-status hidden" aria-live="polite"></div>
                                 <section class="test-generations-library">
@@ -1427,10 +1455,10 @@
                                             <div class="test-generations-library-heading-primary">
                                                 <input id="test-generations-master-select" class="test-generations-master-select" type="checkbox" title="Select/deselect all candidates" aria-label="Select or deselect all candidates">
                                                 <strong>Candidates</strong>
+                                                <span id="test-generations-files-count">0</span>
                                             </div>
                                             <div class="test-generations-library-heading-tools">
-                                                <button id="test-generations-candidates-btn" type="button" class="review-captions-btn hidden" title="Open training candidates for this Set">Runs</button>
-                                                <span id="test-generations-files-count">0</span>
+                                                <button id="test-generations-candidates-btn" type="button" class="review-captions-btn hidden" title="Open training candidates for this Set">Training Runs</button>
                                             </div>
                                         </div>
                                         <div class="test-generations-sweep-setup">
@@ -1466,6 +1494,7 @@
                                 aria-label="Collapse sidebar"
                                 aria-pressed="false"
                             >&lt;</button>
+                            <div id="test-generations-session-surface">
                             <div class="test-generations-results-heading">
                                 <div class="test-generations-results-title">
                                     <span id="test-generations-wildcard-tagline" class="test-generations-wildcard-tagline hidden"></span>
@@ -1528,6 +1557,8 @@
                             </section>
                             <div id="test-generations-results" class="test-generations-results"></div>
                             <div id="test-generations-compare" class="test-generations-compare hidden"></div>
+                            </div>
+                            <section id="test-generations-epoch-info" class="epoch-info-workspace hidden" aria-label="Checkpoint inspection"></section>
                         </section>
                     </div>
                 </section>
@@ -1539,6 +1570,7 @@
                     <button type="button" class="media-explorer-source active" data-media-role="">All media</button>
                     <button type="button" class="media-explorer-source" data-media-role="generated">Generated media</button>
                     <button type="button" class="media-explorer-source" data-media-role="reference">References</button>
+                    <button type="button" class="media-explorer-source" data-media-source="external">External folders</button>
                     <div class="media-explorer-rail-title media-explorer-workflow-title">Workflows</div>
                     <button type="button" class="media-explorer-source" data-media-source="generate">Generate</button>
                     <button type="button" class="media-explorer-source" data-media-source="test">Test Generations</button>
@@ -1549,10 +1581,11 @@
                 <main class="media-explorer-main" aria-label="Media library">
                     <div class="media-explorer-toolbar">
                         <header class="media-explorer-header"><h2 id="media-explorer-heading">All media</h2><div class="media-explorer-header-actions"><button type="button" id="media-explorer-refresh" class="review-captions-btn" title="Refresh this view">↻ Refresh</button><button type="button" id="media-explorer-scan-all" class="review-captions-btn" title="Discover older WebCap-generated media beyond the recent results">Scan full history</button></div></header>
-                        <div class="media-explorer-searchbar"><label class="media-explorer-search-field"><span aria-hidden="true">⌕</span><input type="search" id="media-explorer-search" placeholder="Search generated media, prompts, models…" aria-label="Search media" autocomplete="off"></label><select id="media-explorer-sort" aria-label="Sort media"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Filename A–Z</option><option value="rating">Highest rated</option></select></div>
+                        <div id="media-explorer-external-path-bar" class="media-explorer-external-path-bar hidden"><input type="text" id="media-explorer-external-path" placeholder="Absolute folder path (other disks supported)" aria-label="External folder path"><button type="button" id="media-explorer-open-path" class="review-captions-btn">Browse</button><button type="button" id="media-explorer-generate-metadata" class="review-captions-btn">Generate Metadata</button><button type="button" id="media-explorer-stop-metadata" class="review-captions-btn hidden">Stop</button></div><div id="media-explorer-metadata-progress" class="media-explorer-metadata-progress hidden" role="status"></div>
+                        <div class="media-explorer-searchbar"><label class="media-explorer-search-field"><span aria-hidden="true">⌕</span><input type="search" id="media-explorer-search" placeholder="Search generated media, prompts, models…" aria-label="Search media" autocomplete="off"></label><select id="media-explorer-sort" aria-label="Sort media"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Filename A–Z</option><option value="rating">Highest rated</option><option value="path">Path A–Z</option><option value="type">Type</option><option value="resolution">Resolution</option><option value="megapixels">Megapixels</option><option value="duration">Longest</option></select></div>
                         <div class="media-explorer-facets"><select id="media-explorer-storyboard-type" class="hidden" aria-label="Filter Storyboard media"><option value="">All Storyboard media</option><option value="scenes">Scenes</option><option value="exports">Exported Sequences</option></select><select id="media-explorer-kind" aria-label="Filter media type"><option value="">All media types</option><option value="image">Images</option><option value="video">Videos</option></select><select id="media-explorer-model" aria-label="Filter model" class="hidden"><option value="">All models</option></select><select id="media-explorer-folder" aria-label="Filter Set" class="hidden"><option value="">All Sets</option></select><select id="media-explorer-date" aria-label="Filter date"><option value="">Any date</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select><select id="media-explorer-rating" aria-label="Filter rating"><option value="">Any rating</option><option value="5">5 stars</option><option value="4">4 stars &amp; up</option><option value="3">3 stars &amp; up</option><option value="2">2 stars &amp; up</option><option value="1">Rated</option><option value="unrated">Unrated / unknown</option></select></div>
-                        <div id="media-explorer-filter-chips" class="media-explorer-filter-chips"></div>
-                        <div class="media-explorer-gallery-toolbar"><div class="media-explorer-count-group"><span id="media-explorer-count" aria-live="polite">Discovering media…</span><button id="media-explorer-clear-filters" type="button" class="media-explorer-text-btn hidden">Clear filters</button></div><div class="media-explorer-view-controls"><div class="media-explorer-fit-controls" role="group" aria-label="Thumbnail framing"><button type="button" id="media-explorer-fit" aria-pressed="true">Fit</button><button type="button" id="media-explorer-fill" aria-pressed="false">Fill</button></div><label class="media-explorer-size-label"><span>Size</span><input id="media-explorer-size" type="range" min="180" max="380" step="20" value="260" aria-label="Thumbnail size"></label></div></div>
+                        <div id="media-explorer-external-filters" class="media-explorer-facets hidden"><label>Short side ≥ <input id="media-explorer-min-side" type="number" min="0" placeholder="px" aria-label="Minimum short side pixels"></label><label>MP ≥ <input id="media-explorer-min-mp" type="number" min="0" step="0.1" placeholder="MP" aria-label="Minimum megapixels"></label><label>Duration ≥ <input id="media-explorer-min-duration" type="number" min="0" step="1" placeholder="seconds" aria-label="Minimum duration seconds"></label><label>Duration ≤ <input id="media-explorer-max-duration" type="number" min="0" step="1" placeholder="seconds" aria-label="Maximum duration seconds"></label></div><div id="media-explorer-filter-chips" class="media-explorer-filter-chips"></div>
+                        <div class="media-explorer-gallery-toolbar"><div class="media-explorer-count-group"><span id="media-explorer-count" aria-live="polite">Discovering media…</span><button id="media-explorer-clear-filters" type="button" class="media-explorer-text-btn hidden">Clear filters</button></div><div class="media-explorer-view-controls"><div class="media-explorer-modes" role="group" aria-label="Explorer presentation"><button type="button" data-explorer-mode="list">List</button><button type="button" data-explorer-mode="single" title="Open the existing fullscreen media viewer">Single</button><button type="button" data-explorer-mode="grid" aria-pressed="true">Grid</button></div><div class="media-explorer-fit-controls" role="group" aria-label="Thumbnail framing"><button type="button" id="media-explorer-fit" aria-pressed="true">Fit</button><button type="button" id="media-explorer-fill" aria-pressed="false">Fill</button></div><label class="media-explorer-size-label"><span>Size</span><input id="media-explorer-size" type="range" min="180" max="380" step="20" value="260" aria-label="Thumbnail size"></label></div></div>
                         <div id="media-explorer-selection" class="media-explorer-selection hidden" role="toolbar" aria-label="Media selection"><span id="media-explorer-selected-count"></span><span id="media-explorer-selection-hint" class="media-explorer-selection-hint">Select 2–4 to compare</span><button type="button" id="media-explorer-compare" class="review-captions-btn">Compare</button><button type="button" id="media-explorer-clear-selection" class="media-explorer-text-btn">Deselect</button></div>
                     </div>
                     <div class="media-explorer-gallery-area">
@@ -1783,6 +1816,10 @@
                         <strong>Director</strong>
                         <span id="storyboard-director-activity-phase">Preparing…</span>
                         <span id="storyboard-director-activity-detail"></span>
+                        <div id="storyboard-director-scene-progress" class="storyboard-director-scene-progress hidden">
+                            <span id="storyboard-director-scene-progress-text"></span>
+                            <progress id="storyboard-director-scene-progress-bar" value="0" max="1" aria-label="Director Scenes completed"></progress>
+                        </div>
                         <button id="storyboard-director-view-activity" type="button">View Activity →</button>
                         <div id="storyboard-director-model-load" class="director-model-load hidden" aria-live="polite">
                             <div class="director-model-load-copy"><span>Model</span><strong id="storyboard-director-model-load-label"></strong></div>
@@ -1883,21 +1920,22 @@
 
 
 
-                                <div class="storyboard-develop-row">
-                                    <div class="storyboard-develop-controls">
-                                        <label class="storyboard-target-scenes-inline">
-                                            <input id="storyboard-story-target-scenes" type="number" min="2" max="50" step="1" value="12" aria-label="Target Scene count">
-                                            <span>scenes</span>
-                                        </label>
-                                        <button id="storyboard-scene-count-auto" type="button" class="review-captions-btn storyboard-scene-count-auto" aria-pressed="false" title="Let Director choose the Scene count from the Story">Auto</button>
-                                        <label class="storyboard-develop-individual" title="Plan the Story once, then author each full Scene in a separate Director request.">
-                                            <input id="storyboard-develop-individual" type="checkbox">
-                                            <span>One at a time</span>
-                                        </label>
-                                        <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn storyboard-director-action">Develop Scenes</button>
-                                    </div>
-                                    <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite"></span>
+                            </div>
+
+                            <div class="storyboard-develop-row">
+                                <div class="storyboard-develop-controls">
+                                    <label class="storyboard-target-scenes-inline">
+                                        <input id="storyboard-story-target-scenes" type="number" min="2" max="50" step="1" value="12" aria-label="Target Scene count">
+                                        <span>scenes</span>
+                                    </label>
+                                    <button id="storyboard-scene-count-auto" type="button" class="review-captions-btn storyboard-scene-count-auto" aria-pressed="false" title="Let Director choose the Scene count from the Story">Auto</button>
+                                    <label class="storyboard-develop-individual" title="Plan the Story once, then author each full Scene in a separate Director request.">
+                                        <input id="storyboard-develop-individual" type="checkbox">
+                                        <span>One at a time</span>
+                                    </label>
+                                    <button id="storyboard-develop-btn" type="button" class="storyboard-primary-btn storyboard-director-action">Develop Scenes</button>
                                 </div>
+                                <span id="storyboard-develop-status" class="storyboard-save-state" aria-live="polite"></span>
                             </div>
 
                             <details class="storyboard-story-section storyboard-scene-defaults storyboard-scene-defaults-drawer" data-story-section="defaults" aria-label="Scene Defaults">
@@ -1914,8 +1952,10 @@
                                             <label class="storyboard-field"><span>Megapixels</span><input id="storyboard-story-megapixels" type="number" min="0.05" step="0.05" value="0.2"></label>
                                         </div>
                                     </section>
-                                    <label class="storyboard-develop-individual" style="margin:8px 0"><input id="storyboard-director-lora-enable" type="checkbox"> Director LoRA planning (review suggestions before applying)</label>
-                                    <button id="storyboard-director-lora-suggest" type="button" class="review-captions-btn">Suggest LoRAs for this Story</button>
+                                    <div class="storyboard-director-lora-controls">
+                                        <label class="storyboard-develop-individual" title="Review Director suggestions before applying them."><input id="storyboard-director-lora-enable" type="checkbox"> Director LoRA planning</label>
+                                        <button id="storyboard-director-lora-suggest" type="button" class="review-captions-btn">Suggest LoRAs</button>
+                                    </div>
                                     <span id="storyboard-director-lora-status" class="storyboard-reference-empty" aria-live="polite"></span>
                                     <section class="storyboard-story-loras" aria-label="Story LoRAs">
                                         <div class="storyboard-scene-defaults-subheading">
@@ -2083,18 +2123,6 @@
                     <div id="activity-monitor-list" class="activity-monitor-list"></div>
                 </div>
             </aside>
-            <div id="test-generations-batch-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="test-generations-batch-close">
-                <section class="keep-lora-dialog test-generations-batch-dialog" role="dialog" aria-modal="true" aria-labelledby="test-generations-batch-title">
-                    <header class="keep-lora-header"><div><h2 id="test-generations-batch-title">Batch Test + Ask VL</h2><p class="keep-lora-source">Queue normal Test sessions with fresh seeds; optionally evaluate previews with Ask VL.</p></div><button id="test-generations-batch-close" type="button" class="training-review-modal-close" aria-label="Close Batch dialog">&times;</button></header>
-                    <div class="keep-lora-content">
-                        <label class="test-generations-batch-count-label">Test sessions <input id="test-generations-batch-count" type="number" min="1" max="20" step="1" value="5"></label>
-                        <label class="test-generations-batch-count-label"><input id="test-generations-batch-auto-vl" type="checkbox" checked> Automatically evaluate completed previews with Ask VL</label>
-                        <div id="test-generations-batch-config-summary" class="keep-lora-source"></div>
-                        <p class="keep-lora-source">Batch submission and automatic VL continue on the server when this tab closes. Stopping Batch halts further submissions and its VL assessments; accepted Test sessions continue independently. VL percentages require resolved wildcard attributes.</p>
-                    </div>
-                    <footer class="keep-lora-header test-generations-batch-dialog-actions"><button id="test-generations-batch-cancel" type="button" class="review-captions-btn">Cancel</button><button id="test-generations-batch-start" type="button" class="training-btn">Queue Sessions</button></footer>
-                </section>
-            </div>
             <div id="test-generations-wildcard-modal" class="keep-lora-modal test-generations-wildcard-modal hidden" aria-hidden="true" data-escape-close-id="test-generations-wildcard-close">
                 <section class="keep-lora-dialog test-generations-wildcard-dialog" role="dialog" aria-modal="true" aria-labelledby="test-generations-wildcard-title">
                     <header class="keep-lora-header">
@@ -2340,6 +2368,28 @@
                 </footer>
             </section>
         </div>
+        <div id="storyboard-scene-creation-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-scene-creation-close">
+            <section class="keep-lora-dialog storyboard-scene-creation-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-scene-creation-title">
+                <header class="keep-lora-header">
+                    <h2 id="storyboard-scene-creation-title">Insert Scene After</h2>
+                    <button id="storyboard-scene-creation-close" type="button" class="training-review-modal-close" aria-label="Close">&times;</button>
+                </header>
+                <div class="keep-lora-content">
+                    <div id="storyboard-scene-creation-count-wrap" class="keep-lora-field">
+                        <label for="storyboard-scene-creation-count">New scenes</label>
+                        <input id="storyboard-scene-creation-count" type="number" min="1" step="1" value="3">
+                    </div>
+                    <div class="keep-lora-field">
+                        <label for="storyboard-scene-creation-instruction">Creative direction (optional)</label>
+                        <textarea id="storyboard-scene-creation-instruction" rows="4" placeholder="e.g. Introduce another employee in a different situation."></textarea>
+                    </div>
+                </div>
+                <footer class="keep-lora-footer">
+                    <button id="storyboard-scene-creation-cancel" type="button" class="review-captions-btn">Cancel</button>
+                    <button id="storyboard-scene-creation-run" type="button" class="training-btn">Insert Scene</button>
+                </footer>
+            </section>
+        </div>
         <div id="storyboard-director-tools-modal" class="keep-lora-modal hidden" aria-hidden="true" data-escape-close-id="storyboard-director-tools-close">
             <section class="keep-lora-dialog storyboard-director-tools-dialog" role="dialog" aria-modal="true" aria-labelledby="storyboard-director-tools-title">
                 <header class="keep-lora-header">
@@ -2353,7 +2403,7 @@
                     <div class="keep-lora-field">
                         <div class="storyboard-director-header storyboard-director-model-tools">
                             <label for="storyboard-director-model">Director model</label>
-                            <select id="storyboard-director-model" aria-label="Storyboard Director model"><option value="">Director unavailable</option></select>
+                            <select id="storyboard-director-model" aria-label="Storyboard Director model"><option value="">Director unavailable</option></select><label class="storyboard-thinking-toggle hidden" title="Thinking"><input id="storyboard-director-thinking" type="checkbox" aria-label="Thinking"><span aria-hidden="true">🧠</span></label>
                             <button id="storyboard-director-refresh" type="button" class="refresh-btn-square director-model-refresh-btn" title="Refresh Director models" aria-label="Refresh Director models">&#8635;</button>
                         </div>
                     </div>
@@ -2362,15 +2412,17 @@
                         <select id="storyboard-director-tools-preset">
                             <option value="">Custom revision</option>
                             <option value="continuity">Continuity pass</option>
+                            <option value="coherence">Check Coherence (current Scene)</option>
                         </select>
                     </div>
                     <div class="keep-lora-field">
-                        <label for="storyboard-director-tools-instruction">Revise Scenes</label>
+                        <div class="storyboard-director-tools-instruction-heading">
+                            <label for="storyboard-director-tools-instruction">Revise Scenes</label>
+                            <label class="storyboard-director-tools-fresh-takes" title="After successful revision, queues new Takes for every revised Scene; existing Takes are kept."><input id="storyboard-director-tools-generate-takes" type="checkbox"> Generate fresh Takes</label>
+                            <small>Presets prime this instruction; edit it freely before running.</small>
+                        </div>
                         <textarea id="storyboard-director-tools-instruction" rows="7" placeholder="Describe what should be revised across these Scenes."></textarea>
-                        <small>Presets prime this instruction; edit it freely before running.</small>
                     </div>
-                    <label class="storyboard-develop-individual"><input id="storyboard-director-tools-generate-takes" type="checkbox"> Generate fresh Takes after successful revision</label>
-                    <small>Queues new Takes for every revised Scene; existing Takes are kept.</small>
                     <div id="storyboard-director-tools-status" class="training-history-summary" aria-live="polite"></div>
                 </div>
                 <footer class="keep-lora-footer">
@@ -2882,8 +2934,7 @@
                     <button id="diagnostics-tab-health" type="button" class="app-settings-tab diagnostics-tab active" data-diagnostics-tab="health" role="tab" aria-selected="true" aria-controls="diagnostics-panel-health">Health</button>
                     <button id="diagnostics-tab-assessment" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="assessment" role="tab" aria-selected="false" aria-controls="diagnostics-panel-assessment" tabindex="-1">Model Assessment</button>
                     <button id="diagnostics-tab-h3" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="h3" role="tab" aria-selected="false" aria-controls="diagnostics-panel-h3" tabindex="-1">H3 Calibration</button>
-                    <button id="diagnostics-tab-model-lab" type="button" class="app-settings-tab diagnostics-tab" data-diagnostics-tab="model-lab" role="tab" aria-selected="false" aria-controls="diagnostics-panel-model-lab" tabindex="-1">Model Lab</button>
-                </div>
+                                    </div>
                 <div class="app-settings-tab-panels diagnostics-panels">
                     <div id="diagnostics-panel-health" class="app-settings-panel diagnostics-panel" data-diagnostics-panel="health" role="tabpanel" aria-labelledby="diagnostics-tab-health">
                         <section class="app-settings-section">
@@ -2917,18 +2968,19 @@
                     </div>
                     <div id="diagnostics-panel-assessment" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="assessment" role="tabpanel" aria-labelledby="diagnostics-tab-assessment" hidden>
                         <section class="app-settings-section">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Model Assessment <span class="app-settings-help">Unified comparison</span></div>
-                                <div class="app-settings-section-copy">Compare observed performance and core capabilities. Expand any model for details; specialized test tools remain available below.</div>
-                            </div>
                             <div class="model-assessment-toolbar">
-                                <button id="diagnostics-assessment-run" type="button">Run Selected Tests</button>
-                                <button id="diagnostics-assessment-stop" type="button" class="review-captions-btn" disabled>Stop Assessment</button>
+                                <button id="diagnostics-assessment-run" type="button">Complete Missing Tests</button>
+                                <button id="diagnostics-assessment-stop" type="button" class="review-captions-btn hidden" hidden disabled>Stop Assessment</button>
                                 <button id="diagnostics-assessment-refresh" type="button" class="review-captions-btn">Refresh</button>
-                                <button id="diagnostics-assessment-export" type="button" class="review-captions-btn">Export Results</button>
-                                <button id="diagnostics-assessment-import" type="button" class="review-captions-btn">Import Results</button>
+                                <label class="model-assessment-deep" title="Additional Set samples and extended structured Storyboard JSON capacity tests (4K, 8K and 16K)"><input id="diagnostics-assessment-deep" type="checkbox"> Extended output tests <small>(4K/8K/16K)</small></label>
+                                <details class="model-assessment-tools">
+                                    <summary>More</summary>
+                                    <div class="model-assessment-toolbar">
+                                        <button id="diagnostics-assessment-export" type="button" class="review-captions-btn">Export Results</button>
+                                        <button id="diagnostics-assessment-import" type="button" class="review-captions-btn">Import Results</button>
+                                    </div>
+                                </details>
                                 <input id="diagnostics-assessment-file" type="file" accept=".json,application/json" hidden>
-                                <label class="model-assessment-deep"><input id="diagnostics-assessment-deep" type="checkbox"> Deep Assessment <small>(16 Set samples; Director long-form 4K, 8K and 16K probes — slower)</small></label>
                             </div>
                             <div id="diagnostics-assessment-activity" class="hidden" role="region" aria-label="Model Assessment progress"></div>
                             <div id="diagnostics-assessment-transfer" class="hidden" role="region" aria-label="Import assessment results">
@@ -2939,24 +2991,15 @@
                                 <button id="diagnostics-assessment-import-cancel" type="button" class="review-captions-btn">Cancel</button>
                             </div>
                             <p id="diagnostics-assessment-transfer-status" class="app-settings-help" role="status"></p>
-                            <details class="model-assessment-tools"><summary>Other testing tools</summary>
-                                <div class="model-assessment-toolbar">
-                                    <button id="diagnostics-assessment-director" type="button">Director Calibration</button>
-                                    <button id="diagnostics-assessment-lab" type="button">Vision &amp; Structured Tests</button>
-                                    <button id="diagnostics-assessment-benchmark" type="button">Benchmark &amp; Performance History</button>
-                                </div>
-                            </details>
-                            <div class="model-assessment-bulk">
-                                <strong>Models</strong>
-                                <button id="diagnostics-assessment-all" type="button" class="review-captions-btn">Select All</button>
-                                <button id="diagnostics-assessment-none" type="button" class="review-captions-btn">Select None</button>
-                                <span class="app-settings-help">Choose models below, then Run Selected Tests. Progress updates live; findings refresh when the run finishes.</span>
+                            <div class="model-assessment-filters">
+                                <label>Runtime <select id="diagnostics-assessment-runtime" aria-label="Assessment runtime"><option value="local">Local</option><option value="remote">Remote</option><option value="all">All</option></select></label>
+                                <label class="model-assessment-judge" title="Select a judge, then expand a completed Director model and choose Assess with LLM. Scores are advisory.">LLM judge <select id="diagnostics-assessment-judge-model" aria-label="Choose LLM judge model"><option value="">Choose judge model…</option></select></label>
+                                <label class="model-assessment-search">Filter <input id="diagnostics-assessment-filter" type="search" placeholder="Model name, runtime or role"></label>
                             </div>
-                            <label class="model-assessment-judge">Optional quality judge <select id="diagnostics-assessment-judge-model" aria-label="Choose LLM judge model"><option value="">Choose judge model…</option></select></label>
-                            <span class="app-settings-help">Expand a completed Director model and choose Assess with LLM. Scores are advisory, not workflow qualifications.</span>
-                            <label class="model-assessment-search">Filter models <input id="diagnostics-assessment-filter" type="search" placeholder="Model name, runtime or role"></label>
-                            <div id="diagnostics-assessment-selection" class="app-settings-help" aria-live="polite">Select models below to prepare an assessment.</div>
-                            <div id="diagnostics-assessment-summary" class="app-settings-help" aria-live="polite">Open this tab to load available findings.</div>
+                            <div class="model-assessment-feedback">
+                                <div id="diagnostics-assessment-selection" class="app-settings-help" aria-live="polite">Select models below to prepare an assessment.</div>
+                                <div id="diagnostics-assessment-summary" class="app-settings-help" aria-live="polite">Open this tab to load available findings.</div>
+                            </div>
                             <div id="diagnostics-assessment-results" class="app-settings-environment-results"></div>
                         </section>
                     </div>
@@ -2975,112 +3018,7 @@
                             </details>
                         </section>
                     </div>
-                    <div id="diagnostics-panel-models" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="models" role="tabpanel" aria-label="Director calibration tools" hidden>
-                        <section class="app-settings-section" id="director-model-assessment-settings">
-                            <div class="app-settings-section-header director-model-assessment-header">
-                                <div class="director-model-assessment-title-row">
-                                    <div class="app-settings-section-title">Director Models <span id="director-model-assessment-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
-                                    <div class="director-model-assessment-header-actions">
-                                        <button id="director-model-assessment-refresh" type="button" class="review-captions-btn">Refresh Models</button>
-                                        <button id="director-model-assessment-run" type="button">Assess Selected</button>
-                                        <button id="director-model-assessment-stop" type="button" class="hidden">Stop</button>
-                                    </div>
-                                </div>
-                                <div class="app-settings-section-copy">Learn which WebCap Director workflows each model can reliably handle. Expand a model for the underlying assessment tests and evidence.</div>
-                                <div class="director-model-assessment-progress-row">
-                                    <strong id="director-model-assessment-progress">Loading model status…</strong>
-                                    <span id="director-model-assessment-selection-summary" class="app-settings-help">Loading selection…</span>
-                                </div>
-                            </div>
-                            <div id="director-model-assessment-activity" class="director-model-test-activity" aria-live="polite"></div>
-                            <div id="director-model-assessment-models" class="director-model-assessment-groups">
-                                <p class="app-settings-help">Open this tab to load Director models.</p>
-                            </div>
-                            <div class="director-model-assessment-learned-actions">
-                                <button id="director-model-test-clear-calibration" type="button" class="review-captions-btn" disabled>Clear Learned Results</button>
-                            </div>
-                            <details class="director-model-assessment-raw">
-                                <summary>
-                                    <strong>Raw Assessment Runs</strong>
-                                    <span class="app-settings-help">Temporary full prompts and model outputs. Learned model results remain when raw history is deleted.</span>
-                                </summary>
-                                <div class="app-settings-disclosure-body">
-                                    <div class="app-settings-actions app-settings-actions-inline director-model-assessment-raw-actions">
-                                        <button id="director-model-assessment-clear-raw" type="button" class="review-captions-btn" disabled>Clear Raw Runs</button>
-                                    </div>
-                                    <div id="director-model-assessment-history"><p class="app-settings-help">No raw assessment runs are available.</p></div>
-                                </div>
-                            </details>
-                                                </section>
-                    </div>
-                    <div id="diagnostics-panel-benchmark" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="benchmark" role="tabpanel" aria-label="Director benchmark tools" hidden>
-                        <section class="app-settings-section" id="director-model-test-settings">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Director Benchmark <span id="director-model-test-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
-                                <div class="app-settings-section-copy">Run one editable prompt sequentially across selected Director models for side-by-side qualitative comparison. Benchmark results remain session-only unless exported.</div>
-                            </div>
-                            <div id="director-model-test-protocol" class="app-settings-help">Open this tab to load the protocol and available models.</div>
-                            <label class="app-settings-field app-settings-field-wide">
-                                <span class="app-settings-field-label">Benchmark Prompt</span>
-                                <textarea id="director-model-test-prompt" rows="14" spellcheck="true"></textarea>
-                                <span class="app-settings-note">The exact text is frozen into the current benchmark session when the test starts.</span>
-                            </label>
-                            <div class="director-model-test-model-header">
-                                <span class="app-settings-field-label">Models to benchmark</span>
-                                <div class="director-model-test-model-actions">
-                                    <button id="director-model-test-refresh" type="button" class="review-captions-btn">Refresh Models</button>
-                                    <button id="director-model-test-select-all" type="button" class="review-captions-btn">All</button>
-                                    <button id="director-model-test-select-none" type="button" class="review-captions-btn">None</button>
-                                </div>
-                            </div>
-                            <div id="director-model-test-models" class="director-model-test-models"></div>
-                            <div class="app-settings-actions app-settings-actions-inline director-model-test-actions">
-                                <button id="director-model-test-run" type="button">Run Selected</button>
-                                <button id="director-model-test-stop" type="button" class="hidden">Stop</button>
-                                <button id="director-model-test-export" type="button" class="review-captions-btn" disabled>Export JSON</button>
-                            </div>
-                            <div id="director-model-test-activity" class="director-model-test-activity" aria-live="polite"></div>
-                            <div id="director-model-test-results"><p class="app-settings-help">No results yet.</p></div>
-                            <details class="app-settings-advanced director-model-assessment-raw">
-                                <summary>Saved assessment writing samples</summary>
-                                <div id="director-model-test-saved-samples" class="app-settings-disclosure-body"><p class="app-settings-help">Open Benchmark to load saved samples.</p></div>
-                            </details>
-                        </section>
-                    </div>
-                    <div id="diagnostics-panel-model-lab" class="app-settings-panel diagnostics-panel hidden" data-diagnostics-panel="model-lab" role="tabpanel" aria-labelledby="diagnostics-tab-model-lab" hidden>
-                        <section class="app-settings-section" id="model-lab-settings">
-                            <div class="app-settings-section-header">
-                                <div class="app-settings-section-title">Model Lab <span id="model-lab-summary-status" class="director-model-test-summary-status" data-state="ready">Ready</span></div>
-                                <div class="app-settings-section-copy">Run persistent, diagnostics-only Vision and Director probes against the current Set. Individual failures are recorded and the suite continues.</div>
-                            </div>
-                            <div id="model-lab-source" class="app-settings-help">Open this tab from a Set to prepare a representative sample.</div>
-                            <label class="app-settings-field"><span class="app-settings-field-label">Sample items</span><input id="model-lab-sample-count" type="number" min="2" max="24" value="8"></label>
-                            <div class="model-lab-grid">
-                                <div>
-                                    <div class="director-model-test-model-header"><span class="app-settings-field-label">Vision models</span><button id="model-lab-vision-all" type="button" class="review-captions-btn">All</button></div>
-                                    <div id="model-lab-vision-models" class="director-model-test-models"></div>
-                                    <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Reference Vision for Director tests</span><select id="model-lab-reference-vision"></select></label>
-                                </div>
-                                <div>
-                                    <div class="director-model-test-model-header"><span class="app-settings-field-label">Director models</span><button id="model-lab-director-all" type="button" class="review-captions-btn">All</button></div>
-                                    <div id="model-lab-director-models" class="director-model-test-models"></div>
-                                    <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Reference Director for Vision tests</span><select id="model-lab-reference-director"></select></label>
-                                </div>
-                            </div>
-                            <div class="app-settings-actions app-settings-actions-inline">
-                                <button id="model-lab-run" type="button">Run Model Lab</button>
-                                <button id="model-lab-stop" type="button" class="hidden">Stop</button>
-                                <button id="model-lab-resume" type="button" class="review-captions-btn hidden">Resume</button>
-                                <button id="model-lab-refresh" type="button" class="review-captions-btn">Refresh</button>
-                            </div>
-                            <div id="model-lab-activity" class="director-model-test-activity" aria-live="polite"></div>
-                            <div id="model-lab-results"><p class="app-settings-help">No Model Lab run selected.</p></div>
-                            <details class="director-model-assessment-raw">
-                                <summary><strong>Model Lab History</strong><span class="app-settings-help">Persistent diagnostics evidence. Production Set state is not modified.</span></summary>
-                                <div class="app-settings-disclosure-body"><div id="model-lab-history"></div></div>
-                            </details>
-                        </section>
-                    </div>
+
                 </div>
             </div>
         </div>
@@ -3413,7 +3351,6 @@
         <script src="/static/js/h3_calibration_results.js"></script>
         <script src="/static/js/app_settings.js"></script>
         <script src="/static/js/diagnostics.js"></script>
-        <script src="/static/js/director_model_test.js"></script>
         <script src="/static/js/model_lab.js"></script>
         <script src="/static/js/smart_set.js"></script>
         <script src="/static/js/media_context_actions.js"></script>
@@ -3439,12 +3376,14 @@
         <script src="/static/js/lora_review.js"></script>
         <script src="/static/js/generate.js"></script>
         <script src="/static/js/workflow_gate.js"></script>
+        <script src="/static/js/test_preview_card.js"></script>
         <script src="/static/js/test_generations.js"></script>
         <script src="/static/js/epoch_finder.js"></script>
         <script src="/static/js/test_generations_perspective.js"></script>
         <script src="/static/js/test_generations_unified.js"></script>
         <script src="/static/js/test_references.js"></script>
         <script src="/static/js/run_analytics.js"></script>
+        <script src="/static/js/epoch_info.js"></script>
         <script src="/static/js/storyboard.js"></script>
         <script src="/static/js/main.js"></script>
     </body>

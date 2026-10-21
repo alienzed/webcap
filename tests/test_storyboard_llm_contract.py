@@ -178,15 +178,39 @@ def test_insert_scene_uses_adjacent_scenes_as_relationship_context_not_bridge_re
     assert set(scene_schema["required"]) == {"title", "summary", "prompt", "suggestedDurationSeconds"}
     assert "[SCENE BEFORE]" in prompt
     assert "[SCENE AFTER]" in prompt
-    assert "Treat the adjacent Scenes as relationship and contrast context" in prompt
-    assert "continue, contrast, vary, repeat a format, jump, or remain relatively independent" in prompt
-    assert "meaningfully distinct from both adjacent Scenes" in prompt
+    assert "Treat neighbouring Scenes as relationship and contrast context, not templates to copy" in prompt
+    assert "contrast, vary a repeated format with fresh content, jump, or remain independent" in prompt
+    assert "Make it meaningfully distinct while preserving intentional recurring characters or state" in prompt
     assert "USE EACH GENERATION UNIT WELL." in prompt
 
 
-def test_insert_scene_requires_a_following_scene():
-    with pytest.raises(ValueError, match="following Scene"):
-        storyboard_llm_contract.build_request(_story(), "scene-2", "insert_scene")
+def test_insert_scene_can_append_after_last_scene():
+    request = storyboard_llm_contract.build_request(_story(), "scene-2", "insert_scene")
+    assert "[SCENE AFTER]" not in request["prompt"]
+    assert "at the end of the Story" in request["prompt"]
+
+
+def test_insert_scene_can_use_optional_direction():
+    request = storyboard_llm_contract.build_request(
+        _story(), "scene-1", "insert_scene", instruction="Introduce a new employee."
+    )
+    assert "[USER DIRECTION]\nIntroduce a new employee." in request["prompt"]
+
+
+def test_extend_story_preserves_distinction_from_redevelopment():
+    request = storyboard_llm_contract.build_request(
+        _story(), "", "extend_story", instruction="Different cubicle vignettes.", scene_count=3
+    )
+    assert request["operation"] == "extend_story"
+    assert "Append exactly 3 new Scenes" in request["prompt"]
+    assert "[EXISTING SCENE OUTLINE]" in request["prompt"]
+    assert "[USER DIRECTION]\nDifferent cubicle vignettes." in request["prompt"]
+    assert "new Scenes as JSON" in request["prompt"]
+
+
+def test_extend_story_rejects_invalid_scene_count():
+    with pytest.raises(ValueError, match="positive integer"):
+        storyboard_llm_contract.build_request(_story(), "", "extend_story", scene_count=0)
 
 def test_repair_scenes_is_sparse_and_prompt_is_complete_string():
     request = storyboard_llm_contract.build_request(
@@ -373,6 +397,22 @@ def test_existing_relationship_context_remains_available():
     assert '"suggestedDurationSeconds": 12' in prompt
 
 
+def test_check_coherence_only_sees_existing_prompt():
+    story = _story()
+    prompt = storyboard_llm_contract.build_request(story, "scene-2", "check_coherence")
+    text = prompt["prompt"]
+    assert "Review this H3 text-to-video prompt for coherence." in text
+    assert "Favor details that can be conveyed visually or audibly." in text
+    assert "Consolidate repeated descriptions." in text
+    assert "original unchanged if no meaningful improvement is needed" in text
+    assert "STORY CONCEPT" not in text
+    assert "STORY INVARIANTS" not in text
+    assert "PREVIOUS SCENE" not in text
+    assert "OLD FIRST PROMPT" not in text
+    assert "EXISTING SECOND PROMPT" in text
+    assert prompt["response_schema"]["required"] == ["prompt"]
+
+
 def test_model_guidance_only_for_h3_authoring(monkeypatch):
     from tool.server import config as app_config
     monkeypatch.setitem(app_config.config, "generation_model_guidance", {"minimax_h3": "Prefer simple staging."})
@@ -381,6 +421,11 @@ def test_model_guidance_only_for_h3_authoring(monkeypatch):
         instruction = "Adjust staging." if operation == "repair_scenes" else ""
         prompt = storyboard_llm_contract.build_request(story, "", operation, instruction)["prompt"]
         assert prompt.count("Prefer simple staging.") == 1
+    for operation in ("insert_scene", "extend_story"):
+        prompt = storyboard_llm_contract.build_request(story, "scene-1", operation)["prompt"]
+        assert prompt.count("Prefer simple staging.") == 1
     for operation in ("write_prompt", "refine_prompt"):
         prompt = storyboard_llm_contract.build_request(story, "scene-2", operation, "Adjust staging.")["prompt"]
         assert prompt.count("Prefer simple staging.") == 1
+    assert "Prefer simple staging." not in storyboard_llm_contract.build_request(story, "scene-2", "check_coherence")["prompt"]
+

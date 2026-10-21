@@ -127,8 +127,12 @@ def _job_view(job):
         "label": str(metadata.get("label") or ""),
         "operation": str(metadata.get("operation") or ""),
         "modelId": str(metadata.get("modelId") or ""),
+        "modelLabel": str(metadata.get("modelLabel") or ""),
         "storyId": str(metadata.get("storyId") or ""),
+        "storyTitle": str(metadata.get("storyTitle") or ""),
         "sceneId": str(metadata.get("sceneId") or ""),
+        "sceneNumber": int(metadata.get("sceneNumber") or 0),
+        "sceneTitle": str(metadata.get("sceneTitle") or ""),
         "status": str(job.get("status") or ""),
         "queuePosition": int(job.get("queuePosition") or 0),
         "createdAt": job.get("createdAt"),
@@ -159,34 +163,15 @@ def reconcile_startup():
     _ensure_monitor_started()
 
 
-def _assert_storyboard_contract_current(context, frozen_contract):
-    if context.get("deferredApply") is True:
-        return
-    if "sourceInstruction" not in context:
-        return
-
-    from .storyboard_llm_contract import build_request
-    from .storyboard_store import load_story
-
-    story_id = str(context.get("storyId") or "").strip()
-    scene_id = str(context.get("sceneId") or "").strip()
-    operation = str(context.get("operation") or "").strip()
-    current_story = load_story(story_id)
-    current_contract = build_request(
-        current_story,
-        scene_id,
-        operation,
-        instruction=str(context.get("sourceInstruction") or ""),
-    )
-    if current_contract != frozen_contract:
-        raise RuntimeError(
-            "Storyboard Director inputs changed while the request was running. "
-            "The stale result was not applied; run the Director action again against the current Story state."
-        )
-
-
 def _client_result(client, context, llm_result, job_id="", frozen_contract=None):
     if client in {"chat", "caption"}:
+        if client == "caption" and context.get("testAutoVl") is True:
+            if str((frozen_contract or {}).get("operation") or "") != "vision_question":
+                raise ValueError("Automatic Test VL requires a vision_question job.")
+            from .epoch_test_bench import complete_test_auto_vl
+            seconds = llm_result.get("requestSeconds")
+            elapsed_ms = int(float(seconds) * 1000) if isinstance(seconds, (int, float)) else 0
+            complete_test_auto_vl(context, llm_result["text"], elapsed_ms)
         result = {
             "text": llm_result["text"],
             "reasoning": llm_result.get("reasoning", ""),
@@ -366,7 +351,6 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
         raise RuntimeError("Storyboard LLM job is missing its Story ID.")
     if frozen_contract is None:
         raise RuntimeError("Storyboard LLM job is missing its frozen contract.")
-    _assert_storyboard_contract_current(context, frozen_contract)
 
     if operation == "interpret_atmosphere":
         suggestion = str(llm_result.get("text") or "").strip()
@@ -475,6 +459,21 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "timings": llm_result.get("timings"),
         }
 
+    if operation == "extend_story":
+        from .storyboard_store import extend_director_story
+        plan = copy.deepcopy(llm_result.get("data"))
+        if not isinstance(plan, dict):
+            raise ValueError("Storyboard Director returned an invalid Story extension.")
+        story, added_ids = extend_director_story(story_id, plan, model_id=llm_result["model"])
+        return {
+            "storyId": story["id"],
+            "sceneCount": len(added_ids),
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
     if operation == "insert_scene":
         scene_id = str(context.get("sceneId") or "").strip()
         if not scene_id:
@@ -493,6 +492,20 @@ def _client_result(client, context, llm_result, job_id="", frozen_contract=None)
             "storyId": story["id"],
             "sceneId": scene["id"],
             "insertedAfterSceneId": scene_id,
+            "model": llm_result["model"],
+            "finishReason": llm_result.get("finishReason"),
+            "usage": llm_result.get("usage"),
+            "timings": llm_result.get("timings"),
+        }
+
+    if operation == "check_coherence":
+        data = llm_result.get("data")
+        if not isinstance(data, dict) or not str(data.get("prompt") or "").strip():
+            raise ValueError("Check Coherence returned an empty or invalid prompt.")
+        return {
+            "storyId": story_id,
+            "sceneId": str(context.get("sceneId") or ""),
+            "result": data["prompt"],
             "model": llm_result["model"],
             "finishReason": llm_result.get("finishReason"),
             "usage": llm_result.get("usage"),
@@ -582,7 +595,82 @@ def _execute_claimed(job_id, gpu_reserved):
             error="LLM request stopped before execution.",
         )
 
+    if client == "caption" and context.get("testAutoVl") is True:
+        from . import config as app_config
+        from .caption_vision import build_vision_question_messages, vision_media_data_url
+        from .epoch_test_bench import resolve_result_media
+        folder = app_config.safe_join_fs_root(str(context["testFolder"]))
+        media = resolve_result_media(folder, str(context["testSession"]), str(context["testMedia"]))
+        contract = dict(contract)
+        contract["messages"] = build_vision_question_messages(
+            str(context["testQuestion"]), vision_media_data_url(media)
+        )
+
     from .storyboard_llm_runtime import run_contract, run_freeform_chat
+    if client == "storyboard" and context.get("operation") == "check_coherence_sequence":
+        from .storyboard_store import load_story
+        from .storyboard_llm_contract import build_request
+        scene_ids = list(context.get("sceneIds") or [])
+        reviewed = []
+        with _revision_progress_lock:
+            _revision_progress[job_id] = {
+                "completed": 0, "total": len(scene_ids), "phase": "Checking Coherence",
+            }
+        try:
+            for scene_id in scene_ids:
+                with _enqueue_lock:
+                    if execution_get_job(job_id).get("status") == "stopping":
+                        return execution_finish_job_transient(
+                            job_id, status="stopped",
+                            error="Check Coherence stopped after " + str(len(reviewed)) + " Scenes.",
+                        )
+                story = load_story(str(context.get("storyId") or ""))
+                scene = (story.get("scenes") or {}).get(scene_id)
+                if not isinstance(scene, dict):
+                    raise FileNotFoundError("Scene no longer exists: " + str(scene_id))
+                original = str(scene.get("prompt") or "")
+                scene_contract = build_request(story, scene_id, "check_coherence")
+                result = run_contract(
+                    model_id, scene_contract, gpu_reserved=bool(gpu_reserved),
+                    thinking=context.get("thinking") is True,
+                )
+                with _enqueue_lock:
+                    if execution_get_job(job_id).get("status") == "stopping":
+                        return execution_finish_job_transient(
+                            job_id, status="stopped",
+                            error="Check Coherence stopped after " + str(len(reviewed)) + " Scenes.",
+                        )
+                data = result.get("data")
+                if not isinstance(data, dict) or not str(data.get("prompt") or "").strip():
+                    raise ValueError("Director returned an empty or invalid coherence prompt for Scene " + str(scene_id))
+                reviewed.append({
+                    "sceneId": scene_id,
+                    "title": str(scene.get("title") or ""),
+                    "originalPrompt": original,
+                    "prompt": str(data["prompt"]),
+                })
+                with _revision_progress_lock:
+                    _revision_progress[job_id] = {
+                        "completed": len(reviewed), "total": len(scene_ids),
+                        "phase": "Checking Coherence",
+                    }
+        except Exception as exc:
+            raise RuntimeError(
+                "Check Coherence failed after " + str(len(reviewed)) + " of "
+                + str(len(scene_ids)) + " Scenes: " + str(exc)
+            ) from exc
+        finally:
+            with _revision_progress_lock:
+                _revision_progress.pop(job_id, None)
+        return execution_finish_job_transient(job_id, status="completed", result={
+            "storyId": context["storyId"], "scenes": reviewed,
+            "reviewedSceneCount": len(reviewed),
+            "changedSceneCount": sum(
+                entry["originalPrompt"].strip() != entry["prompt"].strip()
+                for entry in reviewed
+            ),
+        })
+
     if client == "storyboard" and context.get("operation") == "revise_scenes_sequence":
         from .storyboard_store import load_story
         from .storyboard_llm_contract import build_request
@@ -597,9 +685,14 @@ def _execute_claimed(job_id, gpu_reserved):
                     if execution_get_job(job_id).get("status") == "stopping":
                         return execution_finish_job_transient(job_id, status="stopped",
                             error="Revise Scenes stopped after " + str(completed) + " Scenes.")
+                with _revision_progress_lock:
+                    _revision_progress[job_id] = {
+                        "completed": completed, "total": len(scene_ids),
+                        "phase": "Revising Scenes", "sceneId": scene_id,
+                    }
                 story = load_story(str(context.get("storyId") or ""))
                 scene_contract = build_request(story, scene_id, "refine_prompt", instruction=instruction)
-                result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved))
+                result = run_contract(model_id, scene_contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True)
                 with _enqueue_lock:
                     if execution_get_job(job_id).get("status") == "stopping":
                         return execution_finish_job_transient(job_id, status="stopped",
@@ -610,7 +703,10 @@ def _execute_claimed(job_id, gpu_reserved):
                     }, result, job_id=job_id, frozen_contract=scene_contract)
                 completed += 1
                 with _revision_progress_lock:
-                    _revision_progress[job_id] = {"completed": completed, "total": len(scene_ids), "phase": "Revising Scenes"}
+                    _revision_progress[job_id] = {
+                        "completed": completed, "total": len(scene_ids),
+                        "phase": "Revising Scenes", "sceneId": scene_id,
+                    }
         except Exception as exc:
             raise RuntimeError("Revise Scenes failed after " + str(completed) +
                 " of " + str(len(scene_ids)) + " Scenes: " + str(exc)) from exc
@@ -637,10 +733,14 @@ def _execute_claimed(job_id, gpu_reserved):
             chat_kwargs = {"gpu_reserved": bool(gpu_reserved)}
             if context.get("assessmentEvidence"):
                 chat_kwargs["assessment_evidence"] = True
+            if context.get("thinking") is True:
+                chat_kwargs["thinking"] = True
             if "maxTokens" in overrides:
                 chat_kwargs["max_tokens"] = overrides["maxTokens"]
             if "contextSize" in overrides:
                 chat_kwargs["context_size"] = overrides["contextSize"]
+            if client == "chat" and contract.get("operation") == "assessment_scene_plan":
+                chat_kwargs["response_schema"] = contract["response_schema"]
             messages = contract.get("messages")
             caption_operation = str(contract.get("operation") or "").strip()
             if client == "caption" and caption_operation in {"caption_vision_validate", "vision_image_caption", "vision_caption_extras", "vision_question", "vision_schema_sight", "vision_vocabulary_sight"}:
@@ -665,7 +765,7 @@ def _execute_claimed(job_id, gpu_reserved):
                 **chat_kwargs,
             )
         else:
-            llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved))
+            llm_result = run_contract(model_id, contract, gpu_reserved=bool(gpu_reserved), thinking=context.get("thinking") is True if client == "storyboard" else None)
     except Exception as exc:
         # Full failure detail remains in the transient job receipt / live Console.
         # Never persist contract content or exception text in server logs.
@@ -855,11 +955,11 @@ def _storyboard_target(context, operation):
         return None
     if operation in {"interpret_atmosphere", "expand_concept", "define_invariants"}:
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
-    if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene"}:
+    if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story"}:
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
-    if operation in {"repair_scenes", "revise_scenes_sequence"}:
+    if operation in {"repair_scenes", "revise_scenes_sequence", "check_coherence_sequence"}:
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}
-    if operation in {"write_prompt", "refine_prompt"} and scene_id:
+    if operation in {"write_prompt", "refine_prompt", "check_coherence"} and scene_id:
         return {"kind": "scene-prompt", "storyId": story_id, "sceneId": scene_id}
     return None
 
@@ -959,8 +1059,12 @@ def enqueue(client, model_id, contract, context=None, label=""):
                 "label": str(label or "LLM"),
                 "operation": str(contract.get("operation") or ""),
                 "modelId": model_id,
+                "modelLabel": str(context.get("modelLabel") or model_id.split("::", 1)[-1]),
                 "storyId": str(context.get("storyId") or ""),
+                "storyTitle": str(context.get("storyTitle") or ""),
                 "sceneId": str(context.get("sceneId") or ""),
+                "sceneNumber": int(context.get("sceneNumber") or 0),
+                "sceneTitle": str(context.get("sceneTitle") or ""),
             },
         )
     _ensure_monitor_started()

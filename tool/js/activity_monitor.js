@@ -15,12 +15,10 @@
     reportedErrors: Object.create(null),
     localProgress: Object.create(null),
     progressChildIds: Object.create(null),
-    dismissedJobs: Object.create(null),
     selectedJobKey: '',
     detailsOpen: false,
     systemHistory: [],
-    lastSystemSampleAt: 0,
-    autoOpenSeen: Object.create(null)
+    lastSystemSampleAt: 0
   };
 
   function el(id) { return document.getElementById(id); }
@@ -70,8 +68,7 @@
     if (snapshot.childJobId) {
       state.progressChildIds[String(snapshot.childJobId)] = { owner: String(snapshot.id), expiresAt: 0 };
     }
-    if (state.open) render();
-    else { maybeAutoOpen(); render(); }
+    render();
   }
 
   function finishProgress(id, status) {
@@ -222,25 +219,6 @@
       return window.setReviewDetailTab('qa');
     }
     if (item.kind !== 'vocabulary-discovery' && item.kind !== 'vision-tag-assist') return openItem(item);
-  }
-
-  function maybeAutoOpen() {
-    var competingDrawer = ['director-chat-drawer'].concat(window.isOperationsDrawerMounted ? [] : ['inference-queue-drawer']).some(function (id) {
-      var drawer = el(id);
-      return drawer && !drawer.classList.contains('hidden');
-    });
-    currentActivityItems().forEach(function (item) {
-      var lane = activityLane(item);
-      var id = activityJobKey(item);
-      if (state.autoOpenSeen[id]) return;
-      state.autoOpenSeen[id] = true;
-      // Never displace a workflow drawer for an automatically raised Activity panel.
-      var shortInteractive = lane === 'llm' || item.kind === 'first-cut' || item.kind === 'director-diagnostics';
-      if (!(window.isOperationsDrawerMounted && window.isOperationsDrawerVisible()) && !state.open && !competingDrawer && shortInteractive && !state.dismissedJobs[id]) {
-        state.selectedJobKey = id;
-        setOpen(true);
-      }
-    });
   }
 
   function updateSystemHistory(sample) {
@@ -423,13 +401,16 @@
       var measured = bytesLabel(item.bytesScanned);
       if (measured) parts.push(measured + ' scanned');
     } else {
-      if (item.modelId) parts.push(item.modelId);
+      if (item.modelLabel || item.modelId) parts.push(item.modelLabel || item.modelId);
+      if (item.storyTitle) parts.push(item.storyTitle);
+      if (Number(item.sceneNumber) > 0) parts.push('Scene ' + Number(item.sceneNumber) + (item.sceneTitle ? ': ' + item.sceneTitle : ''));
+      else if (item.sceneTitle) parts.push(item.sceneTitle);
       if (item.operation) parts.push(String(item.operation).replace(/_/g, ' '));
       if (item.kind === 'director' && item.finishReason) parts.push('finish=' + String(item.finishReason));
       if (item.kind === 'director' && Number(item.promptTokens) > 0) parts.push('prompt=' + String(item.promptTokens));
       if (item.kind === 'director' && Number(item.outputTokens) > 0) parts.push('output=' + String(item.outputTokens));
       if (item.folder) parts.push(item.folder);
-      if (item.sceneId && !item.label) parts.push('Scene ' + item.sceneId);
+      if (item.sceneId && !item.sceneTitle && !item.sceneNumber && !item.label) parts.push('Scene ' + item.sceneId);
     }
     return parts.join(' · ');
   }
@@ -445,7 +426,7 @@
       title: activityTitle(item),
       status: String(item.status || 'running'),
       startedAt: item.startedAt,
-      detail: String(item.folder || ''),
+      detail: item.kind === 'storyboard' ? activityDetail(item) : String(item.folder || ''),
       phase: '',
       progressLabel: '',
       progress: null
@@ -889,8 +870,11 @@
 
       var detail = document.createElement('small');
       var parts = [];
-      if (job.sceneId) parts.push('Scene ' + String(job.sceneId));
-      if (job.modelId) parts.push(String(job.modelId));
+      if (job.storyTitle) parts.push(String(job.storyTitle));
+      if (Number(job.sceneNumber) > 0) parts.push('Scene ' + Number(job.sceneNumber) + (job.sceneTitle ? ': ' + job.sceneTitle : ''));
+      else if (job.sceneTitle) parts.push(String(job.sceneTitle));
+      else if (job.sceneId) parts.push('Scene ' + String(job.sceneId));
+      if (job.modelLabel || job.modelId) parts.push(String(job.modelLabel || job.modelId));
       detail.textContent = parts.join(' · ') || 'Waiting';
 
       copy.appendChild(title);
@@ -1278,7 +1262,6 @@
         if (!activeErrorKeys[key]) delete state.reportedErrors[key];
       });
       notifyRecent(sessionRecent());
-      maybeAutoOpen();
       render();
       return payload;
     }).catch(function (err) {
@@ -1339,10 +1322,6 @@
       if (!internal && typeof window.setDirectorChatOpen === 'function') window.setDirectorChatOpen(false);
       if (!internal && typeof window.setInferenceQueueOpen === 'function') window.setInferenceQueueOpen(false);
     } else if (wasOpen) {
-      if (manualClose) {
-        var item = currentPrimaryItem();
-        if (item) state.dismissedJobs[activityJobKey(item)] = true;
-      }
       storeLastSeen(Date.now() / 1000);
       state.openedAt = 0;
     }

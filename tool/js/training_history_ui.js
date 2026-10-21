@@ -576,7 +576,7 @@ function openTrainingArchiveModal(jobContext) {
       els.archiveRecap.innerHTML =
         '<div><strong>Production keeper:</strong> Epoch ' + escapeHtml(String(preview.selectedEpoch && preview.selectedEpoch.epoch || '')) + ' · ' + escapeHtml(preview.productionFileName || '') + '</div>' +
         '<div><strong>Training cleanup:</strong> ' + escapeHtml(String(preview.epochCount || 0)) + ' epoch folders · ' + escapeHtml(String(preview.globalStepCount || 0)) + ' global-step folders</div>' +
-        '<div><strong>Test cleanup:</strong> ' + escapeHtml(String(preview.stagedCandidateCount || 0)) + ' staged candidate(s) · ' + escapeHtml(String(preview.testSessionCount || 0)) + ' session(s) will be cleared.</div>' +
+        '<div><strong>Test cleanup:</strong> ' + escapeHtml(String(preview.stagedCandidateCount || 0)) + ' staged candidate(s) · ' + escapeHtml(String(preview.testSessionCount || 0)) + ' run-owned session(s) will be removed; other testing stays intact.</div>' +
         '<div><strong>Related runs:</strong> ' + escapeHtml(String(preview.relatedRunCount || 0)) + (preview.siblingOutputCount ? ' · ' + escapeHtml(String(preview.siblingOutputCount)) + ' sibling output(s) remain' : ' · this is the last managed output') + '</div>';
       var alternateCandidates = Array.isArray(preview.availableAlternateCandidates) ? preview.availableAlternateCandidates : [];
       els.archiveAlternates.innerHTML = alternateCandidates.length
@@ -621,14 +621,6 @@ function finalizeTrainingArchive() {
     trainingWorkspaceState.archivesLoaded = false;
     var archive = payload.archive || {};
     var archiveName = String(archive.archiveName || '');
-    if (
-      archive.lastTrainingArchive &&
-      typeof state === 'object' &&
-      state &&
-      String(state.folder || '') === String(preview.folder || '')
-    ) {
-      state.lastTrainingArchive = JSON.parse(JSON.stringify(archive.lastTrainingArchive));
-    }
     window.dispatchEvent(new CustomEvent('webcap:training-archived', {
       detail: {
         folder: String(preview.folder || ''),
@@ -636,17 +628,13 @@ function finalizeTrainingArchive() {
         archive: archive
       }
     }));
-    if (!archive.testCleanupWarning) {
+    if (Array.isArray(archive.removedTestSessionNames) && archive.removedTestSessionNames.length) {
       window.dispatchEvent(new CustomEvent('webcap:test-sessions-cleared', {
-        detail: { folder: String(preview.folder || '') }
+        detail: { folder: String(preview.folder || ''), sessions: archive.removedTestSessionNames }
       }));
     }
     var notices = [];
-    if (archive.setMarkerWarning) {
-      notices.push('Set archive marker was not saved: ' + String(archive.setMarkerWarning));
-      if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Training Archive', String(archive.setMarkerWarning));
-    }
-    if (archive.testCleanupWarning) notices.push('Test sessions were not fully cleared: ' + String(archive.testCleanupWarning));
+    if (archive.testCleanupWarning) notices.push('Run-owned Test sessions were not fully cleared: ' + String(archive.testCleanupWarning));
     setStatus(
       'Finalized and archived ' + archiveName + '.' +
       (notices.length ? ' ' + notices.join(' · ') : '')

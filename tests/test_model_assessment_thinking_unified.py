@@ -1,0 +1,61 @@
+from pathlib import Path
+
+from tool.server import storyboard_llm_runtime as runtime
+
+
+def test_unified_assessment_thinking_visible_without_legacy_report(monkeypatch):
+    from tool.server import director_model_calibration, model_lab
+    monkeypatch.setattr(director_model_calibration, "get_report", lambda _ref: None)
+    monkeypatch.setattr(model_lab, "capability_run_summaries", lambda: [
+        {"models": {"local::yes.gguf": {"director_thinking": {"status": "completed", "supported": True}},
+                    "local::no.gguf": {"director_thinking": {"status": "failed", "supported": False}}}}
+    ])
+    models = [{"id": "local::yes.gguf"}, {"id": "local::no.gguf"}]
+    runtime._attach_assessment_signals(models)
+    assert models[0]["assessment"]["thinking"] is True
+    assert models[1]["assessment"]["thinking"] is False
+
+
+def test_assessment_table_is_compact_and_retains_thinking_as_context():
+    source = Path("tool/js/diagnostics.js").read_text(encoding="utf-8")
+    assert "{key: 'output', name: 'Valid output'}" in source
+    assert "panel.colSpan = 5" in source
+    assert "tests.director_thinking" in source
+    assert "' · Thinking: ' + thinkingLabel" in source
+
+
+def test_legacy_model_lab_launcher_retired_without_removing_pending_compatibility_panel():
+    html = Path("tool/tool.html").read_text(encoding="utf-8")
+    assert 'id="diagnostics-tab-model-lab"' not in html
+    assert 'id="diagnostics-assessment-lab"' not in html
+    assert 'id="diagnostics-panel-model-lab"' not in html
+    assert 'id="diagnostics-panel-assessment"' in html
+    assert 'id="diagnostics-assessment-run"' in html
+
+
+def test_model_assessment_bulk_selection_uses_header_checkbox():
+    html = Path("tool/tool.html").read_text(encoding="utf-8")
+    source = Path("tool/js/diagnostics.js").read_text(encoding="utf-8")
+    assert 'id="diagnostics-assessment-all"' not in html
+    assert 'id="diagnostics-assessment-none"' not in html
+    assert "selectAll.id = 'diagnostics-assessment-select-all'" in source
+    assert "header.indeterminate = checked > 0 && checked < inputs.length" in source
+
+
+def test_unified_assessment_deduplicates_multimodal_models_and_scopes_runtimes():
+    source = Path("tool/js/diagnostics.js").read_text(encoding="utf-8")
+    html = Path("tool/tool.html").read_text(encoding="utf-8")
+    assert "if (seenModels.has(ref)) return;" in source
+    assert "supportsDirector && supportsVision ? 'Director · Vision'" in source
+    assert "diagnosticsAssessmentRuntime !== 'all'" in source
+    assert "diagnosticsAssessmentSyncHeaderSelection();" in source
+    assert 'id="diagnostics-assessment-runtime"' in html
+    assert 'value="local"' in html and 'value="remote"' in html
+
+
+def test_assessment_completed_receipt_hides_stop_and_is_compact():
+    source = Path("tool/js/diagnostics.js").read_text(encoding="utf-8")
+    html = Path("tool/tool.html").read_text(encoding="utf-8")
+    assert "compact: terminal" in source
+    assert "stop.hidden = run.status !== 'running'" in source
+    assert 'id="diagnostics-assessment-stop" type="button" class="review-captions-btn hidden" hidden disabled' in html

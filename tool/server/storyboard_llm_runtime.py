@@ -1163,6 +1163,22 @@ def _ollama_model_capabilities(model_id, refresh=False):
     return normalized
 
 
+def advertised_thinking(model_ref):
+    """Return True when the current provider explicitly advertises thinking."""
+    runtime_id, model_id = _split_model_ref(model_ref)
+    with _use_runtime(runtime_id):
+        if _director_config().get("mode") != "remote" or not _remote_is_ollama():
+            return False
+        payload = _remote_native_http_json("/api/show", timeout=5, method="POST", payload={"model": model_id})
+        advertised = payload.get("thinking") if isinstance(payload, dict) else None
+        if isinstance(advertised, dict):
+            values = advertised.get("values")
+            if isinstance(values, list):
+                return True in values and False in values
+        capabilities = payload.get("capabilities") if isinstance(payload, dict) else []
+        return isinstance(capabilities, list) and "thinking" in capabilities
+
+
 def list_vision_models(reload=False):
     models = []
     warnings = []
@@ -1346,49 +1362,84 @@ list_models.last_warnings = []
 
 
 
-def _assessment_signal(model_ref):
+def _assessment_signal(model_ref, evidence=None):
+    """Report production assessment, preserving *observed* legacy warnings.
+
+    Scene JSON does not establish an 8K prose capacity. Historic completed prose
+    trials and observed looping/garbled output still matter to Storyboard.
+    """
     from .director_model_calibration import get_report
 
-    report = get_report(model_ref)
-    if not isinstance(report, dict):
-        return None
-    abilities = report.get("abilities") if isinstance(report.get("abilities"), dict) else {}
-    try:
-        coherent_output = max(0, int(abilities.get("coherentOutputTokens") or 0))
-    except (TypeError, ValueError):
-        coherent_output = 0
-    health = str(report.get("health") or "").strip()
-    pathologies = report.get("pathologies") if isinstance(report.get("pathologies"), list) else []
-    serious = bool(pathologies) or health == "likely-unusable"
-    confirmation = report.get("assessmentKind") == "confirmation"
-    # Short workload confirmation never establishes a model's maximum output.
-    limited = (not confirmation and not serious and report.get("status") == "complete"
-               and health in {"healthy", "limited"} and 0 < coherent_output < 8192)
+    probes = evidence or {}
+    report = get_report(model_ref) or {}
+    old_abilities = report.get("abilities") or {}
+    pathologies = sorted(set(report.get("pathologies") or []) | set(
+        (probes.get("_observedPathologies") or {}).get("values") or []
+    ))
+    old_health = str(report.get("health") or "")
+    serious = bool(pathologies) or old_health == "likely-unusable"
+    coherent = int(old_abilities.get("coherentOutputTokens") or 0)
+    limited = old_health == "limited"
+    scene = probes.get("director_scene_plan_2048") or {}
+    schema_kinds = ("set_vocabulary_synthesis", "set_vocabulary_challenge") if (
+        "set_vocabulary_synthesis" in probes or "set_vocabulary_challenge" in probes
+    ) else ("language_synthesis", "language_challenge")
+    schema = [probes.get(kind) or {} for kind in schema_kinds]
+    qualified = scene.get("status") == "completed" and all(
+        probe.get("status") == "completed" for probe in schema
+    )
+    thinking = probes.get("director_thinking") or {}
+    structured = max((
+        int(probe.get("verifiedOutputTokens") or 0)
+        for kind, probe in probes.items()
+        if kind.startswith("director_scene_plan_") and probe.get("status") == "completed"
+    ), default=0)
+    observed = any(probe.get("status") for probe in (scene, *schema))
     return {
-        "status": str(report.get("status") or ""),
-        "health": health,
-        "assessmentKind": report.get("assessmentKind") or "calibration",
-        "pathologies": [str(item) for item in pathologies if str(item or "").strip()],
+        "status": ("complete" if qualified else "incomplete") if observed else str(report.get("status") or ""),
+        "health": old_health if serious or limited else ("technical-pass" if qualified else old_health),
+        "assessmentKind": "model-assessment" if observed else str(report.get("assessmentKind") or ""),
+        "pathologies": pathologies,
         "seriousWarning": serious,
         "limited": limited,
-        "fullStoryCapable": None if confirmation else (coherent_output >= 8192 and not serious),
-        "individualScenesRecommended": limited,
+        "fullStoryCapable": True if coherent >= 8192 else None,
+        "individualScenesRecommended": limited and 0 < coherent < 8192,
         "abilities": {
-            "contextTokens": max(0, int(abilities.get("contextTokens") or 0)),
-            "structuredOutputTokens": max(0, int(abilities.get("structuredOutputTokens") or 0)),
-            "coherentOutputTokens": coherent_output,
+            "contextTokens": int(old_abilities.get("contextTokens") or 0),
+            "structuredOutputTokens": max(structured, int(old_abilities.get("structuredOutputTokens") or 0)),
+            "coherentOutputTokens": coherent,
         },
+        "thinking": (thinking.get("supported") is True if thinking else report.get("thinking") is True),
         "updatedAt": str(report.get("updatedAt") or ""),
     }
 
 
 def _attach_assessment_signals(models):
+    from .model_lab import capability_run_summaries
+
+    # The newest successful result for each probe supersedes newer partial runs.
+    by_model = {}
+    for run in reversed(capability_run_summaries()):
+        for ref, probes in (run.get("models") or {}).items():
+            merged = by_model.setdefault(ref, {})
+            observed = set((merged.get("_observedPathologies") or {}).get("values") or [])
+            for probe in probes.values():
+                observed.update(probe.get("pathologies") or [])
+            merged["_observedPathologies"] = {"values": sorted(observed)}
+            for kind, probe in probes.items():
+                if (kind.startswith("director_scene_plan_") and
+                    run.get("protocol") != "webcap-model-assessment-structured-v2"):
+                    continue
+                if kind not in merged or (
+                    merged[kind].get("status") != "completed" and
+                    probe.get("status") == "completed"
+                ):
+                    merged[kind] = probe
     for model in models:
-        model_ref = str(model.get("id") or "").strip()
-        signal = _assessment_signal(model_ref)
-        if signal is not None:
-            model["assessment"] = signal
+        ref = str(model.get("id") or "").strip()
+        model["assessment"] = _assessment_signal(ref, by_model.get(ref))
     return models
+
 
 def status():
     models = _attach_assessment_signals(list_models(reload=True))
@@ -1664,7 +1715,7 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
     )
 
 
-def chat(model_ref, messages, response_schema=None, max_tokens=None, context_size=None, gpu_reserved=False, sampling=None, allow_truncated=False, assessment_evidence=False):
+def chat(model_ref, messages, response_schema=None, max_tokens=None, context_size=None, gpu_reserved=False, sampling=None, allow_truncated=False, assessment_evidence=False, thinking=None):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director messages are required.")
 
@@ -1700,11 +1751,11 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             if requested_max_tokens <= 0:
                 raise ValueError("Director max_tokens override must be greater than zero.")
             payload["max_tokens"] = requested_max_tokens
-        if assessment_evidence and settings.get("mode", "local") == "remote" and _remote_is_ollama():
-            payload["reasoning_effort"] = "none"
+        if settings.get("mode", "local") == "remote" and _remote_is_ollama() and (thinking is not None or assessment_evidence):
+            payload["reasoning_effort"] = "high" if thinking else "none"
         if settings.get("mode", "local") == "local":
-            payload["reasoning_effort"] = "none"
-            payload["chat_template_kwargs"] = {"enable_thinking": False}
+            payload["reasoning_effort"] = "high" if thinking else "none"
+            payload["chat_template_kwargs"] = {"enable_thinking": bool(thinking)}
             payload["top_k"] = 40
             payload["min_p"] = 0.05
             payload["repeat_penalty"] = 1.0
@@ -1885,7 +1936,7 @@ def normalize_freeform_messages(messages, allow_image_data_urls=False):
         normalized.append({"role": role, "content": content})
     return normalized
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None, allow_image_data_urls=False):
+def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None, allow_image_data_urls=False, thinking=None):
     normalized = normalize_freeform_messages(messages, allow_image_data_urls=allow_image_data_urls)
 
     operation = "freeform_chat"
@@ -1919,6 +1970,7 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, c
                 gpu_reserved=bool(gpu_reserved),
                 allow_truncated=True,
                 assessment_evidence=assessment_evidence,
+                thinking=thinking,
             )
             _set_activity(
                 "complete",
@@ -1947,7 +1999,7 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, c
             raise
 
 
-def run_contract(model_id, contract, gpu_reserved=False):
+def run_contract(model_id, contract, gpu_reserved=False, thinking=None):
     if not isinstance(contract, dict):
         raise ValueError("Director contract must be an object.")
     prompt = str(contract.get("prompt") or "").strip()
@@ -1986,6 +2038,7 @@ def run_contract(model_id, contract, gpu_reserved=False):
                 context_size=(settings.get("context_size") or 0) if settings.get("mode", "local") == "local" else 0,
             )
             chat_kwargs = {
+                "thinking": thinking,
                 "response_schema": contract.get("response_schema"),
                 "sampling": _sampling_profile(operation),
             }

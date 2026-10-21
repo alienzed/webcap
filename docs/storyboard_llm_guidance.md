@@ -193,13 +193,19 @@ WebCap does not run hidden recursive review/repair passes.
 
 ### `insert_scene`
 
-Create exactly one new Scene between two existing Scenes.
+Create exactly one new Scene immediately after the selected Scene, including after the final Scene.
 
-Director receives the complete concept plus the Scene before and Scene after as relationship/contrast context.
+Director receives the complete concept, the preceding Scene, any following Scene, and a concise outline of the existing sequence. Optional user direction may guide the new Scene.
 
-The inserted Scene is **not required to bridge them narratively**. It may continue, contrast, vary, repeat a format, jump, or remain relatively independent as the concept warrants.
+The inserted Scene is **not required to bridge them narratively**. It may continue, contrast, vary a repeated format with fresh content, or remain independent as the concept warrants. Neighbouring Scenes provide context, not templates to copy.
 
-WebCap inserts the returned Scene at that exact gap.
+WebCap adds the returned Scene at that position without replacing existing Scenes or Takes.
+
+### `extend_story`
+
+Append the requested number of Director-authored Scenes after the existing sequence, with optional creative direction. The Director receives the full concept, an outline of existing Scenes, and the last Scene's prompt. Narrative extensions should progress; independent sequences should gain distinct new variations. The existing Scene plan and Takes are never replaced.
+
+Manual Add Scene still appends one empty, editable Scene. Re-develop Scenes remains an explicitly separate replacement operation.
 
 ## Runtime request assembly
 

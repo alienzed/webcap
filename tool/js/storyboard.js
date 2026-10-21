@@ -61,7 +61,9 @@
       activitySlotSample: null,
       requestByJobId: {},
       developIndividuallyOverride: null,
-      developStrategyModelId: ''
+      developStrategyModelId: '',
+      individualDevelopmentProgress: null,
+      sceneCreation: null
     }
   };
 
@@ -72,6 +74,9 @@
   };
 
   var DIRECTOR_PASS_PRESETS = {
+    coherence: {
+      instruction: 'Review this H3 text-to-video prompt for coherence. Favor details that can be conveyed visually or audibly. Consolidate repeated descriptions. Preserve the existing structure and creative intent. Return the complete improved prompt, or the original unchanged if no meaningful improvement is needed.'
+    },
     continuity: {
       instruction: 'Review this Scene against the Story overview, visual atmosphere, continuity invariants, and the preceding Scene. Repair meaningful continuity gaps, contradictions, missing generation-critical context, or prompt omissions while preserving the Scene\'s intended action, chronology, and narrative purpose. If it is already coherent and complete, leave it unchanged.'
     }
@@ -281,6 +286,19 @@
   }
 
   var atmosphereProposal = null;
+  function renderAtmosphereProposal() {
+    var panel = el('storyboard-style-proposal');
+    var visible = !!(atmosphereProposal && storyState.story &&
+      storyState.story.id === atmosphereProposal.storyId);
+    panel.classList.toggle('hidden', !visible);
+    if (!visible) return;
+    el('storyboard-style-proposal-text').textContent = atmosphereProposal.text;
+    var sourceChanged = el('storyboard-story-style').value.trim() !== atmosphereProposal.source;
+    el('storyboard-style-apply').textContent = sourceChanged
+      ? 'Apply suggestion (replaces current text)'
+      : 'Apply suggestion';
+  }
+
   function interpretAtmosphere() {
     if (!storyState.story) return;
     var input = el('storyboard-story-style').value.trim();
@@ -291,7 +309,7 @@
     var target = {kind:'concept', storyId:storyId};
     if (directorTargetBlocked(target)) return reportError(new Error('That Director target already has pending work.'));
     atmosphereProposal = null;
-    el('storyboard-style-proposal').classList.add('hidden');
+    renderAtmosphereProposal();
     var button = el('storyboard-interpret-style-btn');
     button.disabled = true;
     setDirectorPending(target, true);
@@ -301,13 +319,10 @@
     }).then(function (result) {
       // Consume completed work even when the user navigated away during execution.
       return consumeDirectorJob(result.jobId).then(function () {
-        if (!storyState.story || storyState.story.id !== storyId ||
-            el('storyboard-story-style').value.trim() !== input) return;
         var suggestion = String(result.result || '').trim();
         if (!suggestion) throw new Error('Director returned an empty interpretation.');
         atmosphereProposal = {text:suggestion, source:input, storyId:storyId};
-        el('storyboard-style-proposal-text').textContent = suggestion;
-        el('storyboard-style-proposal').classList.remove('hidden');
+        renderAtmosphereProposal();
       });
     }).catch(reportError).finally(function () {
       button.disabled = false;
@@ -408,6 +423,7 @@
           throw new Error((body && body.error) || 'Storyboard Director job request failed.');
         }
         trackTransientLlmJob(body.job);
+        followRevisionProgress(body.job);
         if (['completed', 'failed', 'cancelled', 'stopped', 'interrupted'].indexOf(String(body.job.status || '')) !== -1) {
           reportTransientLlmTiming(body.job);
         }
@@ -492,8 +508,8 @@
   function directorTargetFromJob(job) {
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
     if (job.operation === 'interpret_atmosphere' || job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
-    if (job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene') return { kind: 'scenes', storyId: job.storyId };
-    if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence') return { kind: 'repair', storyId: job.storyId };
+    if (job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene' || job.operation === 'extend_story') return { kind: 'scenes', storyId: job.storyId };
+    if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence' || job.operation === 'check_coherence_sequence') return { kind: 'repair', storyId: job.storyId };
     if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId, operation: job.operation };
     }
@@ -546,15 +562,18 @@
             if (currentCorrection) currentCorrection.value = '';
           }
           syncSceneDirectorRestore(sceneId);
+          syncPromptTakeStatus(sceneId);
           syncSceneRefineState(sceneId);
           updateSceneDirectorStatus(sceneId, 'Director completed.');
         }
-      } else if (operation === 'insert_scene') {
+      } else if (operation === 'insert_scene' || operation === 'extend_story') {
         storyState.story.sceneOrder = canonical.sceneOrder || [];
         storyState.story.scenes = canonical.scenes || {};
         storyState.story.updatedAt = canonical.updatedAt;
         var anchorIndex = storyState.story.sceneOrder.indexOf(sceneId);
-        var insertedSceneId = anchorIndex >= 0 ? storyState.story.sceneOrder[anchorIndex + 1] : '';
+        var insertedSceneId = operation === 'extend_story'
+          ? storyState.story.sceneOrder[storyState.story.sceneOrder.length - 1]
+          : (anchorIndex >= 0 ? storyState.story.sceneOrder[anchorIndex + 1] : '');
         if (insertedSceneId) {
           storyState.sceneViewMode = 'focus';
           storyState.activeSceneId = insertedSceneId;
@@ -662,6 +681,11 @@
   }
 
   function directorRequest(payload) {
+    if (payload && !payload.previewOnly && payload.model && selectedDirectorModel() &&
+        String(payload.model) === String(storyState.director.modelId)) {
+      var brain = el('storyboard-director-thinking');
+      payload.thinking = !!(brain && brain.checked && !brain.disabled);
+    }
     var options = payload
       ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
       : {};
@@ -761,13 +785,22 @@
     } else {
       select.title = '';
     }
+    var brain = el('storyboard-director-thinking');
+    if (!brain) throw new Error('Storyboard Thinking control is missing.');
+    var supported = !!(selectedAssessment && selectedAssessment.thinking);
+    brain.parentElement.classList.toggle('hidden', !supported);
+    brain.disabled = !supported;
+    if (!supported) brain.checked = false;
     syncIndividualDevelopStrategy(previousModelId !== selected);
   }
 
   function refreshDirector() {
     return directorRequest(null).then(function (payload) {
       storyState.director.available = !!payload.available;
-      storyState.director.models = payload.models || [];
+      storyState.director.models = (payload.models || []).filter(function (model) {
+        var modalities = model.inputModalities || (model.architecture && model.architecture.input_modalities) || [];
+        return modalities.indexOf('image') === -1;
+      });
       storyState.director.runtimeLabel = payload.runtime || '';
       storyState.director.error = payload.error || '';
       renderDirectorSelector();
@@ -1150,9 +1183,10 @@
       }
       if (target.kind === 'repair') {
         return candidateTarget
-          && candidateTarget.kind === 'scene-prompt'
           && String(candidateTarget.storyId || '') === String(target.storyId || '')
-          && candidate.operation === 'refine_prompt';
+          && ((candidateTarget.kind === 'repair' &&
+            ['revise_scenes_sequence', 'check_coherence_sequence'].includes(candidate.operation))
+            || (candidateTarget.kind === 'scene-prompt' && candidate.operation === 'refine_prompt'));
       }
       return candidateTarget && directorTargetKey(candidateTarget) === targetKey;
     });
@@ -1170,7 +1204,8 @@
           operation: job.operation || '',
           startedAt: job.startedAt || job.createdAt,
           jobId: jobId,
-          jobStatus: jobStatus
+          jobStatus: jobStatus,
+          revisionProgress: job.revisionProgress || null
         };
       }
       // The queue identifies the job; only matching runtime activity owns live
@@ -1184,7 +1219,8 @@
         operation: job.operation || '',
         startedAt: job.startedAt || job.createdAt,
         jobId: jobId,
-        jobStatus: jobStatus
+        jobStatus: jobStatus,
+        revisionProgress: job.revisionProgress || null
       });
     }
 
@@ -1208,7 +1244,8 @@
       waitOwner: waitOwner,
       waitReason: waitReason,
       jobId: jobId,
-      jobStatus: jobStatus
+      jobStatus: jobStatus,
+      revisionProgress: job.revisionProgress || null
     };
   }
 
@@ -1244,11 +1281,14 @@
   function renderDirectorActivity(activity, system) {
     var card = el('storyboard-director-activity');
     var phase = el('storyboard-director-activity-phase');
+    var sceneProgress = el('storyboard-director-scene-progress');
+    var sceneProgressText = el('storyboard-director-scene-progress-text');
+    var sceneProgressBar = el('storyboard-director-scene-progress-bar');
     var detail = el('storyboard-director-activity-detail');
     var stop = el('storyboard-director-stop');
     var copy = el('storyboard-director-prompt-copy');
     var activityButton = el('storyboard-director-view-activity');
-    if (!card || !phase || !detail || !stop || !copy || !activityButton) throw new Error('Storyboard Director activity markup is missing.');
+    if (!card || !phase || !sceneProgress || !sceneProgressText || !sceneProgressBar || !detail || !stop || !copy || !activityButton) throw new Error('Storyboard Director activity markup is missing.');
 
     var phaseName = String(activity && activity.phase || '');
     var terminal = activity && ['complete', 'error', 'stopped'].indexOf(phaseName) !== -1;
@@ -1279,6 +1319,36 @@
     var targetKind = String(storyState.director.activityTarget && storyState.director.activityTarget.kind || '');
     var action = {concept: 'developing the Story', scenes: 'working on Scenes', repair: 'repairing Scenes', 'scene-prompt': 'revising this Scene'};
     phase.textContent = terminal ? directorPhaseLabel(phaseName) : 'Director is ' + (action[targetKind] || 'working') + '…';
+    var progress = activity && activity.revisionProgress;
+    var total = Number(progress && progress.total);
+    var completed = Number(progress && progress.completed);
+    var operation = String(activity && activity.operation || '');
+    var individual = targetKind === 'scenes' && storyState.director.individualDevelopmentProgress;
+    var isIndividualPass = !terminal && individual && Number.isInteger(individual.total) && individual.total > 0;
+    var isScenePass = !terminal && targetKind === 'repair'
+      && ['revise_scenes_sequence', 'check_coherence_sequence'].includes(operation)
+      && Number.isInteger(total) && total > 0
+      && Number.isInteger(completed) && completed >= 0 && completed <= total;
+    sceneProgress.classList.toggle('hidden', !isScenePass && !isIndividualPass);
+    if (isIndividualPass) {
+      var developed = Math.min(individual.total, Math.max(0, individual.completed));
+      phase.textContent = individual.phase === 'applying' ? 'Director is applying developed Scenes…'
+        : 'Director is developing Scene ' + (developed + 1) + ' of ' + individual.total + '…';
+      sceneProgressText.textContent = developed + ' of ' + individual.total + ' Scenes developed';
+      sceneProgressBar.max = individual.total;
+      sceneProgressBar.value = developed;
+    }
+    if (isScenePass) {
+      var checking = operation === 'check_coherence_sequence';
+      var queuingTakes = String(progress.phase || '') === 'Queuing fresh Takes';
+      if (queuingTakes) phase.textContent = 'Director is queuing fresh Takes…';
+      else if (completed < total) phase.textContent = 'Director is ' +
+        (checking ? 'checking' : 'revising') + ' Scene ' + (completed + 1) + ' of ' + total + '…';
+      else phase.textContent = 'Director finished ' + (checking ? 'checking' : 'revising') + ' ' + total + ' Scenes…';
+      sceneProgressText.textContent = completed + ' of ' + total + ' Scenes ' + (checking ? 'checked' : 'revised');
+      sceneProgressBar.max = total;
+      sceneProgressBar.value = completed;
+    }
     detail.textContent = terminal ? 'Review the result in Storyboard.' : 'Editing is temporarily unavailable here.';
   }
 
@@ -1397,6 +1467,29 @@
     button.classList.toggle('hidden', !scene || typeof scene.previousPrompt !== 'string');
   }
 
+  // A Take freezes the Scene's source prompt; compiled H3 input can be different.
+  function syncPromptTakeStatus(sceneId) {
+    var root = sceneElement(sceneId);
+    if (!root) return;
+    var badge = root.querySelector('[data-prompt-take-status]');
+    var label = badge && badge.querySelector('[data-prompt-take-status-label]');
+    var editor = root.querySelector('[data-scene-field="prompt"]');
+    if (!badge || !label || !editor) throw new Error('Storyboard prompt Take status markup is missing.');
+
+    var scene = storyState.story.scenes[sceneId] || {};
+    var takeId = scene.selectedTakeId;
+    var take = takeId && scene.takes && scene.takes[takeId];
+    var sourcePrompt = take && (typeof take.sourcePrompt === 'string'
+      ? take.sourcePrompt
+      : (!take.generated && typeof take.prompt === 'string' ? take.prompt : null));
+    var changed = typeof sourcePrompt === 'string' && editor.value.trim() !== sourcePrompt.trim();
+    badge.classList.toggle('hidden', !changed);
+    if (!changed) return;
+    var takeIndex = (scene.takeOrder || []).indexOf(takeId);
+    if (takeIndex < 0) throw new Error('Selected Take is missing from the Scene take order.');
+    label.textContent = 'Updated since Take ' + String(takeIndex + 1).padStart(2, '0');
+  }
+
   function syncSceneRefineState(sceneId) {
     syncSceneProgressionCard(sceneId);
     var root = sceneElement(sceneId);
@@ -1442,6 +1535,7 @@
       if (prompt) prompt.value = payload.scene.prompt || '';
       if (duration) duration.value = payload.scene.durationSeconds == null ? '' : payload.scene.durationSeconds;
       syncSceneDirectorRestore(sceneId);
+      syncPromptTakeStatus(sceneId);
       syncSceneRefineState(sceneId);
       updateSceneDirectorStatus(sceneId, 'Previous prompt restored.');
       setSaveState('Saved');
@@ -1825,10 +1919,6 @@
 
   function expandConcept() {
     if (!storyState.story) return;
-    if (typeof storyState.story.previousConcept === 'string') {
-      setDevelopStatus('Restore the original concept before expanding again.');
-      return;
-    }
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'concept', storyId: storyId };
     if (directorTargetBlocked(directorTarget)) {
@@ -1994,6 +2084,12 @@
       if (!outline || !Array.isArray(outline.scenes) || !outline.scenes.length) {
         throw new Error('Director returned an empty Story outline.');
       }
+      storyState.director.individualDevelopmentProgress = { completed: 0, total: outline.scenes.length, phase: 'developing' };
+      window.publishActivityProgress({ id: 'storyboard:individual:' + storyId, kind: 'storyboard', lane: 'background',
+        title: 'Develop Scenes one at a time', storyId: storyId, status: 'running',
+        phase: 'Developing Scene 1 of ' + outline.scenes.length,
+        progress: { completed: 0, total: outline.scenes.length },
+        progressLabel: '0 of ' + outline.scenes.length + ' Scenes developed' });
       return consumeDirectorJob(outlineResult.jobId);
     }).then(function () {
       return outline.scenes.reduce(function (promise, _plannedScene, index) {
@@ -2013,11 +2109,19 @@
               throw new Error('Director returned an invalid individual Scene.');
             }
             authoredScenes.push(sceneResult.scene);
+            storyState.director.individualDevelopmentProgress.completed = authoredScenes.length;
+            window.publishActivityProgress({ id: 'storyboard:individual:' + storyId, kind: 'storyboard', lane: 'background',
+              title: 'Develop Scenes one at a time', storyId: storyId, status: 'running',
+              phase: authoredScenes.length < outline.scenes.length
+                ? 'Developing Scene ' + (authoredScenes.length + 1) + ' of ' + outline.scenes.length : 'Applying Scenes',
+              progress: { completed: authoredScenes.length, total: outline.scenes.length },
+              progressLabel: authoredScenes.length + ' of ' + outline.scenes.length + ' Scenes developed' });
             return consumeDirectorJob(sceneResult.jobId);
           });
         });
       }, Promise.resolve());
     }).then(function () {
+      storyState.director.individualDevelopmentProgress.phase = 'applying';
       setDevelopStatus('Applying ' + String(authoredScenes.length) + ' developed Scenes…');
       return directorRequest({
         storyId: storyId,
@@ -2185,6 +2289,7 @@
     var individual = !!el('storyboard-develop-individual').checked;
     var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
+    storyState.director.individualDevelopmentProgress = null;
     setDevelopStatus(individual ? 'Preparing individual Scene development…' : 'Director is developing the Story…');
     startDirectorActivity();
 
@@ -2227,6 +2332,8 @@
         reportError(err);
       }
     }).finally(function () {
+      window.finishActivityProgress('storyboard:individual:' + storyId);
+      storyState.director.individualDevelopmentProgress = null;
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
     });
@@ -2489,7 +2596,15 @@
     return storyState.activeSceneId;
   }
 
-  function followVisibleWorkingScene(storyId, sceneId) {
+  function followRevisionProgress(job) {
+    if (!job || job.client !== 'storyboard' || job.operation !== 'revise_scenes_sequence' ||
+        job.status !== 'running') return;
+    var progress = job.revisionProgress;
+    if (!progress || progress.phase !== 'Revising Scenes' || !progress.sceneId) return;
+    followVisibleWorkingScene(job.storyId, progress.sceneId, true);
+  }
+
+  function followVisibleWorkingScene(storyId, sceneId, visualOnly) {
     var workspace = el('storyboard-workspace');
     var currentStory = storyState.story;
     var targetStoryId = String(storyId || '');
@@ -2508,9 +2623,9 @@
     storyState.activeSceneId = targetSceneId;
 
     if (storyState.sceneViewMode === 'focus') {
-      clearSceneNewTakeCount(targetSceneId);
+      if (!visualOnly) clearSceneNewTakeCount(targetSceneId);
       renderScenes();
-      if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
+      if (!visualOnly && typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
       if (directorActivityActive()) positionDirectorActivity();
     }
   }
@@ -2674,7 +2789,9 @@
           '<summary title="Scene actions" aria-label="Scene actions">•••</summary>' +
           '<div class="storyboard-scene-menu-popover">' +
             '<button type="button" data-scene-action="duplicate">Duplicate Scene</button>' +
-            '<button type="button" data-scene-action="insert-director"' + (index === order.length - 1 ? ' disabled' : '') + '>Insert Director Scene After</button>' +
+            '<button type="button" data-scene-action="insert-director">Insert Scene After</button>' +
+            '<button type="button" data-scene-action="insert-director-custom">Insert Scene After…</button>' +
+            (index === order.length - 1 ? '<button type="button" data-scene-action="extend-story">Extend Story…</button>' : '') +
             '<button type="button" data-scene-action="up"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
             '<button type="button" data-scene-action="down"' + (index === order.length - 1 ? ' disabled' : '') + '>Move later</button>' +
             '<button type="button" class="danger" data-scene-action="delete">Remove Scene</button>' +
@@ -2682,7 +2799,8 @@
         '</details>' +
       '</div>';
     }).join('') +
-      '<button type="button" class="storyboard-scene-progress-add" data-scene-progress-add title="Add Scene" aria-label="Add Scene">+</button>';
+      '<button type="button" class="storyboard-scene-progress-add" data-scene-progress-add title="Add blank Scene" aria-label="Add blank Scene">+</button>' +
+      (order.length ? '<button type="button" class="review-captions-btn storyboard-extend-story" data-extend-story>Extend Story…</button>' : '');
   }
 
   function syncSceneViewControls(order) {
@@ -3041,7 +3159,7 @@
     });
   }
 
-  function positionStoryActionMenu(menu) {
+  function positionStoryActionMenu(menu, pointer) {
     if (!menu || !menu.open) return;
     var summary = menu.querySelector('summary');
     var popover = menu.querySelector('.storyboard-story-menu-popover');
@@ -3062,6 +3180,11 @@
       ? below
       : above;
 
+    // Keep three-dot menus anchored; right-click opens at the pointer.
+    if (pointer) {
+      left = Math.min(Math.max(margin, pointer.x), Math.max(margin, window.innerWidth - width - margin));
+      top = Math.min(Math.max(margin, pointer.y), Math.max(margin, window.innerHeight - height - margin));
+    }
     popover.style.left = Math.round(left) + 'px';
     popover.style.top = Math.round(Math.max(margin, top)) + 'px';
   }
@@ -3072,7 +3195,7 @@
     });
   }
 
-  function positionSceneActionMenu(menu) {
+  function positionSceneActionMenu(menu, pointer) {
     if (!menu || !menu.open) return;
     var summary = menu.querySelector('summary');
     var popover = menu.querySelector('.storyboard-scene-menu-popover');
@@ -3093,6 +3216,11 @@
       ? below
       : above;
 
+    // Keep three-dot menus anchored; right-click opens at the pointer.
+    if (pointer) {
+      left = Math.min(Math.max(margin, pointer.x), Math.max(margin, window.innerWidth - width - margin));
+      top = Math.min(Math.max(margin, pointer.y), Math.max(margin, window.innerHeight - height - margin));
+    }
     popover.style.left = Math.round(left) + 'px';
     popover.style.top = Math.round(Math.max(margin, top)) + 'px';
   }
@@ -3627,6 +3755,10 @@
 
   function syncStoryLorasIntoScenes() {
     var storyLoras = storyLorasFromUi();
+    var status = el('storyboard-story-lora-status');
+    if (status && storyState.generationCapabilities.available) {
+      status.textContent = storyLoras.length ? 'Applied to every Scene by default.' : 'No Story-wide LoRAs.';
+    }
     var storyNames = storyLoras.map(function (item) { return item.name; });
     Array.prototype.forEach.call(document.querySelectorAll('.storyboard-scene[data-scene-id]'), function (root) {
       var list = root.querySelector('[data-story-lora-inherited-list]');
@@ -3705,6 +3837,10 @@
 
   function takeMetaLabel(take) {
     var parts = [take && take.generated ? 'Generated' : 'Imported'];
+    if (take && take.generated) {
+      var elapsed = take.elapsedMs == null ? '' : formatGenerationElapsedMs(take.elapsedMs);
+      parts.push(elapsed ? elapsed + ' elapsed' : 'Elapsed —');
+    }
     var createdAt = take && take.createdAt ? new Date(take.createdAt) : null;
     if (createdAt && !Number.isNaN(createdAt.getTime())) {
       parts.push(createdAt.toLocaleString([], {
@@ -3727,12 +3863,7 @@
         parts.push(width + '×' + height);
       }
     }
-    if (take && take.generated && take.seed !== undefined && take.seed !== null && take.seed !== '') {
-      parts.push('Seed ' + String(take.seed));
-    }
     if (take && take.mediaPurged) parts.push('Media reclaimed');
-    var elapsed = formatGenerationElapsedMs(take && take.elapsedMs);
-    if (elapsed) parts.push(elapsed);
     return parts.join(' · ');
   }
 
@@ -3871,6 +4002,67 @@
     '</details>';
   }
 
+  function takeSummaryText(scene, pendingCount) {
+    var count = Array.isArray(scene.takeOrder) ? scene.takeOrder.length : 0;
+    var parts = [String(count) + ' Take' + (count === 1 ? '' : 's')];
+    if (scene.selectedTakeId) parts.push('1 selected');
+    if (pendingCount) parts.push(String(pendingCount) + ' pending');
+    return parts.join(' · ');
+  }
+
+  function removedTakesMarkup(removedTakes) {
+    var removedTakeIds = Object.keys(removedTakes);
+    return removedTakeIds.length
+        ? '<section class="storyboard-removed-takes">' +
+            '<header class="storyboard-removed-takes-header">' +
+              '<strong>Removed Takes</strong>' +
+              '<span>' + String(removedTakeIds.length) + '</span>' +
+            '</header>' +
+            '<div class="storyboard-removed-takes-list">' +
+              removedTakeIds.map(function (takeId) {
+                var take = removedTakes[takeId] || {};
+                var filename = String(take.sourceFilename || takeId);
+                return '<div class="storyboard-removed-take-row">' +
+                  '<span class="storyboard-removed-take-name" title="' + escapeHtml(filename) + '">' +
+                    escapeHtml(filename) +
+                  '</span>' +
+                  '<div class="storyboard-removed-take-actions">' +
+                    '<button type="button" class="review-captions-btn" data-take-action="restore" data-take-id="' +
+                      escapeHtml(takeId) + '">Restore</button>' +
+                    '<button type="button" class="review-captions-btn storyboard-take-delete" data-take-action="delete" data-take-id="' +
+                      escapeHtml(takeId) + '">Delete</button>' +
+                  '</div>' +
+                '</div>';
+              }).join('') +
+            '</div>' +
+          '</section>'
+        : '';
+  }
+
+  function syncTakeCardDetails(card, take, index, selectedTakeId) {
+    var identity = card.querySelector('.storyboard-take-identity');
+    var select = card.querySelector('[data-take-action="select"]');
+    if (!identity || !select) throw new Error('Storyboard Take card controls are missing.');
+    var heading = identity.querySelector('strong');
+    var metadata = identity.querySelector('span');
+    if (!heading || !metadata) throw new Error('Storyboard Take identity is missing.');
+    heading.textContent = 'Take ' + String(index + 1).padStart(2, '0');
+    metadata.textContent = takeMetaLabel(take);
+    identity.title = take.sourceFilename || '';
+    var selected = take.id === selectedTakeId;
+    card.classList.toggle('selected', selected);
+    select.disabled = selected;
+    select.textContent = selected ? 'Selected' : 'Select';
+    var rating = Math.max(0, Math.min(5, Number(take.rating || 0)));
+    card.querySelectorAll('[data-take-rating][data-rating-value]').forEach(function (star) {
+      var active = Number(star.dataset.ratingValue) <= rating;
+      star.classList.toggle('active', active);
+      star.textContent = active ? '★' : '☆';
+    });
+    var label = card.querySelector('[data-take-label]');
+    if (label && document.activeElement !== label) label.value = take.label || '';
+  }
+
   function renderScenes() {
     var host = el('storyboard-scenes-list');
     if (!host || !storyState.story) return;
@@ -3941,32 +4133,7 @@
       if (sceneLoras.length) conditioningSummaryParts.push(String(sceneLoras.length) + ' Scene');
       if (sceneReferences.length) conditioningSummaryParts.push(String(sceneReferences.length) + ' ref' + (sceneReferences.length === 1 ? '' : 's'));
       var conditioningSummary = conditioningSummaryParts.length ? conditioningSummaryParts.join(' · ') : 'None';
-      var removedTakeIds = Object.keys(removedTakes);
-      var removedTakesHtml = removedTakeIds.length
-        ? '<section class="storyboard-removed-takes">' +
-            '<header class="storyboard-removed-takes-header">' +
-              '<strong>Removed Takes</strong>' +
-              '<span>' + String(removedTakeIds.length) + '</span>' +
-            '</header>' +
-            '<div class="storyboard-removed-takes-list">' +
-              removedTakeIds.map(function (takeId) {
-                var take = removedTakes[takeId] || {};
-                var filename = String(take.sourceFilename || takeId);
-                return '<div class="storyboard-removed-take-row">' +
-                  '<span class="storyboard-removed-take-name" title="' + escapeHtml(filename) + '">' +
-                    escapeHtml(filename) +
-                  '</span>' +
-                  '<div class="storyboard-removed-take-actions">' +
-                    '<button type="button" class="review-captions-btn" data-take-action="restore" data-take-id="' +
-                      escapeHtml(takeId) + '">Restore</button>' +
-                    '<button type="button" class="review-captions-btn storyboard-take-delete" data-take-action="delete" data-take-id="' +
-                      escapeHtml(takeId) + '">Delete</button>' +
-                  '</div>' +
-                '</div>';
-              }).join('') +
-            '</div>' +
-          '</section>'
-        : '';
+      var removedTakesHtml = removedTakesMarkup(removedTakes);
       var takesHtml = takeOrder.map(function (takeId, takeIndex) {
         var take = takes[takeId];
         return take ? takeCardHtml(story.id, sceneId, takeId, take, takeIndex, scene.selectedTakeId) : '';
@@ -3974,13 +4141,6 @@
       var pendingTakesHtml = sceneGenerationJobs.map(function (job, pendingIndex) {
         return pendingTakeCardHtml(job, takeOrder.length + pendingIndex);
       }).join('');
-      var takeSummaryParts = [
-        String(takeOrder.length) + ' Take' + (takeOrder.length === 1 ? '' : 's')
-      ];
-      if (scene.selectedTakeId) takeSummaryParts.push('1 selected');
-      if (sceneGenerationJobs.length) {
-        takeSummaryParts.push(String(sceneGenerationJobs.length) + ' pending');
-      }
       var takesInitiallyOpen = takeOrder.length > 0 || sceneGenerationJobs.length > 0;
       return '<section class="storyboard-scene" data-scene-id="' + escapeHtml(sceneId) + '">' +
         '<div class="storyboard-scene-body">' +
@@ -3989,9 +4149,14 @@
             '<label class="storyboard-field storyboard-scene-intent"><span>Scene intent</span><textarea data-scene-field="summary" rows="2" placeholder="Describe what happens in this Scene.">' + escapeHtml(sceneValue(scene, 'summary', '')) + '</textarea></label>' +
             '<div class="storyboard-prompt-block">' +
               '<div class="storyboard-prompt-heading">' +
-                '<span' +
-                  (promptDirectorModel ? ' title="Last populated by Director model ' + escapeHtml(promptDirectorModel) + '"' : '') +
-                '>Generation prompt</span>' +
+                '<span class="storyboard-prompt-label">' +
+                  '<span' +
+                    (promptDirectorModel ? ' title="Last populated by Director model ' + escapeHtml(promptDirectorModel) + '"' : '') +
+                  '>Generation prompt</span>' +
+                  '<span class="storyboard-prompt-take-status hidden" data-prompt-take-status title="The current prompt differs from the selected Take&#39;s original prompt.">' +
+                    '<span aria-hidden="true">✧</span><span data-prompt-take-status-label></span>' +
+                  '</span>' +
+                '</span>' +
                 '<div class="storyboard-prompt-actions">' +
                   '<button type="button" class="review-captions-btn storyboard-director-action" data-director-write title="Draft a complete H3 prompt from this Scene intent and the useful Story context.">Write with Director</button>' +
                   '<button type="button" class="review-captions-btn' +
@@ -4092,7 +4257,7 @@
           '</aside>' +
         '</div>' +
         '<details class="storyboard-takes"' + (takesInitiallyOpen ? ' open' : '') + '>' +
-          '<summary class="storyboard-takes-summary"><strong>Takes</strong><span>' + escapeHtml(takeSummaryParts.join(' · ')) + '</span>' +
+          '<summary class="storyboard-takes-summary"><strong>Takes</strong><span>' + escapeHtml(takeSummaryText(scene, sceneGenerationJobs.length)) + '</span>' +
             '<label class="review-captions-btn storyboard-take-upload-btn" title="Import existing image or video media as a Take for this Scene. Imported media is copied into this Story and keeps a frozen Scene snapshot.">Import Take<input type="file" accept="image/*,video/*" data-take-upload hidden></label>' +
           '</summary>' +
           '<div class="storyboard-takes-content">' +
@@ -4106,6 +4271,7 @@
     if (!activeHtml) activeHtml = '<div class="storyboard-library-empty">No Scenes yet. Add the first generatable scene.</div>';
 
     host.innerHTML = activeHtml + removedScenesHtml(removedScenes);
+    if (focusedSceneId) syncPromptTakeStatus(focusedSceneId);
     syncDirectorPendingControls();
     if (storyState.director.busy && storyState.director.activityTarget) positionDirectorActivity();
   }
@@ -4132,6 +4298,7 @@
     el('storyboard-story-concept').value = storyState.story.concept || '';
     el('storyboard-story-style').value = storyState.story.style || '';
     renderStoryStylePresetSelector();
+    renderAtmosphereProposal();
     renderStoryInvariants();
     el('storyboard-story-status').value = storyState.story.status || 'active';
     var targetSceneCount = storyState.story.targetSceneCount;
@@ -4154,7 +4321,6 @@
       if (developRow) developRow.classList.toggle('has-scenes', hasScenes);
     }
     var hasExpandedConcept = typeof storyState.story.previousConcept === 'string';
-    el('storyboard-expand-concept-btn').classList.toggle('hidden', hasExpandedConcept);
     el('storyboard-restore-concept-btn').classList.toggle('hidden', !hasExpandedConcept);
     setStoryCollapsed(storyState.storyCollapsed);
     el('storyboard-director-lora-enable').checked = storyState.story.directorLoraPlanning === true;
@@ -4678,13 +4844,13 @@
     }).catch(reportError);
   }
 
-  function insertDirectorSceneAfter(sceneId) {
+  function insertDirectorSceneAfter(sceneId, instruction) {
     if (!storyState.story) return;
     var storyId = storyState.story.id;
     var order = Array.isArray(storyState.story.sceneOrder) ? storyState.story.sceneOrder : [];
     var index = order.indexOf(sceneId);
-    if (index < 0 || index + 1 >= order.length) {
-      reportError(new Error('Insert Director Scene requires a following Scene.'));
+    if (index < 0) {
+      reportError(new Error('Insert Director Scene requires an existing Scene.'));
       return;
     }
     var directorTarget = { kind: 'scenes', storyId: storyId };
@@ -4707,6 +4873,7 @@
         storyId: storyId,
         sceneId: sceneId,
         operation: 'insert_scene',
+        instruction: instruction || '',
         model: modelId
       });
     }).then(function (payload) {
@@ -4727,6 +4894,75 @@
       setDirectorPending(directorTarget, false);
       finishDirectorActivity();
     });
+  }
+
+  function openSceneCreation(mode, sceneId) {
+    if (!storyState.story) return;
+    var order = storyState.story.sceneOrder || [];
+    if (mode === 'extend' && !order.length) return;
+    storyState.director.sceneCreation = { mode: mode, sceneId: sceneId || '' };
+    var modal = el('storyboard-scene-creation-modal');
+    el('storyboard-scene-creation-title').textContent = mode === 'extend' ? 'Extend Story' : 'Insert Scene After';
+    el('storyboard-scene-creation-count-wrap').classList.toggle('hidden', mode !== 'extend');
+    el('storyboard-scene-creation-count').value = '3';
+    el('storyboard-scene-creation-instruction').value = '';
+    el('storyboard-scene-creation-run').textContent = mode === 'extend' ? 'Extend Story' : 'Insert Scene';
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    el(mode === 'extend' ? 'storyboard-scene-creation-count' : 'storyboard-scene-creation-instruction').focus();
+  }
+
+  function closeSceneCreation() {
+    var modal = el('storyboard-scene-creation-modal');
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    storyState.director.sceneCreation = null;
+  }
+
+  function extendStory(sceneCount, instruction) {
+    if (!storyState.story) return;
+    var storyId = storyState.story.id;
+    var modelId = storyState.director.modelId;
+    if (!modelId) return reportError(new Error('Choose a Storyboard Director model first.'));
+    var target = { kind: 'scenes', storyId: storyId };
+    if (directorTargetBlocked(target)) return reportError(new Error('This Story already has conflicting Director work.'));
+    setDirectorPending(target, true);
+    setSaveState('Director extending Story…');
+    startDirectorActivity();
+    flushPendingSaves().then(function () {
+      return directorRequest({
+        storyId: storyId, operation: 'extend_story', model: modelId,
+        sceneCount: sceneCount, instruction: instruction
+      });
+    }).then(function (payload) {
+      return applyDirectorResultToVisibleStory({
+        storyId: storyId, operation: 'extend_story', jobId: payload.jobId
+      }).then(function () { return consumeDirectorJob(payload.jobId); });
+    }).then(function () {
+      setSaveState('Saved');
+      return refreshLibrary();
+    }).catch(function (err) {
+      if (!directorWasStopped(err)) reportError(err);
+    }).finally(function () {
+      setDirectorPending(target, false);
+      finishDirectorActivity();
+    });
+  }
+
+  function runSceneCreation() {
+    var state = storyState.director.sceneCreation;
+    if (!state) return;
+    var instruction = el('storyboard-scene-creation-instruction').value.trim();
+    var count = Number(el('storyboard-scene-creation-count').value);
+    if (state.mode === 'extend' && (!Number.isInteger(count) || count < 1)) {
+      el('storyboard-scene-creation-count').setCustomValidity('Enter a positive whole number.');
+      el('storyboard-scene-creation-count').reportValidity();
+      return;
+    }
+    el('storyboard-scene-creation-count').setCustomValidity('');
+    closeSceneCreation();
+    if (state.mode === 'extend') extendStory(count, instruction);
+    else insertDirectorSceneAfter(state.sceneId, instruction);
   }
 
   function duplicateScene(sceneId) {
@@ -4790,8 +5026,7 @@
         });
       });
     }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
       refreshLibrary();
     }).catch(reportError);
@@ -4806,8 +5041,8 @@
       takeId: takeId,
       label: String(label || '').trim()
     }); }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -4821,8 +5056,8 @@
       takeId: takeId,
       rating: rating === '' ? null : Number(rating)
     }); }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -4835,10 +5070,10 @@
       sceneId: sceneId,
       takeId: takeId
     }); }).then(function (payload) {
-      storyState.story = payload.story;
+
       storyState.sequenceEncodingWarnings = [];
       storyState.sequenceWarningsVisible = false;
-      renderStory();
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -4851,8 +5086,8 @@
       sceneId: sceneId,
       takeId: takeId
     }); }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -4860,14 +5095,15 @@
   function deleteTake(sceneId, takeId) {
     var scene = storyState.story && storyState.story.scenes ? storyState.story.scenes[sceneId] : null;
     var take = scene && scene.takes ? scene.takes[takeId] : null;
-    if (!take && scene && scene.removedTakes) take = scene.removedTakes[takeId];
+    var isRemoved = !take && !!(scene && scene.removedTakes && scene.removedTakes[takeId]);
+    if (isRemoved) take = scene.removedTakes[takeId];
     var label = take && (take.label || take.sourceFilename) ? (take.label || take.sourceFilename) : 'this Take';
     var selected = !!(scene && scene.selectedTakeId === takeId);
     var message = 'Delete "' + label + '" permanently? This deletes its media and metadata and cannot be undone.';
     if (selected) {
       message += '\n\nThis Take is currently selected. Deleting it will leave the Scene without a selected Take.';
     }
-    if (!window.confirm(message)) return;
+    if (!isRemoved && !window.confirm(message)) return;
     setSaveState('Deleting...');
     flushPendingSaves().then(function () { return request({
       operation: 'delete_take',
@@ -4875,8 +5111,8 @@
       sceneId: sceneId,
       takeId: takeId
     }); }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -4889,8 +5125,8 @@
       sceneId: sceneId,
       takeId: takeId
     }); }).then(function (payload) {
-      storyState.story = payload.story;
-      renderStory();
+
+      applyTakeMutation(sceneId, payload);
       setSaveState('Saved');
     }).catch(reportError);
   }
@@ -5204,10 +5440,13 @@
     var root = sceneElement(sceneId);
     if (!root) return;
     var grid = root.querySelector('.storyboard-takes-grid');
-    if (!grid) throw new Error('Storyboard Takes grid is missing.');
+    var content = root.querySelector('.storyboard-takes-content');
+    var summary = root.querySelector('.storyboard-takes-summary > span');
+    if (!grid || !content || !summary) throw new Error('Storyboard Takes markup is missing.');
 
     var scene = storyState.story.scenes[sceneId] || {};
     var takes = scene.takes && typeof scene.takes === 'object' ? scene.takes : {};
+    var removedTakes = scene.removedTakes && typeof scene.removedTakes === 'object' ? scene.removedTakes : {};
     var takeOrder = Array.isArray(scene.takeOrder) ? scene.takeOrder : [];
     var jobs = generationJobsForScene(sceneId);
     var activeJobIds = {};
@@ -5215,13 +5454,26 @@
     var empty = grid.querySelector('.storyboard-takes-empty');
     if ((takeOrder.length || jobs.length) && empty) empty.remove();
 
+    // Preserve every surviving video element, playback position, and open Advanced panel.
+    var changedTakeList = false;
+    Array.prototype.forEach.call(grid.querySelectorAll('.storyboard-take[data-take-id]'), function (card) {
+      if (takes[card.dataset.takeId] && takeOrder.indexOf(card.dataset.takeId) !== -1) return;
+      card.remove();
+      changedTakeList = true;
+    });
     takeOrder.forEach(function (takeId, takeIndex) {
       var take = takes[takeId];
-      if (!take || sceneTakeCardById(grid, takeId)) return;
-      var pending = grid.querySelector('[data-generation-job-id]');
-      var html = takeCardHtml(storyState.story.id, sceneId, takeId, take, takeIndex, scene.selectedTakeId);
-      if (pending) pending.insertAdjacentHTML('beforebegin', html);
-      else grid.insertAdjacentHTML('beforeend', html);
+      if (!take) throw new Error('Storyboard Take order references a missing Take: ' + takeId);
+      var card = sceneTakeCardById(grid, takeId);
+      if (!card) {
+        var pending = grid.querySelector('[data-generation-job-id]');
+        var html = takeCardHtml(storyState.story.id, sceneId, takeId, take, takeIndex, scene.selectedTakeId);
+        if (pending) pending.insertAdjacentHTML('beforebegin', html);
+        else grid.insertAdjacentHTML('beforeend', html);
+        card = sceneTakeCardById(grid, takeId);
+        changedTakeList = true;
+      }
+      syncTakeCardDetails(card, take, takeIndex, scene.selectedTakeId);
     });
 
     jobs.forEach(function (job, pendingIndex) {
@@ -5231,9 +5483,10 @@
         grid.insertAdjacentHTML('beforeend', pendingTakeCardHtml(job, takeOrder.length + pendingIndex));
         card = sceneGenerationCardById(grid, job.jobId);
       }
+      var pendingTitle = card.querySelector('.storyboard-take-identity strong');
+      if (pendingTitle) pendingTitle.textContent = 'Take ' + String(takeOrder.length + pendingIndex + 1).padStart(2, '0');
       syncGenerationJobCard(job, card);
     });
-
     Array.prototype.forEach.call(grid.querySelectorAll('[data-generation-job-id]'), function (card) {
       if (!activeJobIds[card.dataset.generationJobId]) card.remove();
     });
@@ -5242,14 +5495,43 @@
       grid.insertAdjacentHTML('beforeend', '<div class="storyboard-takes-empty">No Takes yet.</div>');
     }
 
+    var removedIds = Object.keys(removedTakes);
+    var removed = content.querySelector('.storyboard-removed-takes');
+    var renderedIds = removed ? Array.prototype.map.call(removed.querySelectorAll('[data-take-action="restore"]'), function (node) {
+      return node.dataset.takeId;
+    }) : [];
+    if (removedIds.join('|') !== renderedIds.join('|')) {
+      if (removed) removed.remove();
+      if (removedIds.length) content.insertAdjacentHTML('beforeend', removedTakesMarkup(removedTakes));
+    }
+    summary.textContent = takeSummaryText(scene, jobs.length);
+    if (changedTakeList) {
+      var referenceSource = root.querySelector('[data-reference-source]');
+      if (referenceSource) {
+        var chosen = referenceSource.value;
+        referenceSource.innerHTML = activeTakeOptions(storyState.story, '');
+        referenceSource.value = chosen;
+      }
+    }
+
     if (hadNoTakeActivity && (takeOrder.length || jobs.length)) {
       var takesDetails = root.querySelector('.storyboard-takes');
       if (!takesDetails) throw new Error('Storyboard Takes disclosure is missing.');
       takesDetails.open = true;
     }
-
     var generateButton = root.querySelector('[data-scene-generate]');
     if (generateButton) generateButton.textContent = (takeOrder.length || jobs.length) ? 'Generate Another Take' : 'Generate Take';
+    syncPromptTakeStatus(sceneId);
+  }
+
+  function applyTakeMutation(sceneId, payload) {
+    if (!payload || !payload.story) throw new Error('Storyboard Take mutation returned no Story.');
+    if (!storyState.story || storyState.story.id !== payload.story.id) return;
+    storyState.story = payload.story;
+    syncSceneTakeDom(sceneId);
+    syncSceneProgressionCard(sceneId);
+    renderStoryReadiness();
+    renderSequencePreview();
   }
 
   function mergeFetchedSceneTakeState(storyId, sceneId, latestStory) {
@@ -5264,6 +5546,8 @@
     currentScene.updatedAt = latestScene.updatedAt || currentScene.updatedAt;
     storyState.story.updatedAt = latestStory.updatedAt || storyState.story.updatedAt;
     syncSceneTakeDom(sceneId);
+    syncSceneProgressionCard(sceneId);
+    renderStoryReadiness();
   }
 
   function syncGenerationJobCard(job, card) {
@@ -5549,6 +5833,7 @@
       progressTitle.textContent = field.value.trim() || 'Untitled Scene';
     }
     if (field.dataset.sceneField === 'prompt') {
+      syncPromptTakeStatus(sceneId);
       var promptScene = storyState.story && storyState.story.scenes
         ? storyState.story.scenes[sceneId]
         : null;
@@ -5571,6 +5856,8 @@
     else if (action === 'down') reorderScene(sceneId, 1);
     else if (action === 'duplicate') duplicateScene(sceneId);
     else if (action === 'insert-director') insertDirectorSceneAfter(sceneId);
+    else if (action === 'insert-director-custom') openSceneCreation('insert', sceneId);
+    else if (action === 'extend-story') openSceneCreation('extend');
     else if (action === 'delete') deleteScene(sceneId);
   }
 
@@ -5682,6 +5969,9 @@
     if (!modal || !input || !preset || !status) throw new Error('Director Tools modal markup is missing.');
     preset.value = '';
     input.value = '';
+    input.readOnly = false;
+    el('storyboard-director-tools-run').textContent = 'Revise Scenes';
+    el('storyboard-director-tools-generate-takes').closest('label').classList.remove('hidden');
     el('storyboard-director-tools-generate-takes').checked = false;
     status.textContent = '';
     modal.classList.remove('hidden');
@@ -5696,7 +5986,133 @@
     modal.setAttribute('aria-hidden', 'true');
   }
 
+  function showCoherenceReview(storyId, scenes, modelId) {
+    var changed = scenes.filter(function (scene) {
+      return scene.originalPrompt.trim() !== scene.prompt.trim();
+    });
+    var dialog = document.createElement('dialog');
+    dialog.setAttribute('aria-label', 'Check Coherence results');
+    dialog.style.cssText = 'width:min(920px,94vw);max-height:90vh;padding:20px;border-radius:10px;';
+    var title = document.createElement('h3');
+    title.textContent = 'Check Coherence: ' + scenes.length + ' Scenes reviewed, ' + changed.length + ' changed';
+    var content = document.createElement('div');
+    content.style.cssText = 'max-height:65vh;overflow:auto;';
+    var entries = [];
+    scenes.forEach(function (scene, index) {
+      var isChanged = scene.originalPrompt.trim() !== scene.prompt.trim();
+      var item = document.createElement('details');
+      item.open = isChanged;
+      item.style.cssText = 'margin:12px 0;border-bottom:1px solid #8885;padding-bottom:10px;';
+      var heading = document.createElement('summary');
+      heading.textContent = (index + 1) + '. ' + (scene.title || scene.sceneId) + (isChanged ? ' — changes proposed' : ' — unchanged');
+      item.appendChild(heading);
+      var box = document.createElement('textarea');
+      box.value = scene.prompt;
+      box.readOnly = !isChanged;
+      box.setAttribute('aria-label', 'Coherence prompt for ' + (scene.title || scene.sceneId));
+      box.style.cssText = 'box-sizing:border-box;width:100%;height:240px;resize:vertical;margin-top:8px;';
+      if (isChanged) {
+        var label = document.createElement('label');
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        label.append(checkbox, document.createTextNode(' Apply this Scene'));
+        item.appendChild(label);
+        entries.push({scene: scene, checkbox: checkbox, box: box});
+      }
+      item.appendChild(box);
+      content.appendChild(item);
+    });
+    var status = document.createElement('p');
+    status.setAttribute('aria-live', 'polite');
+    var actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;margin-top:12px;';
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = 'Close / Discard';
+    close.onclick = function () { dialog.close(); };
+    actions.appendChild(close);
+    if (entries.length) {
+      var apply = document.createElement('button');
+      apply.type = 'button';
+      apply.textContent = 'Apply Selected';
+      apply.onclick = function () {
+        var selected = entries.filter(function (entry) { return entry.checkbox.checked; });
+        if (!selected.length) {
+          status.textContent = 'Select at least one changed Scene.';
+          return;
+        }
+        apply.disabled = true;
+        var applied = 0;
+        selected.reduce(function (promise, entry) {
+          return promise.then(function () {
+            status.textContent = 'Applying ' + (applied + 1) + ' of ' + selected.length + '…';
+            return directorRequest({
+              operation: 'apply_coherence', storyId: storyId,
+              sceneId: entry.scene.sceneId, expectedPrompt: entry.scene.originalPrompt,
+              prompt: entry.box.value, model: modelId
+            }).then(function () {
+              applied += 1;
+              entry.checkbox.checked = false;
+              entry.checkbox.disabled = true;
+            });
+          });
+        }, Promise.resolve()).then(function () {
+          status.textContent = 'Applied ' + applied + ' Scene(s).';
+          return request(null, 'story=' + encodeURIComponent(storyId));
+        }).then(function (payload) {
+          if (storyState.story && String(storyState.story.id) === String(storyId)) {
+            storyState.story = payload.story;
+            renderStory();
+          }
+          dialog.close();
+        }).catch(function (err) {
+          status.textContent = 'Applied ' + applied + ' before failure: ' + String(err.message || err);
+          reportError(err);
+        }).finally(function () { apply.disabled = false; });
+      };
+      actions.appendChild(apply);
+    }
+    dialog.append(title, content, status, actions);
+    dialog.addEventListener('close', function () { dialog.remove(); });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  }
+
+  function runDirectorToolsCoherence() {
+    var storyId = storyState.story.id;
+    var modelId = storyState.director.modelId;
+    if (!modelId) {
+      reportError(new Error('Choose a Director model first.'));
+      return;
+    }
+    var run = el('storyboard-director-tools-run');
+    var status = el('storyboard-director-tools-status');
+    var target = {kind: 'repair', storyId: storyId};
+    run.disabled = true;
+    status.textContent = 'Starting Story coherence review…';
+    flushPendingSaves().then(function () {
+      setDirectorPending(target, true);
+      startDirectorActivity();
+      closeDirectorTools();
+      return directorRequest({
+        storyId: storyId, operation: 'check_coherence_sequence', model: modelId
+      });
+    }).then(function (result) {
+      showCoherenceReview(storyId, result.scenes || [], modelId);
+      return consumeDirectorJob(result.jobId);
+    }).catch(reportError).finally(function () {
+      setDirectorPending(target, false);
+      finishDirectorActivity();
+      syncDirectorToolsUi();
+    });
+  }
+
   function runDirectorToolsRevision() {
+    if (el('storyboard-director-tools-preset').value === 'coherence') {
+      runDirectorToolsCoherence();
+      return;
+    }
     var input = el('storyboard-director-tools-instruction');
     var run = el('storyboard-director-tools-run');
     var status = el('storyboard-director-tools-status');
@@ -5744,12 +6160,22 @@
     el('storyboard-generate-scenes-btn').onclick = generateScenes;
     el('storyboard-cancel-takes-btn').onclick = cancelStoryTakes;
     el('storyboard-director-tools-btn').onclick = openDirectorTools;
+    el('storyboard-scene-creation-close').onclick = closeSceneCreation;
+    el('storyboard-scene-creation-cancel').onclick = closeSceneCreation;
+    el('storyboard-scene-creation-run').onclick = runSceneCreation;
     el('storyboard-director-tools-close').onclick = closeDirectorTools;
     el('storyboard-director-tools-cancel').onclick = closeDirectorTools;
     el('storyboard-director-tools-preset').onchange = function () {
       var input = el('storyboard-director-tools-instruction');
       if (!input) return;
       if (this.value === 'continuity') input.value = DIRECTOR_PASS_PRESETS.continuity.instruction;
+      if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
+      var coherence = this.value === 'coherence';
+      var run = el('storyboard-director-tools-run');
+      if (run) run.textContent = coherence ? 'Check Coherence' : 'Revise Scenes';
+      var fresh = el('storyboard-director-tools-generate-takes').closest('label');
+      if (fresh) fresh.classList.toggle('hidden', coherence);
+      input.readOnly = coherence;
       input.focus();
     };
     el('storyboard-director-tools-run').onclick = runDirectorToolsRevision;
@@ -5804,6 +6230,18 @@
         return;
       }
       if (event.target.closest('[data-scene-progress-add]')) addScene();
+      if (event.target.closest('[data-extend-story]')) openSceneCreation('extend');
+    });
+    sceneProgression.addEventListener('contextmenu', function (event) {
+      var card = event.target.closest('.storyboard-scene-progress-card[data-scene-id]');
+      if (!card || event.target.closest('.storyboard-scene-menu-popover')) return;
+      var menu = card.querySelector('.storyboard-scene-progress-menu');
+      if (!menu) throw new Error('Scene actions menu is missing.');
+      event.preventDefault();
+      closeStoryActionMenus();
+      closeSceneActionMenus(menu);
+      menu.open = true;
+      positionSceneActionMenu(menu, { x: event.clientX, y: event.clientY });
     });
     sceneProgression.addEventListener('scroll', function () {
       closeSceneActionMenus();
@@ -5835,6 +6273,7 @@
       storyState.director.modelId = this.value;
       storyState.director.developIndividuallyOverride = null;
       storyState.director.developStrategyModelId = this.value;
+      renderDirectorSelector();
       syncIndividualDevelopStrategy(true);
       setDirectorModelPreference('webcap.storyboard.directorModel', this.value);
     });
@@ -5851,6 +6290,7 @@
       var modelSelect = el('storyboard-director-model');
       if (modelSelect && Array.prototype.some.call(modelSelect.options, function (option) { return option.value === selected; })) {
         modelSelect.value = selected;
+        renderDirectorSelector();
       }
       syncIndividualDevelopStrategy(true);
     });
@@ -5918,6 +6358,17 @@
       }
       if (event.target.closest('[data-story-open]')) openStory(storyId).catch(reportError);
     };
+    storyLibraryList.addEventListener('contextmenu', function (event) {
+      var row = event.target.closest('.storyboard-story-row[data-story-id]');
+      if (!row || event.target.closest('.storyboard-story-menu-popover')) return;
+      var menu = row.querySelector('.storyboard-story-menu');
+      if (!menu) throw new Error('Story actions menu is missing.');
+      event.preventDefault();
+      closeSceneActionMenus();
+      closeStoryActionMenus(menu);
+      menu.open = true;
+      positionStoryActionMenu(menu, { x: event.clientX, y: event.clientY });
+    });
     storyLibraryList.addEventListener('scroll', function () {
       closeStoryActionMenus();
     });
@@ -5940,24 +6391,22 @@
     el('storyboard-interpret-style-btn').onclick = interpretAtmosphere;
     el('storyboard-style-dismiss').onclick = function () {
       atmosphereProposal = null;
-      el('storyboard-style-proposal').classList.add('hidden');
+      renderAtmosphereProposal();
     };
     el('storyboard-style-apply').onclick = function () {
       if (!atmosphereProposal || !storyState.story ||
-          storyState.story.id !== atmosphereProposal.storyId ||
-          el('storyboard-story-style').value.trim() !== atmosphereProposal.source) {
-        reportError(new Error('Visual / Atmosphere changed since the Director proposal. Interpret again.'));
+          storyState.story.id !== atmosphereProposal.storyId) {
+        reportError(new Error('Director suggestion is not available for this Story.'));
         return;
       }
       el('storyboard-story-style').value = atmosphereProposal.text;
       atmosphereProposal = null;
-      el('storyboard-style-proposal').classList.add('hidden');
+      renderAtmosphereProposal();
       renderStoryStylePresetSelector();
       scheduleStorySave();
     };
     el('storyboard-story-style').addEventListener('input', function () {
-      atmosphereProposal = null;
-      el('storyboard-style-proposal').classList.add('hidden');
+      renderAtmosphereProposal();
       renderStoryStylePresetSelector();
       scheduleStorySave();
     });
@@ -6155,7 +6604,9 @@
       if (upload) {
         var uploadScene = upload.closest('.storyboard-scene[data-scene-id]');
         if (!uploadScene) throw new Error('Take upload Scene is missing.');
-        uploadTake(uploadScene.dataset.sceneId, upload.files && upload.files[0]);
+        var uploadFile = upload.files && upload.files[0];
+        upload.value = '';
+        uploadTake(uploadScene.dataset.sceneId, uploadFile);
         return;
       }
       var takeLabel = event.target.closest('[data-take-label]');

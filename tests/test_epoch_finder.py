@@ -190,6 +190,106 @@ def test_wizard_proposal_normalization_enforces_alignment():
         })
 
 
+def test_campaign_director_keeps_exact_tag_group_when_text_occurs_twice():
+    from tool.server.epoch_finder_plan import normalize_proposal
+    result = normalize_proposal({
+        "concept": "Micro bikini construction",
+        "wildcard": "A {simple string straps|ring connectors} top and "
+                    "{simple string straps|ring connectors} bottom.",
+        "stableTerms": ["bikini"],
+        "variationGroups": [
+            {"label": "Top straps", "annotationGroup": "BT Back",
+             "role": "primary", "options": ["simple string straps", "ring connectors"]},
+            {"label": "Bottom straps", "annotationGroup": "BB Back",
+             "role": "primary", "options": ["simple string straps", "ring connectors"]},
+        ],
+    })
+    assert [group["annotationGroup"] for group in result["variationGroups"]] == [
+        "BT Back", "BB Back"
+    ]
+    assert [group["role"] for group in result["variationGroups"]] == [
+        "primary", "primary"
+    ]
+
+
+def test_reference_vl_does_not_conflate_identical_labels_and_tags(tmp_path, monkeypatch):
+    frame_dir = tmp_path / "frames"
+    frame_dir.mkdir()
+    (frame_dir / "render.png").write_bytes(b"render")
+    (tmp_path / "top.png").write_bytes(b"top")
+    (tmp_path / "bottom.png").write_bytes(b"bottom")
+    monkeypatch.setattr(epoch_finder, "_directory", lambda *_: tmp_path)
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda *_: "set")
+    monkeypatch.setattr(epoch_finder, "vision_resized_image_data_url",
+                        lambda *_: "data:image/png;base64,AAAA")
+    monkeypatch.setattr("tool.server.epoch_reference.verified_reference",
+                        lambda *_: {"size": 3, "mtimeNs": 4})
+    monkeypatch.setattr(epoch_finder, "enqueue_llm",
+                        lambda *_args, **_kwargs: {"jobId": "llm-1"})
+    monkeypatch.setattr(epoch_finder, "llm_job_status",
+                        lambda *_args, **_kwargs: {
+                            "status": "completed",
+                            "result": {"text": "OPTION: 1\nVERDICT: MATCH"},
+                        })
+    monkeypatch.setattr(epoch_finder, "_save", lambda *_args: None)
+
+    options = ["simple string straps", "ring connectors"]
+    campaign = {
+        "id": "campaign", "jobId": "run1", "visionModel": "vision1",
+        "referenceEvaluation": {"rvn": True},
+        "referencePlan": [
+            {"dimensionId": "G1", "attribute": "Straps",
+             "option": options[0], "group": "BT Back", "media": "top.png",
+             "size": 3, "mtimeNs": 4},
+            {"dimensionId": "G2", "attribute": "Straps",
+             "option": options[0], "group": "BB Back", "media": "bottom.png",
+             "size": 3, "mtimeNs": 4},
+        ],
+    }
+    unit = {
+        "frame": "render.png",
+        "groups": [{"id": ident, "label": "Straps", "role": "primary",
+                    "expected": 1, "options": options}
+                   for ident in ("G1", "G2")],
+    }
+    epoch_finder._evaluate_reference_unit(tmp_path, campaign, unit)
+    assert [row["group"] for row in unit["referenceAssessments"]] == [
+        "BT Back", "BB Back"
+    ]
+    assert [row["reference"] for row in unit["referenceAssessments"]] == [
+        "top.png", "bottom.png"
+    ]
+
+
+def test_campaign_one_image_question_prefers_exact_source_group():
+    groups = [{"id": "G3", "label": "Attribute 3", "annotationGroup": "BT Back",
+               "options": ["simple string straps", "metal ring"]}]
+    question = epoch_finder._question(groups)
+    assert "G3 (BT Back)" in question
+    assert "Attribute 3" not in question
+
+
+def test_campaign_director_uses_compiled_tags_and_default_roles():
+    from tool.server.epoch_finder_plan import build_proposal
+    contract = build_proposal(
+        ["A woman in a black bikini with simple string straps and blonde hair."],
+        annotations=[{"BT Back": ["simple string straps"],
+                      "BB Back": ["simple string straps"],
+                      "Hair": ["blonde"], "Background": ["studio"]}],
+        vocabulary=[{"group": "BT Back", "alias": "Bikini top straps"},
+                    {"group": "BB Back", "alias": "Bikini bottom straps"}],
+        focus="micro bikini",
+    )
+    prompt = contract["prompt"]
+    assert "Observed concept tags" in prompt
+    assert '"group":"BT Back"' in prompt and '"group":"BB Back"' in prompt
+    assert '"group":"Hair"' not in prompt and '"group":"Background"' not in prompt
+    assert "Default Leakage: Position, Hair, Body, Clothing" in prompt
+    assert "Default Vary only: Viewpoint, Background, Lighting" in prompt
+    assert "annotationGroup" in prompt
+    assert "[ACTUAL SET REFERENCE TAGS]" not in prompt
+
+
 def test_wizard_cumulative_score_uses_primary_and_leakage_weights():
     campaign = {
         "rounds": [{"epochs": [1, 2]}],
@@ -295,10 +395,14 @@ def test_discover_queued_resume_run_with_saved_epochs(tmp_path, monkeypatch):
     monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
                         lambda path: [{"epoch": 60, "status": "available"},
                                       {"epoch": 65, "status": "missing"}])
-    assert epoch_finder._runs(tmp_path) == [{
+    runs = epoch_finder._runs(tmp_path)
+    assert len(runs) == 1
+    assert {key: runs[0][key] for key in ("jobId", "runName", "modelId", "stage", "epochs")} == {
         "jobId": "queued-1", "runName": "Waiting H3", "modelId": "minimax_h3",
         "stage": "h3", "epochs": [60],
-    }]
+    }
+    assert runs[0]["folder"] == "set/a"
+    assert runs[0]["setName"] == "a"
 
 
 def test_discover_history_run_and_queue_only_once(tmp_path, monkeypatch):
@@ -342,3 +446,18 @@ def test_epoch_primary_prompt_instructions_require_exact_single_group_tags():
     assert "exact text of one tag" in contract["prompt"]
     assert "never combine, rephrase, or infer tags" in contract["prompt"]
     assert "ACTUAL SET REFERENCE TAGS" in contract["prompt"]
+
+
+def test_campaign_run_choices_use_saved_sequence_and_training_details():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    backend = (root / "tool/server/epoch_finder.py").read_text(encoding="utf-8")
+    history = (root / "tool/server/training_history.py").read_text(encoding="utf-8")
+    assert 'run.get("sequence") or job.get("sequence")' in backend
+    assert '"runSummary": run.get("runSummary")' in backend
+    assert '"currentEpoch": run.get("currentEpoch")' in backend
+    assert 'summary["rank"] = rank' in history
+    assert "function runIdentity(run)" in js
+    assert "function runDetails(run)" in js
+    assert "escape(runDetails(run))" in js

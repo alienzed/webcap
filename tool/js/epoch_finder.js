@@ -51,7 +51,7 @@
     var finder = next === 'finder';
     var references = next === 'references';
     var analytics = next === 'analytics';
-    document.querySelectorAll('[data-test-workspace-mode]').forEach(function (button) {
+    document.querySelectorAll('#test-workspace-main-tabs [data-test-workspace-mode]').forEach(function (button) {
       var active = button.dataset.testWorkspaceMode === next;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
@@ -65,7 +65,7 @@
     if (analytics) window.runAnalyticsOpen();
   }
   window.epochFinderShowMode = showMode;
-  document.getElementById('epoch-finder-back-to-tests').onclick = function () { window.testGenerationsUnifiedDestination('build'); };
+  document.getElementById('epoch-finder-back-to-tests').onclick = function () { showMode('tests'); };
   function renderSecondsEstimate(modelId, durationSeconds, megapixels) {
     var key = [modelId, Number.isFinite(megapixels) ? String(megapixels) : String(document.getElementById('test-generations-dimensions')?.value || ''), String(durationSeconds)].join('|');
     var samples = timingProfiles[key] && timingProfiles[key].seconds;
@@ -138,7 +138,7 @@
   function suggestedRole(label, options) {
     var text = String(label || '').toLowerCase();
     if (/background|setting|lighting|surface|camera|viewpoint|environment|scenery|location/.test(text)) return 'vary';
-    if (/hair|skin|eye|face|expression|pose|position|body|age|ethnicity/.test(text)) return 'leakage';
+    if (/hair|skin|eye|face|expression|pose|position|body|clothing|age|ethnicity/.test(text)) return 'leakage';
     return 'primary';
   }
   function updateDimensions() {
@@ -146,9 +146,12 @@
     dimensions = groups.map(function (g, index) {
       var prev = dimensions[index] || {};
       var oldValues = (prev.options || []).join('|');
+      var unchanged = oldValues === g.options.join('|');
       return {label: String(prev.label || ('Attribute ' + (index + 1))),
         options: g.options.slice(),
-        role: oldValues && oldValues !== g.options.join('|') ? suggestedRole(prev.label, g.options) : (prev.role || suggestedRole(prev.label, g.options)), nested: g.nested};
+        annotationGroup: unchanged ? (prev.annotationGroup || '') : '',
+        role: oldValues && !unchanged ? suggestedRole(prev.annotationGroup || prev.label, g.options) :
+          (prev.role || suggestedRole(prev.annotationGroup || prev.label, g.options)), nested: g.nested};
     });
     renderDimensions();
   }
@@ -156,6 +159,7 @@
     els('attributes').innerHTML = dimensions.map(function (group, index) {
       return '<div class="epoch-finder-attribute" data-index="' + index + '">' +
         '<label>Attribute <input data-attr-name value="' + escape(group.label) + '"></label>' +
+        (group.annotationGroup ? '<small class="epoch-finder-muted">Set group: ' + escape(group.annotationGroup) + '</small>' : '') +
         '<label>Role <select data-attr-role>' +
         [['primary', 'Primary · 2×'], ['leakage', 'Leakage · 1×'], ['vary', 'Vary only · unscored']].map(function (item) {
           return '<option value="' + item[0] + '"' + (group.role === item[0] ? ' selected' : '') +
@@ -177,7 +181,11 @@
           values.some(function (x) { return /[{}|]/.test(x); })) throw new Error('Attribute ' + (index + 1) + ' has invalid values.');
       var label = row.querySelector('[data-attr-name]').value.trim();
       if (!label) throw new Error('Every attribute needs a name.');
-      return {label: label, role: row.querySelector('[data-attr-role]').value, options: values};
+      var original = dimensions[index] || {};
+      // Option edits do not change which Set component this dimension describes.
+      var annotationGroup = original.annotationGroup || '';
+      return {label: label, role: row.querySelector('[data-attr-role]').value,
+        options: values, annotationGroup: annotationGroup};
     });
     if (!edits.some(function (entry) { return entry.role !== 'vary'; })) {
       throw new Error('Mark at least one concept or leakage attribute for scoring.');
@@ -238,7 +246,8 @@
       els('concept').value = analysis.concept || els('concept').value;
       els('prompt').value = analysis.wildcard;
       dimensions = analysis.variationGroups.map(function (g) {
-        return {label: g.label, options: g.options, role: g.role || suggestedRole(g.label, g.options)};
+        return {label: g.label, options: g.options, annotationGroup: g.annotationGroup || '',
+          role: g.role || suggestedRole(g.annotationGroup || g.label, g.options)};
       });
       renderDimensions();
       els('proposal-status').textContent = 'Proposed tests ready. Edit values and scoring roles freely.';
@@ -261,18 +270,34 @@
     var run = String(source.runName || (source.runSequence ? 'Run ' + source.runSequence : source.jobId));
     return run + ' · Epoch ' + source.epoch;
   }
+  function runIdentity(run) {
+    var sequence = String(run.runSequence || '').trim().replace(/^0+(?=\d)/, '');
+    var name = String(run.runName || '').trim();
+    var identity = sequence ? 'Run ' + sequence : 'Run ' + String(run.jobId).slice(-8);
+    if (name && name !== identity) identity += ' · ' + name;
+    return identity;
+  }
+  function runDetails(run) {
+    var summary = run.runSummary || {};
+    var saved = Array.isArray(run.epochs) && run.epochs.length ? Math.max.apply(null, run.epochs) : 0;
+    var current = Number(run.currentEpoch) || 0;
+    var planned = Number(run.plannedEpochs || summary.epochs) || 0;
+    var observed = Math.max(saved, current);
+    var parts = [String(run.stage || run.modelId || '').toUpperCase(), run.epochs.length + ' checkpoints'];
+    if (observed > 0) parts.push('E' + observed + (planned > 0 ? '/' + planned : ''));
+    if (summary.lr != null && Number.isFinite(Number(summary.lr))) parts.push('LR ' + Number(summary.lr).toExponential(1).replace('.0e', 'e').replace('e+', 'e'));
+    if (Number(summary.rank) > 0) parts.push('Rank ' + Number(summary.rank));
+    return parts.filter(Boolean).join(' · ');
+  }
   function drawRuns() {
     var model = String(window.getWorkingModelProfileId() || '');
     var options = runs.filter(function (run) { return run.modelId === model; });
-    els('run-choices').innerHTML = options.length ? options.map(function (run,index) {
+    els('run-choices').innerHTML = options.length ? options.map(function (run) {
       var chosen = runEpochSelections[run.jobId] instanceof Set;
-      var identity = run.runName || '';
-      if (run.runSequence) identity += (identity ? ' · ' : '') + 'Run ' + run.runSequence;
-      if (!identity) identity = 'Run ' + String(run.jobId).slice(-8);
-      var label = [run.setName, identity].filter(Boolean).join(' · ');
+      var label = [run.setName, runIdentity(run)].filter(Boolean).join(' · ');
       return '<label class="epoch-finder-run-choice"><input type="checkbox" data-run-id="' + escape(run.jobId) +
         '"' + (chosen ? ' checked' : '') + '><span><strong>' + escape(label) + '</strong>' +
-        '<small>' + escape(run.stage || run.modelId) + ' · ' + run.epochs.length + ' checkpoints</small></span></label>';
+        '<small>' + escape(runDetails(run)) + '</small></span></label>';
     }).join('') : '<p class="epoch-finder-muted">No available saved checkpoints for this model.</p>';
     var selected = selectedRunEntries();
     els('run').value = selected.length ? selected[0].jobId : '';
@@ -285,7 +310,7 @@
     host.innerHTML = selected.map(function (choice) {
       var run = runs.find(function (item) { return item.jobId === choice.jobId; });
       return '<section class="epoch-finder-run-epochs" data-epoch-run="' + escape(run.jobId) + '">' +
-        '<strong>' + escape(run.runName || run.runSequence || run.jobId) + ' · ' + choice.epochs.length + '/' + run.epochs.length + ' selected</strong>' +
+        '<strong>' + escape(runIdentity(run)) + ' · ' + choice.epochs.length + '/' + run.epochs.length + ' selected</strong>' +
         '<div class="epoch-finder-epoch-timeline">' + run.epochs.map(function (epoch) {
           return '<button type="button" class="epoch-finder-epoch-tick' + (runEpochSelections[run.jobId].has(epoch) ? ' is-selected' : '') +
             '" data-epoch-choice="' + epoch + '" aria-pressed="' + runEpochSelections[run.jobId].has(epoch) + '"> ' + epoch + '</button>';
@@ -320,10 +345,12 @@
   var referencePlanSignature = '';
   function prepareReferences() {
     var version = ++referenceGeneration;
-    referencePlanSignature = JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options]; })]);
-    referenceItems = dimensions.flatMap(function (d) {
+    referencePlanSignature = JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options,d.annotationGroup]; })]);
+    referenceItems = dimensions.flatMap(function (d, index) {
       return d.role === 'primary' ? d.options.map(function (option) {
-        return {attribute:d.label, option:option, key:JSON.stringify([d.label,option]), candidates:[]};
+        return {attribute:d.label, dimensionId:'G' + (index + 1),
+          option:option, annotationGroup:d.annotationGroup || '',
+          key:JSON.stringify([index,option]), candidates:[]};
       }) : [];
     });
     referenceIndex = 0;
@@ -332,23 +359,23 @@
     return api('reference_vocabulary', {jobId: els('run').value}).then(function (response) {
       var vocabulary = response.vocabulary || [];
       referenceItems.forEach(function (item) {
-        var dimension = dimensions.find(function (d) { return d.label === item.attribute && d.role === 'primary'; });
-        var matches = vocabulary.filter(function (group) {
-          var terms = (group.terms || []).map(function (term) { return term.term; });
-          return dimension && dimension.options.every(function (option) { return terms.includes(option); });
+        item.groups = vocabulary.filter(function (group) {
+          return (group.terms || []).some(function (term) { return term.term === item.option; });
+        }).map(function (group) { return group.group; });
+        // The Director's scoped group is a preference, not a restriction on manual choice.
+        item.groups.sort(function (a, b) {
+          return Number(b === item.annotationGroup) - Number(a === item.annotationGroup);
         });
-        if (matches.length !== 1) {
-          throw new Error('Primary attribute "' + item.attribute + '" must use exact tags from one training annotation group. Found ' +
-            matches.length + ' matching groups. Edit the wildcard or mark this attribute Leakage/Vary.');
-        }
-        item.group = matches[0].group;
       });
       return Promise.all(referenceItems.map(function (item) {
-        return api('reference_candidates', {jobId: els('run').value, group: item.group, term: item.option}).then(function (response) {
-          item.candidates = (response.references || []).map(function (candidate) {
-            return Object.assign({}, candidate, {tag:item.option});
+        return Promise.all(item.groups.map(function (group) {
+          return api('reference_candidates', {jobId: els('run').value, group: group, term: item.option}).then(function (response) {
+            return (response.references || []).map(function (candidate) {
+              return Object.assign({}, candidate, {tag:item.option});
+            });
           });
-          if (!item.candidates.length) throw new Error('No trained reference for ' + item.group + ' / ' + item.option + '.');
+        })).then(function (candidateGroups) {
+          item.candidates = candidateGroups.flat();
         });
       }));
     }).then(function () {
@@ -356,21 +383,41 @@
       referenceDraftChoices = {};
       referenceItems.forEach(function (item) {
         var saved = referenceSelections[item.key];
-        if (!saved) {
-          var chosen = window.testReferencesChoice(els('run').value, item.group, item.option);
-          if (chosen) saved = {attribute:item.attribute, option:item.option,
-            group:item.group, tag:item.option, media:chosen.media};
+        var cleared = Object.prototype.hasOwnProperty.call(referenceSelections, item.key) && saved === null;
+        if (!saved && !cleared) {
+          // Never guess which of two identically named tags a saved choice meant.
+          var savedMatches = item.groups.map(function (group) {
+            var chosen = window.testReferencesChoice(els('run').value, group, item.option);
+            if (!chosen || !item.candidates.some(function (candidate) {
+              return candidate.group === group && candidate.media === chosen.media;
+            })) return null;
+            return {attribute:item.attribute, dimensionId:item.dimensionId, option:item.option,
+              group:group, tag:item.option, media:chosen.media};
+          }).filter(Boolean);
+          saved = item.annotationGroup
+            ? (savedMatches.find(function (entry) {
+                return entry.group === item.annotationGroup;
+              }) || null)
+            : (savedMatches.length === 1 ? savedMatches[0] : null);
         }
-        var valid = item.candidates.some(function (candidate) {
+        if (item.annotationGroup && saved && saved.group !== item.annotationGroup &&
+            !Object.prototype.hasOwnProperty.call(referenceSelections, item.key)) saved = null;
+        var selectedIndex = !cleared && item.candidates.length ? item.candidates.findIndex(function (candidate) {
           return saved && candidate.media === saved.media && candidate.group === saved.group && candidate.tag === saved.tag;
-        });
-        var selectedIndex = valid ? item.candidates.findIndex(function (candidate) { return saved.media === candidate.media; }) : 0;
+        }) : -1;
+        if (selectedIndex < 0 && !cleared && item.annotationGroup) {
+          selectedIndex = item.candidates.findIndex(function (candidate) {
+            return candidate.group === item.annotationGroup;
+          });
+        }
+        if (selectedIndex < 0 && !cleared && !item.annotationGroup &&
+            item.groups.length === 1 && item.candidates.length) selectedIndex = 0;
         var candidate = item.candidates[selectedIndex];
-        // Deterministic default: explicit user selection wins; otherwise first exact-tag match.
-        referenceSelections[item.key] = valid ? saved : {
-          attribute:item.attribute, option:item.option,
+        // Ambiguous options remain unselected unless the source group is known.
+        referenceSelections[item.key] = candidate ? {
+          attribute:item.attribute, dimensionId:item.dimensionId, option:item.option,
           group:candidate.group, tag:candidate.tag, media:candidate.media
-        };
+        } : null;
         referenceDraftChoices[item.key] = selectedIndex;
       });
       renderReferenceStep();
@@ -386,21 +433,29 @@
       els('start').disabled = false;
       return;
     }
-    var selected = referenceDraftChoices[item.key] == null ? 0 : referenceDraftChoices[item.key];
-    host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' + escape(item.attribute) +
-      ' · ' + escape(item.option) + '</strong><span>' + (referenceIndex+1) + ' / ' +
-      referenceItems.length + '</span></div><p class="epoch-finder-muted">Auto-selected from matching tags. Review or change as needed.</p>' +
+    var selected = referenceDraftChoices[item.key] == null ? -1 : referenceDraftChoices[item.key];
+    var selectedCandidate = item.candidates[selected];
+    var sourceGroup = selectedCandidate ? selectedCandidate.group
+      : item.annotationGroup || (item.groups.length === 1 ? item.groups[0] : '');
+    var heading = (sourceGroup || (item.groups.length > 1 ? 'Choose Set group' : item.attribute)) +
+      ' · ' + item.option;
+    host.innerHTML = '<div class="epoch-finder-reference-step"><strong>' + escape(heading) +
+      '</strong><span>' + (referenceIndex+1) + ' / ' +
+      referenceItems.length + '</span></div><p class="epoch-finder-muted">References are optional; identically named tags in different groups are separate features.</p>' +
       '<div class="epoch-finder-reference-nav"><button type="button" data-reference-nav="prev"' +
       (referenceIndex===0?' disabled':'') + '>← Previous</button><button type="button" data-reference-nav="next">' +
       (referenceIndex===referenceItems.length-1?'Finish':'Next →') + '</button></div>';
-    galleryHost.innerHTML = '<h3>' + escape(item.attribute) + ' · ' + escape(item.option) +
-      '</h3><p class="epoch-finder-muted">Click Select to choose, or Preview to inspect a larger image.</p>' +
+    galleryHost.innerHTML = '<h3>' + escape(heading) +
+      '</h3><p class="epoch-finder-muted">' + (item.candidates.length ?
+        'Click Select to choose, or Preview to inspect a larger image.' :
+        'No exact-tag training images available for this option. Reference comparisons will skip it.') + '</p>' +
       '<div class="epoch-finder-reference-gallery">' + item.candidates.map(function (candidate,i) {
         var active = selected === i;
         var media = '/caption/media?folder=' + encodeURIComponent(currentFolder) +
           '&media=' + encodeURIComponent(candidate.media);
         return '<div class="epoch-finder-reference-tile' + (active ? ' selected' : '') + '">' +
           '<img loading="lazy" src="' + media + '" alt="' + escape(candidate.media) + '">' +
+          '<span title="' + escape(getRequirementGroupAlias(candidate.group)) + '">' + escape(candidate.group) + '</span>' +
           '<div class="epoch-finder-reference-tile-actions"><button type="button" data-reference-pick="' + i +
           '" aria-pressed="' + !!active + '">' + (active ? '✓ Selected' : 'Select') +
           '</button><button type="button" data-reference-preview="' + i + '">Preview</button></div></div>';
@@ -409,11 +464,14 @@
   }
   function updateReferenceStatus() {
     var chosen = referenceItems.filter(function (item) { return !!referenceSelections[item.key]; }).length;
-    els('reference-choices').textContent = chosen + ' / ' + referenceItems.length + ' auto-selected · optional review';
-    els('start').disabled = referenceItems.length > 0 && chosen !== referenceItems.length;
+    els('reference-choices').textContent = chosen + ' / ' + referenceItems.length + ' references selected · others skipped';
+    els('start').disabled = false;
   }
   function approvedReferences() {
-    return referenceItems.map(function (item) { return referenceSelections[item.key]; }).filter(Boolean);
+    return referenceItems.map(function (item) {
+      var chosen = referenceSelections[item.key];
+      return chosen ? Object.assign({}, chosen, {alias:getRequirementGroupAlias(chosen.group)}) : null;
+    }).filter(Boolean);
   }
   function showStep(value) {
     wizardStep = value;
@@ -430,7 +488,7 @@
     els('next').classList.toggle('hidden', value === 4);
     els('start').classList.toggle('hidden', value !== 4);
     if (value === 3) roundPlan();
-    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options]; })])) prepareReferences(); else renderReferenceStep(); }
+    if (value === 4) { reviewWizard(); if (referencePlanSignature !== JSON.stringify([selectedRunEntries(), dimensions.map(function (d) { return [d.label,d.role,d.options,d.annotationGroup]; })])) prepareReferences(); else renderReferenceStep(); }
   }
   function advance() {
     try {
@@ -725,48 +783,77 @@
       (caveats.length ? '<p class="epoch-finder-muted">' + caveats.map(escape).join(' · ') + '</p>' : '');
   }
   function gallery(campaign) {
-    var units = campaign.units.filter(function (u) {
-      return inspectedEpoch == null || u.epoch === inspectedEpoch;
+    var units=campaign.units.filter(function(u){
+      return (inspectedEpoch==null||u.epoch===inspectedEpoch)&&!!u.frame&&!u.framePruned;
     });
-    var key = campaign.id + ':' + inspectedEpoch + ':' + units.map(function (u) {
-      return u.frame + ':' + (u.assessment ? '1' : '0') + ':' + (u.error || '');
+    var key=campaign.id+':'+inspectedEpoch+':'+units.map(function(u){
+      return [u.frame,JSON.stringify(u.assessment||null),JSON.stringify(u.referenceAssessments||[]),
+        JSON.stringify(u.dinoAssessments||[]),u.error||''].join(':');
     }).join('|');
-    if (lastFrameKey === key) return;
-    lastFrameKey = key;
-    var heading = inspectedEpoch == null ? '<strong>Recent retained frames</strong>' :
-      '<strong>' + escape(candidateLabel(campaign, inspectedEpoch)) + ' · All recorded tests</strong> ' +
-      '<button type="button" data-inspect-reset>Show all epochs</button>';
-    var shown = inspectedEpoch == null ? units.filter(function (u) { return !!u.frame; }).slice(-40).reverse() :
-      units.slice().sort(function (a,b) { return a.round - b.round || a.case - b.case; });
-    els('frames').innerHTML = '<div class="epoch-finder-gallery-heading">' + heading + '</div>' +
-      shown.map(function (unit) {
-        var src = unit.frame ? '/fs/epoch_finder/frame?folder=' + encodeURIComponent(currentFolder) +
-          '&campaign=' + encodeURIComponent(campaign.id) + '&frame=' + encodeURIComponent(unit.frame) : '';
-        var assessment = unit.assessment || {};
-        var selections = (unit.groups || []).filter(function (group) {
-          return group.expected != null && group.options && group.options[group.expected - 1];
-        }).map(function (group) {
-          return '<span title="' + escape(group.label) + '">' + escape(group.options[group.expected - 1]) + '</span>';
-        });
-        var comparisons = assessment.comparison || [];
-        var matched = comparisons.filter(function (c) { return c.result === 'match'; }).length;
-        var decided = comparisons.filter(function (c) { return c.result === 'match' || c.result === 'mismatch'; }).length;
-        var status = unit.error ? 'Error' : unit.assessment ?
-          (decided ? matched + '/' + decided + ' attributes matched' : 'VL evaluated · unclear') :
-          (src ? 'Frame ready · awaiting VL' : 'Awaiting frame');
-        return '<figure class="epoch-finder-frame" role="button" tabindex="0" aria-label="Inspect epoch ' + unit.epoch +
-          ', round ' + unit.round + ', test ' + (unit.case + 1) + '" data-gallery-epoch="' + unit.epoch +
-          '" data-gallery-round="' + unit.round + '" data-gallery-case="' + unit.case + '">' +
-          (src ? '<img loading="lazy" src="' + escape(src) + '" alt="Epoch ' + unit.epoch + ' test frame">' :
-            '<div class="epoch-finder-frame-empty">Frame pruned or unavailable</div>') +
-          '<figcaption><div class="epoch-finder-frame-heading"><strong>' + escape(candidateLabel(campaign, unit.epoch)) +
-          '</strong><span>Round ' + unit.round + ' · Test ' + (unit.case + 1) + '</span></div>' +
-          (selections.length ? '<div class="epoch-finder-frame-choices" aria-label="Expected wildcard choices">' +
-            selections.join('') + '</div>' : '') +
-          '<div class="epoch-finder-frame-footer"><small>' + escape(unit.error || status) + '</small>' +
-          (src ? '<a href="' + escape(src) + '" target="_blank" rel="noopener" data-frame-original title="Open original image">Open image ↗</a>' : '') +
-          '</div></figcaption></figure>';
-      }).join('');
+    if(lastFrameKey===key)return;
+    lastFrameKey=key;
+    var host=els('frames');
+    var preserved=new Map();
+    host.querySelectorAll('[data-gallery-epoch]').forEach(function(card){
+      preserved.set(card.dataset.galleryEpoch+':'+card.dataset.galleryRound+':'+card.dataset.galleryCase,card);
+    });
+    var heading=host.querySelector('.epoch-finder-gallery-heading');
+    if(!heading){heading=document.createElement('div');heading.className='epoch-finder-gallery-heading';}
+    heading.replaceChildren();
+    var label=document.createElement('strong');
+    label.textContent=inspectedEpoch==null?'Recent retained frames':candidateLabel(campaign,inspectedEpoch)+' · Available renders';
+    heading.appendChild(label);
+    if(inspectedEpoch!=null){
+      var reset=document.createElement('button');reset.type='button';reset.dataset.inspectReset='1';
+      reset.textContent='Show all epochs';heading.appendChild(reset);
+    }
+    host.appendChild(heading);
+    var shown=inspectedEpoch==null?units.slice(-40).reverse():units.slice().sort(function(a,b){return a.round-b.round||a.case-b.case;});
+    var keep=new Set();
+    shown.forEach(function(unit){
+      var identity=unit.epoch+':'+unit.round+':'+unit.case;
+      keep.add(identity);
+      var version=[unit.frame,JSON.stringify(unit.assessment||null),JSON.stringify(unit.referenceAssessments||[]),JSON.stringify(unit.dinoAssessments||[]),unit.error||''].join('|');
+      var prior=preserved.get(identity);
+      if(prior&&prior.dataset.cardVersion===version){host.appendChild(prior);return;}
+      var url='/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+'&campaign='+encodeURIComponent(campaign.id)+'&frame='+encodeURIComponent(unit.frame);
+      var checks=unit.assessment&&unit.assessment.comparison||[];
+      var matched=checks.filter(function(c){return c.result==='match';}).length;
+      var counted=checks.filter(function(c){return c.result==='match'||c.result==='mismatch';}).length;
+      var selection=(unit.groups||[]).filter(function(g){return g.expected!=null&&g.options&&g.options[g.expected-1];})
+        .map(function(g){return {label:g.label||g.id,value:g.options[g.expected-1]};});
+      var evidence=[];
+      if(unit.assessment)evidence.push({label:counted?'VL '+matched+'/'+counted:'VL ✓'});
+      if((unit.referenceAssessments||[]).length)evidence.push({label:'Ref '+unit.referenceAssessments.length});
+      if((unit.dinoAssessments||[]).length)evidence.push({label:'DINO '+unit.dinoAssessments.length});
+      var details=[];
+      if(unit.prompt)details.push({label:'Resolved prompt',value:unit.prompt,pre:true});
+      if(unit.seed!=null)details.push({label:'Seed',value:String(unit.seed)});
+      if(checks.length)details.push({label:'VL judgments',value:checks.map(function(c){
+        return (c.label||c.id||'Attribute')+': '+c.result+' · expected '+(c.expectedText||'')+' · observed '+(c.selectedText||'');
+      })});
+      if((unit.referenceAssessments||[]).length)details.push({label:'Reference VL',value:unit.referenceAssessments.map(function(r){
+        return (r.group||r.label||'Reference')+' · '+r.option+': '+r.verdict+' · '+(r.reference||'');
+      })});
+      if((unit.dinoAssessments||[]).length)details.push({label:'DINOv2',value:unit.dinoAssessments.map(function(r){
+        return (r.reference||'Reference')+': '+Number(r.similarity).toFixed(3);
+      })});
+      var card=createTestPreviewCard({
+        tag:'figure',className:'epoch-finder-frame',role:'button',tabIndex:0,
+        ariaLabel:'Inspect epoch '+unit.epoch+', round '+unit.round+', test '+(unit.case+1),
+        dataset:{galleryEpoch:unit.epoch,galleryRound:unit.round,galleryCase:unit.case},
+        title:candidateLabel(campaign,unit.epoch),
+        sourceDetail:'Round '+unit.round+' · Test '+(unit.case+1),
+        elapsed:unit.renderSeconds!=null?Math.round(unit.renderSeconds)+'s':'',
+        media:{kind:'image',url:url,alt:'Saved Campaign render'},
+        wildcards:selection,evaluations:evidence,details:details,
+        actions:[{label:'Open original',url:url}],
+      });
+      card.dataset.cardVersion=version;
+      if(prior)prior.remove(); // Replace a changed card; never leave its old copy behind.
+      host.appendChild(card);
+    });
+    preserved.forEach(function(card,id){if(!keep.has(id))card.remove();});
   }
   function evidenceSection(campaign) {
     if (inspectedEpoch == null) return '';
@@ -853,13 +940,13 @@
       escape(unit.prompt || 'Not yet resolved') + '</p></details>' +
       ((unit.referenceAssessments || []).length ? '<details open><summary>Training-reference comparisons (' +
         unit.referenceAssessments.length + ')</summary>' + unit.referenceAssessments.map(function (v) {
-          return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.label) +
+          return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.group || v.label) +
           ' · ' + escape(v.option) + '</strong><span>' + escape(v.verdict) + '</span>' +
           '<small>Selected in render: ' + escape(v.selected == null ? 'unclear' : ((unit.groups || []).find(function (g) { return g.id === v.groupId; })?.options || [])[v.selected - 1] || 'unclear') + '</small>' +
           '<div>' + escape(v.response) + '</div><small>Reference: ' + escape(v.reference) +
           ' · ' + escape(v.elapsedSeconds) + 's</small></div>';
         }).join('') + '</details>' : '') +
-      ((unit.dinoAssessments || []).length ? '<details open><summary>DINOv2 similarity (' +
+      ((unit.dinoAssessments || []).length ? '<details open><summary>DINOv2 whole-image similarity (' +
         unit.dinoAssessments.length + ' distinct references)</summary>' + unit.dinoAssessments.map(function (v) {
           return '<div class="epoch-finder-reference-verdict"><strong>' + escape(v.reference) +
             '</strong><span>' + Number(v.similarity).toFixed(3) + '</span><div>' +
@@ -972,6 +1059,9 @@
     els('enable-rvn').checked = !!source.referenceEvaluation.rvn;
     els('enable-dino').checked = !!source.referenceEvaluation.dino;
     referenceSelections = {};
+    source.dimensions.filter(function (item) { return item.role === 'primary'; }).forEach(function (item) {
+      item.options.forEach(function (option) { referenceSelections[JSON.stringify([item.label, option])] = null; });
+    });
     (source.referencePlan || []).forEach(function (ref) {
       referenceSelections[JSON.stringify([ref.attribute,ref.option])] = {
         attribute:ref.attribute, option:ref.option, group:ref.group, tag:ref.tag, media:ref.media
@@ -1050,7 +1140,7 @@
       gallery(campaignState); inspectFrame(campaignState);
     }).catch(error);
   };
-  document.querySelectorAll('[data-test-workspace-mode]').forEach(function (button) {
+  document.querySelectorAll('#test-workspace-main-tabs [data-test-workspace-mode]').forEach(function (button) {
     button.addEventListener('click', function () { showMode(button.dataset.testWorkspaceMode); });
   });
   els('refresh').onclick = refresh;
@@ -1107,23 +1197,23 @@
     var pick = event.target.closest('[data-reference-pick]');
     if (pick) {
       var item = referenceItems[referenceIndex];
-      var candidate = item.candidates[Number(pick.dataset.referencePick)];
-      referenceDraftChoices[item.key] = Number(pick.dataset.referencePick);
-      referenceSelections[item.key] = {attribute:item.attribute, option:item.option,
-        group:candidate.group, tag:candidate.tag, media:candidate.media};
+      var index = Number(pick.dataset.referencePick);
+      var candidate = item.candidates[index];
+      if (referenceDraftChoices[item.key] === index) {
+        referenceDraftChoices[item.key] = -1;
+        referenceSelections[item.key] = null;
+      } else {
+        referenceDraftChoices[item.key] = index;
+        referenceSelections[item.key] = {attribute:item.attribute, dimensionId:item.dimensionId,
+          option:item.option, group:candidate.group, tag:candidate.tag, media:candidate.media};
+      }
       renderReferenceStep();
       return;
     }
     var nav = event.target.closest('[data-reference-nav]');
     if (!nav) return;
     if (nav.dataset.referenceNav === 'prev') referenceIndex = Math.max(0,referenceIndex-1);
-    else {
-      var item = referenceItems[referenceIndex];
-      var candidate = item.candidates[referenceDraftChoices[item.key] == null ? 0 : referenceDraftChoices[item.key]];
-      referenceSelections[item.key] = {attribute:item.attribute,option:item.option,
-        group:candidate.group,tag:candidate.tag,media:candidate.media};
-      if (referenceIndex < referenceItems.length-1) referenceIndex++;
-    }
+    else if (referenceIndex < referenceItems.length-1) referenceIndex++;
     renderReferenceStep();
   }
   els('reference-options').addEventListener('click', referenceClick);
@@ -1202,13 +1292,13 @@
       inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = null; refreshStatus().catch(error);
       return;
     }
-    if (event.target.closest('[data-frame-original]')) return;
+    if (event.target.closest('.test-preview-card-utility, .test-preview-card-details')) return;
     var frame = event.target.closest('[data-gallery-epoch]');
     if (frame) selectGalleryFrame(frame);
   };
   els('frames').onkeydown = function (event) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    if (event.target.closest('[data-frame-original]')) return;
+    if (event.target.closest('.test-preview-card-utility, .test-preview-card-details')) return;
     var frame = event.target.closest('[data-gallery-epoch]');
     if (!frame) return;
     event.preventDefault();

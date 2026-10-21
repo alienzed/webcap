@@ -202,7 +202,7 @@ def test_insert_custom_scene_direction_drives_without_story_or_other_prompts():
         story, "scene-1", "insert_scene", instruction=instruction
     )
     prompt = request["prompt"]
-    assert prompt.startswith("[USER DIRECTION - PRIMARY CREATIVE BRIEF]\\n" + instruction)
+    assert prompt.startswith("[USER DIRECTION - PRIMARY CREATIVE BRIEF]\n" + instruction)
     assert "[STORY CONCEPT]" not in prompt
     assert "A woman enters an empty hotel" not in prompt
     assert "[EXISTING SCENE OUTLINE]" not in prompt

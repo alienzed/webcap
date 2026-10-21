@@ -616,3 +616,19 @@ def test_insights_featured_previews_fill_unrated_slots_and_keep_vl_per_render(tm
     assert [preview["rating"] for preview in previews] == [5, 4, None, None]
     assert [(preview["vlAgreement"], preview["vlJudgments"]) for preview in previews] == [
         (50, 2), (None, 0), (100, 1), (None, 0)]
+
+
+def test_blind_five_rating_uses_full_height_without_hiding_rating_controls():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    markup = (root / "tool/tool.html").read_text(encoding="utf-8")
+    review = markup.split('id="run-lab-review-dialog"', 1)[1].split('</dialog>', 1)[0]
+    assert "#run-analytics-screen .run-lab-review-dialog[open]{display:flex;flex-direction:column;min-height:0}" in css
+    assert "height:calc(100dvh - 24px)" in css
+    assert ".run-lab-review-media{display:flex;flex:1 1 auto;min-height:0" in css
+    assert ".run-lab-review-media video{display:block;width:100%;height:100%;max-height:100%" in css
+    assert ".run-lab-review-dialog[open]{overflow-y:auto}" in css  # Short viewports can scroll.
+    assert "max-height:min(53vh,550px)" not in css
+    for control in ("review-media", "review-stars", "review-skip", "review-next", "review-close"):
+        assert 'id="run-lab-' + control + '"' in review

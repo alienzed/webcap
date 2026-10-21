@@ -328,8 +328,9 @@
     drawer.querySelectorAll('[data-queue-drop]').forEach(function (item) {
       item.removeAttribute('data-queue-drop');
     });
-    var rect = row.getBoundingClientRect();
-    row.dataset.queueDrop = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    // Target a job, not a half-row insertion zone: dropping an adjacent job
+    // onto the wrong half used to calculate its original position (a no-op).
+    row.dataset.queueDrop = 'target';
   });
   drawer.addEventListener('drop', function (event) {
     if (!drag) return;
@@ -337,15 +338,12 @@
     var row = event.target.closest('[data-queue-drag-lane]');
     var source = drag;
     var target = row && row.dataset.queueDragLane === source.lane && row.classList.contains('status-queued') ? row : null;
-    var after = target && target.dataset.queueDrop === 'after';
     var beforeRows = queueRows(source.lane);
     clearDrag();
     if (!target || moving) return;
     var from = beforeRows.findIndex(function (item) { return item.dataset.queueDragId === source.id; });
-    var to = beforeRows.indexOf(target) + (after ? 1 : 0);
-    if (from < 0 || to < 0) return;
-    if (from < to) to -= 1;
-    if (from === to) return;
+    var to = beforeRows.indexOf(target);
+    if (from < 0 || to < 0 || from === to) return;
     moving = true;
     var request = source.lane === 'inference'
       ? window.reorderInferenceQueueToPosition(source.id, to)

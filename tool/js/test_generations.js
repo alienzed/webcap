@@ -58,6 +58,9 @@
     activityLoadModelId: ''
   };
 
+  // Group bindings belong to the exact authored prompt, not its matched words.
+  var wildcardIntent = null;
+
   // VL assessments belong to Test sessions; scoring remains derived in the UI.
   var testVl = { scope: '', entries: Object.create(null), disabledGroups: new Set(), running: false, token: 0, jobId: '', done: 0, total: 0, question: '', loadedScope: '', loadedEvidence: '' };
   // Session-scoped browser controllers. Every request uses the existing LLM queue.
@@ -835,7 +838,13 @@
     // Only references corresponding to a scored option can be assessed.
     var seen = new Set();
     referenceCompare.plan = all.map(function (choice) {
-      var matches = attributes.filter(function (g) { return g.options.includes(choice.term); });
+      // Known scoped groups win over anonymous dimensions with identical wording.
+      var scoped = attributes.filter(function (g) {
+        return g.annotationGroup === choice.group && g.options.includes(choice.term);
+      });
+      var matches = scoped.length ? scoped : attributes.filter(function (g) {
+        return !g.annotationGroup && g.options.includes(choice.term);
+      });
       var resultKey = JSON.stringify([choice.group, choice.term]);
       if (matches.length !== 1 || seen.has(resultKey)) return null;
       seen.add(resultKey); // Saved comparisons are keyed by method/group/option, not source run.
@@ -1336,6 +1345,15 @@
     var value = String(output && output.value || '').trim();
     if (!value) throw new Error('No generated wildcard is available.');
     prompt.value = value;
+    var authored = wildcardDirector.analysis && wildcardDirector.analysis.variationGroups || [];
+    wildcardIntent = {prompt:value, dimensions:parseWildcardGroups(value).map(function (group, index) {
+      var original = authored[index] || {};
+      var options = group.options.map(function (option) { return option.trim(); });
+      var exact = Array.isArray(original.options) && original.options.length === options.length &&
+        original.options.every(function (option, i) { return String(option || '').trim() === options[i]; });
+      return {label:exact ? String(original.label || '') : 'Attribute ' + (index + 1),
+        options:options,annotationGroup:exact ? String(original.annotationGroup || '') : ''};
+    })};
     saveTestWorkspacePrompt(value);
     saveTestBenchState();
     el('test-generations-wildcard-status').textContent = 'Wildcard copied to Prompt.';
@@ -1866,7 +1884,8 @@
       return {
         settings: saved.settings && typeof saved.settings === 'object'
           ? saved.settings
-          : {}
+          : {},
+        wildcardIntent: saved.wildcardIntent || null
       };
     }
     var model = supportedTestModels[modelId] || {};
@@ -1915,7 +1934,8 @@
       });
     }
     state.testGenerationByModel[modelId] = {
-      settings: JSON.parse(JSON.stringify(settings))
+      settings: JSON.parse(JSON.stringify(settings)),
+      wildcardIntent: wildcardIntent ? JSON.parse(JSON.stringify(wildcardIntent)) : null
     };
     if (currentModel.default === true) {
       state.testGenerationSettings = settings;
@@ -4496,6 +4516,8 @@
       prompt.value = payload.workspacePromptPresent === true
         ? String(payload.workspacePrompt || '')
         : String(payload.defaultPrompt || '');
+      wildcardIntent = saved.wildcardIntent && saved.wildcardIntent.prompt === prompt.value
+        ? saved.wildcardIntent : null;
     }
   }
 
@@ -4602,6 +4624,7 @@
     compareIndex = 0;
     wildcardDirector.analysis = null;
     wildcardDirector.previewSelections = [];
+    wildcardIntent = null;
     if (wildcardDirector.modalOpen) closeWildcardBuilder();
     el('test-generations-wildcard-focus').value = '';
     renderWildcardAnalysis(null);
@@ -4721,6 +4744,9 @@
       includeBase: el('test-generations-base-include').checked,
       prompt: prompt, settings: settings
     };
+    if (wildcardIntent && wildcardIntent.prompt === prompt) {
+      criteria.wildcardDimensions = wildcardIntent.dimensions;
+    }
     if (sweepMode) criteria.sweepWeights = parseSweepWeights(sweepWeights);
     return criteria;
   }

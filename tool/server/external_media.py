@@ -254,6 +254,8 @@ def _child_directories(snapshot, directory):
     """Immediate subfolders from the indexed source, including empty folders."""
     root = snapshot["root"]
     folder = str(directory or "").replace("\\", "/").strip("/")
+    if Path(folder).is_absolute() or any(part in (".", "..") for part in Path(folder).parts):
+        raise ValueError("Invalid directory")
     target = (root / folder).resolve()
     if not target.is_relative_to(root) or not target.is_dir():
         raise ValueError("Directory is outside the selected root")

@@ -476,3 +476,57 @@ def test_dependent_reference_probes_included_in_expected_total(monkeypatch):
     assert len(keys) == 6  # two Vision, Scene JSON, thinking and Set Schema Assist pair
     assert "set_vocabulary_challenge|local::director.gguf|" in keys
     assert not any(kind.startswith("vision:") for kind in keys)
+
+
+def test_assessment_preview_reuses_exact_start_plan_without_creating_a_run():
+    config = {"directorModels": [_director()]}
+    earlier = model_lab._new_run_payload(config)
+    earlier["status"] = "completed"
+    earlier["attempts"] = [
+        {"id": "ok1", "modelRef": _director()["modelRef"],
+         "kind": "director_thinking", "status": "completed"},
+        {"id": "ok2", "modelRef": _director()["modelRef"],
+         "kind": "director_scene_plan_2048", "status": "completed"},
+        {"id": "fail", "modelRef": _director()["modelRef"],
+         "kind": "language_synthesis", "status": "failed"},
+    ]
+    model_lab._write_run(earlier)
+    before = [row["id"] for row in model_lab.list_runs()]
+    preview = model_lab.preview_run(config)
+    assert preview["plan"] == {"missing": 1, "retry": 1, "total": 2}
+    assert preview["reused"] == 2
+    assert preview["models"][_director()["modelRef"]] == {
+        "planned": 4, "complete": 2, "reused": 2, "missing": 1, "retry": 1
+    }
+    assert [row["id"] for row in model_lab.list_runs()] == before
+    run = model_lab._new_run_payload(config)
+    assert model_lab._pending_probe_plan(run) == preview["plan"]
+
+
+def test_assessment_preview_when_complete_reports_zero_work():
+    config = {"directorModels": [_director()], "depth": "deep"}
+    original = model_lab._new_run_payload(config)
+    original["status"] = "completed"
+    original["attempts"] = [{
+        "id": "complete-" + str(i), "modelRef": _director()["modelRef"],
+        "kind": kind, "status": "completed"
+    } for i, kind in enumerate(("director_thinking", "director_scene_plan_2048",
+        "director_scene_plan_4096", "director_scene_plan_8192",
+        "director_scene_plan_16384", "language_synthesis", "language_challenge"))]
+    model_lab._write_run(original)
+    preview = model_lab.preview_run(config)
+    assert preview["plan"]["total"] == 0
+    assert preview["models"][_director()["modelRef"]]["complete"] == 7
+    assert len(model_lab.list_runs()) == 1
+
+
+def test_assessment_preview_route_is_read_only():
+    from flask import Flask
+    app = Flask(__name__)
+    model_lab.register_routes(app)
+    response = app.test_client().post("/app/model-lab", json={
+        "action": "preview", "config": {"directorModels": [_director()]}
+    })
+    assert response.status_code == 200
+    assert response.get_json()["plan"] == {"missing": 4, "retry": 0, "total": 4}
+    assert model_lab.list_runs() == []

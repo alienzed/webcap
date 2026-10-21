@@ -9,6 +9,9 @@ var diagnosticsAssessmentSort = { key: 'speed', descending: true };
 var diagnosticsAssessmentExpanded = new Set();
 var diagnosticsAssessmentReviewRefresh = 0;
 var diagnosticsAssessmentRuntime = 'local';
+var diagnosticsAssessmentPreviewKey = '';
+var diagnosticsAssessmentPreviewVersion = 0;
+var diagnosticsAssessmentPlanTotal = null;
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
@@ -136,14 +139,17 @@ function diagnosticsRenderAssessmentProgress(run) {
       terminal ? 'assessment-terminal' : 'active');
   var wasRunning = diagnosticsAssessmentRunStatus === 'running';
   diagnosticsAssessmentRunStatus = String(run.status);
-  diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running';
+  diagnosticsEl('diagnostics-assessment-run').disabled = run.status === 'running' || !diagnosticsAssessmentPlanTotal;
   if (run.status !== 'running' && diagnosticsAssessmentStoppingId === String(run.id)) diagnosticsAssessmentStoppingId = '';
   var stop = diagnosticsEl('diagnostics-assessment-stop');
   stop.classList.toggle('hidden', run.status !== 'running');
   stop.hidden = run.status !== 'running';
   stop.disabled = run.status !== 'running' || diagnosticsAssessmentStoppingId === String(run.id);
   stop.textContent = diagnosticsAssessmentStoppingId === String(run.id) ? 'Stopping…' : 'Stop Assessment';
-  if (wasRunning && run.status !== 'running') refreshUnifiedModelAssessment().catch(function () {});
+  if (wasRunning && run.status !== 'running') {
+    diagnosticsAssessmentPreviewKey = '';
+    refreshUnifiedModelAssessment().catch(function () {});
+  }
 }
 
 function diagnosticsAssessmentProgressError(runId, error) {
@@ -185,13 +191,18 @@ function setDiagnosticsTab(tabName, focusTab) {
 }
 
 function selectUnifiedAssessmentModels(select) {
-  document.querySelectorAll('#diagnostics-assessment-results tbody[data-assessment-model]:not([hidden]) input[data-assessment-select]').forEach(function (input) {
-    if (input.checked !== select) {
-      input.checked = select;
-      input.dispatchEvent(new Event('change'));
-    }
+  document.querySelectorAll('#diagnostics-assessment-results tbody[data-assessment-model]:not([hidden])').forEach(function (body) {
+    var input = body.querySelector('input[data-assessment-select]');
+    input.checked = select;
+    var ref = body.dataset.assessmentModel;
+    ['director', 'vision'].forEach(function (role) {
+      if (body.dataset.assessmentRole !== role && body.dataset.assessmentRole !== 'both') return;
+      if (select) diagnosticsAssessmentSelected[role].add(ref);
+      else diagnosticsAssessmentSelected[role].delete(ref);
+    });
   });
   diagnosticsAssessmentSyncHeaderSelection();
+  diagnosticsRefreshSelectionPlan();
 }
 
 function diagnosticsAssessmentSyncHeaderSelection() {
@@ -281,6 +292,7 @@ function refreshUnifiedModelAssessment() {
       diagnosticsEl('diagnostics-assessment-selection').textContent =
         selectedModels.size + ' model(s) selected · Completed compatible tests will be reused.';
       diagnosticsAssessmentSyncHeaderSelection();
+      diagnosticsRefreshSelectionPlan();
     }
     function addRow(title, kind, ref, report) {
       if (seenModels.has(ref)) return;
@@ -333,6 +345,11 @@ function refreshUnifiedModelAssessment() {
       expand.title = title + ' · show probe evidence';
       expand.setAttribute('aria-expanded', String(diagnosticsAssessmentExpanded.has(key)));
       name.appendChild(expand);
+      var workLabel = document.createElement('span');
+      workLabel.className = 'model-assessment-work';
+      workLabel.dataset.assessmentWork = ref;
+      workLabel.hidden = true;
+      name.appendChild(workLabel);
       line.appendChild(name);
       var roleLabel = supportsDirector && supportsVision ? 'Director · Vision' : supportsVision ? 'Vision' : 'Director';
       var model = (kind === 'director' ? directors : vision).find(function (entry) {
@@ -539,7 +556,6 @@ function refreshUnifiedModelAssessment() {
     } else {
       diagnosticsAssessmentRunId = ''; diagnosticsAssessmentRunStatus = '';
       diagnosticsEl('diagnostics-assessment-activity').classList.add('hidden');
-      diagnosticsEl('diagnostics-assessment-run').disabled = false;
       diagnosticsEl('diagnostics-assessment-stop').disabled = true;
       diagnosticsEl('diagnostics-assessment-stop').hidden = true;
       diagnosticsEl('diagnostics-assessment-stop').classList.add('hidden');
@@ -551,7 +567,78 @@ function refreshUnifiedModelAssessment() {
   });
 }
 
-function runUnifiedModelAssessment() {
+function diagnosticsRefreshSelectionPlan() {
+  var count = new Set([
+    ...diagnosticsAssessmentSelected.director,
+    ...diagnosticsAssessmentSelected.vision
+  ]).size;
+  var status = diagnosticsEl('diagnostics-assessment-selection');
+  var button = diagnosticsEl('diagnostics-assessment-run');
+  var labels = document.querySelectorAll('#diagnostics-assessment-results [data-assessment-work]');
+  if (diagnosticsAssessmentRunStatus === 'running') return;
+
+  if (!count) {
+    diagnosticsAssessmentPreviewVersion += 1;
+    diagnosticsAssessmentPreviewKey = '';
+    diagnosticsAssessmentPlanTotal = null;
+    labels.forEach(function (label) { label.hidden = true; label.textContent = ''; });
+    status.textContent = 'Select models to see what remains.';
+    button.textContent = 'Complete Missing Tests';
+    button.disabled = true;
+    return;
+  }
+
+  var config;
+  try {
+    config = diagnosticsAssessmentConfig();
+  } catch (error) {
+    diagnosticsAssessmentPreviewVersion += 1;
+    diagnosticsAssessmentPreviewKey = '';
+    diagnosticsAssessmentPlanTotal = null;
+    labels.forEach(function (label) { label.hidden = true; label.textContent = ''; });
+    status.textContent = error.message;
+    button.textContent = 'Complete Missing Tests';
+    button.disabled = true;
+    return;
+  }
+  var key = JSON.stringify(config);
+  if (key === diagnosticsAssessmentPreviewKey) return;
+  diagnosticsAssessmentPreviewKey = key;
+  diagnosticsAssessmentPlanTotal = null;
+  var version = ++diagnosticsAssessmentPreviewVersion;
+  button.textContent = 'Checking Tests…';
+  button.disabled = true;
+  status.textContent = count + ' model(s) selected · Checking saved tests…';
+  labels.forEach(function (label) { label.hidden = true; label.textContent = ''; });
+  modelLabPost({action: 'preview', config: config}).then(function (data) {
+    if (version !== diagnosticsAssessmentPreviewVersion || diagnosticsAssessmentRunStatus === 'running') return;
+    var plan = data.plan;
+    diagnosticsAssessmentPlanTotal = plan.total;
+    button.textContent = plan.total ? 'Complete ' + plan.total + (plan.total === 1 ? ' Test' : ' Tests') : 'Already Complete';
+    button.disabled = !plan.total;
+    status.textContent = count + ' model(s) selected · ' + data.reused + ' already complete · ' +
+      plan.missing + ' missing · ' + plan.retry + ' retry';
+    labels.forEach(function (label) {
+      var item = data.models[label.dataset.assessmentWork];
+      label.hidden = !item;
+      if (!item) return;
+      label.textContent = item.missing || item.retry
+        ? [item.missing ? item.missing + ' missing' : '', item.retry ? item.retry + ' retry' : ''].filter(Boolean).join(' · ')
+        : 'Tests complete';
+      label.title = item.complete + ' of ' + item.planned + ' planned tests already complete.';
+    });
+  }).catch(function (error) {
+    if (version !== diagnosticsAssessmentPreviewVersion || diagnosticsAssessmentRunStatus === 'running') return;
+    diagnosticsAssessmentPreviewKey = '';
+    diagnosticsAssessmentPlanTotal = null;
+    status.textContent = 'Could not check outstanding tests: ' + error.message;
+    button.textContent = 'Complete Missing Tests';
+    button.disabled = true;
+    reportConsoleError('Model Assessment preview', error);
+  });
+}
+
+function diagnosticsAssessmentConfig() {
   var selectedDirectors = diagnosticsAssessmentCatalog.directors.filter(function (model) {
     return diagnosticsAssessmentSelected.director.has(String(model.id || ''));
   }).map(function (model) {
@@ -578,8 +665,21 @@ function runUnifiedModelAssessment() {
   var sourceFolder = String(state && state.folder || '').trim();
   var files = modelLabCurrentFiles();
   var canLab = !!sourceFolder && files.length >= 2;
-  var status = diagnosticsEl('diagnostics-assessment-selection');
   if (visions.length && !canLab) throw new Error('Open a Set with at least two media items to assess Vision models. Director assessment needs no Set.');
+  return {
+    folder: sourceFolder, files: files, groups: modelLabGroups(),
+    depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
+    visionModels: visions, directorModels: directors
+  };
+}
+
+function runUnifiedModelAssessment() {
+  var config = diagnosticsAssessmentConfig();
+  var deep = config.depth === 'deep';
+  var status = diagnosticsEl('diagnostics-assessment-selection');
+  diagnosticsAssessmentPreviewKey = '';
+  diagnosticsAssessmentPreviewVersion += 1;
+  diagnosticsAssessmentPlanTotal = null;
   status.textContent = 'Checking saved results and scheduling outstanding ' + (deep ? 'deep' : 'quick') + ' tests…';
   var runButton = diagnosticsEl('diagnostics-assessment-run');
   runButton.disabled = true;
@@ -587,14 +687,11 @@ function runUnifiedModelAssessment() {
 
     // The server owns active-run admission; a cached historical preview must
     // not block a new assessment after its worker has already failed.
-    return modelLabPost({
-      action: 'start',
-      config: {
-        folder: sourceFolder, files: files, groups: modelLabGroups(), depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
-        visionModels: visions, directorModels: directors
-      }
-    }).then(function (payload) {
+    return modelLabPost({action: 'start', config: config}).then(function (payload) {
       if (payload.noWork) {
+        diagnosticsAssessmentPlanTotal = 0;
+        runButton.textContent = 'Already Complete';
+        runButton.disabled = true;
         status.textContent = 'Already assessed · 0 tests needed. Existing results are preserved.';
         diagnosticsAssessmentRunId = '';
         diagnosticsAssessmentRunStatus = 'completed';
@@ -624,7 +721,7 @@ function runUnifiedModelAssessment() {
     reportConsoleError('Model Assessment', error);
     throw error;
   }).finally(function () {
-    runButton.disabled = diagnosticsAssessmentRunStatus === 'running';
+    runButton.disabled = diagnosticsAssessmentRunStatus === 'running' || diagnosticsAssessmentPlanTotal === 0;
   });
 }
 
@@ -1098,7 +1195,11 @@ function wireDiagnosticsUi() {
     diagnosticsAssessmentSortAndFilter();
     diagnosticsAssessmentSyncHeaderSelection();
   };
-  diagnosticsEl('diagnostics-assessment-refresh').onclick = function () { refreshUnifiedModelAssessment().catch(function () {}); };
+  diagnosticsEl('diagnostics-assessment-refresh').onclick = function () {
+    diagnosticsAssessmentPreviewKey = '';
+    refreshUnifiedModelAssessment().catch(function () {});
+  };
+  diagnosticsEl('diagnostics-assessment-deep').onchange = diagnosticsRefreshSelectionPlan;
   diagnosticsEl('diagnostics-assessment-stop').onclick = stopUnifiedModelAssessment;
   diagnosticsEl('diagnostics-assessment-export').onclick = exportAssessmentResults;
   diagnosticsEl('diagnostics-assessment-import').onclick = function () { diagnosticsEl('diagnostics-assessment-file').click(); };

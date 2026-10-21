@@ -504,3 +504,68 @@ def test_insights_archive_warnings_do_not_fill_landing_page():
     assert "training-history notice" in history
     assert "labInventory.warnings.join(' · ')" in history
     assert "labInventory.warnings.length" in history
+
+
+def test_insights_featured_previews_use_highest_rated_surviving_test_media(tmp_path, monkeypatch):
+    from tool.server import run_analytics as analytics
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+    origin = {"sourceJobId": "run-a", "sourceFolder": "set/a",
+              "sourceEpoch": 47, "sourceRunName": "Run A"}
+
+    def result(name, *, kind="lora", source=None):
+        return {"kind": kind, "mediaFile": name, "provenance": source or origin}
+
+    snapshots = {
+        a: {"results": [
+            result("best-video.mp4"), result("good-image.jpg"),
+            result("missing-best.png"), result("base.png", kind="base"),
+            result("wrong-set.png", source={**origin, "sourceFolder": "other"})]},
+        b: {"results": [
+            result("also-best.webp"), result("ok-image.png"),
+            result("low-image.png"), result("sidecar.txt")]},
+    }
+    for folder, names in ((a, ("best-video.mp4", "good-image.jpg", "base.png", "wrong-set.png")),
+                          (b, ("also-best.webp", "ok-image.png", "low-image.png", "sidecar.txt"))):
+        for name in names:
+            (folder / name).touch()
+
+    scores = {a: {"best-video.mp4": 5, "good-image.jpg": 4,
+                  "missing-best.png": 5, "base.png": 5, "wrong-set.png": 5},
+              b: {"also-best.webp": 5, "ok-image.png": 3,
+                  "low-image.png": 2, "sidecar.txt": 5}}
+    monkeypatch.setattr(analytics, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(analytics.bench, "_session_directories", lambda _: [a, b])
+    monkeypatch.setattr(analytics.bench, "_read_status", lambda folder: snapshots[folder])
+    monkeypatch.setattr(analytics.bench, "_session_rating_map", lambda folder: scores[folder])
+    monkeypatch.setattr(analytics.bench, "_session_vision_state", lambda _: {})
+    monkeypatch.setattr(analytics, "_campaigns", lambda *_: [])
+
+    snapshot = analytics.overview(tmp_path)
+    epoch = snapshot["epochs"][0]
+    assert epoch["ratedCount"] == 7  # Existing rating math is unchanged.
+    assert len(epoch["topRenders"]) == 3
+    assert [(item["mediaFile"], item["rating"], item["mediaKind"]) for item in epoch["topRenders"]] == [
+        ("best-video.mp4", 5, "video"),
+        ("also-best.webp", 5, "image"),
+        ("good-image.jpg", 4, "image"),
+    ]
+    assert [item["session"] for item in epoch["topRenders"]] == ["a", "b", "a"]
+
+
+def test_insights_previews_reuse_existing_media_and_enlarge_landing_only():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/run_analytics.js").read_text(encoding="utf-8")
+    css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    assert "(p.topRenders||[])" in js
+    assert "'/fs/test_generations/media?folder='" in js
+    assert 'loading="lazy"' in js
+    assert 'preload="metadata" muted playsinline' in js
+    assert "#t=0.1" in js
+    assert 'class="run-lab-feature-preview"' in js
+    assert 'data-lab-feature="inspect"' in js
+    assert "#run-analytics-screen .run-lab-feature-previews" in css
+    assert "#run-analytics-screen .run-lab-feature strong{font-size:34px}" in css
+    assert "#run-analytics-screen .run-lab-details>summary{font-size:16px}" in css

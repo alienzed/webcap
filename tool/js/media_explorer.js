@@ -1038,13 +1038,16 @@
     reverseSort = !reverseSort; el('media-explorer-sort-reverse').setAttribute('aria-pressed', String(reverseSort)); load(true);
   });
   var grip = el('media-explorer-resizer'), explorerWorkspace = el('media-explorer-workspace'), resizing = false;
-  grip.addEventListener('pointerdown', function (e) { resizing = true; grip.setPointerCapture(e.pointerId); });
+  grip.addEventListener('pointerdown', function (e) { resizing = true; grip.classList.add('dragging'); grip.setPointerCapture(e.pointerId); });
   grip.addEventListener('pointermove', function (e) {
     if (!resizing) return;
     var rect = explorerWorkspace.querySelector('.media-explorer-main').getBoundingClientRect();
     explorerWorkspace.style.setProperty('--explorer-list-width', Math.max(220, Math.min(650, e.clientX - rect.left)) + 'px');
   });
-  grip.addEventListener('pointerup', function () { resizing = false; });
+  function endResize() { resizing = false; grip.classList.remove('dragging'); }
+  grip.addEventListener('pointerup', endResize);
+  grip.addEventListener('pointercancel', endResize);
+  grip.addEventListener('lostpointercapture', endResize);
   grip.addEventListener('dblclick', function () { explorerWorkspace.style.setProperty('--explorer-list-width', '260px'); });
   grip.addEventListener('keydown', function (e) {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault();

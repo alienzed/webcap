@@ -356,7 +356,7 @@
     referenceIndex = 0;
     els('start').disabled = true;
     els('reference-options').innerHTML = '<p class="epoch-finder-muted">Finding tagged reference candidates…</p>';
-    return api('reference_vocabulary', {jobId: els('run').value}).then(function (response) {
+    return api('reference_vocabulary', {}).then(function (response) {
       var vocabulary = response.vocabulary || [];
       referenceItems.forEach(function (item) {
         item.groups = vocabulary.filter(function (group) {
@@ -369,7 +369,7 @@
       });
       return Promise.all(referenceItems.map(function (item) {
         return Promise.all(item.groups.map(function (group) {
-          return api('reference_candidates', {jobId: els('run').value, group: group, term: item.option}).then(function (response) {
+          return api('reference_candidates', {group: group, term: item.option}).then(function (response) {
             return (response.references || []).map(function (candidate) {
               return Object.assign({}, candidate, {tag:item.option});
             });
@@ -387,7 +387,7 @@
         if (!saved && !cleared) {
           // Never guess which of two identically named tags a saved choice meant.
           var savedMatches = item.groups.map(function (group) {
-            var chosen = window.testReferencesChoice(els('run').value, group, item.option);
+            var chosen = window.testReferencesChoice(group, item.option);
             if (!chosen || !item.candidates.some(function (candidate) {
               return candidate.group === group && candidate.media === chosen.media;
             })) return null;

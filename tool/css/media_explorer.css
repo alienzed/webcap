@@ -651,6 +651,39 @@
   }
 }
 
+/* Folder navigation belongs to the file pane, not the workspace-wide search form. */
+.media-explorer-workspace .media-explorer-browser > .media-explorer-external-navigation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px 8px;
+  flex: none;
+  margin: 0;
+  padding: 8px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border-soft);
+}
+.media-explorer-workspace .media-explorer-browser > .media-explorer-external-navigation label {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 27px;
+  margin: 0;
+  font-size: 14px;
+}
+.media-explorer-workspace .media-explorer-browser > .media-explorer-external-navigation input[type='checkbox'] {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+.media-explorer-workspace .media-explorer-directory-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Prep's dense list affordance without fetching full-size images into the rail. */
 .media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card-open {
   gap: 6px;

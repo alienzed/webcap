@@ -204,6 +204,11 @@ def test_extend_story_preserves_distinction_from_redevelopment():
     assert request["operation"] == "extend_story"
     assert "Append exactly 3 new Scenes" in request["prompt"]
     assert "[EXISTING SCENE OUTLINE]" in request["prompt"]
+    assert "[LAST SCENE GENERATION PROMPT]" not in request["prompt"]
+    assert "OLD FIRST PROMPT" not in request["prompt"]
+    assert "EXISTING SECOND PROMPT" not in request["prompt"]
+    assert "[LAST SCENE EXIT STATE]" not in request["prompt"]
+    assert "distinct new Scene ideas before writing their prompts" in request["prompt"]
     assert "[USER DIRECTION]\nDifferent cubicle vignettes." in request["prompt"]
     assert "new Scenes as JSON" in request["prompt"]
 
@@ -429,3 +434,11 @@ def test_model_guidance_only_for_h3_authoring(monkeypatch):
         assert prompt.count("Prefer simple staging.") == 1
     assert "Prefer simple staging." not in storyboard_llm_contract.build_request(story, "scene-2", "check_coherence")["prompt"]
 
+
+
+def test_extend_story_uses_only_last_exit_state_as_continuity_handoff():
+    story = _story()
+    story["scenes"]["scene-2"]["exitState"] = "Mara reaches the locked lift."
+    prompt = storyboard_llm_contract.build_request(story, "", "extend_story", scene_count=2)["prompt"]
+    assert "[LAST SCENE EXIT STATE]\nMara reaches the locked lift." in prompt
+    assert "EXISTING SECOND PROMPT" not in prompt

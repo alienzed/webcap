@@ -760,6 +760,8 @@ def _queue_test_auto_vl(folder_path, session_name, media_file):
 
     session_dir = _session_directory(folder_path, session_name)
     status = _read_status(session_dir) or {}
+    if str(status.get("status") or "") in {"stopping", "stopped"}:
+        return
     model = str(status.get("autoVlModel") or "")
     jobs = status.get("autoVlJobs") or {}
     if not model or media_file in jobs:
@@ -794,6 +796,25 @@ def _queue_test_auto_vl(folder_path, session_name, media_file):
             errors.append(media_file + ": " + str(exc))
             latest["autoVlErrors"] = errors
             _atomic_write_json(_status_path(session_dir), latest)
+
+
+def _cancel_test_auto_vl_jobs(session_directory):
+    """Stop only the queued/running auto-VL work owned by this Test session."""
+    from .llm_runner import action as llm_action
+
+    status = _read_status(session_directory) or {}
+    for job_id in set(str(value).strip() for value in (status.get("autoVlJobs") or {}).values()):
+        if not job_id:
+            continue
+        try:
+            llm_action("cancel_job", job_id=job_id)
+        except FileNotFoundError:
+            # Its transient receipt was already consumed.
+            continue
+        except Exception:
+            # A cancellation failure should not turn a user-requested deletion
+            # into an undeletable Test session; retain the diagnostic in logs.
+            _logger.exception("Could not cancel Test Auto VL job %s for Session %s", job_id, Path(session_directory).name)
 
 
 def complete_test_auto_vl(context, answer, elapsed_ms):
@@ -3279,6 +3300,7 @@ def stop(folder_path, session_name=None):
         status_payload["status"] = "stopping"
         _atomic_write_json(_status_path(session_directory), status_payload)
 
+    _cancel_test_auto_vl_jobs(session_directory)
     for job in _session_job_records(status_payload):
         job_status = str(job.get("status") or "")
         job_id = str(job.get("id") or "")
@@ -3375,6 +3397,7 @@ def clear_archived_run_sessions(folder_path, sessions):
     if active:
         raise RuntimeError("Cannot clear active Test Generations sessions: " + ", ".join(active))
     for session in sessions:
+        _cancel_test_auto_vl_jobs(session)
         shutil.rmtree(session)
     if sessions:
         _invalidate_recent_session_caches()
@@ -3394,6 +3417,7 @@ def clear_sessions(folder_path):
         )
     _snapshot_session_assessments(folder_path, sessions)
     for session in sessions:
+        _cancel_test_auto_vl_jobs(session)
         shutil.rmtree(session)
 
     workspace = _workspace_root(folder_path)
@@ -3416,6 +3440,7 @@ def delete_session(folder_path, session_name):
     if isinstance(session_payload.get("inferenceJobs"), list) and _session_has_nonterminal_jobs(session):
         raise RuntimeError("Cannot delete an active Test Generations session. Stop it first.")
     _snapshot_session_assessments(folder_path, [session])
+    _cancel_test_auto_vl_jobs(session)
     shutil.rmtree(session)
     _invalidate_recent_session_caches()
     return {

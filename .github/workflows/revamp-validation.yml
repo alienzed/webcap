@@ -4,6 +4,9 @@ on:
     paths:
       - 'tool/tool.html'
       - 'tool/js/test_generations*.js'
+      - 'tool/js/job_queues.js'
+      - 'tool/css/workspace_shell.css'
+      - 'tests/job_queue_drag_reorder.test.cjs'
       - 'tool/js/epoch_finder.js'
       - 'tool/server/epoch_finder.py'
       - 'tool/server/epoch_reference.py'
@@ -59,6 +62,10 @@ jobs:
         run: npm install --no-save --no-package-lock jsdom
       - name: Browser DOM lifecycle smoke
         run: node --test tests/test_generations_unified_dom.test.cjs
+      - name: Inference and Training drag-to-reorder
+        run: |
+          node --check tool/js/job_queues.js
+          node --test tests/job_queue_drag_reorder.test.cjs
       - name: Python syntax
         run: python -m compileall -q tool/server/epoch_finder.py tool/server/epoch_test_bench.py tests/test_test_generations_unified_gallery.py
       - name: Prepare isolated config

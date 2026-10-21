@@ -2123,6 +2123,11 @@
                     <button type="button" role="tab" id="job-queue-tab-training" data-job-queue-tab="training" aria-selected="false" aria-controls="job-queue-panel-training" tabindex="-1">Training <span data-job-queue-count="training"></span></button>
                 </div>
                 <div id="job-queue-panel-inference" role="tabpanel" aria-labelledby="job-queue-tab-inference">
+                    <section id="inference-queue-error" class="inference-queue-error hidden" aria-live="polite">
+                        <div class="inference-queue-error-heading"><strong>ComfyUI execution failed</strong><button id="inference-queue-error-copy" type="button" class="review-captions-btn">Copy Error</button></div>
+                        <p id="inference-queue-error-message" class="inference-queue-error-message"></p>
+                        <details><summary>Technical details / traceback</summary><pre id="inference-queue-error-traceback"></pre></details>
+                    </section>
                     <div id="inference-queue-list" class="inference-queue-list"></div>
                 </div>
                 <div id="job-queue-panel-llm" class="hidden" role="tabpanel" aria-labelledby="job-queue-tab-llm">

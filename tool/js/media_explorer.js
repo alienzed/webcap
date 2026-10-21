@@ -344,7 +344,7 @@
     text(el('media-explorer-inspector-name'), item.fileName);
     el('media-explorer-inspector-name').title = item.fileName;
     var provenance = document.createElement('div'); provenance.className = 'media-explorer-provenance';
-    text(provenance, 'Owned by · ' + sourceNames[item.source] + ' › ' + (item.contextLabel || item.storageId)); host.appendChild(provenance);
+    text(provenance, item.source === 'external' ? 'External · ' + item.relativePath : 'Owned by · ' + sourceNames[item.source] + ' › ' + (item.contextLabel || item.storageId)); host.appendChild(provenance);
     var actions = document.createElement('div'); actions.className = 'media-explorer-inspector-actions'; host.appendChild(actions);
     if (item.storageId) {
       var related = document.createElement('button');

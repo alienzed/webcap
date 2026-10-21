@@ -1439,6 +1439,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             sweep_weights=criteria.get("sweepWeights"),
             include_base=criteria.get("includeBase"),
             model_id=criteria.get("modelId"),
+            wildcard_dimensions=criteria.get("wildcardDimensions"),
         )
     raise ValueError("Unsupported Test Generations operation: " + operation)
 
@@ -3007,7 +3008,7 @@ def reconcile_startup():
 
 def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
             candidate_strengths=None, include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None,
-            sweep_weights=None, campaign_staging="", auto_vl_model=""):
+            sweep_weights=None, campaign_staging="", auto_vl_model="", wildcard_dimensions=None):
     reconcile_startup()
     request, loras, include_base = _new_inference_request(
         folder_path,
@@ -3025,6 +3026,7 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
         duration=duration,
         campaign_staging=campaign_staging,
     )
+    request["wildcardDimensions"] = _test_wildcard_dimensions(folder_path, prompt, wildcard_dimensions)
     latest = _enqueue_frozen_test_request(folder_path, request, loras, include_base, auto_vl_model=auto_vl_model)
     return {
         "operation": "test_enqueue",
@@ -3087,6 +3089,7 @@ def enqueue_repeated(folder_path, criteria):
                 model_id=criteria.get("modelId"),
                 sweep_weights=criteria.get("sweepWeights"),
                 auto_vl_model=vl_model,
+                wildcard_dimensions=criteria.get("wildcardDimensions"),
             )
         except Exception as exc:
             if not accepted:

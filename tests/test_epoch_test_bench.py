@@ -1498,8 +1498,20 @@ def test_clear_queued_test_sessions_keeps_other_global_inference(tmp_path, monke
         include_base=True,
     )
 
+    from tool.server import llm_runner
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    stored = bench._read_status(session)
+    stored["autoVlJobs"] = {"old.mp4": "vl-old"}
+    bench._atomic_write_json(session / "test.json", stored)
+    cancelled_vl = []
+    monkeypatch.setattr(
+        llm_runner, "action",
+        lambda operation, job_id="": cancelled_vl.append((operation, job_id)) or {"job": {"status": "cancelled"}},
+    )
+
     cleared = bench.clear_queued(tmp_path)
 
+    assert cancelled_vl == [("cancel_job", "vl-old")]
     assert cleared["removed"] == 1
     assert not (bench._central_session_root() / payload["latest"]["session"]).exists()
     assert execution_queue.get_job(other["id"])["status"] == "queued"

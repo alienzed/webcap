@@ -4,6 +4,10 @@ on:
     paths:
       - 'tool/css/storyboard.css'
       - 'tool/js/storyboard.js'
+      - 'tool/js/generate.js'
+      - 'tool/js/session_prompt_history.js'
+      - 'tool/tool.html'
+      - 'tests/session_prompt_history.test.cjs'
       - 'tool/js/diagnostics.js'
       - 'tool/server/model_lab.py'
       - 'tool/server/storyboard_llm_runtime.py'
@@ -32,6 +36,11 @@ jobs:
         with:
           python-version: '3.11'
       - run: node --check tool/js/storyboard.js && node --check tool/js/diagnostics.js
+      - name: RAM-only instruction history
+        run: |
+          node --check tool/js/session_prompt_history.js
+          node --check tool/js/generate.js
+          node --test tests/session_prompt_history.test.cjs
       - run: cp tool/config.example.json tool/config.json
       - run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
       - run: python -m compileall -q tool/server

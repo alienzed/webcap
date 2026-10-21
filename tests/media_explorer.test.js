@@ -27,6 +27,7 @@ function fixture(hash = '#/media') {
     emit(k, event = {}) { for (const fn of this.listeners[k] || []) fn.call(this, {target:this, ...event}); }
     click(event = {}) { this.emit('click', event); if (this.onclick) this.onclick(event); }
     appendChild(node) { return this.insertBefore(node, null); }
+    prepend(node) { return this.insertBefore(node, this.children[0] || null); }
     insertBefore(node, before) { node.remove(); node.parent = this; this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, node); return node; }
     remove() { if (this.parent) this.parent.children.splice(this.parent.children.indexOf(this), 1); this.parent = null; }
     replaceChildren(...nodes) { for (const node of [...this.children]) node.remove(); nodes.forEach(node => this.appendChild(node)); }
@@ -97,8 +98,8 @@ function fixture(hash = '#/media') {
     getComputedStyle: () => ({gridTemplateColumns:'240px 240px'}),
     fetch: (url, options) => new Promise((resolve, reject) => pending.push({url, options, resolve, reject}))
   });
-  const settle = async (request, items, ok = true) => {
-    request.resolve({ok, status:ok ? 200 : 500, json:async () => ({ok, items, total:items.length, complete:true, error:ok ? undefined : 'owner discovery failed'})});
+  const settle = async (request, items, ok = true, extra = {}) => {
+    request.resolve({ok, status:ok ? 200 : 500, json:async () => ({ok, items, total:items.length, complete:true, error:ok ? undefined : 'owner discovery failed', ...extra})});
     await new Promise(resolve => setImmediate(resolve));
   };
   const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
@@ -330,4 +331,51 @@ test('Storyboard provenance preserves exact take identity for owner handoff', ()
   assert.match(explorer, /takeId: use\.takeId \|\| ''/);
   assert.match(storyboard, /Storyboard Take no longer exists in scene/);
   assert.match(storyboard, /\.storyboard-take\[data-take-id\]/);
+});
+
+
+test('External browsing is folder-first, keeps media list in Grid and never auto-writes metadata', async () => {
+  const f = fixture(); f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(b => b.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/tmp/other-drive';
+  f.nodes['media-explorer-open-path'].click();
+  const request = f.pending.at(-1);
+  const params = new URL(request.url, 'http://localhost').searchParams;
+  assert.equal(params.get('directory'), '');
+  assert.equal(params.get('recursive'), '0');
+  const files = [
+    {...media('a'), id:'external:a', fileName:'a.jpg', source:'external', relativePath:'a.jpg'},
+    {...media('b'), id:'external:b', fileName:'b.jpg', source:'external', relativePath:'b.jpg'}
+  ];
+  await f.settle(request, files, true, {folders:['child']});
+  assert.equal(f.nodes['media-explorer-folder-rows'].children.length, 1);
+  assert.equal(f.nodes['media-explorer-grid'].children.length, 2);
+  assert.equal(f.pending.filter(entry => entry.url.includes('/external/metadata')).length, 0,
+    'Browsing must not start a writing metadata operation');
+  f.modeButtons.find(b => b.dataset.explorerMode === 'grid').click();
+  assert.equal(f.nodes['media-explorer-side-list'].children.length, 2,
+    'Grid mode retains the selectable left media list');
+  assert.equal(f.nodes['media-explorer-grid'].parent, f.nodes['media-explorer-preview-stage'],
+    'Grid belongs in the large central pane');
+  const row = f.nodes['media-explorer-side-list'].children[1];
+  row.querySelector('button').click();
+  assert.equal(f.nodes['media-explorer-inspector-body'].dataset.id, 'external:b');
+  f.nodes['media-explorer-folder-rows'].children[0].click();
+  const folderRequest = f.pending.at(-1);
+  assert.equal(new URL(folderRequest.url,'http://localhost').searchParams.get('directory'), 'child');
+  await f.settle(folderRequest, [], true, {folders:[]});
+  assert.equal(f.nodes['media-explorer-side-list'].children.length, 0);
+});
+
+test('External subfolder checkbox broadens scope only when selected', async () => {
+  const f = fixture(); f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(b => b.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/tmp/other-drive';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1), [], true, {folders:['child']});
+  f.nodes['media-explorer-recursive'].checked = true;
+  f.nodes['media-explorer-recursive'].emit('change');
+  assert.equal(new URL(f.pending.at(-1).url,'http://localhost').searchParams.get('recursive'), '1');
 });

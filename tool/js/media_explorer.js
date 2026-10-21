@@ -58,15 +58,19 @@
   function renderMainPreview() {
     var stage = el('media-explorer-preview-stage');
     if (explorerMode === 'grid') return;
+    var item = active >= 0 ? items[active] : null;
+    var id = item ? item.id : '';
+    if (stage.dataset.id === id && stage.children.length && !stage.querySelector('#media-explorer-grid')) return;
+    stage.dataset.id = id;
     stage.replaceChildren();
-    if (active >= 0 && items[active]) stage.appendChild(mediaElement(items[active], true));
+    if (item) stage.appendChild(mediaElement(item, true));
     else { var label = document.createElement('span'); label.textContent = 'Select a file to preview'; stage.appendChild(label); }
   }
   function placeGallery() {
     var gallery = el('media-explorer-grid'), stage = el('media-explorer-preview-stage');
     if (!galleryHome) galleryHome = el('media-explorer-gallery-area');
     el('media-explorer-workspace').classList.toggle('explorer-grid-mode', explorerMode === 'grid');
-    if (explorerMode === 'grid') { stage.replaceChildren(); stage.appendChild(gallery); }
+    if (explorerMode === 'grid') { stage.dataset.id = ''; stage.replaceChildren(); stage.appendChild(gallery); }
     else { galleryHome.appendChild(gallery); renderMainPreview(); }
   }
   var explorerMode = 'list', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null;
@@ -583,7 +587,7 @@
   }
   function openLoupe(index) {
     var dlg = el('media-explorer-loupe');
-    if (!dlg.open) loupeReturn = {inspectorOpen: !el('media-explorer-inspector').classList.contains('hidden'), scroll: document.querySelector('.media-explorer-main').scrollTop};
+    if (!dlg.open) loupeReturn = {inspectorOpen: !el('media-explorer-inspector').classList.contains('hidden'), scroll: (explorerMode === 'grid' ? el('media-explorer-preview-stage').parentElement : el('media-explorer-gallery-area')).scrollTop};
     if (typeof index === 'number') selectItem(index);
     if (active < 0 || !items[active]) return;
     el('media-explorer-loupe-content').classList.remove('zoomed');

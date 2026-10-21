@@ -97,7 +97,7 @@
     items.forEach(function (item, index) {
       var row = existing.get(item.id);
       if (!row) {
-        row = document.createElement('div'); row.className = 'media-explorer-side-row'; row.dataset.id = item.id;
+        row = document.createElement('div'); row.className = 'media-explorer-side-row'; row.dataset.id = item.id; row.dataset.mediaKind = item.mediaKind;
         var check = document.createElement('input'); check.type = 'checkbox';
         check.setAttribute('aria-label', 'Select ' + item.fileName);
         check.addEventListener('click', function (event) { event.stopPropagation(); selectSideRow(item.id, event, true); });
@@ -658,6 +658,7 @@
     var card = document.createElement('article');
     card.className = 'media-explorer-card'; card.title = item.fileName;
     card.dataset.id = item.id;
+    card.dataset.mediaKind = item.mediaKind;
     card.dataset.index = index;
     var open = document.createElement('button'); open.type = 'button'; open.className = 'media-explorer-card-open';
     open.tabIndex = index === 0 ? 0 : -1;

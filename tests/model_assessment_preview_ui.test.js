@@ -90,3 +90,13 @@ test('late responses cannot overwrite a newer selection', async () => {
   assert.equal(nodes.get('diagnostics-assessment-run').textContent, 'Complete 1 Test');
   assert.equal(nodes.get('diagnostics-assessment-run').disabled, false);
 });
+
+test('server no-work response stays disabled after the start callback finishes', async () => {
+  const {ctx, nodes} = view();
+  ctx.modelLabPost = async () => ({noWork: true, run: {status: 'completed'}});
+  ctx.refreshUnifiedModelAssessment = async () => {};
+  await ctx.runUnifiedModelAssessment();
+  assert.equal(nodes.get('diagnostics-assessment-run').textContent, 'Already Complete');
+  assert.equal(nodes.get('diagnostics-assessment-run').disabled, true);
+  assert.match(nodes.get('diagnostics-assessment-selection').textContent, /0 tests needed/);
+});

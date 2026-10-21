@@ -6,7 +6,8 @@
     workspace: '',
     queue: { jobs: [], paused: false, pauseReason: '' },
     timer: 0,
-    pending: false
+    pending: false,
+    reportedExecutionFailure: ''
   };
 
   function el(id) { return document.getElementById(id); }
@@ -131,6 +132,17 @@
     if (typeof window.setShellInferenceActive === 'function') window.setShellInferenceActive(running);
   }
 
+  function reportExecutionFailure(queue) {
+    var reason = queue && queue.paused ? String(queue.pauseReason || '').trim() : '';
+    if (!reason.startsWith('Inference paused after an execution error:')) {
+      state.reportedExecutionFailure = '';
+      return;
+    }
+    if (reason === state.reportedExecutionFailure) return;
+    state.reportedExecutionFailure = reason;
+    window.reportConsoleError('Inference Queue · ComfyUI', new Error(reason));
+  }
+
   function renderToggle(jobs) {
     var toggles = document.querySelectorAll('[data-inference-queue-toggle]');
     if (!toggles.length) return;
@@ -148,6 +160,7 @@
       backlog ? String(backlog) + ' backlog' : ''
     ].filter(Boolean).join(' · ');
     title = title ? ('Inference · ' + title) : 'Inference Queue';
+    if (state.queue.paused && state.queue.pauseReason) title += '\n' + state.queue.pauseReason;
     Array.prototype.forEach.call(toggles, function (toggle) {
       var isRail = toggle.hasAttribute('data-inference-queue-rail');
       if (!isRail) toggle.textContent = count ? ('Inference Queue · ' + count) : 'Inference Queue';
@@ -396,6 +409,9 @@
     summary.textContent = state.queue.paused
       ? String(state.queue.pauseReason || 'Inference is temporarily waiting.')
       : (String(state.queue.waitReason || '').trim() || counts || 'No inference work');
+    summary.classList.toggle('inference-queue-failure',
+      state.queue.paused && String(state.queue.pauseReason || '').startsWith('Inference paused after an execution error:'));
+    summary.title = summary.textContent;
 
     var hasPending = jobs.some(function (job) {
       return ['queued', 'backlog'].indexOf(String(job.status || '')) !== -1;
@@ -501,6 +517,7 @@
     state.pending = true;
     return requestJson('/fs/inference').then(function (payload) {
       state.queue = payload.queue || { jobs: [], paused: false, pauseReason: '' };
+      reportExecutionFailure(state.queue);
       render();
       window.dispatchEvent(new CustomEvent('webcap:inference-queue-snapshot', {
         detail: { queue: state.queue }

@@ -154,20 +154,29 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 
 /* Shared Test Generations reference comparison selector (kept with Epoch Finder styles). */
 .test-generations-vl-toolbar #test-generations-evaluator{max-width:235px;min-width:115px;background:var(--input-bg,#131d27);border:1px solid var(--border-color,#405064);border-radius:6px;color:inherit;padding:5px}
-.test-reference-dialog{width:min(570px,calc(100vw - 24px));max-height:90vh;overflow:auto;background:var(--background-secondary,#263340);color:inherit;border:1px solid var(--border-color,#405064);border-radius:12px;padding:18px;box-shadow:0 18px 55px #0007}
+.test-reference-dialog{width:min(1020px,calc(100vw - 24px));max-height:90vh;overflow:auto;background:var(--background-secondary,#263340);color:inherit;border:1px solid var(--border-color,#405064);border-radius:12px;padding:18px;box-shadow:0 18px 55px #0007}
 .test-reference-dialog::backdrop{background:#000a}
-.test-reference-dialog h3{font-size:17px;margin:0 26px 8px 0}
-.test-reference-dialog p{font-size:12px;line-height:1.5}
-.test-reference-dialog>label{display:grid;gap:4px;margin:12px 0;font-size:12px}
-.test-reference-dialog select{min-width:0;width:100%;padding:7px;border-radius:6px;background:var(--input-bg,#131d27);color:inherit;border:1px solid var(--border-color,#405064)}
-.test-reference-dialog>img{display:block;max-width:100%;height:auto;max-height:230px;margin:8px auto;object-fit:contain;border-radius:8px}
-.test-reference-dialog>img.hidden{display:none}
-.test-reference-close{position:absolute;top:11px;right:12px;background:transparent;border:0;color:inherit;font-size:22px;cursor:pointer}
+.test-reference-dialog h3{font-size:20px;margin:0 32px 8px 0}
+.test-reference-dialog p{font-size:16px;line-height:1.5}
+.test-reference-close{position:absolute;top:11px;right:12px;background:transparent;border:0;color:inherit;font-size:24px;cursor:pointer}
 .test-reference-actions{display:flex;justify-content:flex-end;margin:12px 0}
-.test-reference-results{margin-top:14px;max-height:240px;overflow:auto}
-.test-reference-results h4{margin:0 0 8px}
-.test-reference-result{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px 0;border-bottom:1px solid var(--border-color,#405064);font-size:12px}
+.test-reference-pair{border:1px solid var(--border-color,#405064);border-radius:10px;padding:12px;background:var(--background-primary,#17212a);min-height:90px}
+.test-reference-pair-summary{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:18px}
+.test-reference-pair-summary>span{font-size:16px;font-weight:700}
+.test-reference-pair-images{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.test-reference-pair-images figure{min-width:0;margin:0;border:1px solid var(--border-color,#405064);border-radius:8px;overflow:hidden;background:#12181f}
+.test-reference-pair-images figcaption{display:grid;gap:4px;padding:8px 10px;font-size:16px}
+.test-reference-pair-images figcaption span{font-size:13px;opacity:.85;overflow-wrap:anywhere}
+.test-reference-pair-images img,.test-reference-pair-images video{display:block;width:100%;height:320px;object-fit:contain;background:#080a0c}
+.test-reference-pair-response{white-space:pre-wrap;overflow-wrap:anywhere;max-height:120px;overflow:auto;font:inherit;font-size:16px;line-height:1.5;margin:10px 0 0}
+.test-reference-results{margin-top:14px;max-height:265px;overflow:auto}
+.test-reference-results h4{margin:0 0 8px;font-size:18px}
+.test-reference-result{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;width:100%;padding:10px;text-align:left;border:0;border-bottom:1px solid var(--border-color,#405064);background:transparent;color:inherit;font:inherit;font-size:16px;cursor:pointer}
+.test-reference-result:hover,.test-reference-result:focus-visible{background:var(--background-primary,#17212a)}
+.test-reference-result strong,.test-reference-result b{overflow-wrap:anywhere}
 .test-reference-result span,.test-reference-result small{grid-column:1/-1;overflow-wrap:anywhere}
+.test-reference-result small{font-size:14px}
+@media(max-width:650px){.test-reference-pair-images{grid-template-columns:1fr}.test-reference-pair-images img,.test-reference-pair-images video{height:270px}}
 @media(max-width:650px){.test-generations-vl-toolbar #test-generations-evaluator{max-width:160px}}
 
 /* Image-first Epoch Finder evidence cards: prioritize inspection over density. */

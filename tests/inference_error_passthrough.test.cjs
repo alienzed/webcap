@@ -62,7 +62,7 @@ test('failure panel formats first line while retaining complete technical traceb
   assert.ok(begin > 0 && end > begin);
   const sandbox = {};
   vm.runInNewContext(source.slice(begin, end) + '\nthis.format = formatExecutionFailure;', sandbox);
-  const detail = "Inference paused after an execution error: ModuleNotFoundError: No module named 'triton' (128 / PatchSageAttention)\\n\\nTraceback:\\n  import triton";
+  const detail = "Inference paused after an execution error: ModuleNotFoundError: No module named 'triton' (128 / PatchSageAttention)\n\nTraceback:\n  import triton";
   const result = sandbox.format(detail);
   assert.equal(result.summary, "ModuleNotFoundError: No module named 'triton' (128 / PatchSageAttention)");
   assert.equal(result.full, detail);

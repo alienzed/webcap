@@ -811,3 +811,11 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .run-analytics-epoch-media-footer{position:sticky;bottom:0;z-index:1;display:flex;justify-content:flex-end;padding:13px 22px;border-top:1px solid var(--border-color,#384653);background:var(--panel-bg,#1c2834)}
 #run-analytics-screen .run-analytics-epoch-media-footer button{font-size:17px;font-weight:750;min-height:46px;padding:10px 17px}
 @media(max-width:540px){#run-analytics-screen .run-analytics-result-epochs{grid-template-columns:1fr 1fr}#run-analytics-screen .run-analytics-epoch-media-footer{padding:12px}#run-analytics-screen .run-analytics-epoch-media-head #run-analytics-epoch-media-close{white-space:normal}}
+
+/* The actual Epoch inspector is an in-pane workspace, not the older media dialog. */
+#run-analytics-epoch-info .epoch-info-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
+#run-analytics-epoch-info .epoch-info-header h3{font-size:28px}
+#run-analytics-epoch-info .epoch-info-back{display:inline-flex;align-items:center;justify-content:center;width:auto;min-height:48px;padding:11px 19px;font-size:18px;font-weight:750}
+#run-analytics-epoch-info>.epoch-info-back{margin-bottom:18px}
+#run-analytics-epoch-info .epoch-info-header p{font-size:16px;line-height:1.45}
+@media(max-width:620px){#run-analytics-epoch-info .epoch-info-header{flex-direction:column;gap:12px}}

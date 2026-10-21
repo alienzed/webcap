@@ -38,7 +38,7 @@ def test_reference_run_order_is_explicit_and_campaign_reuses_scoped_saved_choice
     assert 'sorted(runs, key=lambda run: float(run.get("createdAt") or 0), reverse=True)' in server
     assert "item.groups = vocabulary.filter(function (group)" in finder
     assert "item.groups.map(function (group)" in finder
-    assert "window.testReferencesChoice(els('run').value, group, item.option)" in finder
+    assert "window.testReferencesChoice(group, item.option)" in finder
     assert "candidate.group === group && candidate.media === chosen.media" in finder
     assert "window.testReferencesChoice(els('run').value, item.group" not in finder
 
@@ -60,3 +60,15 @@ def test_reference_browser_typography_and_real_work_progress():
     assert '#test-references-active-heading{font-size:clamp(24px' in css
     assert '.test-references-tag{display:flex;align-items:center' in css
     assert '.test-references-progress-track>span' in css
+
+
+def test_reference_gallery_has_separate_choose_remove_actions_and_set_scoped_state():
+    script = (ROOT / "tool/js/test_references.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    assert 'function key(group, term) { return JSON.stringify([group, term]); }' in script
+    assert "window.testReferencesChoice = function (group, term)" in script
+    assert "data-remove-gallery-reference=" in script
+    assert "changeSelection('reference_selection_remove', chosen)" in script
+    assert "changeSelection('reference_selection_save', {group:choice.group,term:choice.term,media:candidate.media}" in script
+    assert "Saved for this Set (outside selected run)" in script
+    assert ".test-references-remove-btn" in css

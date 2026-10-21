@@ -360,7 +360,7 @@ def create_campaign(folder_path, criteria):
     evaluation = criteria.get("referenceEvaluation")
     if not isinstance(evaluation, dict) or any(type(evaluation.get(k)) is not bool for k in ("rvn", "dino")):
         raise ValueError("Select reference evaluation mechanisms explicitly.")
-    scoped = reference_vocabulary(folder, job_id) if approved else []
+    scoped = reference_vocabulary(folder, None) if approved else []
     reference_groups = {
         (attribute, option): {group["group"] for group in scoped
                               if any(term["term"] == option for term in group["terms"])}
@@ -373,7 +373,7 @@ def create_campaign(folder_path, criteria):
         group = str(entry.get("group") or "")
         media = str(entry.get("media") or "")
         tag = str(entry.get("tag") or option)
-        reference = verified_reference(folder, group, tag, media, job_id)
+        reference = verified_reference(folder, group, tag, media, None)
         references.append({"attribute": str(entry.get("attribute") or identity),
                            "dimensionId": str(entry.get("dimensionId") or ""),
                            "option": option, "group": group,
@@ -679,7 +679,7 @@ def _evaluate_reference_unit(folder_path, campaign, unit):
         assigned = references.get((group["id"], expected)) or references.get((group["label"], expected))
         if assigned is None:
             continue
-        verified = verified_reference(_folder_key(folder_path), assigned["group"], assigned.get("tag") or expected, assigned["media"], campaign["jobId"])
+        verified = verified_reference(_folder_key(folder_path), assigned["group"], assigned.get("tag") or expected, assigned["media"], None)
         if verified["size"] != assigned["size"] or verified["mtimeNs"] != assigned["mtimeNs"]:
             raise ValueError("Training reference changed after campaign approval.")
         reference = folder_path / assigned["media"]
@@ -743,7 +743,7 @@ def _evaluate_dino_unit(folder_path, campaign, unit):
         entry = references.get((group["id"], option)) or references.get((group["label"], option))
         if entry is None:
             continue
-        actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"], campaign["jobId"])
+        actual = verified_reference(_folder_key(folder_path), entry["group"], entry.get("tag") or option, entry["media"], None)
         if actual["size"] != entry["size"] or actual["mtimeNs"] != entry["mtimeNs"]:
             raise ValueError("Training reference changed since approval.")
         unique.setdefault(entry["media"], []).append(entry["group"] + ": " + option)

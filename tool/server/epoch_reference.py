@@ -113,7 +113,9 @@ def reference_vocabulary(folder, job_id):
     by_media = read_folder_state(root / ".webcap_state.json").get("caption_group_tags_by_media") or {}
     if not isinstance(by_media, dict):
         raise ValueError("Scoped tag map is invalid.")
-    allowed = set(list_media_files(folder)) & training_image_members(folder, job_id)
+    allowed = set(list_media_files(folder))
+    if job_id:
+        allowed &= training_image_members(folder, job_id)
     vocabulary = {}
     for name, annotations in by_media.items():
         if name not in allowed or Path(name).suffix.lower() not in SUPPORTED_REFERENCE_EXTENSIONS:
@@ -130,7 +132,7 @@ def reference_vocabulary(folder, job_id):
             for g, terms in sorted(vocabulary.items())]
 
 
-def verified_reference(folder, group, term, media, job_id):
+def verified_reference(folder, group, term, media, job_id=None):
     matches = find_reference_candidates(folder, group, term, job_id)
     reference = next((entry for entry in matches if entry["media"] == media), None)
     if reference is None:
@@ -138,7 +140,7 @@ def verified_reference(folder, group, term, media, job_id):
     return reference
 
 
-def find_reference_candidates(folder, group, term, job_id):
+def find_reference_candidates(folder, group, term, job_id=None):
     """Return deterministically sorted media annotated with exact group and term.
 
     Unsupported annotation shapes fail explicitly rather than silently matching text.
@@ -154,7 +156,7 @@ def find_reference_candidates(folder, group, term, job_id):
     if not isinstance(by_media, dict):
         raise ValueError("Scoped tag map is invalid.")
     results = []
-    allowed = training_image_members(folder, job_id)
+    allowed = training_image_members(folder, job_id) if job_id else set(list_media_files(folder))
     for name in list_media_files(folder):
         if name not in allowed:
             continue

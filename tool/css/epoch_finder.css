@@ -759,7 +759,12 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .test-references-screen .epoch-finder-reference-tile-actions button{font-size:16px;font-weight:700;padding:10px 8px;min-height:43px;border:1px solid var(--border-color,#455768);border-radius:7px;background:var(--background-secondary,#283645);color:inherit}
 .test-references-screen .epoch-finder-reference-tile-actions button[data-select-reference]{border-color:var(--accent-color,#e99b16)}
 .test-references-screen .epoch-finder-reference-tile.selected button[data-select-reference]{background:var(--accent-color,#e99b16);color:var(--panel-bg,#15202b)}
-.test-references-screen .epoch-finder-reference-tile-actions button:hover{filter:brightness(1.15)}
+.test-references-screen .epoch-finder-reference-tile-actions button:hover:not(:disabled){filter:brightness(1.15)}
+.test-references-screen .epoch-finder-reference-tile-actions button[data-select-reference]:disabled{opacity:1;cursor:default}
+.test-references-screen .test-references-set-label{padding:0 4px 5px;font-size:14px;line-height:1.3;color:var(--text-muted,#aeb8c4)}
+.test-references-screen .test-references-remove-btn{display:block;width:100%;min-height:42px;margin-top:7px;padding:9px 8px;border:1px solid var(--border-color,#657181);border-radius:7px;background:transparent;color:inherit;cursor:pointer;font-size:16px;font-weight:700}
+.test-references-screen .test-references-remove-btn:hover{border-color:var(--danger-color,#e99)}
+
 .test-references-screen .epoch-finder-reference-tile:focus-within{outline:2px solid var(--accent-color,#e99b16);outline-offset:2px}
 .test-references-screen #test-references-preview-caption{font-size:16px;line-height:1.45}
 @media(max-width:1000px){

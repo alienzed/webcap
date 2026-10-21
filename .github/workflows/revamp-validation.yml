@@ -6,6 +6,13 @@ on:
       - 'tool/js/test_generations*.js'
       - 'tool/js/epoch_finder.js'
       - 'tool/server/epoch_finder.py'
+      - 'tool/server/epoch_reference.py'
+      - 'tool/server/training_reference_selections.py'
+      - 'tests/test_training_reference_selections.py'
+      - 'tests/test_training_references_browser.py'
+      - 'tests/test_epoch_finder_multigroup_references.py'
+      - 'tool/js/test_references.js'
+      - 'tool/css/epoch_finder.css'
       - 'tool/server/epoch_test_bench.py'
       - 'tool/css/styles.css'
       - 'tests/test_generations_unified_dom.test.cjs'
@@ -69,6 +76,9 @@ jobs:
       - name: Current native Test and Repeat contracts (must pass)
         run: |
           python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py tests/test_test_workspace_permanent_tabs.py tests/test_test_generations_revamp_parity.py
+      - name: Set-wide Training Reference selections and campaign integration
+        run: |
+          python -m pytest -q tests/test_training_reference_selections.py tests/test_training_references_browser.py tests/test_epoch_finder_multigroup_references.py
       - name: Native Test, VL, Finder and Analytics regressions
         run: |
           python -m pytest -q tests/test_test_generations_ui_contract.py tests/test_test_generations_route.py tests/test_test_generations_ask_vl_navigation_contract.py tests/test_test_repeat.py tests/test_epoch_finder.py tests/test_epoch_finder_multirun.py tests/test_run_analytics_next.py

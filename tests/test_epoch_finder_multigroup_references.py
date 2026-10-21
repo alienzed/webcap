@@ -65,3 +65,8 @@ def test_reference_group_must_contain_selected_exact_tag(monkeypatch, tmp_path):
     assert epoch_reference.verified_reference("set", "Action", "standing", "b.png", "job")["group"] == "Action"
     with pytest.raises(ValueError):
         epoch_reference.verified_reference("set", "Action", "standing", "a.png", "job")
+    # Saved references are Set-scoped; an image can be used for a different run
+    # when its exact group/tag is still annotated in this Set.
+    assert epoch_reference.verified_reference("set", "Action", "standing", "b.png", None)["media"] == "b.png"
+    with pytest.raises(ValueError):
+        epoch_reference.verified_reference("set", "Action", "standing", "a.png", None)

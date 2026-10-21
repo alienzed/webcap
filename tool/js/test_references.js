@@ -24,7 +24,7 @@
   }
   function resetError() { el('error').classList.add('hidden'); el('error').textContent = ''; }
   function mediaUrl(name) { return '/caption/media?folder=' + encodeURIComponent(folder) + '&media=' + encodeURIComponent(name); }
-  function key(group, term) { return JSON.stringify([runId, group, term]); }
+  function key(group, term) { return JSON.stringify([group, term]); }
   function currentChoice() { return {group:currentGroup, term:currentTerm}; }
   var currentGroup = '', currentTerm = '';
   function groupTerms(groupName) {
@@ -44,7 +44,7 @@
       if (folder !== currentFolder || token !== loadCounter) return;
       selected = {};
       (response.selections || []).forEach(function (item) {
-        selected[JSON.stringify([item.runId, item.group, item.term])] = item;
+        selected[key(item.group, item.term)] = item;
       });
       loaded = true;
       drawGallery();
@@ -58,8 +58,14 @@
     resetError();
     api(operation, item).then(function () {
       if (saveFolder !== folder) return;
-      if (operation === 'reference_selection_remove') delete selected[JSON.stringify([item.runId, item.group, item.term])];
-      else selected[JSON.stringify([item.runId, item.group, item.term])] = item;
+      if (operation === 'reference_selection_remove') {
+        delete selected[key(item.group, item.term)];
+        if (saveRun === runId && saveGroup === currentGroup && saveTerm === currentTerm) {
+          candidates = candidates.filter(function (candidate) {
+            return !candidate.savedFromSet || candidate.media !== item.media;
+          });
+        }
+      } else selected[key(item.group, item.term)] = {group:item.group, term:item.term, media:item.media};
       drawGallery();
       if (saveRun === runId && saveGroup === currentGroup && saveTerm === currentTerm) {
         if (after) after();
@@ -112,7 +118,7 @@
     el('next').disabled = position < 0 || position >= choices.length - 1;
   }
   function drawSelections() {
-    var keys = Object.keys(selected).filter(function (value) { return selected[value].runId === runId; });
+    var keys = Object.keys(selected);
     el('selected-count').textContent = keys.length + ' picked';
     el('selections').innerHTML = keys.length ? keys.map(function (value) {
       var item = selected[value];
@@ -142,10 +148,14 @@
       return '<div class="epoch-finder-reference-tile' + (active ? ' selected' : '') + '">' +
         '<img loading="lazy" src="' + mediaUrl(candidate.media) + '" alt="' + esc(candidate.media) + '">' +
         '<span class="test-references-filename" title="' + esc(candidate.media) + '">' + esc(candidate.media) + '</span>' +
+        (candidate.savedFromSet ? '<span class="test-references-set-label">Saved for this Set (outside selected run)</span>' : '') +
         '<div class="epoch-finder-reference-tile-actions">' +
-        '<button type="button" data-select-reference="' + i + '" aria-pressed="' + !!active + '">' +
+        '<button type="button" data-select-reference="' + i + '" aria-pressed="' + !!active + '"' +
+        (active ? ' disabled' : '') + '>' +
         (active ? '✓ Chosen' : 'Choose this') + '</button>' +
-        '<button type="button" data-preview-reference="' + i + '">Preview</button></div></div>';
+        '<button type="button" data-preview-reference="' + i + '">Preview</button></div>' +
+        (active ? '<button type="button" class="test-references-remove-btn" data-remove-gallery-reference="' + i +
+          '">Remove reference</button>' : '') + '</div>';
     }).join('');
     drawSelections();
     drawGroups();
@@ -160,6 +170,11 @@
     api('reference_candidates', {jobId:runId,group:choice.group,term:choice.term}).then(function (response) {
       if (token !== version || folder !== currentFolder || runId !== currentRun) return;
       candidates = response.references || [];
+      // A reference belongs to the Set, even if a different run captured it.
+      var chosen = selected[key(choice.group, choice.term)];
+      if (chosen && !candidates.some(function (candidate) { return candidate.media === chosen.media; })) {
+        candidates.unshift({media:chosen.media, group:choice.group, term:choice.term, savedFromSet:true});
+      }
       drawGallery();
     }).catch(function (error) { if (token === version && currentFolder === folder) report(error); });
   }
@@ -246,8 +261,8 @@
     if (String(setFolder) !== String(folder) || !loaded) return [];
     return Object.keys(selected).map(function (id) { return Object.assign({}, selected[id]); });
   };
-  window.testReferencesChoice = function (jobId, group, term) {
-    return selected[JSON.stringify([String(jobId), String(group), String(term)])] || null;
+  window.testReferencesChoice = function (group, term) {
+    return selected[key(String(group), String(term))] || null;
   };
   el('refresh').onclick = refresh;
   el('run').onchange = function () { el('run-status').textContent = 'Manually selected run.'; loadVocabulary(); };
@@ -266,13 +281,18 @@
   el('gallery').onclick = function (event) {
     var pick = event.target.closest('[data-select-reference]');
     var preview = event.target.closest('[data-preview-reference]');
-    if (!pick && !preview) return;
-    var index = Number(pick ? pick.dataset.selectReference : preview.dataset.previewReference);
+    var remove = event.target.closest('[data-remove-gallery-reference]');
+    if (!pick && !preview && !remove) return;
+    var index = Number(pick ? pick.dataset.selectReference :
+      preview ? preview.dataset.previewReference : remove.dataset.removeGalleryReference);
     var candidate = candidates[index];
     if (!candidate) throw new Error('Reference candidate no longer exists.');
-    if (pick) {
+    if (remove) {
+      var chosen = selected[key(currentGroup, currentTerm)];
+      if (chosen && chosen.media === candidate.media) changeSelection('reference_selection_remove', chosen);
+    } else if (pick) {
       var choice = currentChoice();
-      changeSelection('reference_selection_save', {runId:runId,group:choice.group,term:choice.term,media:candidate.media},
+      changeSelection('reference_selection_save', {group:choice.group,term:choice.term,media:candidate.media},
         advanceAfterPick);
     } else {
       el('preview-image').src = mediaUrl(candidate.media);

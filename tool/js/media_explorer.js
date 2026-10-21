@@ -46,6 +46,7 @@
     var host = el('media-explorer-folder-rows'); host.replaceChildren();
     el('media-explorer-external-navigation').classList.toggle('hidden', !isExternal());
     el('media-explorer-directory-label').textContent = '/' + externalDirectory;
+    el('media-explorer-directory-label').title = '/' + externalDirectory;
     el('media-explorer-up').disabled = !externalDirectory;
     if (!isExternal() || el('media-explorer-recursive').checked) return;
     externalFolders.forEach(function (name) {
@@ -716,7 +717,7 @@
     })) load(false);
   }
   function count() {
-    text(el('media-explorer-count'), items.length + (items.length < total ? ' of ' + total : '') + (total === 1 ? ' item' : ' items') + (isExternal() ? (complete ? '' : ' · discovering…') : (complete ? '' : ' · recent')));
+    text(el('media-explorer-count'), items.length + (items.length < total ? ' of ' + total : '') + (total === 1 ? ' item' : ' items') + (isExternal() && !complete ? ' · discovering…' : ''));
     el('media-explorer-more-btn').classList.toggle('hidden', !externalPendingRefresh);
     text(el('media-explorer-more-btn'), externalPendingRefresh ? 'Refresh results' : 'Load more');
     el('media-explorer-scope').classList.toggle('hidden', complete || isExternal());

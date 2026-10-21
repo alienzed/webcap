@@ -403,3 +403,29 @@ test('Explorer workspace toolbar spans the list and preview without relocating o
   assert.match(css, /\.media-explorer-workspace \.media-explorer-resizer\s*\{\s*grid-column:\s*2;\s*grid-row:\s*2;/);
   assert.match(css, /\.media-explorer-workspace \.media-explorer-preview\s*\{\s*grid-column:\s*3;\s*grid-row:\s*2;/);
 });
+
+
+test('Explorer IA keeps full-size viewer an action and recent discovery in the header', () => {
+  const html = fs.readFileSync('tool/tool.html', 'utf8');
+  const mainStart = html.indexOf('<main class="media-explorer-main"');
+  const mainEnd = html.indexOf('</main>', mainStart);
+  const main = html.slice(mainStart, mainEnd);
+  const toolbarEnd = main.indexOf('<aside class="media-explorer-browser"');
+  assert.ok(main.indexOf('id="media-explorer-scope"') > 0 && main.indexOf('id="media-explorer-scope"') < toolbarEnd,
+    'partial history is explained by the result count, not as a row inside the media list');
+  assert.match(main, /role="group" aria-label="Media list or grid view"/);
+  assert.match(main, /class="media-explorer-viewer-action" data-explorer-mode="single"/);
+  const modeGroup = main.slice(main.indexOf('aria-label="Media list or grid view"'), main.indexOf('</div>', main.indexOf('aria-label="Media list or grid view"')));
+  assert.ok(!modeGroup.includes('data-explorer-mode="single"'), 'full-size viewer must not masquerade as a persisted view mode');
+  const css = fs.readFileSync('tool/css/media_explorer.css', 'utf8');
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-toolbar\s*\{\s*max-height:/);
+  assert.match(css, /@media \(max-width: 760px\)/);
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-resizer\s*\{\s*display: none;/);
+});
+
+test('Explorer file lists expose media type without loading thumbnails in List mode', () => {
+  const source = fs.readFileSync('tool/js/media_explorer.js', 'utf8');
+  assert.match(source, /row\.dataset\.mediaKind = item\.mediaKind/);
+  assert.match(source, /card\.dataset\.mediaKind = item\.mediaKind/);
+  assert.match(source, /if \(next === 'list' && media\) media\.remove\(\)/);
+});

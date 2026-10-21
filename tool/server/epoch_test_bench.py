@@ -3178,6 +3178,7 @@ def cancel_queued(folder_path, job_id):
                 session_directory=session_directory,
                 reduce_total=True,
             )
+    _cancel_test_auto_vl_jobs(session_directory)
     shutil.rmtree(session_directory)
     return {
         "operation": "test_queue_cancel",

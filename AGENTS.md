@@ -143,6 +143,14 @@ Keep the UI efficient and calm.
 - Polling and live refreshes must preserve DOM identity for stateful or interactive elements (especially video/audio playback, inputs, selection, scroll, and expanded controls). Reconcile by stable key and add/update/remove only what actually changed; do not replace whole live containers on a timer unless an intentional context reset requires it.
 - For a local list mutation, prefer updating/removing only the affected keyed element when the mutation's effect is local. If the operation legitimately changes other rows, ordering, grouping, filtering, or collection-wide state, use an authoritative refresh; do not use a scoped response to reconstruct unrelated items.
 
+### Readable Type and Honest Visual Hierarchy
+
+- **12px is the absolute minimum for user-facing text** (including filenames, tag counts, card captions, helper text, status, controls, and secondary metadata). Prefer 13–14px for supporting text and larger for important controls. Do not squeeze more data into a view by shrinking text below this floor; truncate, wrap, reduce columns, or provide a detail view instead.
+- **The user's active subject or decision owns the dominant heading** of its workspace. In a tag-reference gallery, for example, `BB Shape · ring connectors` is the main heading; generic labels like `Matching images`, counts, and instructions are subordinate. Don't give a container label more visual weight than the actual thing being inspected.
+- Respect hierarchy through font size, weight, spacing, and placement; distinguish a primary heading, supporting labels, actionable controls, and tertiary metadata. Verify real rendered hierarchy at normal browser zoom and representative viewport sizes, rather than assuming the DOM heading tag or existing styling makes it prominent.
+- If a screenshot looks too small, inspect the app's actual CSS and layout before attributing it to browser zoom or display scaling. Browser zoom is a hypothesis, not a substitute for correcting undersized in-app typography.
+- These are default requirements for **new and meaningfully revised UI**, and when correcting a reported readability problem; do not redesign unrelated screens just to apply the rules.
+
 ## Visible, Rewarding Progress
 
 Make ongoing work feel alive. A user waiting for model loading, inference, training, scanning, assessment, queue execution, or a Storyboard operation should never have to wonder whether WebCap is broken.

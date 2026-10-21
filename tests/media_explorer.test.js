@@ -11,11 +11,12 @@ function fixture(hash = '#/media') {
     constructor(tag = 'div') {
       this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attrs = {};
       this.listeners = {}; this.value = ''; this.textContent = ''; this.open = false; this.paused = false;
+      this.scrollTop = 0; this.clientHeight = 800; this.scrollHeight = 1200;
       const classes = new Set();
       this.classList = { add: x => classes.add(x), remove: x => classes.delete(x), contains: x => classes.has(x),
         toggle: (x, force = !classes.has(x)) => { force ? classes.add(x) : classes.delete(x); return force; } };
       Object.defineProperty(this, 'className', {set: value => { classes.clear(); value.split(' ').filter(Boolean).forEach(x => classes.add(x)); }});
-      this.style = {setProperty() {}};
+      this.style = {setProperty() {}, getPropertyValue() {return '';}};
       Object.defineProperty(this, 'options', {get: () => this.children});
       Object.defineProperty(this, 'selectedIndex', {get: () => this.children.findIndex(option => option.value === this.value)});
       Object.defineProperty(this, 'parentElement', {get: () => this.parent});
@@ -24,12 +25,20 @@ function fixture(hash = '#/media') {
     getAttribute(k) { return this.attrs[k]; }
     addEventListener(k, fn) { (this.listeners[k] ||= []).push(fn); }
     emit(k, event = {}) { for (const fn of this.listeners[k] || []) fn.call(this, {target:this, ...event}); }
-    click(event) { this.emit('click', event); }
+    click(event = {}) { this.emit('click', event); if (this.onclick) this.onclick(event); }
     appendChild(node) { return this.insertBefore(node, null); }
+    prepend(node) { return this.insertBefore(node, this.children[0] || null); }
     insertBefore(node, before) { node.remove(); node.parent = this; this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, node); return node; }
     remove() { if (this.parent) this.parent.children.splice(this.parent.children.indexOf(this), 1); this.parent = null; }
     replaceChildren(...nodes) { for (const node of [...this.children]) node.remove(); nodes.forEach(node => this.appendChild(node)); }
-    matches(selector) { return selector.split(',').some(s => { s = s.trim(); return s.startsWith('.') ? this.classList.contains(s.slice(1)) : s.toUpperCase() === this.tagName; }); }
+    matches(selector) { return selector.split(',').some(s => {
+      s = s.trim();
+      if (s.startsWith('.')) return this.classList.contains(s.slice(1));
+      if (s.startsWith('#')) return this.id === s.slice(1);
+      if (s.startsWith('option[value="') && s.endsWith('"]'))
+        return this.tagName === 'OPTION' && this.value === s.slice('option[value="'.length, -2);
+      return s.toUpperCase() === this.tagName;
+    }); }
     closest(selector) { return this.matches(selector) ? this : this.parent?.closest(selector) || null; }
     contains(node) { return node === this || this.children.some(child => child.contains(node)); }
     querySelectorAll(selector) { return this.children.flatMap(node => [...(node.matches(selector) ? [node] : []), ...node.querySelectorAll(selector)]); }
@@ -38,9 +47,13 @@ function fixture(hash = '#/media') {
     close() { this.open = false; this.emit('close'); }
     pause() { this.paused = true; }
     focus() { document.activeElement = this; }
+    hasAttribute(k) { return Object.hasOwn(this.attrs, k); }
+    getBoundingClientRect() { return {left: 0, right: 1600, width: 1600}; }
   }
   const html = fs.readFileSync('tool/tool.html', 'utf8');
-  for (const [,id] of html.matchAll(/id="(media-explorer-[^"]+|app-frame)"/g)) nodes[id] = new Element();
+  for (const [,id] of html.matchAll(/id="(media-explorer-[^"]+|app-frame)"/g)) {
+    nodes[id] = new Element(); nodes[id].id = id;
+  }
   for (const [,id,content] of html.matchAll(/<select[^>]*id="(media-explorer-[^"]+)"[^>]*>([\s\S]*?)<\/select>/g)) {
     for (const [,value,label] of content.matchAll(/<option value="([^"]*)">([^<]*)<\/option>/g)) {
       const option = new Element('option'); option.value = value; option.textContent = label; nodes[id].appendChild(option);
@@ -49,16 +62,35 @@ function fixture(hash = '#/media') {
   const buttons = [...html.matchAll(/class="media-explorer-source(?: active)?" data-media-(role|source)="([^"]*)"/g)].map(([,kind,value]) => {
     const button = new Element('button'); button.dataset[kind === 'role' ? 'mediaRole' : 'mediaSource'] = value; button.className = 'media-explorer-source'; return button;
   });
+  const modeButtons = ['list', 'single', 'grid'].map(mode => {
+    const button = new Element('button'); button.dataset.explorerMode = mode; return button;
+  });
+  const workspace = nodes['media-explorer-workspace'];
+  const main = new Element('main'); main.className = 'media-explorer-main';
+  const preview = new Element('section'); preview.className = 'media-explorer-preview';
+  const sizeLabel = new Element('label'); sizeLabel.className = 'media-explorer-size-label';
+  const fitControls = new Element('div'); fitControls.className = 'media-explorer-fit-controls';
   nodes['media-explorer-sort'].value = 'newest';
   nodes['media-explorer-inspector'].classList.add('hidden');
-  nodes['media-explorer-workspace'].appendChild(nodes['media-explorer-inspector-body']);
-  nodes['media-explorer-workspace'].appendChild(nodes['media-explorer-grid']);
+  workspace.appendChild(main);
+  workspace.appendChild(sizeLabel); workspace.appendChild(fitControls);
+  main.appendChild(nodes['media-explorer-gallery-area']);
+  main.appendChild(preview);
+  nodes['media-explorer-gallery-area'].appendChild(nodes['media-explorer-folder-rows']);
+  nodes['media-explorer-gallery-area'].appendChild(nodes['media-explorer-side-list']);
+  nodes['media-explorer-gallery-area'].appendChild(nodes['media-explorer-grid']);
+  preview.appendChild(nodes['media-explorer-preview-stage']);
+  workspace.appendChild(nodes['media-explorer-inspector']);
+  nodes['media-explorer-inspector'].appendChild(nodes['media-explorer-inspector-body']);
+  workspace.appendChild(nodes['media-explorer-loupe']); workspace.appendChild(nodes['media-explorer-compare-dialog']);
   nodes['media-explorer-compare-dialog'].appendChild(new Element('strong'));
   nodes['media-explorer-compare-dialog'].appendChild(nodes['media-explorer-compare-content']);
   document = { getElementById: id => nodes[id], createElement: tag => new Element(tag), listeners: {},
-    querySelector: () => ({scrollTop:0}),
+    querySelector: selector => selector === '.media-explorer-main' ? main : workspace.querySelector(selector),
     addEventListener(k, fn) { this.listeners[k] = fn; },
-    querySelectorAll: selector => selector.includes('[data-media-role]') ? buttons.filter(b => 'mediaRole' in b.dataset) : selector.includes('[data-media-source]') ? buttons.filter(b => 'mediaSource' in b.dataset) : buttons };
+    querySelectorAll: selector => selector.includes('[data-explorer-mode]') ? modeButtons :
+      selector.includes('[data-media-role]') ? buttons.filter(b => 'mediaRole' in b.dataset) :
+      selector.includes('[data-media-source]') ? buttons.filter(b => 'mediaSource' in b.dataset) : buttons };
   const window = { location: {hash}, reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
   for (const owner of ['Generate', 'TestBench', 'Storyboard', 'Storage']) window['close' + owner + 'Activity'] = () => closed.push(owner);
   vm.runInNewContext(fs.readFileSync('tool/js/media_explorer.js', 'utf8'), {
@@ -66,18 +98,19 @@ function fixture(hash = '#/media') {
     getComputedStyle: () => ({gridTemplateColumns:'240px 240px'}),
     fetch: (url, options) => new Promise((resolve, reject) => pending.push({url, options, resolve, reject}))
   });
-  const settle = async (request, items, ok = true) => {
-    request.resolve({ok, status:ok ? 200 : 500, json:async () => ({ok, items, total:items.length, complete:true, error:ok ? undefined : 'owner discovery failed'})});
+  const settle = async (request, items, ok = true, extra = {}) => {
+    request.resolve({ok, status:ok ? 200 : 500, json:async () => ({ok, items, total:items.length, complete:true, error:ok ? undefined : 'owner discovery failed', ...extra})});
     await new Promise(resolve => setImmediate(resolve));
   };
   const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
-  return {nodes, buttons, pending, errors, closed, window, settle, key};
+  return {nodes, buttons, modeButtons, pending, errors, closed, window, settle, key};
 }
 const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
 
 test('unavailable previews keep their card and expose decoder details in the Console', async () => {
   const f = fixture(); f.window.openMediaExplorerActivity();
   await f.settle(f.pending[0], [media('missing'), media('broken', 'video')]);
+  f.modeButtons.find(button => button.dataset.explorerMode === 'grid').click();
   const [imageCard, videoCard] = f.nodes['media-explorer-grid'].children;
   imageCard.querySelector('img').emit('error');
   const video = videoCard.querySelector('video');
@@ -148,7 +181,7 @@ test('selection, grid keys, loupe return and native video cleanup', async () => 
   f.key(a, 'ArrowRight'); assert.equal(b.classList.contains('active'), true);
   f.key(b, 'Enter'); assert.equal(f.nodes['media-explorer-loupe'].open, true);
   f.nodes['media-explorer-close-loupe'].click();
-  c.click(); const video = f.nodes['media-explorer-inspector-body'].querySelector('video');
+  c.click(); const video = f.nodes['media-explorer-preview-stage'].querySelector('video');
   f.window.closeMediaExplorerActivity(); assert.equal(video.paused, true);
 });
 
@@ -298,4 +331,51 @@ test('Storyboard provenance preserves exact take identity for owner handoff', ()
   assert.match(explorer, /takeId: use\.takeId \|\| ''/);
   assert.match(storyboard, /Storyboard Take no longer exists in scene/);
   assert.match(storyboard, /\.storyboard-take\[data-take-id\]/);
+});
+
+
+test('External browsing is folder-first, keeps media list in Grid and never auto-writes metadata', async () => {
+  const f = fixture(); f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(b => b.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/tmp/other-drive';
+  f.nodes['media-explorer-open-path'].click();
+  const request = f.pending.at(-1);
+  const params = new URL(request.url, 'http://localhost').searchParams;
+  assert.equal(params.get('directory'), '');
+  assert.equal(params.get('recursive'), '0');
+  const files = [
+    {...media('a'), id:'external:a', fileName:'a.jpg', source:'external', relativePath:'a.jpg'},
+    {...media('b'), id:'external:b', fileName:'b.jpg', source:'external', relativePath:'b.jpg'}
+  ];
+  await f.settle(request, files, true, {folders:['child']});
+  assert.equal(f.nodes['media-explorer-folder-rows'].children.length, 1);
+  assert.equal(f.nodes['media-explorer-grid'].children.length, 2);
+  assert.equal(f.pending.filter(entry => entry.url.includes('/external/metadata')).length, 0,
+    'Browsing must not start a writing metadata operation');
+  f.modeButtons.find(b => b.dataset.explorerMode === 'grid').click();
+  assert.equal(f.nodes['media-explorer-side-list'].children.length, 2,
+    'Grid mode retains the selectable left media list');
+  assert.equal(f.nodes['media-explorer-grid'].parent, f.nodes['media-explorer-preview-stage'],
+    'Grid belongs in the large central pane');
+  const row = f.nodes['media-explorer-side-list'].children[1];
+  row.querySelector('button').click();
+  assert.equal(f.nodes['media-explorer-inspector-body'].dataset.id, 'external:b');
+  f.nodes['media-explorer-folder-rows'].children[0].click();
+  const folderRequest = f.pending.at(-1);
+  assert.equal(new URL(folderRequest.url,'http://localhost').searchParams.get('directory'), 'child');
+  await f.settle(folderRequest, [], true, {folders:[]});
+  assert.equal(f.nodes['media-explorer-side-list'].children.length, 0);
+});
+
+test('External subfolder checkbox broadens scope only when selected', async () => {
+  const f = fixture(); f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(b => b.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/tmp/other-drive';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1), [], true, {folders:['child']});
+  f.nodes['media-explorer-recursive'].checked = true;
+  f.nodes['media-explorer-recursive'].emit('change');
+  assert.equal(new URL(f.pending.at(-1).url,'http://localhost').searchParams.get('recursive'), '1');
 });

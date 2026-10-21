@@ -389,8 +389,13 @@ def register_routes(app):
                                           + quote(str(snapshot["root"]), safe="")
                                           + "&file=" + quote(item["relativePath"], safe=""))
                     selected.append(record)
+                # The browser requires child directories even when this page has
+                # zero media files; the recursive index contains files, not folders.
+                directory = request.args.get("directory")
+                folders = _child_directories(snapshot, directory) if directory is not None else []
                 return jsonify({**_snapshot_status(snapshot), "items": selected,
-                                "total": len(items), "offset": offset, "limit": limit, "facets": {}})
+                                "folders": folders, "total": len(items),
+                                "offset": offset, "limit": limit, "facets": {}})
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA DISCOVERY FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400

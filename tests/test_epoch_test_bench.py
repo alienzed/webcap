@@ -735,6 +735,62 @@ def test_sessions_list_open_and_delete_are_scoped_to_current_set(tmp_path):
 
 
 
+def test_deleting_test_session_cancels_its_pending_auto_vl(tmp_path, monkeypatch):
+    from tool.server import llm_runner
+
+    session = tmp_path / bench.TEST_RESULTS_DIR / "completed-with-vl"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete",
+        "results": [],
+        "autoVlJobs": {"one.mp4": "vl-one", "two.mp4": "vl-two"},
+    })
+    cancelled = []
+    monkeypatch.setattr(
+        llm_runner, "action",
+        lambda operation, job_id="": cancelled.append((operation, job_id)) or {"job": {"status": "cancelled"}},
+    )
+
+    bench.delete_session(tmp_path, session.name)
+
+    assert not session.exists()
+    assert set(cancelled) == {("cancel_job", "vl-one"), ("cancel_job", "vl-two")}
+
+
+def test_clear_sessions_cancels_automatic_test_vl(tmp_path, monkeypatch):
+    from tool.server import llm_runner
+
+    session = tmp_path / bench.TEST_RESULTS_DIR / "completed-with-vl"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "complete", "results": [], "autoVlJobs": {"one.mp4": "vl-one"},
+    })
+    cancelled = []
+    monkeypatch.setattr(
+        llm_runner, "action",
+        lambda operation, job_id="": cancelled.append((operation, job_id)) or {"job": {"status": "cancelled"}},
+    )
+
+    assert bench.clear_sessions(tmp_path) == 1
+    assert cancelled == [("cancel_job", "vl-one")]
+
+
+def test_stopping_session_does_not_enqueue_late_test_vl(tmp_path, monkeypatch):
+    from tool.server import llm_runner
+
+    session = tmp_path / bench.TEST_RESULTS_DIR / "stopping-session"
+    session.mkdir(parents=True)
+    bench._atomic_write_json(session / "test.json", {
+        "status": "stopping", "autoVlModel": "vision-model", "autoVlJobs": {},
+    })
+    monkeypatch.setattr(
+        llm_runner, "enqueue",
+        lambda *args, **kwargs: pytest.fail("Stopped Test session must not schedule Auto VL"),
+    )
+
+    bench._queue_test_auto_vl(tmp_path, session.name, "one.mp4")
+
+
 def test_workspace_prompt_is_disk_backed_per_set_and_model(tmp_path, monkeypatch):
     root = tmp_path / "root"
     output = tmp_path / "output"
@@ -1442,8 +1498,20 @@ def test_clear_queued_test_sessions_keeps_other_global_inference(tmp_path, monke
         include_base=True,
     )
 
+    from tool.server import llm_runner
+    session = bench._session_directory(tmp_path, payload["latest"]["session"])
+    stored = bench._read_status(session)
+    stored["autoVlJobs"] = {"old.mp4": "vl-old"}
+    bench._atomic_write_json(session / "test.json", stored)
+    cancelled_vl = []
+    monkeypatch.setattr(
+        llm_runner, "action",
+        lambda operation, job_id="": cancelled_vl.append((operation, job_id)) or {"job": {"status": "cancelled"}},
+    )
+
     cleared = bench.clear_queued(tmp_path)
 
+    assert cancelled_vl == [("cancel_job", "vl-old")]
     assert cleared["removed"] == 1
     assert not (bench._central_session_root() / payload["latest"]["session"]).exists()
     assert execution_queue.get_job(other["id"])["status"] == "queued"
@@ -1463,8 +1531,19 @@ def test_stop_shared_test_session_cancels_pending_children_and_requests_active_s
     assert claimed["id"] == child_ids[0]
     execution_queue.mark_running(child_ids[0])
 
+    from tool.server import llm_runner
+    cancelled_vl = []
+    monkeypatch.setattr(
+        llm_runner, "action",
+        lambda operation, job_id="": cancelled_vl.append((operation, job_id)) or {"job": {"status": "cancelled"}},
+    )
+    status_payload = bench._read_status(session)
+    status_payload["autoVlJobs"] = {"prior.mp4": "vl-prior"}
+    bench._atomic_write_json(session / "test.json", status_payload)
+
     stopped = bench.stop(tmp_path)
 
+    assert cancelled_vl == [("cancel_job", "vl-prior")]
     assert stopped["status"] == "stopping"
     assert execution_queue.get_job(child_ids[0])["status"] == "stopping"
     assert [execution_queue.transient_receipt(job_id)["status"] for job_id in child_ids[1:]] == ["cancelled", "cancelled"]

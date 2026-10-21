@@ -367,6 +367,11 @@
     var kind = kindLabel(item);
     if (item.kind === 'test-batch') return 'Batch Test + VL';
     if (item.kind === 'director') {
+      // Auto Test VL is a caption/vision request, not a Director failure.
+      if (item.client === 'caption' && item.operation === 'vision_question' &&
+          String(item.label || '').indexOf('Test Ask VL · ') === 0) {
+        return String(item.label);
+      }
       var client = item.client === 'generate' ? 'Generate'
         : item.client === 'storyboard' ? 'Storyboard'
         : item.client === 'test' ? 'Test'

@@ -73,9 +73,12 @@
       return items.map(function (entry) {
         var chosen = groupTerms(entry.group).filter(function (term) { return selected[key(entry.group, term.term)]; }).length;
         var active = entry.group === currentGroup;
+        var total = groupTerms(entry.group).length;
         return '<button type="button" class="test-references-group' + (active ? ' active' : '') +
           '" data-reference-group="' + esc(entry.group) + '" aria-pressed="' + active + '">' +
-          '<span>' + esc(entry.group) + '</span><small>' + chosen + ' / ' + groupTerms(entry.group).length + '</small></button>';
+          '<span class="test-references-group-name">' + esc(entry.group) + '</span>' +
+          '<span class="test-references-group-count">' + chosen + ' / ' + total + '</span>' +
+          '<span class="test-references-group-track"><span style="width:' + Math.round(chosen / total * 100) + '%"></span></span></button>';
       }).join('');
     }
     el('groups').innerHTML = concepts.length ? buttons(concepts) : '';
@@ -98,15 +101,16 @@
       var active = entry.term === currentTerm, saved = !!selected[key(currentGroup, entry.term)];
       return '<button type="button" class="test-references-tag' + (active ? ' active' : '') +
         (saved ? ' chosen' : '') + '" data-reference-term="' + esc(entry.term) +
-        '" aria-pressed="' + active + '">' + (saved ? '✓ ' : '') + esc(entry.term) +
-        ' <small>' + Number(entry.count || 0) + '</small></button>';
+        '" aria-pressed="' + active + '"><span class="test-references-tag-name">' +
+        (saved ? '✓ ' : '') + esc(entry.term) + '</span>' +
+        '<small>' + Number(entry.count || 0) + ' images</small></button>';
     }).join('');
     el('previous').disabled = position <= 0;
     el('next').disabled = position < 0 || position >= choices.length - 1;
   }
   function drawSelections() {
     var keys = Object.keys(selected).filter(function (value) { return selected[value].runId === runId; });
-    el('selected-count').textContent = keys.length + ' chosen';
+    el('selected-count').textContent = keys.length + ' picked';
     el('selections').innerHTML = keys.length ? keys.map(function (value) {
       var item = selected[value];
       return '<div class="test-references-selection"><img loading="lazy" src="' + mediaUrl(item.media) + '" alt="">' +
@@ -116,19 +120,28 @@
   }
   function drawGallery() {
     var chosen = selected[key(currentGroup, currentTerm)];
+    var terms = groupTerms(currentGroup);
+    var covered = terms.filter(function (item) { return selected[key(currentGroup, item.term)]; }).length;
     el('active-heading').textContent = currentGroup && currentTerm
       ? currentGroup + ' · ' + currentTerm : 'Choose an annotation tag';
-    el('count').textContent = candidates.length + ' images';
-    el('status').textContent = candidates.length ? 'Select a representative image or preview it.' :
-      (runId && currentGroup && currentTerm ? 'No images carry this exact tag in this training run.' : 'No matching tags for this training run.');
+    el('active-chosen').classList.toggle('hidden', !chosen);
+    el('coverage-label').textContent = terms.length ? covered + ' of ' + terms.length + ' tags covered' : 'Choose a group to begin';
+    el('progress').setAttribute('aria-valuemax', String(terms.length));
+    el('progress').setAttribute('aria-valuenow', String(covered));
+    el('progress-fill').style.width = (terms.length ? Math.round(covered / terms.length * 100) : 0) + '%';
+    el('count').textContent = candidates.length + ' matching images';
+    el('status').textContent = candidates.length
+      ? (chosen ? 'Reference saved for this tag. Choose another image to replace it, or continue.' :
+         'Pick the strongest example for this tag; preview any image first.')
+      : (runId && currentGroup && currentTerm ? 'No images carry this exact tag in this training run.' : 'Choose a group and tag to browse exact matches.');
     el('gallery').innerHTML = candidates.map(function (candidate, i) {
       var active = chosen && chosen.media === candidate.media;
       return '<div class="epoch-finder-reference-tile' + (active ? ' selected' : '') + '">' +
         '<img loading="lazy" src="' + mediaUrl(candidate.media) + '" alt="' + esc(candidate.media) + '">' +
-        '<span title="' + esc(candidate.media) + '">' + esc(candidate.media) + '</span>' +
+        '<span class="test-references-filename" title="' + esc(candidate.media) + '">' + esc(candidate.media) + '</span>' +
         '<div class="epoch-finder-reference-tile-actions">' +
         '<button type="button" data-select-reference="' + i + '" aria-pressed="' + !!active + '">' +
-        (active ? '✓ Selected' : 'Select') + '</button>' +
+        (active ? '✓ Chosen' : 'Choose this') + '</button>' +
         '<button type="button" data-preview-reference="' + i + '">Preview</button></div></div>';
     }).join('');
     drawSelections();
@@ -159,6 +172,15 @@
     currentTerm = choices.some(function (entry) { return entry.term === saved; }) ? saved :
       (firstOpen || choices[0] || {}).term || '';
     loadCandidates();
+  }
+  function advanceAfterPick() {
+    var choices = groupTerms(currentGroup);
+    var index = choices.findIndex(function (entry) { return entry.term === currentTerm; });
+    for (var step = 1; step < choices.length; step++) {
+      var item = choices[(index + step) % choices.length];
+      if (!selected[key(currentGroup, item.term)]) { showTerm(item.term); return; }
+    }
+    el('status').textContent = 'Group complete! Every observed tag in this group has a chosen reference.';
   }
   function advance(step) {
     var choices = groupTerms(currentGroup), index = choices.findIndex(function (entry) { return entry.term === currentTerm; });
@@ -248,7 +270,7 @@
     if (pick) {
       var choice = currentChoice();
       changeSelection('reference_selection_save', {runId:runId,group:choice.group,term:choice.term,media:candidate.media},
-        function () { advance(1); });
+        advanceAfterPick);
     } else {
       el('preview-image').src = mediaUrl(candidate.media);
       el('preview-image').alt = candidate.media;

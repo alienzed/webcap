@@ -671,22 +671,6 @@ def history_job_output_path(folder_path, job_id):
     return Path(job["outputRoot"])
 
 
-def clear_history(folder_path=None):
-    """Clear indexes only; job bundles and trainer artifacts are deliberately untouched."""
-    folder_key = _folder_key(folder_path) if folder_path else ""
-    with _history_lock:
-        recent = _read_recent_runs()
-        original = recent["jobs"]
-        retained = [
-            job for job in original
-            if folder_key and str(job.get("folder") or "") != folder_key
-        ]
-        cleared = len(original) - len(retained)
-        recent["jobs"] = retained
-        _write_recent_runs(recent)
-        return cleared
-
-
 def clear_history_job(folder_path, job_id):
     """Remove one history index entry without touching its logs or training artifacts."""
     folder_key = _folder_key(folder_path)

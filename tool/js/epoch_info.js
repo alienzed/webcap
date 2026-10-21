@@ -19,8 +19,16 @@
     view.rendered=true;
     root.replaceChildren();
     var header=element('div','epoch-info-header');
-    header.appendChild(element('h3','', 'Epoch '+view.epoch));
-    header.appendChild(element('p','', 'Run '+view.jobId.slice(-8)+' · All recorded Test and Campaign evidence'));
+    var heading=element('div','epoch-info-header-text');
+    heading.appendChild(element('h3','', 'Epoch '+view.epoch));
+    heading.appendChild(element('p','', 'Run '+view.jobId.slice(-8)+' · All recorded Test and Campaign evidence'));
+    header.appendChild(heading);
+    if(view.mode==='analytics'){
+      var back=element('button','review-captions-btn epoch-info-back','← Back to Insights');
+      back.type='button';
+      back.onclick=window.epochInfoShowAnalytics;
+      header.appendChild(back);
+    }
     root.appendChild(header);
     var summary=view.summary||{};
     var grid=element('div','epoch-info-stats');
@@ -182,7 +190,9 @@
   window.epochInfoOpen=function(mode,folder,jobId,epoch){
     if(mode!=='tests'&&mode!=='analytics')throw new Error('Unknown epoch inspector view: '+mode);
     var host=mode==='tests'?'test-generations-epoch-info':'run-analytics-epoch-info';
-    var view={mode:mode,host:host,folder:folder,jobId:String(jobId),epoch:Number(epoch),items:[],offset:0,total:0,cards:new Map(),rendered:false};
+    var report=mode==='analytics'?document.getElementById('run-analytics-report-surface'):null;
+    var reportWasHidden=report?(state.analytics?state.analytics.reportWasHidden:report.classList.contains('hidden')):null;
+    var view={mode:mode,host:host,folder:folder,jobId:String(jobId),epoch:Number(epoch),items:[],offset:0,total:0,cards:new Map(),rendered:false,reportWasHidden:reportWasHidden};
     state[mode]=view;
     if(mode==='tests') {
       document.getElementById('test-generations-session-surface').classList.add('hidden');
@@ -196,7 +206,7 @@
   // Analytics selection and Test-to-epoch links use the same surface.
   window.runAnalyticsViewEpoch=function(jobId,epoch,returnMode){
     var mode=returnMode==='tests'?'tests':'analytics';
-    if(mode==='analytics') {
+    if(mode==='analytics' && document.getElementById('run-analytics-screen').classList.contains('hidden')) {
       window.epochFinderShowMode('analytics');
     }
     var folder=window.runAnalyticsFolder();
@@ -207,6 +217,10 @@
     state.tests=null;document.getElementById('test-generations-epoch-info').classList.add('hidden');document.getElementById('test-generations-session-surface').classList.remove('hidden');
   };
   window.epochInfoShowAnalytics=function(){
-    state.analytics=null;document.getElementById('run-analytics-epoch-info').classList.add('hidden');document.getElementById('run-analytics-report-surface').classList.remove('hidden');
+    var view=state.analytics;
+    state.analytics=null;
+    document.getElementById('run-analytics-epoch-info').classList.add('hidden');
+    var report=document.getElementById('run-analytics-report-surface');
+    report.classList.toggle('hidden',!view||view.reportWasHidden);
   };
 })();

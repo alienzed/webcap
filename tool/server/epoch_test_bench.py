@@ -1439,6 +1439,7 @@ def handle_request(folder_path, mode, selection_criteria=None):
             sweep_weights=criteria.get("sweepWeights"),
             include_base=criteria.get("includeBase"),
             model_id=criteria.get("modelId"),
+            wildcard_dimensions=criteria.get("wildcardDimensions"),
         )
     raise ValueError("Unsupported Test Generations operation: " + operation)
 
@@ -2019,12 +2020,80 @@ def _wildcard_evaluation_groups(source_prompt, resolved_prompt):
     return groups
 
 
+def resolve_test_wildcards(prompt, seed):
+    """Choose actual wildcard values in WebCap; stable across equal test seeds."""
+    source = _strip_wildcard_comments(str(prompt or ""))
+    output, selections = [], []
+    for kind, item in _parse_wildcard_nodes(source):
+        if kind == "literal":
+            output.append(item)
+            continue
+        options = [value for branch in item for value in _expand_wildcard_option(branch)]
+        if not options:
+            raise ValueError("Test wildcard has no options.")
+        index = len(selections)
+        digest = hashlib.sha256(
+            (str(seed) + "\x00" + source + "\x00" + str(index)).encode("utf-8")
+        ).digest()
+        chosen = int.from_bytes(digest[:8], "big") % len(options)
+        output.append(options[chosen])
+        selections.append({"id": "G" + str(index + 1),
+                           "option": _normalize_wildcard_text(options[chosen]),
+                           "selected": chosen + 1})
+    return "".join(output).strip(), selections
+
+
+def _test_wildcard_dimensions(folder_path, prompt, dimensions):
+    """Bind only exact source group/tag options; customized options remain valid."""
+    if not dimensions:
+        return []
+    options = []
+    for kind, item in _parse_wildcard_nodes(_strip_wildcard_comments(prompt)):
+        if kind == "group":
+            values = []
+            for branch in item:
+                for value in _expand_wildcard_option(branch):
+                    normalized = _normalize_wildcard_text(value)
+                    if normalized not in values:
+                        values.append(normalized)
+            options.append(values)
+    if not isinstance(dimensions, list) or len(dimensions) != len(options):
+        return []
+    from .epoch_reference import reference_vocabulary
+    vocabulary = {
+        entry["group"]: {tag["term"] for tag in entry["terms"]}
+        for entry in reference_vocabulary(_relative_set_folder(folder_path), None)
+    } if any(isinstance(row, dict) and row.get("annotationGroup") for row in dimensions) else {}
+    result = []
+    for index, (row, choices) in enumerate(zip(dimensions, options)):
+        if not isinstance(row, dict) or row.get("options") != choices:
+            return []
+        group = str(row.get("annotationGroup") or "").strip()
+        if group and not set(choices).issubset(vocabulary.get(group, set())):
+            group = ""
+        result.append({"id": "G" + str(index + 1),
+                       "label": str(row.get("label") or ("Attribute " + str(index + 1))),
+                       "options": choices, "annotationGroup": group,
+                       "role": str(row.get("role") or "")})
+    return result
+
+
 def _project_wildcard_fields(payload):
     visible = payload
     source = visible.get("sourcePrompt")
     resolved = visible.get("resolvedPrompt") or visible.get("prompt")
     visible["wildcardValues"] = _resolved_wildcard_values(source, resolved)
-    visible["wildcardEvaluationGroups"] = _wildcard_evaluation_groups(source, resolved)
+    groups = _wildcard_evaluation_groups(source, resolved)
+    dimensions = visible.get("wildcardDimensions") or []
+    selections = visible.get("wildcardSelections") or []
+    for index, group in enumerate(groups):
+        if index < len(dimensions) and dimensions[index].get("options") == group["options"]:
+            dimension = dimensions[index]
+            group.update({key: dimension[key] for key in ("label", "annotationGroup", "role")
+                          if dimension.get(key)})
+        if index < len(selections) and selections[index].get("option") in group["options"]:
+            group["expected"] = group["options"].index(selections[index]["option"]) + 1
+    visible["wildcardEvaluationGroups"] = groups
     visible["wildcardSummary"] = _resolved_wildcard_summary(
         source, resolved, visible.get("ownerFolder"),
     )
@@ -2092,22 +2161,14 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     template = model.load_template()
     normalized_settings = model.normalize_settings(template, _new_session_seed, requested_settings)
 
-    prompt_needs_resolve = False
-    try:
-        resolved_prompt = inference_runtime.resolve_wildcard_prompt(
-            prompt,
-            normalized_settings["seed"],
-        )
-    except (ConnectionError, TimeoutError):
-        resolved_prompt = prompt
-        prompt_needs_resolve = True
+    resolved_prompt, selections = resolve_test_wildcards(prompt, normalized_settings["seed"])
     request = {
         "modelId": model.PROFILE_ID,
         "mediaKind": model.MEDIA_KIND,
         "name": session_name,
         "sourcePrompt": prompt,
         "prompt": resolved_prompt,
-        "promptNeedsResolve": prompt_needs_resolve,
+        "wildcardSelections": selections,
         "settings": dict(normalized_settings),
         "workflow": copy.deepcopy(template),
         "candidateStrengths": strength_by_file,
@@ -2526,20 +2587,6 @@ def execute_inference(job_id, request, context):
             dict(request.get("settings") or {}),
         )
         prompt = str(request.get("prompt") or "").strip()
-        if request.get("promptNeedsResolve"):
-            with _status_lock:
-                status_payload = _read_status(session_directory) or {}
-                session_prompt = str(status_payload.get("resolvedPrompt") or "").strip()
-                if session_prompt and session_prompt != str(request.get("sourcePrompt") or "").strip():
-                    prompt = session_prompt
-                else:
-                    prompt = inference_runtime.resolve_wildcard_prompt(
-                        str(request.get("sourcePrompt") or prompt),
-                        settings["seed"],
-                    )
-                    status_payload["resolvedPrompt"] = prompt
-                    status_payload["prompt"] = prompt
-                    _atomic_write_json(_status_path(session_directory), status_payload)
         if not prompt:
             raise ValueError("Test inference job has no resolved prompt.")
 
@@ -2710,6 +2757,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
         "session": session_directory.name,
         "name": str(request.get("name") or ""),
         "sourcePrompt": str(request.get("sourcePrompt") or ""),
+        "wildcardSelections": copy.deepcopy(request.get("wildcardSelections") or []),
+        "wildcardDimensions": copy.deepcopy(request.get("wildcardDimensions") or []),
         "resolvedPrompt": str(request.get("prompt") or ""),
         "prompt": str(request.get("prompt") or ""),
         "total": len(candidates),
@@ -2959,7 +3008,7 @@ def reconcile_startup():
 
 def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_files=None,
             candidate_strengths=None, include_base=True, model_id=None, aspect_ratio=None, megapixels=None, duration=None,
-            sweep_weights=None, campaign_staging="", auto_vl_model=""):
+            sweep_weights=None, campaign_staging="", auto_vl_model="", wildcard_dimensions=None):
     reconcile_startup()
     request, loras, include_base = _new_inference_request(
         folder_path,
@@ -2977,6 +3026,7 @@ def enqueue(folder_path, prompt, settings=None, seed=None, name=None, selected_f
         duration=duration,
         campaign_staging=campaign_staging,
     )
+    request["wildcardDimensions"] = _test_wildcard_dimensions(folder_path, prompt, wildcard_dimensions)
     latest = _enqueue_frozen_test_request(folder_path, request, loras, include_base, auto_vl_model=auto_vl_model)
     return {
         "operation": "test_enqueue",
@@ -3039,6 +3089,7 @@ def enqueue_repeated(folder_path, criteria):
                 model_id=criteria.get("modelId"),
                 sweep_weights=criteria.get("sweepWeights"),
                 auto_vl_model=vl_model,
+                wildcard_dimensions=criteria.get("wildcardDimensions"),
             )
         except Exception as exc:
             if not accepted:

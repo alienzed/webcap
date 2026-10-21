@@ -548,6 +548,7 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
             selected_files=[staged], candidate_strengths={Path(staged).name: 1.0},
             include_base=False, model_id=campaign["modelId"],
             campaign_staging="epoch-finder-" + campaign["id"],
+            wildcard_dimensions=campaign["dimensions"],
         )
         unit["session"] = answer["job"]["id"]
         unit["queuedAt"] = time.time()

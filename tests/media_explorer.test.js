@@ -439,3 +439,13 @@ test('full-size viewer action is disabled without a file and enabled after disco
   await f.settle(f.pending[1], [media('ready')]);
   assert.equal(f.nodes['media-explorer-view-full-size'].disabled, false);
 });
+
+test('partial generated discovery notice does not leak into external-folder navigation', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], [media('recent')], true, {complete:false, total:150});
+  assert.equal(f.nodes['media-explorer-scope'].classList.contains('hidden'), false);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  assert.equal(f.nodes['media-explorer-scope'].classList.contains('hidden'), true);
+  assert.equal(f.nodes['media-explorer-view-full-size'].disabled, true);
+});

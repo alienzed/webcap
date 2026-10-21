@@ -278,3 +278,11 @@
 .media-explorer-detail dd,.media-explorer-inspector-section p,.media-explorer-inspector-title strong { font-size:16px; }
 .media-explorer-inspector-actions button,.media-explorer-selection button { font-size:16px; }
 .media-explorer-source-note { font-size:12px; }
+
+/* Readability for the revised Explorer controls; avoid 10-12px working text. */
+.media-explorer-rail-title { font-size:13px; }
+.media-explorer-modes button,.media-explorer-fit-controls button { font-size:15px; }
+.media-explorer-metadata-progress,.media-explorer-status { font-size:15px; }
+.media-explorer-selection-hint,.media-explorer-inspector-section summary { font-size:14px; }
+.media-explorer-use-link,.media-explorer-scope { font-size:14px; }
+.media-explorer-card-badge { font-size:12px; }

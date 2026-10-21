@@ -54,6 +54,7 @@ def test_reference_browser_typography_and_real_work_progress():
     assert 'el(\'active-heading\').textContent = currentGroup && currentTerm' in script
     assert 'el(\'coverage-label\').textContent = terms.length ? covered +' in script
     assert "function advanceAfterPick()" in script
+    assert "saveGroup === currentGroup && saveTerm === currentTerm" in script
     assert "if (!selected[key(currentGroup, item.term)])" in script
     assert '.test-references-screen{font-size:16px' in css
     assert '#test-references-active-heading{font-size:clamp(24px' in css

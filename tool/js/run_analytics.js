@@ -359,12 +359,8 @@
     var num=Number(epoch);
     if(!id||!Number.isInteger(num))throw new Error('Choose a valid saved checkpoint.');
     epochMediaReturnMode=returnMode==='finder'||returnMode==='tests'?returnMode:'analytics';
-    var backLabel=epochMediaReturnMode==='finder'?'← Back to Campaign':epochMediaReturnMode==='tests'?'← Back to Test results':'← Back to Insights';
-    el('epoch-media-close').textContent=backLabel;
-    el('epoch-media-back-bottom').textContent=backLabel;
-    // Inspecting from Insights must not reload it, lose selection, or reset scroll.
-    if(document.getElementById('run-analytics-screen').classList.contains('hidden'))
-      window.epochFinderShowMode('analytics');
+    el('epoch-media-close').textContent=epochMediaReturnMode==='finder'?'← Back to Campaign':epochMediaReturnMode==='tests'?'← Back to Test results':'← Back to Analytics';
+    window.epochFinderShowMode('analytics');
     epochMediaSerial++;
     epochMediaLoading=false;
     epochMediaScope={jobId:id,epoch:num};
@@ -376,7 +372,6 @@
     epochMediaLoad(false);
   };
   el('epoch-media-close').onclick=epochMediaClose;
-  el('epoch-media-back-bottom').onclick=epochMediaClose;
   el('epoch-media-more').onclick=function(){epochMediaLoad(true);};
   el('epoch-media-dialog').addEventListener('close',function(){
     if(!epochMediaScope)return;

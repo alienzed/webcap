@@ -379,3 +379,27 @@ test('External subfolder checkbox broadens scope only when selected', async () =
   f.nodes['media-explorer-recursive'].emit('change');
   assert.equal(new URL(f.pending.at(-1).url,'http://localhost').searchParams.get('recursive'), '1');
 });
+
+
+test('Explorer workspace toolbar spans the list and preview without relocating owned controls', () => {
+  const html = fs.readFileSync('tool/tool.html', 'utf8');
+  const css = fs.readFileSync('tool/css/media_explorer.css', 'utf8');
+  const main = html.slice(html.indexOf('<main class="media-explorer-main"'), html.indexOf('</main>', html.indexOf('<main class="media-explorer-main"')));
+  const toolbarStart = main.indexOf('<div class="media-explorer-toolbar">');
+  const toolbarEnd = main.indexOf('<aside class="media-explorer-browser"');
+  const listStart = main.indexOf('<div id="media-explorer-gallery-area"');
+  const separatorStart = main.indexOf('<div id="media-explorer-resizer"');
+  const previewStart = main.indexOf('<section class="media-explorer-preview"');
+  assert.ok(toolbarStart > 0 && toolbarStart < toolbarEnd, 'toolbar is the first layout row');
+  assert.ok(toolbarEnd < listStart && listStart < separatorStart && separatorStart < previewStart, 'file list and preview remain separate resizable panes');
+  for (const id of ['media-explorer-heading', 'media-explorer-search', 'media-explorer-sort', 'media-explorer-kind',
+    'media-explorer-model', 'media-explorer-folder', 'media-explorer-date', 'media-explorer-rating',
+    'media-explorer-filter-chips', 'media-explorer-count', 'media-explorer-selection']) {
+    assert.ok(main.indexOf('id="' + id + '"') > toolbarStart && main.indexOf('id="' + id + '"') < toolbarEnd,
+      id + ' stays in the shared toolbar');
+  }
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-toolbar\s*\{\s*grid-column:\s*1\s*\/\s*-1;/);
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-browser\s*\{\s*grid-column:\s*1;\s*grid-row:\s*2;/);
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-resizer\s*\{\s*grid-column:\s*2;\s*grid-row:\s*2;/);
+  assert.match(css, /\.media-explorer-workspace \.media-explorer-preview\s*\{\s*grid-column:\s*3;\s*grid-row:\s*2;/);
+});

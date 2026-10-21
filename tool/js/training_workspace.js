@@ -580,7 +580,6 @@ function wireTrainingWorkspace() {
   var historyShowAllBtn = document.getElementById('training-history-show-all-btn');
   var historySearch = document.getElementById('training-history-search');
   var historyScope = document.getElementById('training-history-scope');
-  var historyClearBtn = document.getElementById('training-history-clear-btn');
   var historyTabs = document.getElementById('training-history-tabs');
   var archiveModalClose = document.getElementById('training-archive-close');
   var archiveModalCancel = document.getElementById('training-archive-cancel');
@@ -755,7 +754,7 @@ function wireTrainingWorkspace() {
       return;
     }
     var historyMoreMenu = event.target.closest('.training-history-more');
-    if (historyMoreMenu && event.target.closest('[data-training-history-output], [data-training-history-action], [data-training-history-clear]')) {
+    if (historyMoreMenu && event.target.closest('[data-training-history-output], [data-training-history-action]')) {
       historyMoreMenu.removeAttribute('open');
     }
     var finalizeButton = event.target.closest('[data-training-history-finalize]');
@@ -768,7 +767,6 @@ function wireTrainingWorkspace() {
     var outputJobId = event.target.getAttribute('data-training-history-output');
     var runJobId = event.target.getAttribute('data-training-history-run');
     var actionJobId = event.target.getAttribute('data-training-history-action');
-    var clearId = event.target.getAttribute('data-training-history-clear');
     if (candidateId) {
       var candidateJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === candidateId; })[0];
       openTrainingCandidates(candidateJob);
@@ -787,10 +785,6 @@ function wireTrainingWorkspace() {
     if (actionJobId) {
       var actionJob = (trainingWorkspaceState.history.jobs || []).filter(function (item) { return item.id === actionJobId; })[0];
       openTrainingJobAction(actionJobId, actionJob && actionJob.folder);
-      return;
-    }
-    if (clearId) {
-      clearTrainingHistoryJob(clearId);
       return;
     }
     if (logId) {
@@ -826,7 +820,6 @@ function wireTrainingWorkspace() {
     renderTrainingHistory();
   };
   if (historySearch) historySearch.oninput = renderTrainingHistory;
-  if (historyClearBtn) historyClearBtn.onclick = clearTrainingHistory;
   if (historyTabs) historyTabs.onclick = function (event) {
     var button = event.target.closest('[data-training-history-tab]');
     if (!button) return;

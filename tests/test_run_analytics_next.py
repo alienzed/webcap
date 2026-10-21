@@ -120,7 +120,7 @@ def test_testing_lab_isolated_to_analytics_and_read_only():
     for element in ("summary", "challenge-title", "contenders", "discoveries",
                     "chart", "coverage", "explorer", "refresh"):
         assert 'id="run-lab-' + element + '"' in html
-    assert "window.runAnalyticsOpen=function(){labLoad();};" in js
+    assert "window.runAnalyticsOpen=function(){labLoad();labEnsureDetailIndex();};" in js
     assert "window.runAnalyticsViewEpoch" in js
     assert "operation:'run_analytics_overview'" in js
     assert "el('report-surface').classList.remove('hidden')" in js

@@ -160,16 +160,18 @@
           return;
         }
         var html=[];
+        var groupNumber=0;
         groups.forEach(function(entries,id){
           entries.sort(function(a,b){return a.epoch-b.epoch;});
           var run=runs.find(function(item){return item.jobId===id;});
           var label=(run && run.runSequence!=null ? 'Run '+run.runSequence : '') ||
             names.get(id) || entries[0].runName || 'Run '+id.slice(-8);
-          html.push('<div class="run-analytics-result-run"><strong>'+esc(label)+'</strong><small>ID '+esc(id.slice(-8))+'</small><div class="run-analytics-result-epochs">'+
+          var expanded=groupNumber++===0 ? ' open' : '';
+          html.push('<details class="run-analytics-result-run"'+expanded+'><summary title="Run ID '+esc(id)+'"><strong>'+esc(label)+'</strong><span>'+entries.length+' epochs</span></summary><div class="run-analytics-result-epochs">'+
             entries.map(function(entry){
               var types=[entry.testCount?entry.testCount+' Test':'',entry.campaignCount?entry.campaignCount+' Campaign':''].filter(Boolean).join(' · ');
-              return '<button type="button" data-result-epoch-job="'+esc(entry.jobId)+'" data-result-epoch="'+entry.epoch+'"><span>Epoch '+entry.epoch+'</span><small>'+entry.count+' results'+(types?' · '+esc(types):'')+'</small></button>';
-            }).join('')+'</div></div>');
+              return '<button type="button" data-result-epoch-job="'+esc(entry.jobId)+'" data-result-epoch="'+entry.epoch+'" title="'+esc(types||'View saved results')+'"><strong>Epoch '+entry.epoch+'</strong><span>'+entry.count+' results</span></button>';
+            }).join('')+'</div></details>');
         });
         el('result-epochs').innerHTML=html.join('');
         if(data.warnings&&data.warnings.length)el('result-epochs-note').textContent=data.warnings.join(' · ');
@@ -212,7 +214,7 @@
     el('campaign').innerHTML='<option value="">No campaign</option>';el('session').innerHTML='<option value="">All sessions</option>';
     el('director').disabled=true;updateScopeUi();previewGeneration++;previewFacts=null;previewKey='';el('director-result').textContent='';el('director-status').textContent='';clearError();
   };
-  window.runAnalyticsOpen=function(){labLoad();};
+  window.runAnalyticsOpen=function(){labLoad();labEnsureDetailIndex();};
   window.runAnalyticsFolder=function(){return folder;};
   el('result-epochs').onclick=function(event){
     var button=event.target.closest('[data-result-epoch-job]');

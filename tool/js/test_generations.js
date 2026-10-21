@@ -692,7 +692,7 @@
   }
 
 
-  var referenceCompare = {vocabulary: [], busy: false, session: '', folder: ''};
+  var referenceCompare = {vocabulary: [], busy: false, session: '', folder: '', resultReadCounter: 0, rows: [], resultMethod: 'rvn'};
 
   function testReferenceRequest(data) {
     return captionAssistRequestJson('/fs/test_generations/reference', {
@@ -701,28 +701,102 @@
     });
   }
 
+  function showReferencePair(file, value) {
+    var host = el('test-generations-reference-pair');
+    var reference = String(value.reference || '');
+    if (!file || !reference) throw new Error('Reference comparison needs both source media files.');
+    var pairKey = JSON.stringify([referenceCompare.folder, referenceCompare.session, file, reference]);
+    if (host.dataset.pairKey !== pairKey) {
+      var referenceUrl = '/caption/media?folder=' + encodeURIComponent(referenceCompare.folder) +
+        '&media=' + encodeURIComponent(reference);
+      var generatedUrl = mediaUrl(referenceCompare.session, file);
+      var video = /\.(?:mp4|webm|mov|m4v|mkv)$/i.test(file);
+      host.innerHTML =
+        '<div class="test-reference-pair-summary"><strong data-reference-pair-title></strong>' +
+        '<span data-reference-pair-verdict></span></div>' +
+        '<div class="test-reference-pair-images">' +
+          '<figure><figcaption><strong>A · Training reference</strong><span>' + escapeHtml(reference) +
+          '</span></figcaption><img src="' + escapeHtml(referenceUrl) +
+          '" alt="Approved training reference for the selected attribute"></figure>' +
+          '<figure><figcaption><strong>B · Generated preview</strong><span>' + escapeHtml(file) +
+          '</span></figcaption>' +
+          (video ? '<video src="' + escapeHtml(generatedUrl) +
+            '#t=0.001" controls muted playsinline preload="metadata" aria-label="Generated video, whose first frame was evaluated"></video>' :
+            '<img src="' + escapeHtml(generatedUrl) + '" alt="Generated image evaluated against training reference">') +
+          '</figure></div>' +
+        '<pre class="test-reference-pair-response" data-reference-pair-response></pre>';
+      host.dataset.pairKey = pairKey;
+    }
+    host.querySelector('[data-reference-pair-title]').textContent =
+      String(value.group || '') + ' · ' + String(value.option || '') +
+      ' · ' + (value.method === 'dino' ? 'DINOv2' : 'VL');
+    host.querySelector('[data-reference-pair-verdict]').textContent =
+      value.method === 'dino' && value.similarity != null
+        ? 'DINO cosine ' + Number(value.similarity).toFixed(3)
+        : (value.verdict || 'Comparing…') +
+          (value.selectedText ? ' · ' + value.selectedText : '');
+    host.querySelector('[data-reference-pair-response]').textContent =
+      String(value.response || (value.verdict || value.similarity != null ? '' : 'Images A and B are being evaluated.'));
+  }
+
   function drawReferenceResults() {
     if (!referenceCompare.session) return;
+    var readCounter = ++referenceCompare.resultReadCounter;
+    var folder = referenceCompare.folder, session = referenceCompare.session;
     testReferenceRequest({action:'read'}).then(function (payload) {
+      if (readCounter !== referenceCompare.resultReadCounter ||
+          folder !== referenceCompare.folder || session !== referenceCompare.session) return;
       var host = el('test-generations-reference-results');
       var saved = (payload.references || {}).byMedia || {};
       var rows = [];
       Object.keys(saved).sort().forEach(function (file) {
         Object.keys(saved[file] || {}).sort().forEach(function (key) {
           var value = saved[file][key];
-          if (value.method !== el('test-generations-evaluator').value) return;
+          if (referenceCompare.resultMethod !== 'all' && value.method !== referenceCompare.resultMethod) return;
           var verdict = value.method === 'dino' ? 'DINO cosine ' + Number(value.similarity).toFixed(3) :
             (value.verdict || 'UNCLEAR') + (value.selectedText ? ' · ' + value.selectedText : '');
-          rows.push('<div class="test-reference-result"><strong>' + escapeHtml(file) +
-            '</strong><span>' + escapeHtml(value.group + ' · ' + value.option) +
-            '</span><b>' + escapeHtml(verdict) + '</b><small>' +
-            escapeHtml(value.reference) + '</small>' +
-            (value.response ? '<small>' + escapeHtml(value.response).slice(0, 600) + '</small>' : '') +
-            '</div>');
+          var reason = String(value.response || '').match(/^REASON\s*:\s*(.+)$/im);
+          rows.push({file:file, value:value, key:JSON.stringify([file,key]),
+            verdict:verdict, reason:reason ? reason[1] : ''});
         });
       });
-      host.innerHTML = rows.length ? '<h4>Saved comparisons</h4>' + rows.join('') :
-        '<p>No saved comparisons for this method yet.</p>';
+      referenceCompare.rows = rows;
+      if (!rows.length) {
+        host.innerHTML = '<p>No saved comparisons for this method yet.</p>';
+        return;
+      }
+      if (!host.querySelector('[data-reference-list]')) {
+        host.innerHTML = '<h4>Saved comparisons · select to inspect A / B</h4><div data-reference-list></div>';
+      }
+      var list = host.querySelector('[data-reference-list]');
+      var old = new Map(Array.from(list.children).map(function (node) {
+        return [node.dataset.referenceKey, node];
+      }));
+      rows.forEach(function (row, index) {
+        var node = old.get(row.key) || document.createElement('button');
+        old.delete(row.key);
+        node.type = 'button';
+        node.className = 'test-reference-result';
+        node.dataset.referenceKey = row.key;
+        node.dataset.referenceIndex = String(index);
+        var markup = '<strong>' + escapeHtml(row.file) + '</strong><b>' +
+          escapeHtml(row.verdict) + '</b><span>' +
+          escapeHtml((row.value.method === 'dino' ? 'DINOv2' : 'VL') + ' · ' +
+            row.value.group + ' · ' + row.value.option) + '</span>' +
+          (row.reason ? '<small>' + escapeHtml(row.reason) + '</small>' : '') +
+          '<small>Reference: ' + escapeHtml(row.value.reference) + '</small>';
+        if (node.dataset.renderedMarkup !== markup) {
+          node.innerHTML = markup;
+          node.dataset.renderedMarkup = markup;
+        }
+        list.appendChild(node);
+      });
+      old.forEach(function (node) { node.remove(); });
+      var pairHost = el('test-generations-reference-pair');
+      if (!pairHost.dataset.pairKey) {
+        var latest = rows[rows.length - 1];
+        showReferencePair(latest.file, latest.value);
+      }
     }).catch(showError);
   }
 
@@ -732,6 +806,13 @@
       throw new Error('No Test previews are available for comparison.');
     referenceCompare.folder = owningSetFolder(launchFolder || (state && state.folder) || '');
     referenceCompare.session = status.session;
+    var pairHost = el('test-generations-reference-pair');
+    var pairScope = referenceCompare.folder + '|' + referenceCompare.session;
+    if (referenceCompare.pairScope !== pairScope) {
+      pairHost.innerHTML = '<p>Select a saved comparison to inspect the images.</p>';
+      delete pairHost.dataset.pairKey;
+      referenceCompare.pairScope = pairScope;
+    }
     var all = typeof window.testReferencesSelections === 'function'
       ? window.testReferencesSelections(referenceCompare.folder) : [];
     var attributes = (status.wildcardEvaluationGroups || []).filter(function (g) { return g.options && g.options.length; });
@@ -746,6 +827,7 @@
     }).filter(Boolean);
     var dialog = el('test-generations-reference-dialog');
     var method = referenceCompare.runAll ? 'all' : el('test-generations-evaluator').value;
+    referenceCompare.resultMethod = method;
     el('test-generations-reference-title').textContent =
       method === 'all' ? 'Evaluate All · Training References' :
       method === 'dino' ? 'DINOv2 · Training References' : 'VL Compare · Training References';
@@ -759,6 +841,14 @@
         : 'No Training References selected. Choose references in the References workspace first.';
     el('test-generations-reference-run').disabled = !referenceCompare.plan.length;
     if (!dialog.open) dialog.showModal();
+    if (!pairHost.dataset.pairKey && referenceCompare.plan.length) {
+      var firstPreview = (status.results || []).map(resultMediaFile).find(Boolean);
+      if (firstPreview) {
+        var firstChoice = referenceCompare.plan[0].choice;
+        showReferencePair(firstPreview, {reference:firstChoice.media,group:firstChoice.group,
+          option:firstChoice.term,method:method === 'dino' ? 'dino' : 'rvn'});
+      }
+    }
     drawReferenceResults();
   }
 
@@ -786,6 +876,7 @@
             throw new Error('Session changed; stopped further comparisons.');
           status.textContent = method.toUpperCase() + ' · ' + (++done) + ' / ' + total +
             ' · ' + choice.group + ': ' + choice.term;
+          showReferencePair(previews[i], {reference:choice.media, group:choice.group, option:choice.term, method:method});
           var payload = await testReferenceRequest({
             folder:folder, session:session, action:'evaluate', method:method, media:previews[i],
             group:choice.group, groupAlias:getRequirementGroupAlias(choice.group), option:choice.term,
@@ -801,13 +892,17 @@
             var verdictMatch = raw.match(/^VERDICT\s*:\s*(MATCH|PARTIAL|MISMATCH|UNCLEAR)/im);
             var selected = optionMatch ? Number(optionMatch[1]) : null;
             if (selected && selected > attribute.options.length) selected = null;
-            await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:{
+            var assessment = {
               method:'rvn',group:choice.group,option:choice.term,reference:choice.media,jobId:choice.runId,
               attribute:attribute.label || attribute.id,
               selected:selected,selectedText:selected == null ? '' : attribute.options[selected - 1],
               verdict:verdictMatch ? verdictMatch[1].toUpperCase() : 'UNCLEAR',
               response:raw,modelId:getCaptionVisionModelId(),at:Date.now()/1000
-            }});
+            };
+            await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:assessment});
+            showReferencePair(previews[i], assessment);
+          } else if (payload.assessment) {
+            showReferencePair(previews[i], payload.assessment);
           }
           drawReferenceResults();
         }
@@ -4839,6 +4934,13 @@
     });
     el('test-generations-reference-run').onclick = function () {
       runReferenceComparison().catch(showError);
+    };
+    el('test-generations-reference-results').onclick = function (event) {
+      var button = event.target.closest('[data-reference-index]');
+      if (!button) return;
+      var row = referenceCompare.rows[Number(button.dataset.referenceIndex)];
+      if (!row) throw new Error('The selected reference comparison is no longer available.');
+      showReferencePair(row.file, row.value);
     };
     el('test-generations-vl-recheck').onclick = function () { try { recheckTestVlItem(); } catch (err) { showError(err); } };
     el('test-generations-vl-filter-options').onchange = function (event) {

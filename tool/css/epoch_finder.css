@@ -777,3 +777,37 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
   .test-references-screen .test-references-group-track>span{transition:none}
   .test-references-screen .epoch-finder-reference-tile:hover{transform:none}
 }
+
+
+/* Insights rail: browse first, optional analysis controls second. */
+#run-analytics-screen .run-insights-rail-intro{padding:11px 7px 18px}
+#run-analytics-screen .run-insights-rail-intro h2{font-size:25px;line-height:1.2;margin:0 0 8px}
+#run-analytics-screen .run-insights-rail-intro p{font-size:16px;line-height:1.45;margin:0;color:var(--text-muted,#bfccd7)}
+#run-analytics-screen .epoch-finder-sidebar>.run-insights-rail-primary,
+#run-analytics-screen .epoch-finder-sidebar>.run-insights-rail-secondary{padding:18px 16px;margin-bottom:13px}
+#run-analytics-screen .epoch-finder-sidebar .run-insights-rail-primary>details>summary,
+#run-analytics-screen .epoch-finder-sidebar .run-insights-rail-secondary>details>summary{font-size:18px;line-height:1.3;padding:0 0 2px;cursor:pointer}
+#run-analytics-screen .run-insights-rail-summary-title{font-size:19px;font-weight:800}
+#run-analytics-screen .run-insights-rail-summary-subtitle{display:block;font-size:15px;line-height:1.45;font-weight:400;color:var(--text-muted,#bdc8d3);margin:4px 0 0 16px}
+#run-analytics-screen .run-analytics-result-run{padding:12px 13px;margin:10px 0 0;border:1px solid var(--border-color,#384653);border-radius:9px;background:var(--background-secondary,#243342)}
+#run-analytics-screen .run-analytics-result-run>summary{font-size:16px;line-height:1.45;cursor:pointer;overflow-wrap:anywhere}
+#run-analytics-screen .run-analytics-result-run>summary>strong{font-size:17px}
+#run-analytics-screen .run-analytics-result-run>summary>span{display:block;margin:3px 0 0 16px;font-size:15px;color:var(--text-muted,#bfccd7)}
+#run-analytics-screen .run-analytics-result-epochs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:12px 0 0}
+#run-analytics-screen .run-analytics-result-epochs button{display:flex;align-items:flex-start;justify-content:center;flex-direction:column;gap:5px;min-width:0;min-height:67px;width:100%;padding:10px;border-radius:9px;text-align:left}
+#run-analytics-screen .run-analytics-result-epochs button strong{font-size:17px;line-height:1.2}
+#run-analytics-screen .run-analytics-result-epochs button span{font-size:15px;color:var(--text-muted,#ccd5df)}
+#run-analytics-screen .run-analytics-result-epochs button:focus-visible{outline:2px solid var(--accent-color,#8db8ea);outline-offset:2px}
+#run-analytics-screen .run-analytics-run-choice{min-height:54px;padding:11px 10px;gap:10px}
+#run-analytics-screen .run-analytics-run-choice input{width:19px;height:19px;flex:0 0 auto}
+#run-analytics-screen .run-analytics-run-choice strong{font-size:16px;line-height:1.3}
+#run-analytics-screen .run-analytics-run-choice small{font-size:14px;line-height:1.35;margin-top:4px}
+#run-analytics-screen .epoch-finder-sidebar>.run-insights-rail-secondary .epoch-finder-muted{font-size:15px;line-height:1.45}
+#run-analytics-screen .epoch-finder-sidebar>.run-insights-rail-secondary label{font-size:16px}
+#run-analytics-screen .epoch-finder-sidebar>.run-insights-rail-secondary label select{font-size:16px}
+#run-analytics-screen .epoch-finder-sidebar #run-analytics-selection-count{font-size:16px}
+#run-analytics-screen .epoch-finder-sidebar #run-analytics-analyze{font-size:17px;min-height:46px}
+#run-analytics-screen .run-analytics-epoch-media-head #run-analytics-epoch-media-close{font-size:17px;font-weight:750;min-height:46px;padding:10px 17px;white-space:nowrap}
+#run-analytics-screen .run-analytics-epoch-media-footer{position:sticky;bottom:0;z-index:1;display:flex;justify-content:flex-end;padding:13px 22px;border-top:1px solid var(--border-color,#384653);background:var(--panel-bg,#1c2834)}
+#run-analytics-screen .run-analytics-epoch-media-footer button{font-size:17px;font-weight:750;min-height:46px;padding:10px 17px}
+@media(max-width:540px){#run-analytics-screen .run-analytics-result-epochs{grid-template-columns:1fr 1fr}#run-analytics-screen .run-analytics-epoch-media-footer{padding:12px}#run-analytics-screen .run-analytics-epoch-media-head #run-analytics-epoch-media-close{white-space:normal}}

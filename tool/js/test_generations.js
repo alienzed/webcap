@@ -692,7 +692,7 @@
   }
 
 
-  var referenceCompare = {vocabulary: [], busy: false, session: '', folder: '', resultReadCounter: 0, rows: [], resultMethod: 'rvn'};
+  var referenceCompare = {vocabulary: [], busy: false, session: '', folder: '', resultReadCounter: 0, rows: [], resultMethod: 'rvn', pinned: false, livePair: null, pairIsPreview: false};
 
   function testReferenceRequest(data) {
     return captionAssistRequestJson('/fs/test_generations/reference', {
@@ -709,11 +709,13 @@
     if (host.dataset.pairKey !== pairKey) {
       var referenceUrl = '/caption/media?folder=' + encodeURIComponent(referenceCompare.folder) +
         '&media=' + encodeURIComponent(reference);
-      var generatedUrl = mediaUrl(referenceCompare.session, file);
+      var generatedUrl = '/fs/test_generations/media?folder=' + encodeURIComponent(referenceCompare.folder) +
+        '&session=' + encodeURIComponent(referenceCompare.session) + '&media=' + encodeURIComponent(file);
       var video = /\.(?:mp4|webm|mov|m4v|mkv)$/i.test(file);
       host.innerHTML =
         '<div class="test-reference-pair-summary"><strong data-reference-pair-title></strong>' +
-        '<span data-reference-pair-verdict></span></div>' +
+        '<span data-reference-pair-verdict></span>' +
+        '<button type="button" class="review-captions-btn" data-reference-follow-live hidden>Follow live</button></div>' +
         '<div class="test-reference-pair-images">' +
           '<figure><figcaption><strong>A · Training reference</strong><span>' + escapeHtml(reference) +
           '</span></figcaption><img src="' + escapeHtml(referenceUrl) +
@@ -730,13 +732,21 @@
     host.querySelector('[data-reference-pair-title]').textContent =
       String(value.group || '') + ' · ' + String(value.option || '') +
       ' · ' + (value.method === 'dino' ? 'DINOv2' : 'VL');
+    referenceCompare.pairIsPreview = !!value.previewOnly;
+    host.querySelector('[data-reference-follow-live]').hidden = !referenceCompare.pinned;
     host.querySelector('[data-reference-pair-verdict]').textContent =
-      value.method === 'dino' && value.similarity != null
+      value.previewOnly ? 'Preview only' : value.method === 'dino' && value.similarity != null
         ? 'DINO cosine ' + Number(value.similarity).toFixed(3)
         : (value.verdict || 'Comparing…') +
           (value.selectedText ? ' · ' + value.selectedText : '');
     host.querySelector('[data-reference-pair-response]').textContent =
-      String(value.response || (value.verdict || value.similarity != null ? '' : 'Images A and B are being evaluated.'));
+      String(value.response || (value.previewOnly ? 'Run a comparison to evaluate this pair.' :
+        value.verdict || value.similarity != null ? '' : 'Images A and B are being evaluated.'));
+  }
+
+  function showLiveReferencePair(file, value) {
+    referenceCompare.livePair = {file: file, value: value};
+    if (!referenceCompare.pinned) showReferencePair(file, value);
   }
 
   function drawReferenceResults() {
@@ -793,9 +803,11 @@
       });
       old.forEach(function (node) { node.remove(); });
       var pairHost = el('test-generations-reference-pair');
-      if (!pairHost.dataset.pairKey) {
-        var latest = rows[rows.length - 1];
-        showReferencePair(latest.file, latest.value);
+      if (referenceCompare.pairIsPreview && !referenceCompare.busy && !referenceCompare.pinned) {
+        var latest = rows.reduce(function (best, row) {
+          return !best || Number(row.value.at || 0) > Number(best.value.at || 0) ? row : best;
+        }, null);
+        if (latest) showReferencePair(latest.file, latest.value);
       }
     }).catch(showError);
   }
@@ -807,11 +819,15 @@
     referenceCompare.folder = owningSetFolder(launchFolder || (state && state.folder) || '');
     referenceCompare.session = status.session;
     var pairHost = el('test-generations-reference-pair');
-    var pairScope = referenceCompare.folder + '|' + referenceCompare.session;
+    var method = referenceCompare.runAll ? 'all' : el('test-generations-evaluator').value;
+    var pairScope = referenceCompare.folder + '|' + referenceCompare.session + '|' + method;
     if (referenceCompare.pairScope !== pairScope) {
       pairHost.innerHTML = '<p>Select a saved comparison to inspect the images.</p>';
       delete pairHost.dataset.pairKey;
       referenceCompare.pairScope = pairScope;
+      referenceCompare.pinned = false;
+      referenceCompare.livePair = null;
+      referenceCompare.pairIsPreview = true;
     }
     var all = typeof window.testReferencesSelections === 'function'
       ? window.testReferencesSelections(referenceCompare.folder) : [];
@@ -826,7 +842,6 @@
       return {choice:choice, attribute:matches[0]};
     }).filter(Boolean);
     var dialog = el('test-generations-reference-dialog');
-    var method = referenceCompare.runAll ? 'all' : el('test-generations-evaluator').value;
     referenceCompare.resultMethod = method;
     el('test-generations-reference-title').textContent =
       method === 'all' ? 'Evaluate All · Training References' :
@@ -846,7 +861,7 @@
       if (firstPreview) {
         var firstChoice = referenceCompare.plan[0].choice;
         showReferencePair(firstPreview, {reference:firstChoice.media,group:firstChoice.group,
-          option:firstChoice.term,method:method === 'dino' ? 'dino' : 'rvn'});
+          option:firstChoice.term,method:method === 'dino' ? 'dino' : 'rvn',previewOnly:true});
       }
     }
     drawReferenceResults();
@@ -862,6 +877,7 @@
     var folder = referenceCompare.folder, session = referenceCompare.session;
     var button = el('test-generations-reference-run'), status = el('test-generations-reference-status');
     referenceCompare.busy = true;
+    referenceCompare.pinned = false;
     button.disabled = true;
     el('test-generations-evaluator').disabled = true;
     try {
@@ -876,7 +892,7 @@
             throw new Error('Session changed; stopped further comparisons.');
           status.textContent = method.toUpperCase() + ' · ' + (++done) + ' / ' + total +
             ' · ' + choice.group + ': ' + choice.term;
-          showReferencePair(previews[i], {reference:choice.media, group:choice.group, option:choice.term, method:method});
+          showLiveReferencePair(previews[i], {reference:choice.media, group:choice.group, option:choice.term, method:method});
           var payload = await testReferenceRequest({
             folder:folder, session:session, action:'evaluate', method:method, media:previews[i],
             group:choice.group, groupAlias:getRequirementGroupAlias(choice.group), option:choice.term,
@@ -900,9 +916,9 @@
               response:raw,modelId:getCaptionVisionModelId(),at:Date.now()/1000
             };
             await testReferenceRequest({folder:folder,session:session,action:'save',media:previews[i],assessment:assessment});
-            showReferencePair(previews[i], assessment);
+            showLiveReferencePair(previews[i], assessment);
           } else if (payload.assessment) {
-            showReferencePair(previews[i], payload.assessment);
+            showLiveReferencePair(previews[i], payload.assessment);
           }
           drawReferenceResults();
         }
@@ -4940,7 +4956,18 @@
       if (!button) return;
       var row = referenceCompare.rows[Number(button.dataset.referenceIndex)];
       if (!row) throw new Error('The selected reference comparison is no longer available.');
+      referenceCompare.pinned = true;
       showReferencePair(row.file, row.value);
+    };
+    el('test-generations-reference-pair').onclick = function (event) {
+      if (!event.target.closest('[data-reference-follow-live]')) return;
+      referenceCompare.pinned = false;
+      var live = referenceCompare.livePair;
+      if (live) showReferencePair(live.file, live.value);
+      else {
+        var pairHost = el('test-generations-reference-pair');
+        pairHost.querySelector('[data-reference-follow-live]').hidden = true;
+      }
     };
     el('test-generations-vl-recheck').onclick = function () { try { recheckTestVlItem(); } catch (err) { showError(err); } };
     el('test-generations-vl-filter-options').onchange = function (event) {

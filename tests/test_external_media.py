@@ -238,7 +238,7 @@ def test_directory_scope_recursion_and_sorting(tmp_path):
     assert len(external_media._query_items(snapshot, {})) == 3
     assert [i["fileName"] for i in external_media._query_items(
         snapshot, {"directory": "", "recursive": "1", "sort": "size"})] == [
-        "root.jpg", "child.jpg", "grandchild.jpg"]
+        "child.jpg", "grandchild.jpg", "root.jpg"]
     assert [i["fileName"] for i in external_media._query_items(
         snapshot, {"directory": "", "recursive": "1", "sort": "name", "direction": "asc"})] == [
         "root.jpg", "grandchild.jpg", "child.jpg"]

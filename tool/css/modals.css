@@ -3141,6 +3141,8 @@ html[data-theme="dark"] .app-settings-environment-check {
 .set-scan-quality-summary span::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; background: var(--muted); }
 .set-scan-quality-summary .flagged::before { background: #cfac70; }
 .set-scan-content .set-scan-progress-track { margin: 16px 0 0; height: 7px; }
+.set-scan-timing { padding-top: 10px; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.set-scan-timing[hidden] { display: none; }
 .set-scan-content .set-scan-summary { padding: 12px 0 0; justify-content: flex-start; flex-wrap: wrap; }
 .set-scan-content .set-scan-summary strong { font-size: 14px; }
 .set-scan-content .set-scan-evidence-detail { margin-top: 5px; }

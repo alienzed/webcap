@@ -429,3 +429,13 @@ test('Explorer file lists expose media type without loading thumbnails in List m
   assert.match(source, /card\.dataset\.mediaKind = item\.mediaKind/);
   assert.match(source, /if \(next === 'list' && media\) media\.remove\(\)/);
 });
+
+test('full-size viewer action is disabled without a file and enabled after discovery', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  assert.equal(f.nodes['media-explorer-view-full-size'].disabled, true);
+  f.nodes['media-explorer-refresh'].click();
+  await f.settle(f.pending[1], [media('ready')]);
+  assert.equal(f.nodes['media-explorer-view-full-size'].disabled, false);
+});

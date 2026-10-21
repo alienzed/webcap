@@ -58,8 +58,14 @@
     resetError();
     api(operation, item).then(function () {
       if (saveFolder !== folder) return;
-      if (operation === 'reference_selection_remove') delete selected[key(item.group, item.term)];
-      else selected[key(item.group, item.term)] = {group:item.group, term:item.term, media:item.media};
+      if (operation === 'reference_selection_remove') {
+        delete selected[key(item.group, item.term)];
+        if (saveRun === runId && saveGroup === currentGroup && saveTerm === currentTerm) {
+          candidates = candidates.filter(function (candidate) {
+            return !candidate.savedFromSet || candidate.media !== item.media;
+          });
+        }
+      } else selected[key(item.group, item.term)] = {group:item.group, term:item.term, media:item.media};
       drawGallery();
       if (saveRun === runId && saveGroup === currentGroup && saveTerm === currentTerm) {
         if (after) after();

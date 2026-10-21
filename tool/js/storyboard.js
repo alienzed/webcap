@@ -1999,7 +1999,7 @@
     });
   }
 
-  function reviseScenes(instruction, modelId, generateFreshTakes) {
+  function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext) {
     if (!storyState.story) return Promise.reject(new Error('Choose a Story first.'));
     var storyId = storyState.story.id;
     var directorTarget = { kind: 'repair', storyId: storyId };
@@ -2030,7 +2030,8 @@
         operation: 'revise_scenes_sequence',
         instruction: instruction,
         model: modelId,
-        generateFreshTakes: generateFreshTakes === true
+        generateFreshTakes: generateFreshTakes === true,
+        continuityContext: continuityContext === true
       }).then(function (payload) {
         return flushPendingSaves().then(function () { return request(null, 'story=' + encodeURIComponent(storyId)); }).then(function (fresh) {
           if (storyState.story && storyState.story.id === storyId) {
@@ -6137,7 +6138,10 @@
     status.textContent = 'Starting revision…';
     var storyId = storyState.story && storyState.story.id;
     var target = { kind: 'repair', storyId: storyId };
-    var revision = reviseScenes(instruction, storyState.director.modelId, generateFreshTakes);
+    var revision = reviseScenes(
+      instruction, storyState.director.modelId, generateFreshTakes,
+      el('storyboard-director-tools-preset').value === 'continuity'
+    );
     // The target is registered synchronously once the operation has started.
     // Dismiss the input modal now so its activity card is not obscured.
     var started = directorTargetPending(target);

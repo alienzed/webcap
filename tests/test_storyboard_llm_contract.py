@@ -95,8 +95,11 @@ def test_refine_prompt_preserves_existing_prompt_and_keeps_scene_fields_optional
     schema = request["response_schema"]
 
     assert "EXISTING SECOND PROMPT" in prompt
-    assert "[PREVIOUS SCENE - RELATIONSHIP CONTEXT]" in prompt
-    assert "judge the appropriate relationship and distinctness" in prompt
+    assert "[PREVIOUS SCENE" not in prompt
+    assert "OLD FIRST PROMPT" not in prompt
+    assert "[STORY CONCEPT / OVERVIEW]" not in prompt
+    assert "full MiniMax H3 prompt" not in prompt
+    assert "Make the smallest necessary edit" in prompt
     assert "Keep the camera behind her" in prompt
     assert schema["required"] == ["changed", "prompt"]
     assert {"summary", "entryState", "exitState", "durationSeconds"}.issubset(schema["properties"])
@@ -167,7 +170,7 @@ def test_develop_story_auto_scene_count_leaves_count_to_director():
 
 
 
-def test_insert_scene_uses_adjacent_scenes_as_relationship_context_not_bridge_requirement():
+def test_insert_scene_uses_adjacent_scene_facts_not_prompt_templates():
     request = storyboard_llm_contract.build_request(_story(), "scene-1", "insert_scene")
     prompt = request["prompt"]
     schema = request["response_schema"]
@@ -176,25 +179,38 @@ def test_insert_scene_uses_adjacent_scenes_as_relationship_context_not_bridge_re
     assert schema["required"] == ["scene"]
     scene_schema = schema["properties"]["scene"]
     assert set(scene_schema["required"]) == {"title", "summary", "prompt", "suggestedDurationSeconds"}
-    assert "[SCENE BEFORE]" in prompt
-    assert "[SCENE AFTER]" in prompt
-    assert "Treat neighbouring Scenes as relationship and contrast context, not templates to copy" in prompt
-    assert "contrast, vary a repeated format with fresh content, jump, or remain independent" in prompt
-    assert "Make it meaningfully distinct while preserving intentional recurring characters or state" in prompt
+    assert "[SCENE BEFORE - PLACEMENT CONTEXT]" in prompt
+    assert "[SCENE AFTER - PLACEMENT CONTEXT]" in prompt
+    assert "[STORY CONCEPT]" in prompt
+    assert "[EXISTING SCENE OUTLINE]" in prompt
+    assert "OLD FIRST PROMPT" not in prompt
+    assert "EXISTING SECOND PROMPT" not in prompt
+    assert "not templates to copy" in prompt
     assert "USE EACH GENERATION UNIT WELL." in prompt
 
 
 def test_insert_scene_can_append_after_last_scene():
     request = storyboard_llm_contract.build_request(_story(), "scene-2", "insert_scene")
-    assert "[SCENE AFTER]" not in request["prompt"]
+    assert "[SCENE AFTER - PLACEMENT CONTEXT]" not in request["prompt"]
     assert "at the end of the Story" in request["prompt"]
 
 
-def test_insert_scene_can_use_optional_direction():
+def test_insert_custom_scene_direction_drives_without_story_or_other_prompts():
+    story = _story()
+    instruction = "Introduce a new employee doing a completely different task."
     request = storyboard_llm_contract.build_request(
-        _story(), "scene-1", "insert_scene", instruction="Introduce a new employee."
+        story, "scene-1", "insert_scene", instruction=instruction
     )
-    assert "[USER DIRECTION]\nIntroduce a new employee." in request["prompt"]
+    prompt = request["prompt"]
+    assert prompt.startswith("[USER DIRECTION - PRIMARY CREATIVE BRIEF]\n" + instruction)
+    assert "[STORY CONCEPT]" not in prompt
+    assert "A woman enters an empty hotel" not in prompt
+    assert "[EXISTING SCENE OUTLINE]" not in prompt
+    assert "OLD FIRST PROMPT" not in prompt
+    assert "EXISTING SECOND PROMPT" not in prompt
+    assert "She is just inside the closed front door." in prompt
+    assert "[STORY VISUAL / ATMOSPHERE - CONSTRAINT]" in prompt
+    assert "[STORY INVARIANTS - CONSTRAINTS]" in prompt
 
 
 def test_extend_story_preserves_distinction_from_redevelopment():
@@ -382,14 +398,29 @@ def test_director_guidance_resolves_cross_scene_references_without_changing_h3_s
     assert "Treat invariants as authoritative facts" in prompt
 
 
-def test_existing_relationship_context_remains_available():
+def test_refine_scene_is_isolated_unless_continuity_explicitly_requested():
     story = _story()
-    assert "OLD FIRST PROMPT" in storyboard_llm_contract.build_request(
-        story, "scene-2", "refine_prompt", "Adjust the action."
+    instruction = "Add a smile at the end."
+    isolated = storyboard_llm_contract.build_request(
+        story, "scene-2", "refine_prompt", instruction
     )["prompt"]
-    assert "OLD FIRST PROMPT" in storyboard_llm_contract.build_request(
-        story, "scene-1", "insert_scene"
+    assert "EXISTING SECOND PROMPT" in isolated
+    assert "OLD FIRST PROMPT" not in isolated
+    assert "[PREVIOUS SCENE" not in isolated
+    assert "A woman enters an empty hotel" not in isolated
+    assert "[H3 GUIDANCE]" not in isolated
+    assert "For a localized request" in isolated
+    continuity = storyboard_llm_contract.build_request(
+        story, "scene-2", "refine_prompt", instruction, continuity_context=True
     )["prompt"]
+    assert "[PREVIOUS SCENE - CONTINUITY FACTS ONLY]" in continuity
+    assert "She reaches the hotel entrance." in continuity
+    assert "She is just inside the closed front door." in continuity
+    assert "OLD FIRST PROMPT" not in continuity
+
+
+def test_individual_scene_development_still_uses_previous_authored_scene_when_intended():
+    story = _story()
     outline = {"scenes": [
         {"title": "Arrival", "summary": "Mara arrives.", "suggestedDurationSeconds": 10},
         {"title": "Footprints", "summary": "Mara notices prints.", "suggestedDurationSeconds": 12},

@@ -171,6 +171,7 @@
     el('media-explorer-folder-rows').classList.toggle('hidden', !external);
     el('media-explorer-external-filters').classList.toggle('hidden', !external);
     el('media-explorer-scan-all').classList.toggle('hidden', external);
+    if (external) el('media-explorer-scope').classList.add('hidden');
     el('media-explorer-model').classList.toggle('hidden', external);
     el('media-explorer-folder').classList.toggle('hidden', external);
     el('media-explorer-rating').classList.toggle('hidden', external);

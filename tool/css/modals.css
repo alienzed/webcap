@@ -3750,6 +3750,8 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-expand { width: 100%; padding: 0; border: 0; background: none; color: var(--text); font-weight: 650; text-align: left; cursor: pointer; }
 .model-assessment-expand::before { content: "▸ "; color: var(--muted); }
 .model-assessment-expand[aria-expanded="true"]::before { content: "▾ "; }
+.model-assessment-work { display: block; margin: 3px 0 0 13px; font-size: 13px; color: var(--muted); }
+.model-assessment-work[hidden] { display: none; }
 .model-assessment-evidence td { background: var(--surface-alt, rgba(128,128,128,.07)); text-align: left !important; padding: 12px 24px; }
 .model-assessment-evidence td > div { margin: 4px 0; overflow-wrap: anywhere; }
 .model-assessment-evidence button { width: auto; margin-top: 8px; }

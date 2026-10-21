@@ -9,6 +9,8 @@ var diagnosticsAssessmentSort = { key: 'speed', descending: true };
 var diagnosticsAssessmentExpanded = new Set();
 var diagnosticsAssessmentReviewRefresh = 0;
 var diagnosticsAssessmentRuntime = 'local';
+var diagnosticsAssessmentPreviewKey = '';
+var diagnosticsAssessmentPreviewVersion = 0;
 
 function diagnosticsEl(id) {
   return document.getElementById(id);
@@ -143,7 +145,10 @@ function diagnosticsRenderAssessmentProgress(run) {
   stop.hidden = run.status !== 'running';
   stop.disabled = run.status !== 'running' || diagnosticsAssessmentStoppingId === String(run.id);
   stop.textContent = diagnosticsAssessmentStoppingId === String(run.id) ? 'Stopping…' : 'Stop Assessment';
-  if (wasRunning && run.status !== 'running') refreshUnifiedModelAssessment().catch(function () {});
+  if (wasRunning && run.status !== 'running') {
+    diagnosticsAssessmentPreviewKey = '';
+    refreshUnifiedModelAssessment().catch(function () {});
+  }
 }
 
 function diagnosticsAssessmentProgressError(runId, error) {
@@ -192,6 +197,7 @@ function selectUnifiedAssessmentModels(select) {
     }
   });
   diagnosticsAssessmentSyncHeaderSelection();
+  diagnosticsRefreshSelectionPlan();
 }
 
 function diagnosticsAssessmentSyncHeaderSelection() {
@@ -281,6 +287,7 @@ function refreshUnifiedModelAssessment() {
       diagnosticsEl('diagnostics-assessment-selection').textContent =
         selectedModels.size + ' model(s) selected · Completed compatible tests will be reused.';
       diagnosticsAssessmentSyncHeaderSelection();
+      diagnosticsRefreshSelectionPlan();
     }
     function addRow(title, kind, ref, report) {
       if (seenModels.has(ref)) return;
@@ -333,6 +340,11 @@ function refreshUnifiedModelAssessment() {
       expand.title = title + ' · show probe evidence';
       expand.setAttribute('aria-expanded', String(diagnosticsAssessmentExpanded.has(key)));
       name.appendChild(expand);
+      var workLabel = document.createElement('span');
+      workLabel.className = 'model-assessment-work';
+      workLabel.dataset.assessmentWork = ref;
+      workLabel.hidden = true;
+      name.appendChild(workLabel);
       line.appendChild(name);
       var roleLabel = supportsDirector && supportsVision ? 'Director · Vision' : supportsVision ? 'Vision' : 'Director';
       var model = (kind === 'director' ? directors : vision).find(function (entry) {
@@ -539,7 +551,6 @@ function refreshUnifiedModelAssessment() {
     } else {
       diagnosticsAssessmentRunId = ''; diagnosticsAssessmentRunStatus = '';
       diagnosticsEl('diagnostics-assessment-activity').classList.add('hidden');
-      diagnosticsEl('diagnostics-assessment-run').disabled = false;
       diagnosticsEl('diagnostics-assessment-stop').disabled = true;
       diagnosticsEl('diagnostics-assessment-stop').hidden = true;
       diagnosticsEl('diagnostics-assessment-stop').classList.add('hidden');
@@ -551,7 +562,7 @@ function refreshUnifiedModelAssessment() {
   });
 }
 
-function runUnifiedModelAssessment() {
+function diagnosticsAssessmentConfig() {
   var selectedDirectors = diagnosticsAssessmentCatalog.directors.filter(function (model) {
     return diagnosticsAssessmentSelected.director.has(String(model.id || ''));
   }).map(function (model) {
@@ -578,8 +589,20 @@ function runUnifiedModelAssessment() {
   var sourceFolder = String(state && state.folder || '').trim();
   var files = modelLabCurrentFiles();
   var canLab = !!sourceFolder && files.length >= 2;
-  var status = diagnosticsEl('diagnostics-assessment-selection');
   if (visions.length && !canLab) throw new Error('Open a Set with at least two media items to assess Vision models. Director assessment needs no Set.');
+  return {
+    folder: sourceFolder, files: files, groups: modelLabGroups(),
+    depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
+    visionModels: visions, directorModels: directors
+  };
+}
+
+function runUnifiedModelAssessment() {
+  var config = diagnosticsAssessmentConfig();
+  var deep = config.depth === 'deep';
+  var status = diagnosticsEl('diagnostics-assessment-selection');
+  diagnosticsAssessmentPreviewKey = '';
+  diagnosticsAssessmentPreviewVersion += 1;
   status.textContent = 'Checking saved results and scheduling outstanding ' + (deep ? 'deep' : 'quick') + ' tests…';
   var runButton = diagnosticsEl('diagnostics-assessment-run');
   runButton.disabled = true;
@@ -587,13 +610,7 @@ function runUnifiedModelAssessment() {
 
     // The server owns active-run admission; a cached historical preview must
     // not block a new assessment after its worker has already failed.
-    return modelLabPost({
-      action: 'start',
-      config: {
-        folder: sourceFolder, files: files, groups: modelLabGroups(), depth: deep ? 'deep' : 'quick', sampleCount: deep ? 16 : 8,
-        visionModels: visions, directorModels: directors
-      }
-    }).then(function (payload) {
+    return modelLabPost({action: 'start', config: config}).then(function (payload) {
       if (payload.noWork) {
         status.textContent = 'Already assessed · 0 tests needed. Existing results are preserved.';
         diagnosticsAssessmentRunId = '';
@@ -1098,7 +1115,11 @@ function wireDiagnosticsUi() {
     diagnosticsAssessmentSortAndFilter();
     diagnosticsAssessmentSyncHeaderSelection();
   };
-  diagnosticsEl('diagnostics-assessment-refresh').onclick = function () { refreshUnifiedModelAssessment().catch(function () {}); };
+  diagnosticsEl('diagnostics-assessment-refresh').onclick = function () {
+    diagnosticsAssessmentPreviewKey = '';
+    refreshUnifiedModelAssessment().catch(function () {});
+  };
+  diagnosticsEl('diagnostics-assessment-deep').onchange = diagnosticsRefreshSelectionPlan;
   diagnosticsEl('diagnostics-assessment-stop').onclick = stopUnifiedModelAssessment;
   diagnosticsEl('diagnostics-assessment-export').onclick = exportAssessmentResults;
   diagnosticsEl('diagnostics-assessment-import').onclick = function () { diagnosticsEl('diagnostics-assessment-file').click(); };

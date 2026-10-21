@@ -1,6 +1,9 @@
 (function () {
   'use strict';
 
+  // Session-only submitted instructions, independent of saved Story/Scene prompts.
+  var sceneRefineHistory, sceneRevisionHistory, sceneCreationHistory;
+
   var storyState = {
     stories: [],
     story: null,
@@ -1670,6 +1673,7 @@
       }
     }
 
+    if (operation === 'refine_prompt') sceneRefineHistory.remember(instruction, root.querySelector('[data-director-correction]'));
     var saveBarrier = flushPendingSaves();
     clearSceneDirectorCompletion(storyId, sceneId);
     setDirectorPending(directorTarget, true);
@@ -2013,6 +2017,7 @@
     instruction = String(instruction || '').trim();
     if (!instruction) return Promise.reject(new Error('Enter what should be revised across these Scenes.'));
 
+    sceneRevisionHistory.remember(instruction, el('storyboard-director-tools-instruction'));
     storyState.story.repairInstruction = instruction;
     storyState.story.repairComplete = false;
 
@@ -4864,6 +4869,7 @@
       return;
     }
 
+    sceneCreationHistory.remember(instruction, el('storyboard-scene-creation-instruction'));
     var saveBarrier = flushPendingSaves();
     setDirectorPending(directorTarget, true);
     setSaveState('Director inserting Scene...');
@@ -4906,6 +4912,7 @@
     el('storyboard-scene-creation-count-wrap').classList.toggle('hidden', mode !== 'extend');
     el('storyboard-scene-creation-count').value = '3';
     el('storyboard-scene-creation-instruction').value = '';
+    sceneCreationHistory.reset(el('storyboard-scene-creation-instruction'));
     el('storyboard-scene-creation-run').textContent = mode === 'extend' ? 'Extend Story' : 'Insert Scene';
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
@@ -4926,6 +4933,7 @@
     if (!modelId) return reportError(new Error('Choose a Storyboard Director model first.'));
     var target = { kind: 'scenes', storyId: storyId };
     if (directorTargetBlocked(target)) return reportError(new Error('This Story already has conflicting Director work.'));
+    sceneCreationHistory.remember(instruction, el('storyboard-scene-creation-instruction'));
     setDirectorPending(target, true);
     setSaveState('Director extending Story…');
     startDirectorActivity();
@@ -6147,6 +6155,11 @@
 
     initStorySections();
     setStoryLibraryCompact(storyState.storyLibraryCompact);
+    sceneRefineHistory = createSessionPromptHistory();
+    sceneRevisionHistory = createSessionPromptHistory();
+    sceneCreationHistory = createSessionPromptHistory();
+    sceneRevisionHistory.bind(el('storyboard-director-tools-instruction'));
+    sceneCreationHistory.bind(el('storyboard-scene-creation-instruction'));
 
     el('storyboard-library-compact-toggle').onclick = function () {
       setStoryLibraryCompact(!storyState.storyLibraryCompact);
@@ -6170,6 +6183,7 @@
       if (!input) return;
       if (this.value === 'continuity') input.value = DIRECTOR_PASS_PRESETS.continuity.instruction;
       if (this.value === 'coherence') input.value = DIRECTOR_PASS_PRESETS.coherence.instruction;
+      sceneRevisionHistory.reset(input);
       var coherence = this.value === 'coherence';
       var run = el('storyboard-director-tools-run');
       if (run) run.textContent = coherence ? 'Check Coherence' : 'Revise Scenes';
@@ -6527,6 +6541,9 @@
     });
     el('storyboard-scenes-list').addEventListener('keydown', handleLoraPickerKeydown);
     el('storyboard-scenes-list').addEventListener('keydown', function (event) {
+      if (event.target.closest('[data-director-correction]')) sceneRefineHistory.handleKeydown(event);
+    });
+    el('storyboard-scenes-list').addEventListener('keydown', function (event) {
       if (event.key !== 'Enter' || event.repeat || event.isComposing || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
       var correction = event.target.closest('[data-director-correction]');
       if (!correction) return;
@@ -6536,6 +6553,7 @@
       runDirector(scene.dataset.sceneId, 'refine_prompt');
     });
     el('storyboard-scenes-list').addEventListener('input', function (event) {
+      if (event.target.closest('[data-director-correction]')) sceneRefineHistory.handleInput(event);
       var picker = event.target.closest('[data-scene-lora-picker]');
       if (picker) {
         renderLoraPickerMenu(picker);

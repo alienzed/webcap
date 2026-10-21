@@ -1,6 +1,5 @@
 """Read-only-source Media Explorer exports into Sets (separate from Prep state)."""
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -33,8 +32,6 @@ def _destination(data):
     if name:
         if name in (".", "..") or Path(name).name != name or "/" in name or "\\" in name:
             raise ValueError("New Set name must be one folder name")
-        if not re.fullmatch(r"[\w .()-]+", name):
-            raise ValueError("Unsupported characters in Set name")
         dest = parent / name
         if dest.exists():
             raise ValueError("New Set already exists")
@@ -61,8 +58,6 @@ def _validated_sources(data):
     paths = data.get("files")
     if not isinstance(paths, list) or not paths:
         raise ValueError("Select one or more source files")
-    if len(paths) > 1000:
-        raise ValueError("Select up to 1000 files per copy operation")
     return [(_source_file(root, relative), str(relative)) for relative in paths]
 
 
@@ -72,8 +67,13 @@ def copy_media(data):
     created = []
     for source, relative in sources:
         target = _unique_path(dest, source.name)
-        shutil.copy2(source, target)
-        normalize_path_permissions(target)
+        try:
+            shutil.copy2(source, target)
+            normalize_path_permissions(target)
+        except OSError as exc:
+            raise RuntimeError(
+                f"Copied {len(created)} files into {dest} before failing on {relative}: {exc}"
+            ) from exc
         created.append({"source": relative, "name": target.name})
     return {"ok": True, "destination": str(dest), "copied": created}
 

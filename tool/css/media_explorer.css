@@ -236,3 +236,16 @@
 .media-explorer-workspace.explorer-grid-mode .media-explorer-browser .media-explorer-gallery-area { display:none; }
 @media(max-width:1050px) { .media-explorer-workspace:has(.media-explorer-inspector:not(.hidden)) .media-explorer-main { margin-right:0; } .media-explorer-inspector { box-shadow:-10px 0 25px #0006; } }
 @media(max-width:800px) { .media-explorer-main { min-height:0; } }
+
+.media-explorer-export-dialog { width:min(580px,92vw); max-height:88vh; overflow:auto; border:1px solid var(--border); border-radius:9px; padding:18px; background:var(--panel); color:var(--text); }
+.media-explorer-export-dialog::backdrop { background:#0009; }
+.media-explorer-export-dialog h3 { font-size:22px; margin:0 0 8px; }
+.media-explorer-export-dialog p { font-size:15px; }
+.media-explorer-export-dialog label { display:flex; flex-direction:column; gap:5px; font-size:15px; margin:12px 0; }
+.media-explorer-export-dialog input { min-height:38px; font-size:16px; padding:6px 9px; border:1px solid var(--border); border-radius:5px; background:var(--bg); color:var(--text); }
+.media-explorer-export-browser { border:1px solid var(--border); padding:7px; border-radius:5px; max-height:190px; overflow:auto; }
+.media-explorer-export-browser button { display:block; width:100%; text-align:left; border:0; background:transparent; color:var(--text); padding:6px 10px; font-size:15px; }
+.media-explorer-export-browser button:hover { background:var(--bg); }
+.media-explorer-export-buttons { display:flex; justify-content:flex-end; gap:9px; margin-top:12px; }
+.media-explorer-export-buttons button { padding:8px 14px; border:1px solid var(--border); border-radius:5px; background:var(--bg); color:var(--text); font-size:16px; }
+.media-explorer-export-buttons button[type=submit] { border-color:var(--explorer-accent); }

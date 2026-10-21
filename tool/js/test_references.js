@@ -116,8 +116,10 @@
   }
   function drawGallery() {
     var chosen = selected[key(currentGroup, currentTerm)];
+    el('active-heading').textContent = currentGroup && currentTerm
+      ? currentGroup + ' · ' + currentTerm : 'Choose an annotation tag';
     el('count').textContent = candidates.length + ' images';
-    el('status').textContent = candidates.length ? currentGroup + ' · ' + currentTerm + ' — select a representative image or preview it.' :
+    el('status').textContent = candidates.length ? 'Select a representative image or preview it.' :
       (runId && currentGroup && currentTerm ? 'No images carry this exact tag in this training run.' : 'No matching tags for this training run.');
     el('gallery').innerHTML = candidates.map(function (candidate, i) {
       var active = chosen && chosen.media === candidate.media;

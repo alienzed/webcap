@@ -15,20 +15,24 @@ def test_training_history_promotes_recorded_epoch_and_step_progress():
     assert 'progress["lr"] = learning_rate_matches[-1].strip()' in progress
 
 
-def test_training_history_keeps_metadata_index_and_clear_controls():
+def test_training_history_keeps_metadata_without_history_only_deletion():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "training_history_ui.js").read_text(encoding="utf-8")
     workspace = (ROOT / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
+    history = (ROOT / "tool" / "server" / "training_history.py").read_text(encoding="utf-8")
 
-    assert 'Training History' in html
-    assert 'training-history-clear-btn' in html
-    assert '>Clear All History</button>' in html
-    assert 'data-training-history-clear' in script
-    assert 'function clearTrainingHistory()' in script
-    assert 'clearTrainingHistoryJob(clearId)' in workspace
-    assert '/fs/training_history/clear' in app
-    assert '/fs/training_history/job/clear' in app
+    assert "Training History" in html
+    assert 'id="training-history-clear-btn"' not in html
+    assert 'data-training-history-clear="' not in script
+    assert "function clearTrainingHistory()" not in script
+    assert "clearTrainingHistoryJob(" not in workspace
+    assert '@app.route("/fs/training_history/clear"' not in app
+    assert '@app.route("/fs/training_history/job/clear"' not in app
+    assert "def clear_history(folder_path=None)" not in history
+    assert "def clear_history_job(" in history
+    assert 'data-training-history-delete="' in script
+    assert 'data-training-history-finalize="' in script
 
 
 def test_training_history_offers_curve_analysis_for_an_available_resume_run():
@@ -143,7 +147,7 @@ def test_metadata_backed_training_history_contract():
     assert "_write_recent_runs(recent)" in record
     assert "record_job(folder_path, job)" in runner
     assert "clear_history_job" in runner
-    assert "historyHidden" in runner
+    assert "historyHidden" not in runner
 
 
 

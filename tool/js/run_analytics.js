@@ -539,6 +539,36 @@
     });
     lab('chart').innerHTML='<svg viewBox="0 0 680 195" role="img" aria-label="Saved manual ratings by epoch and run"><path d="M36 15V175H645" stroke="currentColor" stroke-opacity=".25" fill="none"/>'+paths.join('')+'</svg><p class="run-lab-footnote">'+(selected?'Measured epochs for the selected run.':'All rated epochs · select a run to follow its trajectory.')+'</p>';
   }
+  var evalTimer=null,evalBusy=false;
+  function renderEvaluation(data){
+    var e=data&&data.evaluation||{},total=Number(e.total||0),done=Number(e.completed||0),queued=Number(e.queued||0),running=Number(e.running||0),actionable=Number(e.actionable||0);
+    lab('eval-meter').max=total||1;lab('eval-meter').value=done;
+    lab('eval-percent').textContent=total?Math.round(done*100/total)+'%':'—';
+    lab('eval-count').textContent=done+' / '+total+' renders evaluated';
+    lab('eval-status').textContent=(running?running+' running · ':'')+(queued?queued+' queued · ':'')+(actionable?actionable+' to evaluate':total&&done===total?'All caught up!':'No available work')+(Number(e.unavailable||0)?' · '+e.unavailable+' unavailable':'');
+    lab('eval-start').disabled=evalBusy||!actionable;
+    lab('eval-start').textContent=evalBusy?'Submitting…':actionable?'Evaluate missing '+actionable:'All evaluated ✓';
+    lab('eval-stop').disabled=evalBusy||!queued&&!running;
+  }
+  function evalRequest(operation,criteria){
+    return labReviewApi(operation,criteria||{},'/fs/test_generations');
+  }
+  function evalRefresh(){
+    if(!folder||evalBusy)return;
+    var owner=folder;
+    evalRequest('test_evaluation_progress').then(function(data){if(owner===folder)renderEvaluation(data);}).catch(error);
+  }
+  function evalAction(operation){
+    if(evalBusy)return;
+    var owner=folder;evalBusy=true;lab('eval-start').disabled=true;lab('eval-stop').disabled=true;
+    var work=operation==='test_evaluate_missing'?loadCaptionVisionCapabilities().then(function(){
+      var model=getCaptionVisionModelId();if(!model)throw Error('Select a Vision model first.');return evalRequest(operation,{model:model});
+    }):evalRequest(operation);
+    Promise.resolve(work).then(function(data){if(owner===folder)renderEvaluation(data);}).catch(error).finally(function(){evalBusy=false;evalRefresh();});
+  }
+  lab('eval-start').onclick=function(){evalAction('test_evaluate_missing');};
+  lab('eval-stop').onclick=function(){evalAction('test_evaluation_stop');};
+  evalTimer=setInterval(function(){if(document.getElementById('run-analytics-screen')&&!document.getElementById('run-analytics-screen').classList.contains('hidden'))evalRefresh();},4000);
   function labRender(){
     var totals=labSnapshot.coverage||{},groups=labSnapshot.cohorts||[];
     lab('summary').innerHTML=[['Test sessions',totals.sessions],['Generated results',totals.generatedPreviews],['Rated previews',totals.ratedPreviews],['VL-reviewed previews',totals.vlReviewedPreviews]].map(function(pair){
@@ -731,6 +761,7 @@
       .finally(function(){reviewBusy=false;});
   }
   function labLoad(){
+    evalRefresh();
     var serial=++labRequest,scope=folder;lab('status').textContent='Reading recorded Test and Campaign evidence…';
     fetch('/fs/epoch_finder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder:scope,operation:'run_analytics_overview'})})
       .then(function(r){return r.json().then(function(d){if(!r.ok||!d.ok)throw Error(d.error||'Could not load evidence');return d;});})

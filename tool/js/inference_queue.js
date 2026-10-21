@@ -147,7 +147,7 @@
     var prefix = 'Inference paused after an execution error:';
     var full = String(reason || '').trim();
     var detail = full.startsWith(prefix) ? full.slice(prefix.length).trim() : full;
-    var firstLine = detail.split('\\n')[0].trim();
+    var firstLine = detail.split('\n')[0].trim();
     return {
       summary: firstLine || 'ComfyUI inference failed.',
       detail: detail,

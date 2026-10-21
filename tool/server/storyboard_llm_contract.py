@@ -598,19 +598,25 @@ def build_request(story, scene_id, operation, instruction="", development=None, 
         blocks.append("[H3 GUIDANCE]\n" + h3_runtime_context)
         _add_model_limitations(blocks, "minimax_h3")
         blocks.append("[EXISTING SCENE OUTLINE]\n" + "\n".join(
-            str(number) + ". " + _scene_context(scenes[ordered_id])
+            str(number) + ". " + _clean(scenes[ordered_id].get("title"))
+            + ": " + _clean(scenes[ordered_id].get("summary"))
             for number, ordered_id in enumerate(order, start=1)
         ))
-        last_scene = scenes[order[-1]]
-        blocks.append("[LAST SCENE GENERATION PROMPT]\n" + _clean(last_scene.get("prompt")))
+        last_exit = _clean(scenes[order[-1]].get("exitState"))
+        if last_exit:
+            blocks.append("[LAST SCENE EXIT STATE]\n" + last_exit)
         if _clean(instruction):
             blocks.append("[USER DIRECTION]\n" + _clean(instruction))
         blocks.append(
             "[CURRENT TASK]\nAppend exactly " + str(scene_count) + " new Scenes after the existing sequence. "
-            "Build on the complete concept and existing Scenes without rewriting or repeating them. "
-            "For an ongoing narrative, advance the action and relevant state; for a sequence of independent moments, introduce fresh situations or variations. "
-            "Preserve recurring characters and format when intentional, but give each new Scene a distinct purpose. "
-            "Return each new Scene with its complete H3 generation prompt using the supplied Director and H3 guidance. "
+            "First consider what each existing Scene already covers, then decide on distinct new Scene ideas before writing their prompts. "
+            "The existing outline is a record of covered material, not example wording or a template to repeat. "
+            "Give each new Scene its own substantive action, development, situation, or visual idea; changing only a few words, props, or camera angles does not make a new Scene. "
+            "For an ongoing narrative, move events forward and preserve relevant evolving state. "
+            "For episodic, montage, or repeated-format material, retain the format when appropriate but introduce genuinely different moments. "
+            "Preserve intentional recurring characters, locations, visual language, and other Story invariants. "
+            "Keep the new Scenes distinct from existing Scenes and from one another without forcing unrelated novelty. "
+            "Write a complete standalone H3 generation prompt for each new Scene using the supplied Director and H3 guidance. "
             "Return only the new Scenes as JSON matching the supplied schema."
         )
         return {

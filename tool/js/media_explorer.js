@@ -598,9 +598,16 @@
     card.addEventListener('dblclick', function () { selectItem(Number(card.dataset.index)); openLoupe(); });
     return card;
   }
+  function maybeLoadMore() {
+    if (!visible || loading || offset >= total || externalPendingRefresh) return;
+    var scroller = explorerMode === 'grid' ? el('media-explorer-preview') : el('media-explorer-gallery-area');
+    if (!scroller) scroller = explorerMode === 'grid'
+      ? el('media-explorer-preview-stage').parentElement : el('media-explorer-gallery-area');
+    if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 350) load(false);
+  }
   function count() {
     text(el('media-explorer-count'), items.length + (items.length < total ? ' of ' + total : '') + (total === 1 ? ' item' : ' items') + (isExternal() ? (complete ? '' : ' · discovering…') : (complete ? '' : ' · recent')));
-    el('media-explorer-more-btn').classList.toggle('hidden', offset >= total && !externalPendingRefresh);
+    el('media-explorer-more-btn').classList.toggle('hidden', !externalPendingRefresh);
     text(el('media-explorer-more-btn'), externalPendingRefresh ? 'Refresh results' : 'Load more');
     el('media-explorer-scope').classList.toggle('hidden', complete || isExternal());
   }
@@ -783,6 +790,7 @@
       .finally(function () { if (request === serial) {
         loading = false; activeRequest = null; el('media-explorer-scan-all').disabled = false;
         el('media-explorer-more-btn').disabled = false; el('media-explorer-grid').setAttribute('aria-busy', 'false'); emptyState();
+        maybeLoadMore();
       } });
   }
   function open(target) {
@@ -890,6 +898,8 @@
     load(true, {refreshFilesystem:true});
   });
   el('media-explorer-external-path').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('media-explorer-open-path').click(); });
+  el('media-explorer-gallery-area').addEventListener('scroll', maybeLoadMore);
+  el('media-explorer-preview-stage').parentElement.addEventListener('scroll', maybeLoadMore);
   el('media-explorer-up').addEventListener('click', function () { setExternalDirectory(externalDirectory.split('/').slice(0, -1).join('/')); });
   el('media-explorer-recursive').addEventListener('change', function () { renderExternalFolders(); load(true); });
   el('media-explorer-sort-reverse').addEventListener('click', function () {

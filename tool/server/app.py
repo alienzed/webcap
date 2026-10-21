@@ -1885,6 +1885,7 @@ def storyboard_director_route():
                     "storyId": story_id, "operation": operation,
                     **job_display_context,
                     "sceneIds": scene_ids, "sourceInstruction": instruction,
+                    "continuityContext": data.get("continuityContext") is True,
                     "generateFreshTakes": data.get("generateFreshTakes") is True,
                     "thinking": data.get("thinking") is True,
                 },

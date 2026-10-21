@@ -203,7 +203,7 @@ WebCap adds the returned Scene at that position without replacing existing Scene
 
 ### `extend_story`
 
-Append the requested number of Director-authored Scenes after the existing sequence, with optional creative direction. The Director receives the full concept, an outline of existing Scenes, and the last Scene's prompt. Narrative extensions should progress; independent sequences should gain distinct new variations. The existing Scene plan and Takes are never replaced.
+Append the requested number of Director-authored Scenes after the existing sequence, with optional creative direction. The Director receives the full concept, a concise title/summary outline of existing Scenes, and the last Scene's exit state when provided—not existing generation prompts. It plans genuinely new beats before authoring standalone H3 prompts. Narrative extensions should progress; independent sequences should gain distinct new variations rather than lightly reworded copies. The existing Scene plan and Takes are never replaced.
 
 Manual Add Scene still appends one empty, editable Scene. Re-develop Scenes remains an explicitly separate replacement operation.
 

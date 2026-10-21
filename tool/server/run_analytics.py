@@ -736,7 +736,7 @@ def overview(folder_path):
                 "jobId": job_id, "epoch": epoch, "runName": name,
                 "testCount": 0, "campaignCount": 0, "ratedCount": 0,
                 "ratingSum": 0, "ratingDistribution": {str(n): 0 for n in range(1, 6)},
-                "vlReviewedCount": 0, "sessions": set(),
+                "vlReviewedCount": 0, "sessions": set(), "topRenders": [],
             }
         elif name and not epochs[key]["runName"]:
             epochs[key]["runName"] = name
@@ -803,6 +803,25 @@ def overview(folder_path):
                 entry["ratedCount"] += 1
                 entry["ratingSum"] += ratings[media]
                 entry["ratingDistribution"][str(ratings[media])] += 1
+                # The landing page shows only the three best-rated surviving Test
+                # files. Reuse the existing media route; never decode or scan video.
+                supported_media = media.lower().endswith((
+                    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif",
+                    ".mp4", ".webm", ".mov", ".mkv",
+                )) if media else False
+                media_path = directory / media if media else None
+                if (supported_media and media_path.is_file()
+                        and not media_path.is_symlink()):
+                    preview = {
+                        "session": directory.name, "mediaFile": media,
+                        "rating": ratings[media],
+                        "mediaKind": ("video" if media.lower().endswith(
+                            (".mp4", ".webm", ".mov", ".mkv")) else "image"),
+                    }
+                    entry["topRenders"].append(preview)
+                    entry["topRenders"].sort(key=lambda item: (
+                        -item["rating"], item["session"], item["mediaFile"]))
+                    del entry["topRenders"][3:]
             if judgments:
                 entry["vlReviewedCount"] += 1
 

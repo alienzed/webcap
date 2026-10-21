@@ -1398,19 +1398,20 @@ def preview_run(config):
     """Read-only version of the exact plan used by Complete Missing Tests."""
     run = _new_run_payload(config)
     plan = _pending_probe_plan(run)
+    planned = _planned_probes(run)
     reused = run.get("reused") or {}
     failures = run.get("previousFailures") or {}
     models = {}
     for model in run["directorModels"] + run["visionModels"]:
         ref = model["modelRef"]
-        keys = [key for key in _planned_probes(run) if key.split("|", 2)[1] == ref]
+        keys = [key for key in planned if key.split("|", 2)[1] == ref]
         complete = sum(key in reused for key in keys)
         retry = sum(key in failures and key not in reused for key in keys)
         models[ref] = {
             "planned": len(keys), "complete": complete, "reused": complete,
             "missing": len(keys) - complete - retry, "retry": retry,
         }
-    return {"plan": plan, "reused": len(reused), "models": models}
+    return {"plan": plan, "reused": sum(key in reused for key in planned), "models": models}
 
 
 def start_run(config):

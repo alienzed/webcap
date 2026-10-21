@@ -3,6 +3,39 @@
   var visible = false, items = [], offset = 0, total = 0, active = -1, role = '', loading = false;
   var selected = new Set(), anchor = -1;
   var source = '', pageSize = 60, serial = 0, full = false, complete = false, activeRequest = null;
+  var exportMode = 'copy', exportItems = [];
+  function chooseExport(mode, chosen) {
+    exportMode = mode; exportItems = chosen;
+    if (!chosen.length) return;
+    var dialog = el('media-explorer-export-dialog');
+    text(el('media-explorer-export-heading'), mode === 'clip' ? 'Clip to Set' : 'Copy to Set');
+    text(el('media-explorer-export-count'), chosen.length + ' source file' + (chosen.length === 1 ? '' : 's'));
+    el('media-explorer-export-trim').classList.toggle('hidden', mode !== 'clip');
+    el('media-explorer-export-submit').textContent = mode === 'clip' ? 'Export clip' : 'Copy to Set';
+    el('media-explorer-export-status').textContent = '';
+    el('media-explorer-export-new-set').value = '';
+    browseDestinations();
+    dialog.showModal();
+  }
+  function browseDestinations() {
+    var path = el('media-explorer-export-destination').value.trim();
+    var host = el('media-explorer-export-folders'); host.replaceChildren();
+    return fetch('/fs/media_explorer/external/destinations?destination=' + encodeURIComponent(path))
+      .then(function (res) { return res.json().then(function (data) {
+        if (!res.ok || !data.ok) throw Error(data.error || 'Could not list Set folders');
+        return data;
+      }); }).then(function (data) {
+        (data.folders || []).forEach(function (name) {
+          var button = document.createElement('button'); button.type = 'button';
+          button.textContent = '📁 ' + name; button.onclick = function () {
+            el('media-explorer-export-destination').value = [path, name].filter(Boolean).join('/');
+            browseDestinations();
+          }; host.appendChild(button);
+        });
+      }).catch(function (err) {
+        el('media-explorer-export-status').textContent = err.message; report(err);
+      });
+  }
   var needsLoad = true;
   var externalDirectory = '', externalFolders = [], reverseSort = false, galleryHome = null;
   function setExternalDirectory(path) {
@@ -271,6 +304,7 @@
     text(el('media-explorer-selected-count'), selected.size + ' selected (loaded items)');
     text(el('media-explorer-selection-hint'), selected.size > 4 ? 'Compare supports up to 4 selected items' : selected.size < 2 ? 'Select 2–4 to compare' : 'Ready to compare');
     var chosen = items.filter(function (item) { return selected.has(item.id); });
+    el('media-explorer-copy-selected').classList.toggle('hidden', !isExternal());
     el('media-explorer-compare').disabled = chosen.length < 2 || chosen.length > 4;
     text(el('media-explorer-compare'), chosen.length > 2 && chosen.length <= 4 ? 'Survey' : 'Compare');
     el('media-explorer-compare').title = 'Compare 2–4 media; videos play independently';
@@ -518,6 +552,19 @@
       });
       var destructive = document.createElement('div'); destructive.className = 'media-explorer-danger-actions';
       destructive.appendChild(deleteButton); host.appendChild(destructive);
+    }
+    if (item.source === 'external') {
+      var copy = document.createElement('button'); copy.type = 'button'; copy.className = 'review-captions-btn';
+      copy.textContent = 'Copy to Set';
+      copy.onclick = function () {
+        var choices = items.filter(function (candidate) { return selected.has(candidate.id); });
+        chooseExport('copy', choices.length ? choices : [item]);
+      }; actions.appendChild(copy);
+      if (item.mediaKind === 'video') {
+        var clip = document.createElement('button'); clip.type = 'button'; clip.className = 'review-captions-btn';
+        clip.textContent = 'Clip to Set'; clip.onclick = function () { chooseExport('clip', [item]); };
+        actions.appendChild(clip);
+      }
     }
     if (item.mediaUrl) {
       var download = document.createElement('a');
@@ -900,6 +947,36 @@
   el('media-explorer-external-path').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('media-explorer-open-path').click(); });
   el('media-explorer-gallery-area').addEventListener('scroll', maybeLoadMore);
   el('media-explorer-preview-stage').parentElement.addEventListener('scroll', maybeLoadMore);
+  el('media-explorer-copy-selected').addEventListener('click', function () {
+    chooseExport('copy', items.filter(function (item) { return selected.has(item.id); }));
+  });
+  el('media-explorer-export-destination').addEventListener('change', browseDestinations);
+  el('media-explorer-export-up').addEventListener('click', function () {
+    var field = el('media-explorer-export-destination');
+    field.value = field.value.trim().split('/').slice(0,-1).join('/'); browseDestinations();
+  });
+  el('media-explorer-export-cancel').addEventListener('click', function () { el('media-explorer-export-dialog').close(); });
+  el('media-explorer-export-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var submit = el('media-explorer-export-submit');
+    var payload = {
+      path: externalPath, files: exportItems.map(function (item) { return item.relativePath; }),
+      destination: el('media-explorer-export-destination').value.trim(),
+      newSet: el('media-explorer-export-new-set').value.trim(),
+      start: el('media-explorer-export-start').value, duration: el('media-explorer-export-duration').value
+    };
+    submit.disabled = true;
+    text(el('media-explorer-export-status'), exportMode === 'clip' ? 'Exporting video clip…' : 'Copying media…');
+    fetch('/fs/media_explorer/external/' + exportMode, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+    }).then(function (res) { return res.json().then(function (data) {
+      if (!res.ok || !data.ok) throw Error(data.error || 'Export failed'); return data;
+    }); }).then(function (data) {
+      var count = data.copied ? data.copied.length + ' files copied' : 'Clip exported: ' + data.clip;
+      text(el('media-explorer-export-status'), count + ' to ' + data.destination);
+    }).catch(function (err) { text(el('media-explorer-export-status'), err.message); report(err); })
+      .finally(function () { submit.disabled = false; });
+  });
   el('media-explorer-up').addEventListener('click', function () { setExternalDirectory(externalDirectory.split('/').slice(0, -1).join('/')); });
   el('media-explorer-recursive').addEventListener('change', function () { renderExternalFolders(); load(true); });
   el('media-explorer-sort-reverse').addEventListener('click', function () {

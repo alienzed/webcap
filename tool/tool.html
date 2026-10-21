@@ -1295,14 +1295,26 @@
                             </aside>
                             <main class="epoch-finder-dashboard">
                                 <section class="epoch-finder-reference-workspace">
-                                    <div class="epoch-finder-panel-heading"><h3>Matching images</h3><span id="test-references-count"></span></div>
+                                    <div class="epoch-finder-panel-heading test-references-gallery-eyebrow">
+                                        <span>TRAINING REFERENCES</span><span id="test-references-count"></span>
+                                    </div>
                                     <div class="test-references-workflow-heading">
-                                        <span id="test-references-status" class="epoch-finder-muted" aria-live="polite">Finding training references…</span>
+                                        <div class="test-references-task">
+                                            <h1 id="test-references-active-heading">Choose an annotation tag</h1>
+                                            <span id="test-references-active-chosen" class="test-references-chosen-state hidden">✓ Reference chosen</span>
+                                            <div class="test-references-coverage">
+                                                <strong id="test-references-coverage-label">0 of 0 tags covered</strong>
+                                                <div class="test-references-progress-track" role="progressbar" aria-label="References selected in this group" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" id="test-references-progress">
+                                                    <span id="test-references-progress-fill"></span>
+                                                </div>
+                                            </div>
+                                        </div>
                                         <nav class="test-references-nav" aria-label="Tag navigation">
                                             <button type="button" id="test-references-previous" disabled>← Previous</button>
                                             <button type="button" id="test-references-next" disabled>Next →</button>
                                         </nav>
                                     </div>
+                                    <p id="test-references-status" class="epoch-finder-muted" aria-live="polite">Finding training references…</p>
                                     <div id="test-references-gallery" class="epoch-finder-reference-gallery"></div>
                                 </section>
                                 <p id="test-references-error" class="epoch-finder-error hidden" role="alert"></p>

@@ -688,3 +688,83 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .run-lab-feature-preview-rating{position:static;padding:0;background:none;font-size:11px;color:#f2c780;font-weight:750}
 #run-analytics-screen .run-lab-feature-preview-vl{font-size:11px;color:#cfdae5;font-weight:600}
 @media(max-width:570px){#run-analytics-screen .run-lab-feature.has-previews{grid-template-columns:1fr}#run-analytics-screen .run-lab-feature-previews,#run-analytics-screen .run-lab-feature-preview{height:225px;min-height:225px}}
+
+/* References: a legible, task-first picking workflow. Scope every override to this screen. */
+.test-references-screen{font-size:16px;line-height:1.45}
+.test-references-screen .epoch-finder-panel{padding:18px;margin-bottom:14px}
+.test-references-screen .epoch-finder-panel h3,
+.test-references-screen .epoch-finder-reference-workspace h3{font-size:19px;line-height:1.3;font-weight:750}
+.test-references-screen .epoch-finder-sidebar h4,
+.test-references-screen .test-references-tag-heading h4{font-size:18px;margin:20px 0 10px}
+.test-references-screen .epoch-finder-panel label{font-size:16px;line-height:1.4}
+.test-references-screen .epoch-finder-panel label>select{font-size:16px;padding:10px}
+.test-references-screen .epoch-finder-muted{font-size:14px;line-height:1.5}
+.test-references-screen #test-references-run-status{font-size:14px}
+.test-references-screen .epoch-finder-panel-heading span{font-size:14px;font-weight:650;opacity:.9}
+.test-references-screen #test-references-refresh{font-size:14px;padding:9px 12px}
+.test-references-screen .epoch-finder-reference-workspace{padding:20px}
+.test-references-screen .epoch-finder-reference-workspace .test-references-gallery-eyebrow{margin:0 0 8px}
+.test-references-screen .test-references-gallery-eyebrow>span:first-child{font-size:13px;font-weight:750;letter-spacing:.08em;opacity:.75}
+.test-references-screen .test-references-gallery-eyebrow #test-references-count{font-size:15px;opacity:.95}
+.test-references-screen .test-references-workflow-heading{align-items:flex-start;margin:0 0 9px;gap:16px}
+.test-references-screen .test-references-task{flex:1;min-width:0}
+.test-references-screen #test-references-active-heading{font-size:clamp(24px,2vw,30px);line-height:1.2;font-weight:800;letter-spacing:-.02em;margin:0 0 9px;overflow-wrap:anywhere}
+.test-references-screen .test-references-chosen-state{display:inline-flex;align-items:center;margin:0 0 10px;padding:5px 10px;border-radius:6px;border:1px solid var(--accent-color,#e99b16);font-size:14px;font-weight:750}
+.test-references-screen .test-references-chosen-state.hidden{display:none}
+.test-references-screen .test-references-coverage{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 4px}
+.test-references-screen .test-references-coverage>strong{font-size:16px;font-weight:750;white-space:nowrap}
+.test-references-screen .test-references-progress-track{height:9px;flex:1 1 130px;max-width:310px;overflow:hidden;border-radius:20px;background:var(--background-secondary,#344251);border:1px solid var(--border-color,#465465)}
+.test-references-screen .test-references-progress-track>span,
+.test-references-screen .test-references-group-track>span{display:block;height:100%;background:var(--accent-color,#e99b16);border-radius:inherit;transition:width .18s ease}
+.test-references-screen .test-references-nav{display:flex;gap:8px;flex:none}
+.test-references-screen .test-references-nav button{font-size:16px;font-weight:700;padding:11px 16px;min-height:44px;border:1px solid var(--border-color,#455768);border-radius:8px;background:var(--background-secondary,#293948);color:inherit}
+.test-references-screen .test-references-nav button:not(:disabled):hover{border-color:var(--accent-color,#e99b16)}
+.test-references-screen #test-references-status{font-size:15px;margin:4px 0 16px}
+.test-references-screen .test-references-groups{gap:8px;max-height:330px}
+.test-references-screen .test-references-group{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:13px 14px;font-size:16px;line-height:1.3}
+.test-references-screen .test-references-group-name{min-width:0;overflow-wrap:anywhere;font-weight:650}
+.test-references-screen .test-references-group-count{font-size:15px;font-weight:750;font-variant-numeric:tabular-nums}
+.test-references-screen .test-references-group-track{grid-column:1/-1;height:5px;border-radius:20px;overflow:hidden;background:var(--background-secondary,#344251)}
+.test-references-screen .test-references-group.active{border-color:var(--accent-color,#e99b16)}
+.test-references-screen .test-references-other-toggle{font-size:15px;font-weight:650;padding:10px}
+.test-references-screen #test-references-tag-progress{font-size:14px}
+.test-references-screen .test-references-tags{gap:8px;max-height:340px}
+.test-references-screen .test-references-tag{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 13px;font-size:16px;line-height:1.3;min-height:47px}
+.test-references-screen .test-references-tag-name{min-width:0;overflow-wrap:anywhere;font-weight:650}
+.test-references-screen .test-references-tag small{flex:none;font-size:14px;white-space:nowrap;margin:0;opacity:.8;font-variant-numeric:tabular-nums}
+.test-references-screen .test-references-tag.active{border-color:var(--accent-color,#e99b16);box-shadow:inset 3px 0 0 var(--accent-color,#e99b16)}
+.test-references-screen .test-references-tag.chosen:not(.active){border-color:var(--accent-color,#e99b16)}
+.test-references-screen .test-references-selections{gap:9px}
+.test-references-screen .test-references-selection{grid-template-columns:65px minmax(0,1fr) auto;gap:12px;padding:9px}
+.test-references-screen .test-references-selection img{width:65px;height:74px;border-radius:5px}
+.test-references-screen .test-references-selection strong{font-size:16px;line-height:1.3;font-weight:700}
+.test-references-screen .test-references-selection small{font-size:13px;opacity:.75;margin-top:5px;line-height:1.3}
+.test-references-screen .test-references-selection button{font-size:22px;min-width:35px;min-height:40px}
+.test-references-screen .epoch-finder-reference-workspace .epoch-finder-reference-gallery{grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:14px;margin:16px 0 0;padding:3px}
+.test-references-screen .epoch-finder-reference-tile{padding:7px;border-radius:10px;transition:border-color .15s ease,transform .15s ease,box-shadow .15s ease}
+.test-references-screen .epoch-finder-reference-tile:hover{border-color:var(--accent-color,#e99b16);transform:translateY(-2px)}
+.test-references-screen .epoch-finder-reference-tile.selected{border-color:var(--accent-color,#e99b16);box-shadow:0 0 0 1px var(--accent-color,#e99b16)}
+.test-references-screen .epoch-finder-reference-tile img{width:100%;height:270px;aspect-ratio:auto;object-fit:contain;border-radius:6px}
+.test-references-screen .epoch-finder-reference-tile .test-references-filename{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;min-height:44px;padding:9px 4px 4px;font-size:16px;line-height:1.4;overflow-wrap:anywhere}
+.test-references-screen .epoch-finder-reference-tile-actions{gap:8px;margin-top:auto;padding:9px 2px 2px}
+.test-references-screen .epoch-finder-reference-tile-actions button{font-size:16px;font-weight:700;padding:10px 8px;min-height:43px;border:1px solid var(--border-color,#455768);border-radius:7px;background:var(--background-secondary,#283645);color:inherit}
+.test-references-screen .epoch-finder-reference-tile-actions button[data-select-reference]{border-color:var(--accent-color,#e99b16)}
+.test-references-screen .epoch-finder-reference-tile.selected button[data-select-reference]{background:var(--accent-color,#e99b16);color:var(--panel-bg,#15202b)}
+.test-references-screen .epoch-finder-reference-tile-actions button:hover{filter:brightness(1.15)}
+.test-references-screen .epoch-finder-reference-tile:focus-within{outline:2px solid var(--accent-color,#e99b16);outline-offset:2px}
+.test-references-screen #test-references-preview-caption{font-size:16px;line-height:1.45}
+@media(max-width:1000px){
+  .test-references-screen .test-references-workflow-heading{flex-wrap:wrap}
+  .test-references-screen .epoch-finder-reference-workspace .epoch-finder-reference-gallery{grid-template-columns:repeat(auto-fill,minmax(185px,1fr))}
+  .test-references-screen .epoch-finder-reference-tile img{height:225px}
+}
+@media(max-width:850px){
+  .test-references-screen .test-references-nav{width:100%}
+  .test-references-screen .test-references-nav button{flex:1}
+}
+@media(prefers-reduced-motion:reduce){
+  .test-references-screen .epoch-finder-reference-tile,
+  .test-references-screen .test-references-progress-track>span,
+  .test-references-screen .test-references-group-track>span{transition:none}
+  .test-references-screen .epoch-finder-reference-tile:hover{transform:none}
+}

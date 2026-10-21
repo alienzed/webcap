@@ -461,12 +461,29 @@ def cancel_job_and_wait(prompt_id, timeout=10):
 
 def _format_error(job):
     error = job.get("execution_error") if isinstance(job, dict) and isinstance(job.get("execution_error"), dict) else {}
+    kind = str(error.get("exception_type") or "").strip()
     message = str(error.get("exception_message") or "").strip()
+    if not message and isinstance(job.get("error"), str):
+        message = job["error"].strip()
     node_id = str(error.get("node_id") or "").strip()
     node_type = str(error.get("node_type") or "").strip()
     detail = message or "ComfyUI reported an execution error."
+    if kind and not detail.startswith(kind + ":"):
+        detail = kind + ": " + detail
     node = " / ".join(value for value in (node_id, node_type) if value)
-    return detail + ((" (" + node + ")") if node else "")
+    if node:
+        detail += " (" + node + ")"
+
+    # The job-status API supplies the same traceback that ComfyUI logs.
+    # Preserve it in the queue pause reason and global Console diagnostics.
+    traceback_lines = error.get("traceback")
+    if isinstance(traceback_lines, list):
+        traceback_text = "\n".join(str(line).rstrip("\n") for line in traceback_lines).strip()
+    elif isinstance(traceback_lines, str):
+        traceback_text = traceback_lines.strip()
+    else:
+        traceback_text = ""
+    return detail + ("\n\n" + traceback_text if traceback_text else "")
 
 
 def wait_for_output(prompt_id, execution_job_id, find_output_ref):

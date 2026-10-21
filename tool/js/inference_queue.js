@@ -143,6 +143,32 @@
     window.reportConsoleError('Inference Queue · ComfyUI', new Error(reason));
   }
 
+  function formatExecutionFailure(reason) {
+    var prefix = 'Inference paused after an execution error:';
+    var full = String(reason || '').trim();
+    var detail = full.startsWith(prefix) ? full.slice(prefix.length).trim() : full;
+    var firstLine = detail.split('\n')[0].trim();
+    return {
+      summary: firstLine || 'ComfyUI inference failed.',
+      detail: detail,
+      full: full
+    };
+  }
+
+  function renderFailureDetails() {
+    var panel = el('inference-queue-error');
+    var summary = el('inference-queue-error-message');
+    var traceback = el('inference-queue-error-traceback');
+    if (!panel || !summary || !traceback) return;
+    var failed = state.queue.paused &&
+      String(state.queue.pauseReason || '').startsWith('Inference paused after an execution error:');
+    panel.classList.toggle('hidden', !failed);
+    if (!failed) return;
+    var error = formatExecutionFailure(state.queue.pauseReason);
+    summary.textContent = error.summary;
+    traceback.textContent = error.detail;
+  }
+
   function renderToggle(jobs) {
     var toggles = document.querySelectorAll('[data-inference-queue-toggle]');
     if (!toggles.length) return;
@@ -161,6 +187,8 @@
     ].filter(Boolean).join(' · ');
     title = title ? ('Inference · ' + title) : 'Inference Queue';
     if (state.queue.paused && state.queue.pauseReason) title += '\n' + state.queue.pauseReason;
+    var failure = state.queue.paused && String(state.queue.pauseReason || '').startsWith('Inference paused after an execution error:');
+
     Array.prototype.forEach.call(toggles, function (toggle) {
       var isRail = toggle.hasAttribute('data-inference-queue-rail');
       if (!isRail) toggle.textContent = count ? ('Inference Queue · ' + count) : 'Inference Queue';
@@ -168,6 +196,7 @@
       toggle.setAttribute('aria-label', title);
       toggle.setAttribute('aria-expanded', state.open ? 'true' : 'false');
       toggle.classList.toggle('inference-active', activeCount > 0);
+      toggle.classList.toggle('inference-has-error', !!failure);
       if (isRail) {
         var badge = toggle.querySelector('[data-inference-queue-badge]');
         if (badge) {
@@ -382,6 +411,7 @@
   function render() {
     var jobs = Array.isArray(state.queue.jobs) ? state.queue.jobs : [];
     renderToggle(jobs);
+    renderFailureDetails();
     syncShellInferenceState(jobs);
 
     var drawer = el('inference-queue-drawer');
@@ -407,7 +437,9 @@
     ].filter(Boolean).join(' · ');
     if (document.getElementById('job-queue-tab-inference').getAttribute('aria-selected') === 'true') {
     summary.textContent = state.queue.paused
-      ? String(state.queue.pauseReason || 'Inference is temporarily waiting.')
+      ? (String(state.queue.pauseReason || '').startsWith('Inference paused after an execution error:')
+        ? 'Inference paused · execution error'
+        : String(state.queue.pauseReason || 'Inference is temporarily waiting.'))
       : (String(state.queue.waitReason || '').trim() || counts || 'No inference work');
     summary.classList.toggle('inference-queue-failure',
       state.queue.paused && String(state.queue.pauseReason || '').startsWith('Inference paused after an execution error:'));
@@ -628,6 +660,12 @@
       action(pause.dataset.inferenceQueueAction || 'pause_queue');
     };
     clear.onclick = function () { action('clear_all'); };
+    el('inference-queue-error-copy').onclick = function () {
+      var failure = formatExecutionFailure(state.queue.pauseReason);
+      navigator.clipboard.writeText(failure.full).catch(function (err) {
+        window.reportConsoleError('Inference Queue · Copy Error', err);
+      });
+    };
     list.onclick = function (event) {
       var focus = event.target.closest('[data-inference-activity-focus]');
       if (focus) { window.focusActivityByJob(focus.dataset.jobId); return; }

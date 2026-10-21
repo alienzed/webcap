@@ -3222,3 +3222,41 @@ html[data-theme="dark"] .app-frame > #console-panel .console-panel-header {
 .test-generations-set-guide-note strong { font-size: 16px; }
 .test-generations-set-guide-note p { margin: 8px 0 14px; color: var(--muted); }
 .test-generations-set-guide-note button { cursor: pointer; }
+
+/* Execution failures: visible summary, optional full provider traceback. */
+.inference-queue-rail-btn.inference-has-error {
+  color: var(--danger, #e56c6c);
+}
+.inference-queue-error {
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.inference-queue-error.hidden { display: none; }
+.inference-queue-error-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.inference-queue-error-heading strong {
+  font-size: 18px;
+  line-height: 1.3;
+}
+.inference-queue-error-message {
+  font-size: 16px;
+  line-height: 1.45;
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+.inference-queue-error details { font-size: 14px; }
+.inference-queue-error details summary { cursor: pointer; font-size: 14px; }
+.inference-queue-error pre {
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: auto;
+  max-height: 320px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

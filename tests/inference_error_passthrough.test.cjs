@@ -55,3 +55,22 @@ test('queue visibly displays original pause reason and exposes it on the toggle 
   assert.match(source, /title \+= '\\n' \+ state\.queue\.pauseReason/);
   assert.match(source, /reportExecutionFailure\(state\.queue\)/);
 });
+
+test('failure panel formats first line while retaining complete technical traceback', () => {
+  const begin = source.indexOf('  function formatExecutionFailure(reason) {');
+  const end = source.indexOf('  function renderFailureDetails() {', begin);
+  assert.ok(begin > 0 && end > begin);
+  const sandbox = {};
+  vm.runInNewContext(source.slice(begin, end) + '\nthis.format = formatExecutionFailure;', sandbox);
+  const detail = "Inference paused after an execution error: ModuleNotFoundError: No module named 'triton' (128 / PatchSageAttention)\n\nTraceback:\n  import triton";
+  const result = sandbox.format(detail);
+  assert.equal(result.summary, "ModuleNotFoundError: No module named 'triton' (128 / PatchSageAttention)");
+  assert.equal(result.full, detail);
+  assert.match(result.detail, /import triton/);
+});
+
+test('queue error panel is wired without replacing existing scheduling or refresh', () => {
+  assert.match(source, /renderFailureDetails\(\);/);
+  assert.match(source, /navigator\.clipboard\.writeText\(failure\.full\)/);
+  assert.match(source, /toggle\.classList\.toggle\('inference-has-error'/);
+});

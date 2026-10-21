@@ -36,7 +36,8 @@ def test_reference_run_order_is_explicit_and_campaign_reuses_scoped_saved_choice
     server = (ROOT / "tool/server/epoch_finder.py").read_text(encoding="utf-8")
     finder = (ROOT / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
     assert 'sorted(runs, key=lambda run: float(run.get("createdAt") or 0), reverse=True)' in server
-    assert "item.groups.some(function (group)" in finder
+    assert "item.groups = vocabulary.filter(function (group)" in finder
+    assert "item.groups.map(function (group)" in finder
     assert "window.testReferencesChoice(els('run').value, group, item.option)" in finder
     assert "candidate.group === group && candidate.media === chosen.media" in finder
     assert "window.testReferencesChoice(els('run').value, item.group" not in finder

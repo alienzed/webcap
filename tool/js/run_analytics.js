@@ -652,6 +652,7 @@
     var done=!reviewItems[reviewIndex];
     labReviewProgress();
     lab('review-stars').classList.toggle('hidden',done||reviewRatedCurrent);
+    lab('review-dialog').classList.toggle('is-complete',done);
     lab('review-skip').classList.toggle('hidden',done||reviewRatedCurrent);
     lab('review-next').classList.toggle('hidden',!done&&!reviewRatedCurrent);
     lab('review-undo').classList.toggle('hidden',!reviewRatedCurrent);
@@ -663,6 +664,7 @@
     lab('review-status').textContent='';
     lab('review-media').replaceChildren();
     lab('review-wildcards').replaceChildren();
+    lab('review-prompt').textContent='';
     if(done){
       if(!reviewItems.length){
         lab('review-progress').textContent='No available unrated renders';
@@ -671,11 +673,11 @@
       }else{
         lab('review-progress').textContent='Batch complete · '+reviewRated+' rated, '+reviewSkipped+' skipped';
         lab('review-status').textContent='Mission complete: '+reviewRated+' saved ratings, '+reviewSkipped+' skipped. Close to see refreshed rankings, or review another five.';
-        lab('review-next').textContent='Review five more';
+        lab('review-next').textContent='Review five more →';
       }
       return;
     }
-    lab('review-next').textContent='Next render';
+    lab('review-next').textContent='Next render →';
     var url='/fs/test_generations/media?folder='+encodeURIComponent(folder)+'&session='+encodeURIComponent(current.session)+'&media='+encodeURIComponent(current.mediaFile);
     var video=/\.(mp4|webm|mov|mkv)$/i.test(current.mediaFile)||current.mediaKind==='video';
     var media=document.createElement(video?'video':'img');
@@ -683,8 +685,9 @@
     if(video){media.controls=true;media.preload='metadata';media.playsInline=true;}
     else {media.alt='Unrated Test render';}
     lab('review-media').appendChild(media);
-    var wildcards=(current.wildcards||[]).map(function(item){return item.phrase||item.value||item.label||'';}).filter(Boolean);
-    lab('review-wildcards').innerHTML=wildcards.length?wildcards.map(function(value){return '<span>'+esc(value)+'</span>';}).join(''):'<span>No resolved wildcard summary recorded</span>';
+    var wildcards=(current.wildcards||[]).map(function(item){return typeof item==='string'?item:(item&& (item.phrase||item.value||item.label))||'';}).filter(Boolean);
+    lab('review-wildcards').innerHTML=wildcards.length?wildcards.map(function(value){return '<span>'+esc(value)+'</span>';}).join(''):'<p class="run-lab-review-no-wildcards">No wildcard selections recorded for this render. See the actual prompt below.</p>';
+    lab('review-prompt').textContent=current.prompt||'No resolved prompt recorded.';
   }
   function labReviewLoad(){
     reviewBusy=true;

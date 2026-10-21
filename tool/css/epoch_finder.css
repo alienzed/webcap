@@ -827,3 +827,36 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-epoch-info>.epoch-info-back{margin-bottom:18px}
 #run-analytics-epoch-info .epoch-info-header p{font-size:16px;line-height:1.45}
 @media(max-width:620px){#run-analytics-epoch-info .epoch-info-header{flex-direction:column;gap:12px}}
+
+/* Blind Rate Five: image-led workspace, legible prompt context and one clear decision. */
+#run-analytics-screen .run-lab-review-dialog{width:min(1680px,calc(100vw - 32px));padding:0;border-radius:16px}
+#run-analytics-screen .run-lab-review-head{padding:19px 24px;border-bottom:1px solid var(--border-color,#384653);gap:24px}
+#run-analytics-screen .run-lab-review-kicker{display:block;font-size:13px;font-weight:750;letter-spacing:.1em;color:var(--accent-color,#e5ad4f);margin-bottom:5px}
+#run-analytics-screen .run-lab-review-head h3{font-size:30px;line-height:1.2}
+#run-analytics-screen .run-lab-review-meter-wrap{max-width:320px}
+#run-analytics-screen .run-lab-review-meter-wrap span{display:block;font-size:14px;color:var(--text-muted,#bbc9d6);line-height:1.4}
+#run-analytics-screen .run-lab-review-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(350px,420px);gap:0;flex:1;min-height:0}
+#run-analytics-screen .run-lab-review-media{margin:0;border-radius:0;min-height:0;padding:16px}
+#run-analytics-screen .run-lab-review-panel{display:flex;flex-direction:column;gap:12px;padding:24px;overflow-y:auto;min-width:0;border-left:1px solid var(--border-color,#384653)}
+#run-analytics-screen .run-lab-review-panel h4{font-size:22px;line-height:1.25;margin:0 0 8px}
+#run-analytics-screen .run-lab-review-panel p{font-size:16px;line-height:1.45;margin:0 0 13px}
+#run-analytics-screen .run-lab-review-context{flex:1;min-height:0;overflow-y:auto}
+#run-analytics-screen .run-lab-review-wildcards{max-height:none;gap:9px;margin:0 0 14px;font-size:16px}
+#run-analytics-screen .run-lab-review-wildcards span{font-size:16px;line-height:1.35;padding:9px 12px;border:1px solid var(--border-color,#536578);border-radius:9px;overflow-wrap:anywhere}
+#run-analytics-screen .run-lab-review-no-wildcards{color:var(--text-muted,#bbc9d6)}
+#run-analytics-screen .run-lab-review-prompt-details{border-top:1px solid var(--border-color,#536578);padding:13px 0}
+#run-analytics-screen .run-lab-review-prompt-details summary{font-size:16px;font-weight:700;cursor:pointer}
+#run-analytics-screen .run-lab-review-prompt-details p{margin-top:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+#run-analytics-screen .run-lab-review-decision{border-top:1px solid var(--border-color,#536578);padding-top:18px;flex:none}
+#run-analytics-screen .run-lab-review-stars{margin:0 0 12px;gap:8px}
+#run-analytics-screen .run-lab-review-stars button{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;min-width:0;min-height:76px;border-radius:10px;font-size:34px}
+#run-analytics-screen .run-lab-review-stars button:hover,#run-analytics-screen .run-lab-review-stars button:focus-visible{border-color:var(--accent-color,#e5ad4f);background:var(--surface-bg,#293849)}
+#run-analytics-screen .run-lab-review-stars small{font-size:15px;color:var(--text-muted,#bbc9d6)}
+#run-analytics-screen .run-lab-review-actions{justify-content:flex-start;margin:8px 0;gap:9px}
+#run-analytics-screen .run-lab-review-actions button{min-height:48px;padding:9px 16px;font-size:17px;font-weight:700}
+#run-analytics-screen #run-lab-review-next{background:var(--accent-color,#c48a41);color:#111820;border-color:transparent}
+#run-analytics-screen .run-lab-review-reveal{font-size:17px;line-height:1.4;min-height:0}
+#run-analytics-screen #run-lab-review-status{text-align:left;font-size:16px}
+#run-analytics-screen .run-lab-review-keys{font-size:13px!important;color:var(--text-muted,#bbc9d6);margin:2px 0 0!important}
+@media(max-width:900px){#run-analytics-screen .run-lab-review-workspace{grid-template-columns:1fr;overflow:auto}#run-analytics-screen .run-lab-review-dialog[open]{overflow:hidden}#run-analytics-screen .run-lab-review-media{flex:0 0 42vh;min-height:190px}#run-analytics-screen .run-lab-review-panel{overflow:visible;border-left:0;border-top:1px solid var(--border-color,#384653)}#run-analytics-screen .run-lab-review-context{overflow:visible}}
+@media(max-width:600px){#run-analytics-screen .run-lab-review-head{padding:13px;gap:10px}#run-analytics-screen .run-lab-review-head h3{font-size:24px}#run-analytics-screen .run-lab-review-panel{padding:15px}#run-analytics-screen .run-lab-review-stars button{min-height:62px;font-size:27px}#run-analytics-screen .run-lab-review-meter-wrap{order:3;max-width:none;flex-basis:100%}}

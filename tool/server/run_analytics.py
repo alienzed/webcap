@@ -672,12 +672,13 @@ def insights_review_batch(folder_path, excluded=None):
             if identity in excluded_ids:
                 continue
             resolved_prompt = str(result.get("prompt") or status.get("resolvedPrompt") or "")
-            source_prompt = status.get("sourcePrompt")
+            source_prompt = result.get("sourcePrompt") or status.get("sourcePrompt")
             candidates.append({
                 "id": identity, "session": session.name, "mediaFile": media,
                 "mediaKind": str(result.get("mediaKind") or status.get("mediaKind") or ""),
                 "jobId": job_id, "epoch": epoch,
                 "runName": str(source.get("sourceRunName") or ""),
+                "prompt": resolved_prompt,
                 "wildcards": bench._resolved_wildcard_summary(
                     source_prompt, resolved_prompt, status.get("ownerFolder") or set_folder),
                 "_key": key,

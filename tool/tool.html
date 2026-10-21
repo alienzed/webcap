@@ -1349,15 +1349,20 @@
                                 <button id="run-analytics-epoch-media-more" class="review-captions-btn hidden" type="button">Load 8 more</button>
                               </dialog>
                             <dialog id="run-lab-review-dialog" class="run-lab-review-dialog" aria-label="Blind render rating">
-                              <header class="run-lab-review-head"><div><h3>Blind render review</h3><p id="run-lab-review-progress" role="status">Preparing review…</p></div><div class="run-lab-review-meter-wrap"><progress id="run-lab-review-meter" max="5" value="0" aria-label="Blind rating batch progress"></progress><small>1–5 rate · S skip · → next</small></div><button type="button" id="run-lab-review-close" class="review-captions-btn">Close</button></header>
-                              <div id="run-lab-review-media" class="run-lab-review-media"></div>
-                              <div id="run-lab-review-wildcards" class="run-lab-review-wildcards"></div>
-                              <div id="run-lab-review-reveal" class="run-lab-review-reveal" aria-live="polite"></div>
-                              <div id="run-lab-review-stars" class="run-lab-review-stars" aria-label="Rate this render from one to five stars">
-                                <button type="button" data-insights-rating="1" aria-label="1 star">★</button><button type="button" data-insights-rating="2" aria-label="2 stars">★</button><button type="button" data-insights-rating="3" aria-label="3 stars">★</button><button type="button" data-insights-rating="4" aria-label="4 stars">★</button><button type="button" data-insights-rating="5" aria-label="5 stars">★</button>
+                              <header class="run-lab-review-head">
+                                <div><span class="run-lab-review-kicker">INSIGHTS / QUICK REVIEW</span><h3>Rate this render</h3><p id="run-lab-review-progress" role="status">Preparing review…</p></div>
+                                <div class="run-lab-review-meter-wrap"><progress id="run-lab-review-meter" max="5" value="0" aria-label="Blind rating batch progress"></progress><span>Five quick decisions. Run and epoch revealed after rating.</span></div>
+                                <button type="button" id="run-lab-review-close" class="review-captions-btn">Close</button>
+                              </header>
+                              <div class="run-lab-review-workspace">
+                                <div id="run-lab-review-media" class="run-lab-review-media"></div>
+                                <aside class="run-lab-review-panel">
+                                  <div class="run-lab-review-context"><h4>What was generated?</h4><p>Actual resolved prompt and wildcard choices for this render.</p><div id="run-lab-review-wildcards" class="run-lab-review-wildcards"></div><details class="run-lab-review-prompt-details"><summary>Full generated prompt</summary><p id="run-lab-review-prompt"></p></details></div>
+                                  <div class="run-lab-review-decision"><h4>Your rating</h4><p>Judge the image before revealing its training run.</p><div id="run-lab-review-stars" class="run-lab-review-stars" aria-label="Rate this render from one to five stars">
+                                    <button type="button" data-insights-rating="1" aria-label="1 star"><span>★</span><small>1</small></button><button type="button" data-insights-rating="2" aria-label="2 stars"><span>★</span><small>2</small></button><button type="button" data-insights-rating="3" aria-label="3 stars"><span>★</span><small>3</small></button><button type="button" data-insights-rating="4" aria-label="4 stars"><span>★</span><small>4</small></button><button type="button" data-insights-rating="5" aria-label="5 stars"><span>★</span><small>5</small></button>
+                                  </div><div id="run-lab-review-reveal" class="run-lab-review-reveal" aria-live="polite"></div><div class="run-lab-review-actions"><button id="run-lab-review-undo" type="button" class="review-captions-btn hidden">Undo rating</button><button id="run-lab-review-skip" type="button" class="review-captions-btn">Skip</button><button id="run-lab-review-next" type="button" class="review-captions-btn hidden">Next render →</button></div><p id="run-lab-review-status" role="status"></p><p class="run-lab-review-keys">Keys: 1–5 rate · S skip · → next</p></div>
+                                </aside>
                               </div>
-                              <div class="run-lab-review-actions"><button id="run-lab-review-undo" type="button" class="review-captions-btn hidden">Undo rating</button><button id="run-lab-review-skip" type="button" class="review-captions-btn">Skip</button><button id="run-lab-review-next" type="button" class="review-captions-btn hidden">Next render</button></div>
-                              <p id="run-lab-review-status" role="status"></p>
                             </dialog>
                             <div id="run-analytics-lab" class="run-analytics-lab">
                               <header class="run-lab-heading"><div><span class="run-lab-eyebrow">TEST GENERATIONS / INSIGHTS</span><h2>Insights</h2><p>Review what you have, find promising epochs, and choose the next useful action.</p></div><div class="run-lab-heading-actions"><button type="button" id="run-lab-ai" class="training-btn training-launch-btn">✦ AI Insights</button><button type="button" id="run-lab-refresh" class="review-captions-btn">Refresh evidence</button></div></header>

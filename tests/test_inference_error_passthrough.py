@@ -73,7 +73,7 @@ def test_failed_provider_job_raises_full_diagnostic(monkeypatch):
             "exception_type": "ModuleNotFoundError",
             "node_id": "128",
             "node_type": "PatchSageAttention",
-            "traceback": ["  File \\"sageattention/core.py\\", line 2\n", "    import triton\n"],
+            "traceback": ["  File \"sageattention/core.py\", line 2\n", "    import triton\n"],
         },
     })
     with pytest.raises(RuntimeError) as exc:

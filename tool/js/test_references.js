@@ -53,7 +53,7 @@
   function changeSelection(operation, item, after) {
     if (!loaded || pending) { report(new Error(pending ? 'A reference save is still in progress. Try again when it completes.' : 'Training references have not loaded; selection was not saved.')); return; }
     pending = true;
-    var saveFolder = folder, saveRun = runId;
+    var saveFolder = folder, saveRun = runId, saveGroup = currentGroup, saveTerm = currentTerm;
     el('status').textContent = 'Saving reference…';
     resetError();
     api(operation, item).then(function () {
@@ -61,8 +61,11 @@
       if (operation === 'reference_selection_remove') delete selected[JSON.stringify([item.runId, item.group, item.term])];
       else selected[JSON.stringify([item.runId, item.group, item.term])] = item;
       drawGallery();
-      if (after && saveRun === runId) after();
-      else el('status').textContent = 'Reference saved.';
+      if (saveRun === runId && saveGroup === currentGroup && saveTerm === currentTerm) {
+        if (after) after();
+        else el('status').textContent = operation === 'reference_selection_remove'
+          ? 'Reference removed.' : 'Reference saved.';
+      }
     }).catch(function (error) { if (saveFolder === folder) report(error); }).finally(function () { pending = false; });
   }
   function drawGroups() {

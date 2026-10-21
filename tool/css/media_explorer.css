@@ -195,7 +195,7 @@
 .media-explorer-grid.explorer-list .media-explorer-card-open { padding-left:36px; }
 
 /* Prep-aligned Explorer surface: source rail, resizable list, preview, inspector. */
-.media-explorer-workspace { --explorer-list-width: 260px; --explorer-inspector-width: 350px; }
+.media-explorer-workspace { --explorer-list-width: 292px; --explorer-inspector-width: 350px; }
 .media-explorer-main { display:grid; grid-template-columns: minmax(220px,var(--explorer-list-width)) 6px minmax(0,1fr); height:100%; min-height:0; overflow:hidden; scrollbar-gutter:auto; scroll-padding-top:0; }
 .media-explorer-browser { min-width:0; min-height:0; display:flex; flex-direction:column; border-right:1px solid var(--border); overflow:hidden; }
 .media-explorer-toolbar { position:static; padding:9px 9px 0; flex:none; background:var(--bg); }

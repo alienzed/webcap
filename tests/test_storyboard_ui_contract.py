@@ -267,14 +267,17 @@ def test_storyboard_revise_scenes_lives_in_director_tools_and_keeps_sparse_scene
     app = (ROOT / "tool" / "server" / "app.py").read_text(encoding="utf-8")
 
 
-    assert "function reviseScenes(instruction, modelId, generateFreshTakes)" in storyboard
+    assert "function reviseScenes(instruction, modelId, generateFreshTakes, continuityContext)" in storyboard
     assert 'id="storyboard-director-tools-btn"' in html
     assert 'id="storyboard-director-tools-modal"' in html
     assert 'id="storyboard-director-tools-instruction"' in html
     assert '<option value="continuity">Continuity pass</option>' in html
     assert "DIRECTOR_PASS_PRESETS.continuity.instruction" in storyboard
     assert "function runDirectorToolsRevision()" in storyboard
-    assert "reviseScenes(instruction, storyState.director.modelId, generateFreshTakes)" in storyboard
+    assert "var revision = reviseScenes(" in storyboard
+    assert "continuityContext: continuityContext === true" in storyboard
+    assert "el('storyboard-director-tools-preset').value === 'continuity'" in storyboard
+    assert '"continuityContext": data.get("continuityContext") is True' in app
     assert "id: 'revise-scenes'" not in storyboard
 
     assert "kind: 'repair'" in storyboard

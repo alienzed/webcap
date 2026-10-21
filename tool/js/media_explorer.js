@@ -338,11 +338,9 @@
     host.dataset.id = items[index] ? items[index].id : '';
     host.replaceChildren();
     if (index < 0 || !items[index]) { inspector.classList.add('hidden'); renderMainPreview(); return; }
-    var item = items[index], preview = mediaElement(item, true);
+    var item = items[index];
     text(el('media-explorer-inspector-name'), item.fileName);
     el('media-explorer-inspector-name').title = item.fileName;
-    var previewFrame = document.createElement('div'); previewFrame.className = 'media-explorer-inspector-preview';
-    previewFrame.appendChild(preview); host.appendChild(previewFrame);
     var provenance = document.createElement('div'); provenance.className = 'media-explorer-provenance';
     text(provenance, 'Owned by · ' + sourceNames[item.source] + ' › ' + (item.contextLabel || item.storageId)); host.appendChild(provenance);
     var actions = document.createElement('div'); actions.className = 'media-explorer-inspector-actions'; host.appendChild(actions);

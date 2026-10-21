@@ -754,38 +754,52 @@ def _test_auto_vl_compare(answer, groups):
 
 
 
-def _queue_test_auto_vl(folder_path, session_name, media_file):
-    """Enqueue VL in the existing LLM lane; each session owns its evidence."""
-    from .llm_runner import enqueue as enqueue_llm
+def _queue_test_auto_vl(folder_path, session_name, media_file, model_override=None, raise_on_error=False):
+    """Reuse the existing durable LLM lane for generation-time and requested Test VL."""
+    from .llm_runner import enqueue as enqueue_llm, job_status
 
     session_dir = _session_directory(folder_path, session_name)
-    status = _read_status(session_dir) or {}
-    model = str(status.get("autoVlModel") or "")
-    jobs = status.get("autoVlJobs") or {}
-    if not model or media_file in jobs:
-        return
-    visible = open_session(folder_path, session_name)
-    groups = visible.get("wildcardEvaluationGroups") or []
-    question = _test_auto_vl_question(groups)
     try:
-        resolve_result_media(folder_path, session_name, media_file)
-        # Keep the queued contract small. The vision bytes are resolved only when the LLM runs.
-        job = enqueue_llm(
-            "caption", model, {
-                "operation": "vision_question",
-                "messages": [{"role": "user", "content": question}],
-            }, context={
-                "testAutoVl": True, "testFolder": _relative_set_folder(folder_path),
-                "testSession": session_name, "testMedia": media_file,
-                "testGroups": groups, "testQuestion": question, "testModel": model,
-            }, label="Test Ask VL · " + session_name,
-        )
+        # Admission and saved job identity are one critical section. Separate
+        # browser tabs must never submit the same preview twice.
         with _status_lock:
+            status = _read_status(session_dir) or {}
+            model = str(model_override or status.get("autoVlModel") or "")
+            if not model:
+                return None
+            jobs = status.get("autoVlJobs") or {}
+            existing_id = str(jobs.get(media_file) or "")
+            if existing_id:
+                if model_override is None:
+                    return existing_id
+                try:
+                    previous_state = str(job_status(existing_id).get("status") or "")
+                except FileNotFoundError:
+                    previous_state = "absent"
+                if previous_state in {"queued", "backlog", "starting", "running", "stopping"}:
+                    return existing_id
+            if media_file in (_session_vision_state(session_dir).get("byMedia") or {}):
+                return None
+            visible = open_session(folder_path, session_name)
+            groups = visible.get("wildcardEvaluationGroups") or []
+            question = _test_auto_vl_question(groups)
+            resolve_result_media(folder_path, session_name, media_file)
+            # Media bytes are resolved by the existing LLM worker at execution.
+            job = enqueue_llm(
+                "caption", model,
+                {"operation": "vision_question", "messages": [{"role": "user", "content": question}]},
+                context={
+                    "testAutoVl": True, "testFolder": _relative_set_folder(folder_path),
+                    "testSession": session_name, "testMedia": media_file,
+                    "testGroups": groups, "testQuestion": question, "testModel": model,
+                }, label="Test Ask VL · " + session_name,
+            )
             latest = _read_status(session_dir) or {}
             registered = dict(latest.get("autoVlJobs") or {})
             registered[media_file] = str(job["jobId"])
             latest["autoVlJobs"] = registered
             _atomic_write_json(_status_path(session_dir), latest)
+            return str(job["jobId"])
     except Exception as exc:
         _logger.exception("Automatic Test VL submission failed for Session %s, media %s", session_name, media_file)
         with _status_lock:
@@ -794,6 +808,108 @@ def _queue_test_auto_vl(folder_path, session_name, media_file):
             errors.append(media_file + ": " + str(exc))
             latest["autoVlErrors"] = errors
             _atomic_write_json(_status_path(session_dir), latest)
+        if raise_on_error:
+            raise
+        return None
+
+
+def _evaluation_items(folder_path):
+    """All surviving saved previews, across sessions, without launching analysis."""
+    for directory in _session_directories(folder_path):
+        status = _read_status(directory) or {}
+        if status.get("campaignStaging"):
+            continue
+        evidence = (_session_vision_state(directory).get("byMedia") or {})
+        jobs = status.get("autoVlJobs") or {}
+        seen = set()
+        for result in status.get("results") or []:
+            media = _result_media_file(result)
+            if not media or media in seen:
+                continue
+            seen.add(media)
+            try:
+                resolve_result_media(folder_path, directory.name, media)
+                available = True
+            except (FileNotFoundError, ValueError):
+                available = False
+            saved = evidence.get(media)
+            completed = isinstance(saved, dict) and isinstance(saved.get("text"), str)
+            yield directory.name, media, available, completed, str(jobs.get(media) or "")
+
+
+def evaluation_progress(folder_path):
+    """Read-only evidence coverage, including active jobs in the existing LLM lane."""
+    from .llm_runner import job_status
+    counts = {"total": 0, "completed": 0, "queued": 0, "running": 0,
+              "failed": 0, "unavailable": 0, "missing": 0}
+    for session, media, available, completed, job_id in _evaluation_items(folder_path):
+        if not available:
+            counts["unavailable"] += 1
+            continue
+        counts["total"] += 1
+        if completed:
+            counts["completed"] += 1
+            continue
+        if not job_id:
+            counts["missing"] += 1
+            continue
+        try:
+            state = str(job_status(job_id).get("status") or "")
+        except FileNotFoundError:
+            state = "absent"
+        if state in {"queued", "backlog", "starting"}:
+            counts["queued"] += 1
+        elif state in {"running", "stopping"}:
+            counts["running"] += 1
+        elif state in {"failed", "cancelled", "stopped", "interrupted", "completed"}:
+            # Completed with no saved receipt is an evaluation failure.
+            counts["failed"] += 1
+        else:
+            counts["missing"] += 1
+    counts["remaining"] = counts["total"] - counts["completed"]
+    counts["actionable"] = counts["missing"] + counts["failed"]
+    return counts
+
+
+def evaluate_missing(folder_path, model):
+    """Explicitly enqueue only missing/failed original VL assessments Set-wide."""
+    from .llm_runner import job_status
+    model = str(model or "").strip()
+    if not model:
+        raise ValueError("Select a Vision model before evaluating Test renders.")
+    queued = 0
+    for session, media, available, completed, job_id in _evaluation_items(folder_path):
+        if not available or completed:
+            continue
+        if job_id:
+            try:
+                state = str(job_status(job_id).get("status") or "")
+            except FileNotFoundError:
+                state = "absent"
+            if state in {"queued", "backlog", "starting", "running", "stopping"}:
+                continue
+        if _queue_test_auto_vl(folder_path, session, media, model_override=model, raise_on_error=True):
+            queued += 1
+    return {"submitted": queued, "evaluation": evaluation_progress(folder_path)}
+
+
+def stop_missing_evaluation(folder_path):
+    """Explicit stop limited to outstanding Test VL jobs for this Set."""
+    from .llm_runner import cancel_job, job_status
+    stopped = 0
+    seen = set()
+    for session, media, available, completed, job_id in _evaluation_items(folder_path):
+        if completed or not job_id or job_id in seen:
+            continue
+        seen.add(job_id)
+        try:
+            state = str(job_status(job_id).get("status") or "")
+        except FileNotFoundError:
+            continue
+        if state in {"queued", "backlog", "starting", "running"}:
+            cancel_job(job_id)
+            stopped += 1
+    return {"stopped": stopped, "evaluation": evaluation_progress(folder_path)}
 
 
 def complete_test_auto_vl(context, answer, elapsed_ms):
@@ -1398,6 +1514,13 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_rating_summary":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return rating_summary(folder_path, model_id=criteria.get("modelId"))
+    if operation == "test_evaluation_progress":
+        return {"operation": operation, "evaluation": evaluation_progress(folder_path)}
+    if operation == "test_evaluate_missing":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return {"operation": operation, **evaluate_missing(folder_path, criteria.get("model"))}
+    if operation == "test_evaluation_stop":
+        return {"operation": operation, **stop_missing_evaluation(folder_path)}
     if operation == "test_vision_update":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return update_vision(folder_path, criteria.get("session"), criteria)

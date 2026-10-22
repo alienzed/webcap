@@ -778,6 +778,9 @@ def _execute_claimed(job_id, gpu_reserved):
             if client == "caption" and caption_operation in {"caption_vision_validate", "vision_image_caption", "vision_caption_extras", "vision_question", "vision_schema_sight", "vision_vocabulary_sight"}:
                 from .storyboard_llm_runtime import prepare_caption_vision_messages
                 chat_kwargs["allow_image_data_urls"] = True
+                # Ollama thinking defaults can exhaust the response budget before
+                # producing visible VL text. Vision tasks require visible output.
+                chat_kwargs["thinking"] = False
                 messages = prepare_caption_vision_messages(model_id, messages)
                 if caption_operation == "caption_vision_validate":
                     from .caption_vision import CAPTION_VISION_RESPONSE_SCHEMA

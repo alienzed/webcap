@@ -736,7 +736,7 @@ def test_live_screening_does_not_allow_rating_unrendered_images(tmp_path, monkey
         epoch_finder.command(folder, "screening_rate", {
             "campaignId": campaign["id"], "round": 1, "epoch": 2, "case": 0, "rating": 5,
         })
-    with pytest.raises(ValueError, match="current screening round"):
+    with pytest.raises(ValueError, match="shown in this screening round"):
         epoch_finder.command(folder, "screening_keep", {
             "campaignId": campaign["id"], "round": 2, "epoch": 1, "keep": False,
         })

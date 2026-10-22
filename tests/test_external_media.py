@@ -279,3 +279,41 @@ def test_external_endpoint_lists_immediate_folders_even_with_zero_files(tmp_path
     })
     assert response.status_code == 200
     assert [item["relativePath"] for item in response.get_json()["items"]] == ["subfolder/child.jpg"]
+
+
+def test_external_file_move_stays_under_root_and_refuses_collisions(tmp_path):
+    root = tmp_path / "source"
+    source = _file(root / "one.png")
+    (root / "other").mkdir()
+    result = external_media.move_external_files({
+        "path": str(root), "files": ["one.png"], "destination": "other"
+    })
+    assert result["moved"] == ["one.png"]
+    assert not source.exists()
+    assert (root / "other" / "one.png").exists()
+    import pytest
+    with pytest.raises(ValueError, match="already contains"):
+        external_media.move_external_files({
+            "path": str(root), "files": ["other/one.png"], "destination": "other"
+        })
+    with pytest.raises(ValueError, match="inside the external root"):
+        external_media.move_external_files({
+            "path": str(root), "files": ["other/one.png"], "destination": "../outside"
+        })
+
+
+def test_external_trash_uses_system_trash_not_permanent_delete(tmp_path, monkeypatch):
+    root = tmp_path / "source"
+    _file(root / "one.png")
+    trash = tmp_path / "recycle"
+    trash.mkdir()
+    calls = []
+    def fake_send2trash(path):
+        from pathlib import Path
+        calls.append(path)
+        Path(path).rename(trash / Path(path).name)
+    monkeypatch.setattr(external_media, "send2trash", fake_send2trash)
+    result = external_media.trash_external_files({"path": str(root), "files": ["one.png"]})
+    assert result["trashed"] == ["one.png"]
+    assert len(calls) == 1 and (trash / "one.png").exists()
+    assert not (root / "one.png").exists()

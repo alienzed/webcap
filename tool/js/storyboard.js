@@ -3881,6 +3881,18 @@
       'Prompt mode: ' + String(input.promptMode || '')
     ].filter(function (value) { return !/:\s*$/.test(value); });
 
+    // Preserve the frozen sampling recipe under Advanced, not in the Take footer.
+    var sampling = take.submittedSampling;
+    if (sampling && sampling.mode) {
+      facts.splice(2, 0, 'Sampling: ' + (
+        sampling.mode === 'quality'
+          ? 'Quality · ' + sampling.steps + ' steps · no Turbo'
+          : 'Turbo · ' + sampling.steps + ' steps · Turbo ' + sampling.turboStrength
+      ));
+    } else if (take.samplingMode) {
+      facts.splice(2, 0, 'Sampling mode (legacy): ' + String(take.samplingMode));
+    }
+
     var referenceLines = Object.keys(references).map(function (role) {
       return role + ': ' + String(references[role] || '');
     });

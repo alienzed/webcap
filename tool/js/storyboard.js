@@ -3842,41 +3842,24 @@
   }
 
   function takeMetaLabel(take) {
-    var parts = [take && take.generated ? 'Generated' : 'Imported'];
-    if (take && take.generated) {
-      var elapsed = take.elapsedMs == null ? '' : formatGenerationElapsedMs(take.elapsedMs);
-      parts.push(elapsed ? elapsed + ' elapsed' : 'Elapsed —');
-    }
-    var createdAt = take && take.createdAt ? new Date(take.createdAt) : null;
-    if (createdAt && !Number.isNaN(createdAt.getTime())) {
-      parts.push(createdAt.toLocaleString([], {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit'
-      }));
-    }
-    if (take && take.generated) {
-      var submitted = take.submittedSampling;
-      if (submitted && submitted.mode) {
-        parts.push(submitted.mode === 'quality' ? 'Quality · ' + submitted.steps + ' steps · no Turbo'
-          : 'Turbo · ' + submitted.steps + ' steps · Turbo ' + submitted.turboStrength);
-      } else {
-        var mode = String(take.samplingMode || 'current');
-        parts.push(mode === 'quality' || mode === 'no_turbo' ? 'Quality · 20 steps · no Turbo'
-          : (mode === 'current' ? 'Legacy · 8 steps · Turbo 0.9' : 'Turbo · 8 steps · Turbo 1.0'));
-      }
-      var input = take.effectiveInput || {};
-      var mp = Number(input.megapixels);
-      if (input.megapixels !== undefined && input.megapixels !== null && input.megapixels !== '' &&
-          Number.isFinite(mp) && mp > 0) {
-        parts.push(String(Number(mp.toFixed(2))) + ' MP');
-      }
+    var parts = [];
+    var input = take && take.effectiveInput || {};
+    var mp = Number(input.megapixels);
+    if (input.megapixels !== undefined && input.megapixels !== null && input.megapixels !== '' &&
+        Number.isFinite(mp) && mp > 0) {
+      parts.push(String(Number(mp.toFixed(2))) + ' MP');
+    } else {
       var width = Number(input.width);
       var height = Number(input.height);
       if (Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0) {
-        parts.push(width + '×' + height);
+        parts.push(String(Number((width * height / 1000000).toFixed(2))) + ' MP');
       }
+    }
+    if (take && take.generated) {
+      var elapsed = take.elapsedMs == null ? '' : formatGenerationElapsedMs(take.elapsedMs);
+      parts.push(elapsed ? elapsed + ' elapsed' : 'Elapsed —');
+    } else if (!parts.length) {
+      parts.push('Imported');
     }
     if (take && take.mediaPurged) parts.push('Media reclaimed');
     return parts.join(' · ');
@@ -3897,6 +3880,18 @@
       'Seed: ' + String(input.seed == null ? '' : input.seed),
       'Prompt mode: ' + String(input.promptMode || '')
     ].filter(function (value) { return !/:\s*$/.test(value); });
+
+    // Preserve the frozen sampling recipe under Advanced, not in the Take footer.
+    var sampling = take.submittedSampling;
+    if (sampling && sampling.mode) {
+      facts.splice(2, 0, 'Sampling: ' + (
+        sampling.mode === 'quality'
+          ? 'Quality · ' + sampling.steps + ' steps · no Turbo'
+          : 'Turbo · ' + sampling.steps + ' steps · Turbo ' + sampling.turboStrength
+      ));
+    } else if (take.samplingMode) {
+      facts.splice(2, 0, 'Sampling mode (legacy): ' + String(take.samplingMode));
+    }
 
     var referenceLines = Object.keys(references).map(function (role) {
       return role + ': ' + String(references[role] || '');

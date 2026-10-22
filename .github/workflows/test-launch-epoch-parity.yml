@@ -14,6 +14,8 @@ on:
       - 'tests/test_test_generations_focused_unification.py'
       - 'tests/test_test_repeat.py'
       - 'tool/server/epoch_test_bench.py'
+      - 'tool/server/epoch_finder.py'
+      - 'tests/test_epoch_finder.py'
       - 'tool/server/llm_runner.py'
       - 'tool/js/inference_queue.js'
       - 'tool/server/inference_runtime.py'
@@ -49,3 +51,4 @@ jobs:
           python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py tests/test_training_references_browser.py
           cp tool/config.example.json tool/config.json
           python -m pytest -q tests/test_inference_error_passthrough.py
+          python -m pytest -q tests/test_epoch_finder.py

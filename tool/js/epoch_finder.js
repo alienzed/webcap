@@ -32,6 +32,7 @@
   var manualSelectedRound = 0;
   var manualMatrixSignature = '';
   var manualVisionPending = false;
+  var screeningSelectionQueue = Promise.resolve();
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -1106,8 +1107,12 @@
   }
   function screeningSaveSelection() {
     if (!isManualCampaign()) return Promise.resolve();
-    var id=activeCampaign, folder=currentFolder;
-    return api('screening_selection',{campaignId:id,runSelections:selectedRunEntries()}).then(function (response) {
+    if (campaignState.status !== 'complete') return Promise.resolve();
+    var id=activeCampaign, folder=currentFolder, selection=selectedRunEntries();
+    screeningSelectionQueue=screeningSelectionQueue.catch(function(){}).then(function(){
+      return api('screening_selection',{campaignId:id,runSelections:selection});
+    });
+    return screeningSelectionQueue.then(function (response) {
       if (!campaignState || campaignState.id !== id || currentFolder !== folder) return;
       campaignState.kept=response.campaign.kept;
       campaignState.candidateMap=response.campaign.candidateMap;
@@ -1129,7 +1134,9 @@
       criteria.runSelections=selectedRunEntries();
     } else criteria.campaignId=id;
     els('manual-launch').disabled=true;
-    api(action,criteria).then(function (response) {
+    (next?screeningSelectionQueue:Promise.resolve()).then(function(){
+      return api(action,criteria);
+    }).then(function (response) {
       if (next && activeCampaign!==id) return;
       activeCampaign=response.campaign.id;
       manualSelectedRound=response.campaign.rounds.length;
@@ -1192,7 +1199,7 @@
       var x=campaign.candidateMap[String(a)],y=campaign.candidateMap[String(b)];
       return (x&&x.epoch||a)-(y&&y.epoch||b)||a-b;
     });
-    var signature=JSON.stringify([campaign.id,manualSelectedRound,rows,Array.from(kept),sort,
+    var signature=JSON.stringify([campaign.id,campaign.status,manualSelectedRound,rows,Array.from(kept),sort,
       units.filter(function(u){return u.round===plan.number;}).map(function (u) {
         return [u.epoch,u.case,u.frame,u.error,u.rating,u.assessment&&u.assessment.text];
       }),units.map(function(u){return [u.epoch,u.rating]})]);
@@ -1218,6 +1225,7 @@
         '★ '+total.average.toFixed(1)+' · '+total.count+' rated':'Not rated';head.appendChild(summary);
       var keepLabel=document.createElement('label');
       var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=kept.has(epoch);
+      checkbox.disabled=campaign.status!=='complete';
       checkbox.addEventListener('change',function () {
         var origin=campaign.candidateMap[String(epoch)];
         if (!origin) throw new Error('Missing screening checkpoint identity.');
@@ -1229,7 +1237,8 @@
       });
       keepLabel.append(checkbox,document.createTextNode('Keep for next round'));head.appendChild(keepLabel);
       var vl=document.createElement('button');vl.type='button';vl.className='review-captions-btn';vl.textContent='Ask VL · Epoch';
-      vl.onclick=function(){screeningAskVision(campaign,{epoch:epoch});};head.appendChild(vl);
+      vl.onclick=function(){screeningAskVision(campaign,{epoch:epoch});};
+      vl.disabled=campaign.status!=='complete';head.appendChild(vl);
       row.appendChild(head);
       var cards=document.createElement('div');cards.className='epoch-screening-cases';
       for (var caseIndex=0;caseIndex<plan.seeds.length;caseIndex++) {
@@ -1244,7 +1253,7 @@
             placeholder:url?null:(u&&u.error?'Render failed':'Awaiting render'),
             failed:!!(u&&u.error),
             error:u&&u.error||'',
-            rating:url?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,
+            rating:url&&campaign.status==='complete'?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,
               onRate:function(value){
                 api('screening_rate',{campaignId:campaign.id,round:plan.number,
                   epoch:epoch,case:index,rating:value}).then(function () {
@@ -1257,7 +1266,7 @@
             details:[{label:'Prompt',value:plan.casePrompts[index],pre:true},
               {label:'Seed',value:String(plan.seeds[index])},
               {label:'VL',value:u&&u.assessment&&u.assessment.text||''}],
-            actions:url?[{label:'Ask VL for this render',onClick:function () {
+            actions:url&&campaign.status==='complete'?[{label:'Ask VL for this render',onClick:function () {
                 screeningAskVision(campaign,{epoch:epoch,case:index});
               }},{label:'Open original',url:url}]:[]
           });

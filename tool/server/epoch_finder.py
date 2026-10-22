@@ -584,6 +584,9 @@ def _screening_selection(folder_path, campaign, selections):
 def _screening_next_round(folder_path, campaign, criteria):
     if campaign.get("status") != "complete":
         raise ValueError("Finish the current screening round before launching another.")
+    worker = _screening_vision_workers.get(campaign["id"])
+    if worker and worker.is_alive():
+        raise ValueError("Finish the active VL review before launching the next round.")
     if not campaign.get("kept"):
         raise ValueError("Keep at least one epoch for the next round.")
     model = get_test_model(campaign["modelId"])
@@ -636,9 +639,13 @@ def _screening_vision(folder_path, campaign, criteria):
                 current["visionModel"] = model
                 # Preserve concurrent human ratings/selections after the VL call.
                 _evaluate_unit(folder_path, current, unit)
-            except Exception:
+            except Exception as exc:
                 import logging
                 logging.getLogger(__name__).exception("Manual Screening VL failed for %s", identity)
+                current = _load(folder_path, identity)
+                unit = _unit(current, item["round"], item["epoch"], item["case"])
+                unit["visionError"] = str(exc)
+                _save(folder_path, current)
         _screening_vision_workers.pop(identity, None)
     worker = threading.Thread(target=evaluate, daemon=True, name="screening-vl-" + identity)
     _screening_vision_workers[identity] = worker
@@ -893,7 +900,15 @@ def _evaluate_unit(folder_path, campaign, unit):
                 "modelId": campaign["visionModel"], "text": answer,
                 "comparison": _compare(answer, unit["groups"]),
             }
-            _save(folder_path, campaign)
+            if campaign.get("mode") == "manual":
+                latest = _load(folder_path, campaign["id"])
+                target = _unit(latest, unit["round"], unit["epoch"], unit["case"])
+                target["assessment"] = unit["assessment"]
+                target["visionWallSeconds"] = unit["visionWallSeconds"]
+                target.pop("visionError", None)
+                _save(folder_path, latest)
+            else:
+                _save(folder_path, campaign)
             llm_job_status(job_id, consume=True)
             return
         time.sleep(1)
@@ -1288,6 +1303,9 @@ def _launch(folder_path, campaign_id):
 
 def status(folder_path, campaign_id):
     campaign = _load(folder_path, campaign_id)
+    if campaign.get("mode") == "manual":
+        worker = _screening_vision_workers.get(campaign_id)
+        campaign["screeningVisionRunning"] = bool(worker and worker.is_alive())
     with _worker_lock:
         thread = _workers.get(campaign_id)
     if campaign.get("status") in {"running", "queued"} and (thread is None or not thread.is_alive()):

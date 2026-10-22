@@ -517,9 +517,8 @@ def _normalize_scene(scene_id, value, existing=None):
         if megapixels <= 0:
             raise ValueError("Scene megapixels must be greater than zero.")
 
-    sampling_mode = str(value.get("samplingMode", current.get("samplingMode", "current")) or "current")
-    if sampling_mode not in ("current", "single", "no_turbo"):
-        raise ValueError("Unsupported Storyboard sampling mode: " + sampling_mode)
+    from .h3_sampling import normalize_mode
+    sampling_mode = normalize_mode(value.get("samplingMode", current.get("samplingMode", "turbo")))
 
     normalized = {
         "id": scene_id,
@@ -1765,6 +1764,7 @@ def add_take_upload(
             "jobId",
             "elapsedMs",
             "effectiveInput",
+            "submittedSampling",
         ):
             if key in generated_provenance:
                 take[key] = copy.deepcopy(generated_provenance[key])
@@ -2183,6 +2183,7 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
         "jobId",
         "elapsedMs",
         "effectiveInput",
+        "submittedSampling",
     ):
         if key in provenance:
             take[key] = copy.deepcopy(provenance[key])

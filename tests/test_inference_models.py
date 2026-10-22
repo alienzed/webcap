@@ -104,7 +104,7 @@ def test_h3_inference_workflow_supports_multiple_loras_and_frame_anchors():
 
 def test_h3_shared_inference_model_uses_dedicated_workflow_with_standalone_turbo():
     model = get_inference_model("minimax_h3")
-    assert model.TEMPLATE_PATH.name == "minimax_h3_inference_api.json"
+    assert model.TEMPLATE_PATH.name == "minimax_h3_inference_single_api.json"
 
     workflow = model.load_template()
     turbo = workflow["148"]["inputs"]
@@ -112,7 +112,7 @@ def test_h3_shared_inference_model_uses_dedicated_workflow_with_standalone_turbo
 
     assert workflow["124"]["inputs"]["steps"] == 8
     assert turbo["lora_name"] == "mh3\\minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors"
-    assert turbo["strength_model"] == 0.9
+    assert turbo["strength_model"] == 1.0
     assert turbo["strength_clip"] == 1
     assert turbo["model"] == ["161", 0]
     assert turbo["clip"] == ["128", 0]

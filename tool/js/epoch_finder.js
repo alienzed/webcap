@@ -1263,6 +1263,54 @@
           (action==='stop'?'Stop queuing':'Cancel')+'</button>':'')+'</div>';
     }).join('');
   }
+  function screeningRunInfo(campaign, plan) {
+    var host=els('manual-run-info');
+    var signature=JSON.stringify([campaign.id,plan.number,plan.settings,plan.prompt,
+      plan.groupIndex,plan.columnLabels,plan.casePrompts,plan.seeds]);
+    if (host.dataset.signature===signature) return;
+    host.dataset.signature=signature;
+    host.replaceChildren();
+    var heading=document.createElement('strong');
+    heading.textContent='Round '+plan.number+' · Submitted prompts and settings';
+    host.appendChild(heading);
+    var settings=document.createElement('p');
+    settings.textContent=Object.entries(plan.settings||{}).map(function(entry){
+      return entry[0]+': '+String(entry[1]);
+    }).join(' · ');
+    host.appendChild(settings);
+    var prompt=document.createElement('details');
+    var promptLabel=document.createElement('summary');
+    promptLabel.textContent='Original wildcard prompt · Group '+(plan.groupIndex+1);
+    var promptText=document.createElement('pre');promptText.textContent=plan.prompt;
+    prompt.append(promptLabel,promptText);
+    host.appendChild(prompt);
+    var columns=document.createElement('div');columns.className='epoch-screening-run-prompts';
+    plan.columnLabels.forEach(function(name,index){
+      var item=document.createElement('details');
+      var title=document.createElement('summary');
+      title.textContent=name+' · Seed '+plan.seeds[index];
+      var submitted=document.createElement('pre');submitted.textContent=plan.casePrompts[index];
+      item.append(title,submitted);
+      columns.appendChild(item);
+    });
+    host.appendChild(columns);
+  }
+  function screeningUpdateAverage(row, average) {
+    var head=row&&row.querySelector('.epoch-screening-row-head');
+    if (!head) return;
+    var summary=head.querySelector('.epoch-screening-rating-summary');
+    if (!average || !average.count) {
+      if (summary) summary.remove();
+      return;
+    }
+    if (!summary) {
+      summary=document.createElement('span');
+      summary.className='epoch-screening-rating-summary';
+      head.insertBefore(summary,head.querySelector('.epoch-screening-row-actions'));
+    }
+    var value='★ '+average.average.toFixed(1)+' · '+average.count;
+    if (summary.textContent!==value) summary.textContent=value;
+  }
   function screeningMatrix(campaign) {
     if (campaign.mode!=='manual') return;
     if (!campaign.rounds.some(function (plan) {return plan.number===manualSelectedRound;})) {
@@ -1270,6 +1318,7 @@
     }
     screeningRoundList(campaign);
     var plan=campaign.rounds[manualSelectedRound-1],host=els('manual-matrix');
+    screeningRunInfo(campaign,plan);
     var kept=new Set(campaign.kept||[]);
     // The left picker is the immediate next-round selection. Derive Keep from it
     // so live polls and delayed saves cannot visually undo a local checkbox edit.
@@ -1324,54 +1373,26 @@
     }
     scroller.style.setProperty('--screening-columns',String(plan.seeds.length));
     scroller.style.setProperty('--screening-width',Math.max(550,plan.seeds.length*228)+'px');
-    // The frozen run plan, not the editable form, owns the review header.
+    // Keep column labels aligned while scrolling; full prompts belong to the run,
+    // not to each epoch or the sticky image grid.
     var labels=scroller.querySelector('.epoch-screening-case-labels');
-    var labelSignature=JSON.stringify([plan.columnLabels,plan.casePrompts,plan.seeds,plan.settings,plan.prompt,plan.groupIndex]);
+    var labelSignature=JSON.stringify(plan.columnLabels);
     if (!labels || labels.dataset.signature!==labelSignature) {
       if (labels) labels.remove();
       labels=document.createElement('div');
       labels.className='epoch-screening-cases epoch-screening-case-labels';
       labels.dataset.signature=labelSignature;
-      var settings=document.createElement('div');
-      settings.className='epoch-screening-run-settings';
-      var summary=document.createElement('strong');
-      summary.textContent='Submitted prompts and settings';
-      settings.appendChild(summary);
-      var settingsLine=document.createElement('span');
-      settingsLine.textContent=Object.entries(plan.settings||{}).map(function(entry){
-        return entry[0]+': '+String(entry[1]);
-      }).join(' · ');
-      settings.appendChild(settingsLine);
-      var template=document.createElement('details');
-      template.className='epoch-screening-template';
-      var templateLabel=document.createElement('summary');
-      templateLabel.textContent='Original wildcard prompt · Group '+(plan.groupIndex+1);
-      var templatePrompt=document.createElement('pre');
-      templatePrompt.textContent=plan.prompt;
-      template.append(templateLabel,templatePrompt);
-      settings.appendChild(template);
-      labels.appendChild(settings);
-      plan.columnLabels.forEach(function(name,index){
-        var cell=document.createElement('div');
-        cell.className='epoch-screening-case-heading';
-        var heading=document.createElement('strong');heading.textContent=name;
-        var snippet=document.createElement('p');
-        snippet.className='epoch-screening-prompt-snippet';
-        snippet.textContent=plan.casePrompts[index];
-        snippet.title=plan.casePrompts[index];
-        var detail=document.createElement('details');
-        var trigger=document.createElement('summary');trigger.textContent='Full prompt · seed '+plan.seeds[index];
-        var full=document.createElement('pre');full.textContent=plan.casePrompts[index];
-        detail.append(trigger,full);
-        cell.append(heading,snippet,detail);
-        labels.appendChild(cell);
+      plan.columnLabels.forEach(function(name) {
+        var heading=document.createElement('strong');
+        heading.textContent=name;
+        labels.appendChild(heading);
       });
       scroller.insertBefore(labels,scroller.firstChild);
     }
     var desired=[];
     rows.forEach(function (epoch) {
       var collapsed=!kept.has(epoch)&&!screeningExpandedExcluded.has(campaign.id+':'+plan.number+':'+epoch);
-      var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,rated[epoch],
+      var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,
         units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;}).map(function(u){
           return [u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
         })]);
@@ -1379,6 +1400,12 @@
         return element.dataset.screeningEpoch===String(epoch);
       });
       if (previous && previous.dataset.signature===rowSignature) {
+        screeningUpdateAverage(previous,rated[epoch]);
+        var existingUnits=units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;});
+        existingUnits.forEach(function(u){
+          var card=previous.querySelector('.epoch-screening-cases').children[u.case];
+          if (card) window.updateTestPreviewCardRating(card,u.rating||0);
+        });
         desired.push(previous);
         return;
       }
@@ -1386,7 +1413,7 @@
       row.className='epoch-screening-row'+(collapsed?' is-collapsed':'');
       row.dataset.screeningEpoch=String(epoch);
       row.dataset.signature=rowSignature;
-      var headSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,rated[epoch]]);
+      var headSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed]);
       var head=row.querySelector('.epoch-screening-row-head');
       if (!head || head.dataset.signature!==headSignature) {
       if (head) head.remove();
@@ -1445,6 +1472,7 @@
       head.appendChild(actions);
       row.insertBefore(head,row.firstChild);
       }
+      screeningUpdateAverage(row,rated[epoch]);
       var cards=row.querySelector('.epoch-screening-cases');
       if (!cards) {
         cards=document.createElement('div');cards.className='epoch-screening-cases';
@@ -1454,9 +1482,12 @@
         var unit=units.find(function(u){return u.round===plan.number&&u.epoch===epoch&&u.case===caseIndex;});
         (function(u,index) {
           var cardSignature=JSON.stringify([u&&u.frame,u&&u.framePruned,u&&u.error,
-            u&&u.rating,u&&u.renderSeconds,u&&u.visionError,u&&u.assessment&&u.assessment.text]);
+            u&&u.renderSeconds,u&&u.visionError,u&&u.assessment&&u.assessment.text]);
           var oldCard=cards.children[index];
-          if (oldCard && oldCard.dataset.screeningCardSignature===cardSignature) return;
+          if (oldCard && oldCard.dataset.screeningCardSignature===cardSignature) {
+            window.updateTestPreviewCardRating(oldCard,u&&u.rating||0);
+            return;
+          }
           var url=u&&u.frame&&!u.framePruned?'/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+
             '&campaign='+encodeURIComponent(campaign.id)+'&frame='+encodeURIComponent(u.frame):'';
           var card=createTestPreviewCard({
@@ -1467,19 +1498,38 @@
             failed:!!(u&&u.error),
             error:u&&u.error||'',
             rating:url?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,
-              onRate:function(value){
+              onRate:function(value,card){
                 api('screening_rate',{campaignId:campaign.id,round:plan.number,
                   epoch:epoch,case:index,rating:value}).then(function () {
-                    u.rating=value;host.dataset.signature='';screeningMatrix(campaign);
+                    u.rating=value;
+                    if (campaignState && campaignState.id===campaign.id) {
+                      var current=campaignState.units.find(function(item){
+                        return item.round===plan.number&&item.epoch===epoch&&item.case===index;
+                      });
+                      if(current)current.rating=value;
+                    }
+                    window.updateTestPreviewCardRating(card,value);
+                    var currentUnits=(campaignState&&campaignState.id===campaign.id?
+                      campaignState:campaign).units.filter(function(item){
+                        return item.epoch===epoch&&Number(item.rating)>0;
+                      });
+                    screeningUpdateAverage(card.closest('.epoch-screening-row'),{
+                      count:currentUnits.length,
+                      average:currentUnits.length?currentUnits.reduce(function(total,item){
+                        return total+item.rating;
+                      },0)/currentUnits.length:0
+                    });
+                    if (els('manual-sort').value==='high'||els('manual-sort').value==='low') {
+                      host.dataset.signature='';
+                      screeningMatrix(campaignState||campaign);
+                    }
                   }).catch(error);
               }}:null,
             wildcards:plan.caseSelections[index].map(function(v){return {label:v.id,value:v.option};}),
             metadata:u&&u.renderSeconds?[(u.renderSeconds).toFixed(1)+'s']:[],
             evaluations:u&&u.assessment?[{label:'VL reviewed',title:u.assessment.text}]:
               u&&u.visionError?[{label:'VL failed',title:u.visionError}]:[],
-            details:[{label:'Prompt',value:plan.casePrompts[index],pre:true},
-              {label:'Seed',value:String(plan.seeds[index])},
-              {label:'VL',value:u&&u.assessment&&u.assessment.text||''},
+            details:[{label:'VL',value:u&&u.assessment&&u.assessment.text||''},
               {label:'VL error',value:u&&u.visionError||''}],
             actions:url?[{label:'Ask VL for this render',onClick:function () {
                 screeningAskVision(campaign,{epoch:epoch,case:index});

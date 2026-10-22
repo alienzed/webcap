@@ -29,7 +29,7 @@ from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
 _workers = {}
 _controls = {}
 _pending_campaigns = []  # FIFO of (validated folder, campaign id); no new execution lane.
-_worker_lock = threading.Lock()
+_worker_lock = threading.RLock()  # Also serializes short campaign state saves/edits.
 _ID = re.compile(r"^[a-f0-9]{12}$")
 _FRAME = re.compile(r"^r[0-9]+-e[0-9]+-c[0-9]+\.png$")
 
@@ -61,8 +61,33 @@ def _load(folder_path, campaign_id):
     return payload
 
 
-def _save(folder_path, campaign):
-    test_bench._atomic_write_json(_directory(folder_path, campaign["id"]) / "campaign.json", campaign)
+def _save(folder_path, campaign, *, preserve_manual=True):
+    # Manual ratings/selection and VL results may arrive while the render worker
+    # holds an older campaign snapshot. Merge those independently owned fields
+    # rather than letting the next progress save erase a user's live review.
+    with _worker_lock:
+        if preserve_manual and campaign.get("mode") == "manual":
+            path = _directory(folder_path, campaign["id"]) / "campaign.json"
+            if path.is_file():
+                latest = _load(folder_path, campaign["id"])
+                for field in ("kept", "runSelections", "candidateMap"):
+                    if field in latest:
+                        campaign[field] = latest[field]
+                by_unit = {
+                    (item["round"], item["epoch"], item["case"]): item
+                    for item in latest.get("units", [])
+                }
+                for unit in campaign.get("units", []):
+                    saved = by_unit.get((unit["round"], unit["epoch"], unit["case"]), {})
+                    if "rating" in saved:
+                        unit["rating"] = saved["rating"]
+                    if saved.get("assessment") is not None and unit.get("assessment") is None:
+                        for field in ("assessment", "visionWallSeconds"):
+                            if field in saved:
+                                unit[field] = saved[field]
+                    if saved.get("visionError") and not unit.get("assessment"):
+                        unit["visionError"] = saved["visionError"]
+        test_bench._atomic_write_json(_directory(folder_path, campaign["id"]) / "campaign.json", campaign)
 
 
 def _requires_reference(role):
@@ -579,7 +604,7 @@ def _screening_selection(folder_path, campaign, selections):
             chosen.append(by_source[identity])
     campaign["kept"] = chosen
     campaign["runSelections"] = selections
-    _save(folder_path, campaign)
+    _save(folder_path, campaign, preserve_manual=False)
     return campaign
 
 
@@ -613,8 +638,8 @@ _screening_vision_workers = {}
 
 
 def _screening_vision(folder_path, campaign, criteria):
-    if campaign.get("status") != "complete":
-        raise ValueError("Finish rendering before requesting manual VL.")
+    if campaign.get("status") not in {"running", "paused", "complete", "interrupted", "failed", "stopped"}:
+        raise ValueError("Start rendering before requesting manual VL.")
     if _screening_vision_workers.get(campaign["id"]) and _screening_vision_workers[campaign["id"]].is_alive():
         raise ValueError("A Manual Screening VL batch is already running.")
     from .storyboard_llm_runtime import list_vision_models
@@ -644,10 +669,11 @@ def _screening_vision(folder_path, campaign, criteria):
             except Exception as exc:
                 import logging
                 logging.getLogger(__name__).exception("Manual Screening VL failed for %s", identity)
-                current = _load(folder_path, identity)
-                unit = _unit(current, item["round"], item["epoch"], item["case"])
-                unit["visionError"] = str(exc)
-                _save(folder_path, current)
+                with _worker_lock:
+                    current = _load(folder_path, identity)
+                    unit = _unit(current, item["round"], item["epoch"], item["case"])
+                    unit["visionError"] = str(exc)
+                    _save(folder_path, current, preserve_manual=False)
         _screening_vision_workers.pop(identity, None)
     worker = threading.Thread(target=evaluate, daemon=True, name="screening-vl-" + identity)
     _screening_vision_workers[identity] = worker
@@ -908,12 +934,13 @@ def _evaluate_unit(folder_path, campaign, unit):
                 "comparison": _compare(answer, unit["groups"]),
             }
             if campaign.get("mode") == "manual":
-                latest = _load(folder_path, campaign["id"])
-                target = _unit(latest, unit["round"], unit["epoch"], unit["case"])
-                target["assessment"] = unit["assessment"]
-                target["visionWallSeconds"] = unit["visionWallSeconds"]
-                target.pop("visionError", None)
-                _save(folder_path, latest)
+                with _worker_lock:
+                    latest = _load(folder_path, campaign["id"])
+                    target = _unit(latest, unit["round"], unit["epoch"], unit["case"])
+                    target["assessment"] = unit["assessment"]
+                    target["visionWallSeconds"] = unit["visionWallSeconds"]
+                    target.pop("visionError", None)
+                    _save(folder_path, latest, preserve_manual=False)
             else:
                 _save(folder_path, campaign)
             llm_job_status(job_id, consume=True)
@@ -1617,30 +1644,50 @@ def command(folder_path, operation, criteria=None):
     campaign_id = str(criteria.get("campaignId") or "")
     if operation == "status":
         return {"campaign": status(folder_path, campaign_id)}
-    if operation in {"screening_selection", "screening_next_round", "screening_rate", "screening_vision"}:
+    if operation in {"screening_selection", "screening_next_round", "screening_rate", "screening_keep", "screening_vision"}:
         campaign = status(folder_path, campaign_id)
         if campaign.get("mode") != "manual":
             raise ValueError("This operation requires a Manual Screening campaign.")
-        if operation == "screening_selection":
-            return {"campaign": _screening_selection(folder_path, campaign, criteria.get("runSelections"))}
-        if operation == "screening_next_round":
-            return {"campaign": _screening_next_round(folder_path, campaign, criteria)}
         if operation == "screening_vision":
             return _screening_vision(folder_path, campaign, criteria)
-        unit = next((item for item in campaign["units"]
-                     if item["round"] == criteria.get("round") and
-                     item["epoch"] == criteria.get("epoch") and
-                     item["case"] == criteria.get("case")), None)
-        if not unit or not unit.get("frame"):
-            raise ValueError("Screening render does not exist.")
-        if campaign.get("status") != "complete":
-            raise ValueError("Finish this round before rating Manual Screening renders.")
-        value = criteria.get("rating")
-        if type(value) is not int or not 0 <= value <= 5:
-            raise ValueError("Rating must be 0-5 stars.")
-        unit["rating"] = value
-        _save(folder_path, campaign)
-        return {"rating": value}
+        if operation == "screening_next_round":
+            return {"campaign": _screening_next_round(folder_path, campaign, criteria)}
+        with _worker_lock:
+            # Re-read after taking the worker lock; a render might just have landed.
+            campaign = _load(folder_path, campaign_id)
+            if operation == "screening_selection":
+                return {"campaign": _screening_selection(folder_path, campaign, criteria.get("runSelections"))}
+            if operation == "screening_keep":
+                epoch = criteria.get("epoch")
+                number = criteria.get("round")
+                keep = criteria.get("keep")
+                if type(epoch) is not int or type(number) is not int or type(keep) is not bool:
+                    raise ValueError("Choose an epoch and whether to keep it.")
+                plan = next((plan for plan in campaign["rounds"] if plan["number"] == number), None)
+                if number != campaign["round"] or not plan or epoch not in plan["epochs"]:
+                    raise ValueError("Choose an epoch in the current screening round.")
+                if epoch not in campaign["candidateMap"] and str(epoch) not in campaign["candidateMap"]:
+                    raise ValueError("Screening checkpoint identity is missing.")
+                kept = list(campaign["kept"])
+                if keep and epoch not in kept:
+                    kept.append(epoch)
+                if not keep:
+                    kept = [item for item in kept if item != epoch]
+                campaign["kept"] = kept
+                _save(folder_path, campaign, preserve_manual=False)
+                return {"kept": kept}
+            unit = next((item for item in campaign["units"]
+                         if item["round"] == criteria.get("round") and
+                         item["epoch"] == criteria.get("epoch") and
+                         item["case"] == criteria.get("case")), None)
+            if not unit or not unit.get("frame"):
+                raise ValueError("Screening render does not exist.")
+            value = criteria.get("rating")
+            if type(value) is not int or not 0 <= value <= 5:
+                raise ValueError("Rating must be 0-5 stars.")
+            unit["rating"] = value
+            _save(folder_path, campaign, preserve_manual=False)
+            return {"rating": value}
     if operation in {"pause", "stop"}:
         campaign = status(folder_path, campaign_id)
         if campaign.get("status") == "queued":

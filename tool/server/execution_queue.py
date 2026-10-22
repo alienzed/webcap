@@ -1033,7 +1033,7 @@ def clear_lane(lane_name):
         _write_state(state)
 
 
-def backlog_active(job_id, pause_reason=""):
+def backlog_active(job_id):
     """Preserve one stopped frozen request at the end of Backlog, without a terminal receipt."""
     now = time.time()
     with _lock:
@@ -1061,9 +1061,6 @@ def backlog_active(job_id, pause_reason=""):
         lane["activeJobId"] = ""
         lane["jobs"].remove(job)
         lane["jobs"].append(job)
-        if pause_reason:
-            lane["paused"] = True
-            lane["pauseReason"] = str(pause_reason)
         _refresh_positions(lane)
         _write_state(state)
         return _public_job(job)

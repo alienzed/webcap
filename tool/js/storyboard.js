@@ -3857,8 +3857,15 @@
       }));
     }
     if (take && take.generated) {
-      var mode = String(take.samplingMode || 'current');
-      parts.push(mode === 'no_turbo' ? '20 steps · No Turbo' : (mode === 'single' ? '8 steps · Turbo 1.0' : '8 steps · Turbo 0.9'));
+      var submitted = take.submittedSampling;
+      if (submitted && submitted.mode) {
+        parts.push(submitted.mode === 'quality' ? 'Quality · ' + submitted.steps + ' steps · no Turbo'
+          : 'Turbo · ' + submitted.steps + ' steps · Turbo ' + submitted.turboStrength);
+      } else {
+        var mode = String(take.samplingMode || 'current');
+        parts.push(mode === 'quality' || mode === 'no_turbo' ? 'Quality · 20 steps · no Turbo'
+          : (mode === 'current' ? 'Legacy · 8 steps · Turbo 0.9' : 'Turbo · 8 steps · Turbo 1.0'));
+      }
       var input = take.effectiveInput || {};
       var mp = Number(input.megapixels);
       if (input.megapixels !== undefined && input.megapixels !== null && input.megapixels !== '' &&
@@ -4122,12 +4129,19 @@
       }).join('');
       var loraRowsHtml = sceneLoras.map(sceneLoraRowHtml).join('');
       var baseLoras = storyState.generationCapabilities.baseLoras || [];
-      var sceneMode = String(scene.samplingMode || 'current');
+  function normalizeStoryboardSamplingMode(value) {
+    var mode = String(value || 'turbo');
+    if (mode === 'current' || mode === 'single') return 'turbo';
+    if (mode === 'no_turbo') return 'quality';
+    return mode;
+  }
+
+      var sceneMode = normalizeStoryboardSamplingMode(scene.samplingMode);
       var loraStatusTitle = storyState.generationCapabilities.available
-        ? (sceneMode === 'no_turbo' ? '20 steps; Turbo LoRA disabled.' : ('8 steps; Turbo LoRA: ' + baseLoras.join(', ')))
+        ? (sceneMode === 'quality' ? '20 steps; Turbo LoRA disabled.' : ('8 steps; Turbo LoRA: ' + baseLoras.join(', ')))
         : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
       var loraStatusText = storyState.generationCapabilities.available
-        ? (sceneMode === 'no_turbo' ? 'No Turbo · 20 steps' : (sceneMode === 'single' ? 'Turbo 1.0 · 8 steps' : 'Turbo 0.9 · 8 steps'))
+        ? (sceneMode === 'quality' ? 'Quality · 20 steps · no Turbo' : 'Turbo · 8 steps · Turbo 1.0')
         : 'LoRAs unavailable';
       var referencesHtml = sceneReferences.map(function (reference) {
         if (!reference || !reference.role) return '';
@@ -4226,9 +4240,8 @@
                 '</select></label>' +
                 '<label class="storyboard-field" title="Leave blank to inherit the Story megapixel target."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneMegapixels) + '" placeholder="Inherit · ' + escapeHtml(inheritedMegapixels) + '"></label>' +
                 '<label class="storyboard-field" title="H3 sampling workflow used for this Scene."><span>Sampling mode</span><select data-scene-field="samplingMode">' +
-                  '<option value="current"' + (sceneValue(scene, 'samplingMode', 'current') === 'current' ? ' selected' : '') + '>Current · 8 steps / Turbo 0.9</option>' +
-                  '<option value="single"' + (sceneValue(scene, 'samplingMode', 'current') === 'single' ? ' selected' : '') + '>Single Turbo · 8 steps / 1.0</option>' +
-                  '<option value="no_turbo"' + (sceneValue(scene, 'samplingMode', 'current') === 'no_turbo' ? ' selected' : '') + '>No Turbo · 20 steps</option>' +
+                  '<option value="turbo"' + (sceneMode === 'turbo' ? ' selected' : '') + '>Turbo · 8 steps / 1.0</option>' +
+                  '<option value="quality"' + (sceneMode === 'quality' ? ' selected' : '') + '>Quality · 20 steps / no Turbo</option>' +
                 '</select></label>' +
                 '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
               '</div>' +

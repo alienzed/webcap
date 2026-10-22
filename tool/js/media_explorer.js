@@ -112,6 +112,7 @@
     if (action === 'move') {
       destination = window.prompt('Move ' + chosen.length + ' file(s) to which folder inside the external root?\\nUse a relative folder path (empty for root).', externalDirectory);
       if (destination === null) return;
+      if (!window.confirm('Move ' + chosen.length + ' file(s) to ' + (destination || '/') + '?')) return;
     } else if (!window.confirm('Move ' + chosen.length + ' file(s) to the operating system Trash?')) return;
     externalAction(action, {path: externalPath, files:names, destination:destination}, function () {
       selected.clear(); selectItem(-1);
@@ -119,7 +120,7 @@
       load(true, {refreshFilesystem:true});
     });
   }
-  function itemActions(item, index) {
+  function itemActions(item) {
     var actions = [{label:'View full size', run:function () { openLoupe(items.findIndex(function (x) { return x.id === item.id; })); }}];
     if (item.source === 'external') {
       actions.push({label:'Open in Explorer', run:function () {

@@ -1457,7 +1457,7 @@
                                             <label id="test-generations-aspect-field" class="training-run-option"><span>Aspect ratio</span><select id="test-generations-aspect"></select></label>
                                             <label id="test-generations-megapixels-field" class="training-run-option"><span>Resolution (MP)</span><input id="test-generations-megapixels" type="number" min="0.2" step="0.1"></label>
                                             <label id="test-generations-duration-field" class="training-run-option"><span>Duration (seconds)</span><input id="test-generations-duration" type="number" min="3" step="1"></label>
-                                            <label id="test-generations-sampling-mode-field" class="training-run-option"><span>Sampling mode</span><select id="test-generations-sampling-mode"><option value="current">Current · 8 steps / Turbo 1.0</option><option value="single">Single Turbo · 8 steps / 1.0</option><option value="no_turbo">No Turbo · 20 steps</option></select></label>
+                                            <label id="test-generations-sampling-mode-field" class="training-run-option"><span>Sampling mode</span><select id="test-generations-sampling-mode"><option value="turbo">Turbo · 8 steps / 1.0</option><option value="quality">Quality · 20 steps / no Turbo</option></select></label>
                                             <label id="test-generations-dimensions-field" class="training-run-option hidden"><span>Dimensions</span><select id="test-generations-dimensions"></select></label>
                                             <label id="test-generations-seed-field" class="training-run-option"><span>Seed</span><input id="test-generations-seed" type="number" min="0" max="4294967295" step="1"></label>
                                         </div>
@@ -1746,7 +1746,7 @@
                             <label id="generate-field-aspectRatio" class="generate-field"><span>Aspect ratio</span><select id="generate-aspect"></select></label>
                             <label id="generate-field-megapixels" class="generate-field"><span>Megapixels</span><input id="generate-megapixels" type="number" min="0.05" step="0.05"></label>
                             <label id="generate-field-duration" class="generate-field"><span>Duration (s)</span><input id="generate-duration" type="number" min="4" max="15" step="0.1"></label>
-                            <label id="generate-field-samplingMode" class="generate-field"><span>Sampling mode</span><select id="generate-sampling-mode"><option value="current">Current · 8 steps / Turbo 0.9</option><option value="single">Single Turbo · 8 steps / 1.0</option><option value="no_turbo">No Turbo · 20 steps</option></select></label>
+                            <label id="generate-field-samplingMode" class="generate-field"><span>Sampling mode</span><select id="generate-sampling-mode"><option value="turbo">Turbo · 8 steps / 1.0</option><option value="quality">Quality · 20 steps / no Turbo</option></select></label>
                             <label id="generate-field-dimensions" class="generate-field hidden"><span>Dimensions</span><select id="generate-dimensions"></select></label>
                             <label id="generate-field-seed" class="generate-field"><span>Seed</span><input id="generate-seed" type="number" min="-1" step="1" value="-1"></label>
                             </div>

@@ -468,6 +468,7 @@
                                     <span class="btn-glyph" aria-hidden="true">&#8627;</span>
                                     <span>Create Set</span>
                                 </button>
+                                <button id="clone-set-vl-btn" type="button" class="review-captions-btn sidebar-review-output-btn" title="Clone this Set into a sibling folder using saved Open Sight descriptions">Clone with VL Captions</button>
                                 <button id="qa-focus-review-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Review actionable QA findings while the remaining selection is checked">QA Focus Review</button>
                                 <button id="set-intelligence-open-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Prepare this Set: collect Sight, discover vocabulary, and guide tagging">Prepare Set</button>
                                 <button id="sidebar-open-review-output-btn" type="button" class="review-captions-btn sidebar-review-output-btn hidden" title="Check and correct this Set; existing reports and utilities remain available" aria-pressed="false">Quality Assurance</button>
@@ -3367,6 +3368,17 @@
             </div>
         </div>
         </div>
+        <div id="clone-set-vl-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="clone-set-vl-title">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="clone-set-vl-title">Clone with VL Captions</h3><button id="clone-set-vl-close" class="modal-close-btn" aria-label="Close">&times;</button></div>
+    <div class="modal-body vl-clone-fields">
+      <label>Saved Vision model<select id="clone-set-vl-model"></select></label>
+      <label>Sibling folder name<input id="clone-set-vl-name" type="text" autocomplete="off"></label>
+      <div id="clone-set-vl-summary" class="vl-clone-summary" aria-live="polite"></div>
+    </div>
+    <div class="vl-clone-footer"><button id="clone-set-vl-cancel" type="button" class="review-captions-btn">Cancel</button><button id="clone-set-vl-create" type="button" class="review-captions-btn" disabled>Create cloned Set</button></div>
+  </div>
+</div>
         <!-- JS load order: shared globals first, feature files, then main.js wiring -->
         <script src="/static/js/constants.js"></script>
         <script src="/static/js/common.js"></script>
@@ -3421,6 +3433,7 @@
         <script src="/static/js/diagnostics.js"></script>
         <script src="/static/js/model_lab.js"></script>
         <script src="/static/js/smart_set.js"></script>
+        <script src="/static/js/set_vl_clone.js"></script>
         <script src="/static/js/media_context_actions.js"></script>
         <script src="/static/js/ui_event_wiring.js"></script>
         <script src="/static/js/working_context.js"></script>

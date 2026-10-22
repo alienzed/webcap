@@ -43,6 +43,7 @@ from .training_run_delete import preview as training_run_delete_preview, delete 
 from .training_history import history_payload as training_history_payload, all_history_payload as training_all_history_payload, discovered_run_output_path, history_job_output_path
 from .training_archive import preview as training_archive_preview, finalize as training_archive_finalize, list_archives as training_archive_list, archive_metrics as training_archive_metrics
 from .smart_set import create_set_from_results_response, smart_set_materialize_response, superset_search_response
+from .set_vl_clone import preview_vl_set_clone, clone_set_with_vl_captions
 from .prune_candidates import prune_candidates_response
 from .duplicate_candidates import duplicate_candidates_response
 from .training_setup import ensure_training_setup
@@ -910,6 +911,26 @@ def vision_caption_extras_route():
     except Exception as exc:
         app.logger.exception("VISION EXTRAS FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+@app.route("/fs/set-vl-clone", methods=["GET", "POST"])
+def fs_set_vl_clone():
+    data = request.get_json(silent=True) or {} if request.method == "POST" else request.args
+    try:
+        if request.method == "GET":
+            return jsonify(preview_vl_set_clone(str(data.get("folder") or "")))
+        return jsonify(clone_set_with_vl_captions(
+            str(data.get("folder") or ""),
+            str(data.get("model") or ""),
+            str(data.get("set_name") or ""),
+        ))
+    except FileExistsError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 409
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("VL SET CLONE FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
 
 @app.route("/fs/vision_schema", methods=["GET", "POST"])
 def vision_schema_assist_route():

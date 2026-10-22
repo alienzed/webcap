@@ -3831,3 +3831,14 @@ html[data-theme="dark"] .app-settings-environment-check {
 #diagnostics-panel-assessment .model-assessment-table td { padding-top: 10px; padding-bottom: 10px; }
 #diagnostics-panel-assessment .model-assessment-expand { font-size: inherit; }
 
+
+/* Isolated VL-caption experiment dialog. */
+#clone-set-vl-modal { width: min(550px, calc(100vw - 32px)); max-height: 90vh; overflow: auto; }
+#clone-set-vl-modal .modal-content { min-width: 0; }
+#clone-set-vl-modal .modal-header h3 { font-size: 24px; }
+#clone-set-vl-modal .vl-clone-fields { display: grid; gap: 16px; }
+#clone-set-vl-modal label { display: grid; gap: 6px; font-size: 18px; font-weight: 600; }
+#clone-set-vl-modal input, #clone-set-vl-modal select { width: 100%; min-width: 0; font: inherit; font-size: 16px; padding: 10px; }
+#clone-set-vl-modal .vl-clone-summary { font-size: 16px; line-height: 1.5; }
+#clone-set-vl-modal .vl-clone-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 14px; }
+#clone-set-vl-modal .vl-clone-footer button { font-size: 16px; }

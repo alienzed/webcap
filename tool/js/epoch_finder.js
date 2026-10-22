@@ -32,6 +32,7 @@
   var manualSelectedRound = 0;
   var manualMatrixSignature = '';
   var manualVisionPending = false;
+  var screeningReportedVlErrors = new Set();
   var screeningSelectionQueue = Promise.resolve();
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
@@ -1154,6 +1155,17 @@
       refreshStatus().catch(error);
     }).catch(function (exc) {manualVisionPending=false;error(exc);});
   }
+  function screeningLogVisionErrors(campaign) {
+    (campaign.units || []).forEach(function (u) {
+      if (!u.visionError) return;
+      var identity = [campaign.id,u.round,u.epoch,u.case,u.visionErrorAt||'',u.visionError].join('|');
+      if (screeningReportedVlErrors.has(identity)) return;
+      screeningReportedVlErrors.add(identity);
+      window.reportConsoleError('Manual Screening Ask VL', new Error(
+        'Round '+u.round+' · '+candidateLabel(campaign,u.epoch)+
+        ' · variation '+(u.case+1)+': '+u.visionError));
+    });
+  }
   function screeningRoundList(campaign) {
     els('manual-history').classList.remove('hidden');
     var host=els('manual-round-list');
@@ -1207,7 +1219,7 @@
     });
     var signature=JSON.stringify([campaign.id,campaign.status,manualSelectedRound,rows,Array.from(kept),sort,
       units.filter(function(u){return u.round===plan.number;}).map(function (u) {
-        return [u.epoch,u.case,u.frame,u.error,u.rating,u.assessment&&u.assessment.text];
+        return [u.epoch,u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
       }),units.map(function(u){return [u.epoch,u.rating]})]);
     if (host.dataset.signature===signature) return;
     host.dataset.signature=signature;
@@ -1239,7 +1251,7 @@
     rows.forEach(function (epoch) {
       var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),rated[epoch],
         units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;}).map(function(u){
-          return [u.case,u.frame,u.error,u.rating,u.assessment&&u.assessment.text];
+          return [u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
         })]);
       var previous=Array.from(scroller.querySelectorAll('[data-screening-epoch]')).find(function(element){
         return element.dataset.screeningEpoch===String(epoch);
@@ -1322,7 +1334,7 @@
         var unit=units.find(function(u){return u.round===plan.number&&u.epoch===epoch&&u.case===caseIndex;});
         (function(u,index) {
           var cardSignature=JSON.stringify([u&&u.frame,u&&u.framePruned,u&&u.error,
-            u&&u.rating,u&&u.renderSeconds,u&&u.assessment&&u.assessment.text]);
+            u&&u.rating,u&&u.renderSeconds,u&&u.visionError,u&&u.assessment&&u.assessment.text]);
           var oldCard=cards.children[index];
           if (oldCard && oldCard.dataset.screeningCardSignature===cardSignature) return;
           var url=u&&u.frame&&!u.framePruned?'/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+
@@ -1343,10 +1355,12 @@
               }}:null,
             wildcards:plan.caseSelections[index].map(function(v){return {label:v.id,value:v.option};}),
             metadata:u&&u.renderSeconds?[(u.renderSeconds).toFixed(1)+'s']:[],
-            evaluations:u&&u.assessment?[{label:'VL reviewed',title:u.assessment.text}]:[],
+            evaluations:u&&u.assessment?[{label:'VL reviewed',title:u.assessment.text}]:
+              u&&u.visionError?[{label:'VL failed',title:u.visionError}]:[],
             details:[{label:'Prompt',value:plan.casePrompts[index],pre:true},
               {label:'Seed',value:String(plan.seeds[index])},
-              {label:'VL',value:u&&u.assessment&&u.assessment.text||''}],
+              {label:'VL',value:u&&u.assessment&&u.assessment.text||''},
+              {label:'VL error',value:u&&u.visionError||''}],
             actions:url?[{label:'Ask VL for this render',onClick:function () {
                 screeningAskVision(campaign,{epoch:epoch,case:index});
               }},{label:'Open original',url:url}]:[]
@@ -1383,6 +1397,7 @@
     els('metrics').classList.add('hidden');
     els('follow-up').classList.add('hidden');
     manualVisionPending=!!campaign.screeningVisionRunning;
+    screeningLogVisionErrors(campaign);
     screeningMatrix(campaign);
   }
 

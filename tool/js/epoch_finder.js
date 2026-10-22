@@ -1107,7 +1107,6 @@
   }
   function screeningSaveSelection() {
     if (!isManualCampaign()) return Promise.resolve();
-    if (campaignState.status !== 'complete') return Promise.resolve();
     var id=activeCampaign, folder=currentFolder, selection=selectedRunEntries();
     screeningSelectionQueue=screeningSelectionQueue.catch(function(){}).then(function(){
       return api('screening_selection',{campaignId:id,runSelections:selection});
@@ -1274,7 +1273,7 @@
       var actions=document.createElement('div');actions.className='epoch-screening-row-actions';
       var keepLabel=document.createElement('label');
       var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=kept.has(epoch);
-      checkbox.disabled=campaign.status!=='complete'&&plan.number!==campaign.round;
+      // Keep always targets the *next* round, even while another round renders.
       checkbox.addEventListener('change',function () {
         var wanted=checkbox.checked;
         var origin=campaign.candidateMap[String(epoch)];
@@ -1370,7 +1369,7 @@
     els('manual-vl-round').disabled=!units.some(function(u) {
       return u.round===plan.number&&u.frame&&!u.error;
     });
-    els('manual-launch').disabled=campaign.status!=='complete'&&campaign.status!=='paused';
+    els('manual-launch').disabled=campaign.status!=='complete';
     els('manual-launch').textContent='Run Round '+(campaign.rounds.length+1)+' · '+(campaign.kept||[]).length+' epochs';
   }
   function screeningRender(campaign) {
@@ -1380,7 +1379,8 @@
     els('manual-review').classList.remove('hidden');
     els('live-layout').classList.add('hidden');
     els('timeline').classList.add('hidden');
-    els('metrics').classList.add('hidden');
+    els('metrics').classList.remove('hidden');
+    progress(campaign);
     els('follow-up').classList.add('hidden');
     manualVisionPending=!!campaign.screeningVisionRunning;
     screeningMatrix(campaign);
@@ -1423,7 +1423,8 @@
     var running = campaign.status === 'running';
     els('pause').classList.toggle('hidden', !running);
     els('stop').classList.toggle('hidden', !running);
-    els('resume').classList.toggle('hidden', !['paused', 'interrupted', 'failed'].includes(campaign.status));
+    els('resume').classList.toggle('hidden', !(['paused', 'interrupted', 'failed'].includes(campaign.status) ||
+      (campaign.mode === 'manual' && campaign.status === 'stopped')));
     els('delete').classList.toggle('hidden', running);
     if (campaign.mode === 'manual') {
       screeningRender(campaign);
@@ -1656,10 +1657,6 @@
   els('run-choices').addEventListener('change', function (event) {
     var checkbox = event.target.closest('[data-run-id]');
     if (!checkbox) return;
-    if (isManualCampaign() && campaignState.status !== 'complete') {
-      drawEpochPicker();
-      return error(new Error('Finish the current round before changing the next-round selection.'));
-    }
     var jobId = checkbox.dataset.runId;
     var run = runs.find(function (item) { return item.jobId === jobId; });
     if (!run) throw new Error('Selected training run disappeared.');
@@ -1674,9 +1671,6 @@
   els('epoch-picker').addEventListener('click', function (event) {
     var region = event.target.closest('[data-epoch-run]');
     if (!region) return;
-    if (isManualCampaign() && campaignState.status !== 'complete') {
-      return error(new Error('Finish the current round before changing the next-round selection.'));
-    }
     var jobId = region.dataset.epochRun, choice = event.target.closest('[data-epoch-choice]');
     var selected = runEpochSelections[jobId];
     if (!(selected instanceof Set)) throw new Error('Run selection missing.');

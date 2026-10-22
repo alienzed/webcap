@@ -53,6 +53,13 @@ def submitted_sampling(workflow, mode):
         expected_source = ["148", 0] if single is not None else ["161", 0]
         if power["model"] != expected_source:
             raise ValueError("H3 LoRA loader is not connected to the effective model.")
+        if power["clip"] != (["148", 1] if single is not None else ["128", 0]):
+            raise ValueError("H3 LoRA loader is not connected to the effective CLIP.")
+        if single is not None and (
+            single["inputs"]["model"] != ["161", 0]
+            or single["inputs"]["clip"] != ["128", 0]
+        ):
+            raise ValueError("H3 standard LoRA node does not receive the expected model and CLIP.")
     except (KeyError, TypeError, OverflowError) as exc:
         raise ValueError("H3 submitted workflow has invalid sampling inputs.") from exc
     return {

@@ -5425,8 +5425,9 @@
     if(!requestedJob||!Number.isInteger(requestedEpoch)||!Number.isInteger(amount)||amount<1||amount>20){
       throw new Error('Choose a valid training epoch and 1–20 Test repeats.');
     }
+    var origin=window.epochFinderCurrentMode();
     openPane();
-    window.epochFinderShowMode('tests');
+    window.epochFinderShowMode('tests',origin!=='tests'?{returnTo:origin}:null);
     var targetFolder=String(launchFolder),modelId=currentTestModelId();
     return request('test_prepare',{modelId:modelId}).then(function(payload){
       if(String(launchFolder)!==targetFolder||currentTestModelId()!==modelId)return;
@@ -5461,7 +5462,8 @@
   window.openTestBenchForFolder = openTestBenchForSetFolder;
   window.openTestBenchForCurrentFolder = openPane;
   window.openTestBenchAnalyticsSession = function (sessionId) {
-    window.epochFinderShowMode("tests");
+    var origin=window.epochFinderCurrentMode();
+    window.epochFinderShowMode("tests",origin!=="tests"?{returnTo:origin}:null);
     openSession(String(sessionId));
   };
   window.closeTestBenchActivity = closePane;

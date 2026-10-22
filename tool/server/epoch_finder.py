@@ -848,8 +848,13 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
 
 
 def _retire_scored_session(folder_path, campaign, unit):
-    """Discard campaign-owned source media only after a durable VL score."""
-    if unit.get("assessment") is None or not unit.get("session"):
+    """Retire source Test media after durable frame capture (or automated VL)."""
+    if not unit.get("session"):
+        return
+    if campaign.get("mode") == "manual":
+        if not unit.get("frame"):
+            return
+    elif unit.get("assessment") is None:
         return
     try:
         test_bench.delete_session(folder_path, unit["session"])
@@ -1139,6 +1144,9 @@ def _run(folder_path, campaign_id, control):
                 if not _campaign_has_active_sessions(folder_path, campaign):
                     _clean_staging(folder_path, campaign)
             if campaign.get("mode") == "manual":
+                for finished in campaign["units"]:
+                    if finished["round"] == number and finished.get("frame"):
+                        _retire_scored_session(folder_path, campaign, finished)
                 _update(folder_path, campaign, status="complete", phase="Review",
                         detail="Round " + str(number) + " ready for manual review.",
                         finishedAt=time.time())

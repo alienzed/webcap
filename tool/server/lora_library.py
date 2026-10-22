@@ -1,4 +1,5 @@
 """Configured-root LoRA profile discovery. No ComfyUI dependency or persistent index."""
+import logging
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
@@ -40,11 +41,19 @@ def _checkpoint(stage, relative):
     return candidate
 
 
-def catalogue():
+def catalogue(warnings=None):
     result = []
     for stage, root in roots().items():
+        try:
+            root.stat()
+        except FileNotFoundError:
+            warning = {"stage": stage, "path": str(root)}
+            if warnings is not None:
+                warnings.append(warning)
+            logging.getLogger(__name__).warning("Skipping missing configured LoRA root (%s): %s", stage, root)
+            continue
         if not root.is_dir():
-            raise FileNotFoundError("Configured LoRA root does not exist: " + str(root))
+            raise NotADirectoryError("Configured LoRA root is not a directory: " + str(root))
         for path in root.rglob("*.safetensors"):
             if path.is_symlink() or not path.is_file() or any(parent.is_symlink() for parent in path.parents if root in parent.parents):
                 continue

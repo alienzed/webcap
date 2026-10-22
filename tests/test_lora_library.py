@@ -66,3 +66,32 @@ def test_resolve_rejects_missing_or_ambiguous_comfy_name(monkeypatch):
         lora_library.resolve_for_inference("h3", ["Run/identity.safetensors"])
     with pytest.raises(ValueError, match="not enriched"):
         lora_library.resolve_for_inference("h3", ["unknown.safetensors"])
+
+
+def test_missing_root_does_not_block_valid_roots(tmp_path, monkeypatch, caplog):
+    available = tmp_path / "existing"
+    available.mkdir()
+    (available / "good.safetensors").write_bytes(b"unused")
+    absent = tmp_path / "removed"
+    monkeypatch.setattr(lora_library, "roots", lambda: {"wan21": absent, "h3": available})
+    warnings = []
+    items = lora_library.catalogue(warnings=warnings)
+    assert [item["name"] for item in items] == ["good.safetensors"]
+    assert warnings == [{"stage": "wan21", "path": str(absent)}]
+    assert str(absent) in caplog.text
+
+
+def test_missing_root_only_returns_warning(tmp_path, monkeypatch):
+    absent = tmp_path / "removed"
+    monkeypatch.setattr(lora_library, "roots", lambda: {"wan21": absent})
+    warnings = []
+    assert lora_library.catalogue(warnings=warnings) == []
+    assert warnings == [{"stage": "wan21", "path": str(absent)}]
+
+
+def test_non_directory_root_still_fails(tmp_path, monkeypatch):
+    root = tmp_path / "not-a-folder"
+    root.write_text("file", encoding="utf-8")
+    monkeypatch.setattr(lora_library, "roots", lambda: {"h3": root})
+    with pytest.raises(NotADirectoryError, match="not a directory"):
+        lora_library.catalogue()

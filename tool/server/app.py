@@ -2353,7 +2353,9 @@ def lora_library_route():
     from .lora_library import catalogue, profile
     try:
         if request.method == "GET":
-            return jsonify({"ok": True, "items": catalogue()})
+            warnings = []
+            items = catalogue(warnings=warnings)
+            return jsonify({"ok": True, "items": items, "warnings": warnings})
         data = request.get_json(silent=True) or {}
         stage = str(data.get("stage") or "")
         path = str(data.get("path") or "")

@@ -1294,23 +1294,54 @@
       }).join('|');
     if (host.dataset.signature===signature) return;
     host.dataset.signature=signature;
-    host.innerHTML=visibleRounds.map(function(plan){
+    // Progress polling changes counts often. Keep existing round buttons and focus
+    // instead of destroying the whole list whenever a render completes.
+    var existing=new Map(Array.from(host.querySelectorAll('[data-screening-round-item]')).map(function(node){
+      return [Number(node.dataset.screeningRoundItem),node];
+    }));
+    visibleRounds.forEach(function(plan,index){
       var state=screeningRoundState(campaign,plan);
       var completed=campaign.units.filter(function(u){return u.round===plan.number&&!!u.frame;}).length;
       var total=plan.epochs.length*plan.seeds.length;
       var action=state==='queued'?'cancel':state==='running'?'stop':
         (plan.number<campaign.round&&['complete','stopped','cancelled'].includes(state)?'delete':'');
-      return '<div class="epoch-screening-round-item">'+
-        '<button type="button" class="epoch-finder-campaign'+
-        (manualSelectedRound===plan.number?' active':'')+'" data-screening-round="'+plan.number+'">'+
-        '<strong>Round '+plan.number+'</strong><small>'+plan.epochs.length+' epochs · '+
-        completed+'/'+total+' renders · '+escape(state)+'</small></button>'+
-        (action?'<button type="button" class="review-captions-btn" data-screening-round-action="'+action+
-          '" data-screening-round-number="'+plan.number+'" title="'+
-          (action==='stop'?'Cancel unstarted renders; finish the active render':
-            action==='delete'?'Delete only this finished round and its results':'Cancel before rendering')+'">'+
-          (action==='stop'?'Stop queuing':action==='delete'?'Delete':'Cancel')+'</button>':'')+'</div>';
-    }).join('');
+      var entry=existing.get(plan.number);
+      if (!entry) {
+        entry=document.createElement('div');
+        entry.className='epoch-screening-round-item';
+        entry.dataset.screeningRoundItem=String(plan.number);
+        var open=document.createElement('button');
+        open.type='button';
+        open.className='epoch-finder-campaign';
+        open.dataset.screeningRound=String(plan.number);
+        open.appendChild(document.createElement('strong'));
+        open.appendChild(document.createElement('small'));
+        entry.appendChild(open);
+      }
+      var button=entry.querySelector('[data-screening-round]');
+      button.classList.toggle('active',manualSelectedRound===plan.number);
+      button.querySelector('strong').textContent='Round '+plan.number;
+      var detail=plan.epochs.length+' epochs · '+completed+'/'+total+' renders · '+state;
+      if (button.querySelector('small').textContent!==detail) button.querySelector('small').textContent=detail;
+      var control=entry.querySelector('[data-screening-round-action]');
+      if (!action || !control || control.dataset.screeningRoundAction!==action) {
+        if (control) control.remove();
+        if (action) {
+          control=document.createElement('button');
+          control.type='button';
+          control.className='review-captions-btn';
+          control.dataset.screeningRoundAction=action;
+          control.dataset.screeningRoundNumber=String(plan.number);
+          control.title=action==='stop'?'Cancel unstarted renders; finish the active render':
+            action==='delete'?'Delete only this finished round and its results':'Cancel before rendering';
+          control.textContent=action==='stop'?'Stop queuing':action==='delete'?'Delete':'Cancel';
+          entry.appendChild(control);
+        }
+      }
+      if (host.children[index]!==entry) host.insertBefore(entry,host.children[index]||null);
+      existing.delete(plan.number);
+    });
+    existing.forEach(function(node){node.remove();});
   }
   function screeningRunInfo(campaign, plan) {
     var host=els('manual-run-info');

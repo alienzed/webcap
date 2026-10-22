@@ -887,7 +887,20 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-manual-review { min-width: 0; }
 .epoch-finder-manual-review > .epoch-finder-panel-heading { flex-wrap: wrap; }
 .epoch-finder-manual-review > .epoch-finder-panel-heading label { display: flex; align-items: center; gap: 7px; }
-.epoch-finder-manual-matrix { max-width: 100%; overflow-x: auto; }
+.epoch-finder-manual-matrix {
+  max-width: 100%;
+  max-height: max(320px, calc(100dvh - 265px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+/* The headings stay aligned to the card columns while reviewing a long round. */
+.epoch-screening-case-labels {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel-bg, #1b2530);
+}
 .epoch-screening-round { min-width: var(--screening-width, 720px); }
 .epoch-screening-row { margin-bottom: 12px; }
 .epoch-screening-row-head { display: flex; align-items: center; flex-wrap: nowrap; gap: 10px; min-width: 0; padding: 6px 2px; font-size: 16px; }
@@ -903,3 +916,20 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-screening-row .test-generations-result-card { min-width: 0; }
 .epoch-screening-row .test-generations-result-name { overflow-wrap: anywhere; }
 .epoch-finder-manual-form.hidden, .epoch-finder-manual-review.hidden { display: none; }
+
+/* Only revised Manual Screening controls get the legible default; leave other Campaigns alone. */
+#epoch-finder-screen .epoch-finder-manual-form label,
+#epoch-finder-screen .epoch-finder-manual-review > .epoch-finder-panel-heading label {
+  font-size: 16px;
+  margin-top: 5px;
+}
+#epoch-finder-screen .epoch-finder-manual-form label > input,
+#epoch-finder-screen .epoch-finder-manual-form label > select,
+#epoch-finder-screen .epoch-finder-manual-form label > textarea,
+#epoch-finder-screen .epoch-finder-manual-review select {
+  font-size: 16px;
+}
+#epoch-finder-screen .epoch-screening-row-actions label,
+#epoch-finder-screen .epoch-screening-row-head .epoch-screening-ask-btn {
+  font-size: 16px;
+}

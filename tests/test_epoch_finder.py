@@ -736,7 +736,7 @@ def test_live_screening_does_not_allow_rating_unrendered_images(tmp_path, monkey
         epoch_finder.command(folder, "screening_rate", {
             "campaignId": campaign["id"], "round": 1, "epoch": 2, "case": 0, "rating": 5,
         })
-    with pytest.raises(ValueError, match="current screening round"):
+    with pytest.raises(ValueError, match="shown in this screening round"):
         epoch_finder.command(folder, "screening_keep", {
             "campaignId": campaign["id"], "round": 2, "epoch": 1, "keep": False,
         })
@@ -759,3 +759,67 @@ def test_manual_vl_allows_live_rendered_frames_without_waiting_for_round(monkeyp
     })
     assert result == {"queued": 1}
     epoch_finder._screening_vision_workers.pop(campaign["id"], None)
+
+
+
+def test_manual_vl_uses_frozen_wildcard_options_not_resolved_prompt():
+    """A concrete per-column prompt still needs its original comparison vocabulary."""
+    plan = epoch_finder._screening_plan(
+        "a {red|blue|brown} glove on {table|grass}", 0,
+        {"megapixels": 0.3}, 1, [16, 20])
+    assert len(plan["casePrompts"]) == 3
+    for index, colour in enumerate(("red", "blue", "brown")):
+        groups = epoch_finder._screening_groups(plan, index)
+        assert [row["id"] for row in groups] == ["G1", "G2"]
+        assert groups[0]["options"] == ["red", "blue", "brown"]
+        assert groups[0]["expected"] == index + 1
+        assert groups[1]["expected"] == plan["caseSelections"][index][1]["selected"]
+        question = epoch_finder._question(groups)
+        assert "G1" in question and "G2" in question
+        comparison = epoch_finder._compare("G1: " + str(index + 1), groups)
+        assert comparison[0]["result"] == "match"
+
+
+def test_manual_selection_remains_editable_while_rendering(monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_runs", lambda _folder: [{
+        "jobId": "run-a", "epochs": [1, 2, 3], "stage": "h3", "modelId": "minimax_h3"}])
+    monkeypatch.setattr(epoch_finder, "_save", lambda *_args, **_kwargs: None)
+    campaign = {"status": "running", "mode": "manual", "modelId": "minimax_h3", "stage": "h3",
+                "candidateMap": {"1": {"jobId": "run-a", "epoch": 1}},
+                "kept": [1], "runSelections": []}
+    result = epoch_finder._screening_selection(None, campaign, [
+        {"jobId": "run-a", "epochs": [2, 3]}])
+    assert result["kept"] == [2, 3]
+    assert campaign["candidateMap"]["1"]["epoch"] == 1
+
+
+def test_manual_review_scrolls_without_pagination_and_logs_per_card_vl_failures():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    assert 'id="epoch-finder-manual-matrix"' in html
+    assert 'aria-label="Scroll through epoch comparisons"' in html
+    assert 'max-height: max(320px, calc(100dvh - 265px));' in css
+    assert "overscroll-behavior: contain;" in css
+    assert "screeningLogVisionErrors(campaign);" in js
+    assert "label:'VL failed'" in js
+    assert "label:'VL error'" in js
+    assert "u&&u.visionError" in js
+    assert "window.reportConsoleError('Manual Screening Ask VL'" in js
+    assert "screeningPage" not in js
+
+
+def test_only_manual_stopped_campaigns_can_resume(monkeypatch):
+    campaign = {"id": "abcdef123456", "mode": "manual", "status": "stopped"}
+    calls = []
+    monkeypatch.setattr(epoch_finder, "status", lambda *_: campaign)
+    monkeypatch.setattr(epoch_finder, "_resume_saved_work", lambda *_: calls.append("reconcile"))
+    monkeypatch.setattr(epoch_finder, "_launch", lambda *_: calls.append("launch"))
+    response = epoch_finder.command(None, "resume", {"campaignId": campaign["id"]})
+    assert response["campaign"] is campaign
+    assert calls == ["reconcile", "launch"]
+    campaign["mode"] = "auto"
+    with pytest.raises(ValueError):
+        epoch_finder.command(None, "resume", {"campaignId": campaign["id"]})

@@ -86,7 +86,9 @@ def _save(folder_path, campaign, *, preserve_manual=True):
                             if field in saved:
                                 unit[field] = saved[field]
                     if saved.get("visionError") and not unit.get("assessment"):
-                        unit["visionError"] = saved["visionError"]
+                        for field in ("visionError", "visionErrorAt"):
+                            if field in saved:
+                                unit[field] = saved[field]
         test_bench._atomic_write_json(_directory(folder_path, campaign["id"]) / "campaign.json", campaign)
 
 
@@ -535,6 +537,23 @@ def _screening_plan(prompt, group_index, settings, number, epochs):
             "columnLabels": [test_bench._normalize_wildcard_text(value) for value in options]}
 
 
+def _screening_groups(plan, case):
+    """Recover explicit comparison options after Test renders a resolved prompt."""
+    nodes = test_bench._parse_wildcard_nodes(test_bench._strip_wildcard_comments(plan["prompt"]))
+    selections = plan["caseSelections"][case]
+    groups = []
+    for kind, node in nodes:
+        if kind != "group":
+            continue
+        options = [test_bench._normalize_wildcard_text(value)
+                   for branch in node for value in test_bench._expand_wildcard_option(branch)]
+        index = len(groups)
+        groups.append({"id": "G" + str(index + 1), "label": "Group " + str(index + 1),
+                       "options": options, "expected": selections[index]["selected"],
+                       "weight": 1})
+    return groups
+
+
 def _create_screening_campaign(folder_path, criteria, folder, model, normalized, job_id, run_name):
     if not normalized or criteria.get("selectedFiles") is not None:
         raise ValueError("Manual Screening starts from saved training epochs.")
@@ -573,8 +592,6 @@ def _create_screening_campaign(folder_path, criteria, folder, model, normalized,
 
 def _screening_selection(folder_path, campaign, selections):
     """Persist editable next-round scope, including newly selected saved epochs."""
-    if campaign.get("status") != "complete":
-        raise ValueError("Finish this round before editing its next-round selection.")
     if not isinstance(selections, list):
         raise ValueError("Select training runs and epochs.")
     available = {item["jobId"]: item for item in _runs(folder_path)}
@@ -611,9 +628,6 @@ def _screening_selection(folder_path, campaign, selections):
 def _screening_next_round(folder_path, campaign, criteria):
     if campaign.get("status") != "complete":
         raise ValueError("Finish the current screening round before launching another.")
-    worker = _screening_vision_workers.get(campaign["id"])
-    if worker and worker.is_alive():
-        raise ValueError("Finish the active VL review before launching the next round.")
     if not campaign.get("kept"):
         raise ValueError("Keep at least one epoch for the next round.")
     model = get_test_model(campaign["modelId"])
@@ -664,6 +678,16 @@ def _screening_vision(folder_path, campaign, criteria):
                 if unit.get("assessment") is not None:
                     continue
                 current["visionModel"] = model
+                if not unit.get("groups"):
+                    plan = current["rounds"][item["round"] - 1]
+                    unit["groups"] = _screening_groups(plan, item["case"])
+                    unit["question"] = _question(unit["groups"])
+                    with _worker_lock:
+                        latest = _load(folder_path, identity)
+                        target = _unit(latest, item["round"], item["epoch"], item["case"])
+                        target["groups"] = unit["groups"]
+                        target["question"] = unit["question"]
+                        _save(folder_path, latest, preserve_manual=False)
                 # Preserve concurrent human ratings/selections after the VL call.
                 _evaluate_unit(folder_path, current, unit)
             except Exception as exc:
@@ -673,6 +697,7 @@ def _screening_vision(folder_path, campaign, criteria):
                     current = _load(folder_path, identity)
                     unit = _unit(current, item["round"], item["epoch"], item["case"])
                     unit["visionError"] = str(exc)
+                    unit["visionErrorAt"] = time.time()
                     _save(folder_path, current, preserve_manual=False)
         _screening_vision_workers.pop(identity, None)
     worker = threading.Thread(target=evaluate, daemon=True, name="screening-vl-" + identity)
@@ -856,15 +881,18 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     elapsed_ms = result.get("elapsedMs")
     if isinstance(elapsed_ms, (int, float)) and elapsed_ms > 0:
         unit["renderSeconds"] = round(elapsed_ms / 1000, 2)
-    unit["groups"] = status.get("wildcardEvaluationGroups") or []
-    if len(unit["groups"]) != len(campaign["dimensions"]):
-        raise RuntimeError("Resolved wildcard group count differs from the approved plan.")
-    for group, dimension in zip(unit["groups"], campaign["dimensions"]):
-        if group.get("options") != dimension["options"]:
-            raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
-        group.update({"label": dimension["label"], "role": dimension["role"],
-                      "weight": dimension["weight"],
-                      "annotationGroup": dimension.get("annotationGroup", "")})
+    if campaign.get("mode") == "manual":
+        unit["groups"] = _screening_groups(plan, unit["case"])
+    else:
+        unit["groups"] = status.get("wildcardEvaluationGroups") or []
+        if len(unit["groups"]) != len(campaign["dimensions"]):
+            raise RuntimeError("Resolved wildcard group count differs from the approved plan.")
+        for group, dimension in zip(unit["groups"], campaign["dimensions"]):
+            if group.get("options") != dimension["options"]:
+                raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
+            group.update({"label": dimension["label"], "role": dimension["role"],
+                          "weight": dimension["weight"],
+                          "annotationGroup": dimension.get("annotationGroup", "")})
     unit["question"] = _question(unit["groups"])
     if plan.get("caseSelections"):
         unit["selections"] = plan["caseSelections"][unit["case"]]
@@ -940,6 +968,7 @@ def _evaluate_unit(folder_path, campaign, unit):
                     target["assessment"] = unit["assessment"]
                     target["visionWallSeconds"] = unit["visionWallSeconds"]
                     target.pop("visionError", None)
+                    target.pop("visionErrorAt", None)
                     _save(folder_path, latest, preserve_manual=False)
             else:
                 _save(folder_path, campaign)
@@ -1173,11 +1202,15 @@ def _run(folder_path, campaign_id, control):
                 if not _campaign_has_active_sessions(folder_path, campaign):
                     _clean_staging(folder_path, campaign)
             if campaign.get("mode") == "manual":
+                if not _check_signal(folder_path, campaign, control):
+                    return
                 for finished in campaign["units"]:
                     if finished["round"] == number and finished.get("frame"):
                         _retire_scored_session(folder_path, campaign, finished)
+                failed = sum(bool(item.get("error")) for item in campaign["units"] if item["round"] == number)
                 _update(folder_path, campaign, status="complete", phase="Review",
-                        detail="Round " + str(number) + " ready for manual review.",
+                        detail=("Round " + str(number) + " ready for manual review." +
+                                (" " + str(failed) + " failed render(s); see cards and Console." if failed else "")),
                         finishedAt=time.time())
                 return
             _update(folder_path, campaign, phase="Evaluating", detail="All round frames captured.")
@@ -1664,8 +1697,8 @@ def command(folder_path, operation, criteria=None):
                 if type(epoch) is not int or type(number) is not int or type(keep) is not bool:
                     raise ValueError("Choose an epoch and whether to keep it.")
                 plan = next((plan for plan in campaign["rounds"] if plan["number"] == number), None)
-                if number != campaign["round"] or not plan or epoch not in plan["epochs"]:
-                    raise ValueError("Choose an epoch in the current screening round.")
+                if not plan or epoch not in plan["epochs"]:
+                    raise ValueError("Choose an epoch shown in this screening round.")
                 if epoch not in campaign["candidateMap"] and str(epoch) not in campaign["candidateMap"]:
                     raise ValueError("Screening checkpoint identity is missing.")
                 kept = list(campaign["kept"])
@@ -1705,8 +1738,11 @@ def command(folder_path, operation, criteria=None):
         return {"campaign": status(folder_path, campaign_id)}
     if operation == "resume":
         campaign = status(folder_path, campaign_id)
-        if campaign["status"] not in {"paused", "interrupted", "failed"}:
-            raise ValueError("Only a paused or interrupted campaign can resume.")
+        can_resume = {"paused", "interrupted", "failed"}
+        if campaign.get("mode") == "manual":
+            can_resume.add("stopped")
+        if campaign["status"] not in can_resume:
+            raise ValueError("Only paused, interrupted, failed or stopped work can resume.")
         _resume_saved_work(folder_path, campaign)
         _launch(folder_path, campaign_id)
         return {"campaign": status(folder_path, campaign_id)}

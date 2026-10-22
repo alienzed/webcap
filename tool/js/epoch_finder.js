@@ -32,6 +32,9 @@
   var manualSelectedRound = 0;
   var manualMatrixSignature = '';
   var manualVisionPending = false;
+  var screeningReportedVlErrors = new Set();
+  var screeningSettingsKey = '';
+  var screeningSettingsRequest = null;
   var screeningSelectionQueue = Promise.resolve();
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
@@ -1031,24 +1034,52 @@
       drawEpochPicker();
     }
   }
-  function screeningSettingsSource() {
-    [['aspect','aspect'],['sampling','sampling-mode'],['dimensions','dimensions']].forEach(function (pair) {
-      var target=els('manual-'+pair[0]), source=document.getElementById('test-generations-'+pair[1]);
-      var options=source ? Array.from(source.options) : [];
-      var signature=options.map(function(option){return option.value+'|'+option.text;}).join('~');
-      if (options.length && target.dataset.options!==signature) {
-        var previous=target.value;
-        target.replaceChildren.apply(target,options.map(function(option){return option.cloneNode(true);}));
-        target.value=options.some(function(option){return option.value===previous;})?previous:source.value;
-        target.dataset.options=signature;
-      }
-      if (source) target.closest('label').classList.toggle('hidden',source.closest('label').classList.contains('hidden'));
+  // Read the Test model's owned prepare contract; don't borrow another screen's DOM.
+  function screeningSettingsSource(modelId) {
+    var key=currentFolder+'|'+String(modelId||window.getWorkingModelProfileId()||'');
+    if (screeningSettingsKey===key && screeningSettingsRequest) return screeningSettingsRequest;
+    screeningSettingsKey=key;
+    screeningSettingsRequest=fetch('/fs/test_generations',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:currentFolder,operation:'test_prepare',criteria:{modelId:modelId||window.getWorkingModelProfileId()}})
+    }).then(function(response){return response.json().then(function(payload){
+      if(!response.ok||!payload||payload.ok===false) throw new Error(payload&&payload.error||'Could not load Test settings.');
+      return payload;
+    });}).then(function(payload){
+      if(screeningSettingsKey!==key) return payload;
+      var available=new Set(payload.settings||[]), defaults=payload.defaults||{};
+      var fields=[['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
+        ['sampling','samplingMode'],['dimensions','dimensions']];
+      fields.forEach(function(pair){
+        var target=els('manual-'+pair[0]), field=target.closest('label');
+        field.classList.toggle('hidden',!available.has(pair[1]));
+        if(target.dataset.screeningSettingsKey!==key && target.tagName==='INPUT'){
+          target.value=defaults[pair[1]]==null?'':String(defaults[pair[1]]);
+        }
+        target.dataset.screeningSettingsKey=key;
+      });
+      [['aspect',payload.aspectRatioOptions||[]],
+        ['dimensions',(payload.settingOptions||{}).dimensions||[]]].forEach(function(pair){
+        var target=els('manual-'+pair[0]);
+        var field=pair[0]==='aspect'?'aspectRatio':'dimensions';
+        var selected=target.value, preferred=String(defaults[field]||'');
+        var values=pair[1].map(String);
+        if(preferred && !values.includes(preferred))values.unshift(preferred);
+        target.replaceChildren.apply(target,values.map(function(value){
+          var option=document.createElement('option');option.value=value;option.textContent=value;return option;
+        }));
+        target.value=values.includes(selected)?selected:preferred;
+      });
+      var sampling=els('manual-sampling'), prior=sampling.value;
+      sampling.value=Array.from(sampling.options).some(function(o){return o.value===prior;})?prior:String(defaults.samplingMode||'turbo');
+      (payload.warnings||[]).forEach(function(warning){if(warning)window.reportConsoleWarning('Manual Screening settings',warning);});
+      return payload;
     });
-    [['mp','megapixels'],['duration','duration']].forEach(function (pair) {
-      var target=els('manual-'+pair[0]),source=document.getElementById('test-generations-'+pair[1]);
-      if (source && !target.value) target.value=source.value;
-      if (source) target.closest('label').classList.toggle('hidden',source.closest('label').classList.contains('hidden'));
+    screeningSettingsRequest=screeningSettingsRequest.catch(function(exc){
+      if(screeningSettingsKey===key)screeningSettingsRequest=null;
+      throw exc;
     });
+    return screeningSettingsRequest;
   }
   function screeningGroups(selected) {
     var choice=els('manual-group');
@@ -1061,18 +1092,34 @@
     if (groups.length) choice.value=String(Math.min(Math.max(0,old),groups.length-1));
   }
   function screeningApplySettings(campaign) {
-    screeningSettingsSource();
+    if(els('campaign-type').value!=='manual')return;
     var plan=campaign && campaign.rounds[campaign.rounds.length-1];
-    els('manual-prompt').value=plan ? plan.prompt :
-      (els('prompt').value || document.getElementById('test-generations-prompt').value || '');
-    if (plan) {
-      var settings=plan.settings || {};
+    var context=currentFolder, selectedId=campaign&&campaign.id;
+    els('manual-prompt').value=plan?plan.prompt:'';
+    screeningGroups(plan?plan.groupIndex:0);
+    screeningSettingsSource(campaign&&campaign.modelId).then(function(payload){
+      if(context!==currentFolder || (selectedId && activeCampaign!==selectedId) ||
+          (!selectedId && activeCampaign) || els('campaign-type').value!=='manual')return;
+      if(!plan){
+        var prompt=payload.workspacePromptPresent?payload.workspacePrompt:payload.defaultPrompt;
+        if(!els('manual-prompt').value.trim()){
+          els('manual-prompt').value=String(prompt||'');
+          screeningGroups(0);
+        }
+        return;
+      }
+      var settings=plan.settings||{};
       [['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
-        ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function (pair) {
-        if (settings[pair[1]] != null) els('manual-'+pair[0]).value=String(settings[pair[1]]);
+        ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function(pair){
+        var target=els('manual-'+pair[0]),value=settings[pair[1]];
+        if(value==null)return;
+        if(target.tagName==='SELECT'&&!Array.from(target.options).some(function(o){return o.value===String(value);})){
+          var option=document.createElement('option');option.value=String(value);option.textContent=String(value);
+          target.appendChild(option);
+        }
+        target.value=String(value);
       });
-    }
-    screeningGroups(plan ? plan.groupIndex : 0);
+    }).catch(error);
   }
   function screeningCriteria() {
     var settings={};
@@ -1107,7 +1154,6 @@
   }
   function screeningSaveSelection() {
     if (!isManualCampaign()) return Promise.resolve();
-    if (campaignState.status !== 'complete') return Promise.resolve();
     var id=activeCampaign, folder=currentFolder, selection=selectedRunEntries();
     screeningSelectionQueue=screeningSelectionQueue.catch(function(){}).then(function(){
       return api('screening_selection',{campaignId:id,runSelections:selection});
@@ -1153,6 +1199,17 @@
       if (!answer.queued) manualVisionPending=false;
       refreshStatus().catch(error);
     }).catch(function (exc) {manualVisionPending=false;error(exc);});
+  }
+  function screeningLogVisionErrors(campaign) {
+    (campaign.units || []).forEach(function (u) {
+      if (!u.visionError) return;
+      var identity = [campaign.id,u.round,u.epoch,u.case,u.visionErrorAt||'',u.visionError].join('|');
+      if (screeningReportedVlErrors.has(identity)) return;
+      screeningReportedVlErrors.add(identity);
+      window.reportConsoleError('Manual Screening Ask VL', new Error(
+        'Round '+u.round+' · '+candidateLabel(campaign,u.epoch)+
+        ' · variation '+(u.case+1)+': '+u.visionError));
+    });
   }
   function screeningRoundList(campaign) {
     els('manual-history').classList.remove('hidden');
@@ -1207,7 +1264,7 @@
     });
     var signature=JSON.stringify([campaign.id,campaign.status,manualSelectedRound,rows,Array.from(kept),sort,
       units.filter(function(u){return u.round===plan.number;}).map(function (u) {
-        return [u.epoch,u.case,u.frame,u.error,u.rating,u.assessment&&u.assessment.text];
+        return [u.epoch,u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
       }),units.map(function(u){return [u.epoch,u.rating]})]);
     if (host.dataset.signature===signature) return;
     host.dataset.signature=signature;
@@ -1239,7 +1296,7 @@
     rows.forEach(function (epoch) {
       var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),rated[epoch],
         units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;}).map(function(u){
-          return [u.case,u.frame,u.error,u.rating,u.assessment&&u.assessment.text];
+          return [u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
         })]);
       var previous=Array.from(scroller.querySelectorAll('[data-screening-epoch]')).find(function(element){
         return element.dataset.screeningEpoch===String(epoch);
@@ -1274,7 +1331,7 @@
       var actions=document.createElement('div');actions.className='epoch-screening-row-actions';
       var keepLabel=document.createElement('label');
       var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=kept.has(epoch);
-      checkbox.disabled=campaign.status!=='complete'&&plan.number!==campaign.round;
+      // Reviewing an older round never changes its historical renders or active work.
       checkbox.addEventListener('change',function () {
         var wanted=checkbox.checked;
         var origin=campaign.candidateMap[String(epoch)];
@@ -1322,7 +1379,7 @@
         var unit=units.find(function(u){return u.round===plan.number&&u.epoch===epoch&&u.case===caseIndex;});
         (function(u,index) {
           var cardSignature=JSON.stringify([u&&u.frame,u&&u.framePruned,u&&u.error,
-            u&&u.rating,u&&u.renderSeconds,u&&u.assessment&&u.assessment.text]);
+            u&&u.rating,u&&u.renderSeconds,u&&u.visionError,u&&u.assessment&&u.assessment.text]);
           var oldCard=cards.children[index];
           if (oldCard && oldCard.dataset.screeningCardSignature===cardSignature) return;
           var url=u&&u.frame&&!u.framePruned?'/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+
@@ -1343,10 +1400,12 @@
               }}:null,
             wildcards:plan.caseSelections[index].map(function(v){return {label:v.id,value:v.option};}),
             metadata:u&&u.renderSeconds?[(u.renderSeconds).toFixed(1)+'s']:[],
-            evaluations:u&&u.assessment?[{label:'VL reviewed',title:u.assessment.text}]:[],
+            evaluations:u&&u.assessment?[{label:'VL reviewed',title:u.assessment.text}]:
+              u&&u.visionError?[{label:'VL failed',title:u.visionError}]:[],
             details:[{label:'Prompt',value:plan.casePrompts[index],pre:true},
               {label:'Seed',value:String(plan.seeds[index])},
-              {label:'VL',value:u&&u.assessment&&u.assessment.text||''}],
+              {label:'VL',value:u&&u.assessment&&u.assessment.text||''},
+              {label:'VL error',value:u&&u.visionError||''}],
             actions:url?[{label:'Ask VL for this render',onClick:function () {
                 screeningAskVision(campaign,{epoch:epoch,case:index});
               }},{label:'Open original',url:url}]:[]
@@ -1370,7 +1429,7 @@
     els('manual-vl-round').disabled=!units.some(function(u) {
       return u.round===plan.number&&u.frame&&!u.error;
     });
-    els('manual-launch').disabled=campaign.status!=='complete'&&campaign.status!=='paused';
+    els('manual-launch').disabled=campaign.status!=='complete';
     els('manual-launch').textContent='Run Round '+(campaign.rounds.length+1)+' · '+(campaign.kept||[]).length+' epochs';
   }
   function screeningRender(campaign) {
@@ -1380,9 +1439,16 @@
     els('manual-review').classList.remove('hidden');
     els('live-layout').classList.add('hidden');
     els('timeline').classList.add('hidden');
-    els('metrics').classList.add('hidden');
+    els('metrics').classList.remove('hidden');
+    progress(campaign);
+    els('vl-count').parentElement.classList.add('hidden');
+    var failed=(campaign.units||[]).filter(function(u){
+      return u.round===campaign.round && !!u.error;
+    }).length;
+    if(failed)els('render-count').textContent+=' · '+failed+' failed';
     els('follow-up').classList.add('hidden');
     manualVisionPending=!!campaign.screeningVisionRunning;
+    screeningLogVisionErrors(campaign);
     screeningMatrix(campaign);
   }
 
@@ -1423,7 +1489,8 @@
     var running = campaign.status === 'running';
     els('pause').classList.toggle('hidden', !running);
     els('stop').classList.toggle('hidden', !running);
-    els('resume').classList.toggle('hidden', !['paused', 'interrupted', 'failed'].includes(campaign.status));
+    els('resume').classList.toggle('hidden', !(['paused', 'interrupted', 'failed'].includes(campaign.status) ||
+      (campaign.mode==='manual'&&campaign.status==='stopped')));
     els('delete').classList.toggle('hidden', running);
     if (campaign.mode === 'manual') {
       screeningRender(campaign);
@@ -1436,6 +1503,7 @@
     els('live-layout').classList.remove('hidden');
     els('timeline').classList.remove('hidden');
     els('metrics').classList.remove('hidden');
+    els('vl-count').parentElement.classList.remove('hidden');
     progress(campaign);
     els('follow-up').classList.toggle('hidden', campaign.status === 'running' || campaign.status === 'queued');
     ranking(campaign);
@@ -1471,7 +1539,7 @@
       }
       campaigns = response.campaigns || [];
       timingProfiles = response.timings || {};
-      setup(); screeningSettingsSource(); list();
+      setup(); list();
       if (activeCampaign && campaigns.some(function (c) { return c.id === activeCampaign; })) return refreshStatus();
       activeCampaign = '';
       manualSelectionCampaign='';
@@ -1656,10 +1724,6 @@
   els('run-choices').addEventListener('change', function (event) {
     var checkbox = event.target.closest('[data-run-id]');
     if (!checkbox) return;
-    if (isManualCampaign() && campaignState.status !== 'complete') {
-      drawEpochPicker();
-      return error(new Error('Finish the current round before changing the next-round selection.'));
-    }
     var jobId = checkbox.dataset.runId;
     var run = runs.find(function (item) { return item.jobId === jobId; });
     if (!run) throw new Error('Selected training run disappeared.');
@@ -1674,9 +1738,6 @@
   els('epoch-picker').addEventListener('click', function (event) {
     var region = event.target.closest('[data-epoch-run]');
     if (!region) return;
-    if (isManualCampaign() && campaignState.status !== 'complete') {
-      return error(new Error('Finish the current round before changing the next-round selection.'));
-    }
     var jobId = region.dataset.epochRun, choice = event.target.closest('[data-epoch-choice]');
     var selected = runEpochSelections[jobId];
     if (!(selected instanceof Set)) throw new Error('Run selection missing.');

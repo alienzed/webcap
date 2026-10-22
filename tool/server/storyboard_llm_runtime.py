@@ -1896,9 +1896,23 @@ def _completion_result(response, model_id, allow_truncated=False, assessment_evi
     content = str(message.get("content") or "")
     if not assessment_evidence:
         content = content.strip()
-    if not content and not assessment_evidence:
-        raise RuntimeError("Director runtime returned an empty response.")
     finish_reason = str(choice.get("finish_reason") or "").strip().lower() if isinstance(choice, dict) else ""
+    if not content and not assessment_evidence:
+        # The provider returned successfully but supplied no answer. Preserve its
+        # completion metadata in the job error/Console without exposing reasoning.
+        usage = response.get("usage") if isinstance(response, dict) else None
+        usage = usage if isinstance(usage, dict) else {}
+        details = usage.get("completion_tokens_details")
+        details = details if isinstance(details, dict) else {}
+        reasoning = message.get("reasoning") or message.get("reasoning_content") or ""
+        diagnostics = [
+            "finish_reason=" + (finish_reason or "unreported"),
+            "completion_tokens=" + str(usage.get("completion_tokens") if usage.get("completion_tokens") is not None else "unreported"),
+            "reasoning_chars=" + str(len(str(reasoning))),
+        ]
+        if details.get("reasoning_tokens") is not None:
+            diagnostics.append("reasoning_tokens=" + str(details["reasoning_tokens"]))
+        raise RuntimeError("Director runtime returned an empty response (" + ", ".join(diagnostics) + ").")
     if finish_reason in {"length", "max_tokens"}:
         if not allow_truncated:
             raise RuntimeError(

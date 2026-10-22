@@ -548,6 +548,8 @@ def _create_screening_campaign(folder_path, criteria, folder, model, normalized,
 
 def _screening_selection(folder_path, campaign, selections):
     """Persist editable next-round scope, including newly selected saved epochs."""
+    if campaign.get("status") != "complete":
+        raise ValueError("Finish this round before editing its next-round selection.")
     if not isinstance(selections, list):
         raise ValueError("Select training runs and epochs.")
     available = {item["jobId"]: item for item in _runs(folder_path)}
@@ -1631,6 +1633,8 @@ def command(folder_path, operation, criteria=None):
                      item["case"] == criteria.get("case")), None)
         if not unit or not unit.get("frame"):
             raise ValueError("Screening render does not exist.")
+        if campaign.get("status") != "complete":
+            raise ValueError("Finish this round before rating Manual Screening renders.")
         value = criteria.get("rating")
         if type(value) is not int or not 0 <= value <= 5:
             raise ValueError("Rating must be 0-5 stars.")

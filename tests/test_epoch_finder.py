@@ -620,7 +620,7 @@ def test_manual_screening_expands_selected_group_and_freezes_each_case(monkeypat
 def test_screening_manual_scope_can_reintroduce_and_add_epochs(monkeypatch):
     monkeypatch.setattr(epoch_finder, "_runs", lambda _folder: [{
         "jobId": "run-a", "epochs": [1, 2, 3], "stage": "h3", "modelId": "minimax_h3"}])
-    monkeypatch.setattr(epoch_finder, "_save", lambda *_: None)
+    monkeypatch.setattr(epoch_finder, "_save", lambda *args, **kwargs: None)
     campaign = {"status": "complete", "mode": "manual", "modelId": "minimax_h3", "stage": "h3",
                 "candidateMap": {"1": {"jobId": "run-a", "epoch": 1}},
                 "kept": [1], "runSelections": []}
@@ -662,3 +662,100 @@ def test_screening_next_round_is_explicit_and_preserves_previous_round(monkeypat
     assert campaign["rounds"][1]["settings"]["megapixels"] == 0.4
     assert campaign["round"] == 2
     assert launched == ["abcdef123456"]
+
+
+def _live_screening_fixture(tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    directory = tmp_path / "campaign"
+    directory.mkdir()
+    monkeypatch.setattr(epoch_finder, "_directory", lambda _folder, _identity: directory)
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _folder: "set")
+    campaign = {
+        "id": "abcdef123456", "folder": "set", "mode": "manual",
+        "status": "running", "round": 1,
+        "rounds": [{"number": 1, "epochs": [1, 2], "seeds": [11, 22]}],
+        "candidateMap": {"1": {"jobId": "train", "epoch": 1}, "2": {"jobId": "train", "epoch": 2}},
+        "runSelections": [{"jobId": "train", "epochs": [1, 2]}],
+        "kept": [1, 2],
+        "units": [
+            {"round": 1, "epoch": 1, "case": 0, "frame": "r1-e1-c0.png", "rating": 0,
+             "assessment": None},
+        ],
+    }
+    epoch_finder._save(folder, campaign, preserve_manual=False)
+    return folder, campaign
+
+
+def test_live_screening_can_rate_finished_frame_and_deselect_during_rendering(tmp_path, monkeypatch):
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    rating = epoch_finder.command(folder, "screening_rate", {
+        "campaignId": campaign["id"], "round": 1, "epoch": 1, "case": 0, "rating": 5,
+    })
+    assert rating == {"rating": 5}
+    choice = epoch_finder.command(folder, "screening_keep", {
+        "campaignId": campaign["id"], "round": 1, "epoch": 1, "keep": False,
+    })
+    assert choice["kept"] == [2]
+    latest = epoch_finder._load(folder, campaign["id"])
+    assert latest["units"][0]["rating"] == 5
+    assert latest["kept"] == [2]
+    assert latest["status"] == "running"
+
+
+def test_render_progress_cannot_erase_live_manual_review_or_vl(tmp_path, monkeypatch):
+    folder, stale_render_worker = _live_screening_fixture(tmp_path, monkeypatch)
+    epoch_finder.command(folder, "screening_rate", {
+        "campaignId": stale_render_worker["id"], "round": 1,
+        "epoch": 1, "case": 0, "rating": 4,
+    })
+    epoch_finder.command(folder, "screening_keep", {
+        "campaignId": stale_render_worker["id"], "round": 1, "epoch": 1, "keep": False,
+    })
+    vl_result = epoch_finder._load(folder, stale_render_worker["id"])
+    vl_result["units"][0]["assessment"] = {"text": "G1: 1", "comparison": []}
+    epoch_finder._save(folder, vl_result, preserve_manual=False)
+
+    # Simulate the in-flight render worker completing the next image from its
+    # older snapshot. Rating, VL and selection must survive that save.
+    stale_render_worker["units"].append({
+        "round": 1, "epoch": 1, "case": 1, "frame": "r1-e1-c1.png",
+        "assessment": None,
+    })
+    epoch_finder._save(folder, stale_render_worker)
+    latest = epoch_finder._load(folder, stale_render_worker["id"])
+    assert latest["units"][0]["rating"] == 4
+    assert latest["units"][0]["assessment"]["text"] == "G1: 1"
+    assert latest["kept"] == [2]
+    assert latest["units"][1]["frame"] == "r1-e1-c1.png"
+
+
+def test_live_screening_does_not_allow_rating_unrendered_images(tmp_path, monkeypatch):
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    with pytest.raises(ValueError, match="does not exist"):
+        epoch_finder.command(folder, "screening_rate", {
+            "campaignId": campaign["id"], "round": 1, "epoch": 2, "case": 0, "rating": 5,
+        })
+    with pytest.raises(ValueError, match="current screening round"):
+        epoch_finder.command(folder, "screening_keep", {
+            "campaignId": campaign["id"], "round": 2, "epoch": 1, "keep": False,
+        })
+
+
+def test_manual_vl_allows_live_rendered_frames_without_waiting_for_round(monkeypatch):
+    campaign = {
+        "id": "abcdef123456", "status": "running", "mode": "manual",
+        "units": [{"round": 1, "epoch": 1, "case": 0, "frame": "r1-e1-c0.png",
+                   "assessment": None, "error": ""}],
+    }
+    class FakeWorker:
+        def start(self):
+            pass
+    monkeypatch.setattr(epoch_finder.threading, "Thread", lambda **_kwargs: FakeWorker())
+    monkeypatch.setattr("tool.server.storyboard_llm_runtime.list_vision_models",
+                        lambda: [{"id": "remote::vl"}])
+    result = epoch_finder._screening_vision(None, campaign, {
+        "visionModel": "remote::vl", "round": 1, "epoch": 1,
+    })
+    assert result == {"queued": 1}
+    epoch_finder._screening_vision_workers.pop(campaign["id"], None)

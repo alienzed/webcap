@@ -729,3 +729,15 @@
 .media-explorer-workspace .media-explorer-toolbar > .media-explorer-facets select { flex:1 1 170px; }
 .media-explorer-workspace .media-explorer-searchbar { max-width:none; grid-template-columns:minmax(0,1fr) minmax(165px,205px) auto; }
 .media-explorer-workspace .media-explorer-gallery-toolbar { border-top:1px solid var(--border-soft); padding-top:6px; }
+
+/* Search/filter composition and obvious results sorting. */
+.media-explorer-workspace .media-explorer-searchbar { display:flex; }
+.media-explorer-workspace .media-explorer-search-field { width:100%; }
+.media-explorer-workspace .media-explorer-gallery-toolbar { gap:8px; }
+.media-explorer-workspace .media-explorer-sort-controls { display:flex; align-items:center; gap:6px; min-width:0; }
+.media-explorer-workspace .media-explorer-sort-controls span { font-size:14px; font-weight:600; color:var(--text); }
+.media-explorer-workspace .media-explorer-sort-controls select { width:170px; max-width:100%; min-height:34px; font-size:15px; border:1px solid var(--border); color:var(--text); background:var(--panel); border-radius:4px; }
+.media-explorer-workspace .media-explorer-sort-controls button { font-size:16px; }
+@media(max-width:850px) {
+  .media-explorer-workspace .media-explorer-sort-controls { flex:1 1 100%; }
+}

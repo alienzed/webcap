@@ -863,10 +863,24 @@ def _compare(answer, groups):
     return comparison
 
 
-def _wait_for_session(folder_path, campaign, unit):
+def _wait_for_session(folder_path, campaign, unit, stop_queuing=None):
     while True:
         session = test_bench.open_session(folder_path, unit["session"])
         phase = str(session.get("status") or "")
+        if stop_queuing is not None and stop_queuing.is_set() and phase == "queued":
+            try:
+                # The session owns a single queued Test request. Cancel only
+                # pending work; a request that just started may finish normally.
+                test_bench.cancel_queued(folder_path, unit["session"])
+            except RuntimeError as exc:
+                if "Only a fully queued Test session can be cancelled here." not in str(exc):
+                    raise
+                # The scheduler started it between inspection and cancellation.
+                continue
+            unit["cancelled"] = True
+            unit["session"] = ""
+            _save(folder_path, campaign)
+            return None
         if phase in {"complete", "failed", "stopped", "interrupted"}:
             if phase != "complete" or not session.get("results"):
                 raise RuntimeError("Test render " + unit["session"] + " ended as " + phase +
@@ -876,8 +890,12 @@ def _wait_for_session(folder_path, campaign, unit):
         time.sleep(2)
 
 
-def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
-    if unit["frame"]:
+def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False, stop_queuing=None):
+    if unit["frame"] or unit.get("cancelled"):
+        return
+    if stop_queuing is not None and stop_queuing.is_set() and not unit["session"]:
+        unit["cancelled"] = True
+        _save(folder_path, campaign)
         return
     if not unit["session"]:
         settings = dict(plan["settings"], seed=plan["seeds"][unit["case"]])
@@ -895,7 +913,9 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
         _save(folder_path, campaign)
     if enqueue_only:
         return
-    status = _wait_for_session(folder_path, campaign, unit)
+    status = _wait_for_session(folder_path, campaign, unit, stop_queuing=stop_queuing)
+    if status is None:
+        return
     result = status["results"][0]
     media = test_bench.resolve_result_media(folder_path, unit["session"], result["mediaFile"])
     file_name = "r" + str(unit["round"]) + "-e" + str(unit["epoch"]) + "-c" + str(unit["case"]) + ".png"
@@ -1233,7 +1253,8 @@ def _run(folder_path, campaign_id, control):
                     # completed clip on the CPU.
                     for unit in pending:
                         try:
-                            _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=True)
+                            _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=True,
+                                         stop_queuing=control["stop_round"] if campaign.get("mode") == "manual" else None)
                         except Exception as exc:
                             _mark_unit_error(folder_path, campaign, unit, "render", exc)
                     for unit in pending:
@@ -1243,7 +1264,8 @@ def _run(folder_path, campaign_id, control):
                         if unit["error"]:
                             continue
                         try:
-                            _render_unit(folder_path, campaign, plan, unit, staged)
+                            _render_unit(folder_path, campaign, plan, unit, staged,
+                                         stop_queuing=control["stop_round"] if campaign.get("mode") == "manual" else None)
                         except Exception as exc:
                             _mark_unit_error(folder_path, campaign, unit, "render", exc)
                 if not _campaign_has_active_sessions(folder_path, campaign):

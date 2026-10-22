@@ -887,7 +887,20 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-manual-review { min-width: 0; }
 .epoch-finder-manual-review > .epoch-finder-panel-heading { flex-wrap: wrap; }
 .epoch-finder-manual-review > .epoch-finder-panel-heading label { display: flex; align-items: center; gap: 7px; }
-.epoch-finder-manual-matrix { max-width: 100%; overflow-x: auto; }
+.epoch-finder-manual-matrix {
+  max-width: 100%;
+  max-height: max(320px, calc(100dvh - 265px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+/* The headings stay aligned to the card columns while reviewing a long round. */
+.epoch-screening-case-labels {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel-bg, #1b2530);
+}
 .epoch-screening-round { min-width: var(--screening-width, 720px); }
 .epoch-screening-row { margin-bottom: 12px; }
 .epoch-screening-row-head { display: flex; align-items: center; flex-wrap: nowrap; gap: 10px; min-width: 0; padding: 6px 2px; font-size: 16px; }

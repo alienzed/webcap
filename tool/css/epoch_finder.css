@@ -916,3 +916,20 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-screening-row .test-generations-result-card { min-width: 0; }
 .epoch-screening-row .test-generations-result-name { overflow-wrap: anywhere; }
 .epoch-finder-manual-form.hidden, .epoch-finder-manual-review.hidden { display: none; }
+
+/* Only revised Manual Screening controls get the legible default; leave other Campaigns alone. */
+#epoch-finder-screen .epoch-finder-manual-form label,
+#epoch-finder-screen .epoch-finder-manual-review > .epoch-finder-panel-heading label {
+  font-size: 16px;
+  margin-top: 5px;
+}
+#epoch-finder-screen .epoch-finder-manual-form label > input,
+#epoch-finder-screen .epoch-finder-manual-form label > select,
+#epoch-finder-screen .epoch-finder-manual-form label > textarea,
+#epoch-finder-screen .epoch-finder-manual-review select {
+  font-size: 16px;
+}
+#epoch-finder-screen .epoch-screening-row-actions label,
+#epoch-finder-screen .epoch-screening-row-head .epoch-screening-ask-btn {
+  font-size: 16px;
+}

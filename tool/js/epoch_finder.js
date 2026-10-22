@@ -36,6 +36,7 @@
   var screeningSettingsKey = '';
   var screeningSettingsRequest = null;
   var screeningSelectionQueue = Promise.resolve();
+  var screeningSelectionRevision = 0;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -1155,16 +1156,25 @@
   function screeningSaveSelection() {
     if (!isManualCampaign()) return Promise.resolve();
     var id=activeCampaign, folder=currentFolder, selection=selectedRunEntries();
+    var revision=++screeningSelectionRevision;
     screeningSelectionQueue=screeningSelectionQueue.catch(function(){}).then(function(){
       return api('screening_selection',{campaignId:id,runSelections:selection});
     });
     return screeningSelectionQueue.then(function (response) {
-      if (!campaignState || campaignState.id !== id || currentFolder !== folder) return;
+      if (!campaignState || campaignState.id !== id || currentFolder !== folder ||
+          revision!==screeningSelectionRevision) return;
       campaignState.kept=response.campaign.kept;
       campaignState.candidateMap=response.campaign.candidateMap;
-      manualMatrixSignature='';
       screeningMatrix(campaignState);
-    }).catch(error);
+    }).catch(function(exc) {
+      error(exc);
+      if (activeCampaign===id && currentFolder===folder &&
+          revision===screeningSelectionRevision) {
+        // Roll back the optimistic picker on a failed save, never leave a false Keep state.
+        manualSelectionCampaign='';
+        return refreshStatus().catch(error);
+      }
+    });
   }
   function screeningLaunch() {
     clearError();
@@ -1236,6 +1246,15 @@
     screeningRoundList(campaign);
     var plan=campaign.rounds[manualSelectedRound-1],host=els('manual-matrix');
     var kept=new Set(campaign.kept||[]);
+    // The left picker is the immediate next-round selection. Derive Keep from it
+    // so live polls and delayed saves cannot visually undo a local checkbox edit.
+    if (manualSelectionCampaign===campaign.id) {
+      Object.entries(campaign.candidateMap||{}).forEach(function(entry){
+        var origin=entry[1],selected=runEpochSelections[origin.jobId];
+        if (selected instanceof Set && selected.has(origin.epoch)) kept.add(Number(entry[0]));
+        else kept.delete(Number(entry[0]));
+      });
+    }
     var units=campaign.units||[];
     var byEpoch={};
     units.forEach(function (u) { if (!byEpoch[u.epoch]) byEpoch[u.epoch]=[];byEpoch[u.epoch].push(u); });
@@ -1333,34 +1352,17 @@
       var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=kept.has(epoch);
       // Reviewing an older round never changes its historical renders or active work.
       checkbox.addEventListener('change',function () {
-        var wanted=checkbox.checked;
         var origin=campaign.candidateMap[String(epoch)];
         if (!origin) throw new Error('Missing screening checkpoint identity.');
-        if (!(runEpochSelections[origin.jobId] instanceof Set)) runEpochSelections[origin.jobId]=new Set();
-        if (wanted) runEpochSelections[origin.jobId].add(origin.epoch);
+        if (!(runEpochSelections[origin.jobId] instanceof Set))
+          runEpochSelections[origin.jobId]=new Set();
+        if (checkbox.checked) runEpochSelections[origin.jobId].add(origin.epoch);
         else runEpochSelections[origin.jobId].delete(origin.epoch);
         drawEpochPicker();
-        if (campaign.status==='complete') {
-          screeningSaveSelection();
-          return;
-        }
-        var id=campaign.id,folder=currentFolder,round=plan.number;
-        screeningSelectionQueue=screeningSelectionQueue.catch(function(){}).then(function() {
-          return api('screening_keep',{campaignId:id,round:round,epoch:epoch,keep:wanted});
-        });
-        screeningSelectionQueue.then(function(response) {
-          if (currentFolder!==folder||!campaignState||campaignState.id!==id) return;
-          campaignState.kept=response.kept;
-          screeningMatrix(campaignState);
-        }).catch(function(exc) {
-          if (currentFolder===folder&&campaignState&&campaignState.id===id) {
-            if (wanted) runEpochSelections[origin.jobId].delete(origin.epoch);
-            else runEpochSelections[origin.jobId].add(origin.epoch);
-            drawEpochPicker();
-            refreshStatus().catch(error);
-          }
-          error(exc);
-        });
+        // Both the matrix checkbox and form picker save the same selected epochs.
+        host.dataset.signature='';
+        screeningMatrix(campaignState);
+        screeningSaveSelection();
       });
       keepLabel.title='Keep for next round';
       keepLabel.append(checkbox,document.createTextNode('Keep'));actions.appendChild(keepLabel);

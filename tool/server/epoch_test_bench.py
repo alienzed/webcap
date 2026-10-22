@@ -2592,7 +2592,17 @@ def execute_inference(job_id, request, context):
         if not isinstance(frozen_template, dict):
             raise ValueError("Test inference job has no frozen workflow.")
         evidence = _workflow_evidence(model, frozen_template, (request.get("settings") or {}).get("samplingMode"))
-        if str(request.get("workflowFile") or "") != evidence["workflowFile"]:
+        workflow_file = str(request.get("workflowFile") or "")
+        source_mode = str((request.get("settings") or {}).get("samplingMode") or "")
+        legacy_h3_files = {
+            "current": "minimax_h3_test_api.json",
+            "single": "minimax_h3_test_single_api.json",
+            "no_turbo": "minimax_h3_test_no_turbo_api.json",
+        }
+        legacy_frozen = (model.PROFILE_ID == "minimax_h3"
+                         and source_mode in legacy_h3_files
+                         and workflow_file == legacy_h3_files[source_mode])
+        if workflow_file != evidence["workflowFile"] and not legacy_frozen:
             raise ValueError("Test inference workflow identity does not match the selected model.")
         if str(request.get("workflowSha256") or "") != evidence["workflowSha256"]:
             raise ValueError("Test inference workflow fingerprint is invalid.")
@@ -2647,6 +2657,11 @@ def execute_inference(job_id, request, context):
             strength_model=float(context.get("candidateStrength")) if candidate_kind == "lora" else 1,
             filename_prefix=output_prefix,
         )
+        if model.PROFILE_ID == "minimax_h3":
+            from .h3_sampling import submitted_sampling
+            sampling = submitted_sampling(workflow, settings["samplingMode"])
+        else:
+            sampling = None
         provider_job_id = inference_runtime.queue_managed_workflow(str(job_id), workflow)
         execution_update_job(
             str(job_id),
@@ -2700,7 +2715,8 @@ def execute_inference(job_id, request, context):
             "prompt": prompt,
             "seed": model.workflow_seed(workflow),
             "elapsedMs": _candidate_elapsed_ms(started),
-            "samplingMode": settings.get("samplingMode", "current"),
+            "samplingMode": settings.get("samplingMode", "turbo"),
+            "submittedSampling": sampling,
             "samplingSteps": workflow.get("124", {}).get("inputs", {}).get("steps"),
             "workflowFile": request.get("workflowFile"),
             "workflowSha256": request.get("workflowSha256"),

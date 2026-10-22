@@ -13,7 +13,6 @@ from pathlib import Path
 from urllib.parse import quote
 
 from flask import jsonify, request, send_file
-from send2trash import send2trash
 
 from .media import merge_technical_media_metadata
 
@@ -412,6 +411,7 @@ def move_external_files(data):
 
 
 def trash_external_files(data):
+    from send2trash import send2trash
     root, files = _external_sources(data)
     trashed = []
     for source in files:

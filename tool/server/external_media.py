@@ -384,7 +384,7 @@ def _external_sources(data):
 
 
 def _external_target_folder(root, relative):
-    relative = str(relative or "").strip().replace("\\\\", "/")
+    relative = str(relative or "").strip().replace("\\", "/")
     folder = Path(relative)
     if folder.is_absolute() or ".." in folder.parts:
         raise ValueError("Destination must be a folder inside the external root.")

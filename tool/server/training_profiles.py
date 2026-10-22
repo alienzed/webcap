@@ -95,7 +95,7 @@ _PROFILES = {
             "sessionSlug": "h3",
             "mediaKind": "video",
             "workflowFile": "minimax_h3_test_api.json",
-            "settings": ("aspectRatio", "megapixels", "duration", "seed"),
+            "settings": ("aspectRatio", "megapixels", "duration", "samplingMode", "seed"),
         },
     },
 }

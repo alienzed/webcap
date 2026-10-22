@@ -23,13 +23,18 @@ class TestModel:
         self.TEMPLATE_PATH = _TEMPLATE_ROOT / str(policy["workflowFile"])
         self.settings = tuple(policy.get("settings") or ())
 
-    def load_template(self):
+    def template_path(self, sampling_mode=None):
+        files = getattr(self.adapter, "WORKFLOW_FILES", None)
+        return _TEMPLATE_ROOT / files[self.adapter.normalize_sampling_mode(sampling_mode)] if files else self.TEMPLATE_PATH
+
+    def load_template(self, sampling_mode=None):
+        path = self.template_path(sampling_mode)
         try:
-            workflow = json.loads(self.TEMPLATE_PATH.read_text(encoding="utf-8"))
+            workflow = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            raise RuntimeError("Could not read Test workflow template: " + self.TEMPLATE_PATH.name) from exc
+            raise RuntimeError("Could not read Test workflow template: " + path.name) from exc
         if not isinstance(workflow, dict):
-            raise ValueError("Test workflow template must be a JSON object: " + self.TEMPLATE_PATH.name)
+            raise ValueError("Test workflow template must be a JSON object: " + path.name)
         return workflow
 
     def setting_options(self, workflow, available_names):

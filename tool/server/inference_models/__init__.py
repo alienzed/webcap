@@ -11,7 +11,7 @@ _MODEL_SPECS = {
         "adapter": h3,
         "mediaKind": "video",
         "workflowFile": "minimax_h3_inference_api.json",
-        "settings": ("aspectRatio", "megapixels", "duration", "seed"),
+        "settings": ("aspectRatio", "megapixels", "duration", "samplingMode", "seed"),
         "references": ("first_frame", "last_frame"),
         "default": True,
     },
@@ -37,13 +37,18 @@ class InferenceModel:
         self.settings = tuple(spec.get("settings") or ())
         self.references = tuple(spec.get("references") or ())
 
-    def load_template(self):
+    def template_path(self, sampling_mode=None):
+        files = getattr(self.adapter, "WORKFLOW_FILES", None)
+        return _TEMPLATE_ROOT / files[self.adapter.normalize_sampling_mode(sampling_mode)] if files else self.TEMPLATE_PATH
+
+    def load_template(self, sampling_mode=None):
+        path = self.template_path(sampling_mode)
         try:
-            workflow = json.loads(self.TEMPLATE_PATH.read_text(encoding="utf-8"))
+            workflow = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            raise RuntimeError("Could not read inference workflow template: " + self.TEMPLATE_PATH.name) from exc
+            raise RuntimeError("Could not read inference workflow template: " + path.name) from exc
         if not isinstance(workflow, dict):
-            raise ValueError("Inference workflow template must be a JSON object: " + self.TEMPLATE_PATH.name)
+            raise ValueError("Inference workflow template must be a JSON object: " + path.name)
         return workflow
 
     def __getattr__(self, name):

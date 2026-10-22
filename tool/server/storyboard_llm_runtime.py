@@ -1603,6 +1603,44 @@ def release_loaded_model_for_gpu_work():
             _request_lock.release()
 
 
+def manual_local_runtime(action="status"):
+    """Inspect or release only the WebCap-owned local llama.cpp process."""
+    from .execution_queue import execution_resource_owner
+
+    if action not in {"status", "unload", "stop"}:
+        raise ValueError("Unknown local llama.cpp action.")
+    if action != "status" and execution_resource_owner() == "llm":
+        raise RuntimeError("Director currently owns the GPU; finish or stop the active job first.")
+
+    if action != "status" and not _request_lock.acquire(blocking=False):
+        raise DirectorRuntimeBusy("Director is busy; wait for its request to finish.")
+    try:
+        with _process_lock:
+            running = _process is not None and _process.poll() is None
+            if action == "unload":
+                if not running:
+                    raise RuntimeError("WebCap's local llama-server is not running.")
+                release_loaded_model_for_gpu_work()
+                _logger.info("Manual llama.cpp unload completed; server remains running.")
+            elif action == "stop":
+                if not running:
+                    raise RuntimeError("WebCap's local llama-server is not running.")
+                stop_server()
+                _logger.info("Manual llama.cpp server stop completed.")
+            running = _process is not None and _process.poll() is None
+            loaded = []
+            if running:
+                with _use_runtime("local"):
+                    loaded = [
+                        model["label"] for model in _normalize_models(_http_json("/models", timeout=5))
+                        if model["status"] != "unloaded"
+                    ]
+            return {"serverRunning": running, "loadedModels": loaded}
+    finally:
+        if action != "status":
+            _request_lock.release()
+
+
 def _sampling_profile(operation):
     operation = str(operation or "").strip()
     profiles = {

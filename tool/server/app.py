@@ -69,7 +69,7 @@ from .storyboard_archive import archive_preview as storyboard_archive_preview, a
 from .storyboard_store import _mutation_lock as storyboard_mutation_lock
 from .storyboard_llm_contract import build_request as storyboard_build_llm_request
 from .storyboard_first_cut import register_routes as register_storyboard_first_cut_routes
-from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status
+from .storyboard_llm_runtime import activity_status as storyboard_director_activity_status, list_vision_models, status as storyboard_director_status, manual_local_runtime
 from .generate_generation import capabilities as generate_capabilities, prepare_request as prepare_generate_request
 from .media_explorer import list_media as media_explorer_list_media
 from .external_media import register_routes as register_external_media_routes
@@ -1497,6 +1497,16 @@ def storyboard_generation_route():
     except Exception as exc:
         app.logger.exception("STORYBOARD GENERATION FAILED: %s", exc)
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route("/fs/director/local-runtime", methods=["GET", "POST"])
+def director_local_runtime_route():
+    try:
+        action = "status" if request.method == "GET" else str((request.get_json(silent=True) or {}).get("action") or "").strip()
+        return jsonify({"ok": True, **manual_local_runtime(action)})
+    except Exception as exc:
+        app.logger.warning("DIRECTOR LOCAL RUNTIME CONTROL FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 409
 
 
 @app.route("/fs/director/activity", methods=["GET"])

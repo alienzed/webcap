@@ -409,11 +409,55 @@ function parseAppSettingsJson() {
   return normalizeAppConfigShape(JSON.parse(text));
 }
 
+function refreshAppSettingsLlamaRuntime() {
+  var statusEl = document.getElementById('app-settings-llama-status');
+  var unload = document.getElementById('app-settings-llama-unload');
+  var stop = document.getElementById('app-settings-llama-stop');
+  if (!statusEl || !unload || !stop) return;
+  unload.disabled = true;
+  stop.disabled = true;
+  fetch('/fs/director/local-runtime').then(function (r) {
+    return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Runtime status unavailable.'); return p; });
+  }).then(function (p) {
+    statusEl.textContent = p.serverRunning
+      ? ('Server running · ' + (p.loadedModels.length ? p.loadedModels.join(', ') : 'No model loaded'))
+      : 'Server stopped';
+    unload.disabled = !p.serverRunning || !p.loadedModels.length;
+    stop.disabled = !p.serverRunning;
+  }).catch(function (error) {
+    statusEl.textContent = 'Runtime status unavailable: ' + error.message;
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Local llama.cpp', error);
+  });
+}
+
+function appSettingsLlamaAction(action) {
+  var unload = document.getElementById('app-settings-llama-unload');
+  var stop = document.getElementById('app-settings-llama-stop');
+  var statusEl = document.getElementById('app-settings-llama-status');
+  unload.disabled = true;
+  stop.disabled = true;
+  statusEl.textContent = action === 'unload' ? 'Unloading model…' : 'Stopping llama-server…';
+  fetch('/fs/director/local-runtime', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ action: action })
+  }).then(function (r) {
+    return r.json().then(function (p) { if (!r.ok || p.ok === false) throw new Error(p.error || 'Runtime action failed.'); return p; });
+  }).then(function () {
+    setAppSettingsStatus(action === 'unload' ? 'Local llama.cpp model unloaded.' : 'Local llama-server stopped.', false);
+    refreshAppSettingsLlamaRuntime();
+  }).catch(function (error) {
+    setAppSettingsStatus(error.message, true);
+    if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Local llama.cpp', error);
+    refreshAppSettingsLlamaRuntime();
+  });
+}
+
 function openAppSettingsModal() {
   if (!ui.appSettingsModalEl) return;
   setAppSettingsStatus('Loading settings...', false);
   setAppSettingsTab(appSettingsActiveTab, false);
   ui.appSettingsModalEl.classList.remove('hidden');
+  refreshAppSettingsLlamaRuntime();
   ui.appSettingsModalEl.setAttribute('aria-hidden', 'false');
   focusFirstModalTextField(ui.appSettingsModalEl);
   HttpModule.get('/app/config', function (status, responseText) {
@@ -714,6 +758,8 @@ function saveLoraLibraryProfile() {
 }
 
 function wireAppSettingsUi() {
+  document.getElementById('app-settings-llama-unload').addEventListener('click', function () { appSettingsLlamaAction('unload'); });
+  document.getElementById('app-settings-llama-stop').addEventListener('click', function () { appSettingsLlamaAction('stop'); });
   document.getElementById('lora-library-refresh').addEventListener('click', refreshLoraLibrary);
   document.getElementById('lora-library-save').addEventListener('click', saveLoraLibraryProfile);
   document.getElementById('lora-library-editor-close').addEventListener('click', function () {

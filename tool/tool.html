@@ -2861,6 +2861,17 @@
                                             <input id="app-settings-storyboard-port" type="number" min="1" max="65535" step="1" value="8189">
                                         </label>
                                     </div>
+                                    <details class="app-settings-advanced">
+                                        <summary>Advanced · Runtime controls</summary>
+                                        <div class="app-settings-disclosure-body">
+                                            <p id="app-settings-llama-status" class="app-settings-help" aria-live="polite">Checking local llama.cpp…</p>
+                                            <div class="app-settings-runtime-controls">
+                                                <button id="app-settings-llama-unload" type="button" class="review-captions-btn" disabled>Unload model</button>
+                                                <button id="app-settings-llama-stop" type="button" class="review-captions-btn" disabled>Stop server</button>
+                                            </div>
+                                            <p class="app-settings-help">Unload releases models while keeping the server running. Stop terminates only the WebCap-owned server. Run these while Director is idle.</p>
+                                        </div>
+                                    </details>
                                 </div>
                                 <div class="app-settings-runtime-scope">
                                     <div class="app-settings-section-header">

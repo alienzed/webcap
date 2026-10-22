@@ -535,6 +535,23 @@ def _screening_plan(prompt, group_index, settings, number, epochs):
             "columnLabels": [test_bench._normalize_wildcard_text(value) for value in options]}
 
 
+def _screening_groups(plan, case):
+    """Recover explicit comparison options after Test renders a resolved prompt."""
+    nodes = test_bench._parse_wildcard_nodes(test_bench._strip_wildcard_comments(plan["prompt"]))
+    selections = plan["caseSelections"][case]
+    groups = []
+    for kind, node in nodes:
+        if kind != "group":
+            continue
+        options = [test_bench._normalize_wildcard_text(value)
+                   for branch in node for value in test_bench._expand_wildcard_option(branch)]
+        index = len(groups)
+        groups.append({"id": "G" + str(index + 1), "label": "Group " + str(index + 1),
+                       "options": options, "expected": selections[index]["selected"],
+                       "weight": 1})
+    return groups
+
+
 def _create_screening_campaign(folder_path, criteria, folder, model, normalized, job_id, run_name):
     if not normalized or criteria.get("selectedFiles") is not None:
         raise ValueError("Manual Screening starts from saved training epochs.")
@@ -664,6 +681,16 @@ def _screening_vision(folder_path, campaign, criteria):
                 if unit.get("assessment") is not None:
                     continue
                 current["visionModel"] = model
+                if not unit.get("groups"):
+                    plan = current["rounds"][item["round"] - 1]
+                    unit["groups"] = _screening_groups(plan, item["case"])
+                    unit["question"] = _question(unit["groups"])
+                    with _worker_lock:
+                        latest = _load(folder_path, identity)
+                        target = _unit(latest, item["round"], item["epoch"], item["case"])
+                        target["groups"] = unit["groups"]
+                        target["question"] = unit["question"]
+                        _save(folder_path, latest, preserve_manual=False)
                 # Preserve concurrent human ratings/selections after the VL call.
                 _evaluate_unit(folder_path, current, unit)
             except Exception as exc:
@@ -856,15 +883,18 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False):
     elapsed_ms = result.get("elapsedMs")
     if isinstance(elapsed_ms, (int, float)) and elapsed_ms > 0:
         unit["renderSeconds"] = round(elapsed_ms / 1000, 2)
-    unit["groups"] = status.get("wildcardEvaluationGroups") or []
-    if len(unit["groups"]) != len(campaign["dimensions"]):
-        raise RuntimeError("Resolved wildcard group count differs from the approved plan.")
-    for group, dimension in zip(unit["groups"], campaign["dimensions"]):
-        if group.get("options") != dimension["options"]:
-            raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
-        group.update({"label": dimension["label"], "role": dimension["role"],
-                      "weight": dimension["weight"],
-                      "annotationGroup": dimension.get("annotationGroup", "")})
+    if campaign.get("mode") == "manual":
+        unit["groups"] = _screening_groups(plan, unit["case"])
+    else:
+        unit["groups"] = status.get("wildcardEvaluationGroups") or []
+        if len(unit["groups"]) != len(campaign["dimensions"]):
+            raise RuntimeError("Resolved wildcard group count differs from the approved plan.")
+        for group, dimension in zip(unit["groups"], campaign["dimensions"]):
+            if group.get("options") != dimension["options"]:
+                raise RuntimeError("Resolved wildcard attributes diverged from the approved plan.")
+            group.update({"label": dimension["label"], "role": dimension["role"],
+                          "weight": dimension["weight"],
+                          "annotationGroup": dimension.get("annotationGroup", "")})
     unit["question"] = _question(unit["groups"])
     if plan.get("caseSelections"):
         unit["selections"] = plan["caseSelections"][unit["case"]]

@@ -89,6 +89,12 @@ def test_h3_inference_workflow_supports_multiple_loras_and_frame_anchors():
             "strengthModel": 0.9,
             "strengthClip": 1.0,
         }],
+        "assets": {
+            "diffusion": "model.safetensors",
+            "textEncoder": "clip.safetensors",
+            "videoVae": "video.safetensors",
+            "audioVae": "audio.safetensors",
+        },
         "loras": [
             {"name": "one.safetensors", "strength": 0.7},
             {"name": "two.safetensors", "strength": 0.5},

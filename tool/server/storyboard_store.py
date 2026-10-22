@@ -517,6 +517,10 @@ def _normalize_scene(scene_id, value, existing=None):
         if megapixels <= 0:
             raise ValueError("Scene megapixels must be greater than zero.")
 
+    sampling_mode = str(value.get("samplingMode", current.get("samplingMode", "current")) or "current")
+    if sampling_mode not in ("current", "single", "no_turbo"):
+        raise ValueError("Unsupported Storyboard sampling mode: " + sampling_mode)
+
     normalized = {
         "id": scene_id,
         "title": str(value.get("title", current.get("title", "")) or "").strip(),
@@ -553,6 +557,7 @@ def _normalize_scene(scene_id, value, existing=None):
             value.get("sharedContextRefs", current.get("sharedContextRefs", []))
         ),
         "durationSeconds": duration,
+        "samplingMode": sampling_mode,
         "aspectRatio": aspect_ratio,
         "megapixels": megapixels,
         "seed": seed,
@@ -705,7 +710,7 @@ def duplicate_story(story_id):
 
     scene_fields = (
         "title", "summary", "entryState", "exitState", "prompt", "invariantRefs", "sharedContextRefs",
-        "durationSeconds", "aspectRatio", "megapixels", "seed", "seedMode",
+        "durationSeconds", "samplingMode", "aspectRatio", "megapixels", "seed", "seedMode",
         "loras", "storyLoraOverrides", "notes",
     )
     for source_scene_id in source.get("sceneOrder") or []:
@@ -1486,6 +1491,7 @@ def duplicate_scene(story_id, scene_id):
         "invariantRefs": copy.deepcopy(current.get("invariantRefs") or []),
         "sharedContextRefs": copy.deepcopy(current.get("sharedContextRefs") or []),
         "durationSeconds": current.get("durationSeconds", 6),
+        "samplingMode": current.get("samplingMode", "current"),
         "aspectRatio": current.get("aspectRatio"),
         "megapixels": current.get("megapixels"),
         "seed": current.get("seed"),
@@ -1727,6 +1733,7 @@ def add_take_upload(
         "entryState": str(scene.get("entryState") or ""),
         "exitState": str(scene.get("exitState") or ""),
         "durationSeconds": scene.get("durationSeconds", 6),
+        "samplingMode": scene.get("samplingMode", "current"),
         "seed": scene.get("seed"),
         "seedMode": scene.get("seedMode", "random"),
         "loras": _normalize_loras(effective_loras) if effective_loras is not None else resolve_scene_loras(story, scene),
@@ -1744,6 +1751,9 @@ def add_take_upload(
             "exitState",
             "sourcePrompt",
             "durationSeconds",
+            "samplingMode",
+            "workflowFile",
+            "workflowSha256",
             "seed",
             "seedMode",
             "aspectRatio",
@@ -2160,6 +2170,8 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
         "exitState",
         "sourcePrompt",
         "durationSeconds",
+        "samplingMode",
+        "workflowFile",
         "seed",
         "seedMode",
         "aspectRatio",

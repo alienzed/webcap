@@ -377,7 +377,7 @@
     var select = el('generate-model');
     if (!select) return;
     var previousModelId = select.value;
-    var draft = ['generate-prompt', 'generate-aspect', 'generate-dimensions', 'generate-megapixels', 'generate-duration', 'generate-seed'].map(function (id) {
+    var draft = ['generate-prompt', 'generate-aspect', 'generate-dimensions', 'generate-megapixels', 'generate-duration', 'generate-sampling-mode', 'generate-seed'].map(function (id) {
       var node = el(id);
       return {node: node, value: node.value};
     });
@@ -393,6 +393,7 @@
     renderModelForm();
     if (previousModelId === selected) {
       draft.forEach(function (field) { field.node.value = field.value; });
+      syncGenerateBaseLoras();
     }
   }
 
@@ -401,11 +402,21 @@
     return !!model && Array.isArray(model.settings) && model.settings.indexOf(name) !== -1;
   }
 
+  function syncGenerateBaseLoras() {
+    var model = currentModel();
+    var base = el('generate-base-loras');
+    if (!model || !base) return;
+    var names = model.baseLoras || [];
+    var noTurbo = model.id === 'minimax_h3' && el('generate-sampling-mode').value === 'no_turbo';
+    base.textContent = noTurbo ? 'Turbo disabled · 20 steps' : (names.length ? 'Required workflow LoRA: ' + names.join(', ') : '');
+    base.classList.toggle('hidden', !noTurbo && !names.length);
+  }
+
   function renderModelForm() {
     var model = currentModel();
     if (!model) return;
 
-    ['aspectRatio', 'megapixels', 'duration', 'dimensions', 'seed'].forEach(function (name) {
+    ['aspectRatio', 'megapixels', 'duration', 'samplingMode', 'dimensions', 'seed'].forEach(function (name) {
       var node = el('generate-field-' + name);
       if (node) node.classList.toggle('hidden', !fieldVisible(name));
     });
@@ -430,6 +441,7 @@
 
     if (el('generate-megapixels')) el('generate-megapixels').value = String((model.defaultSettings || {}).megapixels || '');
     if (el('generate-duration')) el('generate-duration').value = String((model.defaultSettings || {}).duration || '');
+    el('generate-sampling-mode').value = String((model.defaultSettings || {}).samplingMode || 'current');
     if (el('generate-seed')) el('generate-seed').value = '-1';
 
     var prompt = el('generate-prompt');
@@ -445,13 +457,7 @@
       if (field) field.classList.toggle('hidden', (model.references || []).indexOf(role) === -1);
     });
 
-    var base = el('generate-base-loras');
-    if (base) {
-      base.textContent = (model.baseLoras || []).length
-        ? 'Required workflow LoRA: ' + model.baseLoras.join(', ')
-        : '';
-      base.classList.toggle('hidden', !(model.baseLoras || []).length);
-    }
+    syncGenerateBaseLoras();
     renderLoras();
     setLoraMode(generateState.loraMode);
   }
@@ -535,14 +541,7 @@
         model.baseLoras = Array.isArray(fresh.baseLoras) ? fresh.baseLoras.slice() : [];
       });
 
-      var current = currentModel();
-      var base = el('generate-base-loras');
-      if (current && base) {
-        base.textContent = (current.baseLoras || []).length
-          ? 'Required workflow LoRA: ' + current.baseLoras.join(', ')
-          : '';
-        base.classList.toggle('hidden', !(current.baseLoras || []).length);
-      }
+      syncGenerateBaseLoras();
       generateState.loraProfileCache = {};
       renderLoras();
     }).catch(function (err) {
@@ -672,6 +671,7 @@
     if (fieldVisible('aspectRatio')) settings.aspectRatio = el('generate-aspect').value;
     if (fieldVisible('megapixels')) settings.megapixels = el('generate-megapixels').value;
     if (fieldVisible('duration')) settings.duration = el('generate-duration').value;
+    if (fieldVisible('samplingMode')) settings.samplingMode = el('generate-sampling-mode').value;
     if (fieldVisible('dimensions')) settings.dimensions = el('generate-dimensions').value;
     if (fieldVisible('seed')) settings.seed = el('generate-seed').value;
     return settings;
@@ -706,6 +706,7 @@
         ['aspectRatio', 'generate-aspect'],
         ['megapixels', 'generate-megapixels'],
         ['duration', 'generate-duration'],
+        ['samplingMode', 'generate-sampling-mode'],
         ['dimensions', 'generate-dimensions'],
         ['seed', 'generate-seed']
       ].forEach(function (entry) {
@@ -714,6 +715,7 @@
         if (control) control.value = String(settings[entry[0]]);
       });
 
+      syncGenerateBaseLoras();
       generateState.lorasByModel[resultModelId] = Array.isArray(result.loras)
         ? result.loras.map(function (item) {
             var strength = Number(item.strength);
@@ -1144,6 +1146,10 @@
     if (settings.dimensions) summary.push(String(settings.dimensions).trim());
     if (settings.aspectRatio) summary.push(String(settings.aspectRatio));
     if (settings.duration) summary.push(String(settings.duration) + 's');
+    if (result && result.modelId === 'minimax_h3') {
+      var mode = String(settings.samplingMode || 'current');
+      summary.push(mode === 'no_turbo' ? '20 steps · No Turbo' : (mode === 'single' ? '8 steps · Turbo 1.0' : '8 steps · Turbo 0.9'));
+    }
     if (result && result.seed !== undefined && result.seed !== null) summary.push('Seed ' + result.seed);
     var elapsed = formatGenerationElapsedMs(result && result.elapsedMs);
     if (elapsed) summary.push(elapsed);
@@ -2175,6 +2181,7 @@
       'generate-aspect',
       'generate-megapixels',
       'generate-duration',
+      'generate-sampling-mode',
       'generate-dimensions',
       'generate-seed',
       'generate-reference-first_frame',
@@ -2539,6 +2546,7 @@
       if (result) renderActiveResult(result);
     });
 
+    el('generate-sampling-mode').addEventListener('change', syncGenerateBaseLoras);
     el('generate-model').addEventListener('change', function () {
       generateState.modelId = this.value;
       generateState.promptLibrary.activeId = '';

@@ -1,6 +1,13 @@
 from .common import validate_test_seed
 
 import copy
+WORKFLOW_FILES = {"current": "minimax_h3_test_api.json", "single": "minimax_h3_test_single_api.json", "no_turbo": "minimax_h3_test_no_turbo_api.json"}
+
+def normalize_sampling_mode(value):
+    mode = str(value or "current").strip()
+    if mode not in WORKFLOW_FILES: raise ValueError("Unsupported H3 sampling mode: " + mode)
+    return mode
+
 OUTPUT_EXTENSIONS = (".mp4",)
 
 ASPECT_RATIO_OPTIONS = (
@@ -32,6 +39,7 @@ def template_settings(workflow):
         "megapixels": float(resolution.get("megapixels") or 0),
         "duration": float(duration.get("value") or 0),
         "strength": float(lora.get("strength_model") if lora.get("strength_model") is not None else 0.9),
+        "samplingMode": "current",
     }
 
 
@@ -62,6 +70,7 @@ def normalize_settings(workflow, new_seed, values=None):
         "megapixels": selected_megapixels,
         "duration": selected_duration,
         "strength": selected_strength,
+        "samplingMode": normalize_sampling_mode(selected.get("samplingMode")),
         "seed": selected_seed,
     }
 

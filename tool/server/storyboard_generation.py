@@ -1,4 +1,6 @@
 import copy
+import hashlib
+import json
 import io
 import logging
 import secrets
@@ -111,6 +113,7 @@ def _scene_settings(scene, story=None):
         "duration": duration,
         "seed": seed,
         "seedMode": seed_mode,
+        "samplingMode": str(scene.get("samplingMode") or "current"),
         "references": copy.deepcopy(scene.get("references") or []),
         "loras": resolve_scene_loras(story or {}, scene),
     }
@@ -168,11 +171,12 @@ def _storyboard_request(settings):
             "megapixels": settings["megapixels"],
             "duration": settings["duration"],
             "seed": settings["seed"],
+            "samplingMode": settings.get("samplingMode", "current"),
         },
         "loras": copy.deepcopy(settings.get("loras") or []),
         "references": references,
         "referenceRecords": copy.deepcopy(settings.get("references") or []),
-        "workflowFile": "minimax_h3_inference_api.json",
+        "workflowFile": get_inference_model("minimax_h3").template_path(settings.get("samplingMode")).name,
         "entryState": str(settings.get("entryState") or ""),
         "exitState": str(settings.get("exitState") or ""),
         "seedMode": str(settings.get("seedMode") or ""),
@@ -186,7 +190,7 @@ def execute_inference(job_id, request, context):
         raise RuntimeError("Storyboard inference is missing its Story or Scene context.")
 
     model = get_inference_model(request.get("modelId"))
-    template = model.load_template()
+    template = model.load_template((request.get("settings") or {}).get("samplingMode"))
     started = time.monotonic()
     uploaded = {}
     output_ref = None
@@ -211,6 +215,7 @@ def execute_inference(job_id, request, context):
             inference_runtime.resolve_name,
         )
         effective_input = model.effective_input(workflow)
+        workflow_sha256 = hashlib.sha256(json.dumps(workflow, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
         provider_job_id = inference_runtime.queue_managed_workflow(job_id, workflow)
         output_ref = inference_runtime.wait_for_output(
             provider_job_id,
@@ -233,6 +238,9 @@ def execute_inference(job_id, request, context):
             "loras": request.get("loras") or [],
             "references": copy.deepcopy(context.get("referenceRecords") or []),
             "workflowProfile": "minimax_h3_inference_v1",
+            "workflowFile": request["workflowFile"],
+            "workflowSha256": workflow_sha256,
+            "samplingMode": request["settings"].get("samplingMode", "current"),
             "providerJobId": provider_job_id,
             "jobId": str(job_id),
             "elapsedMs": elapsed_ms,
@@ -457,6 +465,7 @@ def regenerate_take(story_id, scene_id, take_id):
         "megapixels": original.get("megapixels"),
         "seed": original.get("seed"),
         "seedMode": "fixed",
+        "samplingMode": original.get("samplingMode", "current"),
         "loras": copy.deepcopy(original.get("loras") or []),
         "references": copy.deepcopy(original.get("references") or []),
         "entryState": str(original.get("entryState") or ""),

@@ -260,6 +260,8 @@ def persist_result(job_id, request, output_ref, media_bytes, provider_job_id, el
             "loras": request.get("loras") if isinstance(request.get("loras"), list) else [],
             "references": persisted_references,
             "workflowFile": str(request.get("workflowFile") or ""),
+            "samplingSteps": request.get("samplingSteps"),
+            "workflowSha256": str(request.get("workflowSha256") or ""),
             "providerJobId": str(provider_job_id or ""),
             "elapsedMs": int(elapsed_ms or 0),
             "mediaPath": relative_media,

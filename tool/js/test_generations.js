@@ -1907,6 +1907,7 @@
       aspectRatio: String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim(),
       megapixels: Number(el('test-generations-megapixels') && el('test-generations-megapixels').value || 0),
       duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0),
+      samplingMode: String(el('test-generations-sampling-mode').value || 'current'),
       dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || ''),
       defaultStrength: defaultCandidateStrength,
       sweepWeights: sweepWeights,
@@ -3375,6 +3376,10 @@
     var metrics = [];
     var megapixels = testResultMegapixels(status), strength = testResultStrength(status, result);
     if (megapixels != null) metrics.push(megapixels + ' MP');
+    if (String(status && status.modelId || '') === 'minimax_h3') {
+      var samplingMode = String(result && result.samplingMode || status && status.settings && status.settings.samplingMode || 'current');
+      metrics.push(samplingMode === 'no_turbo' ? '20 steps · No Turbo' : (samplingMode === 'single' ? '8 steps · Turbo 1.0' : '8 steps · Turbo 1.0 (Current)'));
+    }
     if (strength != null) metrics.push('Strength ' + strength);
     var elapsed = result && result.elapsedMs != null ? formatCandidateElapsed(result.elapsedMs) : '';
     return createTestPreviewCard({
@@ -4256,6 +4261,10 @@
     if (settings.aspectRatio) parts.push(String(settings.aspectRatio));
     if (settings.megapixels !== undefined && settings.megapixels !== null && settings.megapixels !== '') parts.push(String(settings.megapixels) + ' MP');
     if (settings.duration !== undefined && settings.duration !== null && settings.duration !== '') parts.push(String(settings.duration) + 's');
+    if (modelId === 'minimax_h3') {
+      var mode = String(settings.samplingMode || 'current');
+      parts.push(mode === 'no_turbo' ? '20 steps · No Turbo' : (mode === 'single' ? '8 steps · Turbo 1.0 (Single)' : '8 steps · Turbo 1.0 (Current)'));
+    }
     if (settings.dimensions) parts.push(String(settings.dimensions).trim());
     if (settings.seed !== undefined && settings.seed !== null && settings.seed !== '') parts.push('Seed ' + String(settings.seed));
     return parts.join(' · ');
@@ -4487,6 +4496,7 @@
     var aspect = el('test-generations-aspect');
     var megapixels = el('test-generations-megapixels');
     var duration = el('test-generations-duration');
+    var samplingMode = el('test-generations-sampling-mode');
     var dimensions = el('test-generations-dimensions');
     var seed = el('test-generations-seed');
     var prompt = el('test-generations-prompt');
@@ -4495,6 +4505,7 @@
       ['aspectRatio', 'test-generations-aspect-field'],
       ['megapixels', 'test-generations-megapixels-field'],
       ['duration', 'test-generations-duration-field'],
+      ['samplingMode', 'test-generations-sampling-mode-field'],
       ['dimensions', 'test-generations-dimensions-field'],
       ['seed', 'test-generations-seed-field']
     ].forEach(function (entry) {
@@ -4513,6 +4524,7 @@
     }
     if (megapixels) megapixels.value = String(savedSettings.megapixels || defaults.megapixels || '');
     if (duration) duration.value = String(savedSettings.duration || defaults.duration || '');
+    samplingMode.value = String(savedSettings.samplingMode || defaults.samplingMode || 'current');
     if (dimensions) {
       var dimensionOptions = payload.settingOptions && Array.isArray(payload.settingOptions.dimensions)
         ? payload.settingOptions.dimensions.slice()
@@ -4732,7 +4744,7 @@
     var declared = prepared && Array.isArray(prepared.settings) ? prepared.settings : [];
     var settings = {};
     [['aspectRatio', 'test-generations-aspect'], ['megapixels', 'test-generations-megapixels'],
-      ['duration', 'test-generations-duration'], ['dimensions', 'test-generations-dimensions'],
+      ['duration', 'test-generations-duration'], ['samplingMode', 'test-generations-sampling-mode'], ['dimensions', 'test-generations-dimensions'],
       ['seed', 'test-generations-seed']].forEach(function (pair) {
       if (declared.indexOf(pair[0]) !== -1) settings[pair[0]] = String(el(pair[1]).value || '').trim();
     });
@@ -5336,7 +5348,7 @@
     el('test-generations-prompt').addEventListener('input', function () {
       saveTestWorkspacePrompt(this.value);
     });
-    ['test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-dimensions'].forEach(function (id) {
+    ['test-generations-aspect', 'test-generations-megapixels', 'test-generations-duration', 'test-generations-sampling-mode', 'test-generations-dimensions'].forEach(function (id) {
       el(id).addEventListener('change', function () {
         saveTestBenchState();
       });

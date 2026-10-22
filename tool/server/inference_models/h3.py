@@ -3,6 +3,13 @@ import copy
 from .common import normalize_name, validate_seed
 
 
+WORKFLOW_FILES = {"current": "minimax_h3_inference_api.json", "single": "minimax_h3_inference_single_api.json", "no_turbo": "minimax_h3_inference_no_turbo_api.json"}
+
+def normalize_sampling_mode(value):
+    mode = str(value or "current").strip()
+    if mode not in WORKFLOW_FILES: raise ValueError("Unsupported H3 sampling mode: " + mode)
+    return mode
+
 OUTPUT_EXTENSIONS = (".mp4",)
 ASPECT_RATIO_OPTIONS = (
     "1:1 (Square)",
@@ -31,6 +38,7 @@ def template_settings(workflow):
         "aspectRatio": str(resolution.get("aspect_ratio") or "").strip(),
         "megapixels": float(resolution.get("megapixels") or 0),
         "duration": float(duration.get("value") or 0),
+        "samplingMode": "current",
     }
 
 
@@ -55,6 +63,7 @@ def normalize_settings(workflow, new_seed, values=None):
         "aspectRatio": aspect,
         "megapixels": megapixels,
         "duration": duration,
+        "samplingMode": normalize_sampling_mode(selected.get("samplingMode")),
         "seed": seed,
     }
 
@@ -84,8 +93,9 @@ def resolve_assets(template, available_names, resolve_name):
                 cache[key] = available_names(node_type, input_name, label)
             inputs[input_name] = resolve_name(inputs[input_name], cache[key], label)
         available_loras = available_lora_names(available_names)
-        turbo_inputs = workflow["148"]["inputs"]
-        turbo_inputs["lora_name"] = resolve_name(turbo_inputs["lora_name"], available_loras, "LoRA")
+        if "148" in workflow:
+            turbo_inputs = workflow["148"]["inputs"]
+            turbo_inputs["lora_name"] = resolve_name(turbo_inputs["lora_name"], available_loras, "LoRA")
         for value in workflow["138"]["inputs"].values():
             if isinstance(value, dict) and value.get("on") is True and str(value.get("lora") or "").strip():
                 value["lora"] = resolve_name(value["lora"], available_loras, "LoRA")
@@ -97,9 +107,7 @@ def resolve_assets(template, available_names, resolve_name):
 def base_loras(workflow):
     inputs = ((workflow.get("148") or {}).get("inputs") or {})
     name = str(inputs.get("lora_name") or "").strip()
-    if not name:
-        raise ValueError("MiniMax H3 inference workflow is missing the required Turbo LoRA.")
-    return [name]
+    return [name] if name else []
 
 
 def build_workflow(template, prompt, settings, loras, uploaded_references, filename_prefix, available_names, resolve_name):
@@ -179,11 +187,11 @@ def effective_input(workflow):
         })
 
     turbo = ((workflow.get("148") or {}).get("inputs") or {})
-    required_loras = [{
+    required_loras = ([{
         "name": str(turbo.get("lora_name") or ""),
         "strengthModel": float(turbo.get("strength_model", 1.0)),
         "strengthClip": float(turbo.get("strength_clip", 1.0)),
-    }]
+    }] if turbo.get("lora_name") else [])
 
     assets = {}
     for node_id, key, label in (
@@ -196,7 +204,7 @@ def effective_input(workflow):
         if value:
             assets[label] = str(value)
 
-    return {
+    effective = {
         "prompt": str(prompt_inputs.get("populated_text") or prompt_inputs.get("wildcard_text") or ""),
         "promptMode": str(prompt_inputs.get("mode") or ""),
         "seed": noise.get("noise_seed"),
@@ -208,6 +216,8 @@ def effective_input(workflow):
         "assets": assets,
         "loras": loras,
     }
+    if "124" in workflow: effective["samplingSteps"] = workflow["124"]["inputs"]["steps"]
+    return effective
 
 
 def find_output_ref(value):

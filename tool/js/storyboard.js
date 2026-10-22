@@ -3857,6 +3857,8 @@
       }));
     }
     if (take && take.generated) {
+      var mode = String(take.samplingMode || 'current');
+      parts.push(mode === 'no_turbo' ? '20 steps · No Turbo' : (mode === 'single' ? '8 steps · Turbo 1.0' : '8 steps · Turbo 0.9'));
       var input = take.effectiveInput || {};
       var mp = Number(input.megapixels);
       if (input.megapixels !== undefined && input.megapixels !== null && input.megapixels !== '' &&
@@ -3881,6 +3883,8 @@
     var loras = Array.isArray(input.loras) ? input.loras : [];
     var facts = [
       'Duration: ' + String(input.durationSeconds == null ? '' : input.durationSeconds) + 's',
+      'Workflow: ' + String(take.workflowFile || ''),
+      'Steps: ' + String(input.samplingSteps == null ? '' : input.samplingSteps),
       'Aspect: ' + String(input.aspectRatio || ''),
       'Megapixels: ' + String(input.megapixels == null ? '' : input.megapixels),
       'Seed: ' + String(input.seed == null ? '' : input.seed),
@@ -4118,11 +4122,12 @@
       }).join('');
       var loraRowsHtml = sceneLoras.map(sceneLoraRowHtml).join('');
       var baseLoras = storyState.generationCapabilities.baseLoras || [];
+      var sceneMode = String(scene.samplingMode || 'current');
       var loraStatusTitle = storyState.generationCapabilities.available
-        ? (baseLoras.length ? 'Required Turbo: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
+        ? (sceneMode === 'no_turbo' ? '20 steps; Turbo LoRA disabled.' : ('8 steps; Turbo LoRA: ' + baseLoras.join(', ')))
         : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
       var loraStatusText = storyState.generationCapabilities.available
-        ? (baseLoras.length ? 'Turbo active' : 'LoRAs ready')
+        ? (sceneMode === 'no_turbo' ? 'No Turbo · 20 steps' : (sceneMode === 'single' ? 'Turbo 1.0 · 8 steps' : 'Turbo 0.9 · 8 steps'))
         : 'LoRAs unavailable';
       var referencesHtml = sceneReferences.map(function (reference) {
         if (!reference || !reference.role) return '';
@@ -4220,6 +4225,11 @@
                   }).join('') +
                 '</select></label>' +
                 '<label class="storyboard-field" title="Leave blank to inherit the Story megapixel target."><span>Megapixels</span><input type="number" min="0.05" step="0.05" data-scene-field="megapixels" value="' + escapeHtml(sceneMegapixels) + '" placeholder="Inherit · ' + escapeHtml(inheritedMegapixels) + '"></label>' +
+                '<label class="storyboard-field" title="H3 sampling workflow used for this Scene."><span>Sampling mode</span><select data-scene-field="samplingMode">' +
+                  '<option value="current"' + (sceneValue(scene, 'samplingMode', 'current') === 'current' ? ' selected' : '') + '>Current · 8 steps / Turbo 0.9</option>' +
+                  '<option value="single"' + (sceneValue(scene, 'samplingMode', 'current') === 'single' ? ' selected' : '') + '>Single Turbo · 8 steps / 1.0</option>' +
+                  '<option value="no_turbo"' + (sceneValue(scene, 'samplingMode', 'current') === 'no_turbo' ? ' selected' : '') + '>No Turbo · 20 steps</option>' +
+                '</select></label>' +
                 '<label class="storyboard-field" title="Use -1 for a random seed, or enter a non-negative integer for a fixed seed."><span>Seed</span><input type="number" min="-1" step="1" data-scene-field="seed" value="' + escapeHtml(seedDisplay) + '"></label>' +
               '</div>' +
               '<button type="button" class="storyboard-primary-btn storyboard-generate-btn" data-scene-generate title="Queue a new Take from the current saved Scene.">' +
@@ -4687,6 +4697,7 @@
       refineComplete: refineComplete,
       notes: field('notes').value,
       durationSeconds: field('durationSeconds').value,
+      samplingMode: field('samplingMode').value,
       aspectRatio: field('aspectRatio').value || null,
       megapixels: String(field('megapixels').value || '').trim() || null,
       seedMode: randomSeed ? 'random' : 'fixed',

@@ -1,4 +1,6 @@
 import copy
+import hashlib
+import json
 import logging
 import re
 import secrets
@@ -178,14 +180,14 @@ def prepare_request(data):
         "settings": settings,
         "loras": loras,
         "references": references,
-        "workflowFile": model.TEMPLATE_PATH.name,
+        "workflowFile": model.template_path(settings.get("samplingMode")).name,
     }
 
 
 def execute(job_id, request):
     model = get_inference_model(request.get("modelId"))
-    template = model.load_template()
     request = copy.deepcopy(request)
+    template = model.load_template((request.get("settings") or {}).get("samplingMode"))
     started = time.monotonic()
     uploaded = {}
     output_ref = None
@@ -214,6 +216,8 @@ def execute(job_id, request):
             inference_runtime.available_names,
             inference_runtime.resolve_name,
         )
+        request["samplingSteps"] = workflow.get("124", {}).get("inputs", {}).get("steps")
+        request["workflowSha256"] = hashlib.sha256(json.dumps(workflow, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
         provider_job_id = inference_runtime.queue_managed_workflow(job_id, workflow)
         output_ref = inference_runtime.wait_for_output(provider_job_id, job_id, model.find_output_ref)
         media = inference_runtime.download_output(output_ref)

@@ -214,6 +214,8 @@ def execute_inference(job_id, request, context):
             inference_runtime.available_names,
             inference_runtime.resolve_name,
         )
+        from .h3_sampling import submitted_sampling
+        sampling = submitted_sampling(workflow, request["settings"]["samplingMode"])
         effective_input = model.effective_input(workflow)
         workflow_sha256 = hashlib.sha256(json.dumps(workflow, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
         provider_job_id = inference_runtime.queue_managed_workflow(job_id, workflow)
@@ -245,6 +247,7 @@ def execute_inference(job_id, request, context):
             "jobId": str(job_id),
             "elapsedMs": elapsed_ms,
             "effectiveInput": effective_input,
+            "submittedSampling": sampling,
         }
         _story, take = add_take_upload(
             story_id,

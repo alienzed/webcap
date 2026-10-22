@@ -925,7 +925,10 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-screening-run-info summary { cursor:pointer; font-weight:600; }
 .epoch-screening-run-info pre { max-height:180px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; font-size:14px; margin:8px 0 0; }
 .epoch-screening-run-prompts { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:8px; margin-top:10px; }
-.epoch-screening-run-prompts > details { border:1px solid var(--border-color,var(--border)); border-radius:6px; padding:8px; }
+.epoch-screening-run-prompt { min-width:0; border:1px solid var(--border-color,var(--border)); border-radius:6px; padding:8px; }
+.epoch-screening-run-prompt > strong { display:block; font-size:16px; }
+.epoch-screening-run-prompt > p { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; font-size:14px; margin:6px 0; }
+
 .epoch-screening-row .test-generations-result-card { min-width: 0; }
 .epoch-screening-row .test-generations-result-name { overflow-wrap: anywhere; }
 .epoch-finder-manual-form.hidden, .epoch-finder-manual-review.hidden { display: none; }

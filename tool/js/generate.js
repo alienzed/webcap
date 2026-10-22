@@ -401,6 +401,16 @@
     return !!model && Array.isArray(model.settings) && model.settings.indexOf(name) !== -1;
   }
 
+  function syncGenerateBaseLoras() {
+    var model = currentModel();
+    var base = el('generate-base-loras');
+    if (!model || !base) return;
+    var names = model.baseLoras || [];
+    var noTurbo = model.id === 'minimax_h3' && el('generate-sampling-mode').value === 'no_turbo';
+    base.textContent = noTurbo ? 'Turbo disabled · 20 steps' : (names.length ? 'Required workflow LoRA: ' + names.join(', ') : '');
+    base.classList.toggle('hidden', !noTurbo && !names.length);
+  }
+
   function renderModelForm() {
     var model = currentModel();
     if (!model) return;
@@ -446,13 +456,7 @@
       if (field) field.classList.toggle('hidden', (model.references || []).indexOf(role) === -1);
     });
 
-    var base = el('generate-base-loras');
-    if (base) {
-      base.textContent = (model.baseLoras || []).length
-        ? 'Required workflow LoRA: ' + model.baseLoras.join(', ')
-        : '';
-      base.classList.toggle('hidden', !(model.baseLoras || []).length);
-    }
+    syncGenerateBaseLoras();
     renderLoras();
     setLoraMode(generateState.loraMode);
   }
@@ -536,14 +540,7 @@
         model.baseLoras = Array.isArray(fresh.baseLoras) ? fresh.baseLoras.slice() : [];
       });
 
-      var current = currentModel();
-      var base = el('generate-base-loras');
-      if (current && base) {
-        base.textContent = (current.baseLoras || []).length
-          ? 'Required workflow LoRA: ' + current.baseLoras.join(', ')
-          : '';
-        base.classList.toggle('hidden', !(current.baseLoras || []).length);
-      }
+      syncGenerateBaseLoras();
       generateState.loraProfileCache = {};
       renderLoras();
     }).catch(function (err) {
@@ -1147,6 +1144,10 @@
     if (settings.dimensions) summary.push(String(settings.dimensions).trim());
     if (settings.aspectRatio) summary.push(String(settings.aspectRatio));
     if (settings.duration) summary.push(String(settings.duration) + 's');
+    if (result && result.modelId === 'minimax_h3') {
+      var mode = String(settings.samplingMode || 'current');
+      summary.push(mode === 'no_turbo' ? '20 steps · No Turbo' : (mode === 'single' ? '8 steps · Turbo 1.0' : '8 steps · Turbo 0.9'));
+    }
     if (result && result.seed !== undefined && result.seed !== null) summary.push('Seed ' + result.seed);
     var elapsed = formatGenerationElapsedMs(result && result.elapsedMs);
     if (elapsed) summary.push(elapsed);
@@ -2543,6 +2544,7 @@
       if (result) renderActiveResult(result);
     });
 
+    el('generate-sampling-mode').addEventListener('change', syncGenerateBaseLoras);
     el('generate-model').addEventListener('change', function () {
       generateState.modelId = this.value;
       generateState.promptLibrary.activeId = '';

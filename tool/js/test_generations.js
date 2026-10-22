@@ -3376,6 +3376,10 @@
     var metrics = [];
     var megapixels = testResultMegapixels(status), strength = testResultStrength(status, result);
     if (megapixels != null) metrics.push(megapixels + ' MP');
+    if (String(status && status.modelId || '') === 'minimax_h3') {
+      var samplingMode = String(result && result.samplingMode || status && status.settings && status.settings.samplingMode || 'current');
+      metrics.push(samplingMode === 'no_turbo' ? '20 steps · No Turbo' : (samplingMode === 'single' ? '8 steps · Turbo 1.0' : '8 steps · Turbo 1.0 (Current)'));
+    }
     if (strength != null) metrics.push('Strength ' + strength);
     var elapsed = result && result.elapsedMs != null ? formatCandidateElapsed(result.elapsedMs) : '';
     return createTestPreviewCard({
@@ -4257,6 +4261,10 @@
     if (settings.aspectRatio) parts.push(String(settings.aspectRatio));
     if (settings.megapixels !== undefined && settings.megapixels !== null && settings.megapixels !== '') parts.push(String(settings.megapixels) + ' MP');
     if (settings.duration !== undefined && settings.duration !== null && settings.duration !== '') parts.push(String(settings.duration) + 's');
+    if (modelId === 'minimax_h3') {
+      var mode = String(settings.samplingMode || 'current');
+      parts.push(mode === 'no_turbo' ? '20 steps · No Turbo' : (mode === 'single' ? '8 steps · Turbo 1.0 (Single)' : '8 steps · Turbo 1.0 (Current)'));
+    }
     if (settings.dimensions) parts.push(String(settings.dimensions).trim());
     if (settings.seed !== undefined && settings.seed !== null && settings.seed !== '') parts.push('Seed ' + String(settings.seed));
     return parts.join(' · ');

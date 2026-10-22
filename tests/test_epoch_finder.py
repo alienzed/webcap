@@ -1050,11 +1050,13 @@ def test_review_header_uses_frozen_run_without_restoring_form():
     js = (Path(__file__).resolve().parents[1] / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
     remember = js[js.index("function screeningRememberSelection("):js.index("function screeningSaveSelection(")]
     assert "screeningApplySettings(campaign);" not in remember
+    run_info = js[js.index("function screeningRunInfo("):js.index("function screeningUpdateAverage(")]
     matrix = js[js.index("function screeningMatrix("):js.index("function screeningRender(")]
-    assert "plan.casePrompts[index]" in matrix
-    assert "plan.settings" in matrix
-    assert "plan.seeds[index]" in matrix
+    assert "plan.casePrompts[index]" in run_info
+    assert "plan.settings" in run_info
+    assert "plan.seeds[index]" in run_info
     assert "epoch-screening-case-labels" in matrix
+    assert "screeningRunInfo(campaign,plan);" in matrix
     assert "stop_queuing" in (Path(__file__).resolve().parents[1] /
                               "tool/server/epoch_finder.py").read_text(encoding="utf-8")
 
@@ -1112,3 +1114,75 @@ def test_stop_queuing_keeps_active_frame_cancels_queued_case_and_skips_later_epo
     assert result["units"][1]["cancelled"] is True
     assert not result["units"][1]["error"]
     assert (frames / "r1-e1-c0.png").read_bytes() == b"fake-png-bytes"
+
+
+def test_stop_queuing_cancels_pending_test_jobs_immediately(tmp_path, monkeypatch):
+    import threading
+    from types import SimpleNamespace
+
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    campaign["units"] = [
+        {"round": 1, "epoch": 1, "case": 0, "frame": "", "session": "active"},
+        {"round": 1, "epoch": 1, "case": 1, "frame": "", "session": "pending"},
+        {"round": 1, "epoch": 2, "case": 0, "frame": "", "session": "another-pending"},
+    ]
+    epoch_finder._save(folder, campaign, preserve_manual=False)
+    worker_snapshot = epoch_finder._load(folder, campaign["id"])
+    stopped = threading.Event()
+    monkeypatch.setattr(epoch_finder, "_workers", {
+        campaign["id"]: SimpleNamespace(is_alive=lambda: True)})
+    monkeypatch.setattr(epoch_finder, "_controls", {
+        campaign["id"]: {"stop_round": stopped}})
+    monkeypatch.setattr(epoch_finder.test_bench, "open_session", lambda _folder, name: {
+        "status": "running" if name == "active" else "queued"})
+    cancelled = []
+    monkeypatch.setattr(epoch_finder.test_bench, "cancel_queued",
+                        lambda _folder, name: cancelled.append(name))
+
+    result = epoch_finder.command(folder, "screening_round_action", {
+        "campaignId": campaign["id"], "round": 1, "action": "stop"})["campaign"]
+    assert stopped.is_set()
+    assert cancelled == ["pending", "another-pending"]
+    assert result["rounds"][0]["status"] == "stopping"
+    assert result["units"][0]["session"] == "active"
+    assert [u["cancelled"] for u in result["units"][1:]] == [True, True]
+    # An in-flight render may save an old snapshot; it cannot bring cancelled jobs back.
+    epoch_finder._save(folder, worker_snapshot)
+    stored = epoch_finder._load(folder, campaign["id"])
+    assert all(u["cancelled"] and not u["session"] for u in stored["units"][1:])
+
+
+def test_missing_screening_test_session_needs_explicit_cancel_marker(tmp_path, monkeypatch):
+    import threading
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    campaign["units"] = [{"round": 1, "epoch": 1, "case": 0, "frame": "",
+                          "session": "", "cancelled": True}]
+    epoch_finder._save(folder, campaign, preserve_manual=False)
+    stale = {"round": 1, "epoch": 1, "case": 0, "frame": "", "session": "pending"}
+    monkeypatch.setattr(epoch_finder.test_bench, "open_session",
+                        lambda *_: (_ for _ in ()).throw(FileNotFoundError("removed")))
+    signal = threading.Event()
+    signal.set()
+    assert epoch_finder._wait_for_session(folder, campaign, stale, stop_queuing=signal) is None
+    assert stale["cancelled"] is True
+    assert stale["session"] == ""
+    with pytest.raises(FileNotFoundError):
+        epoch_finder._wait_for_session(folder, campaign,
+            {"round": 1, "epoch": 2, "case": 0, "frame": "", "session": "missing"},
+            stop_queuing=threading.Event())
+
+
+def test_manual_epoch_sweep_ux_preserves_rated_card_and_run_header():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    assert 'id="epoch-finder-manual-run-info"' in html
+    assert "screeningRunInfo(campaign,plan)" in js
+    assert "plan.casePrompts[index]" in js
+    assert "screeningUpdateAverage(previous,rated[epoch]);" in js
+    assert "window.updateTestPreviewCardRating(oldCard" in js
+    assert "window.updateTestPreviewCardRating(card,value)" in js
+    assert "screeningSelectionFailure" in js
+    assert "host.dataset.signature!==signature" in js
+    assert "region.querySelectorAll('[data-epoch-choice]').forEach" in js

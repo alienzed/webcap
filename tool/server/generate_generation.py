@@ -187,6 +187,10 @@ def prepare_request(data):
 def execute(job_id, request):
     model = get_inference_model(request.get("modelId"))
     request = copy.deepcopy(request)
+    if model.PROFILE_ID == "minimax_h3":
+        from .h3_sampling import normalize_mode
+        request["settings"]["samplingMode"] = normalize_mode(request["settings"].get("samplingMode"))
+        request["workflowFile"] = model.template_path(request["settings"]["samplingMode"]).name
     template = model.load_template((request.get("settings") or {}).get("samplingMode"))
     started = time.monotonic()
     uploaded = {}

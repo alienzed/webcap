@@ -1033,7 +1033,46 @@ def clear_lane(lane_name):
         _write_state(state)
 
 
-def request_stop(job_id):
+def backlog_active(job_id, pause_reason=""):
+    """Preserve one stopped frozen request at the end of Backlog, without a terminal receipt."""
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane_name, job = _find_job(state, job_id)
+        if job is None:
+            raise FileNotFoundError("Execution queue job does not exist.")
+        lane = _lane(state, lane_name)
+        if (
+            job.get("status") != "stopping"
+            or job.get("requestedAction") != "backlog"
+            or lane.get("activeJobId") != job["id"]
+        ):
+            raise ValueError("Only active work requested for Backlog can be shelved.")
+
+        job["status"] = "backlog"
+        job["queuePosition"] = 0
+        job["startedAt"] = None
+        job["finishedAt"] = None
+        job["error"] = ""
+        job["requestedAction"] = ""
+        job["details"] = {}
+        job["result"] = {}
+        job["updatedAt"] = now
+        lane["activeJobId"] = ""
+        lane["jobs"].remove(job)
+        lane["jobs"].append(job)
+        if pause_reason:
+            lane["paused"] = True
+            lane["pauseReason"] = str(pause_reason)
+        _refresh_positions(lane)
+        _write_state(state)
+        return _public_job(job)
+
+
+def request_stop(job_id, requested_action="stop"):
+    requested_action = str(requested_action or "").strip()
+    if requested_action not in {"stop", "backlog"}:
+        raise ValueError("Unsupported inference stop action.")
     now = time.time()
     with _lock:
         state = _read_state()
@@ -1042,7 +1081,7 @@ def request_stop(job_id):
             raise FileNotFoundError("Execution queue job does not exist.")
         if job.get("status") not in ACTIVE_STATUSES:
             raise ValueError("Only active execution jobs can be stopped.")
-        job["requestedAction"] = "stop"
+        job["requestedAction"] = requested_action
         job["status"] = "stopping"
         job["updatedAt"] = now
         lane = _lane(state, lane_name)

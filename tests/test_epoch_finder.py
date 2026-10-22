@@ -809,3 +809,17 @@ def test_manual_review_scrolls_without_pagination_and_logs_per_card_vl_failures(
     assert "u&&u.visionError" in js
     assert "window.reportConsoleError('Manual Screening Ask VL'" in js
     assert "screeningPage" not in js
+
+
+def test_only_manual_stopped_campaigns_can_resume(monkeypatch):
+    campaign = {"id": "abcdef123456", "mode": "manual", "status": "stopped"}
+    calls = []
+    monkeypatch.setattr(epoch_finder, "status", lambda *_: campaign)
+    monkeypatch.setattr(epoch_finder, "_resume_saved_work", lambda *_: calls.append("reconcile"))
+    monkeypatch.setattr(epoch_finder, "_launch", lambda *_: calls.append("launch"))
+    response = epoch_finder.command(None, "resume", {"campaignId": campaign["id"]})
+    assert response["campaign"] is campaign
+    assert calls == ["reconcile", "launch"]
+    campaign["mode"] = "auto"
+    with pytest.raises(ValueError):
+        epoch_finder.command(None, "resume", {"campaignId": campaign["id"]})

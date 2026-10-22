@@ -1167,12 +1167,17 @@
                                 <section class="epoch-finder-panel">
                                     <h3>New campaign</h3>
                                     <nav class="epoch-finder-wizard-progress" aria-label="Campaign setup">
-                                        <span data-epoch-step-label="1">1 · Run</span>
+                                        <span data-epoch-step-label="1">1 · Candidates</span>
                                         <span data-epoch-step-label="2">2 · Tests</span>
                                         <span data-epoch-step-label="3">3 · Rounds</span>
                                         <span data-epoch-step-label="4">4 · Launch</span>
                                     </nav>
                                     <div data-epoch-wizard-step="1">
+                                    <div class="epoch-finder-source-choice" role="group" aria-label="Campaign candidate source">
+                                        <label><input type="radio" name="epoch-finder-source" value="staged"> Selected Test LoRAs</label>
+                                        <label><input type="radio" name="epoch-finder-source" value="runs" checked> Training Runs</label>
+                                    </div>
+                                    <div id="epoch-finder-staged-choices" class="epoch-finder-run-choices hidden" aria-label="Select staged Test LoRAs"></div>
                                     <label class="hidden">Training run (legacy)<select id="epoch-finder-run"><option value="">Loading saved runs…</option></select></label><div id="epoch-finder-run-choices" class="epoch-finder-run-choices" aria-label="Select training runs"></div>
                                     <p id="epoch-finder-run-detail" class="epoch-finder-muted"></p>
                                     <div id="epoch-finder-epoch-picker" class="epoch-finder-epoch-picker hidden"></div>
@@ -1215,7 +1220,7 @@
                             <main class="epoch-finder-dashboard">
                                 <section id="epoch-finder-reference-workspace" class="epoch-finder-reference-workspace hidden" aria-label="Training reference gallery"><h3>Choose training references</h3><p class="epoch-finder-muted">Select a matching training image for each attribute. Preview images before choosing.</p></section>
                                 <dialog id="epoch-finder-reference-preview" class="epoch-finder-reference-preview"><button type="button" id="epoch-finder-preview-close" aria-label="Close preview">Close ×</button><img id="epoch-finder-preview-image" alt=""><p id="epoch-finder-preview-caption"></p></dialog>
-                                <div id="epoch-finder-empty" class="epoch-finder-empty"><strong>Ready when you are.</strong><p>Choose a saved training run and start a campaign to watch every round unfold.</p></div>
+                                <div id="epoch-finder-empty" class="epoch-finder-empty"><strong>Ready when you are.</strong><p>Choose selected Test LoRAs or saved Training epochs to run a campaign.</p></div>
                                 <div id="epoch-finder-active" class="hidden">
                                     <div class="epoch-finder-heading">
                                         <div><div class="epoch-finder-eyebrow" id="epoch-finder-phase">READY</div>

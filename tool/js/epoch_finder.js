@@ -904,6 +904,7 @@
   }
   function evidenceSection(campaign) {
     if (inspectedEpoch == null) return '';
+    if (!hasRunOrigin(campaign, inspectedEpoch)) return '';
     var source = (campaign.candidateMap || {})[String(inspectedEpoch)];
     var key = currentFolder + ':' + (source ? source.jobId + ':' + source.epoch : campaign.jobId + ':' + inspectedEpoch);
     var rows = crossEvidenceKey === key ? crossEvidence : null;
@@ -929,6 +930,7 @@
   function loadCrossEvidence() {
     if (!campaignState || inspectedEpoch == null) return;
     var folder = currentFolder, campaignId = campaignState.id;
+    if (!hasRunOrigin(campaignState, inspectedEpoch)) return;
     var source = (campaignState.candidateMap || {})[String(inspectedEpoch)];
     var jobId = source ? source.jobId : campaignState.jobId;
     var candidateId = inspectedEpoch, epoch = source ? source.epoch : inspectedEpoch, version = ++crossEvidenceVersion;
@@ -968,7 +970,11 @@
     node.innerHTML = '<div class="epoch-finder-inspect-top"><strong>' + escape(candidateLabel(campaign, unit.epoch)) +
       ' · Round ' + unit.round + ' / Test ' + (unit.case+1) + '</strong><span>' +
       (inspectedFrame+1) + ' / ' + units.length + '</span></div>' +
-      '<div class="epoch-finder-inspect-actions"><button type="button" data-copy-epoch-to-test>Copy ' + escape(candidateLabel(campaign, unit.epoch)) + ' to Test Generations</button><button type="button" data-view-epoch-media>View all epoch media ↗</button></div>' +
+      (stagedOrigin(campaign, unit.epoch) ? '' :
+        '<div class="epoch-finder-inspect-actions"><button type="button" data-copy-epoch-to-test>Copy ' +
+        escape(candidateLabel(campaign, unit.epoch)) + ' to Test Generations</button></div>') +
+      (hasRunOrigin(campaign, unit.epoch) ?
+        '<div class="epoch-finder-inspect-actions"><button type="button" data-view-epoch-media>View all epoch media ↗</button></div>' : '') +
       (src ? '<button type="button" data-inspect-zoom title="Open original image"><img src="' + escape(src) +
       '" alt="' + escape(candidateLabel(campaign, unit.epoch)) + ' enlarged preview"></button>' :
       '<p>Frame ' + (unit.framePruned ? 'pruned after scoring' : unit.error ? 'unavailable due to error' : 'not yet captured') + '</p>') +
@@ -1334,12 +1340,14 @@
     if (!campaignState || inspectedEpoch == null) return;
     if (event.target.closest('[data-load-cross-evidence]')) { loadCrossEvidence(); return; }
     if (event.target.closest('[data-view-epoch-media]')) {
+      if (!hasRunOrigin(campaignState, inspectedEpoch)) return;
       var mapped=(campaignState.candidateMap||{})[String(inspectedEpoch)];
       window.runAnalyticsViewEpoch(mapped ? mapped.jobId : campaignState.jobId,
         mapped ? mapped.epoch : inspectedEpoch,'finder');
       return;
     }
     if (event.target.closest('[data-copy-epoch-to-test]')) {
+      if (stagedOrigin(campaignState, inspectedEpoch)) return;
       var button = event.target.closest('[data-copy-epoch-to-test]');
       var origin = (campaignState.candidateMap || {})[String(inspectedEpoch)];
       var folder = currentFolder, campaignId = campaignState.id, epoch = origin ? origin.epoch : inspectedEpoch;

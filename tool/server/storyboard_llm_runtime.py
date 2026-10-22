@@ -1895,7 +1895,16 @@ def _completion_result(response, model_id, allow_truncated=False, assessment_evi
     if not assessment_evidence:
         content = content.strip()
     if not content and not assessment_evidence:
-        raise RuntimeError("Director runtime returned an empty response.")
+        reasoning = str(message.get("reasoning") or message.get("reasoning_content") or "")
+        finish_reason = str(choice.get("finish_reason") or "unknown")
+        usage = response.get("usage") if isinstance(response, dict) else None
+        completion_tokens = usage.get("completion_tokens") if isinstance(usage, dict) else None
+        raise RuntimeError(
+            "Director runtime returned an empty response "
+            "(finish_reason=" + finish_reason
+            + ", reasoning_chars=" + str(len(reasoning))
+            + ", completion_tokens=" + str(completion_tokens) + ")."
+        )
     finish_reason = str(choice.get("finish_reason") or "").strip().lower() if isinstance(choice, dict) else ""
     if finish_reason in {"length", "max_tokens"}:
         if not allow_truncated:

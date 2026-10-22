@@ -461,3 +461,114 @@ def test_campaign_run_choices_use_saved_sequence_and_training_details():
     assert "function runIdentity(run)" in js
     assert "function runDetails(run)" in js
     assert "escape(runDetails(run))" in js
+
+
+def test_campaign_accepts_selected_test_loras_without_a_training_run(tmp_path, monkeypatch):
+    """Staged candidates are valid campaign sources even without History or Queue."""
+    from types import SimpleNamespace
+    from tool.server import storyboard_llm_runtime
+
+    source = tmp_path / "test"
+    source.mkdir()
+    first = source / "manual.safetensors"
+    second = source / "copied.safetensors"
+    first.write_bytes(b"manual LoRA")
+    second.write_bytes(b"recorded LoRA")
+
+    model = SimpleNamespace(
+        PROFILE_ID="minimax_h3", STAGING_KEY="h3", settings=("megapixels",),
+        load_template=lambda: {},
+        normalize_settings=lambda *args: {},
+    )
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "sets/demo")
+    monkeypatch.setattr(epoch_finder, "_runs", lambda *_a, **_kw: pytest.fail("Staged campaign queried Training runs"))
+    monkeypatch.setattr(epoch_finder, "get_test_model", lambda identity: model)
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key", lambda stage: model)
+    monkeypatch.setattr(epoch_finder.test_bench, "_test_directory", lambda *_args: source)
+    monkeypatch.setattr(epoch_finder.test_bench, "_selected_lora_files_for_set",
+                        lambda folder, selected_model, selected_files=None: [
+                            path for path in (first, second)
+                            if selected_files is None or path.name in selected_files
+                        ])
+    monkeypatch.setattr(epoch_finder.test_bench, "_staged_lora_provenance",
+                        lambda path: ({
+                            "version": 1, "sourceFolder": "sets/demo", "stage": "h3",
+                            "sourceJobId": "job42", "sourceEpoch": 20,
+                            "sourceFileName": "epoch20.safetensors",
+                            "sourceRunName": "Training 42",
+                        } if path == second else {}))
+    monkeypatch.setattr(epoch_finder.test_bench, "_has_webcap_staged_provenance",
+                        lambda path, selected_model, provenance: path == second)
+    monkeypatch.setattr(epoch_finder, "normalize_dimensions",
+                        lambda prompt, raw: [{"role": "primary", "id": "G1", "label": "Color",
+                                              "options": ["blue", "red"]}])
+    monkeypatch.setattr(storyboard_llm_runtime, "list_vision_models", lambda: [{"id": "vision-1"}])
+    monkeypatch.setattr(epoch_finder, "_directory", lambda folder, cid: tmp_path / cid)
+    monkeypatch.setattr(epoch_finder, "_launch", lambda folder, cid: None)
+    criteria = {
+        "selectedFiles": ["copied.safetensors", "manual.safetensors"],
+        "modelId": "minimax_h3", "prompt": "a {blue|red} bikini", "visionModel": "vision-1",
+        "rounds": 2, "cases": 2, "keepPercent": 50,
+        "settings": {"megapixels": 0.3}, "referencePlan": [],
+        "referenceEvaluation": {"rvn": False, "dino": False},
+    }
+    campaign = epoch_finder.create_campaign(tmp_path, criteria)
+    assert campaign["version"] == 3
+    assert campaign["jobId"] == ""
+    assert campaign["runSelections"] == []
+    assert campaign["selectedFiles"] == ["manual.safetensors", "copied.safetensors"]
+    assert campaign["rounds"][0]["epochs"] == [1, 2]
+    assert campaign["candidateMap"]["1"]["fileName"] == "manual.safetensors"
+    assert campaign["candidateMap"]["1"]["jobId"] == ""
+    assert campaign["candidateMap"]["1"]["epoch"] is None
+    assert campaign["candidateMap"]["2"]["fileName"] == "copied.safetensors"
+    assert campaign["candidateMap"]["2"]["jobId"] == "job42"
+    assert campaign["candidateMap"]["2"]["epoch"] == 20
+
+    staged = epoch_finder._stage_epoch(tmp_path, campaign, 1)
+    assert (source / staged).read_bytes() == first.read_bytes()
+    epoch_finder._clean_staging(tmp_path, campaign)
+    staged = epoch_finder._stage_epoch(tmp_path, campaign, 2)
+    assert (source / staged).read_bytes() == second.read_bytes()
+    epoch_finder._clean_staging(tmp_path, campaign)
+
+    matching = dict(criteria, selectedFiles=campaign["selectedFiles"],
+                    parentCampaignId=campaign["id"])
+    followup = epoch_finder.create_campaign(tmp_path, matching)
+    assert followup["parentCampaignId"] == campaign["id"]
+    with pytest.raises(ValueError, match="original selected Test LoRAs"):
+        epoch_finder.create_campaign(tmp_path, dict(criteria,
+            selectedFiles=["manual.safetensors"], parentCampaignId=campaign["id"]))
+
+
+def test_campaign_list_still_offers_staged_loras_when_training_catalog_fails(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    source = tmp_path / "test"
+    source.mkdir()
+    (source / "manual.safetensors").write_bytes(b"data")
+    model = SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY="h3")
+    monkeypatch.setattr(epoch_finder, "_root", lambda folder: tmp_path / "absent-campaigns")
+    monkeypatch.setattr(epoch_finder, "get_test_model", lambda model_id: model)
+    monkeypatch.setattr(epoch_finder.test_bench, "_staged_loras_for_set",
+                        lambda folder, selected_model: [source / "manual.safetensors"])
+    monkeypatch.setattr(epoch_finder, "_runs",
+                        lambda folder: (_ for _ in ()).throw(RuntimeError("Training queue corrupt")))
+    result = epoch_finder.list_campaigns(tmp_path, "minimax_h3")
+    assert result["stagedFiles"] == ["manual.safetensors"]
+    assert result["runs"] == []
+    assert result["warnings"] == ["Training runs unavailable: Training queue corrupt"]
+
+
+def test_campaign_staged_source_wizard_contract():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    wizard = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    tests = (root / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    assert "window.getTestGenerationSelectedCandidateFiles" in tests
+    assert 'name="epoch-finder-source" value="staged"' in html
+    assert 'data-staged-file=' in wizard
+    assert "criteria.selectedFiles = selectedStagedFiles()" in wizard
+    assert "sourceMode === 'staged'" in wizard
+    assert "stagedOrigin(campaign, unit.epoch)" in wizard

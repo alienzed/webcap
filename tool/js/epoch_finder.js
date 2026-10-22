@@ -1448,6 +1448,7 @@
     var folder=currentFolder,id=campaign.id,key=folder+':'+id+':'+round+':'+epoch;
     if(screeningRatingPending.has(key)) return;
     screeningRatingPending.add(key);
+    els('manual-matrix').dataset.signature='';
     screeningMatrix(campaign);
     var completed=0,task=Promise.resolve();
     // Serialize existing per-render saves; simultaneous read/modify/write can lose ratings.

@@ -1033,10 +1033,13 @@
   function screeningSettingsSource() {
     [['aspect','aspect'],['sampling','sampling-mode'],['dimensions','dimensions']].forEach(function (pair) {
       var target=els('manual-'+pair[0]), source=document.getElementById('test-generations-'+pair[1]);
-      if (source && source.options.length && target.dataset.ready !== 'true') {
-        target.replaceChildren.apply(target,Array.from(source.options).map(function (option) {return option.cloneNode(true);}));
-        target.value=source.value;
-        target.dataset.ready='true';
+      var options=source ? Array.from(source.options) : [];
+      var signature=options.map(function(option){return option.value+'|'+option.text;}).join('~');
+      if (options.length && target.dataset.options!==signature) {
+        var previous=target.value;
+        target.replaceChildren.apply(target,options.map(function(option){return option.cloneNode(true);}));
+        target.value=options.some(function(option){return option.value===previous;})?previous:source.value;
+        target.dataset.options=signature;
       }
       if (source) target.closest('label').classList.toggle('hidden',source.closest('label').classList.contains('hidden'));
     });
@@ -1195,6 +1198,7 @@
       }),units.map(function(u){return [u.epoch,u.rating]})]);
     if (host.dataset.signature===signature) return;
     host.dataset.signature=signature;
+    var priorScroll=host.scrollLeft;
     host.replaceChildren();
     var scroller=document.createElement('div');
     scroller.className='epoch-screening-round';
@@ -1263,6 +1267,7 @@
       row.appendChild(cards);scroller.appendChild(row);
     });
     host.appendChild(scroller);
+    host.scrollLeft=priorScroll;
     els('manual-vl-round').disabled=campaign.status!=='complete';
     els('manual-launch').disabled=campaign.status!=='complete'&&campaign.status!=='paused';
     els('manual-launch').textContent='Run Round '+(campaign.rounds.length+1)+' · '+(campaign.kept||[]).length+' epochs';
@@ -1323,6 +1328,8 @@
       screeningRender(campaign);
       return;
     }
+    els('campaign-type').value='auto';
+    screeningModeUi();
     els('manual-review').classList.add('hidden');
     els('manual-history').classList.add('hidden');
     els('live-layout').classList.remove('hidden');

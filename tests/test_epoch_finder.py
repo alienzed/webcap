@@ -1050,11 +1050,13 @@ def test_review_header_uses_frozen_run_without_restoring_form():
     js = (Path(__file__).resolve().parents[1] / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
     remember = js[js.index("function screeningRememberSelection("):js.index("function screeningSaveSelection(")]
     assert "screeningApplySettings(campaign);" not in remember
+    run_info = js[js.index("function screeningRunInfo("):js.index("function screeningUpdateAverage(")]
     matrix = js[js.index("function screeningMatrix("):js.index("function screeningRender(")]
-    assert "plan.casePrompts[index]" in matrix
-    assert "plan.settings" in matrix
-    assert "plan.seeds[index]" in matrix
+    assert "plan.casePrompts[index]" in run_info
+    assert "plan.settings" in run_info
+    assert "plan.seeds[index]" in run_info
     assert "epoch-screening-case-labels" in matrix
+    assert "screeningRunInfo(campaign,plan);" in matrix
     assert "stop_queuing" in (Path(__file__).resolve().parents[1] /
                               "tool/server/epoch_finder.py").read_text(encoding="utf-8")
 

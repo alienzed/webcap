@@ -911,10 +911,16 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-screening-row-head { display: flex; align-items: center; flex-wrap: nowrap; gap: 10px; min-width: 0; padding: 6px 2px; font-size: 16px; }
 .epoch-screening-row-head strong { font-size: 18px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .epoch-screening-rating-summary { white-space: nowrap; color: var(--text-muted,#b7c4d1); font-size: 14px; }
-.epoch-screening-row-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; margin-left: auto; white-space: nowrap; }
-.epoch-finder-manual-matrix .epoch-screening-row-actions label { display: inline-flex; align-items: center; gap: 5px; margin: 0; white-space: nowrap; font-size: 14px; cursor: pointer; }
-.epoch-finder-manual-matrix .epoch-screening-row-actions label > input[type="checkbox"] { display: inline-block; width: 16px; height: 16px; padding: 0; margin: 0; flex: 0 0 16px; }
-.epoch-screening-row-head .epoch-screening-ask-btn { width: auto; margin: 0; padding: 5px 9px; min-height: 30px; font-size: 13px; font-weight: 650; white-space: nowrap; }
+.epoch-screening-row-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; }
+.epoch-screening-keep-toggle { flex: 0 0 30px; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--border-color,var(--border)); border-radius: 6px; background: transparent; color: var(--text-muted,#b7c4d1); cursor: pointer; font-size: 19px; }
+.epoch-screening-keep-toggle.is-kept { color: var(--accent-color,#e5ad4f); border-color: var(--accent-color,#e5ad4f); }
+.epoch-screening-keep-toggle:hover,.epoch-screening-keep-toggle:focus-visible { background: var(--hover); }
+.epoch-screening-bulk-stars { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 1px; }
+.epoch-screening-bulk-star { width: 25px; min-width: 25px; min-height: 30px; padding: 0; border: 0; background: transparent; color: var(--accent-color,#e5ad4f); font-size: 22px; line-height: 1; cursor: pointer; }
+.epoch-screening-bulk-star:hover,.epoch-screening-bulk-star:focus-visible { background: var(--hover); border-radius: 4px; }
+.epoch-screening-bulk-star:disabled { opacity: .4; cursor: default; }
+.epoch-screening-bulk-rating-status { color: var(--text-muted,#b7c4d1); font-size: 13px; white-space: nowrap; }
+.epoch-screening-row-head .epoch-screening-ask-btn,.epoch-screening-row-head .epoch-screening-copy-btn { width: auto; margin: 0; padding: 5px 9px; min-height: 30px; font-size: 13px; font-weight: 650; white-space: nowrap; }
 .epoch-screening-cases { display: grid; grid-template-columns: repeat(var(--screening-columns), minmax(0, 1fr)); gap: 8px; }
 .epoch-screening-case-labels { margin-bottom:8px; padding:6px 2px 8px; border-bottom:1px solid var(--border-color,var(--border)); }
 .epoch-screening-case-labels > strong { font-size:16px; min-width:0; padding:4px 6px; overflow-wrap:anywhere; }
@@ -945,9 +951,9 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #epoch-finder-screen .epoch-finder-manual-review select {
   font-size: 16px;
 }
-#epoch-finder-screen .epoch-screening-row-actions label,
-#epoch-finder-screen .epoch-screening-row-head .epoch-screening-ask-btn {
-  font-size: 16px;
+#epoch-finder-screen .epoch-screening-row-head .epoch-screening-ask-btn,
+#epoch-finder-screen .epoch-screening-row-head .epoch-screening-copy-btn {
+  font-size: 14px;
 }
 
 /* Manual rounds use the existing sidebar, with contextual Stop/Cancel controls. */

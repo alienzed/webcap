@@ -293,12 +293,7 @@
     }
     var link = row.querySelector('[data-inference-queue-open]');
     if (link) {
-      link.dataset.client = String(job.client || 'generate');
-      link.dataset.storyId = String(job.storyId || '');
-      link.dataset.sceneId = String(job.sceneId || '');
-      link.dataset.folder = String(job.folder || '');
-      link.dataset.source = String(job.source || '');
-      link.dataset.sessionId = String(job.sessionId || '');
+      link.dataset.jobId = String(job.jobId || '');
       var tooltip = ['Open ' + jobClientLabel(job)];
       if (job.client === 'test') {
         if (job.candidateKind === 'base') tooltip.push('Base model');
@@ -373,18 +368,20 @@
         actions.appendChild(stop);
       }
     }
-    var focus = row.querySelector('[data-inference-activity-focus]');
-    if (active && !focus) {
-      focus = document.createElement('button');
-      focus.type = 'button';
-      focus.className = 'review-captions-btn';
-      focus.dataset.inferenceActivityFocus = '1';
-      focus.textContent = 'Activity ↗';
-      actions.appendChild(focus);
+    var destination = row.querySelector('[data-inference-job-destination]');
+    if (active && !destination) {
+      destination = document.createElement('button');
+      destination.type = 'button';
+      destination.className = 'review-captions-btn inference-queue-icon-action';
+      destination.dataset.inferenceJobDestination = '1';
+      destination.textContent = '↗';
+      actions.appendChild(destination);
     }
-    if (focus) {
-      focus.classList.toggle('hidden', !active);
-      focus.dataset.jobId = String(job.jobId || '');
+    if (destination) {
+      destination.classList.toggle('hidden', !active);
+      destination.dataset.jobId = String(job.jobId || '');
+      destination.title = 'Open ' + jobClientLabel(job);
+      destination.setAttribute('aria-label', 'Open ' + jobClientLabel(job) + ' job');
     }
     // Membership changes can change the boundary buttons without changing
     // this row's status. Keep its actual buttons (and pointer focus) intact.
@@ -599,21 +596,16 @@
     refresh().then(schedule);
   }
 
-  function openJobScreen(link) {
-    var client = String(link && link.dataset.client || 'generate');
-    setOpen(false);
-    if (client === 'storyboard') {
-      if (typeof window.openStoryboardActivity !== 'function') throw new Error('Storyboard is not available.');
-      window.openStoryboardActivity();
-      return;
-    }
-    if (client === 'test') {
-      if (typeof window.openTestBenchActivity !== 'function') throw new Error('Test Generations is not available.');
-      window.openTestBenchActivity();
-      return;
-    }
-    if (typeof window.openGenerateActivity !== 'function') throw new Error('Generate is not available.');
-    window.openGenerateActivity();
+  function openJobScreen(jobId) {
+    var job = state.queue.jobs.find(function (entry) {
+      return String(entry.jobId || '') === String(jobId || '');
+    });
+    if (!job) throw new Error('Inference job is no longer in the queue: ' + String(jobId || ''));
+    // Route from this authoritative queue snapshot, not a potentially stale Activity poll.
+    window.openActivityItemDestination(Object.assign({}, job, {
+      id: String(job.jobId || ''),
+      kind: String(job.client || 'generate')
+    }));
   }
 
   function action(operation, jobId, position) {
@@ -667,15 +659,15 @@
       });
     };
     list.onclick = function (event) {
-      var focus = event.target.closest('[data-inference-activity-focus]');
-      if (focus) { window.focusActivityByJob(focus.dataset.jobId); return; }
+      var destination = event.target.closest('[data-inference-job-destination]');
+      if (destination) { openJobScreen(destination.dataset.jobId); return; }
       var actionButton = event.target.closest('[data-inference-queue-action]');
       if (actionButton) {
         action(actionButton.dataset.inferenceQueueAction, actionButton.dataset.jobId);
         return;
       }
       var link = event.target.closest('[data-inference-queue-open]');
-      if (link) openJobScreen(link);
+      if (link) openJobScreen(link.dataset.jobId);
     };
     document.addEventListener('pointerdown', function (event) {
       if (window.isOperationsDrawerMounted || !state.open || drawer.contains(event.target)) return;

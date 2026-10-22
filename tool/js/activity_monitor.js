@@ -1363,6 +1363,8 @@
     if (window.isOperationsDrawerMounted) window.selectOperationsSection('activity');
     else setOpen(true);
   };
+  // One destination router for Activity cards and inference queue links.
+  window.openActivityItemDestination = openItem;
   window.focusActivityByJob = function (jobId) {
     var matching = currentActivityItems().find(function (item) { return String(item.id) === String(jobId); });
     if (matching) state.selectedJobKey = activityJobKey(matching);

@@ -1907,7 +1907,7 @@
       aspectRatio: String(el('test-generations-aspect') && el('test-generations-aspect').value || '').trim(),
       megapixels: Number(el('test-generations-megapixels') && el('test-generations-megapixels').value || 0),
       duration: Number(el('test-generations-duration') && el('test-generations-duration').value || 0),
-      samplingMode: String(el('test-generations-sampling-mode').value || 'current'),
+      samplingMode: String(el('test-generations-sampling-mode').value || 'turbo'),
       dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || ''),
       defaultStrength: defaultCandidateStrength,
       sweepWeights: sweepWeights,
@@ -3377,8 +3377,13 @@
     var megapixels = testResultMegapixels(status), strength = testResultStrength(status, result);
     if (megapixels != null) metrics.push(megapixels + ' MP');
     if (String(status && status.modelId || '') === 'minimax_h3') {
-      var samplingMode = String(result && result.samplingMode || status && status.settings && status.settings.samplingMode || 'current');
-      metrics.push(samplingMode === 'no_turbo' ? '20 steps · No Turbo' : (samplingMode === 'single' ? '8 steps · Turbo 1.0' : '8 steps · Turbo 1.0 (Current)'));
+      var submitted = result && result.submittedSampling;
+      var samplingMode = String(result && result.samplingMode || status && status.settings && status.settings.samplingMode || 'turbo');
+      metrics.push(submitted && submitted.mode
+        ? (submitted.mode === 'quality' ? 'Quality · ' + submitted.steps + ' steps · no Turbo'
+          : 'Turbo · ' + submitted.steps + ' steps · Turbo ' + submitted.turboStrength)
+        : (samplingMode === 'no_turbo' || samplingMode === 'quality'
+          ? 'Quality · 20 steps · no Turbo' : 'Turbo · 8 steps · Turbo 1.0'));
     }
     if (strength != null) metrics.push('Strength ' + strength);
     var elapsed = result && result.elapsedMs != null ? formatCandidateElapsed(result.elapsedMs) : '';
@@ -4249,6 +4254,13 @@
   }
 
 
+  function normalizeTestSamplingMode(value) {
+    var mode = String(value || 'turbo');
+    if (mode === 'current' || mode === 'single') return 'turbo';
+    if (mode === 'no_turbo') return 'quality';
+    return mode;
+  }
+
   function sessionMetaText(status) {
     if (!status || !status.session) return '';
     var parts = [];
@@ -4262,8 +4274,9 @@
     if (settings.megapixels !== undefined && settings.megapixels !== null && settings.megapixels !== '') parts.push(String(settings.megapixels) + ' MP');
     if (settings.duration !== undefined && settings.duration !== null && settings.duration !== '') parts.push(String(settings.duration) + 's');
     if (modelId === 'minimax_h3') {
-      var mode = String(settings.samplingMode || 'current');
-      parts.push(mode === 'no_turbo' ? '20 steps · No Turbo' : (mode === 'single' ? '8 steps · Turbo 1.0 (Single)' : '8 steps · Turbo 1.0 (Current)'));
+      var mode = String(settings.samplingMode || 'turbo');
+      parts.push(mode === 'quality' || mode === 'no_turbo' ? 'Quality · 20 steps · no Turbo'
+        : 'Turbo · 8 steps · Turbo 1.0');
     }
     if (settings.dimensions) parts.push(String(settings.dimensions).trim());
     if (settings.seed !== undefined && settings.seed !== null && settings.seed !== '') parts.push('Seed ' + String(settings.seed));
@@ -4524,7 +4537,7 @@
     }
     if (megapixels) megapixels.value = String(savedSettings.megapixels || defaults.megapixels || '');
     if (duration) duration.value = String(savedSettings.duration || defaults.duration || '');
-    samplingMode.value = String(savedSettings.samplingMode || defaults.samplingMode || 'current');
+    samplingMode.value = normalizeTestSamplingMode(savedSettings.samplingMode || defaults.samplingMode);
     if (dimensions) {
       var dimensionOptions = payload.settingOptions && Array.isArray(payload.settingOptions.dimensions)
         ? payload.settingOptions.dimensions.slice()

@@ -178,8 +178,16 @@ def list_campaigns(folder_path, model_id=""):
     campaigns.sort(key=lambda row: row.get("startedAt") or 0, reverse=True)
     model = get_test_model(model_id) if model_id else None
     staged_files = [path.name for path in test_bench._staged_loras_for_set(folder_path, model)] if model else []
-    return {"runs": _runs(folder_path), "stagedFiles": staged_files,
-            "campaigns": campaigns, "timings": _timing_profiles(folder_path)}
+    warnings = []
+    try:
+        runs = _runs(folder_path)
+    except (OSError, RuntimeError, ValueError) as exc:
+        # A broken Training index does not stop campaigns on staged Test files.
+        warnings.append("Training runs unavailable: " + str(exc))
+        runs = []
+    return {"runs": runs, "stagedFiles": staged_files,
+            "campaigns": campaigns, "timings": _timing_profiles(folder_path),
+            "warnings": warnings}
 
 
 
@@ -279,7 +287,7 @@ def create_campaign(folder_path, criteria):
             entry = {"sourceType": "staged", "fileName": source.name, "jobId": "", "epoch": None}
             provenance = test_bench._staged_lora_provenance(source)
             if test_bench._has_webcap_staged_provenance(source, model, provenance):
-                if str(provenance.get("sourceFolder") or "").replace("\\\\", "/").strip("/") == folder:
+                if str(provenance.get("sourceFolder") or "").replace(chr(92), "/").strip("/") == folder:
                     entry.update({
                         "jobId": str(provenance.get("sourceJobId") or ""),
                         "epoch": int(provenance["sourceEpoch"]),
@@ -290,8 +298,7 @@ def create_campaign(folder_path, criteria):
                         "sourceRevision": int(provenance.get("sourceRevision") or 1),
                     })
             candidate_map[str(number)] = entry
-        selected_epochs = list(range(1, len(candidate_map)))
-        selected_epochs.append(len(candidate_map))
+        selected_epochs = list(range(1, len(candidate_map) + 1))
         job_id = ""
         normalized = []
         run_name = "Selected Test LoRAs"

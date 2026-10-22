@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 // Minimal DOM fixture: exercise the actual classic script and its async requests.
 function fixture(hash = '#/media') {
-  const nodes = {}, pending = [], errors = [], closed = [];
+  const nodes = {}, pending = [], errors = [], closed = [], menus = [];
   let document;
   class Element {
     constructor(tag = 'div') {
@@ -91,11 +91,12 @@ function fixture(hash = '#/media') {
     querySelectorAll: selector => selector.includes('[data-explorer-mode]') ? modeButtons :
       selector.includes('[data-media-role]') ? buttons.filter(b => 'mediaRole' in b.dataset) :
       selector.includes('[data-media-source]') ? buttons.filter(b => 'mediaSource' in b.dataset) : buttons };
-  const window = { location: {hash}, reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
+  const window = { location: {hash}, prompt: () => 'child', confirm: () => true, reportConsoleError: (source, error) => errors.push(error), syncApplicationShellContext() {}, syncShellLocationRoute() {} };
   for (const owner of ['Generate', 'TestBench', 'Storyboard', 'Storage']) window['close' + owner + 'Activity'] = () => closed.push(owner);
   vm.runInNewContext(fs.readFileSync('tool/js/media_explorer.js', 'utf8'), {
     document, window, console, URLSearchParams, AbortController, Set, Map, setTimeout, clearTimeout,
     getComputedStyle: () => ({gridTemplateColumns:'240px 240px'}),
+    showContextMenu: (x, y, actions) => menus.push(actions),
     fetch: (url, options) => new Promise((resolve, reject) => pending.push({url, options, resolve, reject}))
   });
   const settle = async (request, items, ok = true, extra = {}) => {
@@ -103,7 +104,7 @@ function fixture(hash = '#/media') {
     await new Promise(resolve => setImmediate(resolve));
   };
   const key = (target, key, extra = {}) => document.listeners.keydown({target, key, preventDefault() {}, ...extra});
-  return {nodes, buttons, modeButtons, pending, errors, closed, window, settle, key};
+  return {nodes, buttons, modeButtons, pending, errors, closed, menus, window, settle, key};
 }
 const media = (id, kind = 'image') => ({id, fileName:id + '.png', mediaKind:kind, mediaUrl:'/media/' + id, role:'generated', source:'generate', rating:null});
 
@@ -469,4 +470,55 @@ test('external folder navigation stays with the file pane and recent count is no
   await f.settle(f.pending[0], [media('recent')], true, {total:150, complete:false});
   assert.doesNotMatch(f.nodes['media-explorer-count'].textContent, /recent/i, 'scope label carries recent status instead of repeating it in count');
   assert.equal(f.nodes['media-explorer-scope'].classList.contains('hidden'), false);
+});
+
+
+test('External media context menu exposes safe file actions without the inspector', async () => {
+  const f = fixture(); f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/tmp/photos';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1), [
+    {...media('image'), source:'external', relativePath:'image.png', role:'source'}
+  ], true, {folders:['child']});
+  const card = f.nodes['media-explorer-grid'].children[0];
+  assert.equal(card.querySelector('.media-explorer-item-menu').tagName, 'BUTTON');
+  card.querySelector('.media-explorer-item-menu').click({preventDefault(){}, stopPropagation(){}});
+  const actions = f.menus.at(-1);
+  assert.deepEqual(Array.from(actions.filter(action => action.label).map(action => action.label)),
+    ['View full size', 'Open in Explorer', 'Copy to Set', 'Move to Folder…', 'Move to Trash']);
+  assert.equal(f.nodes['media-explorer-inspector'].classList.contains('hidden'), true);
+  actions.find(action => action.label === 'Open in Explorer').run();
+  const reveal = f.pending.at(-1);
+  assert.equal(reveal.url, '/fs/media_explorer/external/reveal');
+  assert.equal(JSON.parse(reveal.options.body).file, 'image.png');
+  await f.settle(reveal, []);
+  actions.find(action => action.label === 'Move to Folder…').run();
+  const move = f.pending.at(-1);
+  assert.equal(move.url, '/fs/media_explorer/external/move');
+  assert.equal(JSON.parse(move.options.body).destination, 'child');
+  await f.settle(move, []);
+  assert.ok(f.pending.at(-1).url.includes('/external?'), 'mutation requests authoritative refresh');
+});
+
+
+test('External Move to Trash only targets the selected clicked item', async () => {
+  const f = fixture(); f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/tmp/photos';
+  f.nodes['media-explorer-open-path'].click();
+  await f.settle(f.pending.at(-1), [
+    {...media('a'), source:'external', relativePath:'a.png', role:'source'},
+    {...media('b'), source:'external', relativePath:'b.png', role:'source'}
+  ]);
+  const card = f.nodes['media-explorer-grid'].children[1];
+  card.querySelector('.media-explorer-item-menu').click({preventDefault(){}, stopPropagation(){}});
+  f.menus.at(-1).find(action => action.label === 'Move to Trash').run();
+  const req = f.pending.at(-1);
+  assert.equal(req.url, '/fs/media_explorer/external/trash');
+  assert.deepEqual(JSON.parse(req.options.body).files, ['b.png']);
+  await f.settle(req, []);
+  assert.equal(f.errors.length, 0);
 });

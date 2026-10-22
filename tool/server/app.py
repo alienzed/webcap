@@ -868,7 +868,7 @@ def vision_question_route():
                 "operation": "vision_question",
                 "messages": messages,
             },
-            context={},
+            context={"vlUserQuestion": True},
             label="Ask VL",
         )
         return jsonify({"ok": True, "job": job}), 202
@@ -2540,7 +2540,7 @@ def test_generations_vision_question_route():
         job = enqueue_llm(
             "caption", model,
             {"operation": "vision_question", "messages": messages},
-            context={},
+            context={"vlUserQuestion": True},
             label="Test Generations Ask VL",
         )
         return jsonify({"ok": True, "job": job}), 202

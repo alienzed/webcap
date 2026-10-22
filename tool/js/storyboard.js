@@ -3492,10 +3492,10 @@
 
     var baseLoras = storyState.generationCapabilities.baseLoras || [];
     var statusTitle = storyState.generationCapabilities.available
-      ? (baseLoras.length ? 'Required Turbo: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
+      ? (baseLoras.length ? 'Turbo available: ' + baseLoras.join(', ') : 'ComfyUI LoRAs loaded.')
       : (storyState.generationCapabilities.error || 'ComfyUI LoRAs unavailable.');
     var statusText = storyState.generationCapabilities.available
-      ? (baseLoras.length ? 'Turbo active' : 'LoRAs ready')
+      ? 'LoRA models available'
       : 'LoRAs unavailable';
     Array.prototype.forEach.call(document.querySelectorAll('.storyboard-lora-status'), function (status) {
       status.title = statusTitle;

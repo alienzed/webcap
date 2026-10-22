@@ -1066,6 +1066,7 @@ def test_stop_queuing_keeps_active_frame_cancels_queued_case_and_skips_later_epo
     folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
     campaign["rounds"] = [epoch_finder._screening_plan(
         "a {red|blue} glove", 0, {"megapixels": 0.3}, 1, [1, 2])]
+    campaign["modelId"] = "minimax_h3"
     campaign["units"] = []
     epoch_finder._save(folder, campaign, preserve_manual=False)
     frames = epoch_finder._directory(folder, campaign["id"]) / "frames"

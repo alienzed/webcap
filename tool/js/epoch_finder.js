@@ -37,6 +37,7 @@
   var screeningSettingsRequest = null;
   var screeningSelectionQueue = Promise.resolve();
   var screeningSelectionRevision = 0;
+  var screeningExpandedExcluded = new Set();
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -1195,7 +1196,7 @@
     }).then(function (response) {
       if (next && activeCampaign!==id) return;
       activeCampaign=response.campaign.id;
-      manualSelectedRound=response.campaign.rounds.length;
+      if (!next) manualSelectedRound=1;
       manualMatrixSignature='';
       return refresh();
     }).catch(error).finally(function () {els('manual-launch').disabled=false;});
@@ -1221,21 +1222,37 @@
         ' · variation '+(u.case+1)+': '+u.visionError));
     });
   }
+  function screeningRoundState(campaign, plan) {
+    if (['complete','stopped','cancelled'].includes(plan.status)) return plan.status;
+    if (plan.number<campaign.round) return 'complete';
+    if (plan.number>campaign.round) return 'queued';
+    if (campaign.status==='complete') return 'complete';
+    return campaign.status;
+  }
   function screeningRoundList(campaign) {
     els('manual-history').classList.remove('hidden');
     var host=els('manual-round-list');
-    var signature=campaign.id+'|'+manualSelectedRound+'|'+campaign.rounds.map(function (plan) {
-      return plan.epochs.length+':'+campaign.units.filter(function(u){return u.round===plan.number&&u.frame;}).length;
-    }).join('|');
+    var signature=campaign.id+'|'+manualSelectedRound+'|'+campaign.status+'|'+campaign.round+'|'+
+      campaign.rounds.map(function(plan){
+        return plan.number+':'+screeningRoundState(campaign,plan)+':'+
+          campaign.units.filter(function(u){return u.round===plan.number&&(u.frame||u.error);}).length;
+      }).join('|');
     if (host.dataset.signature===signature) return;
     host.dataset.signature=signature;
-    host.innerHTML=campaign.rounds.map(function (plan) {
-      var completed=campaign.units.filter(function (u) {return u.round===plan.number&&!!u.frame;}).length;
+    host.innerHTML=campaign.rounds.map(function(plan){
+      var state=screeningRoundState(campaign,plan);
+      var completed=campaign.units.filter(function(u){return u.round===plan.number&&!!u.frame;}).length;
       var total=plan.epochs.length*plan.seeds.length;
-      return '<button type="button" class="epoch-finder-campaign'+
-        (manualSelectedRound===plan.number?' active':'')+'" data-screening-round="'+plan.number+
-        '"><strong>Round '+plan.number+'</strong><small>'+plan.epochs.length+' epochs · '+
-        completed+'/'+total+' renders</small></button>';
+      var action=state==='queued'?'cancel':state==='running'?'stop':'';
+      return '<div class="epoch-screening-round-item">'+
+        '<button type="button" class="epoch-finder-campaign'+
+        (manualSelectedRound===plan.number?' active':'')+'" data-screening-round="'+plan.number+'">'+
+        '<strong>Round '+plan.number+'</strong><small>'+plan.epochs.length+' epochs · '+
+        completed+'/'+total+' renders · '+escape(state)+'</small></button>'+
+        (action?'<button type="button" class="review-captions-btn" data-screening-round-action="'+action+
+          '" data-screening-round-number="'+plan.number+'" title="'+
+          (action==='stop'?'Stop after the current epoch':'Cancel before rendering')+'">'+
+          (action==='stop'?'Stop':'Cancel')+'</button>':'')+'</div>';
     }).join('');
   }
   function screeningMatrix(campaign) {
@@ -1313,7 +1330,8 @@
     }
     var desired=[];
     rows.forEach(function (epoch) {
-      var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),rated[epoch],
+      var collapsed=!kept.has(epoch)&&!screeningExpandedExcluded.has(campaign.id+':'+plan.number+':'+epoch);
+      var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,rated[epoch],
         units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;}).map(function(u){
           return [u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
         })]);
@@ -1325,10 +1343,10 @@
         return;
       }
       var row=previous||document.createElement('section');
-      row.className='epoch-screening-row';
+      row.className='epoch-screening-row'+(collapsed?' is-collapsed':'');
       row.dataset.screeningEpoch=String(epoch);
       row.dataset.signature=rowSignature;
-      var headSignature=JSON.stringify([campaign.status,kept.has(epoch),rated[epoch]]);
+      var headSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,rated[epoch]]);
       var head=row.querySelector('.epoch-screening-row-head');
       if (!head || head.dataset.signature!==headSignature) {
       if (head) head.remove();
@@ -1358,6 +1376,7 @@
           runEpochSelections[origin.jobId]=new Set();
         if (checkbox.checked) runEpochSelections[origin.jobId].add(origin.epoch);
         else runEpochSelections[origin.jobId].delete(origin.epoch);
+        screeningExpandedExcluded.delete(campaign.id+':'+plan.number+':'+epoch);
         drawEpochPicker();
         // Both the matrix checkbox and form picker save the same selected epochs.
         host.dataset.signature='';
@@ -1366,11 +1385,43 @@
       });
       keepLabel.title='Keep for next round';
       keepLabel.append(checkbox,document.createTextNode('Keep'));actions.appendChild(keepLabel);
+      if (!kept.has(epoch)) {
+        var toggle=document.createElement('button');
+        toggle.type='button';toggle.className='review-captions-btn epoch-screening-expand-btn';
+        toggle.textContent=collapsed?'Show':'Hide';
+        toggle.title=collapsed?'Show excluded epoch previews':'Collapse excluded epoch previews';
+        toggle.addEventListener('click',function(){
+          var key=campaign.id+':'+plan.number+':'+epoch;
+          if (screeningExpandedExcluded.has(key)) screeningExpandedExcluded.delete(key);
+          else screeningExpandedExcluded.add(key);
+          host.dataset.signature='';
+          screeningMatrix(campaignState);
+        });
+        actions.appendChild(toggle);
+      }
       var vl=document.createElement('button');vl.type='button';vl.className='review-captions-btn epoch-screening-ask-btn';vl.textContent='Ask VL';
       vl.onclick=function(){screeningAskVision(campaign,{epoch:epoch});};
       actions.appendChild(vl);
       head.appendChild(actions);
       row.insertBefore(head,row.firstChild);
+      }
+      var prompts=row.querySelector('.epoch-screening-prompts');
+      if (!prompts) {
+        prompts=document.createElement('details');
+        prompts.className='epoch-screening-prompts';
+        var promptSummary=document.createElement('summary');
+        promptSummary.textContent='Submitted prompts';
+        prompts.appendChild(promptSummary);
+        plan.casePrompts.forEach(function(prompt,index){
+          var section=document.createElement('section');
+          var name=document.createElement('strong');
+          name.textContent=plan.columnLabels[index]||'Variation '+(index+1);
+          var content=document.createElement('pre');
+          content.textContent=prompt;
+          section.append(name,content);
+          prompts.appendChild(section);
+        });
+        row.appendChild(prompts);
       }
       var cards=row.querySelector('.epoch-screening-cases');
       if (!cards) {
@@ -1431,8 +1482,7 @@
     els('manual-vl-round').disabled=!units.some(function(u) {
       return u.round===plan.number&&u.frame&&!u.error;
     });
-    els('manual-launch').disabled=campaign.status!=='complete';
-    els('manual-launch').textContent='Run Round '+(campaign.rounds.length+1)+' · '+(campaign.kept||[]).length+' epochs';
+    els('manual-launch').textContent='Queue Round '+(campaign.rounds.length+1)+' · '+selectedCampaignCount()+' epochs';
   }
   function screeningRender(campaign) {
     els('campaign-type').value='manual';
@@ -1655,7 +1705,7 @@
     if (changed) followUpSource = '';
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
     if (mode === 'finder') refresh();
@@ -1694,8 +1744,18 @@
   els('manual-sort').onchange=function(){if (isManualCampaign()) screeningMatrix(campaignState);};
   els('manual-vl-round').onclick=function(){if (isManualCampaign()) screeningAskVision(campaignState,{});};
   els('manual-round-list').onclick=function(event){
+    if(!isManualCampaign())return;
+    var action=event.target.closest('[data-screening-round-action]');
+    if(action){
+      var number=Number(action.dataset.screeningRoundNumber),kind=action.dataset.screeningRoundAction;
+      action.disabled=true;
+      api('screening_round_action',{campaignId:activeCampaign,round:number,action:kind})
+        .then(function(){return refreshStatus();}).catch(error)
+        .finally(function(){action.disabled=false;});
+      return;
+    }
     var button=event.target.closest('[data-screening-round]');
-    if (!button||!isManualCampaign())return;
+    if(!button)return;
     manualSelectedRound=Number(button.dataset.screeningRound);
     els('manual-matrix').dataset.signature='';
     screeningMatrix(campaignState);

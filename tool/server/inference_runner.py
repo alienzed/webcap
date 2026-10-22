@@ -549,13 +549,30 @@ def _advance_queue():
                 release_gpu = _cancel_failed_provider(current)
                 if status == "stopping":
                     if str(current.get("requestedAction") or "") == "backlog":
-                        if release_gpu:
+                        # Provider cancellation must be confirmed before this job
+                        # becomes runnable again. The generic failed-provider
+                        # cleanup may release an unverifiable runtime, but that
+                        # is not proof that cancellation succeeded.
+                        latest = execution_get_job(job_id)
+                        details = latest.get("details") or {}
+                        provider_id = str(details.get("providerJobId") or "")
+                        provider_status = str(details.get("providerStatus") or "").lower()
+                        confirmed_done = not provider_id or provider_status in {
+                            "completed", "failed", "cancelled", "missing"
+                        }
+                        if confirmed_done:
                             _backlog_deferred_ids.add(job_id)
                             execution_backlog_active(job_id)
                             _logger.exception("Inference backlogged after an execution error.")
                         else:
-                            execution_pause_lane(EXECUTION_LANE, "Inference cancellation not confirmed: " + str(exc))
-                            _logger.exception("Cannot backlog inference while ComfyUI execution remains active.")
+                            execution_requeue_active_and_pause(
+                                job_id,
+                                "Inference paused after an execution error: "
+                                "Backlog cancellation could not be confirmed. " + str(exc),
+                            )
+                            _logger.exception(
+                                "Could not confirm ComfyUI cancellation; preserved inference request in paused Queue."
+                            )
                     else:
                         _cleanup_generate_job_references(job_id)
                         execution_finish_job_transient(

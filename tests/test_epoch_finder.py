@@ -598,3 +598,67 @@ def test_file_campaign_gallery_preserves_filename_without_inventing_run_identity
     assert item["jobId"] == ""
     assert item["epoch"] is None
     assert gallery["resultEpochs"] == []
+
+
+def test_manual_screening_expands_selected_group_and_freezes_each_case(monkeypatch):
+    seeds = iter([101, 202, 303])
+    monkeypatch.setattr(epoch_finder.secrets, "randbelow", lambda _limit: next(seeds))
+    plan = epoch_finder._screening_plan(
+        "a {red|blue|brown} glove on {grass|table}", 0,
+        {"megapixels": 0.3}, 1, [1, 2, 3])
+    assert plan["epochs"] == [1, 2, 3]
+    assert plan["columnLabels"] == ["red", "blue", "brown"]
+    assert plan["seeds"] == [101, 202, 303]
+    assert len(plan["casePrompts"]) == 3
+    for index, color in enumerate(("red", "blue", "brown")):
+        assert plan["casePrompts"][index].startswith("a " + color + " glove on ")
+        assert plan["caseSelections"][index][0]["option"] == color
+        assert plan["caseSelections"][index][1]["option"] in {"grass", "table"}
+    assert plan["settings"] == {"megapixels": 0.3}
+
+
+def test_screening_manual_scope_can_reintroduce_and_add_epochs(monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_runs", lambda _folder: [{
+        "jobId": "run-a", "epochs": [1, 2, 3], "stage": "h3", "modelId": "minimax_h3"}])
+    monkeypatch.setattr(epoch_finder, "_save", lambda *_: None)
+    campaign = {"status": "complete", "mode": "manual", "modelId": "minimax_h3", "stage": "h3",
+                "candidateMap": {"1": {"jobId": "run-a", "epoch": 1}},
+                "kept": [1], "runSelections": []}
+    result = epoch_finder._screening_selection(None, campaign, [
+        {"jobId": "run-a", "epochs": [2, 3]}])
+    assert result["kept"] == [2, 3]
+    assert result["candidateMap"]["1"] == {"jobId": "run-a", "epoch": 1}
+    assert result["candidateMap"]["2"]["epoch"] == 2
+    assert result["candidateMap"]["3"]["epoch"] == 3
+    result = epoch_finder._screening_selection(None, campaign, [
+        {"jobId": "run-a", "epochs": [1, 3]}])
+    assert result["kept"] == [1, 3]
+
+
+def test_screening_next_round_is_explicit_and_preserves_previous_round(monkeypatch):
+    class Model:
+        settings = ("megapixels", "duration")
+        def load_template(self):
+            return {}
+        def normalize_settings(self, template, seed_fn, settings):
+            return settings
+    monkeypatch.setattr(epoch_finder, "get_test_model", lambda _id: Model())
+    monkeypatch.setattr(epoch_finder, "_save", lambda *_: None)
+    launched = []
+    monkeypatch.setattr(epoch_finder, "_launch", lambda _folder, ident: launched.append(ident))
+    campaign = {
+        "id": "abcdef123456", "modelId": "minimax_h3", "status": "complete",
+        "kept": [2], "round": 1,
+        "rounds": [epoch_finder._screening_plan("a {red|blue} glove", 0,
+                                               {"megapixels": 0.3}, 1, [1, 2])],
+    }
+    original = dict(campaign["rounds"][0])
+    epoch_finder._screening_next_round(None, campaign, {
+        "prompt": "a {red|blue} glove on {grass|table}",
+        "groupIndex": 0, "settings": {"megapixels": 0.4}})
+    assert len(campaign["rounds"]) == 2
+    assert campaign["rounds"][0] == original
+    assert campaign["rounds"][1]["epochs"] == [2]
+    assert campaign["rounds"][1]["settings"]["megapixels"] == 0.4
+    assert campaign["round"] == 2
+    assert launched == ["abcdef123456"]

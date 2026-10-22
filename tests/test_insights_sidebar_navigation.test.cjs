@@ -99,8 +99,8 @@ test('cross-workspace Epoch inspector uses existing navigation and Test mode sta
 test('Back to Insights is available during load, on success, and on errors', () => {
   assert.match(inspector, /function backToInsights\(\)/);
   assert.match(inspector, /back\.onclick=window\.epochInfoShowAnalytics/);
-  assert.match(inspector, /header\.appendChild\(backToInsights\(\)\)/);
-  assert.match(inspector, /host\.prepend\(backToInsights\(\)\)/);
+  assert.match(inspector, /header\.appendChild\(view\.mode==='analytics'\?backToInsights\(\):backToTestResults\(\)\)/);
+  assert.match(inspector, /host\.prepend\(view\.mode==='analytics'\?backToInsights\(\):backToTestResults\(\)\)/);
   assert.match(css, /#run-analytics-epoch-info \.epoch-info-back\{[^}]*font-size:18px/);
 });
 

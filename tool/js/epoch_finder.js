@@ -6,6 +6,8 @@
   var runs = [];
   var timer = null;
   var mode = 'tests';
+  var returnMode = '';
+  var surfaceLabels = {tests:'Tests',finder:'Campaigns',references:'References',analytics:'Insights'};
   var lastFrameKey = '';
   var wizardStep = 1;
   var dimensions = [];
@@ -62,7 +64,14 @@
     if (typeof window.reportConsoleError === 'function') window.reportConsoleError('Epoch Finder', exc);
   }
   function clearError() { els('error').classList.add('hidden'); els('error').textContent = ''; }
-  function showMode(next) {
+  function showMode(next, options) {
+    if (!Object.prototype.hasOwnProperty.call(surfaceLabels,next))
+      throw new Error('Unknown Test workspace destination: '+next);
+    options = options || {};
+    // Only explicit drill-downs get a contextual Back. A tab click is ordinary
+    // navigation, not a request to retain a stale destination.
+    returnMode = options.returnTo && surfaceLabels[options.returnTo] && options.returnTo!==next
+      ? options.returnTo : '';
     mode = next;
     var finder = next === 'finder';
     var references = next === 'references';
@@ -76,11 +85,22 @@
     document.getElementById('test-generations-body').classList.toggle('hidden', finder || references || analytics);
     document.getElementById('test-references-screen').classList.toggle('hidden', !references);
     document.getElementById('run-analytics-screen').classList.toggle('hidden', !analytics);
-    if (finder) refresh();
-    if (references) window.testReferencesOpen();
-    if (analytics) window.runAnalyticsOpen();
+    ['tests','finder'].forEach(function (target) {
+      var control=document.getElementById('test-workspace-return-'+target);
+      control.classList.toggle('hidden',next!==target||!returnMode);
+      if(returnMode)control.querySelector('[data-test-workspace-back]').textContent=
+        '← Back to '+surfaceLabels[returnMode];
+    });
+    // Returning to existing evidence must not reload the user's selected
+    // report, controls or inspector. Explicit tabs still refresh as before.
+    if (!options.restore) {
+      if (finder) refresh();
+      if (references) window.testReferencesOpen();
+      if (analytics) window.runAnalyticsOpen();
+    }
   }
   window.epochFinderShowMode = showMode;
+  window.epochFinderCurrentMode = function () { return mode; };
   document.getElementById('epoch-finder-back-to-tests').onclick = function () { showMode('tests'); };
   function renderSecondsEstimate(modelId, durationSeconds, megapixels) {
     var key = [modelId, Number.isFinite(megapixels) ? String(megapixels) : String(document.getElementById('test-generations-dimensions')?.value || ''), String(durationSeconds)].join('|');
@@ -1869,7 +1889,12 @@
     inspectedEpoch = null;
     lastFrameKey = null;
     var changed = currentFolder !== folder;
-    if (changed) followUpSource = '';
+    if (changed) {
+      followUpSource = ''; returnMode = '';
+      ['tests','finder'].forEach(function(target){
+        document.getElementById('test-workspace-return-'+target).classList.add('hidden');
+      });
+    }
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
     if (changed) { screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
@@ -1879,9 +1904,10 @@
   }
   window.epochFinderPrepare = applyFolder;
   window.epochFinderInspectCampaign = function (campaignId, sourceEpoch, sourceJobId) {
+    var previous=mode;
     activeCampaign = String(campaignId);
     inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = '';
-    showMode('finder');
+    showMode('finder',previous!=='finder'?{returnTo:previous}:null);
     return refreshStatus().then(function () {
       if (sourceEpoch == null || !campaignState || campaignState.id !== String(campaignId)) return;
       var matched = Object.entries(campaignState.candidateMap || {}).find(function (entry) {
@@ -1897,6 +1923,13 @@
   };
   document.querySelectorAll('#test-workspace-main-tabs [data-test-workspace-mode]').forEach(function (button) {
     button.addEventListener('click', function () { showMode(button.dataset.testWorkspaceMode); });
+  });
+  document.querySelectorAll('[data-test-workspace-back]').forEach(function(button){
+    button.addEventListener('click',function(){
+      if(!returnMode)return;
+      var destination=returnMode;
+      showMode(destination,{restore:true});
+    });
   });
   els('refresh').onclick = refresh;
   els('new').onclick = function () { followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); screeningApplySettings(null); };

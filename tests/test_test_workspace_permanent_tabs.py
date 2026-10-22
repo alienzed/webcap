@@ -68,3 +68,19 @@ def test_references_is_a_shared_tab_and_regular_form_starts_with_prompt():
         assert f'id="{retired}"' not in html
         assert f"el('{retired}')" not in test_js
     assert 'id="test-generations-files-count"' in html
+
+
+def test_cross_surface_drill_down_has_contextual_return_without_new_shell():
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    finder = (ROOT / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    tests = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
+    inspector = (ROOT / "tool/js/epoch_info.js").read_text(encoding="utf-8")
+    for destination in ("tests", "finder"):
+        assert f'id="test-workspace-return-{destination}"' in html
+    assert "window.epochFinderCurrentMode = function () { return mode; };" in finder
+    assert "options.returnTo" in finder
+    assert "showMode(destination,{restore:true});" in finder
+    assert "if (!options.restore)" in finder
+    assert "window.epochFinderShowMode(\"tests\",origin!==\"tests\"?{returnTo:origin}:null);" in tests
+    assert "function backToTestResults()" in inspector
+    assert "back.onclick=window.epochInfoShowSession" in inspector

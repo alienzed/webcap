@@ -307,7 +307,8 @@ def _ensure_execution_reconciled():
         for job in prior_unfinished:
             job_id = str(job.get("id") or "")
             outcome = committed_outcomes.get(job_id)
-            if outcome is None and str(job.get("status") or "") == "stopping":
+            if (outcome is None and str(job.get("status") or "") == "stopping"
+                    and str(job.get("requestedAction") or "") != "backlog"):
                 outcome = {
                     "status": "stopped",
                     "result": {},

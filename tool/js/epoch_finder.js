@@ -28,6 +28,11 @@
   var proposalBusy = false;
   var followUpSource = '';
   var timingProfiles = {};
+  var manualSelectionCampaign = '';
+  var manualSelectedRound = 0;
+  var manualMatrixSignature = '';
+  var manualVisionPending = false;
+  var screeningSelectionQueue = Promise.resolve();
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -1009,6 +1014,322 @@
       (unit.dinoError ? '<p class="epoch-finder-error">DINOv2: ' + escape(unit.dinoError) + '</p>' : '') +
       (unit.error ? '<p class="epoch-finder-error">' + escape(unit.error) + '</p>' : '') + evidenceSection(campaign);
   }
+
+  // Manual Screening reuses this Campaign's run picker, Test render cards and queue.
+  function isManualCampaign() { return campaignState && campaignState.mode === 'manual' && !!activeCampaign; }
+  function screeningModeUi() {
+    var manual = els('campaign-type').value === 'manual';
+    els('manual-form').classList.toggle('hidden', !manual);
+    els('wizard-progress').classList.toggle('hidden', manual);
+    els('wizard-actions').classList.toggle('hidden', manual);
+    document.querySelectorAll('[data-epoch-wizard-step]').forEach(function (node) {
+      node.classList.toggle('hidden', manual ? node.dataset.epochWizardStep !== '1' : Number(node.dataset.epochWizardStep) !== wizardStep);
+    });
+    document.querySelector('.epoch-finder-source-choice').classList.toggle('hidden', manual);
+    if (manual) {
+      sourceMode = 'runs';
+      drawEpochPicker();
+    }
+  }
+  function screeningSettingsSource() {
+    [['aspect','aspect'],['sampling','sampling-mode'],['dimensions','dimensions']].forEach(function (pair) {
+      var target=els('manual-'+pair[0]), source=document.getElementById('test-generations-'+pair[1]);
+      var options=source ? Array.from(source.options) : [];
+      var signature=options.map(function(option){return option.value+'|'+option.text;}).join('~');
+      if (options.length && target.dataset.options!==signature) {
+        var previous=target.value;
+        target.replaceChildren.apply(target,options.map(function(option){return option.cloneNode(true);}));
+        target.value=options.some(function(option){return option.value===previous;})?previous:source.value;
+        target.dataset.options=signature;
+      }
+      if (source) target.closest('label').classList.toggle('hidden',source.closest('label').classList.contains('hidden'));
+    });
+    [['mp','megapixels'],['duration','duration']].forEach(function (pair) {
+      var target=els('manual-'+pair[0]),source=document.getElementById('test-generations-'+pair[1]);
+      if (source && !target.value) target.value=source.value;
+      if (source) target.closest('label').classList.toggle('hidden',source.closest('label').classList.contains('hidden'));
+    });
+  }
+  function screeningGroups(selected) {
+    var choice=els('manual-group');
+    var old=selected == null ? Number(choice.value || 0) : selected;
+    var groups;
+    try { groups=wildcardParts(els('manual-prompt').value); } catch (exc) { groups=[]; }
+    choice.innerHTML=groups.map(function (group,index) {
+      return '<option value="'+index+'">Group '+(index+1)+' · '+escape(group.options.join(' / '))+'</option>';
+    }).join('');
+    if (groups.length) choice.value=String(Math.min(Math.max(0,old),groups.length-1));
+  }
+  function screeningApplySettings(campaign) {
+    screeningSettingsSource();
+    var plan=campaign && campaign.rounds[campaign.rounds.length-1];
+    els('manual-prompt').value=plan ? plan.prompt :
+      (els('prompt').value || document.getElementById('test-generations-prompt').value || '');
+    if (plan) {
+      var settings=plan.settings || {};
+      [['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
+        ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function (pair) {
+        if (settings[pair[1]] != null) els('manual-'+pair[0]).value=String(settings[pair[1]]);
+      });
+    }
+    screeningGroups(plan ? plan.groupIndex : 0);
+  }
+  function screeningCriteria() {
+    var settings={};
+    [['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
+      ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function (pair) {
+      var control=els('manual-'+pair[0]);
+      if (!control.closest('label').classList.contains('hidden') && String(control.value||'').trim()) {
+        settings[pair[1]]=control.value;
+      }
+    });
+    var prompt=els('manual-prompt').value.trim();
+    if (!prompt) throw new Error('Enter a wildcard prompt.');
+    if (!els('manual-group').options.length) throw new Error('Select a wildcard group to exhaust.');
+    return {prompt:prompt,groupIndex:Number(els('manual-group').value),settings:settings};
+  }
+  function screeningRememberSelection(campaign) {
+    if (manualSelectionCampaign === campaign.id) return;
+    manualSelectionCampaign=campaign.id;
+    manualSelectedRound=campaign.rounds.length;
+    manualMatrixSignature='';
+    runEpochSelections={};
+    var kept=new Set(campaign.kept||[]);
+    Object.entries(campaign.candidateMap||{}).forEach(function (entry) {
+      var origin=entry[1];
+      if (!kept.has(Number(entry[0]))) return;
+      if (!(runEpochSelections[origin.jobId] instanceof Set)) runEpochSelections[origin.jobId]=new Set();
+      runEpochSelections[origin.jobId].add(origin.epoch);
+    });
+    sourceMode='runs';
+    drawEpochPicker();
+    screeningApplySettings(campaign);
+  }
+  function screeningSaveSelection() {
+    if (!isManualCampaign()) return Promise.resolve();
+    if (campaignState.status !== 'complete') return Promise.resolve();
+    var id=activeCampaign, folder=currentFolder, selection=selectedRunEntries();
+    screeningSelectionQueue=screeningSelectionQueue.catch(function(){}).then(function(){
+      return api('screening_selection',{campaignId:id,runSelections:selection});
+    });
+    return screeningSelectionQueue.then(function (response) {
+      if (!campaignState || campaignState.id !== id || currentFolder !== folder) return;
+      campaignState.kept=response.campaign.kept;
+      campaignState.candidateMap=response.campaign.candidateMap;
+      manualMatrixSignature='';
+      screeningMatrix(campaignState);
+    }).catch(error);
+  }
+  function screeningLaunch() {
+    clearError();
+    var criteria;
+    try {
+      criteria=screeningCriteria();
+      if (!selectedCampaignCount()) throw new Error('Select at least one saved epoch.');
+    } catch (exc) { error(exc);return; }
+    var next=isManualCampaign(),id=activeCampaign;
+    var action=next?'screening_next_round':'start';
+    if (!next) {
+      criteria.campaignMode='manual';
+      criteria.runSelections=selectedRunEntries();
+    } else criteria.campaignId=id;
+    els('manual-launch').disabled=true;
+    (next?screeningSelectionQueue:Promise.resolve()).then(function(){
+      return api(action,criteria);
+    }).then(function (response) {
+      if (next && activeCampaign!==id) return;
+      activeCampaign=response.campaign.id;
+      manualSelectedRound=response.campaign.rounds.length;
+      manualMatrixSignature='';
+      return refresh();
+    }).catch(error).finally(function () {els('manual-launch').disabled=false;});
+  }
+  function screeningAskVision(campaign, criteria) {
+    var model=window.getCaptionVisionModelId();
+    if (!model) { error(new Error('Choose an available Vision model for Ask VL.'));return; }
+    manualVisionPending=true;
+    api('screening_vision',Object.assign({campaignId:campaign.id,visionModel:model,
+      round:manualSelectedRound},criteria)).then(function (answer) {
+      if (!answer.queued) manualVisionPending=false;
+      refreshStatus().catch(error);
+    }).catch(function (exc) {manualVisionPending=false;error(exc);});
+  }
+  function screeningRoundList(campaign) {
+    els('manual-history').classList.remove('hidden');
+    var host=els('manual-round-list');
+    var signature=campaign.id+'|'+manualSelectedRound+'|'+campaign.rounds.map(function (plan) {
+      return plan.epochs.length+':'+campaign.units.filter(function(u){return u.round===plan.number&&u.frame;}).length;
+    }).join('|');
+    if (host.dataset.signature===signature) return;
+    host.dataset.signature=signature;
+    host.innerHTML=campaign.rounds.map(function (plan) {
+      var completed=campaign.units.filter(function (u) {return u.round===plan.number&&!!u.frame;}).length;
+      var total=plan.epochs.length*plan.seeds.length;
+      return '<button type="button" class="epoch-finder-campaign'+
+        (manualSelectedRound===plan.number?' active':'')+'" data-screening-round="'+plan.number+
+        '"><strong>Round '+plan.number+'</strong><small>'+plan.epochs.length+' epochs · '+
+        completed+'/'+total+' renders</small></button>';
+    }).join('');
+  }
+  function screeningMatrix(campaign) {
+    if (campaign.mode!=='manual') return;
+    if (!campaign.rounds.some(function (plan) {return plan.number===manualSelectedRound;})) {
+      manualSelectedRound=campaign.rounds.length;
+    }
+    screeningRoundList(campaign);
+    var plan=campaign.rounds[manualSelectedRound-1],host=els('manual-matrix');
+    var kept=new Set(campaign.kept||[]);
+    var units=campaign.units||[];
+    var byEpoch={};
+    units.forEach(function (u) { if (!byEpoch[u.epoch]) byEpoch[u.epoch]=[];byEpoch[u.epoch].push(u); });
+    var rated={};
+    Object.keys(byEpoch).forEach(function (key) {
+      var values=byEpoch[key].filter(function (u) {return Number(u.rating)>0;});
+      rated[key]={count:values.length,average:values.length?
+        values.reduce(function (sum,u) {return sum+u.rating;},0)/values.length:null};
+    });
+    var sort=els('manual-sort').value;
+    var rows=plan.epochs.slice().sort(function (a,b) {
+      if (sort==='kept') return Number(kept.has(b))-Number(kept.has(a))||a-b;
+      if (sort==='high'||sort==='low') {
+        var av=rated[a]&&rated[a].average,bv=rated[b]&&rated[b].average;
+        if (av==null||bv==null) return av==null&&bv==null?a-b:av==null?1:-1;
+        return (sort==='high'?bv-av:av-b)||a-b;
+      }
+      var x=campaign.candidateMap[String(a)],y=campaign.candidateMap[String(b)];
+      return (x&&x.epoch||a)-(y&&y.epoch||b)||a-b;
+    });
+    var signature=JSON.stringify([campaign.id,campaign.status,manualSelectedRound,rows,Array.from(kept),sort,
+      units.filter(function(u){return u.round===plan.number;}).map(function (u) {
+        return [u.epoch,u.case,u.frame,u.error,u.rating,u.assessment&&u.assessment.text];
+      }),units.map(function(u){return [u.epoch,u.rating]})]);
+    if (host.dataset.signature===signature) return;
+    host.dataset.signature=signature;
+    var priorScroll=host.scrollLeft;
+    var scope=campaign.id+':'+manualSelectedRound;
+    var scroller=host.querySelector('.epoch-screening-round');
+    if (!scroller || host.dataset.scope!==scope) {
+      host.replaceChildren();
+      scroller=document.createElement('div');
+      scroller.className='epoch-screening-round';
+      host.appendChild(scroller);
+      host.dataset.scope=scope;
+    }
+    scroller.style.setProperty('--screening-columns',String(plan.seeds.length));
+    scroller.style.setProperty('--screening-width',Math.max(550,plan.seeds.length*228)+'px');
+    var labels=scroller.querySelector('.epoch-screening-case-labels');
+    var labelSignature=JSON.stringify(plan.columnLabels);
+    if (!labels || labels.dataset.signature!==labelSignature) {
+      if (labels) labels.remove();
+      labels=document.createElement('div');
+      labels.className='epoch-screening-cases epoch-screening-case-labels';
+      labels.dataset.signature=labelSignature;
+      plan.columnLabels.forEach(function (name) {
+        var cell=document.createElement('span');cell.textContent=name;labels.appendChild(cell);
+      });
+      scroller.insertBefore(labels,scroller.firstChild);
+    }
+    var desired=[];
+    rows.forEach(function (epoch) {
+      var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),rated[epoch],
+        units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;}).map(function(u){
+          return [u.case,u.frame,u.error,u.rating,u.assessment&&u.assessment.text];
+        })]);
+      var previous=Array.from(scroller.querySelectorAll('[data-screening-epoch]')).find(function(element){
+        return element.dataset.screeningEpoch===String(epoch);
+      });
+      if (previous && previous.dataset.signature===rowSignature) {
+        desired.push(previous);
+        return;
+      }
+      var row=document.createElement('section');row.className='epoch-screening-row';
+      row.dataset.screeningEpoch=String(epoch);
+      row.dataset.signature=rowSignature;
+      if (previous) previous.remove();
+      var head=document.createElement('div');head.className='epoch-screening-row-head';
+      var title=document.createElement('strong');title.textContent=candidateLabel(campaign,epoch);head.appendChild(title);
+      var total=rated[epoch];
+      var summary=document.createElement('span');summary.textContent=total&&total.count?
+        '★ '+total.average.toFixed(1)+' · '+total.count+' rated':'Not rated';head.appendChild(summary);
+      var keepLabel=document.createElement('label');
+      var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=kept.has(epoch);
+      checkbox.disabled=campaign.status!=='complete';
+      checkbox.addEventListener('change',function () {
+        var origin=campaign.candidateMap[String(epoch)];
+        if (!origin) throw new Error('Missing screening checkpoint identity.');
+        if (!(runEpochSelections[origin.jobId] instanceof Set)) runEpochSelections[origin.jobId]=new Set();
+        if (checkbox.checked) runEpochSelections[origin.jobId].add(origin.epoch);
+        else runEpochSelections[origin.jobId].delete(origin.epoch);
+        drawEpochPicker();
+        screeningSaveSelection();
+      });
+      keepLabel.append(checkbox,document.createTextNode('Keep for next round'));head.appendChild(keepLabel);
+      var vl=document.createElement('button');vl.type='button';vl.className='review-captions-btn';vl.textContent='Ask VL · Epoch';
+      vl.onclick=function(){screeningAskVision(campaign,{epoch:epoch});};
+      vl.disabled=campaign.status!=='complete';head.appendChild(vl);
+      row.appendChild(head);
+      var cards=document.createElement('div');cards.className='epoch-screening-cases';
+      for (var caseIndex=0;caseIndex<plan.seeds.length;caseIndex++) {
+        var unit=units.find(function(u){return u.round===plan.number&&u.epoch===epoch&&u.case===caseIndex;});
+        (function(u,index) {
+          var url=u&&u.frame&&!u.framePruned?'/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+
+            '&campaign='+encodeURIComponent(campaign.id)+'&frame='+encodeURIComponent(u.frame):'';
+          var card=createTestPreviewCard({
+            className:'test-generations-result-card',
+            title:plan.columnLabels[index]||'Variation '+(index+1),
+            media:url?{kind:'image',url:url,alt:'Epoch '+epoch+' · '+plan.columnLabels[index]}:null,
+            placeholder:url?null:(u&&u.error?'Render failed':'Awaiting render'),
+            failed:!!(u&&u.error),
+            error:u&&u.error||'',
+            rating:url&&campaign.status==='complete'?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,
+              onRate:function(value){
+                api('screening_rate',{campaignId:campaign.id,round:plan.number,
+                  epoch:epoch,case:index,rating:value}).then(function () {
+                    u.rating=value;host.dataset.signature='';screeningMatrix(campaign);
+                  }).catch(error);
+              }}:null,
+            wildcards:plan.caseSelections[index].map(function(v){return {label:v.id,value:v.option};}),
+            metadata:u&&u.renderSeconds?[(u.renderSeconds).toFixed(1)+'s']:[],
+            evaluations:u&&u.assessment?[{label:'VL reviewed',title:u.assessment.text}]:[],
+            details:[{label:'Prompt',value:plan.casePrompts[index],pre:true},
+              {label:'Seed',value:String(plan.seeds[index])},
+              {label:'VL',value:u&&u.assessment&&u.assessment.text||''}],
+            actions:url&&campaign.status==='complete'?[{label:'Ask VL for this render',onClick:function () {
+                screeningAskVision(campaign,{epoch:epoch,case:index});
+              }},{label:'Open original',url:url}]:[]
+          });
+          cards.appendChild(card);
+        })(unit,caseIndex);
+      }
+      row.appendChild(cards);
+      desired.push(row);
+    });
+    var wanted=new Set(desired);
+    scroller.querySelectorAll('[data-screening-epoch]').forEach(function(node){
+      if (!wanted.has(node)) node.remove();
+    });
+    desired.forEach(function(node,index){
+      var at=scroller.children[index+1];
+      if (at!==node) scroller.insertBefore(node,at||null);
+    });
+    host.scrollLeft=priorScroll;
+    els('manual-vl-round').disabled=campaign.status!=='complete';
+    els('manual-launch').disabled=campaign.status!=='complete'&&campaign.status!=='paused';
+    els('manual-launch').textContent='Run Round '+(campaign.rounds.length+1)+' · '+(campaign.kept||[]).length+' epochs';
+  }
+  function screeningRender(campaign) {
+    els('campaign-type').value='manual';
+    screeningModeUi();
+    screeningRememberSelection(campaign);
+    els('manual-review').classList.remove('hidden');
+    els('live-layout').classList.add('hidden');
+    els('timeline').classList.add('hidden');
+    els('metrics').classList.add('hidden');
+    els('follow-up').classList.add('hidden');
+    manualVisionPending=!!campaign.screeningVisionRunning;
+    screeningMatrix(campaign);
+  }
+
   function render(campaign) {
     campaignState = campaign;
     function median(values) {
@@ -1048,6 +1369,17 @@
     els('stop').classList.toggle('hidden', !running);
     els('resume').classList.toggle('hidden', !['paused', 'interrupted', 'failed'].includes(campaign.status));
     els('delete').classList.toggle('hidden', running);
+    if (campaign.mode === 'manual') {
+      screeningRender(campaign);
+      return;
+    }
+    els('campaign-type').value='auto';
+    screeningModeUi();
+    els('manual-review').classList.add('hidden');
+    els('manual-history').classList.add('hidden');
+    els('live-layout').classList.remove('hidden');
+    els('timeline').classList.remove('hidden');
+    els('metrics').classList.remove('hidden');
     progress(campaign);
     els('follow-up').classList.toggle('hidden', campaign.status === 'running' || campaign.status === 'queued');
     ranking(campaign);
@@ -1083,9 +1415,10 @@
       }
       campaigns = response.campaigns || [];
       timingProfiles = response.timings || {};
-      setup(); list();
+      setup(); screeningSettingsSource(); list();
       if (activeCampaign && campaigns.some(function (c) { return c.id === activeCampaign; })) return refreshStatus();
       activeCampaign = '';
+      manualSelectionCampaign='';
       els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
     }).catch(error);
   }
@@ -1196,7 +1529,7 @@
     if (changed) followUpSource = '';
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
     if (mode === 'finder') refresh();
@@ -1223,8 +1556,24 @@
     button.addEventListener('click', function () { showMode(button.dataset.testWorkspaceMode); });
   });
   els('refresh').onclick = refresh;
-  els('new').onclick = function () { followUpSource = ''; activeCampaign = ''; campaignState = null; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); };
+  els('new').onclick = function () { followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); screeningApplySettings(null); };
   els('start').onclick = start;
+  els('campaign-type').onchange=function () {
+    activeCampaign='';campaignState=null;manualSelectionCampaign='';
+    els('active').classList.add('hidden');els('empty').classList.remove('hidden');
+    showStep(1);screeningModeUi();screeningApplySettings(null);
+  };
+  els('manual-prompt').addEventListener('input',function(){screeningGroups();});
+  els('manual-launch').onclick=screeningLaunch;
+  els('manual-sort').onchange=function(){if (isManualCampaign()) screeningMatrix(campaignState);};
+  els('manual-vl-round').onclick=function(){if (isManualCampaign()) screeningAskVision(campaignState,{});};
+  els('manual-round-list').onclick=function(event){
+    var button=event.target.closest('[data-screening-round]');
+    if (!button||!isManualCampaign())return;
+    manualSelectedRound=Number(button.dataset.screeningRound);
+    els('manual-matrix').dataset.signature='';
+    screeningMatrix(campaignState);
+  };
   els('follow-up').onclick = followUpCampaign;
   els('suggest').onclick = propose;
   els('next').onclick = advance;
@@ -1251,6 +1600,10 @@
   els('run-choices').addEventListener('change', function (event) {
     var checkbox = event.target.closest('[data-run-id]');
     if (!checkbox) return;
+    if (isManualCampaign() && campaignState.status !== 'complete') {
+      drawEpochPicker();
+      return error(new Error('Finish the current round before changing the next-round selection.'));
+    }
     var jobId = checkbox.dataset.runId;
     var run = runs.find(function (item) { return item.jobId === jobId; });
     if (!run) throw new Error('Selected training run disappeared.');
@@ -1260,10 +1613,14 @@
     referenceGeneration++;
     drawEpochPicker();
     roundPlan();
+    screeningSaveSelection();
   });
   els('epoch-picker').addEventListener('click', function (event) {
     var region = event.target.closest('[data-epoch-run]');
     if (!region) return;
+    if (isManualCampaign() && campaignState.status !== 'complete') {
+      return error(new Error('Finish the current round before changing the next-round selection.'));
+    }
     var jobId = region.dataset.epochRun, choice = event.target.closest('[data-epoch-choice]');
     var selected = runEpochSelections[jobId];
     if (!(selected instanceof Set)) throw new Error('Run selection missing.');
@@ -1280,6 +1637,7 @@
       if (action.dataset.epochAction === 'last10') runEpochSelections[jobId] = new Set(run.epochs.slice(-10));
     }
     drawEpochPicker(); roundPlan();
+    screeningSaveSelection();
   });
 
   function referenceClick(event) {
@@ -1319,6 +1677,7 @@
   els('preview-close').onclick = function () { els('reference-preview').close(); };
   els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });
   showStep(1);
+  screeningModeUi();
   var testDuration = document.getElementById('test-generations-duration');
   if (testDuration) testDuration.addEventListener('input', function () {
     if (mode === 'finder') roundPlan();
@@ -1417,7 +1776,7 @@
   };
   els('campaigns').onclick = function (event) {
     var button = event.target.closest('[data-id]');
-    if (button) { activeCampaign = button.dataset.id; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; list(); refreshStatus().catch(error); }
+    if (button) { activeCampaign = button.dataset.id; manualSelectionCampaign=''; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; list(); refreshStatus().catch(error); }
   };
   window.addEventListener('webcap:working-model-changed', function () {
     listRequestVersion++;
@@ -1427,7 +1786,7 @@
   });
   timer = setInterval(function () {
     if (mode === 'finder' && activeCampaign && campaignState &&
-        ['queued', 'running'].includes(campaignState.status) &&
+        (['queued', 'running'].includes(campaignState.status) || manualVisionPending) &&
         !els('screen').classList.contains('hidden')) refreshStatus().catch(error);
   }, 2500);
 })();

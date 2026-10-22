@@ -1166,7 +1166,8 @@
                                 </nav>
                                 <section class="epoch-finder-panel">
                                     <h3>New campaign</h3>
-                                    <nav class="epoch-finder-wizard-progress" aria-label="Campaign setup">
+                                    <label>Campaign type<select id="epoch-finder-campaign-type"><option value="auto">Automated · VL screening</option><option value="manual">Manual Screening</option></select></label>
+                                    <nav class="epoch-finder-wizard-progress" id="epoch-finder-wizard-progress" aria-label="Campaign setup">
                                         <span data-epoch-step-label="1">1 · Candidates</span>
                                         <span data-epoch-step-label="2">2 · Tests</span>
                                         <span data-epoch-step-label="3">3 · Rounds</span>
@@ -1205,11 +1206,27 @@
                                         <strong>Review your campaign</strong>
                                         <div id="epoch-finder-review" class="epoch-finder-review"></div>
                                     </div>
-                                    <div class="epoch-finder-wizard-actions">
+                                    <div id="epoch-finder-manual-form" class="hidden epoch-finder-manual-form">
+                                        <label>Test prompt<textarea id="epoch-finder-manual-prompt" rows="6" placeholder="Use {option|option} wildcards."></textarea></label>
+                                        <label>Exhaustively vary<select id="epoch-finder-manual-group"></select></label>
+                                        <div class="epoch-finder-fields">
+                                            <label>Resolution (MP)<input id="epoch-finder-manual-mp" type="number" min="0.1" step="0.1"></label>
+                                            <label>Duration (seconds)<input id="epoch-finder-manual-duration" type="number" min="1" step="1"></label>
+                                            <label>Aspect ratio<select id="epoch-finder-manual-aspect"></select></label>
+                                            <label>Sampling mode<select id="epoch-finder-manual-sampling"></select></label>
+                                            <label>Dimensions<select id="epoch-finder-manual-dimensions"></select></label>
+                                        </div>
+                                        <button id="epoch-finder-manual-launch" type="button" class="training-btn training-launch-btn">Run Round 1</button>
+                                    </div>
+                                    <div class="epoch-finder-wizard-actions" id="epoch-finder-wizard-actions">
                                         <button id="epoch-finder-back" type="button" class="review-captions-btn hidden">Back</button>
                                         <button id="epoch-finder-next" type="button" class="training-btn training-launch-btn">Next</button>
                                         <button id="epoch-finder-start" type="button" class="training-btn training-launch-btn hidden">Launch campaign</button>
                                     </div>
+                                </section>
+                                <section id="epoch-finder-manual-history" class="epoch-finder-panel hidden">
+                                    <div class="epoch-finder-panel-heading"><h3>Rounds</h3></div>
+                                    <div id="epoch-finder-manual-round-list" class="epoch-finder-campaigns"></div>
                                 </section>
                                 <section class="epoch-finder-panel">
                                     <div class="epoch-finder-panel-heading"><h3>Campaigns</h3><span id="epoch-finder-count"></span></div>
@@ -1235,14 +1252,14 @@
                                         </div>
                                     </div>
                                     <div id="epoch-finder-timeline" class="epoch-finder-timeline"></div>
-                                    <div class="epoch-finder-metrics">
+                                    <div id="epoch-finder-metrics" class="epoch-finder-metrics">
                                         <div><span>Frames captured</span><strong id="epoch-finder-render-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-render-bar"></i></div></div>
                                         <div><span>VL evaluations</span><strong id="epoch-finder-vl-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-vl-bar"></i></div></div>
                                         <div id="epoch-finder-rvn-progress" class="hidden"><span>Reference Compare</span><strong id="epoch-finder-rvn-count">0 / 0</strong><small id="epoch-finder-reference-compare-error" class="epoch-finder-error hidden" role="alert"></small></div>
                                         <div id="epoch-finder-dino-progress" class="hidden"><span>DINOv2</span><strong id="epoch-finder-dino-count">0 / 0</strong></div>
                                         <div><span>Current field</span><strong id="epoch-finder-field-count">—</strong></div>
                                     </div>
-                                    <div class="epoch-finder-live-layout">
+                                    <div class="epoch-finder-live-layout" id="epoch-finder-live-layout">
                                         <section class="epoch-finder-live-ranks">
                                             <div class="epoch-finder-panel-heading"><h3>Leaderboard</h3><span id="epoch-finder-ranking-note">Awaiting VL</span></div>
                                             <div id="epoch-finder-shortlist" class="epoch-finder-muted"></div>
@@ -1256,6 +1273,14 @@
                                             <div id="epoch-finder-inspector" class="epoch-finder-inspector hidden"></div>
                                         </section>
                                     </div>
+                                    <section id="epoch-finder-manual-review" class="hidden epoch-finder-manual-review">
+                                        <div class="epoch-finder-panel-heading">
+                                            <h3>Compare epochs</h3>
+                                            <label>Sort rows<select id="epoch-finder-manual-sort"><option value="epoch">Epoch number</option><option value="high">Highest rating</option><option value="low">Lowest rating</option><option value="kept">Kept first</option></select></label>
+                                            <button id="epoch-finder-manual-vl-round" type="button" class="review-captions-btn">Ask VL · Round</button>
+                                        </div>
+                                        <div id="epoch-finder-manual-matrix" class="epoch-finder-manual-matrix"></div>
+                                    </section>
                                 </div>
                                 <p id="epoch-finder-error" class="epoch-finder-error hidden" role="alert"></p>
                             </main>

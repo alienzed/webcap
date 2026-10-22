@@ -363,7 +363,9 @@
         stop.className = 'review-captions-btn';
         stop.dataset.inferenceQueueAction = 'backlog';
         stop.dataset.jobId = String(job.jobId || '');
-        stop.textContent = status === 'stopping' ? 'Backlogging…' : 'Backlog';
+        stop.textContent = status === 'stopping'
+          ? (job.requestedAction === 'backlog' ? 'Backlogging…' : 'Stopping…')
+          : 'Backlog';
         stop.disabled = status === 'stopping';
         actions.appendChild(stop);
       }

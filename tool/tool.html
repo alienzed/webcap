@@ -1213,7 +1213,7 @@
                                             <label>Resolution (MP)<input id="epoch-finder-manual-mp" type="number" min="0.1" step="0.1"></label>
                                             <label>Duration (seconds)<input id="epoch-finder-manual-duration" type="number" min="1" step="1"></label>
                                             <label>Aspect ratio<select id="epoch-finder-manual-aspect"></select></label>
-                                            <label>Sampling mode<select id="epoch-finder-manual-sampling"></select></label>
+                                            <label>Sampling mode<select id="epoch-finder-manual-sampling"><option value="turbo">Turbo · 8 steps / 1.0</option><option value="quality">Quality · 20 steps / no Turbo</option></select></label>
                                             <label>Dimensions<select id="epoch-finder-manual-dimensions"></select></label>
                                         </div>
                                         <button id="epoch-finder-manual-launch" type="button" class="training-btn training-launch-btn">Run Round 1</button>
@@ -1279,7 +1279,7 @@
                                             <label>Sort rows<select id="epoch-finder-manual-sort"><option value="epoch">Epoch number</option><option value="high">Highest rating</option><option value="low">Lowest rating</option><option value="kept">Kept first</option></select></label>
                                             <button id="epoch-finder-manual-vl-round" type="button" class="review-captions-btn">Ask VL · Round</button>
                                         </div>
-                                        <div id="epoch-finder-manual-matrix" class="epoch-finder-manual-matrix"></div>
+                                        <div id="epoch-finder-manual-matrix" class="epoch-finder-manual-matrix" role="region" aria-label="Scroll through epoch comparisons" tabindex="0"></div>
                                     </section>
                                 </div>
                                 <p id="epoch-finder-error" class="epoch-finder-error hidden" role="alert"></p>

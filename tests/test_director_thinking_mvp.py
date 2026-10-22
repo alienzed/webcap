@@ -69,3 +69,29 @@ def test_thinking_report_boolean_is_persisted_by_normalization():
     normalized = director_model_calibration.normalize_report(report)
     assert normalized["thinking"] is True
     assert director_model_calibration.normalize_report({**report, "thinking": False})["thinking"] is False
+
+@pytest.mark.parametrize(
+    "use_configured_max_tokens, explicit_max_tokens, expected",
+    [(True, None, 1024), (False, None, None), (False, 8192, 8192)],
+)
+def test_remote_vl_can_omit_configured_output_cap(monkeypatch, use_configured_max_tokens, explicit_max_tokens, expected):
+    sent = {}
+    monkeypatch.setattr(runtime, "_ensure_server", lambda: None)
+    monkeypatch.setattr(runtime, "_model_record", lambda *_args: {})
+    monkeypatch.setattr(runtime, "_director_config", lambda: {"mode": "remote", "max_tokens": 1024})
+    monkeypatch.setattr(runtime, "_remote_is_ollama", lambda: True)
+    monkeypatch.setattr(runtime, "_set_activity", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runtime, "_ollama_running_model", lambda *_args: {"contextSize": 8192})
+
+    def reply(_path, **kwargs):
+        sent.update(kwargs["payload"])
+        return {"choices": [{"message": {"content": "A detailed description."}, "finish_reason": "stop"}]}
+
+    monkeypatch.setattr(runtime, "_remote_http_json_cancellable", reply)
+    result = runtime.chat(
+        "remote-1::test-model", [{"role": "user", "content": "Describe this image."}],
+        use_configured_max_tokens=use_configured_max_tokens, max_tokens=explicit_max_tokens,
+    )
+    assert result["text"] == "A detailed description."
+    assert sent.get("max_tokens") == expected
+    assert ("max_tokens" in sent) is (expected is not None)

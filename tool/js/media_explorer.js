@@ -89,6 +89,67 @@
       row.querySelector('input').checked = selected.has(id);
     });
   }
+
+  function externalAction(endpoint, data, success) {
+    return fetch('/fs/media_explorer/external/' + endpoint, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+    }).then(function (res) { return res.json().then(function (body) {
+      if (!res.ok || !body.ok) throw Error(body.error || endpoint + ' failed');
+      return body;
+    }); }).then(function (result) {
+      if (success) success(result);
+      return result;
+    }).catch(report);
+  }
+  function externalChoices(item) {
+    var selectedItems = items.filter(function (candidate) { return selected.has(candidate.id); });
+    return selected.has(item.id) && selectedItems.length > 1 ? selectedItems : [item];
+  }
+  function externalMutation(item, action) {
+    var chosen = externalChoices(item);
+    var names = chosen.map(function (candidate) { return candidate.relativePath; });
+    var destination = '';
+    if (action === 'move') {
+      destination = window.prompt('Move ' + chosen.length + ' file(s) to which folder inside the external root?\\nUse a relative folder path (empty for root).', externalDirectory);
+      if (destination === null) return;
+    } else if (!window.confirm('Move ' + chosen.length + ' file(s) to the operating system Trash?')) return;
+    externalAction(action, {path: externalPath, files:names, destination:destination}, function () {
+      selected.clear(); selectItem(-1);
+      mediaFacts.clear(); externalRevision = -1;
+      load(true, {refreshFilesystem:true});
+    });
+  }
+  function itemActions(item, index) {
+    var actions = [{label:'View full size', run:function () { openLoupe(items.findIndex(function (x) { return x.id === item.id; })); }}];
+    if (item.source === 'external') {
+      actions.push({label:'Open in Explorer', run:function () {
+        externalAction('reveal', {path:externalPath, file:item.relativePath});
+      }});
+      actions.push({label:'Copy to Set', run:function () { chooseExport('copy', externalChoices(item)); }});
+      if (item.mediaKind === 'video') actions.push({label:'Clip to Set', run:function () { chooseExport('clip', [item]); }});
+      actions.push({separator:true});
+      actions.push({label:'Move to Folder…', run:function () { externalMutation(item, 'move'); }});
+      actions.push({label:'Move to Trash', run:function () { externalMutation(item, 'trash'); }});
+    }
+    return actions;
+  }
+  function openItemMenu(item, button, event) {
+    event.preventDefault();
+    event.stopPropagation();
+    var rect = button.getBoundingClientRect();
+    var x = event.clientX != null ? event.clientX : rect.left;
+    var y = event.clientY != null ? event.clientY : rect.bottom;
+    showContextMenu(x, y, itemActions(item));
+  }
+  function addItemMenu(host, item) {
+    var menu = document.createElement('button');
+    menu.type = 'button'; menu.className = 'media-explorer-item-menu';
+    menu.textContent = '⋯'; menu.title = 'Actions for ' + item.fileName;
+    menu.setAttribute('aria-label', 'Actions for ' + item.fileName);
+    menu.addEventListener('click', function (event) { openItemMenu(item, menu, event); });
+    host.addEventListener('contextmenu', function (event) { openItemMenu(item, host, event); });
+    host.appendChild(menu);
+  }
   function renderSideList() {
     if (explorerMode !== 'grid') return;
     var host = el('media-explorer-side-list');
@@ -108,7 +169,7 @@
           var next = items.findIndex(function (candidate) { return candidate.id === item.id; });
           if (next >= 0) { selectItem(next); openLoupe(); }
         });
-        row.appendChild(check); row.appendChild(button);
+        row.appendChild(check); row.appendChild(button); addItemMenu(row, item);
       }
       row.dataset.mediaKind = item.mediaKind;
       row.querySelector('button').textContent = item.fileName;
@@ -694,6 +755,7 @@
       anchor = index; updateSelection();
     });
     card.appendChild(check);
+    addItemMenu(card, item);
     card.addEventListener('click', function (event) {
       var index = Number(card.dataset.index), item = items[index];
       if (event.ctrlKey || event.metaKey || event.shiftKey) {

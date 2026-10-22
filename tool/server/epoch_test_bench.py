@@ -1294,7 +1294,7 @@ def _candidate_elapsed_ms(started_at):
     return max(0, int(round((time.monotonic() - started_at) * 1000)))
 
 
-def _workflow_evidence(model, template):
+def _workflow_evidence(model, template, sampling_mode=None):
     canonical = json.dumps(
         template,
         ensure_ascii=False,
@@ -1302,7 +1302,7 @@ def _workflow_evidence(model, template):
         separators=(",", ":"),
     ).encode("utf-8")
     return {
-        "workflowFile": model.TEMPLATE_PATH.name,
+        "workflowFile": model.template_path(sampling_mode).name,
         "workflowSha256": hashlib.sha256(canonical).hexdigest(),
     }
 
@@ -2181,6 +2181,7 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
 
     template = model.load_template()
     normalized_settings = model.normalize_settings(template, _new_session_seed, requested_settings)
+    template = model.load_template(normalized_settings.get("samplingMode"))
 
     resolved_prompt, selections = resolve_test_wildcards(prompt, normalized_settings["seed"])
     request = {
@@ -2197,7 +2198,7 @@ def _new_inference_request(folder_path, prompt, settings=None, seed=None, name=N
     }
     if weights is not None:
         request["sweepWeights"] = weights
-    request.update(_workflow_evidence(model, template))
+    request.update(_workflow_evidence(model, template, normalized_settings.get("samplingMode")))
     return request, loras, include_base is not False
 
 def committed_inference_outcome(job):
@@ -2590,7 +2591,7 @@ def execute_inference(job_id, request, context):
         frozen_template = request.get("workflow")
         if not isinstance(frozen_template, dict):
             raise ValueError("Test inference job has no frozen workflow.")
-        evidence = _workflow_evidence(model, frozen_template)
+        evidence = _workflow_evidence(model, frozen_template, (request.get("settings") or {}).get("samplingMode"))
         if str(request.get("workflowFile") or "") != evidence["workflowFile"]:
             raise ValueError("Test inference workflow identity does not match the selected model.")
         if str(request.get("workflowSha256") or "") != evidence["workflowSha256"]:
@@ -2699,6 +2700,10 @@ def execute_inference(job_id, request, context):
             "prompt": prompt,
             "seed": model.workflow_seed(workflow),
             "elapsedMs": _candidate_elapsed_ms(started),
+            "samplingMode": settings.get("samplingMode", "current"),
+            "samplingSteps": workflow.get("124", {}).get("inputs", {}).get("steps"),
+            "workflowFile": request.get("workflowFile"),
+            "workflowSha256": request.get("workflowSha256"),
         }
         if candidate_kind == "lora":
             result["candidateFile"] = candidate_file

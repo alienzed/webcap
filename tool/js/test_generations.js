@@ -2283,6 +2283,16 @@
     return Array.from(selectedCandidates);
   }
 
+  // Read-only bridge: campaigns consume the same selected Test candidates,
+  // not a second persisted selection or a second source of file membership.
+  window.getTestGenerationSelectedCandidateFiles = function (folder, modelId) {
+    if (String(folder || '') !== String(launchFolder || '') ||
+        !prepared || String(prepared.modelId || '') !== String(modelId || '')) return [];
+    return selectedCandidateFiles().filter(function (name) {
+      return Array.isArray(prepared.files) && prepared.files.includes(name);
+    });
+  };
+
   function syncCandidateMasterSelect(files) {
     var master = el('test-generations-master-select');
     if (!master) return;

@@ -1273,3 +1273,21 @@ def test_manual_delete_ui_separates_round_history_from_delete_all():
     assert "Delete only this finished round" in js
     assert "'Delete all rounds'" in js
     assert "This is NOT just the selected round" in js
+
+
+def test_running_screening_round_keeps_space_and_stable_dom_during_polling():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    action_css = css.split(".epoch-screening-round-item > .review-captions-btn {", 1)[1].split("}", 1)[0]
+    assert "width:auto;" in action_css
+    assert "flex:0 0 auto;" in action_css
+    rounds = js.split("function screeningRoundList(campaign) {", 1)[1].split(
+        "function screeningRunInfo(campaign, plan) {", 1)[0]
+    assert "data-screening-round-item" in rounds
+    assert "host.innerHTML" not in rounds
+    assert "button.classList.toggle('active'" in rounds
+    assert "host.insertBefore(entry" in rounds
+    assert "existing.forEach(function(node){node.remove();});" in rounds

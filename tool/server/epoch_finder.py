@@ -86,6 +86,9 @@ def _save(folder_path, campaign, *, preserve_manual=True):
                 }
                 for unit in campaign.get("units", []):
                     saved = by_unit.get((unit["round"], unit["epoch"], unit["case"]), {})
+                    if saved.get("cancelled"):
+                        unit["cancelled"] = True
+                        unit["session"] = ""
                     if "rating" in saved:
                         unit["rating"] = saved["rating"]
                     if saved.get("assessment") is not None and unit.get("assessment") is None:
@@ -679,6 +682,25 @@ def _screening_round_action(folder_path, campaign, number, action):
     if action == "stop" and active and number == campaign["round"]:
         _controls[campaign["id"]]["stop_round"].set()
         plan["status"] = "stopping"
+        _save(folder_path, campaign, preserve_manual=False)
+        # This round may already have queued multiple Test variations. Cancel
+        # pending work immediately; a render that has started can finish.
+        for unit in campaign["units"]:
+            if (unit["round"] != number or unit.get("frame") or unit.get("cancelled")
+                    or not unit.get("session")):
+                continue
+            session = test_bench.open_session(folder_path, unit["session"])
+            if session.get("status") != "queued":
+                continue
+            try:
+                test_bench.cancel_queued(folder_path, unit["session"])
+            except RuntimeError as exc:
+                if "Only a fully queued Test session can be cancelled here." in str(exc):
+                    continue  # A render started during cancellation; leave it alone.
+                raise
+            unit["cancelled"] = True
+            unit["session"] = ""
+            _save(folder_path, campaign, preserve_manual=False)
     elif action == "cancel" and (number > campaign["round"] or
                                  (campaign["status"] == "queued" and number >= campaign["round"])):
         plan["status"] = "cancelled"
@@ -865,7 +887,24 @@ def _compare(answer, groups):
 
 def _wait_for_session(folder_path, campaign, unit, stop_queuing=None):
     while True:
-        session = test_bench.open_session(folder_path, unit["session"])
+        if unit.get("cancelled"):
+            return None
+        try:
+            session = test_bench.open_session(folder_path, unit["session"])
+        except FileNotFoundError:
+            if stop_queuing is None or not stop_queuing.is_set():
+                raise
+            # A concurrent Stop Queuing may have removed this queued Test session.
+            # Check the saved cancellation marker, never treat arbitrary missing
+            # work as successfully cancelled.
+            with _worker_lock:
+                latest = _load(folder_path, campaign["id"])
+                saved = _unit(latest, unit["round"], unit["epoch"], unit["case"])
+                if not saved.get("cancelled"):
+                    raise
+                unit["cancelled"] = True
+                unit["session"] = ""
+            return None
         phase = str(session.get("status") or "")
         if stop_queuing is not None and stop_queuing.is_set() and phase == "queued":
             try:

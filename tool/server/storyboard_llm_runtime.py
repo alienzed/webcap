@@ -1753,7 +1753,7 @@ def _debug_llm_failure(model_id, elapsed_seconds, exc):
     )
 
 
-def chat(model_ref, messages, response_schema=None, max_tokens=None, context_size=None, gpu_reserved=False, sampling=None, allow_truncated=False, assessment_evidence=False, thinking=None):
+def chat(model_ref, messages, response_schema=None, max_tokens=None, context_size=None, gpu_reserved=False, sampling=None, allow_truncated=False, assessment_evidence=False, thinking=None, use_configured_max_tokens=True):
     if not isinstance(messages, list) or not messages:
         raise ValueError("Director messages are required.")
 
@@ -1783,7 +1783,9 @@ def chat(model_ref, messages, response_schema=None, max_tokens=None, context_siz
             "presence_penalty": float(sampling.get("presence_penalty", 0.0)),
             "frequency_penalty": float(sampling.get("frequency_penalty", 0.0)),
         }
-        requested_max_tokens = max_tokens if max_tokens is not None else settings["max_tokens"]
+        requested_max_tokens = max_tokens if max_tokens is not None else (
+            settings["max_tokens"] if use_configured_max_tokens else None
+        )
         if requested_max_tokens is not None:
             requested_max_tokens = int(requested_max_tokens)
             if requested_max_tokens <= 0:
@@ -1894,9 +1896,23 @@ def _completion_result(response, model_id, allow_truncated=False, assessment_evi
     content = str(message.get("content") or "")
     if not assessment_evidence:
         content = content.strip()
-    if not content and not assessment_evidence:
-        raise RuntimeError("Director runtime returned an empty response.")
     finish_reason = str(choice.get("finish_reason") or "").strip().lower() if isinstance(choice, dict) else ""
+    if not content and not assessment_evidence:
+        # The provider returned successfully but supplied no answer. Preserve its
+        # completion metadata in the job error/Console without exposing reasoning.
+        usage = response.get("usage") if isinstance(response, dict) else None
+        usage = usage if isinstance(usage, dict) else {}
+        details = usage.get("completion_tokens_details")
+        details = details if isinstance(details, dict) else {}
+        reasoning = message.get("reasoning") or message.get("reasoning_content") or ""
+        diagnostics = [
+            "finish_reason=" + (finish_reason or "unreported"),
+            "completion_tokens=" + str(usage.get("completion_tokens") if usage.get("completion_tokens") is not None else "unreported"),
+            "reasoning_chars=" + str(len(str(reasoning))),
+        ]
+        if details.get("reasoning_tokens") is not None:
+            diagnostics.append("reasoning_tokens=" + str(details["reasoning_tokens"]))
+        raise RuntimeError("Director runtime returned an empty response (" + ", ".join(diagnostics) + ").")
     if finish_reason in {"length", "max_tokens"}:
         if not allow_truncated:
             raise RuntimeError(
@@ -1974,7 +1990,7 @@ def normalize_freeform_messages(messages, allow_image_data_urls=False):
         normalized.append({"role": role, "content": content})
     return normalized
 
-def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None, allow_image_data_urls=False, thinking=None):
+def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, context_size=None, assessment_evidence=False, response_schema=None, allow_image_data_urls=False, thinking=None, use_configured_max_tokens=True):
     normalized = normalize_freeform_messages(messages, allow_image_data_urls=allow_image_data_urls)
 
     operation = "freeform_chat"
@@ -2009,6 +2025,7 @@ def run_freeform_chat(model_id, messages, gpu_reserved=False, max_tokens=None, c
                 allow_truncated=True,
                 assessment_evidence=assessment_evidence,
                 thinking=thinking,
+                **({"use_configured_max_tokens": False} if not use_configured_max_tokens else {}),
             )
             _set_activity(
                 "complete",

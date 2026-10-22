@@ -775,6 +775,10 @@ def _execute_claimed(job_id, gpu_reserved):
                 chat_kwargs["response_schema"] = contract["response_schema"]
             messages = contract.get("messages")
             caption_operation = str(contract.get("operation") or "").strip()
+            if client == "caption" and caption_operation in {"vision_image_caption", "vision_question"}:
+                # These user-directed VL replies should end naturally, even if Director
+                # has a configured output cap. Other operations retain their limits.
+                chat_kwargs["use_configured_max_tokens"] = False
             if client == "caption" and caption_operation in {"caption_vision_validate", "vision_image_caption", "vision_caption_extras", "vision_question", "vision_schema_sight", "vision_vocabulary_sight"}:
                 from .storyboard_llm_runtime import prepare_caption_vision_messages
                 chat_kwargs["allow_image_data_urls"] = True

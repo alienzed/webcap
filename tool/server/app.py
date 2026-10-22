@@ -839,9 +839,7 @@ def vision_image_caption_route():
                 "operation": "vision_image_caption",
                 "messages": messages,
             },
-            context={
-                "runtimeOverrides": {"maxTokens": 384},
-            },
+            context={},
             label="Vision Caption",
         )
         return jsonify({"ok": True, "job": job}), 202

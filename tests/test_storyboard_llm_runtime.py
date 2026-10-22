@@ -2487,3 +2487,30 @@ def test_vision_discovery_reports_missing_directory(monkeypatch, tmp_path):
     warnings = []
     assert storyboard_llm_runtime.list_local_vision_models(warnings=warnings) == []
     assert warnings and "does not exist" in warnings[0]["error"]
+
+@pytest.mark.parametrize("finish_reason, usage, reasoning, expected", [
+    ("length", {"completion_tokens": 384}, "reasoning only", ["finish_reason=length", "completion_tokens=384", "reasoning_chars=14"]),
+    ("stop", {"completion_tokens": 0}, "", ["finish_reason=stop", "completion_tokens=0", "reasoning_chars=0"]),
+    ("", {}, "", ["finish_reason=unreported", "completion_tokens=unreported", "reasoning_chars=0"]),
+])
+def test_empty_provider_completion_exposes_diagnostics_without_reasoning_text(finish_reason, usage, reasoning, expected):
+    response = {
+        "choices": [{"message": {"content": "", "reasoning_content": reasoning}, "finish_reason": finish_reason}],
+        "usage": usage,
+    }
+    with pytest.raises(RuntimeError, match="empty response") as failed:
+        storyboard_llm_runtime._completion_result(response, "remote::vision", allow_truncated=True)
+    error = str(failed.value)
+    for part in expected:
+        assert part in error
+    if reasoning:
+        assert reasoning not in error
+
+
+def test_empty_provider_completion_includes_reported_reasoning_token_count():
+    response = {
+        "choices": [{"message": {"content": None}, "finish_reason": "length"}],
+        "usage": {"completion_tokens": 512, "completion_tokens_details": {"reasoning_tokens": 512}},
+    }
+    with pytest.raises(RuntimeError, match="reasoning_tokens=512"):
+        storyboard_llm_runtime._completion_result(response, "remote::vision", allow_truncated=True)

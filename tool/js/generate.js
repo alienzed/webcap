@@ -393,6 +393,7 @@
     renderModelForm();
     if (previousModelId === selected) {
       draft.forEach(function (field) { field.node.value = field.value; });
+      syncGenerateBaseLoras();
     }
   }
 
@@ -714,6 +715,7 @@
         if (control) control.value = String(settings[entry[0]]);
       });
 
+      syncGenerateBaseLoras();
       generateState.lorasByModel[resultModelId] = Array.isArray(result.loras)
         ? result.loras.map(function (item) {
             var strength = Number(item.strength);

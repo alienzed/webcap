@@ -226,7 +226,7 @@ def test_standalone_vision_caption_route_queues_plain_multimodal_caption_job(mon
     assert captured["model"] == "local::vision"
     assert captured["contract"]["operation"] == "vision_image_caption"
     assert captured["contract"]["messages"][1]["content"][1]["image_url"]["url"] == "file://bikini/item.jpg"
-    assert captured["context"]["runtimeOverrides"]["maxTokens"] == 384
+    assert captured["context"] == {}
     assert captured["label"] == "Vision Caption"
 
 

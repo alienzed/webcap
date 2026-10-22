@@ -2002,3 +2002,34 @@ def test_first_cut_keeps_one_llm_gpu_turn_across_all_director_steps(llm_root, mo
     ]
     assert batch["sceneCount"] == 2
     assert batch["phase"] == "Refining Scenes"
+
+@pytest.mark.parametrize("operation,expected_uncapped", [
+    ("vision_question", True),
+    ("vision_image_caption", True),
+    ("vision_caption_extras", False),
+    ("caption_assist", False),
+])
+def test_only_ask_and_describe_vl_skip_configured_output_cap(llm_root, monkeypatch, operation, expected_uncapped):
+    captured = {}
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
+    monkeypatch.setattr(storyboard_llm_runtime, "prepare_caption_vision_messages", lambda _model, messages: messages)
+
+    def fake_run(model_id, messages, **kwargs):
+        captured.update(kwargs)
+        return {
+            "text": '{"extras":[]}' if operation == "vision_caption_extras" else "An image description.",
+            "model": model_id,
+        }
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_freeform_chat", fake_run)
+    context = {"runtimeOverrides": {"maxTokens": 192}} if operation == "vision_caption_extras" else {}
+    job = llm_runner.enqueue(
+        "caption",
+        "remote::vision",
+        {"operation": operation, "messages": [{"role": "user", "content": "Describe this image."}]},
+        context=context,
+    )
+    llm_runner._advance_queue()
+    assert llm_runner.job_status(job["jobId"])["status"] == "completed"
+    assert (captured.get("use_configured_max_tokens") is False) is expected_uncapped
+    assert captured.get("max_tokens") == (192 if operation == "vision_caption_extras" else None)

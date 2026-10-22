@@ -2659,7 +2659,19 @@ def execute_inference(job_id, request, context):
         )
         if model.PROFILE_ID == "minimax_h3":
             from .h3_sampling import submitted_sampling
-            sampling = submitted_sampling(workflow, settings["samplingMode"])
+            current_template = model.load_template(settings["samplingMode"])
+            older_frozen_template = evidence["workflowSha256"] != _workflow_evidence(
+                model, current_template, settings["samplingMode"]
+            )["workflowSha256"]
+            sampling = submitted_sampling(
+                workflow, settings["samplingMode"],
+                allow_legacy_test_clip=older_frozen_template,
+            )
+            if not sampling["conditioningUsesLoraClip"]:
+                _logger.warning(
+                    "H3 Test uses original CLIP wiring from a verified frozen older workflow: %s",
+                    workflow_file,
+                )
         else:
             sampling = None
         provider_job_id = inference_runtime.queue_managed_workflow(str(job_id), workflow)

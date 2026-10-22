@@ -12,7 +12,7 @@ def normalize_mode(value):
     return mode
 
 
-def submitted_sampling(workflow, mode):
+def submitted_sampling(workflow, mode, *, allow_legacy_test_clip=False):
     """Validate the final graph, including candidate LoRAs, before sending it."""
     mode = normalize_mode(mode)
     try:
@@ -21,6 +21,14 @@ def submitted_sampling(workflow, mode):
         steps = int(scheduler["steps"])
         if scheduler["model"] != ["138", 0]:
             raise ValueError("H3 scheduler is not connected to the final LoRA chain.")
+        if workflow["126"]["inputs"]["model"] != ["138", 0]:
+            raise ValueError("H3 guider is not connected to the final LoRA chain.")
+        conditioning_clip = workflow["131"]["inputs"]["clip"]
+        clip_through_lora = conditioning_clip == ["138", 1]
+        if not clip_through_lora and not (
+            allow_legacy_test_clip and conditioning_clip == ["128", 0]
+        ):
+            raise ValueError("H3 conditioning bypasses the effective LoRA CLIP chain.")
         sources = []
         single = workflow.get("148")
         if single is not None:
@@ -66,6 +74,7 @@ def submitted_sampling(workflow, mode):
         "mode": mode,
         "steps": steps,
         "turboEnabled": bool(turbo),
+        "conditioningUsesLoraClip": clip_through_lora,
         "turboStrength": turbo[0]["strength"] if turbo else None,
         "loras": sources,
     }

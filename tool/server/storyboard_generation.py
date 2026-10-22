@@ -161,6 +161,8 @@ def _storyboard_request(settings):
         settings["duration"],
     )
 
+    from .h3_sampling import normalize_mode
+    sampling_mode = normalize_mode(settings.get("samplingMode"))
     return {
         "modelId": "minimax_h3",
         "mediaKind": "video",
@@ -171,12 +173,12 @@ def _storyboard_request(settings):
             "megapixels": settings["megapixels"],
             "duration": settings["duration"],
             "seed": settings["seed"],
-            "samplingMode": settings.get("samplingMode", "current"),
+            "samplingMode": sampling_mode,
         },
         "loras": copy.deepcopy(settings.get("loras") or []),
         "references": references,
         "referenceRecords": copy.deepcopy(settings.get("references") or []),
-        "workflowFile": get_inference_model("minimax_h3").template_path(settings.get("samplingMode")).name,
+        "workflowFile": get_inference_model("minimax_h3").template_path(sampling_mode).name,
         "entryState": str(settings.get("entryState") or ""),
         "exitState": str(settings.get("exitState") or ""),
         "seedMode": str(settings.get("seedMode") or ""),
@@ -190,7 +192,11 @@ def execute_inference(job_id, request, context):
         raise RuntimeError("Storyboard inference is missing its Story or Scene context.")
 
     model = get_inference_model(request.get("modelId"))
-    template = model.load_template((request.get("settings") or {}).get("samplingMode"))
+    from .h3_sampling import normalize_mode
+    request = copy.deepcopy(request)
+    request["settings"]["samplingMode"] = normalize_mode(request["settings"].get("samplingMode"))
+    request["workflowFile"] = model.template_path(request["settings"]["samplingMode"]).name
+    template = model.load_template(request["settings"]["samplingMode"])
     started = time.monotonic()
     uploaded = {}
     output_ref = None

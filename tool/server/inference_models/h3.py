@@ -1,14 +1,11 @@
 import copy
 
+from ..h3_sampling import normalize_mode as normalize_sampling_mode
+
 from .common import normalize_name, validate_seed
 
 
-WORKFLOW_FILES = {"current": "minimax_h3_inference_api.json", "single": "minimax_h3_inference_single_api.json", "no_turbo": "minimax_h3_inference_no_turbo_api.json"}
-
-def normalize_sampling_mode(value):
-    mode = str(value or "current").strip()
-    if mode not in WORKFLOW_FILES: raise ValueError("Unsupported H3 sampling mode: " + mode)
-    return mode
+WORKFLOW_FILES = {"turbo": "minimax_h3_inference_single_api.json", "quality": "minimax_h3_inference_no_turbo_api.json"}
 
 OUTPUT_EXTENSIONS = (".mp4",)
 ASPECT_RATIO_OPTIONS = (
@@ -38,7 +35,7 @@ def template_settings(workflow):
         "aspectRatio": str(resolution.get("aspect_ratio") or "").strip(),
         "megapixels": float(resolution.get("megapixels") or 0),
         "duration": float(duration.get("value") or 0),
-        "samplingMode": "current",
+        "samplingMode": "turbo",
     }
 
 

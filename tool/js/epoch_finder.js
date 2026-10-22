@@ -1075,6 +1075,10 @@
       (payload.warnings||[]).forEach(function(warning){if(warning)console.warn('[Manual Screening settings]',warning);});
       return payload;
     });
+    screeningSettingsRequest=screeningSettingsRequest.catch(function(exc){
+      if(screeningSettingsKey===key)screeningSettingsRequest=null;
+      throw exc;
+    });
     return screeningSettingsRequest;
   }
   function screeningGroups(selected) {
@@ -1093,7 +1097,8 @@
     els('manual-prompt').value=plan?plan.prompt:'';
     screeningGroups(plan?plan.groupIndex:0);
     screeningSettingsSource(campaign&&campaign.modelId).then(function(payload){
-      if(context!==currentFolder || (selectedId && activeCampaign!==selectedId))return;
+      if(context!==currentFolder || (selectedId && activeCampaign!==selectedId) ||
+          (!selectedId && activeCampaign) || els('campaign-type').value!=='manual')return;
       if(!plan){
         var prompt=payload.workspacePromptPresent?payload.workspacePrompt:payload.defaultPrompt;
         if(!els('manual-prompt').value.trim()){
@@ -1435,6 +1440,11 @@
     els('timeline').classList.add('hidden');
     els('metrics').classList.remove('hidden');
     progress(campaign);
+    els('vl-count').parentElement.classList.add('hidden');
+    var failed=(campaign.units||[]).filter(function(u){
+      return u.round===campaign.round && !!u.error;
+    }).length;
+    if(failed)els('render-count').textContent+=' · '+failed+' failed';
     els('follow-up').classList.add('hidden');
     manualVisionPending=!!campaign.screeningVisionRunning;
     screeningLogVisionErrors(campaign);
@@ -1492,6 +1502,7 @@
     els('live-layout').classList.remove('hidden');
     els('timeline').classList.remove('hidden');
     els('metrics').classList.remove('hidden');
+    els('vl-count').parentElement.classList.remove('hidden');
     progress(campaign);
     els('follow-up').classList.toggle('hidden', campaign.status === 'running' || campaign.status === 'queued');
     ranking(campaign);

@@ -37,6 +37,7 @@
   var screeningSettingsRequest = null;
   var screeningSelectionQueue = Promise.resolve();
   var screeningSelectionRevision = 0;
+  var screeningSelectionFailure = null;
   var screeningExpandedExcluded = new Set();
   var screeningWildcardError = null;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
@@ -324,53 +325,93 @@
     return parts.filter(Boolean).join(' · ');
   }
   function drawRuns() {
-    var staged = sourceMode === 'staged';
-    document.querySelectorAll('input[name="epoch-finder-source"]').forEach(function (input) {
-      input.checked = input.value === sourceMode;
+    var staged=sourceMode==='staged';
+    document.querySelectorAll('input[name="epoch-finder-source"]').forEach(function(input){
+      input.checked=input.value===sourceMode;
     });
-    els('run-choices').classList.toggle('hidden', staged);
-    els('staged-choices').classList.toggle('hidden', !staged);
-    els('staged-choices').innerHTML = stagedFiles.length ? stagedFiles.map(function (file) {
-      return '<label class="epoch-finder-run-choice"><input type="checkbox" data-staged-file="' +
-        escape(file) + '"' + (stagedSelection.has(file) ? ' checked' : '') +
-        '><span><strong>' + escape(file) + '</strong></span></label>';
-    }).join('') : '<p class="epoch-finder-muted">No Test LoRAs staged for this Set and model.</p>';
-    if (staged) {
-      els('run').value = '';
-      els('run-detail').textContent = selectedStagedFiles().length + ' / ' + stagedFiles.length + ' Test LoRAs selected';
-      els('start').disabled = !selectedStagedFiles().length;
+    els('run-choices').classList.toggle('hidden',staged);
+    els('staged-choices').classList.toggle('hidden',!staged);
+    var stagedHost=els('staged-choices');
+    var stagedSignature=JSON.stringify([currentFolder,stagedFiles]);
+    if(stagedHost.dataset.signature!==stagedSignature) {
+      stagedHost.dataset.signature=stagedSignature;
+      stagedHost.innerHTML=stagedFiles.length?stagedFiles.map(function(file){
+        return '<label class="epoch-finder-run-choice"><input type="checkbox" data-staged-file="'+
+          escape(file)+'"><span><strong>'+escape(file)+'</strong></span></label>';
+      }).join(''):'<p class="epoch-finder-muted">No Test LoRAs staged for this Set and model.</p>';
+    }
+    stagedHost.querySelectorAll('[data-staged-file]').forEach(function(input){
+      input.checked=stagedSelection.has(input.dataset.stagedFile);
+    });
+    if(staged){
+      els('run').value='';
+      els('run-detail').textContent=selectedStagedFiles().length+' / '+stagedFiles.length+' Test LoRAs selected';
+      els('start').disabled=!selectedStagedFiles().length;
       return;
     }
-    var model = String(window.getWorkingModelProfileId() || '');
-    var options = runs.filter(function (run) { return run.modelId === model; });
-    els('run-choices').innerHTML = options.length ? options.map(function (run) {
-      var chosen = runEpochSelections[run.jobId] instanceof Set;
-      var label = [run.setName, runIdentity(run)].filter(Boolean).join(' · ');
-      return '<label class="epoch-finder-run-choice"><input type="checkbox" data-run-id="' + escape(run.jobId) +
-        '"' + (chosen ? ' checked' : '') + '><span><strong>' + escape(label) + '</strong>' +
-        '<small>' + escape(runDetails(run)) + '</small></span></label>';
-    }).join('') : '<p class="epoch-finder-muted">No available saved checkpoints for this model.</p>';
-    var selected = selectedRunEntries();
-    els('run').value = selected.length ? selected[0].jobId : '';
-    els('run-detail').textContent = selected.length + ' runs · ' + chosenEpochs().length + ' checkpoints selected';
+    var model=String(window.getWorkingModelProfileId()||'');
+    var options=runs.filter(function(run){return run.modelId===model;});
+    var host=els('run-choices');
+    var signature=JSON.stringify([currentFolder,model,options.map(function(run){
+      return [run.jobId,run.setName,runIdentity(run),runDetails(run)];
+    })]);
+    if(host.dataset.signature!==signature){
+      host.dataset.signature=signature;
+      host.innerHTML=options.length?options.map(function(run){
+        var label=[run.setName,runIdentity(run)].filter(Boolean).join(' · ');
+        return '<label class="epoch-finder-run-choice"><input type="checkbox" data-run-id="'+
+          escape(run.jobId)+'"><span><strong>'+escape(label)+'</strong>'+
+          '<small>'+escape(runDetails(run))+'</small></span></label>';
+      }).join(''):'<p class="epoch-finder-muted">No available saved checkpoints for this model.</p>';
+    }
+    host.querySelectorAll('[data-run-id]').forEach(function(input){
+      input.checked=runEpochSelections[input.dataset.runId] instanceof Set;
+    });
+    var selected=selectedRunEntries();
+    els('run').value=selected.length?selected[0].jobId:'';
+    els('run-detail').textContent=selected.length+' runs · '+chosenEpochs().length+' checkpoints selected';
   }
   function drawEpochPicker() {
     drawRuns();
-    var host = els('epoch-picker'), selected = selectedRunEntries();
-    if (sourceMode === 'staged') { host.classList.add('hidden'); return; }
-    host.classList.toggle('hidden', !selected.length);
-    host.innerHTML = selected.map(function (choice) {
-      var run = runs.find(function (item) { return item.jobId === choice.jobId; });
-      return '<section class="epoch-finder-run-epochs" data-epoch-run="' + escape(run.jobId) + '">' +
-        '<strong>' + escape(runIdentity(run)) + ' · ' + choice.epochs.length + '/' + run.epochs.length + ' selected</strong>' +
-        '<div class="epoch-finder-epoch-timeline">' + run.epochs.map(function (epoch) {
-          return '<button type="button" class="epoch-finder-epoch-tick' + (runEpochSelections[run.jobId].has(epoch) ? ' is-selected' : '') +
-            '" data-epoch-choice="' + epoch + '" aria-pressed="' + runEpochSelections[run.jobId].has(epoch) + '"> ' + epoch + '</button>';
-        }).join('') + '</div><div class="epoch-finder-epoch-tools">' +
-        '<button type="button" data-epoch-action="all">All</button><button type="button" data-epoch-action="every5">Every 5</button>' +
-        '<button type="button" data-epoch-action="last10">Last 10</button><button type="button" data-epoch-action="none">Clear</button>' +
-        '</div></section>';
-    }).join('');
+    var host=els('epoch-picker'),selected=selectedRunEntries();
+    if(sourceMode==='staged'){host.classList.add('hidden');return;}
+    host.classList.toggle('hidden',!selected.length);
+    var existing=new Map(Array.from(host.querySelectorAll('[data-epoch-run]')).map(function(node){
+      return [node.dataset.epochRun,node];
+    }));
+    selected.forEach(function(choice,index){
+      var run=runs.find(function(item){return item.jobId===choice.jobId;});
+      if(!run)throw new Error('Selected training run disappeared.');
+      var region=existing.get(run.jobId);
+      var epochsSignature=JSON.stringify(run.epochs);
+      if(!region||region.dataset.epochsSignature!==epochsSignature){
+        if(region)region.remove();
+        region=document.createElement('section');
+        region.className='epoch-finder-run-epochs';
+        region.dataset.epochRun=run.jobId;
+        region.dataset.epochsSignature=epochsSignature;
+        region.innerHTML='<strong></strong><div class="epoch-finder-epoch-timeline">'+
+          run.epochs.map(function(epoch){
+            return '<button type="button" class="epoch-finder-epoch-tick" data-epoch-choice="'+
+              epoch+'" aria-pressed="false"> '+epoch+'</button>';
+          }).join('')+'</div><div class="epoch-finder-epoch-tools">'+
+          '<button type="button" data-epoch-action="all">All</button>'+
+          '<button type="button" data-epoch-action="every5">Every 5</button>'+
+          '<button type="button" data-epoch-action="last10">Last 10</button>'+
+          '<button type="button" data-epoch-action="none">Clear</button></div>';
+      }
+      region.querySelector('strong').textContent=runIdentity(run)+' · '+
+        choice.epochs.length+'/'+run.epochs.length+' selected';
+      region.querySelectorAll('[data-epoch-choice]').forEach(function(tick){
+        var chosen=runEpochSelections[run.jobId].has(Number(tick.dataset.epochChoice));
+        tick.classList.toggle('is-selected',chosen);
+        tick.setAttribute('aria-pressed',String(chosen));
+      });
+      var at=host.children[index];
+      if(at!==region)host.insertBefore(region,at||null);
+      existing.delete(run.jobId);
+    });
+    existing.forEach(function(node){node.remove();});
   }
 
   function reviewWizard() {
@@ -1166,12 +1207,14 @@
     if (!isManualCampaign()) return Promise.resolve();
     var id=activeCampaign, folder=currentFolder, selection=selectedRunEntries();
     var revision=++screeningSelectionRevision;
+    screeningSelectionFailure=null;
     screeningSelectionQueue=screeningSelectionQueue.catch(function(){}).then(function(){
       return api('screening_selection',{campaignId:id,runSelections:selection});
     });
     return screeningSelectionQueue.then(function (response) {
       if (!campaignState || campaignState.id !== id || currentFolder !== folder ||
           revision!==screeningSelectionRevision) return;
+      screeningSelectionFailure=null;
       campaignState.kept=response.campaign.kept;
       campaignState.candidateMap=response.campaign.candidateMap;
       screeningMatrix(campaignState);
@@ -1179,6 +1222,7 @@
       error(exc);
       if (activeCampaign===id && currentFolder===folder &&
           revision===screeningSelectionRevision) {
+        screeningSelectionFailure=exc;
         // Roll back the optimistic picker on a failed save, never leave a false Keep state.
         manualSelectionCampaign='';
         return refreshStatus().catch(error);
@@ -1200,6 +1244,8 @@
     } else criteria.campaignId=id;
     els('manual-launch').disabled=true;
     (next?screeningSelectionQueue:Promise.resolve()).then(function(){
+      if (next && screeningSelectionFailure)
+        throw new Error('Epoch selection was not saved. Correct the error before queuing another round.');
       return api(action,criteria);
     }).then(function (response) {
       if (next && activeCampaign!==id) return;

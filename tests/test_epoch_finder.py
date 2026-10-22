@@ -572,3 +572,29 @@ def test_campaign_staged_source_wizard_contract():
     assert "criteria.selectedFiles = selectedStagedFiles()" in wizard
     assert "sourceMode === 'staged'" in wizard
     assert "stagedOrigin(campaign, unit.epoch)" in wizard
+
+
+def test_file_campaign_gallery_preserves_filename_without_inventing_run_identity(tmp_path, monkeypatch):
+    cid = "abcdef123456"
+    directory = tmp_path / cid
+    directory.mkdir()
+    campaign = {
+        "id": cid, "modelId": "minimax_h3", "jobId": "",
+        "runName": "Selected Test LoRAs",
+        "candidateMap": {"1": {"sourceType": "staged", "fileName": "manual.safetensors",
+                                "jobId": "", "epoch": None}},
+        "units": [{"round": 1, "epoch": 1, "case": 0, "frame": "render.png"}],
+    }
+    monkeypatch.setattr(epoch_finder.test_bench, "_session_directories", lambda folder: [])
+    monkeypatch.setattr(epoch_finder, "_root", lambda folder: tmp_path)
+    monkeypatch.setattr(epoch_finder, "_load", lambda folder, campaign_id: campaign)
+    monkeypatch.setattr(epoch_finder, "_runs", lambda folder: [])
+    gallery = epoch_finder.workspace_gallery(tmp_path, generated_only=True, include_epoch_index=True)
+    assert gallery["total"] == 1
+    item = gallery["media"][0]
+    assert item["candidate"] == "manual.safetensors"
+    assert item["candidateFile"] == "manual.safetensors"
+    assert item["sourceType"] == "staged"
+    assert item["jobId"] == ""
+    assert item["epoch"] is None
+    assert gallery["resultEpochs"] == []

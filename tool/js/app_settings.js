@@ -670,8 +670,19 @@ function refreshLoraLibrary() {
   status.textContent = 'Scanning configured LoRA roots…';
   loraLibraryRequest('GET').then(function (data) {
     var items = data.items || [];
+    var warnings = data.warnings || [];
     status.textContent = items.length + ' discovered · ' +
-      items.filter(function (item) { return item.enriched; }).length + ' enriched';
+      items.filter(function (item) { return item.enriched; }).length + ' enriched' +
+      (warnings.length ? ' · ' + warnings.length + ' missing root' + (warnings.length === 1 ? '' : 's') : '');
+    if (warnings.length) {
+      status.textContent += '\nSkipped: ' + warnings.map(function (warning) {
+        return warning.stage.toUpperCase() + ' / ' + warning.path;
+      }).join('\n');
+      warnings.forEach(function (warning) {
+        window.reportConsoleWarning('LoRA Library', 'Skipped missing configured root (' +
+          warning.stage + '): ' + warning.path);
+      });
+    }
     list.replaceChildren();
     items.forEach(function (item) {
       var button = document.createElement('button');

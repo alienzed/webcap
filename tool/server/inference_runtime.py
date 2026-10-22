@@ -497,7 +497,7 @@ def wait_for_output(prompt_id, execution_job_id, find_output_ref):
 
             queue_job = execution_get_job(execution_job_id)
             requested_action = str(queue_job.get("requestedAction") or "")
-            if requested_action in ("stop", "cancel"):
+            if requested_action in ("stop", "cancel", "backlog"):
                 provider_status = cancel_job_and_wait_status(prompt_id)
                 if not provider_status:
                     raise RuntimeError(

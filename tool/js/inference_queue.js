@@ -361,9 +361,11 @@
         var stop = document.createElement('button');
         stop.type = 'button';
         stop.className = 'review-captions-btn';
-        stop.dataset.inferenceQueueAction = 'stop';
+        stop.dataset.inferenceQueueAction = 'backlog';
         stop.dataset.jobId = String(job.jobId || '');
-        stop.textContent = status === 'stopping' ? 'Stopping…' : 'Stop';
+        stop.textContent = status === 'stopping'
+          ? (job.requestedAction === 'backlog' ? 'Backlogging…' : 'Stopping…')
+          : 'Backlog';
         stop.disabled = status === 'stopping';
         actions.appendChild(stop);
       }

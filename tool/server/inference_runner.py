@@ -4,6 +4,7 @@ import threading
 import time
 
 from .execution_queue import (
+    backlog_active as execution_backlog_active,
     cancel_all_pending_transient as execution_cancel_all_pending_transient,
     cancel_pending_transient as execution_cancel_pending_transient,
     consume_terminal_job as execution_consume_terminal_job,
@@ -44,6 +45,7 @@ _provider_runtime_holds = set()
 _backlog_lock = threading.Lock()
 _backlog_wait_reason = ""
 _backlog_drain_enabled = threading.Event()
+_backlog_deferred_ids = set()
 _logger = logging.getLogger(__name__)
 
 
@@ -127,6 +129,7 @@ def _reconcile_live_provider_runtime_holds():
 def prepare_startup_backlog():
     """Return all persisted unfinished inference work to Backlog."""
     _backlog_drain_enabled.clear()
+    _backlog_deferred_ids.clear()
     _set_backlog_wait_reason("")
     with _provider_runtime_hold_lock:
         _provider_runtime_holds.clear()
@@ -304,7 +307,8 @@ def _ensure_execution_reconciled():
         for job in prior_unfinished:
             job_id = str(job.get("id") or "")
             outcome = committed_outcomes.get(job_id)
-            if outcome is None and str(job.get("status") or "") == "stopping":
+            if (outcome is None and str(job.get("status") or "") == "stopping"
+                    and str(job.get("requestedAction") or "") != "backlog"):
                 outcome = {
                     "status": "stopped",
                     "result": {},
@@ -344,8 +348,12 @@ def _execute_claimed(job_id):
 
     running = execution_mark_running(job_id, details={"providerStatus": "starting"})
     if str(running.get("status") or "") == "stopping":
-        _cleanup_generate_job_references(job_id)
-        execution_finish_job_transient(job_id, status="stopped", error="Inference stopped before provider launch.")
+        if str(running.get("requestedAction") or "") == "backlog":
+            _backlog_deferred_ids.add(job_id)
+            execution_backlog_active(job_id)
+        else:
+            _cleanup_generate_job_references(job_id)
+            execution_finish_job_transient(job_id, status="stopped", error="Inference stopped before provider launch.")
         return
 
     if client == "generate":
@@ -444,7 +452,8 @@ def _advance_queue():
         drain_backlog = _backlog_drain_enabled.is_set()
         if next_runnable is None and drain_backlog:
             next_runnable = next(
-                (job for job in jobs if str(job.get("status") or "") == "backlog"),
+                (job for job in jobs if str(job.get("status") or "") == "backlog"
+                 and str(job.get("id") or "") not in _backlog_deferred_ids),
                 None,
             )
         if next_runnable is None:
@@ -501,6 +510,7 @@ def _advance_queue():
                 str(job.get("id") or "")
                 for job in jobs
                 if str(job.get("status") or "") == "backlog"
+                and str(job.get("id") or "") not in _backlog_deferred_ids
             }
             claimed = execution_claim_next(
                 EXECUTION_LANE,
@@ -527,18 +537,50 @@ def _advance_queue():
             status = str(current.get("status") or "")
             if isinstance(exc, InferenceStopped):
                 if status in {"starting", "running", "stopping"}:
-                    _cleanup_generate_job_references(job_id)
-                    execution_finish_job_transient(job_id, status=exc.status, error=str(exc))
+                    if (status == "stopping"
+                            and str(current.get("requestedAction") or "") == "backlog"
+                            and exc.status == "stopped"):
+                        _backlog_deferred_ids.add(job_id)
+                        execution_backlog_active(job_id)
+                    else:
+                        _cleanup_generate_job_references(job_id)
+                        execution_finish_job_transient(job_id, status=exc.status, error=str(exc))
             else:
                 release_gpu = _cancel_failed_provider(current)
                 if status == "stopping":
-                    _cleanup_generate_job_references(job_id)
-                    execution_finish_job_transient(
-                        job_id,
-                        status="stopped",
-                        error="Inference stopped after an execution error: " + str(exc),
-                    )
-                    _logger.exception("Inference stopped after an execution error.")
+                    if str(current.get("requestedAction") or "") == "backlog":
+                        # Provider cancellation must be confirmed before this job
+                        # becomes runnable again. The generic failed-provider
+                        # cleanup may release an unverifiable runtime, but that
+                        # is not proof that cancellation succeeded.
+                        latest = execution_get_job(job_id)
+                        details = latest.get("details") or {}
+                        provider_id = str(details.get("providerJobId") or "")
+                        provider_status = str(details.get("providerStatus") or "").lower()
+                        confirmed_done = not provider_id or provider_status in {
+                            "completed", "failed", "cancelled", "missing"
+                        }
+                        if confirmed_done:
+                            _backlog_deferred_ids.add(job_id)
+                            execution_backlog_active(job_id)
+                            _logger.exception("Inference backlogged after an execution error.")
+                        else:
+                            execution_requeue_active_and_pause(
+                                job_id,
+                                "Inference paused after an execution error: "
+                                "Backlog cancellation could not be confirmed. " + str(exc),
+                            )
+                            _logger.exception(
+                                "Could not confirm ComfyUI cancellation; preserved inference request in paused Queue."
+                            )
+                    else:
+                        _cleanup_generate_job_references(job_id)
+                        execution_finish_job_transient(
+                            job_id,
+                            status="stopped",
+                            error="Inference stopped after an execution error: " + str(exc),
+                        )
+                        _logger.exception("Inference stopped after an execution error.")
                 elif status in {"starting", "running"}:
                     execution_requeue_active_and_pause(
                         job_id,
@@ -576,7 +618,8 @@ def _monitor_has_work():
     drain_backlog = _backlog_drain_enabled.is_set()
     return any(
         str(job.get("status") or "") == "queued"
-        or (drain_backlog and str(job.get("status") or "") == "backlog")
+        or (drain_backlog and str(job.get("status") or "") == "backlog"
+            and str(job.get("id") or "") not in _backlog_deferred_ids)
         for job in snapshot.get("jobs", [])
     )
 
@@ -618,6 +661,7 @@ def start_observer():
 
 
 def _start_worker_for_requested_inference():
+    _backlog_deferred_ids.clear()
     _ensure_monitor_started(drain_backlog=True)
 
 
@@ -878,6 +922,8 @@ def action(operation, job_id="", direction="", position=None):
         return {"queue": snapshot(), "moved": len(moved)}
     if operation == "stop":
         return {"job": _job_view(execution_request_stop(job_id))}
+    if operation == "backlog":
+        return {"job": _job_view(execution_request_stop(job_id, requested_action="backlog"))}
     if operation == "pause_queue":
         execution_pause_lane(EXECUTION_LANE)
         return {"queue": snapshot()}

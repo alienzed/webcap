@@ -2545,8 +2545,11 @@ def epoch_finder_propose_route():
         folder = str(data.get("folder") or "").strip()
         safe_join_fs_root(folder)
         job_id = str(data.get("jobId") or "").strip()
-        trained_images = training_image_members(folder, job_id)
-        media = [name for name in list_media_files(folder) if name in trained_images]
+        # Training membership is useful for run-scoped proposals, but the
+        # selected Set is sufficient for standalone staged-LoRA campaigns.
+        trained_images = training_image_members(folder, job_id) if job_id else None
+        media = [name for name in list_media_files(folder)
+                 if trained_images is None or name in trained_images]
         captions = [
             str(load_caption_text(folder, name).get("caption") or "").strip()
             for name in media

@@ -48,6 +48,7 @@ def test_test_sampling_workflow_keeps_candidate_separate(mode, steps, turbo_on):
     )
     assert created["148"]["inputs"]["lora_name"] == "candidate.safetensors"
     assert created["148"]["inputs"]["strength_model"] == 0.8
+    assert created["131"]["inputs"]["clip"] == ["138", 1]
     assert created["138"]["inputs"]["lora_1"]["on"] is turbo_on
     assert template["148"]["inputs"]["lora_name"] != "candidate.safetensors"
     without_candidate = test_h3.build_workflow(
@@ -57,6 +58,7 @@ def test_test_sampling_workflow_keeps_candidate_separate(mode, steps, turbo_on):
     )
     assert "148" not in without_candidate
     assert without_candidate["138"]["inputs"]["model"] == ["161", 0]
+    assert without_candidate["131"]["inputs"]["clip"] == ["138", 1]
 
 
 def test_invalid_modes_fail_loudly_and_legacy_mode_is_current():
@@ -95,6 +97,7 @@ def test_actual_generate_graph_contains_correct_turbo(mode, steps, has_turbo):
     evidence = submitted_sampling(graph, mode)
     assert evidence["steps"] == steps
     assert evidence["turboEnabled"] is has_turbo
+    assert evidence["conditioningUsesLoraClip"] is True
     assert evidence["turboStrength"] == (1.0 if has_turbo else None)
     assert len(evidence["loras"]) == (2 if has_turbo else 1)
     assert any(entry["name"] == "my-candidate.safetensors" and entry["strength"] == 0.7
@@ -115,6 +118,7 @@ def test_actual_test_graph_contains_candidate_separate_from_turbo(mode, steps, h
     evidence = submitted_sampling(graph, mode)
     assert evidence["steps"] == steps
     assert evidence["turboEnabled"] is has_turbo
+    assert evidence["conditioningUsesLoraClip"] is True
     assert evidence["turboStrength"] == (1.0 if has_turbo else None)
     assert len(evidence["loras"]) == (2 if has_turbo else 1)
     assert any(entry["name"] == "candidate.safetensors" and entry["strength"] == 0.8
@@ -149,3 +153,19 @@ def test_submitted_graph_rejects_wrong_strength_double_turbo_and_steps():
     }
     with pytest.raises(ValueError, match="must not load a Turbo"):
         submitted_sampling(quality, "quality")
+
+
+def test_submitted_graph_rejects_conditioning_bypass_and_preserves_verified_legacy_wiring():
+    import copy
+    turbo = get_inference_model("minimax_h3").load_template("turbo")
+    bypass = copy.deepcopy(turbo)
+    bypass["131"]["inputs"]["clip"] = ["128", 0]
+    with pytest.raises(ValueError, match="conditioning bypasses"):
+        submitted_sampling(bypass, "turbo")
+    old_evidence = submitted_sampling(bypass, "turbo", allow_legacy_test_clip=True)
+    assert old_evidence["conditioningUsesLoraClip"] is False
+    assert old_evidence["turboStrength"] == 1.0
+    wrong = copy.deepcopy(turbo)
+    wrong["126"]["inputs"]["model"] = ["161", 0]
+    with pytest.raises(ValueError, match="guider"):
+        submitted_sampling(wrong, "turbo")

@@ -860,3 +860,20 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .run-lab-review-keys{font-size:13px!important;color:var(--text-muted,#bbc9d6);margin:2px 0 0!important}
 @media(max-width:900px){#run-analytics-screen .run-lab-review-workspace{grid-template-columns:1fr;overflow:auto}#run-analytics-screen .run-lab-review-dialog[open]{overflow:hidden}#run-analytics-screen .run-lab-review-media{flex:0 0 42vh;min-height:190px}#run-analytics-screen .run-lab-review-panel{overflow:visible;border-left:0;border-top:1px solid var(--border-color,#384653)}#run-analytics-screen .run-lab-review-context{overflow:visible}}
 @media(max-width:600px){#run-analytics-screen .run-lab-review-head{padding:13px;gap:10px}#run-analytics-screen .run-lab-review-head h3{font-size:24px}#run-analytics-screen .run-lab-review-panel{padding:15px}#run-analytics-screen .run-lab-review-stars button{min-height:62px;font-size:27px}#run-analytics-screen .run-lab-review-meter-wrap{order:3;max-width:none;flex-basis:100%}}
+
+/* Campaign source selection keeps native Test selection and Training Runs distinct. */
+.epoch-finder-source-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 12px;
+}
+.epoch-finder-source-choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}

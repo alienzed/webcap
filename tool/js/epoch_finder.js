@@ -1092,6 +1092,7 @@
     if (groups.length) choice.value=String(Math.min(Math.max(0,old),groups.length-1));
   }
   function screeningApplySettings(campaign) {
+    if(els('campaign-type').value!=='manual')return;
     var plan=campaign && campaign.rounds[campaign.rounds.length-1];
     var context=currentFolder, selectedId=campaign&&campaign.id;
     els('manual-prompt').value=plan?plan.prompt:'';

@@ -228,7 +228,8 @@ test('Generate capability refresh retains the current model draft and settings',
     el: id => controls[id],
     generateState: {models:[{id:'model-a',label:'A'}], modelId:'model-a'},
     getGenerateModelPreference: () => 'model-a', setGenerateModelPreference() {}, escapeHtml: value => value,
-    renderModelForm: () => Object.entries(controls).filter(([id]) => id !== 'generate-model').forEach(([,node]) => node.value = 'default')
+    renderModelForm: () => Object.entries(controls).filter(([id]) => id !== 'generate-model').forEach(([,node]) => node.value = 'default'),
+    syncGenerateBaseLoras() {}
   };
   vm.runInNewContext(source.slice(source.indexOf('  function populateModelSelector()'), source.indexOf('  function fieldVisible(')), context);
   context.populateModelSelector();

@@ -1248,11 +1248,16 @@
         desired.push(previous);
         return;
       }
-      var row=document.createElement('section');row.className='epoch-screening-row';
+      var row=previous||document.createElement('section');
+      row.className='epoch-screening-row';
       row.dataset.screeningEpoch=String(epoch);
       row.dataset.signature=rowSignature;
-      if (previous) previous.remove();
-      var head=document.createElement('div');head.className='epoch-screening-row-head';
+      var headSignature=JSON.stringify([campaign.status,kept.has(epoch),rated[epoch]]);
+      var head=row.querySelector('.epoch-screening-row-head');
+      if (!head || head.dataset.signature!==headSignature) {
+      if (head) head.remove();
+      head=document.createElement('div');head.className='epoch-screening-row-head';
+      head.dataset.signature=headSignature;
       var title=document.createElement('strong');
       var source=campaign.candidateMap[String(epoch)]||{};
       title.textContent=source.sourceType==='staged'?
@@ -1269,6 +1274,7 @@
       var actions=document.createElement('div');actions.className='epoch-screening-row-actions';
       var keepLabel=document.createElement('label');
       var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=kept.has(epoch);
+      checkbox.disabled=campaign.status!=='complete'&&plan.number!==campaign.round;
       checkbox.addEventListener('change',function () {
         var wanted=checkbox.checked;
         var origin=campaign.candidateMap[String(epoch)];
@@ -1305,11 +1311,20 @@
       vl.onclick=function(){screeningAskVision(campaign,{epoch:epoch});};
       actions.appendChild(vl);
       head.appendChild(actions);
-      row.appendChild(head);
-      var cards=document.createElement('div');cards.className='epoch-screening-cases';
+      row.insertBefore(head,row.firstChild);
+      }
+      var cards=row.querySelector('.epoch-screening-cases');
+      if (!cards) {
+        cards=document.createElement('div');cards.className='epoch-screening-cases';
+        row.appendChild(cards);
+      }
       for (var caseIndex=0;caseIndex<plan.seeds.length;caseIndex++) {
         var unit=units.find(function(u){return u.round===plan.number&&u.epoch===epoch&&u.case===caseIndex;});
         (function(u,index) {
+          var cardSignature=JSON.stringify([u&&u.frame,u&&u.framePruned,u&&u.error,
+            u&&u.rating,u&&u.renderSeconds,u&&u.assessment&&u.assessment.text]);
+          var oldCard=cards.children[index];
+          if (oldCard && oldCard.dataset.screeningCardSignature===cardSignature) return;
           var url=u&&u.frame&&!u.framePruned?'/fs/epoch_finder/frame?folder='+encodeURIComponent(currentFolder)+
             '&campaign='+encodeURIComponent(campaign.id)+'&frame='+encodeURIComponent(u.frame):'';
           var card=createTestPreviewCard({
@@ -1336,10 +1351,11 @@
                 screeningAskVision(campaign,{epoch:epoch,case:index});
               }},{label:'Open original',url:url}]:[]
           });
-          cards.appendChild(card);
+          card.dataset.screeningCardSignature=cardSignature;
+          if (oldCard) cards.replaceChild(card,oldCard);
+          else cards.appendChild(card);
         })(unit,caseIndex);
       }
-      row.appendChild(cards);
       desired.push(row);
     });
     var wanted=new Set(desired);

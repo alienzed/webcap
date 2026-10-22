@@ -2183,6 +2183,7 @@ def finalize_generated_take(story_id, scene_id, take_id, provenance):
         "jobId",
         "elapsedMs",
         "effectiveInput",
+        "submittedSampling",
     ):
         if key in provenance:
             take[key] = copy.deepcopy(provenance[key])

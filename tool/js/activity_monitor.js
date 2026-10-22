@@ -694,49 +694,6 @@
     return [String(item.lane || item.kind || ''), String(item.id || ''), String(finishedAt(item))].join(':');
   }
 
-  function toastRecent(item) {
-    var failed = recentStatusClass(item.status) === 'failed';
-    var host = el('activity-toast-stack');
-    if (!host) {
-      host = document.createElement('div');
-      host.id = 'activity-toast-stack';
-      host.className = 'activity-toast-stack';
-      host.setAttribute('aria-live', 'polite');
-      host.setAttribute('aria-label', 'Notifications');
-      el('app-overlay-root').appendChild(host);
-    }
-    var toast = document.createElement('div');
-    toast.className = 'activity-toast ' + (failed ? 'failed' : 'complete');
-    var icon = document.createElement('span');
-    icon.className = 'activity-toast-icon';
-    icon.textContent = failed ? '!' : '✓';
-    var copy = document.createElement('div');
-    copy.className = 'activity-toast-copy';
-    var title = document.createElement('strong');
-    title.textContent = activityTitle(item) + ' ' + recentStatusLabel(item.status);
-    var detail = document.createElement('span');
-    detail.textContent = item.error || activityDetail(item) || '';
-    copy.appendChild(title);
-    if (detail.textContent) copy.appendChild(detail);
-    var close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'activity-toast-close';
-    close.setAttribute('aria-label', 'Dismiss notification');
-    close.textContent = '×';
-    var timer = 0;
-    function dismiss() {
-      if (timer) clearTimeout(timer);
-      toast.remove();
-    }
-    close.onclick = dismiss;
-    toast.appendChild(icon);
-    toast.appendChild(copy);
-    toast.appendChild(close);
-    host.prepend(toast);
-    while (host.children.length > 3) host.lastElementChild.remove();
-    timer = setTimeout(dismiss, failed ? 8000 : 5000);
-  }
-
   function notifyRecent(items) {
     items.forEach(function (item) {
       if (isProgressChild(item)) {
@@ -749,7 +706,6 @@
       if (state.notified[key]) return;
       state.notified[key] = true;
       if (finishedAt(item) < sessionStartedAt) return;
-      toastRecent(item);
 
       var message = activityTitle(item) + ' ' + recentStatusLabel(item.status);
       var detail = item.error || activityDetail(item) || '';

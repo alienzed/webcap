@@ -39,7 +39,7 @@ def submitted_sampling(workflow, mode):
                 })
         turbo = [
             item for item in sources
-            if item["name"].replace("\\\\", "/").split("/")[-1].casefold().startswith(TURBO_LORA_PREFIX)
+            if item["name"].replace(chr(92), "/").split("/")[-1].casefold().startswith(TURBO_LORA_PREFIX)
         ]
         expected_steps = 8 if mode == "turbo" else 20
         if steps != expected_steps:

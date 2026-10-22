@@ -21,6 +21,10 @@ def submitted_sampling(workflow, mode):
         steps = int(scheduler["steps"])
         if scheduler["model"] != ["138", 0]:
             raise ValueError("H3 scheduler is not connected to the final LoRA chain.")
+        if workflow["126"]["inputs"]["model"] != ["138", 0]:
+            raise ValueError("H3 guider is not connected to the final LoRA chain.")
+        if workflow["131"]["inputs"]["clip"] != ["138", 1]:
+            raise ValueError("H3 conditioning bypasses the effective LoRA CLIP chain.")
         sources = []
         single = workflow.get("148")
         if single is not None:

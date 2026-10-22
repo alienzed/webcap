@@ -1332,11 +1332,18 @@
     host.appendChild(prompt);
     var columns=document.createElement('div');columns.className='epoch-screening-run-prompts';
     plan.columnLabels.forEach(function(name,index){
-      var item=document.createElement('details');
-      var title=document.createElement('summary');
+      var item=document.createElement('div');
+      item.className='epoch-screening-run-prompt';
+      var title=document.createElement('strong');
       title.textContent=name+' · Seed '+plan.seeds[index];
+      var preview=document.createElement('p');
+      preview.textContent=plan.casePrompts[index];
+      preview.title=plan.casePrompts[index];
+      var detail=document.createElement('details');
+      var trigger=document.createElement('summary');trigger.textContent='Full prompt';
       var submitted=document.createElement('pre');submitted.textContent=plan.casePrompts[index];
-      item.append(title,submitted);
+      detail.append(trigger,submitted);
+      item.append(title,preview,detail);
       columns.appendChild(item);
     });
     host.appendChild(columns);

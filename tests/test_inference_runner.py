@@ -27,6 +27,7 @@ def inference_root(tmp_path, monkeypatch):
     with inference_runner._backlog_lock:
         inference_runner._backlog_wait_reason = ""
     inference_runner._backlog_drain_enabled.clear()
+    inference_runner._backlog_deferred_ids.clear()
     monkeypatch.setattr(inference_runtime, "system_stats", lambda: {"ok": True})
     monkeypatch.setattr(inference_runtime, "webcap_queue_job_ids", lambda: [])
     return tmp_path
@@ -1709,14 +1710,7 @@ def test_running_inference_backlog_preserves_job_and_queue_order(inference_root,
     execution_queue.mark_running(first["id"], details={"providerJobId": "provider-1"})
     assert inference_runner.action("backlog", first["id"])["job"]["status"] == "stopping"
 
-    # This is the same cancellation signal used by ComfyUI's polling loop.
-    stopped = inference_runtime.InferenceStopped("stopped", "Inference stopped.")
-    def cancelled(_id):
-        raise stopped
-    monkeypatch.setattr(inference_runner, "_execute_claimed", cancelled)
-    monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
-    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
-    # Drive the claimed job's completion boundary with the real queue transition.
+    # Exercise the same atomic transition used after provider cancellation.
     inference_runner._backlog_deferred_ids.add(first["id"])
     shelved = execution_queue.backlog_active(first["id"])
     assert shelved["id"] == first["id"]

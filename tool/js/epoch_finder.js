@@ -1189,7 +1189,13 @@
         values.reduce(function (sum,u) {return sum+u.rating;},0)/values.length:null};
     });
     var sort=els('manual-sort').value;
-    var rows=plan.epochs.slice().sort(function (a,b) {
+    // Reveal an epoch when its first render (or visible failure) is available.
+    // Unfinished cells in that epoch remain as "Awaiting render" placeholders.
+    var rows=plan.epochs.filter(function (epoch) {
+      return units.some(function (u) {
+        return u.round===plan.number && u.epoch===epoch && (u.frame || u.error);
+      });
+    }).sort(function (a,b) {
       if (sort==='kept') return Number(kept.has(b))-Number(kept.has(a))||a-b;
       if (sort==='high'||sort==='low') {
         var av=rated[a]&&rated[a].average,bv=rated[b]&&rated[b].average;
@@ -1247,26 +1253,58 @@
       row.dataset.signature=rowSignature;
       if (previous) previous.remove();
       var head=document.createElement('div');head.className='epoch-screening-row-head';
-      var title=document.createElement('strong');title.textContent=candidateLabel(campaign,epoch);head.appendChild(title);
+      var title=document.createElement('strong');
+      var source=campaign.candidateMap[String(epoch)]||{};
+      title.textContent=source.sourceType==='staged'?
+        String(source.fileName||'Candidate '+epoch):'Epoch '+(source.epoch||epoch);
+      title.title=candidateLabel(campaign,epoch);
+      head.appendChild(title);
       var total=rated[epoch];
-      var summary=document.createElement('span');summary.textContent=total&&total.count?
-        '★ '+total.average.toFixed(1)+' · '+total.count+' rated':'Not rated';head.appendChild(summary);
+      if (total&&total.count) {
+        var summary=document.createElement('span');
+        summary.className='epoch-screening-rating-summary';
+        summary.textContent='★ '+total.average.toFixed(1)+' · '+total.count;
+        head.appendChild(summary);
+      }
+      var actions=document.createElement('div');actions.className='epoch-screening-row-actions';
       var keepLabel=document.createElement('label');
       var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=kept.has(epoch);
-      checkbox.disabled=campaign.status!=='complete';
       checkbox.addEventListener('change',function () {
+        var wanted=checkbox.checked;
         var origin=campaign.candidateMap[String(epoch)];
         if (!origin) throw new Error('Missing screening checkpoint identity.');
         if (!(runEpochSelections[origin.jobId] instanceof Set)) runEpochSelections[origin.jobId]=new Set();
-        if (checkbox.checked) runEpochSelections[origin.jobId].add(origin.epoch);
+        if (wanted) runEpochSelections[origin.jobId].add(origin.epoch);
         else runEpochSelections[origin.jobId].delete(origin.epoch);
         drawEpochPicker();
-        screeningSaveSelection();
+        if (campaign.status==='complete') {
+          screeningSaveSelection();
+          return;
+        }
+        var id=campaign.id,folder=currentFolder,round=plan.number;
+        screeningSelectionQueue=screeningSelectionQueue.catch(function(){}).then(function() {
+          return api('screening_keep',{campaignId:id,round:round,epoch:epoch,keep:wanted});
+        });
+        screeningSelectionQueue.then(function(response) {
+          if (currentFolder!==folder||!campaignState||campaignState.id!==id) return;
+          campaignState.kept=response.kept;
+          screeningMatrix(campaignState);
+        }).catch(function(exc) {
+          if (currentFolder===folder&&campaignState&&campaignState.id===id) {
+            if (wanted) runEpochSelections[origin.jobId].delete(origin.epoch);
+            else runEpochSelections[origin.jobId].add(origin.epoch);
+            drawEpochPicker();
+            refreshStatus().catch(error);
+          }
+          error(exc);
+        });
       });
-      keepLabel.append(checkbox,document.createTextNode('Keep for next round'));head.appendChild(keepLabel);
-      var vl=document.createElement('button');vl.type='button';vl.className='review-captions-btn';vl.textContent='Ask VL · Epoch';
+      keepLabel.title='Keep for next round';
+      keepLabel.append(checkbox,document.createTextNode('Keep'));actions.appendChild(keepLabel);
+      var vl=document.createElement('button');vl.type='button';vl.className='review-captions-btn epoch-screening-ask-btn';vl.textContent='Ask VL';
       vl.onclick=function(){screeningAskVision(campaign,{epoch:epoch});};
-      vl.disabled=campaign.status!=='complete';head.appendChild(vl);
+      actions.appendChild(vl);
+      head.appendChild(actions);
       row.appendChild(head);
       var cards=document.createElement('div');cards.className='epoch-screening-cases';
       for (var caseIndex=0;caseIndex<plan.seeds.length;caseIndex++) {
@@ -1281,7 +1319,7 @@
             placeholder:url?null:(u&&u.error?'Render failed':'Awaiting render'),
             failed:!!(u&&u.error),
             error:u&&u.error||'',
-            rating:url&&campaign.status==='complete'?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,
+            rating:url?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,
               onRate:function(value){
                 api('screening_rate',{campaignId:campaign.id,round:plan.number,
                   epoch:epoch,case:index,rating:value}).then(function () {
@@ -1294,7 +1332,7 @@
             details:[{label:'Prompt',value:plan.casePrompts[index],pre:true},
               {label:'Seed',value:String(plan.seeds[index])},
               {label:'VL',value:u&&u.assessment&&u.assessment.text||''}],
-            actions:url&&campaign.status==='complete'?[{label:'Ask VL for this render',onClick:function () {
+            actions:url?[{label:'Ask VL for this render',onClick:function () {
                 screeningAskVision(campaign,{epoch:epoch,case:index});
               }},{label:'Open original',url:url}]:[]
           });
@@ -1313,7 +1351,9 @@
       if (at!==node) scroller.insertBefore(node,at||null);
     });
     host.scrollLeft=priorScroll;
-    els('manual-vl-round').disabled=campaign.status!=='complete';
+    els('manual-vl-round').disabled=!units.some(function(u) {
+      return u.round===plan.number&&u.frame&&!u.error;
+    });
     els('manual-launch').disabled=campaign.status!=='complete'&&campaign.status!=='paused';
     els('manual-launch').textContent='Run Round '+(campaign.rounds.length+1)+' · '+(campaign.kept||[]).length+' epochs';
   }

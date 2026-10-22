@@ -68,7 +68,7 @@ def test_test_generations_vision_question_uses_resolved_test_media_and_queues_on
     assert seen == {
         "folder": tmp_path / "sets/demo", "session": "session-1", "file": "preview.mp4",
         "lane": "caption", "model": "vl-test", "operation": "vision_question",
-        "context": {}, "label": "Test Generations Ask VL"
+        "context": {"vlUserQuestion": True}, "label": "Test Generations Ask VL"
     }
 
 

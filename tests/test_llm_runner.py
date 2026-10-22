@@ -2003,16 +2003,27 @@ def test_first_cut_keeps_one_llm_gpu_turn_across_all_director_steps(llm_root, mo
     assert batch["sceneCount"] == 2
     assert batch["phase"] == "Refining Scenes"
 
-@pytest.mark.parametrize("operation,expected_uncapped", [
-    ("vision_question", True),
-    ("vision_image_caption", True),
-    ("vision_caption_extras", False),
-    ("caption_assist", False),
+@pytest.mark.parametrize("operation,context,expected_uncapped", [
+    ("vision_question", {"vlUserQuestion": True}, True),
+    ("vision_question", {}, False),  # Reference comparison uses the same operation.
+    ("vision_question", {
+        "testAutoVl": True, "testFolder": "set", "testSession": "session",
+        "testMedia": "preview.png", "testQuestion": "Which option?", "testGroups": [],
+    }, False),
+    ("vision_image_caption", {}, True),
+    ("vision_caption_extras", {"runtimeOverrides": {"maxTokens": 192}}, False),
+    ("caption_assist", {}, False),
 ])
-def test_only_ask_and_describe_vl_skip_configured_output_cap(llm_root, monkeypatch, operation, expected_uncapped):
+def test_only_ask_and_describe_vl_skip_configured_output_cap(llm_root, monkeypatch, operation, context, expected_uncapped):
     captured = {}
     monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda *_args: False)
     monkeypatch.setattr(storyboard_llm_runtime, "prepare_caption_vision_messages", lambda _model, messages: messages)
+    monkeypatch.setattr("tool.server.epoch_test_bench.resolve_result_media",
+                        lambda *_args: Path(llm_root) / "preview.png")
+    monkeypatch.setattr("tool.server.epoch_test_bench.complete_test_auto_vl",
+                        lambda *_args: None)
+    monkeypatch.setattr("tool.server.caption_vision.vision_media_data_url",
+                        lambda *_args: "data:image/png;base64,YQ==")
 
     def fake_run(model_id, messages, **kwargs):
         captured.update(kwargs)
@@ -2022,7 +2033,6 @@ def test_only_ask_and_describe_vl_skip_configured_output_cap(llm_root, monkeypat
         }
 
     monkeypatch.setattr(storyboard_llm_runtime, "run_freeform_chat", fake_run)
-    context = {"runtimeOverrides": {"maxTokens": 192}} if operation == "vision_caption_extras" else {}
     job = llm_runner.enqueue(
         "caption",
         "remote::vision",

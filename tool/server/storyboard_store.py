@@ -1753,6 +1753,7 @@ def add_take_upload(
             "durationSeconds",
             "samplingMode",
             "workflowFile",
+            "workflowSha256",
             "seed",
             "seedMode",
             "aspectRatio",

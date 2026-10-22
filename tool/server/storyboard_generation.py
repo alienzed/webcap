@@ -1,4 +1,6 @@
 import copy
+import hashlib
+import json
 import io
 import logging
 import secrets
@@ -213,6 +215,7 @@ def execute_inference(job_id, request, context):
             inference_runtime.resolve_name,
         )
         effective_input = model.effective_input(workflow)
+        workflow_sha256 = hashlib.sha256(json.dumps(workflow, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
         provider_job_id = inference_runtime.queue_managed_workflow(job_id, workflow)
         output_ref = inference_runtime.wait_for_output(
             provider_job_id,
@@ -236,6 +239,7 @@ def execute_inference(job_id, request, context):
             "references": copy.deepcopy(context.get("referenceRecords") or []),
             "workflowProfile": "minimax_h3_inference_v1",
             "workflowFile": request["workflowFile"],
+            "workflowSha256": workflow_sha256,
             "samplingMode": request["settings"].get("samplingMode", "current"),
             "providerJobId": provider_job_id,
             "jobId": str(job_id),

@@ -2704,6 +2704,7 @@ def execute_inference(job_id, request, context):
             "samplingSteps": workflow.get("124", {}).get("inputs", {}).get("steps"),
             "workflowFile": request.get("workflowFile"),
             "workflowSha256": request.get("workflowSha256"),
+            "effectiveWorkflowSha256": hashlib.sha256(json.dumps(workflow, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest(),
         }
         if candidate_kind == "lora":
             result["candidateFile"] = candidate_file

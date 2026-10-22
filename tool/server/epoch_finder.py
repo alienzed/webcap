@@ -15,7 +15,7 @@ from . import epoch_test_bench as test_bench
 from .epoch_finder_plan import normalize_dimensions
 from .caption_vision import build_vision_question_messages, build_reference_comparison_messages, reference_comparison_feature, vision_resized_image_data_url
 from .llm_runner import enqueue as enqueue_llm, job_status as llm_job_status
-from .test_models import get_test_model_for_staging_key
+from .test_models import get_test_model, get_test_model_for_staging_key
 from .training_history import all_history_payload
 from .training_runner import passive_status_snapshot
 from .training_runner import (
@@ -160,7 +160,7 @@ def _timing_profiles(folder_path):
     return profiles
 
 
-def list_campaigns(folder_path):
+def list_campaigns(folder_path, model_id=""):
     root = _root(folder_path)
     campaigns = []
     if root.is_dir():
@@ -176,7 +176,10 @@ def list_campaigns(folder_path):
                 ("id", "name", "status", "phase", "round", "startedAt", "detail", "modelId", "runName")
             })
     campaigns.sort(key=lambda row: row.get("startedAt") or 0, reverse=True)
-    return {"runs": _runs(folder_path), "campaigns": campaigns, "timings": _timing_profiles(folder_path)}
+    model = get_test_model(model_id) if model_id else None
+    staged_files = [path.name for path in test_bench._staged_loras_for_set(folder_path, model)] if model else []
+    return {"runs": _runs(folder_path), "stagedFiles": staged_files,
+            "campaigns": campaigns, "timings": _timing_profiles(folder_path)}
 
 
 
@@ -263,58 +266,89 @@ def _create_plan(epochs, prompt, rounds, cases, keep_percent, settings, round_op
 def create_campaign(folder_path, criteria):
     criteria = criteria if isinstance(criteria, dict) else {}
     folder = _folder_key(folder_path)
-    runs = {run["jobId"]: run for run in _runs(folder_path)}
-    selections = criteria.get("runSelections")
+    # Staged Test candidates and saved Training epochs are two inputs to the
+    # same campaign evaluator. Legacy run-based campaigns keep their format.
+    selected_files = criteria.get("selectedFiles")
     candidate_map = None
-    if selections is not None:
-        if not isinstance(selections, list) or not selections:
-            raise ValueError("Select at least one training run.")
-        seen_runs = set()
+    if selected_files is not None:
+        model = get_test_model(criteria.get("modelId"))
+        files = test_bench._selected_lora_files_for_set(folder_path, model, selected_files=selected_files)
+        selected_files = [path.name for path in files]
+        candidate_map = {}
+        for number, source in enumerate(files, 1):
+            entry = {"sourceType": "staged", "fileName": source.name, "jobId": "", "epoch": None}
+            provenance = test_bench._staged_lora_provenance(source)
+            if test_bench._has_webcap_staged_provenance(source, model, provenance):
+                if str(provenance.get("sourceFolder") or "").replace("\\\\", "/").strip("/") == folder:
+                    entry.update({
+                        "jobId": str(provenance.get("sourceJobId") or ""),
+                        "epoch": int(provenance["sourceEpoch"]),
+                        "runName": str(provenance.get("sourceRunName") or ""),
+                        "runSequence": str(provenance.get("sourceRunSequence") or ""),
+                        "sourceActionId": str(provenance.get("sourceActionId") or ""),
+                        "sourceRunPath": str(provenance.get("sourceRunPath") or ""),
+                        "sourceRevision": int(provenance.get("sourceRevision") or 1),
+                    })
+            candidate_map[str(number)] = entry
+        selected_epochs = list(range(1, len(candidate_map)))
+        selected_epochs.append(len(candidate_map))
+        job_id = ""
         normalized = []
-        for choice in selections:
-            if not isinstance(choice, dict):
-                raise ValueError("Invalid training-run selection.")
-            chosen_id = str(choice.get("jobId") or "").strip()
-            if chosen_id in seen_runs or chosen_id not in runs:
-                raise ValueError("Training run selection is duplicate or unavailable in this Set.")
-            seen_runs.add(chosen_id)
-            source = runs[chosen_id]
-            epochs = choice.get("epochs")
-            if (not isinstance(epochs, list) or not epochs or
-                    len(epochs) != len(set(epochs)) or
-                    any(type(epoch) is not int or epoch not in source["epochs"] for epoch in epochs)):
-                raise ValueError("Select distinct, available checkpoints for every chosen run.")
-            normalized.append({"jobId": chosen_id, "epochs": sorted(epochs)})
-        models = {(runs[item["jobId"]]["modelId"], runs[item["jobId"]]["stage"]) for item in normalized}
-        if len(models) != 1:
-            raise ValueError("A campaign can compare only runs using the same Test model and stage.")
-        job_id = normalized[0]["jobId"]
-        run = runs[job_id]
-        if len(normalized) > 1:
-            candidate_map = {}
-            for choice in normalized:
-                for epoch in choice["epochs"]:
-                    candidate_map[str(len(candidate_map) + 1)] = {
-                        "jobId": choice["jobId"], "epoch": epoch,
-                        "runName": runs[choice["jobId"]]["runName"],
-                        "runSequence": runs[choice["jobId"]].get("runSequence") or ""}
-            selected_epochs = list(range(1, len(candidate_map) + 1))
-        else:
-            selected_epochs = normalized[0]["epochs"]
+        run_name = "Selected Test LoRAs"
     else:
-        job_id = str(criteria.get("jobId") or "").strip()
-        if job_id not in runs:
-            raise ValueError("Select a training run with available saved epochs.")
-        run = runs[job_id]
-        available = set(run["epochs"])
-        selected_epochs = criteria.get("epochs", run["epochs"])
-        if (not isinstance(selected_epochs, list) or not selected_epochs or
-                any(type(epoch) is not int or epoch not in available for epoch in selected_epochs) or
-                len(selected_epochs) != len(set(selected_epochs))):
-            raise ValueError("Select one or more distinct available epochs from this training run.")
-        selected_epochs = sorted(selected_epochs)
-        normalized = [{"jobId": job_id, "epochs": selected_epochs}]
-    model = get_test_model_for_staging_key(run["stage"])
+        runs = {run["jobId"]: run for run in _runs(folder_path)}
+        selections = criteria.get("runSelections")
+        candidate_map = None
+        if selections is not None:
+            if not isinstance(selections, list) or not selections:
+                raise ValueError("Select at least one training run.")
+            seen_runs = set()
+            normalized = []
+            for choice in selections:
+                if not isinstance(choice, dict):
+                    raise ValueError("Invalid training-run selection.")
+                chosen_id = str(choice.get("jobId") or "").strip()
+                if chosen_id in seen_runs or chosen_id not in runs:
+                    raise ValueError("Training run selection is duplicate or unavailable in this Set.")
+                seen_runs.add(chosen_id)
+                source = runs[chosen_id]
+                epochs = choice.get("epochs")
+                if (not isinstance(epochs, list) or not epochs or
+                        len(epochs) != len(set(epochs)) or
+                        any(type(epoch) is not int or epoch not in source["epochs"] for epoch in epochs)):
+                    raise ValueError("Select distinct, available checkpoints for every chosen run.")
+                normalized.append({"jobId": chosen_id, "epochs": sorted(epochs)})
+            models = {(runs[item["jobId"]]["modelId"], runs[item["jobId"]]["stage"]) for item in normalized}
+            if len(models) != 1:
+                raise ValueError("A campaign can compare only runs using the same Test model and stage.")
+            job_id = normalized[0]["jobId"]
+            run = runs[job_id]
+            if len(normalized) > 1:
+                candidate_map = {}
+                for choice in normalized:
+                    for epoch in choice["epochs"]:
+                        candidate_map[str(len(candidate_map) + 1)] = {
+                            "jobId": choice["jobId"], "epoch": epoch,
+                            "runName": runs[choice["jobId"]]["runName"],
+                            "runSequence": runs[choice["jobId"]].get("runSequence") or ""}
+                selected_epochs = list(range(1, len(candidate_map) + 1))
+            else:
+                selected_epochs = normalized[0]["epochs"]
+        else:
+            job_id = str(criteria.get("jobId") or "").strip()
+            if job_id not in runs:
+                raise ValueError("Select a training run with available saved epochs.")
+            run = runs[job_id]
+            available = set(run["epochs"])
+            selected_epochs = criteria.get("epochs", run["epochs"])
+            if (not isinstance(selected_epochs, list) or not selected_epochs or
+                    any(type(epoch) is not int or epoch not in available for epoch in selected_epochs) or
+                    len(selected_epochs) != len(set(selected_epochs))):
+                raise ValueError("Select one or more distinct available epochs from this training run.")
+            selected_epochs = sorted(selected_epochs)
+            normalized = [{"jobId": job_id, "epochs": selected_epochs}]
+        model = get_test_model_for_staging_key(run["stage"])
+        run_name = run["runName"]
     model.load_template()
     prompt = str(criteria.get("prompt") or "").strip()
     dimensions = normalize_dimensions(prompt, criteria.get("dimensions"))
@@ -384,25 +418,32 @@ def create_campaign(folder_path, criteria):
     parent_id = str(criteria.get("parentCampaignId") or "")
     if parent_id:
         parent = _load(folder_path, parent_id)
-        original = parent.get("runSelections", [{"jobId": parent["jobId"], "epochs": parent["rounds"][0]["epochs"]}])
-        selections_match = {
-            item["jobId"]: tuple(item["epochs"]) for item in original
-        } == {
-            item["jobId"]: tuple(item["epochs"]) for item in normalized
-        }
-        if not selections_match:
-            raise ValueError("Follow-up campaign must use its original selected runs and checkpoints.")
+        if selected_files is not None:
+            if parent.get("selectedFiles") != selected_files:
+                raise ValueError("Follow-up campaign must keep the original selected Test LoRAs.")
+        else:
+            original = parent.get("runSelections", [{"jobId": parent["jobId"], "epochs": parent["rounds"][0]["epochs"]}])
+            selections_match = {
+                item["jobId"]: tuple(item["epochs"]) for item in original
+            } == {
+                item["jobId"]: tuple(item["epochs"]) for item in normalized
+            }
+            if not selections_match:
+                raise ValueError("Follow-up campaign must use its original selected runs and checkpoints.")
     campaign_id = secrets.token_hex(6)
     directory = _directory(folder_path, campaign_id)
     directory.mkdir(parents=True, exist_ok=False)
     (directory / "frames").mkdir()
     campaign = {
-        "version": 2 if candidate_map else 1, "id": campaign_id, "folder": folder, "jobId": job_id,
+        "version": 3 if selected_files is not None else (2 if candidate_map else 1),
+        "id": campaign_id, "folder": folder, "jobId": job_id,
         "parentCampaignId": parent_id or None,
-        "runName": (str(len(normalized)) + " runs · " + str(run["runName"] or "Run")) if candidate_map else run["runName"],
-        "runSelections": normalized, "candidateMap": candidate_map or {},
-        "modelId": model.PROFILE_ID, "stage": run["stage"],
-        "name": str(criteria.get("name") or run["runName"]).strip()[:120],
+        "runName": (str(len(normalized)) + " runs · " + str(run_name or "Run"))
+            if selected_files is None and candidate_map else run_name,
+        "runSelections": normalized, "selectedFiles": selected_files,
+        "candidateMap": candidate_map or {},
+        "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
+        "name": str(criteria.get("name") or run_name).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
         "round": 1, "rounds": plans,
         "visionModel": vision_model, "vlImageMP": vl_image_mp, "dimensions": dimensions,
@@ -430,10 +471,15 @@ def _stage_epoch(folder_path, campaign, epoch):
     directory = _staging(folder_path, campaign)
     directory.mkdir(parents=True, exist_ok=True)
     origin = (campaign.get("candidateMap") or {}).get(str(epoch))
-    source = _candidate_safetensors_path(
-        _folder_key(folder_path),
-        origin["jobId"] if origin else campaign["jobId"],
-        origin["epoch"] if origin else epoch)
+    if origin and origin.get("sourceType") == "staged":
+        model = get_test_model_for_staging_key(campaign["stage"])
+        source = test_bench._selected_lora_files_for_set(
+            folder_path, model, selected_files=[origin["fileName"]])[0]
+    else:
+        source = _candidate_safetensors_path(
+            _folder_key(folder_path),
+            origin["jobId"] if origin else campaign["jobId"],
+            origin["epoch"] if origin else epoch)
     target = directory / ("epoch" + str(epoch) + ".safetensors")
     if target.exists():
         if target.is_symlink() or target.stat().st_size != source.stat().st_size:
@@ -1294,7 +1340,7 @@ def checkpoint_workspace(folder_path, job_id, epoch, offset=0, limit=24):
 def command(folder_path, operation, criteria=None):
     criteria = criteria if isinstance(criteria, dict) else {}
     if operation == "list":
-        return list_campaigns(folder_path)
+        return list_campaigns(folder_path, criteria.get("modelId"))
     if operation == "checkpoint_workspace":
         return checkpoint_workspace(folder_path, criteria.get("jobId"), criteria.get("epoch"),
                                     offset=criteria.get("offset", 0), limit=criteria.get("limit", 24))

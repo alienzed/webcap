@@ -1889,7 +1889,12 @@
     inspectedEpoch = null;
     lastFrameKey = null;
     var changed = currentFolder !== folder;
-    if (changed) { followUpSource = ''; returnMode = ''; }
+    if (changed) {
+      followUpSource = ''; returnMode = '';
+      ['tests','finder'].forEach(function(target){
+        document.getElementById('test-workspace-return-'+target).classList.add('hidden');
+      });
+    }
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
     if (changed) { screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }

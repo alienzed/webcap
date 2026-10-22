@@ -377,7 +377,7 @@
     var select = el('generate-model');
     if (!select) return;
     var previousModelId = select.value;
-    var draft = ['generate-prompt', 'generate-aspect', 'generate-dimensions', 'generate-megapixels', 'generate-duration', 'generate-seed'].map(function (id) {
+    var draft = ['generate-prompt', 'generate-aspect', 'generate-dimensions', 'generate-megapixels', 'generate-duration', 'generate-sampling-mode', 'generate-seed'].map(function (id) {
       var node = el(id);
       return {node: node, value: node.value};
     });
@@ -405,7 +405,7 @@
     var model = currentModel();
     if (!model) return;
 
-    ['aspectRatio', 'megapixels', 'duration', 'dimensions', 'seed'].forEach(function (name) {
+    ['aspectRatio', 'megapixels', 'duration', 'samplingMode', 'dimensions', 'seed'].forEach(function (name) {
       var node = el('generate-field-' + name);
       if (node) node.classList.toggle('hidden', !fieldVisible(name));
     });
@@ -430,6 +430,7 @@
 
     if (el('generate-megapixels')) el('generate-megapixels').value = String((model.defaultSettings || {}).megapixels || '');
     if (el('generate-duration')) el('generate-duration').value = String((model.defaultSettings || {}).duration || '');
+    el('generate-sampling-mode').value = String((model.defaultSettings || {}).samplingMode || 'current');
     if (el('generate-seed')) el('generate-seed').value = '-1';
 
     var prompt = el('generate-prompt');
@@ -672,6 +673,7 @@
     if (fieldVisible('aspectRatio')) settings.aspectRatio = el('generate-aspect').value;
     if (fieldVisible('megapixels')) settings.megapixels = el('generate-megapixels').value;
     if (fieldVisible('duration')) settings.duration = el('generate-duration').value;
+    if (fieldVisible('samplingMode')) settings.samplingMode = el('generate-sampling-mode').value;
     if (fieldVisible('dimensions')) settings.dimensions = el('generate-dimensions').value;
     if (fieldVisible('seed')) settings.seed = el('generate-seed').value;
     return settings;
@@ -706,6 +708,7 @@
         ['aspectRatio', 'generate-aspect'],
         ['megapixels', 'generate-megapixels'],
         ['duration', 'generate-duration'],
+        ['samplingMode', 'generate-sampling-mode'],
         ['dimensions', 'generate-dimensions'],
         ['seed', 'generate-seed']
       ].forEach(function (entry) {
@@ -2175,6 +2178,7 @@
       'generate-aspect',
       'generate-megapixels',
       'generate-duration',
+      'generate-sampling-mode',
       'generate-dimensions',
       'generate-seed',
       'generate-reference-first_frame',

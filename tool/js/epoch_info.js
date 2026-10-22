@@ -13,6 +13,11 @@
     back.type='button';back.onclick=window.epochInfoShowAnalytics;
     return back;
   }
+  function backToTestResults(){
+    var back=element('button','review-captions-btn epoch-info-back','← Back to Test results');
+    back.type='button';back.onclick=window.epochInfoShowSession;
+    return back;
+  }
   function renderHeader(root,view) {
     // Only the first render rebuilds the shell; subsequent pages update keyed cards.
     if(view.rendered){
@@ -28,7 +33,7 @@
     heading.appendChild(element('h3','', 'Epoch '+view.epoch));
     heading.appendChild(element('p','', 'Run '+view.jobId.slice(-8)+' · All recorded Test and Campaign evidence'));
     header.appendChild(heading);
-    if(view.mode==='analytics')header.appendChild(backToInsights());
+    header.appendChild(view.mode==='analytics'?backToInsights():backToTestResults());
     root.appendChild(header);
     var summary=view.summary||{};
     var grid=element('div','epoch-info-stats');
@@ -180,7 +185,7 @@
     var host=document.getElementById(view.host);
     if(!more&&!summaryOnly){
       host.replaceChildren(element('p','', 'Reading recorded epoch evidence…'));
-      if(view.mode==='analytics')host.prepend(backToInsights());
+      host.prepend(view.mode==='analytics'?backToInsights():backToTestResults());
       view.items=[];view.offset=0;
     }
     return request(view.folder,'checkpoint_workspace',{jobId:view.jobId,epoch:view.epoch,offset:summaryOnly?0:view.offset,limit:summaryOnly?1:24}).then(function(data){

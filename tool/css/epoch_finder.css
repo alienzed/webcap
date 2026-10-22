@@ -952,7 +952,14 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 
 /* Manual rounds use the existing sidebar, with contextual Stop/Cancel controls. */
 .epoch-screening-round-item { display:flex; align-items:stretch; gap:6px; min-width:0; }
-.epoch-screening-round-item > .epoch-finder-campaign { flex:1 1 auto; min-width:0; }
-.epoch-screening-round-item > .review-captions-btn { flex:0 0 auto; align-self:center; font-size:14px; }
+.epoch-screening-round-item > .epoch-finder-campaign { flex:1 1 0; min-width:0; }
+.epoch-screening-round-item > .review-captions-btn {
+  /* The shared review button is width:100%; it must not consume the whole round row. */
+  width:auto;
+  flex:0 0 auto;
+  align-self:center;
+  white-space:nowrap;
+  font-size:14px;
+}
 .epoch-screening-row.is-collapsed .epoch-screening-cases { display:none; }
 .epoch-screening-row-head .epoch-screening-expand-btn { width:auto; margin:0; min-height:30px; font-size:14px; padding:5px 9px; }

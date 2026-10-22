@@ -643,7 +643,7 @@ def test_screening_next_round_is_explicit_and_preserves_previous_round(monkeypat
         def normalize_settings(self, template, seed_fn, settings):
             return settings
     monkeypatch.setattr(epoch_finder, "get_test_model", lambda _id: Model())
-    monkeypatch.setattr(epoch_finder, "_save", lambda *_: None)
+    monkeypatch.setattr(epoch_finder, "_save", lambda *_args, **_kwargs: None)
     launched = []
     monkeypatch.setattr(epoch_finder, "_launch", lambda _folder, ident: launched.append(ident))
     campaign = {

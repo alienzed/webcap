@@ -1689,3 +1689,101 @@ def test_weight_sweep_job_preserves_strength_in_failure_metadata(inference_root)
     normal_job = inference_runner.enqueue_test(ordinary, context, deferred=True)
     normal_stored = execution_queue.get_job(normal_job["id"])
     assert "candidateStrength" not in normal_stored["metadata"]
+
+
+def test_running_inference_backlog_preserves_job_and_queue_order(inference_root, monkeypatch):
+    original_request = {"modelId": "krea2_raw", "mediaKind": "image", "prompt": "Keep exact request", "settings": {"seed": 42}}
+    first = execution_queue.enqueue(
+        "inference", {"request": original_request},
+        metadata={"client": "generate", "modelId": "krea2_raw", "mediaKind": "image"},
+    )
+    next_job = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw", "prompt": "Next"}},
+        metadata={"client": "generate"},
+    )
+    old_backlog = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw", "prompt": "Old backlog"}},
+        metadata={"client": "generate"}, initial_status="backlog",
+    )
+    execution_queue.claim_next("inference")
+    execution_queue.mark_running(first["id"], details={"providerJobId": "provider-1"})
+    assert inference_runner.action("backlog", first["id"])["job"]["status"] == "stopping"
+
+    # This is the same cancellation signal used by ComfyUI's polling loop.
+    stopped = inference_runtime.InferenceStopped("stopped", "Inference stopped.")
+    def cancelled(_id):
+        raise stopped
+    monkeypatch.setattr(inference_runner, "_execute_claimed", cancelled)
+    monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
+    # Drive the claimed job's completion boundary with the real queue transition.
+    inference_runner._backlog_deferred_ids.add(first["id"])
+    shelved = execution_queue.backlog_active(first["id"])
+    assert shelved["id"] == first["id"]
+    assert execution_queue.get_job(first["id"], include_payload=True)["payload"]["request"] == original_request
+    assert execution_queue.get_job(first["id"])["details"] == {}
+    jobs = execution_queue.lane_snapshot("inference", include_terminal=False)["jobs"]
+    assert [(j["id"], j["status"]) for j in jobs] == [
+        (next_job["id"], "queued"), (old_backlog["id"], "backlog"), (first["id"], "backlog"),
+    ]
+    assert inference_runner._monitor_has_work() is True
+
+
+def test_backlog_action_uses_existing_stop_signal(inference_root):
+    job = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw", "prompt": "Keep"}},
+        metadata={"client": "generate"},
+    )
+    execution_queue.claim_next("inference")
+    execution_queue.mark_running(job["id"])
+    action = inference_runner.action("backlog", job["id"])
+    assert action["job"]["status"] == "stopping"
+    assert action["job"]["requestedAction"] == "backlog"
+    assert execution_queue.get_job(job["id"], include_payload=True)["payload"]["request"]["prompt"] == "Keep"
+
+
+def test_backlogged_stop_does_not_restart_during_current_idle_drain(inference_root, monkeypatch):
+    first = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw", "prompt": "Park"}},
+        metadata={"client": "generate"},
+    )
+    later = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw", "prompt": "Run"}},
+        metadata={"client": "generate"},
+    )
+    inference_runner._backlog_drain_enabled.set()
+    monkeypatch.setattr(inference_runner, "_reserve_gpu", lambda: True)
+    monkeypatch.setattr(inference_runner, "_release_gpu", lambda: None)
+    monkeypatch.setattr(inference_runtime, "system_stats", lambda: {"ok": True})
+    seen = []
+
+    def execute(job_id):
+        seen.append(job_id)
+        if job_id == first["id"]:
+            execution_queue.request_stop(job_id, requested_action="backlog")
+            raise inference_runtime.InferenceStopped("stopped", "Cancelled by user")
+        execution_queue.finish_job_transient(job_id, status="completed")
+
+    monkeypatch.setattr(inference_runner, "_execute_claimed", execute)
+    inference_runner._advance_queue()
+    assert execution_queue.get_job(first["id"])["status"] == "backlog"
+    assert inference_runner._advance_queue()["jobId"] == later["id"]
+    assert inference_runner._advance_queue() is None
+    assert seen == [first["id"], later["id"]]
+    assert inference_runner._monitor_has_work() is False
+    assert execution_queue.get_job(first["id"])["status"] == "backlog"
+
+
+def test_backlog_intent_survives_restart(inference_root, monkeypatch):
+    job = execution_queue.enqueue(
+        "inference", {"request": {"modelId": "krea2_raw", "prompt": "Keep"}},
+        metadata={"client": "generate"},
+    )
+    execution_queue.claim_next("inference")
+    execution_queue.mark_running(job["id"], details={"providerJobId": "provider-restart"})
+    inference_runner.action("backlog", job["id"])
+    monkeypatch.setattr(inference_runtime, "cancel_job_and_wait_status", lambda _id: "cancelled")
+    inference_runner._startup_reconciled = False
+    inference_runner.prepare_startup_backlog()
+    assert execution_queue.get_job(job["id"])["status"] == "backlog"
+    assert execution_queue.get_job(job["id"], include_payload=True)["payload"]["request"]["prompt"] == "Keep"

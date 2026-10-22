@@ -312,7 +312,8 @@ def test_external_trash_uses_system_trash_not_permanent_delete(tmp_path, monkeyp
         from pathlib import Path
         calls.append(path)
         Path(path).rename(trash / Path(path).name)
-    monkeypatch.setattr(external_media, "send2trash", fake_send2trash)
+    import send2trash
+    monkeypatch.setattr(send2trash, "send2trash", fake_send2trash)
     result = external_media.trash_external_files({"path": str(root), "files": ["one.png"]})
     assert result["trashed"] == ["one.png"]
     assert len(calls) == 1 and (trash / "one.png").exists()

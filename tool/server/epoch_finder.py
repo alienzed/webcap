@@ -176,7 +176,12 @@ def list_campaigns(folder_path, model_id=""):
                 ("id", "name", "status", "phase", "round", "startedAt", "detail", "modelId", "runName")
             })
     campaigns.sort(key=lambda row: row.get("startedAt") or 0, reverse=True)
-    model = get_test_model(model_id) if model_id else None
+    # Existing campaign browsing also works while a non-Test model is selected.
+    # Only the staged candidate list depends on the current Test model.
+    try:
+        model = get_test_model(model_id) if model_id else None
+    except ValueError:
+        model = None
     staged_files = [path.name for path in test_bench._staged_loras_for_set(folder_path, model)] if model else []
     warnings = []
     try:
@@ -450,7 +455,9 @@ def create_campaign(folder_path, criteria):
         "runSelections": normalized, "selectedFiles": selected_files,
         "candidateMap": candidate_map or {},
         "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
-        "name": str(criteria.get("name") or run_name).strip()[:120],
+        "name": str(criteria.get("name") or (
+            selected_files[0] + (" + " + str(len(selected_files) - 1) + " more" if len(selected_files) > 1 else "")
+            if selected_files is not None else run_name)).strip()[:120],
         "status": "paused", "phase": "Ready", "detail": "Ready to generate.",
         "round": 1, "rounds": plans,
         "visionModel": vision_model, "vlImageMP": vl_image_mp, "dimensions": dimensions,
@@ -1241,6 +1248,10 @@ def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collectio
                     "framePruned": bool(unit.get("framePruned")), "error": unit.get("error") or "",
                     "modelId": recorded_model, "jobId": job_id, "epoch": epoch,
                     "runName": origin.get("runName") if origin else campaign.get("runName") or "",
+                    "candidate": origin.get("fileName") if origin and origin.get("sourceType") == "staged"
+                        else "Epoch " + str(epoch),
+                    "candidateFile": origin.get("fileName") if origin and origin.get("sourceType") == "staged" else "",
+                    "sourceType": origin.get("sourceType") if origin else "training",
                     "round": unit.get("round"), "case": unit.get("case"),
                     "renderSeconds": unit.get("renderSeconds"),
                     "visionWallSeconds": unit.get("visionWallSeconds"),

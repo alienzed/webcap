@@ -1,10 +1,11 @@
 """External Media Explorer: transient recursive discovery with source-local metadata.
 
-External media is read-only. Technical facts use Prep's existing synchronized
+External media can be explicitly moved or trashed. Technical facts use Prep's existing synchronized
 media_metadata.json writer; no Set state, database, VL, or inference.
 """
 import json
 import os
+import shutil
 import subprocess
 import threading
 from collections import deque
@@ -370,9 +371,88 @@ def _snapshot_status(snapshot):
             "revision": snapshot["revision"]}
 
 
+
+def _external_sources(data):
+    root = _root(data.get("path"))
+    names = data.get("files")
+    if not isinstance(names, list) or not names:
+        raise ValueError("Select one or more external media files.")
+    if len(names) != len(set(names)):
+        raise ValueError("Duplicate source files in request.")
+    return root, [_source_file(root, name) for name in names]
+
+
+def _external_target_folder(root, relative):
+    relative = str(relative or "").strip().replace("\\", "/")
+    folder = Path(relative)
+    if folder.is_absolute() or ".." in folder.parts:
+        raise ValueError("Destination must be a folder inside the external root.")
+    target = (root / folder).resolve()
+    if not target.is_relative_to(root) or not target.is_dir():
+        raise ValueError("Destination folder does not exist inside the external root.")
+    return target
+
+
+def move_external_files(data):
+    root, files = _external_sources(data)
+    destination = _external_target_folder(root, data.get("destination"))
+    # Check all targets before moving so normal collisions never cause a partial batch.
+    targets = [destination / source.name for source in files]
+    if len(set(targets)) != len(targets) or any(target.exists() for target in targets):
+        raise ValueError("Destination already contains a file with that name.")
+    moved = []
+    for source, target in zip(files, targets):
+        try:
+            shutil.move(str(source), str(target))
+        except OSError as exc:
+            raise RuntimeError(f"Moved {len(moved)} files before failing on {source.name}: {exc}") from exc
+        moved.append(source.relative_to(root).as_posix())
+    return {"ok": True, "moved": moved}
+
+
+def trash_external_files(data):
+    from send2trash import send2trash
+    root, files = _external_sources(data)
+    trashed = []
+    for source in files:
+        try:
+            send2trash(str(source))
+        except Exception as exc:
+            raise RuntimeError(f"Trashed {len(trashed)} files before failing on {source.name}: {exc}") from exc
+        trashed.append(source.relative_to(root).as_posix())
+    return {"ok": True, "trashed": trashed}
+
+
 def register_routes(app):
     from .external_exports import register_routes as register_export_routes
     register_export_routes(app)
+
+    @app.post("/fs/media_explorer/external/reveal")
+    def external_reveal():
+        from .file_ops import open_path_in_explorer_response
+        try:
+            data = request.get_json(silent=True) or {}
+            root = _root(data.get("path"))
+            return open_path_in_explorer_response(_source_file(root, data.get("file")))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL MEDIA REVEAL FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/move")
+    def external_move():
+        try:
+            return jsonify(move_external_files(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL MEDIA MOVE FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.post("/fs/media_explorer/external/trash")
+    def external_trash():
+        try:
+            return jsonify(trash_external_files(request.get_json(silent=True) or {}))
+        except Exception as exc:
+            app.logger.exception("EXTERNAL MEDIA TRASH FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.get("/fs/media_explorer/external")
     def external_list():

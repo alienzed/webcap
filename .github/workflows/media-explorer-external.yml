@@ -35,5 +35,5 @@ jobs:
       - run: node --test tests/media_explorer.test.js
       - run: python -m compileall -q tool/server/external_media.py tool/server/external_exports.py tool/server/media.py tool/server/app.py tests/test_external_media.py tests/test_external_exports.py
       - run: cp tool/config.example.json tool/config.json
-      - run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless Send2Trash
       - run: python -m pytest -q tests/test_external_media.py tests/test_external_exports.py tests/test_media_explorer.py

@@ -712,3 +712,32 @@
   content: '▶';
   font-size: 12px;
 }
+
+/* Compact browser rows, preserving readable controls and Prep-style density. */
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card-open { padding-top:3px; padding-bottom:3px; }
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card-meta { grid-template-columns:minmax(0,1fr); gap:0; padding:1px 4px; }
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card-name { font-size:16px; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; overflow-wrap:normal; }
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card-sub { display:none; }
+.media-explorer-workspace .media-explorer-grid.explorer-list .media-explorer-card { min-height:32px; }
+.media-explorer-workspace .media-explorer-side-open { padding:5px 2px; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; overflow-wrap:normal; }
+.media-explorer-item-menu { position:absolute; top:50%; right:5px; transform:translateY(-50%); z-index:2; border:0; border-radius:4px; background:transparent; color:var(--text); padding:2px 6px; font-size:20px; line-height:1.2; cursor:pointer; }
+.media-explorer-item-menu:hover,.media-explorer-item-menu:focus-visible { background:var(--hover); }
+.media-explorer-side-row { position:relative; padding-right:34px; }
+.media-explorer-side-row .media-explorer-item-menu { right:3px; }
+.media-explorer-grid.explorer-list .media-explorer-card-open { padding-right:42px !important; }
+.media-explorer-workspace .media-explorer-toolbar { padding-bottom:7px; }
+.media-explorer-workspace .media-explorer-toolbar > .media-explorer-facets select { flex:1 1 170px; }
+.media-explorer-workspace .media-explorer-searchbar { max-width:none; grid-template-columns:minmax(0,1fr) minmax(165px,205px) auto; }
+.media-explorer-workspace .media-explorer-gallery-toolbar { border-top:1px solid var(--border-soft); padding-top:6px; }
+
+/* Search/filter composition and obvious results sorting. */
+.media-explorer-workspace .media-explorer-searchbar { display:flex; }
+.media-explorer-workspace .media-explorer-search-field { width:100%; }
+.media-explorer-workspace .media-explorer-gallery-toolbar { gap:8px; }
+.media-explorer-workspace .media-explorer-sort-controls { display:flex; align-items:center; gap:6px; min-width:0; }
+.media-explorer-workspace .media-explorer-sort-controls span { font-size:14px; font-weight:600; color:var(--text); }
+.media-explorer-workspace .media-explorer-sort-controls select { width:170px; max-width:100%; min-height:34px; font-size:15px; border:1px solid var(--border); color:var(--text); background:var(--panel); border-radius:4px; }
+.media-explorer-workspace .media-explorer-sort-controls button { font-size:16px; }
+@media(max-width:850px) {
+  .media-explorer-workspace .media-explorer-sort-controls { flex:1 1 100%; }
+}

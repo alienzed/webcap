@@ -2,14 +2,14 @@ import pytest
 
 from tool.server.inference_models import get_inference_model
 from tool.server.test_models import get_test_model
+from tool.server.h3_sampling import normalize_mode, submitted_sampling
 from tool.server.inference_models import h3 as inference_h3
 from tool.server.test_models import h3 as test_h3
 
 
 @pytest.mark.parametrize("mode,steps,turbo", [
-    ("current", 8, 0.9),
-    ("single", 8, 1.0),
-    ("no_turbo", 20, None),
+    ("turbo", 8, 1.0),
+    ("quality", 20, None),
 ])
 def test_inference_sampling_workflow_is_explicit(mode, steps, turbo):
     model = get_inference_model("minimax_h3")
@@ -30,9 +30,8 @@ def test_inference_sampling_workflow_is_explicit(mode, steps, turbo):
 
 
 @pytest.mark.parametrize("mode,steps,turbo_on", [
-    ("current", 8, True),
-    ("single", 8, True),
-    ("no_turbo", 20, False),
+    ("turbo", 8, True),
+    ("quality", 20, False),
 ])
 def test_test_sampling_workflow_keeps_candidate_separate(mode, steps, turbo_on):
     model = get_test_model("minimax_h3")
@@ -64,9 +63,89 @@ def test_invalid_modes_fail_loudly_and_legacy_mode_is_current():
     model = get_inference_model("minimax_h3")
     legacy = model.normalize_settings(model.load_template(), lambda: 5,
                                       {"duration": 6})
-    assert legacy["samplingMode"] == "current"
+    assert legacy["samplingMode"] == "turbo"
     with pytest.raises(ValueError, match="sampling mode"):
         model.normalize_settings(model.load_template(), lambda: 5,
                                  {"samplingMode": "typo"})
     with pytest.raises(ValueError, match="sampling mode"):
         get_test_model("minimax_h3").load_template("typo")
+
+
+@pytest.mark.parametrize("raw,expected", [
+    (None, "turbo"), ("current", "turbo"), ("single", "turbo"),
+    ("no_turbo", "quality"), ("turbo", "turbo"), ("quality", "quality"),
+])
+def test_legacy_aliases_normalize_without_a_third_execution_mode(raw, expected):
+    assert normalize_mode(raw) == expected
+    assert get_inference_model("minimax_h3").template_path(raw) == get_inference_model("minimax_h3").template_path(expected)
+    assert get_test_model("minimax_h3").template_path(raw) == get_test_model("minimax_h3").template_path(expected)
+
+
+@pytest.mark.parametrize("mode,steps,has_turbo", [
+    ("turbo", 8, True), ("quality", 20, False),
+])
+def test_actual_generate_graph_contains_correct_turbo(mode, steps, has_turbo):
+    model = get_inference_model("minimax_h3")
+    template = model.load_template(mode)
+    values = model.normalize_settings(template, lambda: 99, {"samplingMode": mode})
+    graph = inference_h3.build_workflow(
+        template, "H3 sample", values, [{"name": "my-candidate.safetensors", "strength": 0.7}],
+        {}, "test", lambda *_: [], lambda name, *_: name,
+    )
+    evidence = submitted_sampling(graph, mode)
+    assert evidence["steps"] == steps
+    assert evidence["turboEnabled"] is has_turbo
+    assert evidence["turboStrength"] == (1.0 if has_turbo else None)
+    assert len(evidence["loras"]) == (2 if has_turbo else 1)
+    assert any(entry["name"] == "my-candidate.safetensors" and entry["strength"] == 0.7
+               for entry in evidence["loras"])
+
+
+@pytest.mark.parametrize("mode,steps,has_turbo", [
+    ("turbo", 8, True), ("quality", 20, False),
+])
+def test_actual_test_graph_contains_candidate_separate_from_turbo(mode, steps, has_turbo):
+    model = get_test_model("minimax_h3")
+    template = model.load_template(mode)
+    settings = model.normalize_settings(template, lambda: 3, {"samplingMode": mode})
+    graph = test_h3.build_workflow(
+        template, "H3 sample", "candidate.safetensors",
+        settings=settings, strength_model=0.8,
+    )
+    evidence = submitted_sampling(graph, mode)
+    assert evidence["steps"] == steps
+    assert evidence["turboEnabled"] is has_turbo
+    assert evidence["turboStrength"] == (1.0 if has_turbo else None)
+    assert len(evidence["loras"]) == (2 if has_turbo else 1)
+    assert any(entry["name"] == "candidate.safetensors" and entry["strength"] == 0.8
+               for entry in evidence["loras"])
+
+
+def test_submitted_graph_rejects_wrong_strength_double_turbo_and_steps():
+    import copy
+    template = get_inference_model("minimax_h3").load_template("turbo")
+    assert submitted_sampling(template, "turbo")["turboStrength"] == 1.0
+    weak = copy.deepcopy(template)
+    weak["148"]["inputs"]["strength_model"] = 0.9
+    with pytest.raises(ValueError, match="exactly one Turbo"):
+        submitted_sampling(weak, "turbo")
+    doubled = copy.deepcopy(template)
+    doubled["138"]["inputs"]["lora_1"] = {
+        "on": True, "lora": template["148"]["inputs"]["lora_name"], "strength": 1,
+    }
+    with pytest.raises(ValueError, match="exactly one Turbo"):
+        submitted_sampling(doubled, "turbo")
+    wrong_steps = copy.deepcopy(template)
+    wrong_steps["124"]["inputs"]["steps"] = 20
+    with pytest.raises(ValueError, match="requires 8 steps"):
+        submitted_sampling(wrong_steps, "turbo")
+    disconnected = copy.deepcopy(template)
+    disconnected["138"]["inputs"]["model"] = ["161", 0]
+    with pytest.raises(ValueError, match="not connected"):
+        submitted_sampling(disconnected, "turbo")
+    quality = get_inference_model("minimax_h3").load_template("quality")
+    quality["138"]["inputs"]["lora_1"] = {
+        "on": True, "lora": template["148"]["inputs"]["lora_name"], "strength": 1,
+    }
+    with pytest.raises(ValueError, match="must not load a Turbo"):
+        submitted_sampling(quality, "quality")

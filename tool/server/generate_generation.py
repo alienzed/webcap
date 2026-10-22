@@ -216,6 +216,9 @@ def execute(job_id, request):
             inference_runtime.available_names,
             inference_runtime.resolve_name,
         )
+        if model.PROFILE_ID == "minimax_h3":
+            from .h3_sampling import submitted_sampling
+            request["submittedSampling"] = submitted_sampling(workflow, request["settings"]["samplingMode"])
         request["samplingSteps"] = workflow.get("124", {}).get("inputs", {}).get("steps")
         request["workflowSha256"] = hashlib.sha256(json.dumps(workflow, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
         provider_job_id = inference_runtime.queue_managed_workflow(job_id, workflow)

@@ -823,3 +823,20 @@ def test_only_manual_stopped_campaigns_can_resume(monkeypatch):
     campaign["mode"] = "auto"
     with pytest.raises(ValueError):
         epoch_finder.command(None, "resume", {"campaignId": campaign["id"]})
+
+
+def test_manual_keep_checkbox_uses_the_picker_selection_and_native_scrolling():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    keep = js[js.index("checkbox.addEventListener('change',function () {"):
+              js.index("keepLabel.title='Keep for next round';")]
+    assert "runEpochSelections[origin.jobId]" in keep
+    assert "drawEpochPicker();" in keep
+    assert "screeningSaveSelection();" in keep
+    assert "screening_keep" not in keep  # No split persistence path for live/finished rounds.
+    assert "selected instanceof Set && selected.has(origin.epoch)" in js
+    assert "revision!==screeningSelectionRevision" in js
+    assert "content-visibility: auto;" in css
+    assert "contain-intrinsic-size: auto" in css

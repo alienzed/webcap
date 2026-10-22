@@ -41,6 +41,7 @@
   var screeningSelectionRevision = 0;
   var screeningSelectionFailure = null;
   var screeningExpandedExcluded = new Set();
+  var screeningRatingPending = new Set();
   var screeningWildcardError = null;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
@@ -48,9 +49,10 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
     });
   }
-  function api(operation, criteria) {
+  function api(operation, criteria, folderOverride) {
     return fetch('/fs/epoch_finder', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder: currentFolder, operation: operation, criteria: criteria || {} })
+      body: JSON.stringify({ folder: folderOverride == null ? currentFolder : folderOverride,
+        operation: operation, criteria: criteria || {} })
     }).then(function (response) { return response.json().then(function (json) {
       if (!response.ok || !json.ok) throw new Error(json.error || 'Epoch Finder request failed.');
       return json;
@@ -1402,22 +1404,84 @@
     });
     host.appendChild(columns);
   }
-  function screeningUpdateAverage(row, average) {
+  function screeningUpdateAverage(row, average, epochUnits) {
     var head=row&&row.querySelector('.epoch-screening-row-head');
     if (!head) return;
     var summary=head.querySelector('.epoch-screening-rating-summary');
     if (!average || !average.count) {
       if (summary) summary.remove();
-      return;
+    } else {
+      if (!summary) {
+        summary=document.createElement('span');
+        summary.className='epoch-screening-rating-summary';
+        head.insertBefore(summary,head.querySelector('.epoch-screening-row-actions'));
+      }
+      var averageText='★ '+average.average.toFixed(1)+' · '+average.count;
+      if (summary.textContent!==averageText) summary.textContent=averageText;
     }
-    if (!summary) {
-      summary=document.createElement('span');
-      summary.className='epoch-screening-rating-summary';
-      head.insertBefore(summary,head.querySelector('.epoch-screening-row-actions'));
+    var stars=head.querySelector('.epoch-screening-bulk-stars');
+    if (!stars) return;
+    var rendered=(epochUnits||[]).filter(function(u){return u.frame&&!u.framePruned&&!u.error;});
+    var values=rendered.map(function(u){return Number(u.rating)||0;});
+    var uniform=values.length&&values.every(function(value){return value===values[0];})?values[0]:0;
+    var mixed=values.length>0&&values.some(function(value){return value!==values[0];});
+    var busy=campaignState&&screeningRatingPending.has(
+      currentFolder+':'+campaignState.id+':'+manualSelectedRound+':'+row.dataset.screeningEpoch);
+    stars.querySelectorAll('[data-epoch-bulk-rating]').forEach(function(star){
+      var value=Number(star.dataset.epochBulkRating);
+      star.textContent=value<=uniform?'★':'☆';
+      star.disabled=!!busy||!rendered.length;
+      star.setAttribute('aria-pressed',String(value===uniform&&uniform>0));
+    });
+    var state=head.querySelector('.epoch-screening-bulk-rating-status');
+    if(state){
+      state.textContent=busy?'Rating…':mixed?'Mixed':'';
+      state.classList.toggle('hidden',!state.textContent);
     }
-    var value='★ '+average.average.toFixed(1)+' · '+average.count;
-    if (summary.textContent!==value) summary.textContent=value;
   }
+
+  function screeningRateEpoch(campaign, round, epoch, rating) {
+    var units=(campaign.units||[]).filter(function(u){
+      return u.round===round&&u.epoch===epoch&&u.frame&&!u.framePruned&&!u.error;
+    });
+    if(!units.length) {error(new Error('No rendered items to rate for '+candidateLabel(campaign,epoch)));return;}
+    var folder=currentFolder,id=campaign.id,key=folder+':'+id+':'+round+':'+epoch;
+    if(screeningRatingPending.has(key)) return;
+    screeningRatingPending.add(key);
+    screeningMatrix(campaign);
+    var completed=0,task=Promise.resolve();
+    // Serialize existing per-render saves; simultaneous read/modify/write can lose ratings.
+    units.forEach(function(unit){
+      task=task.then(function(){
+        return api('screening_rate',{campaignId:id,round:round,epoch:epoch,case:unit.case,rating:rating},folder)
+          .then(function(){
+            completed++;
+            unit.rating=rating;
+            if(currentFolder===folder&&campaignState&&campaignState.id===id){
+              var current=campaignState.units.find(function(item){
+                return item.round===round&&item.epoch===epoch&&item.case===unit.case;
+              });
+              if(current) current.rating=rating;
+            }
+          });
+      });
+    });
+    return task.then(function(){
+      if(currentFolder===folder&&campaignState&&campaignState.id===id) return refreshStatus();
+    }).catch(function(exc){
+      error(new Error('Rated '+completed+' of '+units.length+' renders in '+
+        candidateLabel(campaign,epoch)+': '+String(exc&&exc.message||exc)));
+      if(currentFolder===folder&&campaignState&&campaignState.id===id)
+        return refreshStatus().catch(error);
+    }).finally(function(){
+      screeningRatingPending.delete(key);
+      if(currentFolder===folder&&campaignState&&campaignState.id===id){
+        els('manual-matrix').dataset.signature='';
+        screeningMatrix(campaignState);
+      }
+    });
+  }
+
   function screeningMatrix(campaign) {
     if (campaign.mode!=='manual') return;
     if (!campaign.rounds.some(function (plan) {
@@ -1509,7 +1573,9 @@
         return element.dataset.screeningEpoch===String(epoch);
       });
       if (previous && previous.dataset.signature===rowSignature) {
-        screeningUpdateAverage(previous,rated[epoch]);
+        screeningUpdateAverage(previous,rated[epoch],units.filter(function(u){
+          return u.round===plan.number&&u.epoch===epoch;
+        }));
         var existingUnits=units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;});
         existingUnits.forEach(function(u){
           var card=previous.querySelector('.epoch-screening-cases').children[u.case];
@@ -1628,7 +1694,9 @@
       head.appendChild(actions);
       row.insertBefore(head,row.firstChild);
       }
-      screeningUpdateAverage(row,rated[epoch]);
+      screeningUpdateAverage(row,rated[epoch],units.filter(function(u){
+        return u.round===plan.number&&u.epoch===epoch;
+      }));
       var cards=row.querySelector('.epoch-screening-cases');
       if (!cards) {
         cards=document.createElement('div');cards.className='epoch-screening-cases';
@@ -1655,6 +1723,10 @@
             error:u&&u.error||'',
             rating:url?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,
               onRate:function(value,card){
+                if(screeningRatingPending.has(currentFolder+':'+campaign.id+':'+plan.number+':'+epoch)){
+                  error(new Error('Finish applying the row rating before rating an individual render.'));
+                  return;
+                }
                 api('screening_rate',{campaignId:campaign.id,round:plan.number,
                   epoch:epoch,case:index,rating:value}).then(function () {
                     u.rating=value;
@@ -1674,7 +1746,10 @@
                       average:currentUnits.length?currentUnits.reduce(function(total,item){
                         return total+item.rating;
                       },0)/currentUnits.length:0
-                    });
+                    },(campaignState&&campaignState.id===campaign.id?
+                      campaignState:campaign).units.filter(function(item){
+                        return item.round===plan.number&&item.epoch===epoch;
+                      }));
                     if (els('manual-sort').value==='high'||els('manual-sort').value==='low') {
                       host.dataset.signature='';
                       screeningMatrix(campaignState||campaign);

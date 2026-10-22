@@ -1160,7 +1160,7 @@
     });
     sourceMode='runs';
     drawEpochPicker();
-    screeningApplySettings(campaign);
+    // The form is a working draft; opening historical results must not change it.
   }
   function screeningSaveSelection() {
     if (!isManualCampaign()) return Promise.resolve();
@@ -1259,8 +1259,8 @@
         completed+'/'+total+' renders · '+escape(state)+'</small></button>'+
         (action?'<button type="button" class="review-captions-btn" data-screening-round-action="'+action+
           '" data-screening-round-number="'+plan.number+'" title="'+
-          (action==='stop'?'Stop after the current epoch':'Cancel before rendering')+'">'+
-          (action==='stop'?'Stop':'Cancel')+'</button>':'')+'</div>';
+          (action==='stop'?'Cancel unstarted renders; finish the active render':'Cancel before rendering')+'">'+
+          (action==='stop'?'Stop queuing':'Cancel')+'</button>':'')+'</div>';
     }).join('');
   }
   function screeningMatrix(campaign) {
@@ -1324,15 +1324,47 @@
     }
     scroller.style.setProperty('--screening-columns',String(plan.seeds.length));
     scroller.style.setProperty('--screening-width',Math.max(550,plan.seeds.length*228)+'px');
+    // The frozen run plan, not the editable form, owns the review header.
     var labels=scroller.querySelector('.epoch-screening-case-labels');
-    var labelSignature=JSON.stringify(plan.columnLabels);
+    var labelSignature=JSON.stringify([plan.columnLabels,plan.casePrompts,plan.seeds,plan.settings,plan.prompt,plan.groupIndex]);
     if (!labels || labels.dataset.signature!==labelSignature) {
       if (labels) labels.remove();
       labels=document.createElement('div');
       labels.className='epoch-screening-cases epoch-screening-case-labels';
       labels.dataset.signature=labelSignature;
-      plan.columnLabels.forEach(function (name) {
-        var cell=document.createElement('span');cell.textContent=name;labels.appendChild(cell);
+      var settings=document.createElement('div');
+      settings.className='epoch-screening-run-settings';
+      var summary=document.createElement('strong');
+      summary.textContent='Submitted prompts and settings';
+      settings.appendChild(summary);
+      var settingsLine=document.createElement('span');
+      settingsLine.textContent=Object.entries(plan.settings||{}).map(function(entry){
+        return entry[0]+': '+String(entry[1]);
+      }).join(' · ');
+      settings.appendChild(settingsLine);
+      var template=document.createElement('details');
+      template.className='epoch-screening-template';
+      var templateLabel=document.createElement('summary');
+      templateLabel.textContent='Original wildcard prompt · Group '+(plan.groupIndex+1);
+      var templatePrompt=document.createElement('pre');
+      templatePrompt.textContent=plan.prompt;
+      template.append(templateLabel,templatePrompt);
+      settings.appendChild(template);
+      labels.appendChild(settings);
+      plan.columnLabels.forEach(function(name,index){
+        var cell=document.createElement('div');
+        cell.className='epoch-screening-case-heading';
+        var heading=document.createElement('strong');heading.textContent=name;
+        var snippet=document.createElement('p');
+        snippet.className='epoch-screening-prompt-snippet';
+        snippet.textContent=plan.casePrompts[index];
+        snippet.title=plan.casePrompts[index];
+        var detail=document.createElement('details');
+        var trigger=document.createElement('summary');trigger.textContent='Full prompt · seed '+plan.seeds[index];
+        var full=document.createElement('pre');full.textContent=plan.casePrompts[index];
+        detail.append(trigger,full);
+        cell.append(heading,snippet,detail);
+        labels.appendChild(cell);
       });
       scroller.insertBefore(labels,scroller.firstChild);
     }
@@ -1412,24 +1444,6 @@
       actions.appendChild(vl);
       head.appendChild(actions);
       row.insertBefore(head,row.firstChild);
-      }
-      var prompts=row.querySelector('.epoch-screening-prompts');
-      if (!prompts) {
-        prompts=document.createElement('details');
-        prompts.className='epoch-screening-prompts';
-        var promptSummary=document.createElement('summary');
-        promptSummary.textContent='Submitted prompts';
-        prompts.appendChild(promptSummary);
-        plan.casePrompts.forEach(function(prompt,index){
-          var section=document.createElement('section');
-          var name=document.createElement('strong');
-          name.textContent=plan.columnLabels[index]||'Variation '+(index+1);
-          var content=document.createElement('pre');
-          content.textContent=prompt;
-          section.append(name,content);
-          prompts.appendChild(section);
-        });
-        row.appendChild(prompts);
       }
       var cards=row.querySelector('.epoch-screening-cases');
       if (!cards) {

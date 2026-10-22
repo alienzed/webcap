@@ -1072,7 +1072,7 @@
       });
       var sampling=els('manual-sampling'), prior=sampling.value;
       sampling.value=Array.from(sampling.options).some(function(o){return o.value===prior;})?prior:String(defaults.samplingMode||'turbo');
-      (payload.warnings||[]).forEach(function(warning){if(warning)console.warn('[Manual Screening settings]',warning);});
+      (payload.warnings||[]).forEach(function(warning){if(warning)window.reportConsoleWarning('Manual Screening settings',warning);});
       return payload;
     });
     screeningSettingsRequest=screeningSettingsRequest.catch(function(exc){

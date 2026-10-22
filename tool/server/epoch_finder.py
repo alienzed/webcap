@@ -73,6 +73,13 @@ def _save(folder_path, campaign, *, preserve_manual=True):
                 for field in ("kept", "runSelections", "candidateMap"):
                     if field in latest:
                         campaign[field] = latest[field]
+                # A newly submitted round must survive saves by an older render snapshot.
+                if len(latest.get("rounds", [])) > len(campaign.get("rounds", [])):
+                    campaign["rounds"].extend(latest["rounds"][len(campaign["rounds"]):])
+                for index, saved_plan in enumerate(latest.get("rounds", [])):
+                    if (saved_plan.get("status") in {"cancelled", "stopping"} and
+                            campaign["rounds"][index].get("status") not in {"complete", "stopped"}):
+                        campaign["rounds"][index]["status"] = saved_plan["status"]
                 by_unit = {
                     (item["round"], item["epoch"], item["case"]): item
                     for item in latest.get("units", [])
@@ -626,8 +633,6 @@ def _screening_selection(folder_path, campaign, selections):
 
 
 def _screening_next_round(folder_path, campaign, criteria):
-    if campaign.get("status") != "complete":
-        raise ValueError("Finish the current screening round before launching another.")
     if not campaign.get("kept"):
         raise ValueError("Keep at least one epoch for the next round.")
     model = get_test_model(campaign["modelId"])
@@ -640,15 +645,53 @@ def _screening_next_round(folder_path, campaign, criteria):
     prompt = str(criteria.get("prompt", last["prompt"]) or "").strip()
     index = criteria.get("groupIndex", last["groupIndex"])
     plan = _screening_plan(prompt, index, settings, len(campaign["rounds"]) + 1, campaign["kept"])
+    plan["status"] = "queued"
     campaign["rounds"].append(plan)
-    campaign["round"] = plan["number"]
-    campaign["finishedAt"] = None
-    _save(folder_path, campaign)
-    _launch(folder_path, campaign["id"])
+    # Keep the active round and its progress intact. The worker picks up this plan
+    # after finishing the current round, using the existing Campaign FIFO turn.
+    running = _workers.get(campaign["id"])
+    worker_alive = bool(running and running.is_alive())
+    if campaign["status"] == "complete":
+        campaign["round"] = plan["number"]
+        campaign["finishedAt"] = None
+        if worker_alive:
+            campaign.update(status="queued", phase="Queued",
+                            detail="Next manual round queued.")
+            if not any(id_ == campaign["id"] for _, id_ in _pending_campaigns):
+                _pending_campaigns.append((folder_path, campaign["id"]))
+    _save(folder_path, campaign, preserve_manual=False)
+    if not worker_alive and campaign["status"] in {"complete", "queued"}:
+        _launch(folder_path, campaign["id"])
     return campaign
 
 
 _screening_vision_workers = {}
+
+
+def _screening_round_action(folder_path, campaign, number, action):
+    plan = next((row for row in campaign["rounds"] if row["number"] == number), None)
+    if not plan or action not in {"cancel", "stop"}:
+        raise ValueError("Choose a screening round and Cancel or Stop.")
+    if plan.get("status") in {"complete", "cancelled", "stopped"}:
+        raise ValueError("This screening round has already finished.")
+    worker = _workers.get(campaign["id"])
+    active = bool(worker and worker.is_alive()) and campaign["status"] == "running"
+    if action == "stop" and active and number == campaign["round"]:
+        _controls[campaign["id"]]["stop_round"].set()
+        plan["status"] = "stopping"
+    elif action == "cancel" and (number > campaign["round"] or
+                                 (campaign["status"] == "queued" and number >= campaign["round"])):
+        plan["status"] = "cancelled"
+    else:
+        raise ValueError("Stop the running round or cancel a queued round.")
+    _save(folder_path, campaign, preserve_manual=False)
+    if not any(row.get("status") not in {"complete", "cancelled", "stopped"}
+               for row in campaign["rounds"]):
+        _pending_campaigns[:] = [(folder, id_) for folder, id_ in _pending_campaigns
+                                 if id_ != campaign["id"]]
+        campaign.update(status="complete", phase="Review", detail="All queued rounds cancelled.")
+        _save(folder_path, campaign, preserve_manual=False)
+    return campaign
 
 
 def _screening_vision(folder_path, campaign, criteria):
@@ -1162,15 +1205,19 @@ def _run(folder_path, campaign_id, control):
                 _retire_scored_session(folder_path, campaign, unit)
         for plan in campaign["rounds"]:
             number = plan["number"]
-            if number < campaign["round"]:
+            if number < campaign["round"] or plan.get("status") == "cancelled":
                 continue
             epochs = plan["epochs"]
             if not epochs:
                 raise RuntimeError("Round has no candidates.")
             campaign["round"] = number
+            if campaign.get("mode") == "manual":
+                plan["status"] = "running"
             _update(folder_path, campaign, status="running", phase="Rendering",
                     detail="Round " + str(number) + " · " + str(len(epochs)) + " epochs")
             for epoch in epochs:
+                if campaign.get("mode") == "manual" and control["stop_round"].is_set():
+                    break
                 pending = [
                     _unit(campaign, number, epoch, case)
                     for case in range(len(plan["seeds"]))
@@ -1207,12 +1254,29 @@ def _run(folder_path, campaign_id, control):
                 for finished in campaign["units"]:
                     if finished["round"] == number and finished.get("frame"):
                         _retire_scored_session(folder_path, campaign, finished)
+                stopped = control["stop_round"].is_set()
+                control["stop_round"].clear()
                 failed = sum(bool(item.get("error")) for item in campaign["units"] if item["round"] == number)
-                _update(folder_path, campaign, status="complete", phase="Review",
-                        detail=("Round " + str(number) + " ready for manual review." +
-                                (" " + str(failed) + " failed render(s); see cards and Console." if failed else "")),
-                        finishedAt=time.time())
-                return
+                with _worker_lock:
+                    # Check persisted submissions at the completion boundary under
+                    # the same lock used by the submit/cancel operations.
+                    _save(folder_path, campaign)
+                    plan["status"] = "stopped" if stopped else "complete"
+                    next_plan = next((p for p in campaign["rounds"]
+                                      if p["number"] > number and p.get("status") != "cancelled"), None)
+                    if next_plan:
+                        campaign["round"] = next_plan["number"]
+                        _update(folder_path, campaign, status="running", phase="Queued",
+                                detail="Round " + str(number) + (" stopped." if stopped else " complete.") +
+                                       " Next queued round is starting.")
+                    else:
+                        _update(folder_path, campaign, status="complete", phase="Review",
+                                detail=("Round " + str(number) + (" stopped." if stopped else " ready for manual review.") +
+                                        (" " + str(failed) + " failed render(s); see cards and Console." if failed else "")),
+                                finishedAt=time.time())
+                if not next_plan:
+                    return
+                continue
             _update(folder_path, campaign, phase="Evaluating", detail="All round frames captured.")
             for unit in campaign["units"]:
                 if unit["round"] != number:
@@ -1268,6 +1332,10 @@ def _run(folder_path, campaign_id, control):
             _save(folder_path, campaign)
             if not _check_signal(folder_path, campaign, control):
                 return
+        if campaign.get("mode") == "manual":
+            _update(folder_path, campaign, status="complete", phase="Review",
+                    detail="No more queued screening rounds.", finishedAt=time.time())
+            return
         _update(folder_path, campaign, phase="Finalizing", detail="Pruning assessed screening frames.")
         _prune_screening_frames(folder_path, campaign)
         failed = sum(bool(unit.get("error")) for unit in campaign["units"])
@@ -1349,7 +1417,8 @@ def _resume_saved_work(folder_path, campaign):
 
 def _start_campaign_worker_locked(folder_path, campaign_id):
     """Caller holds _worker_lock; only one active Epoch Finder coordinator."""
-    control = {"pause": threading.Event(), "stop": threading.Event()}
+    control = {"pause": threading.Event(), "stop": threading.Event(),
+               "stop_round": threading.Event()}
     thread = threading.Thread(
         target=_run, args=(folder_path, campaign_id, control), daemon=True,
         name="webcap-epoch-finder",
@@ -1677,17 +1746,21 @@ def command(folder_path, operation, criteria=None):
     campaign_id = str(criteria.get("campaignId") or "")
     if operation == "status":
         return {"campaign": status(folder_path, campaign_id)}
-    if operation in {"screening_selection", "screening_next_round", "screening_rate", "screening_keep", "screening_vision"}:
+    if operation in {"screening_selection", "screening_next_round", "screening_round_action",
+                     "screening_rate", "screening_keep", "screening_vision"}:
         campaign = status(folder_path, campaign_id)
         if campaign.get("mode") != "manual":
             raise ValueError("This operation requires a Manual Screening campaign.")
         if operation == "screening_vision":
             return _screening_vision(folder_path, campaign, criteria)
-        if operation == "screening_next_round":
-            return {"campaign": _screening_next_round(folder_path, campaign, criteria)}
         with _worker_lock:
             # Re-read after taking the worker lock; a render might just have landed.
             campaign = _load(folder_path, campaign_id)
+            if operation == "screening_next_round":
+                return {"campaign": _screening_next_round(folder_path, campaign, criteria)}
+            if operation == "screening_round_action":
+                return {"campaign": _screening_round_action(folder_path, campaign,
+                    criteria.get("round"), criteria.get("action"))}
             if operation == "screening_selection":
                 return {"campaign": _screening_selection(folder_path, campaign, criteria.get("runSelections"))}
             if operation == "screening_keep":

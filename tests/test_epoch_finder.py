@@ -643,7 +643,7 @@ def test_screening_next_round_is_explicit_and_preserves_previous_round(monkeypat
         def normalize_settings(self, template, seed_fn, settings):
             return settings
     monkeypatch.setattr(epoch_finder, "get_test_model", lambda _id: Model())
-    monkeypatch.setattr(epoch_finder, "_save", lambda *_: None)
+    monkeypatch.setattr(epoch_finder, "_save", lambda *_args, **_kwargs: None)
     launched = []
     monkeypatch.setattr(epoch_finder, "_launch", lambda _folder, ident: launched.append(ident))
     campaign = {
@@ -840,3 +840,160 @@ def test_manual_keep_checkbox_uses_the_picker_selection_and_native_scrolling():
     assert "revision!==screeningSelectionRevision" in js
     assert "content-visibility: auto;" in css
     assert "contain-intrinsic-size: auto" in css
+
+
+
+def test_manual_round_can_queue_during_active_render_without_losing_it(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    plan = epoch_finder._screening_plan("a {red|blue} glove", 0, {"megapixels": 0.3}, 1, [1, 2])
+    campaign.update(modelId="minimax_h3", rounds=[plan])
+    epoch_finder._save(folder, campaign, preserve_manual=False)
+    stale_worker = epoch_finder._load(folder, campaign["id"])
+    monkeypatch.setattr(epoch_finder, "get_test_model", lambda _: SimpleNamespace(
+        settings=("megapixels",), load_template=lambda: {},
+        normalize_settings=lambda *_: None))
+    monkeypatch.setattr(epoch_finder, "_workers", {campaign["id"]: SimpleNamespace(is_alive=lambda: True)})
+    response = epoch_finder.command(folder, "screening_next_round", {
+        "campaignId": campaign["id"], "prompt": "a {green|yellow} glove",
+        "groupIndex": 0, "settings": {"megapixels": 0.4}})
+    assert response["campaign"]["round"] == 1
+    assert response["campaign"]["status"] == "running"
+    assert response["campaign"]["rounds"][1]["casePrompts"] == [
+        "a green glove", "a yellow glove"]
+    # Old worker progress saving its own snapshot cannot erase a newly queued plan.
+    stale_worker["units"].append({"round": 1, "epoch": 2, "case": 0,
+                                   "frame": "r1-e2-c0.png", "assessment": None})
+    epoch_finder._save(folder, stale_worker)
+    saved = epoch_finder._load(folder, campaign["id"])
+    assert len(saved["rounds"]) == 2
+    assert saved["rounds"][1]["status"] == "queued"
+    assert saved["rounds"][1]["epochs"] == [1, 2]
+
+
+def test_manual_round_stop_and_cancel_are_independent(tmp_path, monkeypatch):
+    import threading
+    from types import SimpleNamespace
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    campaign["rounds"].append({"number": 2, "epochs": [2], "seeds": [30],
+                                "status": "queued"})
+    epoch_finder._save(folder, campaign, preserve_manual=False)
+    signal = threading.Event()
+    monkeypatch.setattr(epoch_finder, "_workers", {
+        campaign["id"]: SimpleNamespace(is_alive=lambda: True)})
+    monkeypatch.setattr(epoch_finder, "_controls", {
+        campaign["id"]: {"stop_round": signal}})
+    answer = epoch_finder.command(folder, "screening_round_action", {
+        "campaignId": campaign["id"], "round": 2, "action": "cancel"})
+    assert answer["campaign"]["rounds"][1]["status"] == "cancelled"
+    assert answer["campaign"]["status"] == "running"
+    answer = epoch_finder.command(folder, "screening_round_action", {
+        "campaignId": campaign["id"], "round": 1, "action": "stop"})
+    assert signal.is_set()
+    assert answer["campaign"]["rounds"][0]["status"] == "stopping"
+    assert answer["campaign"]["rounds"][1]["status"] == "cancelled"
+
+
+def test_manual_rounds_use_one_worker_and_advance_after_submission(tmp_path, monkeypatch):
+    import threading
+    from types import SimpleNamespace
+    from tool.server import workflow_gate
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    campaign.update(modelId="minimax_h3", rounds=[
+        epoch_finder._screening_plan("a {red|blue} glove", 0, {"megapixels": 0.3}, 1, [1])],
+        units=[], kept=[1])
+    epoch_finder._save(folder, campaign, preserve_manual=False)
+    monkeypatch.setattr(epoch_finder, "get_test_model", lambda _: SimpleNamespace(
+        settings=("megapixels",), load_template=lambda: {},
+        normalize_settings=lambda *_: None))
+    monkeypatch.setattr(epoch_finder, "_workers", {
+        campaign["id"]: SimpleNamespace(is_alive=lambda: True)})
+    monkeypatch.setattr(epoch_finder, "_stage_epoch", lambda *_: "staged.safetensors")
+    monkeypatch.setattr(epoch_finder, "_retire_scored_session", lambda *_: None)
+    monkeypatch.setattr(epoch_finder, "_campaign_has_active_sessions", lambda *_: False)
+    monkeypatch.setattr(epoch_finder, "_clean_staging", lambda *_: None)
+    monkeypatch.setattr(workflow_gate, "wait_for_epoch", lambda *_: True)
+    monkeypatch.setattr(workflow_gate, "release", lambda *_: None)
+    submitted = []
+    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False):
+        if enqueue_only:
+            return
+        if plan["number"] == 1 and not submitted:
+            epoch_finder.command(folder_key, "screening_next_round", {
+                "campaignId": worker["id"], "prompt": "a {green|yellow} glove",
+                "groupIndex": 0, "settings": {"megapixels": 0.4}})
+            submitted.append(True)
+        unit["frame"] = "r%d-e%d-c%d.png" % (unit["round"], unit["epoch"], unit["case"])
+        epoch_finder._save(folder_key, worker)
+    monkeypatch.setattr(epoch_finder, "_render_unit", fake_render)
+    control = {"pause": threading.Event(), "stop": threading.Event(),
+               "stop_round": threading.Event()}
+    epoch_finder._run(folder, campaign["id"], control)
+    result = epoch_finder._load(folder, campaign["id"])
+    assert len(result["rounds"]) == 2
+    assert [plan["status"] for plan in result["rounds"]] == ["complete", "complete"]
+    assert result["status"] == "complete"
+    assert result["round"] == 2
+    assert {(u["round"],u["case"]) for u in result["units"]} == {
+        (1,0),(1,1),(2,0),(2,1)}
+
+
+def test_manual_round_ui_supports_prompt_review_collapse_and_live_submission():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    assert "screening_round_action" in js
+    assert "data-screening-round-action" in js
+    assert "screeningExpandedExcluded" in js
+    assert "epoch-screening-row.is-collapsed" in css
+    assert "Submitted prompts" in js
+    assert "Queue Round " in js
+    assert "campaign.status!=='complete'" not in js[js.index("function screeningMatrix("):
+                                                     js.index("function screeningRender(")]
+
+
+def test_stopping_one_manual_round_preserves_and_runs_queued_next(tmp_path, monkeypatch):
+    import threading
+    from types import SimpleNamespace
+    from tool.server import workflow_gate
+
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    campaign.update(modelId="minimax_h3", rounds=[
+        epoch_finder._screening_plan("a {red|blue} glove", 0, {"megapixels": 0.3}, 1, [1, 2])],
+        units=[], kept=[1])
+    epoch_finder._save(folder, campaign, preserve_manual=False)
+    control = {"pause": threading.Event(), "stop": threading.Event(),
+               "stop_round": threading.Event()}
+    monkeypatch.setattr(epoch_finder, "_workers", {
+        campaign["id"]: SimpleNamespace(is_alive=lambda: True)})
+    monkeypatch.setattr(epoch_finder, "_controls", {campaign["id"]: control})
+    monkeypatch.setattr(epoch_finder, "get_test_model", lambda _: SimpleNamespace(
+        settings=("megapixels",), load_template=lambda: {},
+        normalize_settings=lambda *_: None))
+    monkeypatch.setattr(epoch_finder, "_stage_epoch", lambda *_: "staged.safetensors")
+    monkeypatch.setattr(epoch_finder, "_retire_scored_session", lambda *_: None)
+    monkeypatch.setattr(epoch_finder, "_campaign_has_active_sessions", lambda *_: False)
+    monkeypatch.setattr(epoch_finder, "_clean_staging", lambda *_: None)
+    monkeypatch.setattr(workflow_gate, "wait_for_epoch", lambda *_: True)
+    monkeypatch.setattr(workflow_gate, "release", lambda *_: None)
+
+    requested = []
+    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False):
+        if enqueue_only:
+            return
+        if plan["number"] == 1 and not requested:
+            epoch_finder.command(folder_key, "screening_next_round", {
+                "campaignId": worker["id"], "prompt": "a {green|yellow} glove",
+                "groupIndex": 0, "settings": {"megapixels": 0.4}})
+            epoch_finder.command(folder_key, "screening_round_action", {
+                "campaignId": worker["id"], "round": 1, "action": "stop"})
+            requested.append(True)
+        unit["frame"] = "r%d-e%d-c%d.png" % (unit["round"], unit["epoch"], unit["case"])
+        epoch_finder._save(folder_key, worker)
+    monkeypatch.setattr(epoch_finder, "_render_unit", fake_render)
+    epoch_finder._run(folder, campaign["id"], control)
+    result = epoch_finder._load(folder, campaign["id"])
+    assert [p["status"] for p in result["rounds"]] == ["stopped", "complete"]
+    assert result["status"] == "complete"
+    assert {(u["round"], u["epoch"]) for u in result["units"]} == {(1, 1), (2, 1)}

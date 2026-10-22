@@ -915,7 +915,7 @@ def test_manual_rounds_use_one_worker_and_advance_after_submission(tmp_path, mon
     monkeypatch.setattr(workflow_gate, "wait_for_epoch", lambda *_: True)
     monkeypatch.setattr(workflow_gate, "release", lambda *_: None)
     submitted = []
-    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False):
+    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False, stop_queuing=None):
         if enqueue_only:
             return
         if plan["number"] == 1 and not submitted:
@@ -979,7 +979,7 @@ def test_stopping_one_manual_round_preserves_and_runs_queued_next(tmp_path, monk
     monkeypatch.setattr(workflow_gate, "release", lambda *_: None)
 
     requested = []
-    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False):
+    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False, stop_queuing=None):
         if enqueue_only:
             return
         if plan["number"] == 1 and not requested:
@@ -997,3 +997,63 @@ def test_stopping_one_manual_round_preserves_and_runs_queued_next(tmp_path, monk
     assert [p["status"] for p in result["rounds"]] == ["stopped", "complete"]
     assert result["status"] == "complete"
     assert {(u["round"], u["epoch"]) for u in result["units"]} == {(1, 1), (2, 1)}
+
+
+def test_stop_queuing_cancels_only_queued_test_session(monkeypatch):
+    import threading
+    event = threading.Event()
+    event.set()
+    unit = {"round": 1, "epoch": 1, "case": 0, "session": "pending-job",
+            "frame": "", "cancelled": False}
+    calls = []
+    monkeypatch.setattr(epoch_finder.test_bench, "open_session",
+                        lambda *_args: {"status": "queued"})
+    monkeypatch.setattr(epoch_finder.test_bench, "cancel_queued",
+                        lambda *_args: calls.append("cancel"))
+    monkeypatch.setattr(epoch_finder, "_save", lambda *_args, **_kwargs: None)
+    result = epoch_finder._wait_for_session(None, {"mode": "manual"}, unit, stop_queuing=event)
+    assert result is None
+    assert calls == ["cancel"]
+    assert unit["session"] == ""
+    assert unit["cancelled"] is True
+    assert not unit["frame"]
+
+
+def test_stop_queuing_leaves_running_test_to_complete(monkeypatch):
+    import threading
+    event = threading.Event()
+    event.set()
+    unit = {"round": 1, "epoch": 1, "case": 0, "session": "running-job",
+            "frame": ""}
+    monkeypatch.setattr(epoch_finder.test_bench, "open_session",
+                        lambda *_args: {"status": "complete", "results": [{"mediaFile": "finished.png"}]})
+    monkeypatch.setattr(epoch_finder.test_bench, "cancel_queued",
+                        lambda *_args: pytest.fail("A completed Test must never be cancelled"))
+    result = epoch_finder._wait_for_session(None, {"mode": "manual"}, unit, stop_queuing=event)
+    assert result["results"][0]["mediaFile"] == "finished.png"
+
+
+def test_stop_queuing_never_submits_new_render(monkeypatch):
+    import threading
+    event = threading.Event()
+    event.set()
+    unit = {"round": 1, "epoch": 1, "case": 0, "session": "", "frame": ""}
+    monkeypatch.setattr(epoch_finder.test_bench, "enqueue",
+                        lambda *_args, **_kwargs: pytest.fail("No new Test jobs after Stop Queuing"))
+    monkeypatch.setattr(epoch_finder, "_save", lambda *_args, **_kwargs: None)
+    epoch_finder._render_unit(None, {}, {}, unit, "staged", enqueue_only=True, stop_queuing=event)
+    assert unit["cancelled"] is True
+
+
+def test_review_header_uses_frozen_run_without_restoring_form():
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[1] / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    remember = js[js.index("function screeningRememberSelection("):js.index("function screeningSaveSelection(")]
+    assert "screeningApplySettings(campaign);" not in remember
+    matrix = js[js.index("function screeningMatrix("):js.index("function screeningRender(")]
+    assert "plan.casePrompts[index]" in matrix
+    assert "plan.settings" in matrix
+    assert "plan.seeds[index]" in matrix
+    assert "epoch-screening-case-labels" in matrix
+    assert "stop_queuing" in (Path(__file__).resolve().parents[1] /
+                              "tool/server/epoch_finder.py").read_text(encoding="utf-8")

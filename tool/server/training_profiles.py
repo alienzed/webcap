@@ -94,7 +94,7 @@ _PROFILES = {
             "stagingKey": "h3",
             "sessionSlug": "h3",
             "mediaKind": "video",
-            "workflowFile": "minimax_h3_test_api.json",
+            "workflowFile": "minimax_h3_test_single_api.json",
             "settings": ("aspectRatio", "megapixels", "duration", "samplingMode", "seed"),
         },
     },

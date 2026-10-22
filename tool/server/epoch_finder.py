@@ -77,7 +77,8 @@ def _save(folder_path, campaign, *, preserve_manual=True):
                 if len(latest.get("rounds", [])) > len(campaign.get("rounds", [])):
                     campaign["rounds"].extend(latest["rounds"][len(campaign["rounds"]):])
                 for index, saved_plan in enumerate(latest.get("rounds", [])):
-                    if saved_plan.get("status") in {"cancelled", "stopping"}:
+                    if (saved_plan.get("status") in {"cancelled", "stopping"} and
+                            campaign["rounds"][index].get("status") not in {"complete", "stopped"}):
                         campaign["rounds"][index]["status"] = saved_plan["status"]
                 by_unit = {
                     (item["round"], item["epoch"], item["case"]): item

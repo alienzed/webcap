@@ -55,20 +55,49 @@ def _stage(batch, phase, detail=""):
         batch["detail"] = detail
 
 
-def _director(batch, operation, scene_id="", instruction="", replace=False):
-    _check(batch)
+def run_director_steps(batch_id, apply_step):
+    """Execute First Cut's dependent Director stages inside one LLM queue job."""
+    with _LOCK:
+        batch = next((item for item in _BATCHES if item["id"] == batch_id), None)
+    if batch is None:
+        raise FileNotFoundError("First Cut batch not found.")
+
+    def step(operation, scene_id="", instruction=""):
+        _check(batch)
+        story = load_story(batch["storyId"])
+        contract = build_request(story, scene_id, operation, instruction=instruction)
+        apply_step(contract, operation, scene_id, instruction)
+        _check(batch)
+
+    _stage(batch, "Expanding Concept")
+    step("expand_concept")
+    _stage(batch, "Defining Continuity")
+    step("define_invariants")
+    _stage(batch, "Developing Scenes")
+    step("develop_story")
+
     story = load_story(batch["storyId"])
-    contract = build_request(story, scene_id, operation, instruction=instruction)
-    context = {
-        "storyId": batch["storyId"],
-        "sceneId": scene_id,
-        "operation": operation,
-        "replaceExisting": bool(replace),
-        "sourceInstruction": instruction,
-    }
+    scene_ids = list(story.get("sceneOrder") or [])
+    if not scene_ids:
+        raise RuntimeError("First Cut developed no Scenes.")
+    with _LOCK:
+        batch["sceneCount"] = len(scene_ids)
+    for index, scene_id in enumerate(scene_ids):
+        _stage(batch, "Refining Scenes", str(index + 1) + " / " + str(len(scene_ids)))
+        step("refine_prompt", scene_id, _CONTINUITY_INSTRUCTION)
+    return len(scene_ids)
+
+
+def _director(batch):
+    _check(batch)
     job = enqueue(
-        "storyboard", batch["modelId"], contract, context=context,
-        label="Story: " + operation.replace("_", " "),
+        "storyboard", batch["modelId"], {"operation": "first_cut_sequence"},
+        context={
+            "storyId": batch["storyId"],
+            "operation": "first_cut_sequence",
+            "firstCutBatchId": batch["id"],
+        },
+        label="Story: First Cut",
     )
     job_id = str(job["jobId"])
     with _LOCK:
@@ -91,37 +120,27 @@ def _director(batch, operation, scene_id="", instruction="", replace=False):
             if status != "completed":
                 raise RuntimeError(current.get("error") or ("Director job " + status))
             return
-        # Polling only reads the authoritative LLM lane. No timing-based failure gate.
+        # Only observe the LLM lane; no time-based failure gate.
         time.sleep(0.4)
 
 
 def _execute(batch):
     story_id = batch["storyId"]
     _check(batch)
-    story = load_story(story_id)
+    load_story(story_id)
     if storyboard_story_busy(story_id):
         raise RuntimeError("Story already has Director work pending.")
     if generation_queue(story_id).get("jobs"):
         raise RuntimeError("Story has pending Take generation.")
 
-    replace = bool(story.get("sceneOrder"))
     _stage(batch, "Expanding Concept")
-    _director(batch, "expand_concept")
-    _stage(batch, "Defining Continuity")
-    _director(batch, "define_invariants")
-    _stage(batch, "Developing Scenes")
-    _director(batch, "develop_story", replace=replace)
+    _director(batch)
 
+    # First Takes are normal Inference queue jobs, after the one LLM job ends.
     story = load_story(story_id)
     scene_ids = list(story.get("sceneOrder") or [])
     if not scene_ids:
         raise RuntimeError("First Cut developed no Scenes.")
-    with _LOCK:
-        batch["sceneCount"] = len(scene_ids)
-    for index, scene_id in enumerate(scene_ids):
-        _stage(batch, "Refining Scenes", str(index + 1) + " / " + str(len(scene_ids)))
-        _director(batch, "refine_prompt", scene_id, _CONTINUITY_INSTRUCTION)
-
     for index, scene_id in enumerate(scene_ids):
         _check(batch)
         _stage(batch, "Queuing First Takes", str(index + 1) + " / " + str(len(scene_ids)))

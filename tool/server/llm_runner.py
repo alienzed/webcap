@@ -607,6 +607,35 @@ def _execute_claimed(job_id, gpu_reserved):
         )
 
     from .storyboard_llm_runtime import run_contract, run_freeform_chat
+    if client == "storyboard" and context.get("operation") == "first_cut_sequence":
+        from .storyboard_first_cut import run_director_steps
+
+        def apply_step(step_contract, step_operation, scene_id, instruction):
+            # A stopped batch must not apply a late model response.
+            with _enqueue_lock:
+                if execution_get_job(job_id).get("status") == "stopping":
+                    raise RuntimeError("First Cut stopped before its next Director step.")
+            response = run_contract(
+                model_id, step_contract, gpu_reserved=bool(gpu_reserved),
+                thinking=context.get("thinking") is True,
+            )
+            with _enqueue_lock:
+                if execution_get_job(job_id).get("status") == "stopping":
+                    raise RuntimeError("First Cut stopped before applying its Director response.")
+                _client_result(
+                    "storyboard",
+                    {
+                        "storyId": context["storyId"], "sceneId": scene_id,
+                        "operation": step_operation, "sourceInstruction": instruction,
+                    },
+                    response, job_id=job_id, frozen_contract=step_contract,
+                )
+
+        scene_count = run_director_steps(str(context.get("firstCutBatchId") or ""), apply_step)
+        return execution_finish_job_transient(job_id, status="completed", result={
+            "storyId": context["storyId"], "sceneCount": scene_count,
+        })
+
     if client == "storyboard" and context.get("operation") == "check_coherence_sequence":
         from .storyboard_store import load_story
         from .storyboard_llm_contract import build_request
@@ -960,6 +989,8 @@ def _storyboard_target(context, operation):
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
     if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story"}:
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
+    if operation == "first_cut_sequence":
+        return {"kind": "first-cut", "storyId": story_id, "sceneId": ""}
     if operation in {"repair_scenes", "revise_scenes_sequence", "check_coherence_sequence"}:
         return {"kind": "repair", "storyId": story_id, "sceneId": ""}
     if operation in {"write_prompt", "refine_prompt", "check_coherence"} and scene_id:
@@ -988,7 +1019,11 @@ def storyboard_target_busy(story_id, kind, scene_id=""):
             },
             metadata.get("operation"),
         )
-        if not existing or existing["storyId"] != wanted["storyId"] or existing["kind"] != wanted["kind"]:
+        if not existing or existing["storyId"] != wanted["storyId"]:
+            continue
+        if existing["kind"] == "first-cut":
+            return True
+        if existing["kind"] != wanted["kind"]:
             continue
         if wanted["kind"] != "scene-prompt" or existing["sceneId"] == wanted["sceneId"]:
             return True

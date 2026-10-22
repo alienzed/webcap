@@ -1940,3 +1940,65 @@ def test_llm_model_failure_does_not_log_private_prompt(llm_root, monkeypatch, ca
     assert "PRIVATE_MODEL_ERROR_DO_NOT_LOG" in finished["error"]
     assert secret not in caplog.text
     assert "PRIVATE_MODEL_ERROR_DO_NOT_LOG" not in caplog.text
+
+
+def test_first_cut_keeps_one_llm_gpu_turn_across_all_director_steps(llm_root, monkeypatch):
+    from tool.server import storyboard_first_cut as first_cut
+
+    story = {"id": "story-1", "concept": "Initial", "sceneOrder": [], "scenes": {}}
+    batch = {"id": "batch-1", "storyId": "story-1", "modelId": "local",
+             "cancelled": False, "sceneCount": 0, "phase": "", "detail": ""}
+    monkeypatch.setattr(first_cut, "_BATCHES", [batch])
+    monkeypatch.setattr(first_cut, "load_story", lambda _story_id: story)
+    monkeypatch.setattr(
+        first_cut, "build_request",
+        lambda source, scene_id, operation, instruction="": {
+            "operation": operation, "sceneId": scene_id,
+            "concept": source["concept"], "instruction": instruction,
+        },
+    )
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda _model: True)
+    monkeypatch.setattr(llm_runner, "_reserve_gpu",
+                        lambda: execution_queue.reserve_resource("llm"))
+    monkeypatch.setattr(llm_runner, "_release_gpu",
+                        lambda: execution_queue.release_resource("llm"))
+    calls = []
+
+    def fake_run(model, contract, gpu_reserved=False, thinking=False):
+        assert model == "local"
+        assert gpu_reserved is True
+        assert execution_queue.resource_owner() == "llm"
+        assert execution_queue.reserve_resource("training") is False
+        calls.append((contract["operation"], contract["sceneId"], contract["concept"]))
+        return {"model": model, "data": {}, "text": "done"}
+
+    def fake_apply(client, context, response, job_id="", frozen_contract=None):
+        assert execution_queue.resource_owner() == "llm"
+        assert client == "storyboard"
+        if context["operation"] == "expand_concept":
+            story["concept"] = "Expanded"
+        if context["operation"] == "develop_story":
+            story["sceneOrder"] = ["scene-a", "scene-b"]
+        return {"storyId": story["id"]}
+
+    monkeypatch.setattr(storyboard_llm_runtime, "run_contract", fake_run)
+    monkeypatch.setattr(llm_runner, "_client_result", fake_apply)
+    job = llm_runner.enqueue(
+        "storyboard", "local", {"operation": "first_cut_sequence"},
+        context={"storyId": story["id"], "operation": "first_cut_sequence",
+                 "firstCutBatchId": batch["id"]}, label="Story: First Cut",
+    )
+
+    llm_runner._advance_queue()
+
+    assert llm_runner.job_status(job["jobId"])["status"] == "completed"
+    assert execution_queue.resource_owner() == ""
+    assert calls == [
+        ("expand_concept", "", "Initial"),
+        ("define_invariants", "", "Expanded"),
+        ("develop_story", "", "Expanded"),
+        ("refine_prompt", "scene-a", "Expanded"),
+        ("refine_prompt", "scene-b", "Expanded"),
+    ]
+    assert batch["sceneCount"] == 2
+    assert batch["phase"] == "Refining Scenes"

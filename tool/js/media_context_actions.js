@@ -201,6 +201,10 @@ function buildCurrentFolderContextActions() {
       }
     },
     browseOriginalsAction,
+    state.folder && isSetFolderPath(state.folder) ? {
+      label: 'Clone with VL Captions',
+      run: function () { openVlSetClone(state.folder); }
+    } : null,
     {
       label: focusActionLabel,
       run: function () {
@@ -310,6 +314,13 @@ function buildFolderContextMenuActions(key) {
       }
     }
   ];
+  var setFolderPath = buildRowRelativePath(key);
+  if (isSetFolderPath(setFolderPath)) {
+    actions.push({
+      label: 'Clone with VL Captions',
+      run: function () { openVlSetClone(setFolderPath); }
+    });
+  }
   actions.push({
     label: 'Open in Explorer',
     run: function () {

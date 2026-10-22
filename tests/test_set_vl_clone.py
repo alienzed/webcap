@@ -109,3 +109,15 @@ def test_clone_rejects_stale_sight(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert not (tmp_path / "set-vl" / "a.png").exists()
     assert (tmp_path / "set-vl" / "b.png").exists()
+
+
+def test_clone_context_menu_only_and_dialog_wiring():
+    js = Path("tool/js/media_context_actions.js").read_text(encoding="utf-8")
+    dialog = Path("tool/js/set_vl_clone.js").read_text(encoding="utf-8")
+    html = Path("tool/tool.html").read_text(encoding="utf-8")
+    assert js.count("label: 'Clone with VL Captions'") == 2
+    assert "openVlSetClone(state.folder)" in js
+    assert "openVlSetClone(setFolderPath)" in js
+    assert "window.openVlSetClone = open;" in dialog
+    assert "id=\"clone-set-vl-btn\"" not in html
+    assert "id=\"clone-set-vl-modal\"" in html

@@ -1,6 +1,5 @@
 // A deliberately isolated Prep action: create a sibling Set with cached Open Sight captions.
 function wireVlSetCloneUi() {
-  var button = document.getElementById('clone-set-vl-btn');
   var modal = document.getElementById('clone-set-vl-modal');
   var modelSelect = document.getElementById('clone-set-vl-model');
   var nameInput = document.getElementById('clone-set-vl-name');
@@ -8,15 +7,17 @@ function wireVlSetCloneUi() {
   var create = document.getElementById('clone-set-vl-create');
   var close = document.getElementById('clone-set-vl-close');
   var cancel = document.getElementById('clone-set-vl-cancel');
-  if (!button || !modal || !modelSelect || !nameInput || !summary || !create || !close || !cancel) {
+  if (!modal || !modelSelect || !nameInput || !summary || !create || !close || !cancel) {
     throw new Error('Clone Set with VL Captions UI is incomplete.');
   }
   var snapshot = null;
   var sourceFolder = '';
   var busy = false;
+  var openRequestId = 0;
 
   function hide() {
     if (busy) return;
+    openRequestId += 1;
     modal.classList.add('hidden');
   }
   function selectedSource() {
@@ -26,7 +27,7 @@ function wireVlSetCloneUi() {
     var item = selectedSource();
     var available = item ? Number(item.available) : 0;
     summary.textContent = item
-      ? available + ' of ' + snapshot.total + ' images have current Sight from this model. ' +
+      ? available + ' of ' + snapshot.total + ' media items have current Sight from this model. ' +
         item.excluded + ' without matching Sight will be excluded from the clone.'
       : 'No cached Open Sight responses available for this Set.';
     create.disabled = busy || !available || !nameInput.value.trim();
@@ -36,13 +37,16 @@ function wireVlSetCloneUi() {
     var folderName = sourceFolder.split('/').pop();
     return folderName + '-vl-' + (suffix || 'sight');
   }
-  function open() {
-    sourceFolder = String(state.folder || '').trim();
+  function open(folder) {
+    if (busy) return;
+    sourceFolder = String(folder || '').trim();
     if (!sourceFolder) {
       setStatus('Open a Set folder before cloning.');
       return;
     }
     snapshot = null;
+    var requestFolder = sourceFolder;
+    var requestId = ++openRequestId;
     modelSelect.replaceChildren();
     summary.textContent = 'Checking cached VL captions…';
     create.disabled = true;
@@ -53,7 +57,7 @@ function wireVlSetCloneUi() {
         return data;
       });
     }).then(function (data) {
-      if (modal.classList.contains('hidden') || sourceFolder !== String(state.folder || '')) return;
+      if (modal.classList.contains('hidden') || requestFolder !== sourceFolder || requestId !== openRequestId) return;
       snapshot = data;
       data.sources.forEach(function (item) {
         var option = document.createElement('option');
@@ -65,11 +69,12 @@ function wireVlSetCloneUi() {
       nameInput.value = suggestedName(modelSelect.value);
       updateSummary();
     }).catch(function (err) {
+      if (modal.classList.contains('hidden') || requestId !== openRequestId) return;
       summary.textContent = err.message;
       reportConsoleError('VL Set Clone', err);
     });
   }
-  button.onclick = open;
+  window.openVlSetClone = open;
   close.onclick = hide;
   cancel.onclick = hide;
   nameInput.oninput = updateSummary;

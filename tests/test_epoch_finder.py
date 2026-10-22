@@ -825,17 +825,18 @@ def test_only_manual_stopped_campaigns_can_resume(monkeypatch):
         epoch_finder.command(None, "resume", {"campaignId": campaign["id"]})
 
 
-def test_manual_keep_checkbox_uses_the_picker_selection_and_native_scrolling():
+def test_manual_keep_toggle_uses_the_picker_selection_and_native_scrolling():
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
     js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
     css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
-    keep = js[js.index("checkbox.addEventListener('change',function () {"):
-              js.index("keepLabel.title='Keep for next round';")]
+    keep = js[js.index("keepToggle.addEventListener('click',function () {"):
+              js.index("head.appendChild(keepToggle);")]
     assert "runEpochSelections[origin.jobId]" in keep
     assert "drawEpochPicker();" in keep
     assert "screeningSaveSelection();" in keep
     assert "screening_keep" not in keep  # No split persistence path for live/finished rounds.
+    assert "keepToggle.setAttribute('aria-pressed',String(kept.has(epoch)))" in js
     assert "selected instanceof Set && selected.has(origin.epoch)" in js
     assert "revision!==screeningSelectionRevision" in js
     assert "content-visibility: auto;" in css
@@ -1180,12 +1181,22 @@ def test_manual_epoch_sweep_ux_preserves_rated_card_and_run_header():
     assert 'id="epoch-finder-manual-run-info"' in html
     assert "screeningRunInfo(campaign,plan)" in js
     assert "plan.casePrompts[index]" in js
-    assert "screeningUpdateAverage(previous,rated[epoch]);" in js
+    assert "screeningUpdateAverage(previous,rated[epoch],units.filter(function(u){" in js
     assert "window.updateTestPreviewCardRating(oldCard" in js
     assert "window.updateTestPreviewCardRating(card,value)" in js
     assert "screeningSelectionFailure" in js
     assert "host.dataset.signature!==signature" in js
     assert "region.querySelectorAll('[data-epoch-choice]').forEach" in js
+    # Row-wide ratings use the same per-render endpoint without changing individual controls.
+    assert "screeningRateEpoch(campaign,plan.number,epoch,value)" in js
+    assert "task=task.then(function(){" in js
+    assert "api('screening_rate',{campaignId:id,round:round,epoch:epoch,case:unit.case,rating:rating},folder)" in js
+    assert "u.round===round&&u.epoch===epoch&&u.frame&&!u.framePruned&&!u.error" in js
+    assert "var mixed=values.length>0&&values.some(" in js
+    assert "screeningRatingPending.delete(key)" in js
+    # Copy reuses Test Generations staging; no move or queue change.
+    assert "fetch('/fs/training_candidates/copy_to_test'" in js
+    assert "Copy to Test" in js
 
 
 def test_delete_finished_screening_round_keeps_active_round_and_frames(tmp_path, monkeypatch):

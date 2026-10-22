@@ -41,6 +41,7 @@
   var screeningSelectionRevision = 0;
   var screeningSelectionFailure = null;
   var screeningExpandedExcluded = new Set();
+  var screeningRatingPending = new Set();
   var screeningWildcardError = null;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
@@ -48,9 +49,10 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
     });
   }
-  function api(operation, criteria) {
+  function api(operation, criteria, folderOverride) {
     return fetch('/fs/epoch_finder', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder: currentFolder, operation: operation, criteria: criteria || {} })
+      body: JSON.stringify({ folder: folderOverride == null ? currentFolder : folderOverride,
+        operation: operation, criteria: criteria || {} })
     }).then(function (response) { return response.json().then(function (json) {
       if (!response.ok || !json.ok) throw new Error(json.error || 'Epoch Finder request failed.');
       return json;
@@ -1402,22 +1404,85 @@
     });
     host.appendChild(columns);
   }
-  function screeningUpdateAverage(row, average) {
+  function screeningUpdateAverage(row, average, epochUnits) {
     var head=row&&row.querySelector('.epoch-screening-row-head');
     if (!head) return;
     var summary=head.querySelector('.epoch-screening-rating-summary');
     if (!average || !average.count) {
       if (summary) summary.remove();
-      return;
+    } else {
+      if (!summary) {
+        summary=document.createElement('span');
+        summary.className='epoch-screening-rating-summary';
+        head.insertBefore(summary,head.querySelector('.epoch-screening-row-actions'));
+      }
+      var averageText='★ '+average.average.toFixed(1)+' · '+average.count;
+      if (summary.textContent!==averageText) summary.textContent=averageText;
     }
-    if (!summary) {
-      summary=document.createElement('span');
-      summary.className='epoch-screening-rating-summary';
-      head.insertBefore(summary,head.querySelector('.epoch-screening-row-actions'));
+    var stars=head.querySelector('.epoch-screening-bulk-stars');
+    if (!stars) return;
+    var rendered=(epochUnits||[]).filter(function(u){return u.frame&&!u.framePruned&&!u.error;});
+    var values=rendered.map(function(u){return Number(u.rating)||0;});
+    var uniform=values.length&&values.every(function(value){return value===values[0];})?values[0]:0;
+    var mixed=values.length>0&&values.some(function(value){return value!==values[0];});
+    var busy=campaignState&&screeningRatingPending.has(
+      currentFolder+':'+campaignState.id+':'+manualSelectedRound+':'+row.dataset.screeningEpoch);
+    stars.querySelectorAll('[data-epoch-bulk-rating]').forEach(function(star){
+      var value=Number(star.dataset.epochBulkRating);
+      star.textContent=value<=uniform?'★':'☆';
+      star.disabled=!!busy||!rendered.length;
+      star.setAttribute('aria-pressed',String(value===uniform&&uniform>0));
+    });
+    var state=head.querySelector('.epoch-screening-bulk-rating-status');
+    if(state){
+      state.textContent=busy?'Rating…':mixed?'Mixed':'';
+      state.classList.toggle('hidden',!state.textContent);
     }
-    var value='★ '+average.average.toFixed(1)+' · '+average.count;
-    if (summary.textContent!==value) summary.textContent=value;
   }
+
+  function screeningRateEpoch(campaign, round, epoch, rating) {
+    var units=(campaign.units||[]).filter(function(u){
+      return u.round===round&&u.epoch===epoch&&u.frame&&!u.framePruned&&!u.error;
+    });
+    if(!units.length) {error(new Error('No rendered items to rate for '+candidateLabel(campaign,epoch)));return;}
+    var folder=currentFolder,id=campaign.id,key=folder+':'+id+':'+round+':'+epoch;
+    if(screeningRatingPending.has(key)) return;
+    screeningRatingPending.add(key);
+    els('manual-matrix').dataset.signature='';
+    screeningMatrix(campaign);
+    var completed=0,task=Promise.resolve();
+    // Serialize existing per-render saves; simultaneous read/modify/write can lose ratings.
+    units.forEach(function(unit){
+      task=task.then(function(){
+        return api('screening_rate',{campaignId:id,round:round,epoch:epoch,case:unit.case,rating:rating},folder)
+          .then(function(){
+            completed++;
+            unit.rating=rating;
+            if(currentFolder===folder&&campaignState&&campaignState.id===id){
+              var current=campaignState.units.find(function(item){
+                return item.round===round&&item.epoch===epoch&&item.case===unit.case;
+              });
+              if(current) current.rating=rating;
+            }
+          });
+      });
+    });
+    return task.then(function(){
+      if(currentFolder===folder&&campaignState&&campaignState.id===id) return refreshStatus();
+    }).catch(function(exc){
+      error(new Error('Rated '+completed+' of '+units.length+' renders in '+
+        candidateLabel(campaign,epoch)+': '+String(exc&&exc.message||exc)));
+      if(currentFolder===folder&&campaignState&&campaignState.id===id)
+        return refreshStatus().catch(error);
+    }).finally(function(){
+      screeningRatingPending.delete(key);
+      if(currentFolder===folder&&campaignState&&campaignState.id===id){
+        els('manual-matrix').dataset.signature='';
+        screeningMatrix(campaignState);
+      }
+    });
+  }
+
   function screeningMatrix(campaign) {
     if (campaign.mode!=='manual') return;
     if (!campaign.rounds.some(function (plan) {
@@ -1509,7 +1574,9 @@
         return element.dataset.screeningEpoch===String(epoch);
       });
       if (previous && previous.dataset.signature===rowSignature) {
-        screeningUpdateAverage(previous,rated[epoch]);
+        screeningUpdateAverage(previous,rated[epoch],units.filter(function(u){
+          return u.round===plan.number&&u.epoch===epoch;
+        }));
         var existingUnits=units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;});
         existingUnits.forEach(function(u){
           var card=previous.querySelector('.epoch-screening-cases').children[u.case];
@@ -1528,39 +1595,56 @@
       if (head) head.remove();
       head=document.createElement('div');head.className='epoch-screening-row-head';
       head.dataset.signature=headSignature;
+      var keepToggle=document.createElement('button');
+      keepToggle.type='button';
+      keepToggle.className='epoch-screening-keep-toggle'+(kept.has(epoch)?' is-kept':'');
+      keepToggle.textContent=kept.has(epoch)?'✓':'○';
+      keepToggle.title='Keep for next round';
+      keepToggle.setAttribute('aria-label','Keep '+candidateLabel(campaign,epoch)+' for next round');
+      keepToggle.setAttribute('aria-pressed',String(kept.has(epoch)));
+      // Same persisted selection as the existing checkbox and left epoch picker.
+      keepToggle.addEventListener('click',function () {
+        var origin=campaign.candidateMap[String(epoch)];
+        if (!origin) throw new Error('Missing screening checkpoint identity.');
+        if (!(runEpochSelections[origin.jobId] instanceof Set))
+          runEpochSelections[origin.jobId]=new Set();
+        if (kept.has(epoch)) runEpochSelections[origin.jobId].delete(origin.epoch);
+        else runEpochSelections[origin.jobId].add(origin.epoch);
+        screeningExpandedExcluded.delete(campaign.id+':'+plan.number+':'+epoch);
+        drawEpochPicker();
+        host.dataset.signature='';
+        screeningMatrix(campaignState);
+        screeningSaveSelection();
+      });
+      head.appendChild(keepToggle);
       var title=document.createElement('strong');
       var source=campaign.candidateMap[String(epoch)]||{};
       title.textContent=source.sourceType==='staged'?
         String(source.fileName||'Candidate '+epoch):'Epoch '+(source.epoch||epoch);
       title.title=candidateLabel(campaign,epoch);
       head.appendChild(title);
-      var total=rated[epoch];
-      if (total&&total.count) {
-        var summary=document.createElement('span');
-        summary.className='epoch-screening-rating-summary';
-        summary.textContent='★ '+total.average.toFixed(1)+' · '+total.count;
-        head.appendChild(summary);
+      var bulkStars=document.createElement('div');
+      bulkStars.className='epoch-screening-bulk-stars';
+      bulkStars.setAttribute('role','group');
+      bulkStars.setAttribute('aria-label','Rate all rendered items in '+candidateLabel(campaign,epoch));
+      for (var starValue=1;starValue<=5;starValue++) {
+        (function (value) {
+          var star=document.createElement('button');
+          star.type='button';
+          star.className='epoch-screening-bulk-star';
+          star.dataset.epochBulkRating=String(value);
+          star.textContent='☆';
+          star.title='Rate every rendered item '+value+' star'+(value===1?'':'s');
+          star.setAttribute('aria-label',star.title);
+          star.addEventListener('click',function () { screeningRateEpoch(campaign,plan.number,epoch,value); });
+          bulkStars.appendChild(star);
+        })(starValue);
       }
+      head.appendChild(bulkStars);
+      var ratingStatus=document.createElement('span');
+      ratingStatus.className='epoch-screening-bulk-rating-status hidden';
+      head.appendChild(ratingStatus);
       var actions=document.createElement('div');actions.className='epoch-screening-row-actions';
-      var keepLabel=document.createElement('label');
-      var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=kept.has(epoch);
-      // Reviewing an older round never changes its historical renders or active work.
-      checkbox.addEventListener('change',function () {
-        var origin=campaign.candidateMap[String(epoch)];
-        if (!origin) throw new Error('Missing screening checkpoint identity.');
-        if (!(runEpochSelections[origin.jobId] instanceof Set))
-          runEpochSelections[origin.jobId]=new Set();
-        if (checkbox.checked) runEpochSelections[origin.jobId].add(origin.epoch);
-        else runEpochSelections[origin.jobId].delete(origin.epoch);
-        screeningExpandedExcluded.delete(campaign.id+':'+plan.number+':'+epoch);
-        drawEpochPicker();
-        // Both the matrix checkbox and form picker save the same selected epochs.
-        host.dataset.signature='';
-        screeningMatrix(campaignState);
-        screeningSaveSelection();
-      });
-      keepLabel.title='Keep for next round';
-      keepLabel.append(checkbox,document.createTextNode('Keep'));actions.appendChild(keepLabel);
       if (!kept.has(epoch)) {
         var toggle=document.createElement('button');
         toggle.type='button';toggle.className='review-captions-btn epoch-screening-expand-btn';
@@ -1575,13 +1659,45 @@
         });
         actions.appendChild(toggle);
       }
+      if (!stagedOrigin(campaign,epoch)) {
+        var copy=document.createElement('button');
+        copy.type='button';copy.className='review-captions-btn epoch-screening-copy-btn';
+        copy.textContent='Copy to Test';
+        copy.title='Copy this saved checkpoint into Test Generations';
+        copy.addEventListener('click',function () {
+          var origin=(campaign.candidateMap||{})[String(epoch)];
+          var folder=currentFolder, sourceJobId=origin?origin.jobId:campaign.jobId;
+          var sourceEpoch=origin?origin.epoch:epoch;
+          if (!sourceJobId || !Number.isInteger(Number(sourceEpoch))) {
+            error(new Error('Missing saved checkpoint identity for '+candidateLabel(campaign,epoch)));
+            return;
+          }
+          copy.disabled=true;copy.textContent='Copying…';
+          fetch('/fs/training_candidates/copy_to_test',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({folder:folder,jobId:sourceJobId,epoch:sourceEpoch})
+          }).then(function (response) { return response.json().then(function (data) {
+            if (!response.ok || !data.ok) throw new Error(data.error||'Could not copy checkpoint.');
+            return data;
+          }); }).then(function () {
+            copy.textContent='Copied to Test';
+            copy.title='Checkpoint copied to Test Generations';
+          }).catch(function (exc) {
+            copy.disabled=false;copy.textContent='Copy to Test';
+            error(exc);
+          });
+        });
+        actions.appendChild(copy);
+      }
       var vl=document.createElement('button');vl.type='button';vl.className='review-captions-btn epoch-screening-ask-btn';vl.textContent='Ask VL';
       vl.onclick=function(){screeningAskVision(campaign,{epoch:epoch});};
       actions.appendChild(vl);
       head.appendChild(actions);
       row.insertBefore(head,row.firstChild);
       }
-      screeningUpdateAverage(row,rated[epoch]);
+      screeningUpdateAverage(row,rated[epoch],units.filter(function(u){
+        return u.round===plan.number&&u.epoch===epoch;
+      }));
       var cards=row.querySelector('.epoch-screening-cases');
       if (!cards) {
         cards=document.createElement('div');cards.className='epoch-screening-cases';
@@ -1608,6 +1724,10 @@
             error:u&&u.error||'',
             rating:url?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,
               onRate:function(value,card){
+                if(screeningRatingPending.has(currentFolder+':'+campaign.id+':'+plan.number+':'+epoch)){
+                  error(new Error('Finish applying the row rating before rating an individual render.'));
+                  return;
+                }
                 api('screening_rate',{campaignId:campaign.id,round:plan.number,
                   epoch:epoch,case:index,rating:value}).then(function () {
                     u.rating=value;
@@ -1627,7 +1747,10 @@
                       average:currentUnits.length?currentUnits.reduce(function(total,item){
                         return total+item.rating;
                       },0)/currentUnits.length:0
-                    });
+                    },(campaignState&&campaignState.id===campaign.id?
+                      campaignState:campaign).units.filter(function(item){
+                        return item.round===plan.number&&item.epoch===epoch;
+                      }));
                     if (els('manual-sort').value==='high'||els('manual-sort').value==='low') {
                       host.dataset.signature='';
                       screeningMatrix(campaignState||campaign);

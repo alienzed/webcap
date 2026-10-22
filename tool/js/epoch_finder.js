@@ -1528,39 +1528,56 @@
       if (head) head.remove();
       head=document.createElement('div');head.className='epoch-screening-row-head';
       head.dataset.signature=headSignature;
+      var keepToggle=document.createElement('button');
+      keepToggle.type='button';
+      keepToggle.className='epoch-screening-keep-toggle'+(kept.has(epoch)?' is-kept':'');
+      keepToggle.textContent=kept.has(epoch)?'✓':'○';
+      keepToggle.title='Keep for next round';
+      keepToggle.setAttribute('aria-label','Keep '+candidateLabel(campaign,epoch)+' for next round');
+      keepToggle.setAttribute('aria-pressed',String(kept.has(epoch)));
+      // Same persisted selection as the existing checkbox and left epoch picker.
+      keepToggle.addEventListener('click',function () {
+        var origin=campaign.candidateMap[String(epoch)];
+        if (!origin) throw new Error('Missing screening checkpoint identity.');
+        if (!(runEpochSelections[origin.jobId] instanceof Set))
+          runEpochSelections[origin.jobId]=new Set();
+        if (kept.has(epoch)) runEpochSelections[origin.jobId].delete(origin.epoch);
+        else runEpochSelections[origin.jobId].add(origin.epoch);
+        screeningExpandedExcluded.delete(campaign.id+':'+plan.number+':'+epoch);
+        drawEpochPicker();
+        host.dataset.signature='';
+        screeningMatrix(campaignState);
+        screeningSaveSelection();
+      });
+      head.appendChild(keepToggle);
       var title=document.createElement('strong');
       var source=campaign.candidateMap[String(epoch)]||{};
       title.textContent=source.sourceType==='staged'?
         String(source.fileName||'Candidate '+epoch):'Epoch '+(source.epoch||epoch);
       title.title=candidateLabel(campaign,epoch);
       head.appendChild(title);
-      var total=rated[epoch];
-      if (total&&total.count) {
-        var summary=document.createElement('span');
-        summary.className='epoch-screening-rating-summary';
-        summary.textContent='★ '+total.average.toFixed(1)+' · '+total.count;
-        head.appendChild(summary);
+      var bulkStars=document.createElement('div');
+      bulkStars.className='epoch-screening-bulk-stars';
+      bulkStars.setAttribute('role','group');
+      bulkStars.setAttribute('aria-label','Rate all rendered items in '+candidateLabel(campaign,epoch));
+      for (var starValue=1;starValue<=5;starValue++) {
+        (function (value) {
+          var star=document.createElement('button');
+          star.type='button';
+          star.className='epoch-screening-bulk-star';
+          star.dataset.epochBulkRating=String(value);
+          star.textContent='☆';
+          star.title='Rate every rendered item '+value+' star'+(value===1?'':'s');
+          star.setAttribute('aria-label',star.title);
+          star.addEventListener('click',function () { screeningRateEpoch(campaign,plan.number,epoch,value); });
+          bulkStars.appendChild(star);
+        })(starValue);
       }
+      head.appendChild(bulkStars);
+      var ratingStatus=document.createElement('span');
+      ratingStatus.className='epoch-screening-bulk-rating-status hidden';
+      head.appendChild(ratingStatus);
       var actions=document.createElement('div');actions.className='epoch-screening-row-actions';
-      var keepLabel=document.createElement('label');
-      var checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=kept.has(epoch);
-      // Reviewing an older round never changes its historical renders or active work.
-      checkbox.addEventListener('change',function () {
-        var origin=campaign.candidateMap[String(epoch)];
-        if (!origin) throw new Error('Missing screening checkpoint identity.');
-        if (!(runEpochSelections[origin.jobId] instanceof Set))
-          runEpochSelections[origin.jobId]=new Set();
-        if (checkbox.checked) runEpochSelections[origin.jobId].add(origin.epoch);
-        else runEpochSelections[origin.jobId].delete(origin.epoch);
-        screeningExpandedExcluded.delete(campaign.id+':'+plan.number+':'+epoch);
-        drawEpochPicker();
-        // Both the matrix checkbox and form picker save the same selected epochs.
-        host.dataset.signature='';
-        screeningMatrix(campaignState);
-        screeningSaveSelection();
-      });
-      keepLabel.title='Keep for next round';
-      keepLabel.append(checkbox,document.createTextNode('Keep'));actions.appendChild(keepLabel);
       if (!kept.has(epoch)) {
         var toggle=document.createElement('button');
         toggle.type='button';toggle.className='review-captions-btn epoch-screening-expand-btn';
@@ -1574,6 +1591,36 @@
           screeningMatrix(campaignState);
         });
         actions.appendChild(toggle);
+      }
+      if (!stagedOrigin(campaign,epoch)) {
+        var copy=document.createElement('button');
+        copy.type='button';copy.className='review-captions-btn epoch-screening-copy-btn';
+        copy.textContent='Copy to Test';
+        copy.title='Copy this saved checkpoint into Test Generations';
+        copy.addEventListener('click',function () {
+          var origin=(campaign.candidateMap||{})[String(epoch)];
+          var folder=currentFolder, sourceJobId=origin?origin.jobId:campaign.jobId;
+          var sourceEpoch=origin?origin.epoch:epoch;
+          if (!sourceJobId || !Number.isInteger(Number(sourceEpoch))) {
+            error(new Error('Missing saved checkpoint identity for '+candidateLabel(campaign,epoch)));
+            return;
+          }
+          copy.disabled=true;copy.textContent='Copying…';
+          fetch('/fs/training_candidates/copy_to_test',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({folder:folder,jobId:sourceJobId,epoch:sourceEpoch})
+          }).then(function (response) { return response.json().then(function (data) {
+            if (!response.ok || !data.ok) throw new Error(data.error||'Could not copy checkpoint.');
+            return data;
+          }); }).then(function () {
+            copy.textContent='Copied to Test';
+            copy.title='Checkpoint copied to Test Generations';
+          }).catch(function (exc) {
+            copy.disabled=false;copy.textContent='Copy to Test';
+            error(exc);
+          });
+        });
+        actions.appendChild(copy);
       }
       var vl=document.createElement('button');vl.type='button';vl.className='review-captions-btn epoch-screening-ask-btn';vl.textContent='Ask VL';
       vl.onclick=function(){screeningAskVision(campaign,{epoch:epoch});};

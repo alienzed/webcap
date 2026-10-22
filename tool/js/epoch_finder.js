@@ -33,6 +33,8 @@
   var manualMatrixSignature = '';
   var manualVisionPending = false;
   var screeningReportedVlErrors = new Set();
+  var screeningSettingsKey = '';
+  var screeningSettingsRequest = null;
   var screeningSelectionQueue = Promise.resolve();
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
@@ -1032,24 +1034,48 @@
       drawEpochPicker();
     }
   }
-  function screeningSettingsSource() {
-    [['aspect','aspect'],['sampling','sampling-mode'],['dimensions','dimensions']].forEach(function (pair) {
-      var target=els('manual-'+pair[0]), source=document.getElementById('test-generations-'+pair[1]);
-      var options=source ? Array.from(source.options) : [];
-      var signature=options.map(function(option){return option.value+'|'+option.text;}).join('~');
-      if (options.length && target.dataset.options!==signature) {
-        var previous=target.value;
-        target.replaceChildren.apply(target,options.map(function(option){return option.cloneNode(true);}));
-        target.value=options.some(function(option){return option.value===previous;})?previous:source.value;
-        target.dataset.options=signature;
-      }
-      if (source) target.closest('label').classList.toggle('hidden',source.closest('label').classList.contains('hidden'));
+  // Read the Test model's owned prepare contract; don't borrow another screen's DOM.
+  function screeningSettingsSource(modelId) {
+    var key=currentFolder+'|'+String(modelId||window.getWorkingModelProfileId()||'');
+    if (screeningSettingsKey===key && screeningSettingsRequest) return screeningSettingsRequest;
+    screeningSettingsKey=key;
+    screeningSettingsRequest=fetch('/fs/test_generations',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:currentFolder,operation:'test_prepare',criteria:{modelId:modelId||window.getWorkingModelProfileId()}})
+    }).then(function(response){return response.json().then(function(payload){
+      if(!response.ok||!payload||payload.ok===false) throw new Error(payload&&payload.error||'Could not load Test settings.');
+      return payload;
+    });}).then(function(payload){
+      if(screeningSettingsKey!==key) return payload;
+      var available=new Set(payload.settings||[]), defaults=payload.defaults||{};
+      var fields=[['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
+        ['sampling','samplingMode'],['dimensions','dimensions']];
+      fields.forEach(function(pair){
+        var target=els('manual-'+pair[0]), field=target.closest('label');
+        field.classList.toggle('hidden',!available.has(pair[1]));
+        if(target.dataset.screeningSettingsKey!==key && target.tagName==='INPUT'){
+          target.value=defaults[pair[1]]==null?'':String(defaults[pair[1]]);
+        }
+        target.dataset.screeningSettingsKey=key;
+      });
+      [['aspect',payload.aspectRatioOptions||[]],
+        ['dimensions',(payload.settingOptions||{}).dimensions||[]]].forEach(function(pair){
+        var target=els('manual-'+pair[0]);
+        var field=pair[0]==='aspect'?'aspectRatio':'dimensions';
+        var selected=target.value, preferred=String(defaults[field]||'');
+        var values=pair[1].map(String);
+        if(preferred && !values.includes(preferred))values.unshift(preferred);
+        target.replaceChildren.apply(target,values.map(function(value){
+          var option=document.createElement('option');option.value=value;option.textContent=value;return option;
+        }));
+        target.value=values.includes(selected)?selected:preferred;
+      });
+      var sampling=els('manual-sampling'), prior=sampling.value;
+      sampling.value=Array.from(sampling.options).some(function(o){return o.value===prior;})?prior:String(defaults.samplingMode||'turbo');
+      (payload.warnings||[]).forEach(function(warning){if(warning)console.warn('[Manual Screening settings]',warning);});
+      return payload;
     });
-    [['mp','megapixels'],['duration','duration']].forEach(function (pair) {
-      var target=els('manual-'+pair[0]),source=document.getElementById('test-generations-'+pair[1]);
-      if (source && !target.value) target.value=source.value;
-      if (source) target.closest('label').classList.toggle('hidden',source.closest('label').classList.contains('hidden'));
-    });
+    return screeningSettingsRequest;
   }
   function screeningGroups(selected) {
     var choice=els('manual-group');
@@ -1062,18 +1088,32 @@
     if (groups.length) choice.value=String(Math.min(Math.max(0,old),groups.length-1));
   }
   function screeningApplySettings(campaign) {
-    screeningSettingsSource();
     var plan=campaign && campaign.rounds[campaign.rounds.length-1];
-    els('manual-prompt').value=plan ? plan.prompt :
-      (els('prompt').value || document.getElementById('test-generations-prompt').value || '');
-    if (plan) {
-      var settings=plan.settings || {};
+    var context=currentFolder, selectedId=campaign&&campaign.id;
+    els('manual-prompt').value=plan?plan.prompt:'';
+    screeningGroups(plan?plan.groupIndex:0);
+    screeningSettingsSource(campaign&&campaign.modelId).then(function(payload){
+      if(context!==currentFolder || (selectedId && activeCampaign!==selectedId))return;
+      if(!plan){
+        var prompt=payload.workspacePromptPresent?payload.workspacePrompt:payload.defaultPrompt;
+        if(!els('manual-prompt').value.trim()){
+          els('manual-prompt').value=String(prompt||'');
+          screeningGroups(0);
+        }
+        return;
+      }
+      var settings=plan.settings||{};
       [['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
-        ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function (pair) {
-        if (settings[pair[1]] != null) els('manual-'+pair[0]).value=String(settings[pair[1]]);
+        ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function(pair){
+        var target=els('manual-'+pair[0]),value=settings[pair[1]];
+        if(value==null)return;
+        if(target.tagName==='SELECT'&&!Array.from(target.options).some(function(o){return o.value===String(value);})){
+          var option=document.createElement('option');option.value=String(value);option.textContent=String(value);
+          target.appendChild(option);
+        }
+        target.value=String(value);
       });
-    }
-    screeningGroups(plan ? plan.groupIndex : 0);
+    }).catch(error);
   }
   function screeningCriteria() {
     var settings={};
@@ -1487,7 +1527,7 @@
       }
       campaigns = response.campaigns || [];
       timingProfiles = response.timings || {};
-      setup(); screeningSettingsSource(); list();
+      setup(); list();
       if (activeCampaign && campaigns.some(function (c) { return c.id === activeCampaign; })) return refreshStatus();
       activeCampaign = '';
       manualSelectionCampaign='';

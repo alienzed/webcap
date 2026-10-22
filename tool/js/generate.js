@@ -402,12 +402,19 @@
     return !!model && Array.isArray(model.settings) && model.settings.indexOf(name) !== -1;
   }
 
+  function normalizeGenerateSamplingMode(value) {
+    var mode = String(value || 'turbo');
+    if (mode === 'current' || mode === 'single') return 'turbo';
+    if (mode === 'no_turbo') return 'quality';
+    return mode;
+  }
+
   function syncGenerateBaseLoras() {
     var model = currentModel();
     var base = el('generate-base-loras');
     if (!model || !base) return;
     var names = model.baseLoras || [];
-    var noTurbo = model.id === 'minimax_h3' && el('generate-sampling-mode').value === 'no_turbo';
+    var noTurbo = model.id === 'minimax_h3' && el('generate-sampling-mode').value === 'quality';
     base.textContent = noTurbo ? 'Turbo disabled · 20 steps' : (names.length ? 'Required workflow LoRA: ' + names.join(', ') : '');
     base.classList.toggle('hidden', !noTurbo && !names.length);
   }
@@ -441,7 +448,7 @@
 
     if (el('generate-megapixels')) el('generate-megapixels').value = String((model.defaultSettings || {}).megapixels || '');
     if (el('generate-duration')) el('generate-duration').value = String((model.defaultSettings || {}).duration || '');
-    el('generate-sampling-mode').value = String((model.defaultSettings || {}).samplingMode || 'current');
+    el('generate-sampling-mode').value = String((model.defaultSettings || {}).samplingMode || 'turbo');
     if (el('generate-seed')) el('generate-seed').value = '-1';
 
     var prompt = el('generate-prompt');
@@ -712,7 +719,8 @@
       ].forEach(function (entry) {
         if (!Object.prototype.hasOwnProperty.call(settings, entry[0])) return;
         var control = el(entry[1]);
-        if (control) control.value = String(settings[entry[0]]);
+        if (control) control.value = entry[0] === 'samplingMode'
+          ? normalizeGenerateSamplingMode(settings[entry[0]]) : String(settings[entry[0]]);
       });
 
       syncGenerateBaseLoras();
@@ -1147,8 +1155,15 @@
     if (settings.aspectRatio) summary.push(String(settings.aspectRatio));
     if (settings.duration) summary.push(String(settings.duration) + 's');
     if (result && result.modelId === 'minimax_h3') {
-      var mode = String(settings.samplingMode || 'current');
-      summary.push(mode === 'no_turbo' ? '20 steps · No Turbo' : (mode === 'single' ? '8 steps · Turbo 1.0' : '8 steps · Turbo 0.9'));
+      var submitted = result.submittedSampling;
+      if (submitted && submitted.mode) {
+        summary.push(submitted.mode === 'quality' ? 'Quality · ' + submitted.steps + ' steps · no Turbo'
+          : 'Turbo · ' + submitted.steps + ' steps · Turbo ' + submitted.turboStrength);
+      } else {
+        var mode = String(settings.samplingMode || 'current');
+        summary.push(mode === 'quality' || mode === 'no_turbo' ? 'Quality · 20 steps · no Turbo'
+          : (mode === 'current' ? 'Legacy · 8 steps · Turbo 0.9' : 'Turbo · 8 steps · Turbo 1.0'));
+      }
     }
     if (result && result.seed !== undefined && result.seed !== null) summary.push('Seed ' + result.seed);
     var elapsed = formatGenerationElapsedMs(result && result.elapsedMs);

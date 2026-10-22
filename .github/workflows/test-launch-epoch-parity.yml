@@ -26,6 +26,10 @@ on:
       - 'tool/server/llm_runner.py'
       - 'tool/js/inference_queue.js'
       - 'tool/server/inference_runtime.py'
+      - 'tool/server/inference_runner.py'
+      - 'tool/server/execution_queue.py'
+      - 'tests/test_inference_runner.py'
+      - 'tests/test_execution_queue.py'
       - 'tool/css/workspace_shell.css'
       - 'tests/inference_error_passthrough.test.cjs'
       - 'tests/test_inference_error_passthrough.py'
@@ -54,7 +58,12 @@ jobs:
           node --check tool/js/inference_queue.js
           node --test tests/inference_error_passthrough.test.cjs
       - name: Install tests
-        run: python -m pip install pytest "Flask>=3,<4" "Pillow>=10,<12" opencv-python-headless
+        run: python -m pip install pytest "Flask>=3,<4" "Pillow>=10,<12" opencv-python-headless imageio websocket-client
+      - name: Inference queue Backlog and cancellation regression
+        run: |
+          cp tool/config.example.json tool/config.json
+          python -m compileall -q tool/server/inference_runner.py tool/server/execution_queue.py tool/server/inference_runtime.py
+          python -m pytest -q tests/test_inference_runner.py tests/test_execution_queue.py
       - name: Focused regression
         run: |
           python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py tests/test_training_references_browser.py tests/test_h3_sampling_modes.py tests/test_inference_models.py

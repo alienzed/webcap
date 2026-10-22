@@ -1186,3 +1186,90 @@ def test_manual_epoch_sweep_ux_preserves_rated_card_and_run_header():
     assert "screeningSelectionFailure" in js
     assert "host.dataset.signature!==signature" in js
     assert "region.querySelectorAll('[data-epoch-choice]').forEach" in js
+
+
+def test_delete_finished_screening_round_keeps_active_round_and_frames(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    directory = epoch_finder._directory(folder, campaign["id"])
+    frames = directory / "frames"
+    frames.mkdir()
+    first = frames / "r1-e1-c0.png"
+    current = frames / "r2-e2-c0.png"
+    first.write_bytes(b"old preview")
+    current.write_bytes(b"current preview")
+    campaign["round"] = 2
+    campaign["status"] = "running"
+    campaign["rounds"][0]["status"] = "complete"
+    campaign["rounds"].append({"number": 2, "status": "running",
+                                "epochs": [2], "seeds": [22]})
+    campaign["units"].append({"round": 2, "epoch": 2, "case": 0,
+                              "frame": current.name, "session": "", "rating": 5})
+    epoch_finder._save(folder, campaign, preserve_manual=False)
+    stale_worker = epoch_finder._load(folder, campaign["id"])
+    monkeypatch.setattr(epoch_finder, "_workers", {
+        campaign["id"]: SimpleNamespace(is_alive=lambda: True)})
+    result = epoch_finder.command(folder, "screening_round_action", {
+        "campaignId": campaign["id"], "round": 1, "action": "delete"})["campaign"]
+    assert result["rounds"][0]["status"] == "deleted"
+    assert result["rounds"][1]["status"] == "running"
+    assert result["round"] == 2
+    assert result["status"] == "running"
+    assert result["kept"] == [1, 2]
+    assert len(result["units"]) == 1 and result["units"][0]["frame"] == current.name
+    assert not first.exists()
+    assert current.read_bytes() == b"current preview"
+    assert (directory / "campaign.json").is_file()
+    # Saving an old render snapshot must not resurrect deleted round previews.
+    stale_worker["units"][1]["rating"] = 4
+    epoch_finder._save(folder, stale_worker)
+    saved = epoch_finder._load(folder, campaign["id"])
+    assert saved["rounds"][0]["status"] == "deleted"
+    assert [unit["round"] for unit in saved["units"]] == [2]
+    assert current.exists()
+
+
+def test_delete_screening_round_rejects_active_or_queued_and_has_no_side_effects(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    directory = epoch_finder._directory(folder, campaign["id"])
+    campaign["rounds"][0]["status"] = "running"
+    campaign["round"] = 1
+    campaign["rounds"].append({"number": 2, "status": "queued",
+                                "epochs": [2], "seeds": [22]})
+    epoch_finder._save(folder, campaign, preserve_manual=False)
+    monkeypatch.setattr(epoch_finder, "_workers", {
+        campaign["id"]: SimpleNamespace(is_alive=lambda: True)})
+    for number in (1, 2):
+        with pytest.raises(ValueError, match="Only previous finished"):
+            epoch_finder.command(folder, "screening_round_action", {
+                "campaignId": campaign["id"], "round": number, "action": "delete"})
+    with pytest.raises(ValueError, match="worker is active"):
+        epoch_finder.command(folder, "delete", {"campaignId": campaign["id"]})
+    assert directory.exists()
+    assert len(epoch_finder._load(folder, campaign["id"])["rounds"]) == 2
+
+
+def test_delete_all_screening_rounds_rejects_pending_plans_even_without_worker(tmp_path, monkeypatch):
+    folder, campaign = _live_screening_fixture(tmp_path, monkeypatch)
+    campaign["status"] = "complete"
+    campaign["rounds"][0]["status"] = "complete"
+    campaign["rounds"].append({"number": 2, "status": "queued",
+                                "epochs": [2], "seeds": [22]})
+    epoch_finder._save(folder, campaign, preserve_manual=False)
+    monkeypatch.setattr(epoch_finder, "_workers", {})
+    with pytest.raises(ValueError, match="pending screening work"):
+        epoch_finder.command(folder, "delete", {"campaignId": campaign["id"]})
+    assert epoch_finder._directory(folder, campaign["id"]).exists()
+
+
+def test_manual_delete_ui_separates_round_history_from_delete_all():
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[1] / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    assert "plan.status!=='deleted'" in js
+    assert "plan.number<campaign.round" in js
+    assert "Delete only this finished round" in js
+    assert "'Delete all rounds'" in js
+    assert "This is NOT just the selected round" in js

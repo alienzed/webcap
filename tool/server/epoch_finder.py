@@ -77,9 +77,16 @@ def _save(folder_path, campaign, *, preserve_manual=True):
                 if len(latest.get("rounds", [])) > len(campaign.get("rounds", [])):
                     campaign["rounds"].extend(latest["rounds"][len(campaign["rounds"]):])
                 for index, saved_plan in enumerate(latest.get("rounds", [])):
-                    if (saved_plan.get("status") in {"cancelled", "stopping"} and
-                            campaign["rounds"][index].get("status") not in {"complete", "stopped"}):
+                    if saved_plan.get("status") == "deleted":
+                        campaign["rounds"][index]["status"] = "deleted"
+                    elif (saved_plan.get("status") in {"cancelled", "stopping"} and
+                          campaign["rounds"][index].get("status") not in {"complete", "stopped"}):
                         campaign["rounds"][index]["status"] = saved_plan["status"]
+                deleted_rounds = {plan["number"] for plan in campaign["rounds"]
+                                  if plan.get("status") == "deleted"}
+                if deleted_rounds:
+                    campaign["units"] = [unit for unit in campaign.get("units", [])
+                                         if unit["round"] not in deleted_rounds]
                 by_unit = {
                     (item["round"], item["epoch"], item["case"]): item
                     for item in latest.get("units", [])
@@ -673,9 +680,45 @@ _screening_vision_workers = {}
 
 def _screening_round_action(folder_path, campaign, number, action):
     plan = next((row for row in campaign["rounds"] if row["number"] == number), None)
-    if not plan or action not in {"cancel", "stop"}:
-        raise ValueError("Choose a screening round and Cancel or Stop.")
-    if plan.get("status") in {"complete", "cancelled", "stopped"}:
+    if not plan or action not in {"cancel", "stop", "delete"}:
+        raise ValueError("Choose a screening round and its action.")
+    if action == "delete":
+        # Finished history only. Never delete the active run, the Campaign folder
+        # shared by subsequent rounds, or any live Test work.
+        if number >= campaign["round"] or plan.get("status") not in {"complete", "stopped", "cancelled"}:
+            raise ValueError("Only previous finished screening rounds can be deleted.")
+        vl_worker = _screening_vision_workers.get(campaign["id"])
+        if vl_worker and vl_worker.is_alive():
+            raise ValueError("Wait for the screening VL operation before deleting round results.")
+        removed = [unit for unit in campaign["units"] if unit["round"] == number]
+        if any(unit.get("session") and _session_still_active(folder_path, unit["session"])
+               for unit in removed):
+            raise ValueError("This round still owns active Test work.")
+        # Validate the entire file set before mutating anything.
+        for unit in removed:
+            if unit.get("frame"):
+                name = unit["frame"]
+                if not _FRAME.fullmatch(name):
+                    raise ValueError("Invalid saved screening frame path.")
+                frame = _directory(folder_path, campaign["id"]) / "frames" / name
+                if frame.is_symlink():
+                    raise RuntimeError("Refusing to delete a symlinked screening frame.")
+        # A completed round may still retain its Test session, so retire it
+        # before dropping its manifest entries.
+        for unit in removed:
+            if unit.get("session"):
+                try:
+                    test_bench.delete_session(folder_path, unit["session"])
+                except FileNotFoundError:
+                    pass
+            if unit.get("frame"):
+                frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
+                frame.unlink(missing_ok=True)
+        campaign["units"] = [unit for unit in campaign["units"] if unit["round"] != number]
+        plan["status"] = "deleted"  # Keep round IDs stable for queued work and URLs.
+        _save(folder_path, campaign, preserve_manual=False)
+        return campaign
+    if plan.get("status") in {"complete", "cancelled", "stopped", "deleted"}:
         raise ValueError("This screening round has already finished.")
     worker = _workers.get(campaign["id"])
     active = bool(worker and worker.is_alive()) and campaign["status"] == "running"
@@ -707,7 +750,7 @@ def _screening_round_action(folder_path, campaign, number, action):
     else:
         raise ValueError("Stop the running round or cancel a queued round.")
     _save(folder_path, campaign, preserve_manual=False)
-    if not any(row.get("status") not in {"complete", "cancelled", "stopped"}
+    if not any(row.get("status") not in {"complete", "cancelled", "stopped", "deleted"}
                for row in campaign["rounds"]):
         _pending_campaigns[:] = [(folder, id_) for folder, id_ in _pending_campaigns
                                  if id_ != campaign["id"]]
@@ -1881,24 +1924,34 @@ def command(folder_path, operation, criteria=None):
         _launch(folder_path, campaign_id)
         return {"campaign": status(folder_path, campaign_id)}
     if operation == "delete":
-        campaign = status(folder_path, campaign_id)
-        if _screening_vision_workers.get(campaign_id) and _screening_vision_workers[campaign_id].is_alive():
-            raise ValueError("Wait for the manual VL batch to finish before deleting this campaign.")
+        # Keep the worker/pending checks and deletion in one critical section.
+        # Otherwise the dispatcher can start queued work after the idle check.
         with _worker_lock:
-            _pending_campaigns[:] = [(folder, id_) for folder, id_ in _pending_campaigns if id_ != campaign_id]
+            campaign = _load(folder_path, campaign_id)
             worker = _workers.get(campaign_id)
-        if worker is not None and worker.is_alive():
-            raise ValueError("Wait for the campaign worker to finish before deleting it.")
-        if any(unit.get("session") and _session_still_active(folder_path, unit["session"]) for unit in campaign["units"]):
-            raise RuntimeError("Campaign still has active Test work.")
-        for unit in campaign["units"]:
-            if unit.get("session"):
-                try:
-                    test_bench.delete_session(folder_path, unit["session"])
-                except FileNotFoundError:
-                    pass
-        _clean_staging(folder_path, campaign)
-        shutil.rmtree(_directory(folder_path, campaign_id))
+            if worker is not None and worker.is_alive():
+                raise ValueError("Cannot delete screening history while its worker is active.")
+            vl_worker = _screening_vision_workers.get(campaign_id)
+            if vl_worker and vl_worker.is_alive():
+                raise ValueError("Wait for the screening VL operation before deleting.")
+            if campaign.get("mode") == "manual" and (
+                    campaign.get("status") in {"queued", "running"} or
+                    any(plan.get("status") in {"queued", "running", "stopping"}
+                        for plan in campaign.get("rounds", []))):
+                raise ValueError("Stop or cancel pending screening work before deleting all rounds.")
+            if any(unit.get("session") and _session_still_active(folder_path, unit["session"])
+                   for unit in campaign["units"]):
+                raise RuntimeError("Screening history still owns active Test work.")
+            for unit in campaign["units"]:
+                if unit.get("session"):
+                    try:
+                        test_bench.delete_session(folder_path, unit["session"])
+                    except FileNotFoundError:
+                        pass
+            _clean_staging(folder_path, campaign)
+            shutil.rmtree(_directory(folder_path, campaign_id))
+            _pending_campaigns[:] = [(folder, id_) for folder, id_ in _pending_campaigns
+                                     if id_ != campaign_id]
         return {"deleted": campaign_id}
     raise ValueError("Unsupported Epoch Finder operation: " + operation)
 

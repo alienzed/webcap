@@ -1277,7 +1277,7 @@
     });
   }
   function screeningRoundState(campaign, plan) {
-    if (['complete','stopped','cancelled','stopping'].includes(plan.status)) return plan.status;
+    if (['complete','stopped','cancelled','stopping','deleted'].includes(plan.status)) return plan.status;
     if (plan.number<campaign.round) return 'complete';
     if (plan.number>campaign.round) return 'queued';
     if (campaign.status==='complete') return 'complete';
@@ -1286,18 +1286,20 @@
   function screeningRoundList(campaign) {
     els('manual-history').classList.remove('hidden');
     var host=els('manual-round-list');
+    var visibleRounds=campaign.rounds.filter(function(plan){return plan.status!=='deleted';});
     var signature=campaign.id+'|'+manualSelectedRound+'|'+campaign.status+'|'+campaign.round+'|'+
-      campaign.rounds.map(function(plan){
+      visibleRounds.map(function(plan){
         return plan.number+':'+screeningRoundState(campaign,plan)+':'+
           campaign.units.filter(function(u){return u.round===plan.number&&(u.frame||u.error);}).length;
       }).join('|');
     if (host.dataset.signature===signature) return;
     host.dataset.signature=signature;
-    host.innerHTML=campaign.rounds.map(function(plan){
+    host.innerHTML=visibleRounds.map(function(plan){
       var state=screeningRoundState(campaign,plan);
       var completed=campaign.units.filter(function(u){return u.round===plan.number&&!!u.frame;}).length;
       var total=plan.epochs.length*plan.seeds.length;
-      var action=state==='queued'?'cancel':state==='running'?'stop':'';
+      var action=state==='queued'?'cancel':state==='running'?'stop':
+        (plan.number<campaign.round&&['complete','stopped','cancelled'].includes(state)?'delete':'');
       return '<div class="epoch-screening-round-item">'+
         '<button type="button" class="epoch-finder-campaign'+
         (manualSelectedRound===plan.number?' active':'')+'" data-screening-round="'+plan.number+'">'+
@@ -1305,8 +1307,9 @@
         completed+'/'+total+' renders · '+escape(state)+'</small></button>'+
         (action?'<button type="button" class="review-captions-btn" data-screening-round-action="'+action+
           '" data-screening-round-number="'+plan.number+'" title="'+
-          (action==='stop'?'Cancel unstarted renders; finish the active render':'Cancel before rendering')+'">'+
-          (action==='stop'?'Stop queuing':'Cancel')+'</button>':'')+'</div>';
+          (action==='stop'?'Cancel unstarted renders; finish the active render':
+            action==='delete'?'Delete only this finished round and its results':'Cancel before rendering')+'">'+
+          (action==='stop'?'Stop queuing':action==='delete'?'Delete':'Cancel')+'</button>':'')+'</div>';
     }).join('');
   }
   function screeningRunInfo(campaign, plan) {
@@ -1366,8 +1369,10 @@
   }
   function screeningMatrix(campaign) {
     if (campaign.mode!=='manual') return;
-    if (!campaign.rounds.some(function (plan) {return plan.number===manualSelectedRound;})) {
-      manualSelectedRound=campaign.rounds.length;
+    if (!campaign.rounds.some(function (plan) {
+      return plan.number===manualSelectedRound&&plan.status!=='deleted';
+    })) {
+      manualSelectedRound=campaign.round;
     }
     screeningRoundList(campaign);
     var plan=campaign.rounds[manualSelectedRound-1],host=els('manual-matrix');
@@ -1668,8 +1673,14 @@
     els('stop').classList.toggle('hidden', !running);
     els('resume').classList.toggle('hidden', !(['paused', 'interrupted', 'failed'].includes(campaign.status) ||
       (campaign.mode==='manual'&&campaign.status==='stopped')));
-    els('delete').classList.toggle('hidden', running);
-    if (campaign.mode === 'manual') {
+    var manual=campaign.mode==='manual';
+    var canDeleteAll=manual && ['complete','stopped','failed','interrupted'].includes(campaign.status) &&
+      campaign.rounds.every(function(plan){
+        return ['complete','stopped','cancelled','deleted'].includes(plan.status);
+      });
+    els('delete').textContent=manual?'Delete all rounds':'Delete';
+    els('delete').classList.toggle('hidden', manual?!canDeleteAll:running);
+    if (manual) {
       screeningRender(campaign);
       return;
     }
@@ -1873,6 +1884,8 @@
     var action=event.target.closest('[data-screening-round-action]');
     if(action){
       var number=Number(action.dataset.screeningRoundNumber),kind=action.dataset.screeningRoundAction;
+      if(kind==='delete' && !window.confirm(
+        'Permanently delete only Round '+number+' and its previews/ratings? Current and queued rounds will remain intact.')) return;
       action.disabled=true;
       api('screening_round_action',{campaignId:activeCampaign,round:number,action:kind})
         .then(function(){return refreshStatus();}).catch(error)
@@ -2071,7 +2084,10 @@
   els('resume').onclick = function () { send('resume'); };
   els('stop').onclick = function () { send('stop'); };
   els('delete').onclick = function () {
-    if (window.confirm('Delete this campaign, its frames, and its scoring history?')) {
+    var message=isManualCampaign()
+      ? 'Permanently delete ALL rounds and results in this screening history? This is NOT just the selected round.'
+      : 'Delete this campaign, its frames, and its scoring history?';
+    if (window.confirm(message)) {
       clearError();
       api('delete', { campaignId: activeCampaign }).then(function () {
         activeCampaign = ''; inspectedEpoch = null; lastFrameKey = ''; refresh();

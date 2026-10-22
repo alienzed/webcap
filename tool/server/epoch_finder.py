@@ -694,6 +694,15 @@ def _screening_round_action(folder_path, campaign, number, action):
         if any(unit.get("session") and _session_still_active(folder_path, unit["session"])
                for unit in removed):
             raise ValueError("This round still owns active Test work.")
+        # Validate the entire file set before mutating anything.
+        for unit in removed:
+            if unit.get("frame"):
+                name = unit["frame"]
+                if not _FRAME.fullmatch(name):
+                    raise ValueError("Invalid saved screening frame path.")
+                frame = _directory(folder_path, campaign["id"]) / "frames" / name
+                if frame.is_symlink():
+                    raise RuntimeError("Refusing to delete a symlinked screening frame.")
         # A completed round may still retain its Test session, so retire it
         # before dropping its manifest entries.
         for unit in removed:
@@ -703,18 +712,13 @@ def _screening_round_action(folder_path, campaign, number, action):
                 except FileNotFoundError:
                     pass
             if unit.get("frame"):
-                name = unit["frame"]
-                if not _FRAME.fullmatch(name):
-                    raise ValueError("Invalid saved screening frame path.")
-                frame = _directory(folder_path, campaign["id"]) / "frames" / name
-                if frame.is_symlink():
-                    raise RuntimeError("Refusing to delete a symlinked screening frame.")
+                frame = _directory(folder_path, campaign["id"]) / "frames" / unit["frame"]
                 frame.unlink(missing_ok=True)
         campaign["units"] = [unit for unit in campaign["units"] if unit["round"] != number]
         plan["status"] = "deleted"  # Keep round IDs stable for queued work and URLs.
         _save(folder_path, campaign, preserve_manual=False)
         return campaign
-    if plan.get("status") in {"complete", "cancelled", "stopped"}:
+    if plan.get("status") in {"complete", "cancelled", "stopped", "deleted"}:
         raise ValueError("This screening round has already finished.")
     worker = _workers.get(campaign["id"])
     active = bool(worker and worker.is_alive()) and campaign["status"] == "running"
@@ -746,7 +750,7 @@ def _screening_round_action(folder_path, campaign, number, action):
     else:
         raise ValueError("Stop the running round or cancel a queued round.")
     _save(folder_path, campaign, preserve_manual=False)
-    if not any(row.get("status") not in {"complete", "cancelled", "stopped"}
+    if not any(row.get("status") not in {"complete", "cancelled", "stopped", "deleted"}
                for row in campaign["rounds"]):
         _pending_campaigns[:] = [(folder, id_) for folder, id_ in _pending_campaigns
                                  if id_ != campaign["id"]]

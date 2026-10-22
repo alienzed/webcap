@@ -573,8 +573,6 @@ def _create_screening_campaign(folder_path, criteria, folder, model, normalized,
 
 def _screening_selection(folder_path, campaign, selections):
     """Persist editable next-round scope, including newly selected saved epochs."""
-    if campaign.get("status") != "complete":
-        raise ValueError("Finish this round before editing its next-round selection.")
     if not isinstance(selections, list):
         raise ValueError("Select training runs and epochs.")
     available = {item["jobId"]: item for item in _runs(folder_path)}
@@ -611,9 +609,6 @@ def _screening_selection(folder_path, campaign, selections):
 def _screening_next_round(folder_path, campaign, criteria):
     if campaign.get("status") != "complete":
         raise ValueError("Finish the current screening round before launching another.")
-    worker = _screening_vision_workers.get(campaign["id"])
-    if worker and worker.is_alive():
-        raise ValueError("Finish the active VL review before launching the next round.")
     if not campaign.get("kept"):
         raise ValueError("Keep at least one epoch for the next round.")
     model = get_test_model(campaign["modelId"])
@@ -1173,11 +1168,15 @@ def _run(folder_path, campaign_id, control):
                 if not _campaign_has_active_sessions(folder_path, campaign):
                     _clean_staging(folder_path, campaign)
             if campaign.get("mode") == "manual":
+                if not _check_signal(folder_path, campaign, control):
+                    return
                 for finished in campaign["units"]:
                     if finished["round"] == number and finished.get("frame"):
                         _retire_scored_session(folder_path, campaign, finished)
+                errors = sum(bool(item.get("error")) for item in campaign["units"] if item["round"] == number)
                 _update(folder_path, campaign, status="complete", phase="Review",
-                        detail="Round " + str(number) + " ready for manual review.",
+                        detail=("Round " + str(number) + " ready for manual review." +
+                                (" " + str(errors) + " failed render(s); see cards and Console." if errors else "")),
                         finishedAt=time.time())
                 return
             _update(folder_path, campaign, phase="Evaluating", detail="All round frames captured.")
@@ -1664,8 +1663,8 @@ def command(folder_path, operation, criteria=None):
                 if type(epoch) is not int or type(number) is not int or type(keep) is not bool:
                     raise ValueError("Choose an epoch and whether to keep it.")
                 plan = next((plan for plan in campaign["rounds"] if plan["number"] == number), None)
-                if number != campaign["round"] or not plan or epoch not in plan["epochs"]:
-                    raise ValueError("Choose an epoch in the current screening round.")
+                if not plan or epoch not in plan["epochs"]:
+                    raise ValueError("Choose an epoch shown in this screening round.")
                 if epoch not in campaign["candidateMap"] and str(epoch) not in campaign["candidateMap"]:
                     raise ValueError("Screening checkpoint identity is missing.")
                 kept = list(campaign["kept"])
@@ -1705,8 +1704,11 @@ def command(folder_path, operation, criteria=None):
         return {"campaign": status(folder_path, campaign_id)}
     if operation == "resume":
         campaign = status(folder_path, campaign_id)
-        if campaign["status"] not in {"paused", "interrupted", "failed"}:
-            raise ValueError("Only a paused or interrupted campaign can resume.")
+        resumable = {"paused", "interrupted", "failed"}
+        if campaign.get("mode") == "manual":
+            resumable.add("stopped")
+        if campaign["status"] not in resumable:
+            raise ValueError("Only a paused, interrupted, failed or stopped campaign can resume.")
         _resume_saved_work(folder_path, campaign)
         _launch(folder_path, campaign_id)
         return {"campaign": status(folder_path, campaign_id)}

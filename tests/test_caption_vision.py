@@ -385,7 +385,7 @@ def test_ask_vision_route_queues_direct_question_on_existing_multimodal_lane(mon
     parts = captured["contract"]["messages"][0]["content"]
     assert parts[0]["text"] == "Are there rings on the bottom?"
     assert parts[1]["image_url"]["url"] == "file://set/frame.mp4"
-    assert captured["context"] == {}
+    assert captured["context"] == {"vlUserQuestion": True}
     assert captured["label"] == "Ask VL"
 
 

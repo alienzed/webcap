@@ -133,6 +133,7 @@ function copyTextToClipboard(text, onOk, onErr) {
 }
 
 function wireMiscActionButtons() {
+  wireVlSetCloneUi();
   if (ui.refreshBtn) {
     ui.refreshBtn.onclick = function () {
       refreshCurrentDirectory();

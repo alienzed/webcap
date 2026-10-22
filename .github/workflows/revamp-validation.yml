@@ -58,6 +58,8 @@ jobs:
           node --check tool/js/test_generations_perspective.js
           node --check tool/js/epoch_finder.js
           node --check tool/js/test_generations.js
+          node --check tool/js/set_vl_clone.js
+          node --check tool/js/media_context_actions.js
       - name: Install DOM test dependency
         run: npm install --no-save --no-package-lock jsdom
       - name: Browser DOM lifecycle smoke
@@ -72,6 +74,8 @@ jobs:
         run: cp tool/config.example.json tool/config.json
       - name: Install test essentials
         run: python -m pip install pytest Flask Pillow Werkzeug imageio websocket-client opencv-python-headless
+      - name: Set VL clone focused Python regression
+        run: python -m pytest -q tests/test_set_vl_clone.py
       - name: Recovered Evaluate All behavior
         run: node --test tests/test_generations_evaluate_all.test.cjs
       - name: Recovery Python syntax and focused behavior

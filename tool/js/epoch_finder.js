@@ -38,6 +38,7 @@
   var screeningSelectionQueue = Promise.resolve();
   var screeningSelectionRevision = 0;
   var screeningExpandedExcluded = new Set();
+  var screeningWildcardError = null;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
@@ -1087,7 +1088,13 @@
     var choice=els('manual-group');
     var old=selected == null ? Number(choice.value || 0) : selected;
     var groups;
-    try { groups=wildcardParts(els('manual-prompt').value); } catch (exc) { groups=[]; }
+    try {
+      groups=wildcardParts(els('manual-prompt').value);
+      screeningWildcardError=null;
+    } catch (exc) {
+      screeningWildcardError=exc;
+      groups=[];
+    }
     choice.innerHTML=groups.map(function (group,index) {
       return '<option value="'+index+'">Group '+(index+1)+' · '+escape(group.options.join(' / '))+'</option>';
     }).join('');
@@ -1134,6 +1141,7 @@
     });
     var prompt=els('manual-prompt').value.trim();
     if (!prompt) throw new Error('Enter a wildcard prompt.');
+    if (screeningWildcardError) throw screeningWildcardError;
     if (!els('manual-group').options.length) throw new Error('Select a wildcard group to exhaust.');
     return {prompt:prompt,groupIndex:Number(els('manual-group').value),settings:settings};
   }
@@ -1223,7 +1231,7 @@
     });
   }
   function screeningRoundState(campaign, plan) {
-    if (['complete','stopped','cancelled'].includes(plan.status)) return plan.status;
+    if (['complete','stopped','cancelled','stopping'].includes(plan.status)) return plan.status;
     if (plan.number<campaign.round) return 'complete';
     if (plan.number>campaign.round) return 'queued';
     if (campaign.status==='complete') return 'complete';

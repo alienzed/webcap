@@ -13,6 +13,11 @@ on:
       - 'tool/css/styles.css'
       - 'tests/test_test_generations_focused_unification.py'
       - 'tests/test_test_repeat.py'
+      - 'tests/test_h3_sampling_modes.py'
+      - 'tests/test_inference_models.py'
+      - 'tool/server/inference_models/h3.py'
+      - 'tool/server/test_models/h3.py'
+      - '.github/workflows/test-launch-epoch-parity.yml'
       - 'tool/server/epoch_test_bench.py'
       - 'tool/server/epoch_finder.py'
       - 'tests/test_epoch_finder.py'
@@ -48,7 +53,7 @@ jobs:
         run: python -m pip install pytest "Flask>=3,<4" "Pillow>=10,<12" opencv-python-headless
       - name: Focused regression
         run: |
-          python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py tests/test_training_references_browser.py
+          python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py tests/test_training_references_browser.py tests/test_h3_sampling_modes.py tests/test_inference_models.py
           cp tool/config.example.json tool/config.json
           python -m pytest -q tests/test_inference_error_passthrough.py
           python -m pytest -q tests/test_epoch_finder.py

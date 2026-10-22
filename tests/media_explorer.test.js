@@ -222,7 +222,7 @@ test('Prep mutation shortcuts cannot act on hidden working media in Explorer', (
 
 test('Generate capability refresh retains the current model draft and settings', () => {
   const source = fs.readFileSync('tool/js/generate.js', 'utf8');
-  const controls = Object.fromEntries(['model','prompt','aspect','dimensions','megapixels','duration','seed'].map(id => ['generate-' + id, {value:'draft-' + id}]));
+  const controls = Object.fromEntries(['model','prompt','aspect','dimensions','megapixels','duration','sampling-mode','seed'].map(id => ['generate-' + id, {value:'draft-' + id}]));
   controls['generate-model'].value = 'model-a';
   const context = {
     el: id => controls[id],
@@ -234,6 +234,7 @@ test('Generate capability refresh retains the current model draft and settings',
   context.populateModelSelector();
   assert.equal(controls['generate-prompt'].value, 'draft-prompt');
   assert.equal(controls['generate-seed'].value, 'draft-seed');
+  assert.equal(controls['generate-sampling-mode'].value, 'draft-sampling-mode');
   context.generateState.models = [{id:'model-b',label:'B'}];
   context.populateModelSelector();
   assert.equal(controls['generate-prompt'].value, 'default', 'an explicit model change applies that model defaults');

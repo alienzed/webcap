@@ -1,5 +1,3 @@
-import copy
-
 import pytest
 
 from tool.server.inference_models import get_inference_model

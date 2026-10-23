@@ -777,7 +777,7 @@ def enqueue_test(request, context, label="", deferred=False):
 def enqueue_test_many(request, contexts, labels=None, deferred=False):
     """Create one durable queue batch for the Test Session's ordered candidates."""
     _ensure_execution_reconciled()
-    contexts = [copy.deepcopy(item) for item in contexts]
+    contexts = list(contexts)
     labels = list(labels or [])
     if len(contexts) != len(labels):
         raise ValueError("Each Test candidate must have a corresponding label.")
@@ -801,8 +801,9 @@ def enqueue_test_many(request, contexts, labels=None, deferred=False):
         }
         if request.get("sweepWeights") and candidate_kind == "lora":
             metadata["candidateStrength"] = float(context["candidateStrength"])
+        # enqueue_many freezes every payload once under the durable queue lock.
         entries.append({
-            "payload": {"request": copy.deepcopy(request), "clientContext": context},
+            "payload": {"request": request, "clientContext": context},
             "metadata": metadata,
         })
     jobs = execution_enqueue_many(

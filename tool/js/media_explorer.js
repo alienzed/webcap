@@ -280,7 +280,7 @@
     el('media-explorer-search').placeholder = external ? 'Search filenames and relative paths…' : 'Search generated media, prompts, models…';
     ['path', 'type', 'size', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
       var option = el('media-explorer-sort').querySelector('option[value="' + value + '"]');
-      option.hidden = value === 'path' ? false : false;
+      option.hidden = false;
     });
     el('media-explorer-sort').querySelector('option[value="rating"]').hidden = external;
     el('media-explorer-sort-reverse').classList.remove('hidden');
@@ -933,7 +933,6 @@
       qs.set('date', el('media-explorer-date').value);
       qs.set('directory', externalDirectory);
       qs.set('recursive', el('media-explorer-recursive').checked ? '1' : '0');
-      qs.set('direction', reverseSort ? 'asc' : 'desc');
     }
     if (isExternal() && options.refreshFilesystem) qs.set('refresh', '1');
     fetch((isExternal() ? '/fs/media_explorer/external?' : '/fs/media_explorer?') + qs, {signal: controller.signal}).then(function (res) {
@@ -945,6 +944,7 @@
       if (request !== serial || !visible) return;
       total = data.total;
       if (reset && isExternal()) externalPendingRefresh = false;
+      if (isExternal() && options.rememberFolder) saveRecentFolder(externalPath);
       complete = !!data.complete;
       if (isExternal()) {
         externalFolders = data.folders || []; renderExternalFolders();
@@ -1031,6 +1031,9 @@
           }
           el('media-explorer-' + id).value = value;
         });
+        ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (id) {
+          el('media-explorer-' + id).value = params.get(id) || '';
+        });
         sourceButtons.forEach(function (button, index) {
           var match = source ? button.dataset.mediaSource === source : button.dataset.mediaRole === role;
           button.classList.toggle('active', match);
@@ -1078,7 +1081,7 @@
       role = button.dataset.mediaRole;
       artifact = ''; owner = '';
       source = '';
-      if (!['newest', 'oldest', 'name', 'rating'].includes(el('media-explorer-sort').value)) {
+      if (el('media-explorer-sort').value === 'rating' && source === 'external') {
         el('media-explorer-sort').value = 'newest';
       }
       stopExternalTimers(); externalJobRunning = false;
@@ -1096,10 +1099,11 @@
       stopExternalTimers(); externalJobRunning = false;
 
       if (isExternal()) {
+        requestRecentFolders();
         explorerMode = 'list'; externalDirectory = ''; externalFolders = [];
         facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).value = ''; });
-        if (!['newest', 'oldest', 'name', 'path', 'type', 'size', 'resolution', 'megapixels', 'duration'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
-      } else if (!['newest', 'oldest', 'name', 'rating'].includes(el('media-explorer-sort').value)) el('media-explorer-sort').value = 'newest';
+        if (el('media-explorer-sort').value === 'rating') el('media-explorer-sort').value = 'newest';
+      }
       setExplorerMode(explorerMode);
       syncExternalControls();
       artifact = ''; owner = '';
@@ -1112,11 +1116,11 @@
   el('media-explorer-open-path').addEventListener('click', function () {
     var nextPath = el('media-explorer-external-path').value.trim();
     externalPath = nextPath;
-    if (nextPath) saveRecentFolder(nextPath); externalDirectory = ''; externalFolders = [];
+    externalDirectory = ''; externalFolders = [];
     mediaFacts.clear();
     externalRevision = -1; externalPendingRefresh = false; externalOverview = ''; externalJobSummary = ''; externalJobRunning = false;
     stopExternalTimers(); selected.clear(); updateSelection();
-    load(true, {refreshFilesystem:true});
+    load(true, {refreshFilesystem:true, rememberFolder:true});
   });
   el('media-explorer-saved-folders').addEventListener('change', function () {
     var path = this.value;
@@ -1258,6 +1262,7 @@
       });
       load(true);
     } else {
+      ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (name) { el('media-explorer-' + name).value = ''; });
       sourceButtons.find(function (btn) { return btn.hasAttribute('data-media-role') && btn.dataset.mediaRole === ''; }).click();
     }
   });
@@ -1352,6 +1357,7 @@
     if (el('media-explorer-search').value.trim()) params.set('q', el('media-explorer-search').value.trim());
     if (el('media-explorer-kind').value) params.set('kind', el('media-explorer-kind').value);
     facetIds.slice(1).forEach(function (id) { if (el('media-explorer-' + id).value) params.set(id === 'folder' ? 'mediaSet' : id, el('media-explorer-' + id).value); });
+    ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (id) { if (el('media-explorer-' + id).value) params.set(id, el('media-explorer-' + id).value); });
     if (el('media-explorer-sort').value !== 'newest') params.set('sort', el('media-explorer-sort').value);
   };
 })();

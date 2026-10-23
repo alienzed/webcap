@@ -189,6 +189,39 @@
     else { galleryHome.appendChild(gallery); renderMainPreview(); }
   }
   var explorerMode = 'list', externalPath = '', externalDiscoveryTimer = null, externalMetadataTimer = null;
+  var recentFolderRequest = 0;
+  function showRecentFolders(folders) {
+    var select = el('media-explorer-saved-folders');
+    select.replaceChildren();
+    var empty = document.createElement('option'); empty.value = ''; empty.textContent = 'Recent folders…'; select.appendChild(empty);
+    folders.forEach(function (path) {
+      var option = document.createElement('option'); option.value = path; option.textContent = path; select.appendChild(option);
+    });
+    select.value = folders.includes(externalPath) ? externalPath : '';
+    el('media-explorer-forget-folder').disabled = !select.value;
+  }
+  function requestRecentFolders() {
+    var request = ++recentFolderRequest;
+    return fetch('/fs/media_explorer/external/folders').then(function (res) {
+      return res.json().then(function (body) {
+        if (!res.ok || !body.ok) throw Error(body.error || 'Could not load external folders');
+        return body;
+      });
+    }).then(function (body) {
+      if (request === recentFolderRequest) showRecentFolders(body.folders);
+    }).catch(report);
+  }
+  function saveRecentFolder(path) {
+    var request = ++recentFolderRequest;
+    return fetch('/fs/media_explorer/external/folders', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path:path})
+    }).then(function (res) { return res.json().then(function (body) {
+      if (!res.ok || !body.ok) throw Error(body.error || 'Could not remember external folder');
+      return body;
+    }); }).then(function (body) {
+      if (request === recentFolderRequest) showRecentFolders(body.folders);
+    }).catch(report);
+  }
   var externalRevision = -1, externalPendingRefresh = false, externalOverview = '', externalJobSummary = '', lastExternalError = '';
   function externalSummary() {
     var node = el('media-explorer-metadata-progress');
@@ -232,13 +265,13 @@
     el('media-explorer-external-path-bar').classList.toggle('hidden', !external);
     el('media-explorer-external-navigation').classList.toggle('hidden', !external);
     el('media-explorer-folder-rows').classList.toggle('hidden', !external);
-    el('media-explorer-external-filters').classList.toggle('hidden', !external);
+    el('media-explorer-external-filters').classList.toggle('hidden', false);
     el('media-explorer-scan-all').classList.toggle('hidden', external);
     if (external) el('media-explorer-scope').classList.add('hidden');
     el('media-explorer-model').classList.toggle('hidden', external);
     el('media-explorer-folder').classList.toggle('hidden', external);
     el('media-explorer-rating').classList.toggle('hidden', external);
-    el('media-explorer-date').classList.toggle('hidden', external);
+    el('media-explorer-date').classList.toggle('hidden', false);
     el('media-explorer-size').disabled = explorerMode !== 'grid';
     el('media-explorer-workspace').querySelector('.media-explorer-size-label').classList.toggle('hidden', explorerMode !== 'grid');
     el('media-explorer-workspace').querySelector('.media-explorer-fit-controls').classList.toggle('hidden', explorerMode !== 'grid');
@@ -247,10 +280,10 @@
     el('media-explorer-search').placeholder = external ? 'Search filenames and relative paths…' : 'Search generated media, prompts, models…';
     ['path', 'type', 'size', 'resolution', 'megapixels', 'duration'].forEach(function (value) {
       var option = el('media-explorer-sort').querySelector('option[value="' + value + '"]');
-      option.hidden = !external;
+      option.hidden = value === 'path' ? false : false;
     });
     el('media-explorer-sort').querySelector('option[value="rating"]').hidden = external;
-    el('media-explorer-sort-reverse').classList.toggle('hidden', !external);
+    el('media-explorer-sort-reverse').classList.remove('hidden');
   }
   function setExplorerMode(next) {
     if (next === 'single') {
@@ -789,9 +822,11 @@
   var facetIds = ['kind', 'model', 'folder', 'rating', 'date'];
   function hasFilters() {
     if (isExternal()) return el('media-explorer-search').value.trim() ||
-      el('media-explorer-kind').value ||
+      el('media-explorer-kind').value || el('media-explorer-date').value ||
       ['min-side', 'min-mp', 'min-duration', 'max-duration'].some(function (name) { return el('media-explorer-' + name).value; });
-    return artifact || owner || role || source || storyboardType() || el('media-explorer-search').value.trim() || facetIds.some(function (id) { return el('media-explorer-' + id).value; });
+    return artifact || owner || role || source || storyboardType() || el('media-explorer-search').value.trim() ||
+      facetIds.some(function (id) { return el('media-explorer-' + id).value; }) ||
+      ['min-side', 'min-mp', 'min-duration', 'max-duration'].some(function (id) { return el('media-explorer-' + id).value; });
   }
   function emptyState() {
     var empty = el('media-explorer-empty'); empty.classList.toggle('hidden', items.length > 0 || loading);
@@ -822,14 +857,21 @@
     if (storyboardType()) chip(storyboardType() === 'exports' ? 'Exported Sequences' : 'Scenes', function () { el('media-explorer-storyboard-type').value = ''; load(true); });
     if (search.value.trim()) chip('“' + search.value.trim() + '”', function () { search.value = ''; load(true); });
     if (isExternal()) {
+      if (el('media-explorer-date').value) chip('Date ' + el('media-explorer-date').value + ' days', function () { el('media-explorer-date').value = ''; load(true); });
       ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (name) {
         var input = el('media-explorer-' + name);
         if (input.value) chip(input.closest('label').textContent.trim() + ' ' + input.value, function () { input.value = ''; load(true); });
       });
-    } else facetIds.slice(1).forEach(function (id) {
-      var select = el('media-explorer-' + id);
-      if (select.value) chip(select.options[select.selectedIndex].textContent, function () { select.value = ''; load(true); });
-    });
+    } else {
+      facetIds.slice(1).forEach(function (id) {
+        var select = el('media-explorer-' + id);
+        if (select.value) chip(select.options[select.selectedIndex].textContent, function () { select.value = ''; load(true); });
+      });
+      ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (name) {
+        var input = el('media-explorer-' + name);
+        if (input.value) chip(name + ' ' + input.value, function () { input.value = ''; load(true); });
+      });
+    }
     el('media-explorer-clear-filters').classList.toggle('hidden', !hasFilters() && el('media-explorer-sort').value === 'newest');
     var activeSource = sourceButtons.find(function (button) { return button.classList.contains('active'); });
     text(el('media-explorer-heading'), activeSource ? activeSource.textContent : 'All media');
@@ -882,8 +924,13 @@
       kind:el('media-explorer-kind').value, search:el('media-explorer-search').value.trim(),
       sort:el('media-explorer-sort').value, source:source, full:full ? '1' : '0',
       storyboard_type:storyboardType(), model:el('media-explorer-model').value, folder:el('media-explorer-folder').value, rating:el('media-explorer-rating').value, date:el('media-explorer-date').value, artifact:artifact, owner:owner});
+    ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (id) {
+      qs.set(id.replace(/-/g, '_'), el('media-explorer-' + id).value);
+    });
+    qs.set('direction', reverseSort ? 'asc' : 'desc');
     if (isExternal()) {
       Object.entries(externalParams()).forEach(function (entry) { qs.set(entry[0], entry[1]); });
+      qs.set('date', el('media-explorer-date').value);
       qs.set('directory', externalDirectory);
       qs.set('recursive', el('media-explorer-recursive').checked ? '1' : '0');
       qs.set('direction', reverseSort ? 'asc' : 'desc');
@@ -1010,6 +1057,7 @@
     window.syncApplicationShellContext();
     window.syncShellLocationRoute();
     if (needsLoad || isExternal()) load(true);
+    if (isExternal()) requestRecentFolders();
     if (isExternal() && externalPath) externalMetadataStatus();
   }
   function close() {
@@ -1063,11 +1111,32 @@
   document.querySelectorAll('[data-explorer-mode]').forEach(function (btn) { btn.addEventListener('click', function () { setExplorerMode(btn.dataset.explorerMode); }); });
   el('media-explorer-open-path').addEventListener('click', function () {
     var nextPath = el('media-explorer-external-path').value.trim();
-    externalPath = nextPath; externalDirectory = ''; externalFolders = [];
+    externalPath = nextPath;
+    if (nextPath) saveRecentFolder(nextPath); externalDirectory = ''; externalFolders = [];
     mediaFacts.clear();
     externalRevision = -1; externalPendingRefresh = false; externalOverview = ''; externalJobSummary = ''; externalJobRunning = false;
     stopExternalTimers(); selected.clear(); updateSelection();
     load(true, {refreshFilesystem:true});
+  });
+  el('media-explorer-saved-folders').addEventListener('change', function () {
+    var path = this.value;
+    el('media-explorer-forget-folder').disabled = !path;
+    if (!path) return;
+    el('media-explorer-external-path').value = path;
+    el('media-explorer-open-path').click();
+  });
+  el('media-explorer-forget-folder').addEventListener('click', function () {
+    var path = el('media-explorer-saved-folders').value;
+    if (!path) return;
+    var request = ++recentFolderRequest;
+    fetch('/fs/media_explorer/external/folders', {
+      method: 'DELETE', headers: {'Content-Type':'application/json'}, body:JSON.stringify({path:path})
+    }).then(function (res) { return res.json().then(function (body) {
+      if (!res.ok || !body.ok) throw Error(body.error || 'Could not forget external folder');
+      return body;
+    }); }).then(function (body) {
+      if (request === recentFolderRequest) showRecentFolders(body.folders);
+    }).catch(report);
   });
   el('media-explorer-external-path').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('media-explorer-open-path').click(); });
   el('media-explorer-gallery-area').addEventListener('scroll', maybeLoadMore);
@@ -1167,7 +1236,7 @@
   el('media-explorer-kind').addEventListener('change', function () { load(true); });
   el('media-explorer-storyboard-type').addEventListener('change', function () { load(true); });
   facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).addEventListener('change', function () { load(true); }); });
-  el('media-explorer-sort').addEventListener('change', function () { if (!isExternal() && ['path', 'type', 'resolution', 'megapixels', 'duration'].includes(this.value)) this.value = 'newest'; load(true); });
+  el('media-explorer-sort').addEventListener('change', function () { load(true); });
   el('media-explorer-size').addEventListener('input', function () {
     el('media-explorer-grid').style.setProperty('--media-tile-width', this.value + 'px');
   });

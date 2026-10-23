@@ -37,7 +37,7 @@
   var showSessionError = false;
   var missingWorkingModelContextReported = false;
   var reportedFailureKeys = new Set();
-  var debouncedWorkspacePromptSave = debounceCreate(500);
+  var debouncedWorkspacePromptSaves = Object.create(null);
   var debouncedTestBenchStateSave = debounceCreate(500);
   var wildcardDirector = {
     models: [],
@@ -1880,7 +1880,11 @@
     var value = String(prompt == null ? '' : prompt);
     if (typeof window.epochFinderReceiveSetPrompt === 'function')
       window.epochFinderReceiveSetPrompt(folder, modelId, value);
-    debouncedWorkspacePromptSave(function () {
+    // A new Set/model must not cancel an authored prompt still awaiting its save.
+    var scope=folder+'|'+modelId;
+    if(!debouncedWorkspacePromptSaves[scope])
+      debouncedWorkspacePromptSaves[scope]=debounceCreate(500);
+    debouncedWorkspacePromptSaves[scope](function () {
       requestForFolder(folder, 'test_save_workspace_prompt', {
         modelId: modelId,
         prompt: value
@@ -1890,6 +1894,12 @@
 
   // One shared debounced writer for Tests and both Campaign form editors.
   window.testGenerationsSaveSharedSetPrompt = saveTestWorkspacePrompt;
+  window.testGenerationsCurrentSetPrompt = function(folder,modelId) {
+    if(prepared===null || preparedContext!==String(folder||'')+'|'+String(modelId||''))return null;
+    var node=el('test-generations-prompt');
+    return node ? node.value : null;
+  };
+
 
   function savedTestModelState() {
     var modelId = currentTestModelId();

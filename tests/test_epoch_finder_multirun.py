@@ -20,6 +20,7 @@ def test_rank_does_not_merge_same_epoch_in_different_runs():
 
 
 def test_multirun_staging_resolves_original_checkpoint(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_set_saved_checkpoint_path", lambda *_: None)
     source_a = tmp_path / "run_a.safetensors"
     source_b = tmp_path / "run_b.safetensors"
     source_a.write_bytes(b"first")
@@ -56,6 +57,7 @@ def test_multirun_staging_resolves_original_checkpoint(tmp_path, monkeypatch):
 
 
 def test_legacy_staging_still_uses_original_epoch(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_set_saved_checkpoint_path", lambda *_: None)
     source = tmp_path / "original.safetensors"
     source.write_bytes(b"legacy")
     stage = tmp_path / "test"

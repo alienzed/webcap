@@ -59,8 +59,11 @@ function fixture(hash = '#/media') {
       const option = new Element('option'); option.value = value; option.textContent = label; nodes[id].appendChild(option);
     }
   }
-  const buttons = [...html.matchAll(/class="media-explorer-source(?: active)?" data-media-(role|source)="([^"]*)"/g)].map(([,kind,value]) => {
-    const button = new Element('button'); button.dataset[kind === 'role' ? 'mediaRole' : 'mediaSource'] = value; button.className = 'media-explorer-source'; return button;
+  const buttons = [...html.matchAll(/class="media-explorer-source(?: active)?" data-media-(role|source)="([^"]*)"[^>]*>([^<]*)<\/button>/g)].map(([,kind,value,title]) => {
+    const button = new Element('button'); button.dataset[kind === 'role' ? 'mediaRole' : 'mediaSource'] = value;
+    button.setAttribute('data-media-' + kind, value);
+    button.textContent = title;
+    button.className = 'media-explorer-source'; return button;
   });
   const modeButtons = ['list', 'single', 'grid'].map(mode => {
     const button = new Element('button'); button.dataset.explorerMode = mode; return button;
@@ -272,7 +275,7 @@ test('direct checkboxes, Space, range keys and mixed comparison work without tou
   assert.match(f.nodes['media-explorer-compare-dialog'].querySelector('strong').textContent,/Survey · 3 selected/);
 });
 
-test('historical Generate source navigation is read only and rejects late source responses', async () => {
+test('historical Generate source navigation chooses the newest request and rejects late responses', async () => {
   const source = fs.readFileSync('tool/js/generate.js','utf8');
   const requests=[]; let shown='';
   const node={classList:{add() {},remove() {}}};
@@ -282,8 +285,7 @@ test('historical Generate source navigation is read only and rejects late source
     el:()=>node,getDirectorModelPreference:()=>'',trackGenerateJob() {},setGenerateViewMode() {},setTakesCollapsed() {},syncCancelQueuedButton() {},
     refreshCapabilities:()=>Promise.resolve(),refreshDirector:()=>Promise.resolve(),refreshTrackedGenerateJobs:()=>Promise.resolve(),refreshResults:()=>Promise.resolve(),
     requestJson:url=>new Promise(resolve=>requests.push({url,resolve})),
-    renderActiveResult:result=>shown=result.storageId,
-    restoreResultConfiguration:()=>assert.fail('historical navigation must never replace the working draft'),
+    selectGenerationResult:result=>shown=result.storageId,
     reportError:error=>assert.fail(String(error))
   };
   vm.runInNewContext(source.slice(source.indexOf('  function openGenerateActivity('),source.indexOf('  function bindUi()')),context);
@@ -523,4 +525,90 @@ test('External Move to Trash only targets the selected clicked item', async () =
   assert.deepEqual(JSON.parse(req.options.body).files, ['b.png']);
   await f.settle(req, []);
   assert.equal(f.errors.length, 0);
+});
+
+
+test('shared technical filters reach generated media and recent folders require successful browsing', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.nodes['media-explorer-min-mp'].value = '1.5';
+  f.nodes['media-explorer-min-mp'].emit('change');
+  const generated = new URL(f.pending.at(-1).url, 'http://localhost');
+  assert.equal(generated.searchParams.get('min_mp'), '1.5');
+  assert.equal(generated.searchParams.get('direction'), 'desc');
+  await f.settle(f.pending.at(-1), []);
+
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/tmp/photos';
+  f.nodes['media-explorer-open-path'].click();
+  const browse = f.pending.at(-1);
+  assert.match(browse.url, /\/fs\/media_explorer\/external\?/);
+  assert.equal(f.pending.filter(entry =>
+    entry.url === '/fs/media_explorer/external/folders' && entry.options?.method === 'POST').length, 0);
+  await f.settle(browse, []);
+  const saves = f.pending.filter(entry =>
+    entry.url === '/fs/media_explorer/external/folders' && entry.options?.method === 'POST');
+  assert.equal(saves.length, 1);
+  assert.equal(JSON.parse(saves[0].options.body).path, '/tmp/photos');
+});
+
+test('shared technical filters remain part of Media Explorer deep links', async () => {
+  const f = fixture('#/media?source=generate&min-mp=0.8&sort=megapixels');
+  f.window.openMediaExplorerActivity();
+  assert.equal(f.nodes['media-explorer-min-mp'].value, '0.8');
+  const params = new URLSearchParams();
+  f.window.appendMediaExplorerRouteParams(params);
+  assert.equal(params.get('min-mp'), '0.8');
+  assert.equal(params.get('sort'), 'megapixels');
+});
+
+
+test('saved external folders populate the chooser without launching discovery', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  const history = f.pending.find(request => request.url === '/fs/media_explorer/external/folders');
+  assert.ok(history);
+  await f.settle(history, [], true, {folders:['/tmp/recent', '/tmp/older']});
+  assert.equal(f.nodes['media-explorer-external-path'].value, '/tmp/recent');
+  assert.equal(f.nodes['media-explorer-saved-folders'].value, '/tmp/recent');
+  assert.equal(f.pending.filter(request => request.url.startsWith('/fs/media_explorer/external?')).length, 0);
+  assert.equal(f.nodes['media-explorer-status'].textContent.includes('Choose a recent folder'), true);
+  assert.equal(f.nodes['media-explorer-empty-title'].textContent, 'Choose an external folder');
+  assert.equal(f.nodes['media-explorer-heading'].textContent, 'External folders');
+  const params = new URLSearchParams();
+  f.window.appendMediaExplorerRouteParams(params);
+  assert.equal(params.get('source'), 'external');
+  f.nodes['media-explorer-saved-folders'].value = '/tmp/older';
+  f.nodes['media-explorer-saved-folders'].emit('change');
+  const browse = f.pending.filter(request => request.url.startsWith('/fs/media_explorer/external?')).at(-1);
+  assert.equal(new URL(browse.url, 'http://localhost').searchParams.get('path'), '/tmp/older');
+  await f.settle(browse, [], true, {folders:[]});
+  const save = f.pending.filter(request => request.url === '/fs/media_explorer/external/folders' && request.options?.method === 'POST');
+  assert.equal(save.length, 1);
+  await f.settle(save[0], [], true, {folders:['/tmp/older', '/tmp/recent']});
+  assert.equal(f.nodes['media-explorer-saved-folders'].value, '/tmp/older');
+  f.nodes['media-explorer-forget-folder'].click();
+  const forget = f.pending.find(request => request.url === '/fs/media_explorer/external/folders' && request.options?.method === 'DELETE');
+  assert.ok(forget);
+  assert.equal(JSON.parse(forget.options.body).path, '/tmp/older');
+  await f.settle(forget, [], true, {folders:['/tmp/recent']});
+  assert.equal(f.nodes['media-explorer-saved-folders'].value, '');
+});
+
+test('reverse sort restores from Explorer route and Clear filters resets it', async () => {
+  const f = fixture('#/media?source=generate&sort=megapixels&direction=asc');
+  f.window.openMediaExplorerActivity();
+  const qs = new URL(f.pending[0].url, 'http://localhost').searchParams;
+  assert.equal(qs.get('sort'), 'megapixels');
+  assert.equal(qs.get('direction'), 'asc');
+  const route = new URLSearchParams();
+  f.window.appendMediaExplorerRouteParams(route);
+  assert.equal(route.get('direction'), 'asc');
+  await f.settle(f.pending[0], []);
+  f.nodes['media-explorer-clear-filters'].click();
+  const next = new URL(f.pending.at(-1).url, 'http://localhost').searchParams;
+  assert.equal(next.get('direction'), 'desc');
 });

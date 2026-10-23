@@ -444,3 +444,44 @@ def test_storyboard_export_filter_applies_before_paging(monkeypatch):
     assert [item["id"] for item in scenes["items"]] == ["scene", "reference"]
     with pytest.raises(ValueError, match="Storyboard"):
         media_explorer.list_media(source="storyboard", storyboard_type="invalid")
+
+
+def test_common_technical_sort_and_filter_before_paging(monkeypatch):
+    rows = [
+        {"id": "small", "source": "generate", "role": "generated", "storageId": "1",
+         "mediaKind": "image", "fileName": "small.png", "createdAt": 100,
+         "model": "", "rating": 0, "resolution": "512x512", "fileSize": 300},
+        {"id": "large", "source": "generate", "role": "generated", "storageId": "2",
+         "mediaKind": "image", "fileName": "large.png", "createdAt": 200,
+         "model": "", "rating": 0, "resolution": "1600x900", "fileSize": 900},
+        {"id": "unknown", "source": "generate", "role": "generated", "storageId": "3",
+         "mediaKind": "image", "fileName": "unknown.png", "createdAt": 300,
+         "model": "", "rating": 0, "resolution": "", "fileSize": 600},
+    ]
+    monkeypatch.setattr(media_explorer, "discover_generate", lambda limit=500: rows)
+    monkeypatch.setattr(media_explorer, "discover_tests", lambda full=False: [])
+    monkeypatch.setattr(media_explorer, "discover_epoch_frames", lambda: [])
+    monkeypatch.setattr(media_explorer, "discover_storyboards", lambda: [])
+    page = media_explorer.list_media(source="generate", sort="megapixels", limit=1)
+    assert page["total"] == 3
+    assert [item["id"] for item in page["items"]] == ["large"]
+    assert [item["id"] for item in media_explorer.list_media(
+        source="generate", min_mp="1", sort="size")["items"]] == ["large"]
+    assert [item["id"] for item in media_explorer.list_media(
+        source="generate", sort="size", direction="asc")["items"]] == ["small", "unknown", "large"]
+    with pytest.raises(ValueError, match="sort direction"):
+        media_explorer.list_media(source="generate", direction="other")
+
+
+def test_recorded_dimensions_and_duration_are_normalized_without_probing_files():
+    dimensions = media_explorer._record_details({
+        "width": 1344, "height": 768, "durationSeconds": 5,
+    })
+    assert dimensions["resolution"] == "1344x768"
+    assert dimensions["duration"] == 5
+    assert media_explorer._metric(dimensions, "resolution") == 768
+    assert media_explorer._metric(dimensions, "megapixels") == 1344 * 768
+    assert media_explorer._metric(dimensions, "duration") == 5
+    unknown = media_explorer._record_details({"megapixels": 0.8})
+    assert unknown["resolution"] == ""
+    assert media_explorer._metric(unknown, "megapixels") == 0

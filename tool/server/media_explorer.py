@@ -1,6 +1,7 @@
 """Read-only owner-backed Media Explorer discovery; no persistent index."""
 import json
 import os
+import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.parse import quote
@@ -16,12 +17,17 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".mkv", ".avi"}
 def _record_details(record):
     """Expose recorded facts, never run analysis or copy an owner's raw payload."""
     settings = record.get("settings") or {}
+    resolution = record.get("resolution") or settings.get("dimensions") or ""
+    if not _dimensions(resolution):
+        width = record.get("width") or settings.get("width")
+        height = record.get("height") or settings.get("height")
+        resolution = f"{width}x{height}" if _dimensions(f"{width}x{height}") else ""
     return {
         "prompt": str(record.get("resolvedPrompt") or record.get("prompt") or ""),
         "sourcePrompt": str(record.get("sourcePrompt") or ""),
         "seed": record.get("seed", settings.get("seed")),
-        "resolution": str(settings.get("dimensions") or ""),
-        "duration": record.get("durationSeconds", settings.get("duration")),
+        "resolution": str(resolution),
+        "duration": record.get("durationSeconds", record.get("duration", settings.get("duration"))),
         "aspectRatio": str(record.get("aspectRatio") or settings.get("aspectRatio") or ""),
         "workflow": str(record.get("workflowProfile") or record.get("workflowFile") or ""),
         "loras": [{"name": str(item.get("name") or ""), "strength": item.get("strength")}
@@ -34,6 +40,28 @@ def _assessment(record):
         return None
     return {"label": "Vision assessment", "model": str(record.get("modelId") or ""),
             "text": str(record["text"])}
+
+
+def _dimensions(value):
+    match = re.fullmatch(r"\s*(\d+)\s*[x×]\s*(\d+)\s*", str(value or ""))
+    if not match:
+        return None
+    width, height = (int(part) for part in match.groups())
+    return (width, height) if width > 0 and height > 0 else None
+
+
+def _metric(item, name):
+    metadata = item.get("metadata") or {}
+    if name == "duration":
+        try:
+            return float(metadata.get("duration") if metadata.get("duration") is not None else item.get("duration") or 0)
+        except (TypeError, ValueError):
+            return 0
+    dimensions = _dimensions(metadata.get("resolution") or item.get("resolution"))
+    if not dimensions:
+        return 0
+    width, height = dimensions
+    return min(width, height) if name == "resolution" else width * height
 
 
 def _kind(path):
@@ -351,7 +379,8 @@ def discover_storyboards():
 
 
 def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", full=False, source="",
-               model="", folder="", rating="", artifact="", owner="", date="", storyboard_type=""):
+               model="", folder="", rating="", artifact="", owner="", date="", storyboard_type="",
+               min_side="", min_mp="", min_duration="", max_duration="", direction="desc"):
     limit = max(1, min(int(limit), 120))
     offset = max(0, int(offset))
     full = str(full).strip().lower() in ("1", "true", "yes")
@@ -401,14 +430,40 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
             raise ValueError("Unknown media date filter.")
         cutoff = (datetime.now(timezone.utc) - timedelta(days=int(date))).timestamp() * 1000
         results = [item for item in results if item.get("createdAt") and item["createdAt"] >= cutoff]
+    min_side = int(min_side or 0)
+    min_mp = float(min_mp or 0)
+    min_duration = float(min_duration or 0)
+    max_duration = float(max_duration or 0)
+    if min_side or min_mp or min_duration or max_duration:
+        results = [item for item in results
+                   if (not (min_side or min_mp) or (
+                       _metric(item, "resolution") >= min_side and
+                       _metric(item, "megapixels") / 1000000 >= min_mp and
+                       _dimensions((item.get("metadata") or {}).get("resolution") or item.get("resolution")) is not None))
+                   and (not (min_duration or max_duration) or (
+                       _metric(item, "duration") > 0 and
+                       (not min_duration or _metric(item, "duration") >= min_duration) and
+                       (not max_duration or _metric(item, "duration") <= max_duration)))]
     if sort == "oldest":
         results.sort(key=lambda item: (item["createdAt"], item["id"]))
     elif sort == "name":
         results.sort(key=lambda item: (item["fileName"].casefold(), item["id"]))
+    elif sort == "path":
+        results.sort(key=lambda item: (str(item.get("mediaPath") or "").casefold(), item["id"]))
+    elif sort == "type":
+        results.sort(key=lambda item: (item["mediaKind"], item["id"]))
+    elif sort == "size":
+        results.sort(key=lambda item: (-item.get("fileSize", 0), item["id"]))
+    elif sort in ("resolution", "megapixels", "duration"):
+        results.sort(key=lambda item: (-_metric(item, sort), item["id"]))
     elif sort == "rating":
         results.sort(key=lambda item: (-(item["rating"] or 0), -item["createdAt"], item["id"]))
     elif sort != "newest":
         raise ValueError("Unknown media sort.")
+    if direction == "asc":
+        results.reverse()
+    elif direction != "desc":
+        raise ValueError("Unknown sort direction.")
     return {"ok": True, "items": results[offset:offset + limit],
             "total": len(results), "offset": offset, "limit": limit,
             "facets": facets,

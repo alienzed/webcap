@@ -318,3 +318,31 @@ def test_external_trash_uses_system_trash_not_permanent_delete(tmp_path, monkeyp
     assert result["trashed"] == ["one.png"]
     assert len(calls) == 1 and (trash / "one.png").exists()
     assert not (root / "one.png").exists()
+
+
+def test_recent_external_folders_survive_restart_and_support_forget(tmp_path, monkeypatch):
+    monkeypatch.setattr(external_media.app_config, "app_state_root", lambda: tmp_path / "state")
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    assert external_media._recent_paths() == []
+    assert external_media.remember_external_path(str(first)) == [str(first)]
+    assert external_media.remember_external_path(str(second)) == [str(second), str(first)]
+    assert external_media.remember_external_path(str(first)) == [str(first), str(second)]
+    assert external_media._recent_paths() == [str(first), str(second)]
+    assert external_media.remove_external_path(str(first)) == [str(second)]
+    assert external_media._recent_paths() == [str(second)]
+    assert external_media._index is None or "items" in external_media._index
+    assert external_media._recent_paths_file().parent == tmp_path / "state"
+
+
+def test_recent_external_folders_do_not_save_invalid_paths(tmp_path, monkeypatch):
+    monkeypatch.setattr(external_media.app_config, "app_state_root", lambda: tmp_path / "state")
+    try:
+        external_media.remember_external_path(str(tmp_path / "missing"))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Missing directory must fail without saving it")
+    assert external_media._recent_paths() == []

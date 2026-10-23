@@ -2150,6 +2150,9 @@ def media_explorer_route():
             artifact=request.args.get("artifact", ""),
             owner=request.args.get("owner", ""),
             storyboard_type=request.args.get("storyboard_type", ""),
+            min_side=request.args.get("min_side", ""), min_mp=request.args.get("min_mp", ""),
+            min_duration=request.args.get("min_duration", ""), max_duration=request.args.get("max_duration", ""),
+            direction=request.args.get("direction", "desc"),
         ))
     except Exception as exc:
         app.logger.exception("MEDIA EXPLORER DISCOVERY FAILED: %s", exc)

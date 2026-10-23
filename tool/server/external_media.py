@@ -8,8 +8,10 @@ import os
 import shutil
 import subprocess
 import threading
+from datetime import datetime, timedelta, timezone
 from collections import deque
 from pathlib import Path
+from . import config as app_config
 from urllib.parse import quote
 
 from flask import jsonify, request, send_file
@@ -22,6 +24,47 @@ MEDIA_EXTS = IMAGE_EXTS | VIDEO_EXTS
 _LOCK = threading.RLock()
 _index = None
 _metadata_job = None
+
+
+def _recent_paths_file():
+    return app_config.app_state_root() / "media_explorer_folders.json"
+
+
+def _recent_paths():
+    path = _recent_paths_file()
+    if not path.exists():
+        return []
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(saved, list) or not all(isinstance(value, str) for value in saved):
+        raise ValueError("Invalid saved external folders.")
+    return saved
+
+
+def _save_recent_paths(paths):
+    path = _recent_paths_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    try:
+        temporary.write_text(json.dumps(paths, indent=2), encoding="utf-8")
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def remember_external_path(raw):
+    root = str(_root(raw))
+    with _LOCK:
+        paths = [root] + [entry for entry in _recent_paths() if entry != root]
+        _save_recent_paths(paths)
+        return paths
+
+
+def remove_external_path(raw):
+    value = str(raw or "").strip()
+    with _LOCK:
+        paths = [entry for entry in _recent_paths() if entry != value]
+        _save_recent_paths(paths)
+        return paths
 
 
 def _root(raw):
@@ -195,6 +238,12 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
     if query:
         items = [item for item in items
                  if all(term in item["relativePath"].casefold() for term in query)]
+    date = str(args.get("date") or "")
+    if date:
+        if date not in ("7", "30", "90"):
+            raise ValueError("Unknown media date filter.")
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=int(date))).timestamp() * 1000
+        items = [item for item in items if item["createdAt"] >= cutoff]
     if not ignore_metadata:
         min_side = int(args.get("min_side") or 0)
         min_mp = float(args.get("min_mp") or 0)
@@ -452,6 +501,30 @@ def register_routes(app):
             return jsonify(trash_external_files(request.get_json(silent=True) or {}))
         except Exception as exc:
             app.logger.exception("EXTERNAL MEDIA TRASH FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.get("/fs/media_explorer/external/folders")
+    def external_saved_folders():
+        try:
+            return jsonify({"ok": True, "folders": _recent_paths()})
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER HISTORY FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 500
+
+    @app.post("/fs/media_explorer/external/folders")
+    def external_remember_folder():
+        try:
+            return jsonify({"ok": True, "folders": remember_external_path((request.get_json(silent=True) or {}).get("path"))})
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER SAVE FAILED")
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+    @app.delete("/fs/media_explorer/external/folders")
+    def external_remove_folder():
+        try:
+            return jsonify({"ok": True, "folders": remove_external_path((request.get_json(silent=True) or {}).get("path"))})
+        except Exception as exc:
+            app.logger.exception("EXTERNAL FOLDER REMOVE FAILED")
             return jsonify({"ok": False, "error": str(exc)}), 400
 
     @app.get("/fs/media_explorer/external")

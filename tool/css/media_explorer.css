@@ -421,6 +421,26 @@
 .media-explorer-workspace .media-explorer-external-path-bar input {
   flex: 1 1 320px;
 }
+.media-explorer-workspace #media-explorer-saved-folders {
+  flex: 0 1 250px;
+  min-width: 160px;
+  max-width: 100%;
+  min-height: 35px;
+  padding: 5px 28px 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background-color: var(--panel);
+  color: var(--text);
+  font-size: 16px;
+  text-overflow: ellipsis;
+}
+.media-explorer-workspace #media-explorer-forget-folder:disabled {
+  opacity: .5;
+  cursor: default;
+}
+@media (max-width: 760px) {
+  .media-explorer-workspace #media-explorer-saved-folders { flex: 1 1 240px; }
+}
 .media-explorer-workspace .media-explorer-gallery-toolbar {
   min-height: 0;
   display: flex;

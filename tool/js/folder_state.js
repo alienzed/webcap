@@ -49,7 +49,10 @@ function sanitizeFolderState(data) {
       testGenerationByModel[String(modelId)] = {
         settings: (entry.settings && typeof entry.settings === 'object' && !Array.isArray(entry.settings))
           ? JSON.parse(JSON.stringify(entry.settings))
-          : {}
+          : {},
+        wildcardIntent: (entry.wildcardIntent && typeof entry.wildcardIntent === 'object' && !Array.isArray(entry.wildcardIntent))
+          ? JSON.parse(JSON.stringify(entry.wildcardIntent))
+          : null
       };
     });
   }

@@ -37,6 +37,76 @@
   var screeningReportedVlErrors = new Set();
   var screeningSettingsKey = '';
   var screeningSettingsRequest = null;
+  var screeningSaveTimer = 0;
+  var campaignSaveTimer = 0;
+  var campaignDefaultsKey = '';
+  var campaignDraftRevision = 0;
+  window.epochFinderReceiveSetPrompt = function(folder, modelId, prompt) {
+    if(currentFolder!==String(folder||'') ||
+       String(window.getWorkingModelProfileId()||'')!==String(modelId||''))return;
+    // These are editable drafts, not immutable results or historical plans.
+    els('prompt').value=String(prompt==null?'':prompt);
+    els('manual-prompt').value=String(prompt==null?'':prompt);
+    screeningGroups();
+  };
+  function campaignSaveDraft() {
+    if (!currentFolder || els('campaign-type').value!=='auto') return;
+    var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||'');
+    if(!modelId)return;
+    var settings={concept:els('concept').value,rounds:els('rounds').value,
+      cases:els('cases').value,retention:els('retention').value,
+      referenceRvn:els('enable-rvn').checked,referenceDino:els('enable-dino').checked};
+    if(els('round-plan').querySelector('[data-epoch-round]'))settings.roundPlans=getRoundPlans();
+    campaignDraftRevision++;
+    if(campaignSaveTimer)clearTimeout(campaignSaveTimer);
+    campaignSaveTimer=setTimeout(function(){
+      campaignSaveTimer=0;
+      fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:folder,operation:'test_save_campaign_settings',
+          criteria:{modelId:modelId,settings:settings}})})
+        .then(function(response){return response.json().then(function(payload){
+          if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Campaign form defaults.');
+        });}).catch(error);
+    },500);
+  }
+  function campaignApplyDefaults() {
+    if(!currentFolder||els('campaign-type').value!=='auto')return;
+    var folder=currentFolder,modelId=String(window.getWorkingModelProfileId()||'');
+    var revision=++campaignDraftRevision;
+    campaignDefaultsKey=folder+'|'+modelId;
+    fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:folder,operation:'test_prepare',criteria:{modelId:modelId}})})
+      .then(function(response){return response.json().then(function(payload){
+        if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not load Campaign defaults.');
+        return payload;
+      });}).then(function(payload){
+        if(folder!==currentFolder||modelId!==String(window.getWorkingModelProfileId()||'')||
+           activeCampaign||els('campaign-type').value!=='auto'||revision!==campaignDraftRevision)return;
+        var saved=payload.campaignSettings||{};
+        var localPrompt=window.testGenerationsCurrentSetPrompt(folder,modelId);
+        els('prompt').value=localPrompt!==null?localPrompt:
+          (payload.workspacePromptPresent?String(payload.workspacePrompt||''):String(payload.defaultPrompt||''));
+        els('concept').value=String(saved.concept||'');
+        [['rounds','rounds'],['cases','cases'],['retention','retention']].forEach(function(pair){
+          if(saved[pair[1]]!=null)els(pair[0]).value=String(saved[pair[1]]);
+        });
+        if(typeof saved.referenceRvn==='boolean')els('enable-rvn').checked=saved.referenceRvn;
+        if(typeof saved.referenceDino==='boolean')els('enable-dino').checked=saved.referenceDino;
+        dimensions=[];
+        els('round-plan').innerHTML='';
+        roundPlan();
+        if(Array.isArray(saved.roundPlans)){
+          Array.from(els('round-plan').querySelectorAll('[data-epoch-round]')).forEach(function(row,i){
+            var plan=saved.roundPlans[i]||{};
+            [['case','cases'],['keep','keepPercent'],['mp','megapixels'],['dimensions','dimensions']].forEach(function(pair){
+              var input=row.querySelector('[data-'+pair[0]+']');
+              if(input&&plan[pair[1]]!=null)input.value=String(plan[pair[1]]);
+            });
+          });
+        }
+      }).catch(function(exc){campaignDefaultsKey='';error(exc);});
+  }
+
   var screeningSelectionQueue = Promise.resolve();
   var screeningSelectionRevision = 0;
   var screeningSelectionFailure = null;
@@ -1176,7 +1246,8 @@
       return payload;
     });}).then(function(payload){
       if(screeningSettingsKey!==key) return payload;
-      var available=new Set(payload.settings||[]), defaults=payload.defaults||{};
+      var available=new Set(payload.settings||[]), defaults=Object.assign({},payload.defaults||{},payload.manualSettings||{});
+      var freshControls=els('manual-mp').dataset.screeningSettingsKey!==key;
       var fields=[['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
         ['sampling','samplingMode'],['dimensions','dimensions']];
       fields.forEach(function(pair){
@@ -1191,7 +1262,7 @@
         ['dimensions',(payload.settingOptions||{}).dimensions||[]]].forEach(function(pair){
         var target=els('manual-'+pair[0]);
         var field=pair[0]==='aspect'?'aspectRatio':'dimensions';
-        var selected=target.value, preferred=String(defaults[field]||'');
+        var preferred=String(defaults[field]||''), selected=freshControls?preferred:target.value;
         var values=pair[1].map(String);
         if(preferred && !values.includes(preferred))values.unshift(preferred);
         target.replaceChildren.apply(target,values.map(function(value){
@@ -1199,7 +1270,7 @@
         }));
         target.value=values.includes(selected)?selected:preferred;
       });
-      var sampling=els('manual-sampling'), prior=sampling.value;
+      var sampling=els('manual-sampling'), prior=freshControls?String(defaults.samplingMode||'turbo'):sampling.value;
       sampling.value=Array.from(sampling.options).some(function(o){return o.value===prior;})?prior:String(defaults.samplingMode||'turbo');
       (payload.warnings||[]).forEach(function(warning){if(warning)window.reportConsoleWarning('Manual Screening settings',warning);});
       return payload;
@@ -1236,10 +1307,13 @@
       if(context!==currentFolder || (selectedId && activeCampaign!==selectedId) ||
           (!selectedId && activeCampaign) || els('campaign-type').value!=='manual')return;
       if(!plan){
-        var prompt=payload.workspacePromptPresent?payload.workspacePrompt:payload.defaultPrompt;
+        var localPrompt=window.testGenerationsCurrentSetPrompt(
+          context,String(campaign&&campaign.modelId||window.getWorkingModelProfileId()||''));
+        var prompt=localPrompt!==null?localPrompt:
+          (payload.workspacePromptPresent?payload.workspacePrompt:payload.defaultPrompt);
         if(!els('manual-prompt').value.trim()){
           els('manual-prompt').value=String(prompt||'');
-          screeningGroups(0);
+          screeningGroups((payload.manualSettings||{}).groupIndex||0);
         }
         return;
       }
@@ -1255,6 +1329,32 @@
         target.value=String(value);
       });
     }).catch(error);
+  }
+  function screeningSaveDraft() {
+    if (!currentFolder || els('campaign-type').value!=='manual') return;
+    var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||'');
+    var settings={groupIndex:Number(els('manual-group').value||0)};
+    [['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
+      ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function(pair){
+        settings[pair[1]]=els('manual-'+pair[0]).value;
+      });
+    if(screeningSaveTimer)clearTimeout(screeningSaveTimer);
+    screeningSaveTimer=setTimeout(function(){
+      screeningSaveTimer=0;
+      fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:folder,operation:'test_save_manual_settings',
+          criteria:{modelId:modelId,settings:settings}})})
+      .then(function(response){return response.json().then(function(payload){
+        if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Manual Screening settings.');
+        if(folder===currentFolder && modelId===String(window.getWorkingModelProfileId()||'')){
+          screeningSettingsKey=''; screeningSettingsRequest=null;
+        }
+      });}).catch(error);
+    },500);
+  }
+  function screeningSavePrompt() {
+    window.testGenerationsSaveSharedSetPrompt(els('manual-prompt').value);
+    screeningSettingsKey='';screeningSettingsRequest=null;
   }
   function screeningCriteria() {
     var settings={};
@@ -2023,6 +2123,8 @@
       setup(); list();
       if (activeCampaign && campaigns.some(function (c) { return c.id === activeCampaign; })) return refreshStatus();
       activeCampaign = '';
+      var draftKey=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
+      if(!followUpSource&&els('campaign-type').value==='auto'&&campaignDefaultsKey!==draftKey)campaignApplyDefaults();
       manualSelectionCampaign='';
       els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
     }).catch(error);
@@ -2139,7 +2241,7 @@
     }
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { screeningDraftContext=''; screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { campaignDefaultsKey='';screeningSettingsKey='';screeningSettingsRequest=null;screeningDraftContext=''; screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
     if (mode === 'finder' || mode === 'screening') refresh();
@@ -2181,14 +2283,14 @@
     screeningTestStatusCampaign='';
     refresh();
   };
-  els('new').onclick = function () { screeningShowExcluded=false; els('campaign-type').value=mode==='screening'?'manual':'auto'; followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); screeningApplySettings(null); };
+  els('new').onclick = function () { screeningShowExcluded=false; els('campaign-type').value=mode==='screening'?'manual':'auto'; followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); if(els('campaign-type').value==='manual')screeningApplySettings(null);else campaignApplyDefaults(); };
   els('start').onclick = start;
   els('campaign-type').onchange=function () {
     activeCampaign='';campaignState=null;manualSelectionCampaign='';
     els('active').classList.add('hidden');els('empty').classList.remove('hidden');
-    showStep(1);screeningModeUi();screeningApplySettings(null);
+    showStep(1);screeningModeUi();if(els('campaign-type').value==='manual')screeningApplySettings(null);else campaignApplyDefaults();
   };
-  els('manual-prompt').addEventListener('input',function(){screeningGroups();});
+  els('manual-prompt').addEventListener('input',function(){screeningGroups();try{screeningSavePrompt();}catch(exc){error(exc);}});
   els('manual-launch').onclick=screeningLaunch;
   els('screening-show-excluded').onclick=function(){
     screeningShowExcluded=!screeningShowExcluded;
@@ -2327,6 +2429,13 @@
   els('reference-options').addEventListener('click', referenceClick);
   els('reference-workspace').addEventListener('click', referenceClick);
   els('preview-close').onclick = function () { els('reference-preview').close(); };
+  els('prompt').addEventListener('input', function(){
+    if(els('campaign-type').value!=='auto')return;
+    campaignDraftRevision++;
+    try{
+      window.testGenerationsSaveSharedSetPrompt(this.value);
+    }catch(exc){error(exc);}
+  });
   els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });
   showStep(1);
   screeningModeUi();
@@ -2334,9 +2443,15 @@
   if (testDuration) testDuration.addEventListener('input', function () {
     if (mode === 'finder') roundPlan();
   });
-  els('rounds').onchange = roundPlan;
-  els('cases').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
-  els('retention').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
+  ['concept','rounds','cases','retention','enable-rvn','enable-dino'].forEach(function(id){
+    els(id).addEventListener('input',function(){campaignDraftRevision++;});
+    if(!['rounds','cases','retention'].includes(id))els(id).addEventListener('change',campaignSaveDraft);
+  });
+  els('round-plan').addEventListener('change',campaignSaveDraft);
+  els('round-plan').addEventListener('input',campaignSaveDraft);
+  els('rounds').onchange = function () { roundPlan(); campaignSaveDraft(); };
+  els('cases').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); campaignSaveDraft(); };
+  els('retention').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); campaignSaveDraft(); };
   ['rank-filter','rank-sort'].forEach(function (id) { els(id).onchange = function () { if (campaignState) ranking(campaignState); }; });
   els('ranking').onclick = function (event) {
     var row = event.target.closest('[data-inspect-epoch]');
@@ -2437,6 +2552,14 @@
     listRequestVersion++;
     activeCampaign = ''; inspectedEpoch = null; campaignState = null;
     els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
+    if (mode === 'screening') {
+      screeningDraftContext=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
+      screeningSettingsKey='';screeningSettingsRequest=null;
+      screeningApplySettings(null);
+    } else if (mode === 'finder') {
+      campaignDefaultsKey='';
+      campaignApplyDefaults();
+    }
     if (mode === 'finder' || mode === 'screening') refresh();
   });
   timer = setInterval(function () {

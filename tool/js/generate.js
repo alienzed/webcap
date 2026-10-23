@@ -687,6 +687,154 @@
     }
   }
 
+  function collectSettings() {
+    var settings = {};
+    if (fieldVisible('aspectRatio')) settings.aspectRatio = el('generate-aspect').value;
+    if (fieldVisible('megapixels')) settings.megapixels = el('generate-megapixels').value;
+    if (fieldVisible('duration')) settings.duration = el('generate-duration').value;
+    if (fieldVisible('samplingMode')) settings.samplingMode = el('generate-sampling-mode').value;
+    if (fieldVisible('dimensions')) settings.dimensions = el('generate-dimensions').value;
+    if (fieldVisible('seed')) settings.seed = el('generate-seed').value;
+    return settings;
+  }
+
+  function restoreResultConfiguration(result) {
+    if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before restoring a generation configuration.');
+    if (!result) throw new Error('Generation result is required.');
+
+    var resultModelId = String(result.modelId || '');
+    var modelAvailable = generateState.models.some(function (model) {
+      return String(model.id) === resultModelId;
+    });
+    if (resultModelId && modelAvailable) {
+      generateState.modelId = resultModelId;
+      el('generate-model').value = resultModelId;
+      renderModelForm();
+    } else if (resultModelId && typeof window.reportConsoleWarning === 'function') {
+      window.reportConsoleWarning(
+        'Generate',
+        'Opened generation uses unavailable Base Model: ' + resultModelId + '. Preview opened without restoring model-specific settings.'
+      );
+    }
+
+    var prompt = el('generate-prompt');
+    prompt.value = String(result.sourcePrompt || result.resolvedPrompt || '');
+    prompt.dataset.modelId = resultModelId || String(generateState.modelId || '');
+    if (modelAvailable) {
+
+      var settings = result.settings && typeof result.settings === 'object' ? result.settings : {};
+      [
+        ['aspectRatio', 'generate-aspect'],
+        ['megapixels', 'generate-megapixels'],
+        ['duration', 'generate-duration'],
+        ['samplingMode', 'generate-sampling-mode'],
+        ['dimensions', 'generate-dimensions'],
+        ['seed', 'generate-seed']
+      ].forEach(function (entry) {
+        if (!Object.prototype.hasOwnProperty.call(settings, entry[0])) return;
+        var control = el(entry[1]);
+        if (control) control.value = entry[0] === 'samplingMode'
+          ? normalizeGenerateSamplingMode(settings[entry[0]]) : String(settings[entry[0]]);
+      });
+
+      generateState.lorasByModel[resultModelId] = Array.isArray(result.loras)
+        ? result.loras.map(function (item) {
+            var strength = Number(item.strength);
+            return {
+              name: String(item.name || ''),
+              strength: isFinite(strength) ? strength : 1
+            };
+          }).filter(function (item) { return item.name; })
+        : [];
+        renderLoras();
+    }
+
+    generateState.promptLibrary.activeId = '';
+    generateState.director.previousPrompt = null;
+    setDirectorStatus('');
+    renderDirector();
+  }
+
+  function uploadReference(file) {
+    var body = new FormData();
+    body.append('file', file);
+    return requestJson('/fs/generate/reference', { method: 'POST', body: body }).then(function (payload) {
+      return payload.reference.path;
+    });
+  }
+
+  function cleanupUploadedReferences(paths) {
+    var values = Array.isArray(paths) ? paths.filter(Boolean) : [];
+    if (!values.length) return Promise.resolve();
+    return postJson('/fs/generate/reference/cleanup', { paths: values }).catch(function (err) {
+      if (typeof window.reportConsoleError === 'function') {
+        window.reportConsoleError(
+          'Generate',
+          'Could not clean abandoned Generate reference uploads: ' +
+            String(err && err.message ? err.message : err)
+        );
+      }
+    });
+  }
+
+  function syncReferenceDropzone(role) {
+    var input = el('generate-reference-' + role);
+    var zone = document.querySelector('[data-generate-reference-dropzone="' + role + '"]');
+    var name = document.querySelector('[data-generate-reference-name="' + role + '"]');
+    var clear = document.querySelector('[data-generate-reference-clear="' + role + '"]');
+    if (!input || !zone || !name || !clear) throw new Error('Generate reference dropzone markup is missing for ' + role + '.');
+    var file = input.files && input.files[0];
+    zone.classList.toggle('has-file', !!file);
+    name.textContent = file ? file.name : 'No file selected';
+    clear.classList.toggle('hidden', !file);
+    clear.disabled = input.disabled;
+  }
+
+  function setReferenceInputFile(input, file) {
+    if (!file) return;
+    if (file.type && file.type.indexOf('image/') !== 0) {
+      window.alert('Reference files must be images.');
+      return;
+    }
+    var transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function bindReferenceDropzones() {
+    ['first_frame', 'last_frame'].forEach(function (role) {
+      var input = el('generate-reference-' + role);
+      var zone = document.querySelector('[data-generate-reference-dropzone="' + role + '"]');
+      var clear = document.querySelector('[data-generate-reference-clear="' + role + '"]');
+      if (!input || !zone || !clear) throw new Error('Generate reference dropzone markup is missing for ' + role + '.');
+
+      input.addEventListener('change', function () { syncReferenceDropzone(role); });
+      ['dragenter', 'dragover'].forEach(function (eventName) {
+        zone.addEventListener(eventName, function (event) {
+          event.preventDefault();
+          if (input.disabled) return;
+          zone.classList.add('is-dragover');
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+        });
+      });
+      zone.addEventListener('dragleave', function (event) {
+        if (!event.relatedTarget || !zone.contains(event.relatedTarget)) zone.classList.remove('is-dragover');
+      });
+      zone.addEventListener('drop', function (event) {
+        event.preventDefault();
+        zone.classList.remove('is-dragover');
+        if (input.disabled) return;
+        setReferenceInputFile(input, event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
+      });
+      clear.addEventListener('click', function () {
+        input.value = '';
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      syncReferenceDropzone(role);
+    });
+  }
+
   function captureReferenceFiles(model) {
     var files = {};
     (model && Array.isArray(model.references) ? model.references : []).forEach(function (role) {

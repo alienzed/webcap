@@ -60,7 +60,9 @@ function fixture(hash = '#/media') {
     }
   }
   const buttons = [...html.matchAll(/class="media-explorer-source(?: active)?" data-media-(role|source)="([^"]*)"/g)].map(([,kind,value]) => {
-    const button = new Element('button'); button.dataset[kind === 'role' ? 'mediaRole' : 'mediaSource'] = value; button.className = 'media-explorer-source'; return button;
+    const button = new Element('button'); button.dataset[kind === 'role' ? 'mediaRole' : 'mediaSource'] = value;
+    button.setAttribute('data-media-' + kind, value);
+    button.className = 'media-explorer-source'; return button;
   });
   const modeButtons = ['list', 'single', 'grid'].map(mode => {
     const button = new Element('button'); button.dataset.explorerMode = mode; return button;

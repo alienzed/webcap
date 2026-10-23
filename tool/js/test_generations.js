@@ -1888,6 +1888,9 @@
     });
   }
 
+  // One shared debounced writer for Tests and both Campaign form editors.
+  window.testGenerationsSaveSharedSetPrompt = saveTestWorkspacePrompt;
+
   function savedTestModelState() {
     var modelId = currentTestModelId();
     var byModel = state && state.testGenerationByModel && typeof state.testGenerationByModel === 'object'

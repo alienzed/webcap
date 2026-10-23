@@ -5,6 +5,7 @@ from tool.server import epoch_finder, epoch_test_bench
 
 
 def test_manual_screening_test_status_reuses_checkpoint_provenance_across_runs(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_managed_set_checkpoint_sources", lambda *_: [])
     """Test membership is independent of Keep selection and displayed round."""
     from pathlib import Path
 
@@ -44,6 +45,7 @@ def test_manual_screening_test_status_reuses_checkpoint_provenance_across_runs(t
 
 
 def test_manual_screening_unknown_test_destination_fails_explicitly(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_managed_set_checkpoint_sources", lambda *_: [])
     campaign = {"id": "abcdef123456", "mode": "manual", "jobId": "run-a",
                 "rounds": [{"epochs": [1]}], "candidateMap": {}}
     monkeypatch.setattr(epoch_finder, "_load", lambda *_: campaign)
@@ -117,6 +119,7 @@ def test_ranking_counts_matches_mismatches_not_unclear():
 
 
 def test_temporary_checkpoint_copy_cleanup_preserves_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_set_saved_checkpoint_path", lambda *_: None)
     source = tmp_path / "source.safetensors"
     source.write_bytes(b"training epoch weights")
     stage = tmp_path / "staged"

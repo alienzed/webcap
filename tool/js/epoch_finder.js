@@ -416,7 +416,10 @@
         region.className='epoch-finder-run-epochs';
         region.dataset.epochRun=run.jobId;
         region.dataset.epochsSignature=epochsSignature;
-        region.innerHTML='<strong></strong><div class="epoch-finder-epoch-timeline">'+
+        region.innerHTML='<div class="epoch-finder-run-epochs-heading"><strong></strong>'+
+          '<button type="button" class="review-captions-btn epoch-finder-training-runs-link" data-epoch-training-run'+
+          ' title="Open this run in Training Candidates">Training Runs</button></div>'+
+          '<div class="epoch-finder-epoch-timeline">'+
           run.epochs.map(function(epoch){
             return '<button type="button" class="epoch-finder-epoch-tick" data-epoch-choice="'+
               epoch+'" aria-pressed="false"> '+epoch+'</button>';
@@ -2181,7 +2184,25 @@
   els('epoch-picker').addEventListener('click', function (event) {
     var region = event.target.closest('[data-epoch-run]');
     if (!region) return;
-    var jobId = region.dataset.epochRun, choice = event.target.closest('[data-epoch-choice]');
+    var jobId = region.dataset.epochRun;
+    if (event.target.closest('[data-epoch-training-run]')) {
+      var run = runs.find(function(item){return item.jobId===jobId;});
+      if (!run) { error(new Error('Selected training run disappeared.')); return; }
+      if (typeof openTrainingCandidates !== 'function') {
+        error(new Error('Training Candidates is unavailable.')); return;
+      }
+      var folder=currentFolder;
+      openTrainingCandidates({id:String(run.jobId),folder:folder},{
+        onClose:function(){
+          if(currentFolder!==folder) return;
+          refresh();
+          if(campaignState && campaignState.mode==='manual')
+            refreshScreeningTestStatus(campaignState,true).catch(function(){});
+        }
+      });
+      return;
+    }
+    var choice = event.target.closest('[data-epoch-choice]');
     var selected = runEpochSelections[jobId];
     if (!(selected instanceof Set)) throw new Error('Run selection missing.');
     if (choice) {

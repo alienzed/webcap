@@ -323,6 +323,13 @@ def apply_review_config_settings(config_text, settings):
     data = settings if isinstance(settings, dict) else {}
     if "optimizerLr" in data:
         source = rewrite_toml_assignment(source, "lr", _training_lr(data["optimizerLr"]), "optimizer")
+    if "h3ImageShift" in data:
+        config = tomllib.loads(source)
+        if config.get("model", {}).get("type") != "minimax_h3":
+            raise ValueError("Image shift is supported only for MiniMax H3.")
+        source = rewrite_toml_assignment(
+            source, "image_shift", _toml_number(data["h3ImageShift"], "Image shift"), "model"
+        )
     if "adapterRank" in data:
         source = rewrite_toml_assignment(
             source, "rank", _training_choice_int(data["adapterRank"], "LoRA rank", (16, 32)), "adapter"

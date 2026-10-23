@@ -1770,6 +1770,48 @@ def test_h3_adapter_unchecked_does_not_change_cfg(tmp_path, monkeypatch):
     assert (folder / "config.h3.toml").read_text(encoding="utf-8") == source
 
 
+def test_h3_image_shift_uses_existing_template_and_validates_values(tmp_path):
+    from tool.server import training_review
+
+    template = (Path(__file__).parents[1] / "tool" / "templates" / "config.h3.toml").read_text(encoding="utf-8")
+    path = tmp_path / "config.h3.toml"
+    path.write_text(template, encoding="utf-8")
+    assert training_review._config_settings(path)["h3ImageShift"] == 1
+
+    adjusted = apply_review_config_settings(template, {"h3ImageShift": "0.67"})
+    config = tomllib.loads(adjusted)
+    assert config["model"]["image_shift"] == pytest.approx(0.67)
+    assert config["model"]["shift"] == 8
+    assert config["adapter"]["rank"] == 32
+    assert tomllib.loads(template)["model"]["image_shift"] == 1
+
+    for value in ("", "0", "-1", "nan", "inf", "hello"):
+        with pytest.raises(ValueError, match="Image shift"):
+            apply_review_config_settings(template, {"h3ImageShift": value})
+
+    with pytest.raises(ValueError, match="only for MiniMax H3"):
+        apply_review_config_settings('[model]\ntype = "wan21"\n', {"h3ImageShift": "0.67"})
+
+
+@pytest.mark.parametrize("requested", [None, "0.67", "1.25"])
+def test_h3_image_shift_capture_only_changes_requested_run(tmp_path, monkeypatch, requested):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    source = (folder / "config.h3.toml").read_text(encoding="utf-8")
+    action, _ = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
+    settings = {"h3ImageShift": requested} if requested is not None else {}
+    bundle = training_bundle.materialize_training_bundle(
+        folder, action, MINIMAX_H3_PROFILE_ID, "h3", ["one.png"],
+        output_dirs={"h3": str(action / "output" / "minimax-h3")},
+        config_settings={"h3": settings},
+    )
+    parsed = tomllib.loads(Path(bundle["artifacts"]["h3Config"]).read_text(encoding="utf-8"))
+    assert parsed["model"]["image_shift"] == pytest.approx(float(requested) if requested else 1)
+    assert (folder / "config.h3.toml").read_text(encoding="utf-8") == source
+
+
 def test_h3_focused_blocks_match_only_early_main_and_refiner_modules():
     from tool.server.training_config_files import read_training_config_template
 

@@ -897,6 +897,10 @@
                                                 <span>Dropout</span>
                                                 <input id="training-run-dropout-input" type="number" min="0" max="0.2" step="0.01" inputmode="decimal" aria-describedby="training-run-parameters-error">
                                             </label>
+                                            <label id="training-run-h3-image-shift-option" class="training-run-parameter hidden" title="MiniMax H3 image noise shift; 1.0 follows the template baseline. Values below 1 emphasize lower-noise training.">
+                                                <span>Image shift</span>
+                                                <input id="training-run-h3-image-shift-input" type="number" min="0.01" step="any" inputmode="decimal" aria-describedby="training-run-parameters-error">
+                                            </label>
                                         </div>
                                         <div id="training-run-parameters-note" class="training-run-parameters-note hidden"></div>
                                         <div id="training-run-parameters-error" class="training-run-parameters-error hidden" role="status"></div>

@@ -441,6 +441,11 @@ def test_run_setup_uses_compact_parameter_rail_and_resume_canvas():
     styles = (root / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
     assert 'training-run-parameter-rail' in html
+    assert 'id="training-run-h3-image-shift-input"' in html
+    assert 'id="training-run-h3-image-shift-option"' in html
+    assert "bindDraft(imageShiftInput, 'h3ImageShift')" in script
+    assert "imageShiftOption.classList.toggle('hidden', stage !== 'h3')" in script
+    assert 'if (stage === \'h3\') trainingWorkspaceState.runConfigDraft.h3ImageShift = draft.h3ImageShift;' in script
     assert 'training-run-main' in html
     assert 'training-run-primary-row' in html
     assert '<span>Custom checkpoint directory</span>' in html
@@ -491,3 +496,31 @@ context.refreshTrainingReview().then(value => {
 }).catch(err => { console.error(err); process.exitCode = 1; });
 '''
     subprocess.run(["node", "-e", script, str(root / "tool" / "js" / "training_review.js")], check=True)
+
+
+def test_h3_image_shift_run_setup_validation():
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "tool" / "js" / "training_review.js").read_text(encoding="utf-8")
+    script = r"""
+const vm = require('node:vm');
+const fs = require('node:fs');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const start = source.indexOf('function validateTrainingRunSettings(');
+const stop = source.indexOf('function updateTrainingRunParameterState(', start);
+if (start < 0 || stop < 0) throw Error('Validation function missing');
+const ctx = {trainingWorkspaceState: {runStages: 'h3'}};
+vm.runInNewContext(source.slice(start, stop), ctx);
+const settings = {optimizerLr: '8e-5', adapterRank: '32', epochs: '90', adapterDropout: '0', h3ImageShift: '0.67'};
+const assert = require('node:assert/strict');
+assert.equal(ctx.validateTrainingRunSettings(settings), '');
+for (const bad of ['', '0', '-1', 'NaN', 'Infinity', 'wrong']) {
+  assert.match(ctx.validateTrainingRunSettings({...settings, h3ImageShift: bad}), /image shift/i);
+}
+ctx.trainingWorkspaceState.runStages = 'wan21';
+assert.equal(ctx.validateTrainingRunSettings({...settings, h3ImageShift: ''}), '');
+"""
+    result = subprocess.run(
+        ["node", "-e", script, str(root / "tool" / "js" / "training_review.js")],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr

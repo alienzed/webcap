@@ -287,7 +287,9 @@ def _config_settings(path):
         raise ValueError("Could not read training config " + Path(path).name + ": " + str(exc)) from exc
     optimizer = parsed.get("optimizer") if isinstance(parsed.get("optimizer"), dict) else {}
     adapter = parsed.get("adapter") if isinstance(parsed.get("adapter"), dict) else {}
+    model = parsed.get("model") if isinstance(parsed.get("model"), dict) else {}
     return {
+        "h3ImageShift": model.get("image_shift", 1) if model.get("type") == "minimax_h3" else None,
         "optimizerLr": optimizer.get("lr"),
         "adapterRank": adapter.get("rank"),
         "epochs": parsed.get("epochs"),

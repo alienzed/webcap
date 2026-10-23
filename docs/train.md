@@ -7,7 +7,7 @@ The runner's ownership and recovery rules are defined in [training_runner_contra
 ## Workflow
 
 1. Open **Training** from the permanent activity rail and select the **Base Model** in the application header. The model choice is remembered per set.
-2. Set the normal run parameters in **Run setup**: learning rate, rank, epochs, and dropout. These start from the current model template. H3 also offers an optional **Focused H3 blocks (20–49)** checkbox; it excludes H3 blocks 0–19 and the token refiner from LoRA training via PEFT `exclude_modules`, in the captured run config only.
+2. Set the normal run parameters in **Run setup**: learning rate, rank, epochs, and dropout. These start from the current model template. MiniMax H3 also exposes **Image shift** (read from the current H3 TOML; 1.0 in the default template) and an optional **Focused H3 blocks (20–49)** checkbox. Both settings affect only the captured run config; the checkbox excludes blocks 0–19 and the token refiner via PEFT `exclude_modules`.
 3. Review the generated bucket plan and use **Adjust buckets** when the managed dataset needs a different supported target.
 4. Use **Advanced configuration** for raw config/dataset TOML edits. Selecting the setup creates only missing files; **Reset** is the explicit way to restore one training config or regenerate one dataset TOML from the visible media.
 5. Filter or focus the media grid to the exact items to train.
@@ -76,7 +76,7 @@ Disabling a profile only hides it from new-run setup. Existing TOMLs, captured b
 - `.webcap_training/recent_runs.json` is the lightweight Training History metadata index and never gates scheduling.
 - Queue and Training History metadata are convenience state. History rows remain useful even when their recorded output/log paths are later unavailable; existing files are checked only to enrich actions and availability. New action-owned captures, jobs, logs, and output live under `output/runs/<global-sequence>-<set-slug>--<hash>/<logical-run>/`.
 
-The persistent set TOMLs remain the editable baseline. Learning rate, rank, epochs, and dropout selected in Run setup are written only into the captured config for that action; app-owned runtime paths are rewritten there as well.
+The persistent set TOMLs remain the editable baseline. Learning rate, rank, epochs, dropout, and H3 image shift selected in Run setup are written only into the captured config for that action; app-owned runtime paths are rewritten there as well.
 
 Generated dataset repeats are intentionally decoupled from the run's selected Epochs value. Repeat counts are solved against `training.repeat_reference_epochs` (90 by default); the actual run epochs still drive the captured config and estimated total work.
 

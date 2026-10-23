@@ -231,6 +231,20 @@ def set_test_campaign_settings(state_path, model_id, settings):
     return all_settings[model_key]
 
 
+def write_folder_state_with_owned_drafts(state_path, snapshot):
+    """Serialize folder snapshots with independently autosaved Set form drafts."""
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        previous = read_folder_state(path)
+        next_state = dict(snapshot)
+        for field in ("test_workspace_prompts", "test_manual_screening_by_model",
+                      "test_campaign_by_model"):
+            if field in previous:
+                next_state[field] = previous[field]
+        reject_wholesale_state_map_clear(previous, next_state)
+        write_folder_state_atomic(path, next_state)
+
+
 def folder_state_exists(state_path):
     path = Path(state_path)
     try:

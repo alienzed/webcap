@@ -29,6 +29,11 @@ LO_CONFIG_NAME = "config.lo.toml"
 KREA2_CONFIG_NAME = "config.krea2.toml"
 WAN21_CONFIG_NAME = "config.wan21.toml"
 H3_CONFIG_NAME = "config.h3.toml"
+# PEFT full-matches exclude_modules against the names of LoRA target linear modules.
+# H3 main blocks are blocks.0 through blocks.49; the text refiner is separate.
+H3_FOCUSED_EXCLUDE_MODULES = (
+    r"^(?:.*\.)?(?:token_refiner\.blocks\.[0-9]+|blocks\.(?:[0-9]|1[0-9]))\..+$"
+)
 LEGACY_TRAINING_CONFIG_TEMPLATE_NAMES = (
     HI_CONFIG_NAME,
     LO_CONFIG_NAME,
@@ -364,6 +369,16 @@ def apply_h3_premerged_image_model(config_text):
     source = rewrite_toml_assignment(config_text, "diffusion_model", json.dumps(model_path), "model")
     source = rewrite_toml_assignment(source, "merge_adapters", section="model")
     return rewrite_toml_assignment(source, "cfg", section="model")
+
+
+def apply_h3_focused_blocks(config_text):
+    """Capture-only PEFT exclusion: freeze H3 blocks 0-19 and both text refiners."""
+    config = tomllib.loads(str(config_text))
+    if config.get("model", {}).get("type") != "minimax_h3" or config.get("adapter", {}).get("type") != "lora":
+        raise ValueError("Focused H3 blocks requires a MiniMax H3 LoRA config.")
+    return rewrite_toml_assignment(
+        str(config_text), "exclude_modules", json.dumps(H3_FOCUSED_EXCLUDE_MODULES), "adapter"
+    )
 
 
 def apply_captured_initializer(config_text, initializer_dir, force_constant_lr=None):

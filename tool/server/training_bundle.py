@@ -13,7 +13,7 @@ from .dataset_prep import (
     resolve_prepared_caption_text,
     write_prepared_caption,
 )
-from .training_config_files import apply_captured_initializer, apply_h3_premerged_image_model, apply_review_config_settings, with_dataset_path, with_output_dir
+from .training_config_files import apply_captured_initializer, apply_h3_focused_blocks, apply_h3_premerged_image_model, apply_review_config_settings, with_dataset_path, with_output_dir
 from .training_profiles import resolved_profile
 from .training_runtime import to_wsl_path
 from .training_review import validate_managed_review_stage
@@ -552,6 +552,8 @@ def materialize_training_bundle(
             config_text = apply_review_config_settings(config_text, stage_config_settings)
             if stage == "h3" and stage_config_settings.get("h3ImageTrainingAdapter"):
                 config_text = apply_h3_premerged_image_model(config_text)
+            if stage == "h3" and stage_config_settings.get("h3FocusedBlocks"):
+                config_text = apply_h3_focused_blocks(config_text)
         if captured_initializer and str(initializer.get("stage") or "") == stage:
             config_text = apply_captured_initializer(
                 config_text,

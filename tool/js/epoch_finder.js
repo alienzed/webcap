@@ -228,6 +228,12 @@
       button.setAttribute('aria-pressed', String(active));
     });
     els('screen').classList.toggle('hidden', !finder);
+    // A reference lookup discarded while screening was active must be restarted
+    // when returning to Campaign step 4, without discarding authored selections.
+    if(next==='finder'&&previousMode!==next&&wizardStep===4&&!activeCampaign){
+      referencePlanSignature='';
+      showStep(4);
+    }
     document.getElementById('test-generations-body').classList.toggle('hidden', finder || references || analytics);
     document.getElementById('test-references-screen').classList.toggle('hidden', !references);
     document.getElementById('run-analytics-screen').classList.toggle('hidden', !analytics);

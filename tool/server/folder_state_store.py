@@ -195,6 +195,24 @@ def set_test_workspace_prompt(state_path, model_id, prompt):
     return prompts[model_key]
 
 
+def set_test_manual_settings(state_path, model_id, settings):
+    """Patch one model's editable Manual Screening draft without replacing Set state."""
+    model_key = str(model_id or "").strip()
+    if not model_key or not isinstance(settings, dict):
+        raise ValueError("Manual Screening defaults require a model and settings.")
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        all_settings = state.get("test_manual_screening_by_model") or {}
+        if not isinstance(all_settings, dict):
+            raise FolderStateReadError("Manual Screening Set settings are invalid.")
+        all_settings = dict(all_settings)
+        all_settings[model_key] = dict(settings)
+        state["test_manual_screening_by_model"] = all_settings
+        write_folder_state_atomic(path, state)
+    return all_settings[model_key]
+
+
 def folder_state_exists(state_path):
     path = Path(state_path)
     try:

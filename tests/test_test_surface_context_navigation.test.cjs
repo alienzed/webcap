@@ -49,7 +49,7 @@ function harness(){
   const ctx={window:win,document,els:id=>node('epoch-finder-'+id),
     refresh:()=>{stats.finder++;},screeningModeUi:()=>{stats.screening++;},
     screeningApplySettings:()=>{stats.draft++;},currentFolder:'my-set',activeCampaign:'',
-    campaignState:null,manualSelectionCampaign:'',screeningShowExcluded:false,
+    campaignState:null,campaigns:[],manualSelectionCampaign:'',screeningShowExcluded:false,
     screeningDraftContext:'my-set|h3'};
   vm.runInNewContext("var mode='tests';var returnMode='';var surfaceLabels={tests:'Prompt Tests',screening:'Manual Screening',finder:'Campaigns',references:'References',analytics:'Insights'};"+modeController,ctx);
   return {window:win,node,tabs,stats,ctx};
@@ -107,4 +107,22 @@ test('origin-aware links keep the native checkpoint and screening return path',(
   assert.match(html,/id="test-workspace-return-tests"/);
   assert.match(html,/id="test-workspace-return-finder"/);
   assert.match(finder,/mode==='screening'\?'screening':'finder'/);
+});
+
+test('switching methods before a campaign status response cannot revive wrong history',()=>{
+  const h=harness();
+  h.ctx.campaigns=[{id:'manual-loading',mode:'manual'}];
+  h.ctx.activeCampaign='manual-loading';
+  h.ctx.campaignState=null;
+  h.window.epochFinderShowMode('finder');
+  assert.equal(h.ctx.activeCampaign,'');
+  assert.equal(h.ctx.campaignState,null);
+  h.ctx.activeCampaign='unknown-loading';
+  h.window.epochFinderShowMode('screening');
+  assert.equal(h.ctx.activeCampaign,'');
+});
+
+test('switching between live method lists rejects stale responses',()=>{
+  assert.match(finder,/var modeAtRequest = mode, requestVersion = \+\+listRequestVersion/);
+  assert.match(finder,/mode !== modeAtRequest\) return/);
 });

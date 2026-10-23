@@ -511,7 +511,7 @@
   function directorTargetFromJob(job) {
     if (!job || job.client !== 'storyboard' || !job.storyId) return null;
     if (job.operation === 'interpret_atmosphere' || job.operation === 'expand_concept' || job.operation === 'define_invariants') return { kind: 'concept', storyId: job.storyId };
-    if (job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene' || job.operation === 'extend_story') return { kind: 'scenes', storyId: job.storyId };
+    if (job.operation === 'develop_scenes_sequence' || job.operation === 'develop_story' || job.operation === 'develop_story_outline' || job.operation === 'develop_story_scene' || job.operation === 'insert_scene' || job.operation === 'extend_story') return { kind: 'scenes', storyId: job.storyId };
     if (job.operation === 'repair_scenes' || job.operation === 'revise_scenes_sequence' || job.operation === 'check_coherence_sequence') return { kind: 'repair', storyId: job.storyId };
     if ((job.operation === 'write_prompt' || job.operation === 'refine_prompt') && job.sceneId) {
       return { kind: 'scene-prompt', storyId: job.storyId, sceneId: job.sceneId, operation: job.operation };
@@ -1326,29 +1326,22 @@
     var total = Number(progress && progress.total);
     var completed = Number(progress && progress.completed);
     var operation = String(activity && activity.operation || '');
-    var individual = targetKind === 'scenes' && storyState.director.individualDevelopmentProgress;
-    var isIndividualPass = !terminal && individual && Number.isInteger(individual.total) && individual.total > 0;
-    var isScenePass = !terminal && targetKind === 'repair'
-      && ['revise_scenes_sequence', 'check_coherence_sequence'].includes(operation)
+    var developing = operation === 'develop_scenes_sequence';
+    var isScenePass = !terminal
+      && (developing || (targetKind === 'repair'
+        && ['revise_scenes_sequence', 'check_coherence_sequence'].includes(operation)))
       && Number.isInteger(total) && total > 0
       && Number.isInteger(completed) && completed >= 0 && completed <= total;
-    sceneProgress.classList.toggle('hidden', !isScenePass && !isIndividualPass);
-    if (isIndividualPass) {
-      var developed = Math.min(individual.total, Math.max(0, individual.completed));
-      phase.textContent = individual.phase === 'applying' ? 'Director is applying developed Scenes…'
-        : 'Director is developing Scene ' + (developed + 1) + ' of ' + individual.total + '…';
-      sceneProgressText.textContent = developed + ' of ' + individual.total + ' Scenes developed';
-      sceneProgressBar.max = individual.total;
-      sceneProgressBar.value = developed;
-    }
+    sceneProgress.classList.toggle('hidden', !isScenePass);
     if (isScenePass) {
       var checking = operation === 'check_coherence_sequence';
-      var queuingTakes = String(progress.phase || '') === 'Queuing fresh Takes';
-      if (queuingTakes) phase.textContent = 'Director is queuing fresh Takes…';
-      else if (completed < total) phase.textContent = 'Director is ' +
-        (checking ? 'checking' : 'revising') + ' Scene ' + (completed + 1) + ' of ' + total + '…';
-      else phase.textContent = 'Director finished ' + (checking ? 'checking' : 'revising') + ' ' + total + ' Scenes…';
-      sceneProgressText.textContent = completed + ' of ' + total + ' Scenes ' + (checking ? 'checked' : 'revised');
+      var label = developing ? 'developed' : checking ? 'checked' : 'revised';
+      var verb = developing ? 'developing' : checking ? 'checking' : 'revising';
+      if (progress.phase === 'Applying Scenes') phase.textContent = 'Director is applying developed Scenes…';
+      else if (progress.phase === 'Queuing fresh Takes') phase.textContent = 'Director is queuing fresh Takes…';
+      else if (completed < total) phase.textContent = 'Director is ' + verb + ' Scene ' + (completed + 1) + ' of ' + total + '…';
+      else phase.textContent = 'Director finished ' + verb + ' ' + total + ' Scenes…';
+      sceneProgressText.textContent = completed + ' of ' + total + ' Scenes ' + label;
       sceneProgressBar.max = total;
       sceneProgressBar.value = completed;
     }
@@ -2073,79 +2066,17 @@
 
 
   function developStoryIndividually(storyId, modelId, hasScenes) {
-    var sourceUpdatedAt = '';
-    var outline = null;
-    var authoredScenes = [];
-
-    setDevelopStatus('Director is planning the Story…');
+    setDevelopStatus('Director is developing Scenes one at a time…');
     return directorRequest({
       storyId: storyId,
-      operation: 'develop_story_outline',
+      operation: 'develop_scenes_sequence',
       model: modelId,
       replaceExisting: hasScenes
-    }).then(function (outlineResult) {
-      sourceUpdatedAt = String(outlineResult.sourceUpdatedAt || '');
-      outline = outlineResult.outline;
-      if (!sourceUpdatedAt) throw new Error('Individual Story development is missing its source revision.');
-      if (!outline || !Array.isArray(outline.scenes) || !outline.scenes.length) {
-        throw new Error('Director returned an empty Story outline.');
-      }
-      storyState.director.individualDevelopmentProgress = { completed: 0, total: outline.scenes.length, phase: 'developing' };
-      window.publishActivityProgress({ id: 'storyboard:individual:' + storyId, kind: 'storyboard', lane: 'background',
-        title: 'Develop Scenes one at a time', storyId: storyId, status: 'running',
-        phase: 'Developing Scene 1 of ' + outline.scenes.length,
-        progress: { completed: 0, total: outline.scenes.length },
-        progressLabel: '0 of ' + outline.scenes.length + ' Scenes developed' });
-      return consumeDirectorJob(outlineResult.jobId);
-    }).then(function () {
-      return outline.scenes.reduce(function (promise, _plannedScene, index) {
-        return promise.then(function () {
-          setDevelopStatus('Developing Scene ' + String(index + 1) + ' / ' + String(outline.scenes.length) + '…');
-          return directorRequest({
-            storyId: storyId,
-            operation: 'develop_story_scene',
-            model: modelId,
-            development: {
-              outline: outline,
-              sceneIndex: index,
-              previousScene: authoredScenes.length ? authoredScenes[authoredScenes.length - 1] : null
-            }
-          }).then(function (sceneResult) {
-            if (!sceneResult.scene || typeof sceneResult.scene !== 'object') {
-              throw new Error('Director returned an invalid individual Scene.');
-            }
-            authoredScenes.push(sceneResult.scene);
-            storyState.director.individualDevelopmentProgress.completed = authoredScenes.length;
-            window.publishActivityProgress({ id: 'storyboard:individual:' + storyId, kind: 'storyboard', lane: 'background',
-              title: 'Develop Scenes one at a time', storyId: storyId, status: 'running',
-              phase: authoredScenes.length < outline.scenes.length
-                ? 'Developing Scene ' + (authoredScenes.length + 1) + ' of ' + outline.scenes.length : 'Applying Scenes',
-              progress: { completed: authoredScenes.length, total: outline.scenes.length },
-              progressLabel: authoredScenes.length + ' of ' + outline.scenes.length + ' Scenes developed' });
-            return consumeDirectorJob(sceneResult.jobId);
-          });
-        });
-      }, Promise.resolve());
-    }).then(function () {
-      storyState.director.individualDevelopmentProgress.phase = 'applying';
-      setDevelopStatus('Applying ' + String(authoredScenes.length) + ' developed Scenes…');
-      return directorRequest({
-        storyId: storyId,
-        operation: 'apply_individual_development',
-        model: modelId,
-        replaceExisting: hasScenes,
-        expectedUpdatedAt: sourceUpdatedAt,
-        plan: { scenes: authoredScenes }
-      });
     }).then(function (payload) {
       return applyDirectorResultToVisibleStory({
-        storyId: storyId,
-        operation: 'develop_story'
+        storyId: storyId, operation: 'develop_story'
       }).then(function () {
-        return {
-          sceneCount: Number(payload.sceneCount || authoredScenes.length),
-          model: modelId
-        };
+        return consumeDirectorJob(payload.jobId).then(function () { return payload; });
       });
     });
   }

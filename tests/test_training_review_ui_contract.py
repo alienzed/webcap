@@ -525,3 +525,44 @@ assert.equal(ctx.validateTrainingRunSettings({...settings, h3ImageShift: ''}), '
         capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_run_setup_summary_omits_unused_video_targets_without_changing_plan():
+    root = Path(__file__).parents[1]
+    script_path = root / "tool" / "js" / "training_review.js"
+    harness = r'''
+const fs = require('fs');
+const vm = require('vm');
+const context = {
+  document: { addEventListener() {} },
+  trainingWorkspaceState: { reviewSaveStatus: 'saved' }
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+context.escapeHtml = (value) => String(value);
+const plan = {
+  stages: { h3: { imageBuckets: { square: [[768, 768]] } } },
+  videoRoles: [{ id: 'temporal', enabled: true, frames: 17, buckets: { square: [[512, 512]] } }]
+};
+const payload = {
+  plan,
+  distribution: {
+    images: { square: { count: 29 } },
+    videos: { temporal: { square: { native: [] } } }
+  }
+};
+const original = JSON.stringify(plan);
+let html = context.trainingReviewSummaryHtml(payload);
+if (!html.includes('1 image target · 29 images')) throw Error('Image summary changed');
+if (html.includes('video target') || html.includes('0 videos')) throw Error('Unused video buckets must be hidden');
+if (JSON.stringify(plan) !== original) throw Error('Summary mutated saved bucket plan');
+
+payload.distribution.videos.temporal.square.native = [{ file: 'clip.mp4' }];
+html = context.trainingReviewSummaryHtml(payload);
+if (!html.includes('1 video target · 1 video')) throw Error('Video targets must appear when clips exist');
+if (JSON.stringify(plan) !== original) throw Error('Summary mutated saved bucket plan after video added');
+'''
+    result = subprocess.run(
+        ["node", "-e", harness, str(script_path)], capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr

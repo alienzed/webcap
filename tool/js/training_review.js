@@ -1023,7 +1023,7 @@ function trainingReviewSummaryHtml(payload) {
   var custom = payload.customDataset || false;
   var planParts = [];
   if (imageItems || imageTargetCount) planParts.push(imageTargetCount + ' image target' + (imageTargetCount === 1 ? '' : 's') + ' · ' + imageItems + ' image' + (imageItems === 1 ? '' : 's'));
-  if (videoItems || videoTargetCount) planParts.push(videoTargetCount + ' video target' + (videoTargetCount === 1 ? '' : 's') + ' · ' + videoItems + ' video' + (videoItems === 1 ? '' : 's'));
+  if (videoItems) planParts.push(videoTargetCount + ' video target' + (videoTargetCount === 1 ? '' : 's') + ' · ' + videoItems + ' video' + (videoItems === 1 ? '' : 's'));
   var note = custom ? 'Custom dataset TOML · edit it under Advanced configuration, or Reset dataset.' : blockers.length ? String(blockers[0].message || 'Training Review needs attention.') : (planParts.join(' · ') || 'No visible media in this bucket plan.');
   return '<div class="training-review-summary"><div class="training-review-summary-copy"><strong>Bucket plan <span class="training-review-saved">' + escapeHtml(trainingWorkspaceState.reviewSaveStatus === 'saving' ? 'Saving…' : trainingWorkspaceState.reviewSaveStatus === 'error' ? 'Save error' : 'Saved') + '</span></strong><span' + (custom || blockers.length || (payload.warnings || []).length ? ' class="training-review-summary-warning"' : '') + '>' + escapeHtml(note) + '</span></div><div class="training-review-summary-actions">' + (custom ? '' : '<button type="button" class="training-review-reset-defaults" data-review-reset-buckets>Reset Buckets</button>') + '<button type="button" class="review-captions-btn training-review-open-btn" data-open-training-review>Adjust buckets</button></div></div>';
 }

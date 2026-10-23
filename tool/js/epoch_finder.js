@@ -80,17 +80,22 @@
     // navigation, not a request to retain a stale destination.
     returnMode = options.returnTo && surfaceLabels[options.returnTo] && options.returnTo!==next
       ? options.returnTo : '';
+    var previousMode = mode;
     mode = next;
     var finder = next === 'finder' || next === 'screening';
-    if (finder && !options.restore && !options.keepCampaign &&
-        activeCampaign && campaignState && (campaignState.mode === 'manual') !== (next === 'screening')) {
-      // Each method owns its history; switching tabs cannot reuse the other method's active record.
-      activeCampaign = '';
-      campaignState = null;
-      manualSelectionCampaign = '';
-      screeningShowExcluded = false;
-      els('active').classList.add('hidden');
-      els('empty').classList.remove('hidden');
+    if (finder && !options.restore && !options.keepCampaign && activeCampaign) {
+      // A history request may still be pending; resolve its method from the list,
+      // not only from a fully loaded campaignState.
+      var selected = campaigns.find(function(c){return c.id===activeCampaign;}) ||
+        (campaignState && campaignState.id===activeCampaign ? campaignState : null);
+      if (selected ? (selected.mode==='manual') !== (next==='screening') : previousMode!==next) {
+        activeCampaign = '';
+        campaignState = null;
+        manualSelectionCampaign = '';
+        screeningShowExcluded = false;
+        els('active').classList.add('hidden');
+        els('empty').classList.remove('hidden');
+      }
     }
     if (finder) {
       els('campaign-type').value = next === 'screening' ? 'manual' : 'auto';
@@ -797,9 +802,9 @@
   }
 
   function list() {
-    els('count').textContent = String(campaigns.filter(function(c){return c.modelId===String(window.getWorkingModelProfileId()||'') && (c.mode==='manual')===(mode==='screening');}).length);
     var model = String(window.getWorkingModelProfileId() || '');
     var visible = campaigns.filter(function (c) { return c.modelId === model && (c.mode === 'manual') === (mode === 'screening'); });
+    els('count').textContent = String(visible.length);
     els('campaigns').innerHTML = visible.length ? visible.map(function (c) {
       return '<button type="button" class="epoch-finder-campaign ' +
         (c.id === activeCampaign ? 'active' : '') + '" data-id="' + escape(c.id) + '">' +
@@ -1995,10 +2000,10 @@
   function refresh() {
     if (!currentFolder || (mode !== 'finder' && mode !== 'screening')) return;
     var folderAtRequest = currentFolder, modelAtRequest = String(window.getWorkingModelProfileId() || '');
-    var requestVersion = ++listRequestVersion;
+    var modeAtRequest = mode, requestVersion = ++listRequestVersion;
     api('list', {modelId: modelAtRequest}).then(function (response) {
       if (requestVersion !== listRequestVersion || folderAtRequest !== currentFolder ||
-          modelAtRequest !== String(window.getWorkingModelProfileId() || '') || (mode !== 'finder' && mode !== 'screening')) return;
+          modelAtRequest !== String(window.getWorkingModelProfileId() || '') || mode !== modeAtRequest) return;
       runs = response.runs || [];
       stagedFiles = response.stagedFiles || [];
       if (stagedModel !== modelAtRequest) {

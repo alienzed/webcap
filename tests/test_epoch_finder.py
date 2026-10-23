@@ -1375,3 +1375,28 @@ def test_running_screening_round_keeps_space_and_stable_dom_during_polling():
     assert "button.classList.toggle('active'" in rounds
     assert "host.insertBefore(entry" in rounds
     assert "existing.forEach(function(node){node.remove();});" in rounds
+
+
+def test_evaluation_screening_picker_shrinks_but_historical_rounds_remain_visible():
+    """Deselect is a reversible next-round choice, never deletion of recorded evidence."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    server = (root / "tool/server/epoch_finder.py").read_text(encoding="utf-8")
+    assert 'id="epoch-finder-screening-show-excluded"' in html
+    assert "var visibleEpochs=screening&&!screeningShowExcluded?choice.epochs:run.epochs;" in js
+    assert "visibleEpochs.map(function(epoch){" in js
+    assert "screeningShowExcluded=!screeningShowExcluded;" in js
+    assert "screeningSaveSelection();" in js
+    assert "var rows=plan.epochs.filter(function (epoch) {" in js
+    assert "plan = _screening_plan(prompt, index, settings, len(campaign[\"rounds\"]) + 1, campaign[\"kept\"])" in server
+
+
+def test_evaluation_methods_filter_shared_campaign_history_without_migrating_it():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    assert "var surfaceLabels = {tests:'Prompt Tests',screening:'Manual Screening'" in js
+    assert "(c.mode === 'manual') === (mode === 'screening')" in js
+    assert "showMode(destination,previous!==destination?{returnTo:previous,keepCampaign:true}:{keepCampaign:true});" in js

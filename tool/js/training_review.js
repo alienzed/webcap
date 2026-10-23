@@ -143,7 +143,8 @@ function trainingRunTemplateSettings(payload) {
     adapterRank: settings.adapterRank == null ? '' : String(settings.adapterRank),
     epochs: settings.epochs == null ? (stageReview.epochs == null ? '' : String(stageReview.epochs)) : String(settings.epochs),
     adapterDropout: settings.adapterDropout == null || settings.adapterDropout === '' ? '0' : String(settings.adapterDropout),
-    h3ImageTrainingAdapter: false
+    h3ImageTrainingAdapter: false,
+    h3FocusedBlocks: false
   };
 }
 
@@ -195,6 +196,8 @@ function renderTrainingRunParameters(payload) {
   var presetSelect = document.getElementById('training-run-preset-select');
   var h3AdapterOption = document.getElementById('training-run-h3-adapter-option');
   var h3AdapterCheckbox = document.getElementById('training-run-h3-adapter');
+  var h3FocusedOption = document.getElementById('training-run-h3-focused-option');
+  var h3FocusedCheckbox = document.getElementById('training-run-h3-focused');
   if (!panel || !lrInput || !rankSelect || !epochsInput || !dropoutInput || !resetButton || !presetSelect) return;
 
   var stage = String(trainingWorkspaceState.runStages || '');
@@ -219,6 +222,13 @@ function renderTrainingRunParameters(payload) {
   h3AdapterCheckbox.checked = !!draft.h3ImageTrainingAdapter;
   h3AdapterCheckbox.onchange = function () {
     trainingWorkspaceState.runConfigDraft.h3ImageTrainingAdapter = h3AdapterCheckbox.checked;
+    trainingWorkspaceState.runConfigDirty = true;
+    updateTrainingRunParameterState();
+  };
+  h3FocusedOption.classList.toggle('hidden', stage !== 'h3');
+  h3FocusedCheckbox.checked = !!draft.h3FocusedBlocks;
+  h3FocusedCheckbox.onchange = function () {
+    trainingWorkspaceState.runConfigDraft.h3FocusedBlocks = h3FocusedCheckbox.checked;
     trainingWorkspaceState.runConfigDirty = true;
     updateTrainingRunParameterState();
   };
@@ -260,6 +270,7 @@ function renderTrainingRunParameters(payload) {
       throw new Error('Unknown training run setup mode: ' + presetSelect.value);
     }
     trainingWorkspaceState.runConfigDraft.h3ImageTrainingAdapter = !!draft.h3ImageTrainingAdapter;
+    trainingWorkspaceState.runConfigDraft.h3FocusedBlocks = !!draft.h3FocusedBlocks;
     trainingWorkspaceState.runConfigDirty = true;
     trainingWorkspaceState.runConfigStage = stage;
     trainingWorkspaceState.runConfigTemplateSignature = signature;

@@ -80,6 +80,7 @@ def test_candidates_curve_lists_available_queue_and_history_runs_without_saved_e
     from types import SimpleNamespace
 
     monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "sets/subject")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder", lambda _: [])
     monkeypatch.setattr(epoch_finder, "passive_status_snapshot", lambda: ({
         "ok": True, "jobs": [
             {"id": "run-live", "folder": "sets/subject", "stages": "h3", "runName": "Live"},

@@ -20,7 +20,8 @@ from .training_history import all_history_payload
 from .training_runner import passive_status_snapshot
 from .training_runner import (
     _candidate_run_snapshot, _candidate_safetensors_path,
-    _candidate_test_directory_for_run, candidate_run_folder_path,
+    _candidate_test_directory_for_run, _annotate_candidate_test_folder_status,
+    candidate_run_folder_path,
 )
 from .training_candidates import saved_artifacts_for_run
 from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
@@ -1562,6 +1563,56 @@ def status(folder_path, campaign_id):
 
 
 
+def screening_test_status(folder_path, campaign_id):
+    """Read-only Test staging status for Manual Screening's original run/epoch IDs.
+
+    Reuse Candidates Curve's provenance-aware status annotation; never store
+    transient Test state in the campaign or re-run TensorBoard analysis.
+    """
+    campaign = _load(folder_path, campaign_id)
+    if campaign.get("mode") != "manual":
+        raise ValueError("Test checkpoint status requires a Manual Screening campaign.")
+    candidates = campaign.get("candidateMap") or {}
+    epochs = sorted({epoch for plan in campaign.get("rounds") or []
+                     for epoch in plan.get("epochs") or []})
+    identities = {}
+    staged = {}
+    for candidate in epochs:
+        origin = candidates.get(str(candidate)) or {}
+        if origin.get("sourceType") == "staged":
+            staged[str(candidate)] = str(origin.get("fileName") or "")
+            continue
+        job_id = str(origin.get("jobId") or campaign.get("jobId") or "")
+        epoch = origin.get("epoch", candidate)
+        if not job_id or type(epoch) is not int:
+            raise ValueError("Manual Screening candidate lacks saved training-run provenance.")
+        identities.setdefault(job_id, {})[str(candidate)] = epoch
+
+    result = {}
+    if staged:
+        model = get_test_model(str(campaign.get("modelId") or ""))
+        files = {path.name for path in test_bench._staged_loras_for_set(folder_path, model)}
+        result.update({key: bool(name and name in files) for key, name in staged.items()})
+
+    for job_id, mapped in identities.items():
+        _raw_path, run = _candidate_run_snapshot(folder_path, job_id)
+        run_dir = candidate_run_folder_path(folder_path, job_id)
+        wall = run.get("resumeCheckpointWallTime")
+        resumed = run.get("resumeBranchStartedAt")
+        artifacts = saved_artifacts_for_run(run_dir, wall, resumed) if wall is not None and resumed is not None else saved_artifacts_for_run(run_dir)
+        analysis = {"savedArtifacts": artifacts}
+        _annotate_candidate_test_folder_status(run, analysis)
+        folder_status = analysis.get("testFolderStatus") or {}
+        if folder_status.get("state") == "unknown":
+            raise RuntimeError("Could not verify Test staging for training run " + job_id + ": " +
+                               str(folder_status.get("error") or "Unknown staging error"))
+        copied = {item["epoch"]: item["inTestFolder"] for item in artifacts
+                  if item.get("status") == "available"}
+        for candidate, epoch in mapped.items():
+            result[candidate] = bool(copied.get(epoch, False))
+    return {"inTest": result}
+
+
 def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collection_id="", checkpoints=None, include_epoch_index=False, generated_only=False):
     """Read-only visual index over existing Test sessions and Finder campaigns.
 
@@ -1805,6 +1856,8 @@ def command(folder_path, operation, criteria=None):
     criteria = criteria if isinstance(criteria, dict) else {}
     if operation == "list":
         return list_campaigns(folder_path, criteria.get("modelId"))
+    if operation == "screening_test_status":
+        return screening_test_status(folder_path, str(criteria.get("campaignId") or ""))
     if operation == "checkpoint_workspace":
         return checkpoint_workspace(folder_path, criteria.get("jobId"), criteria.get("epoch"),
                                     offset=criteria.get("offset", 0), limit=criteria.get("limit", 24))

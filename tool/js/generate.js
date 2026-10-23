@@ -393,7 +393,6 @@
     renderModelForm();
     if (previousModelId === selected) {
       draft.forEach(function (field) { field.node.value = field.value; });
-      syncGenerateBaseLoras();
     }
   }
 
@@ -407,16 +406,6 @@
     if (mode === 'current' || mode === 'single') return 'turbo';
     if (mode === 'no_turbo') return 'quality';
     return mode;
-  }
-
-  function syncGenerateBaseLoras() {
-    var model = currentModel();
-    var base = el('generate-base-loras');
-    if (!model || !base) return;
-    var names = model.baseLoras || [];
-    var noTurbo = model.id === 'minimax_h3' && el('generate-sampling-mode').value === 'quality';
-    base.textContent = noTurbo ? 'Turbo disabled · 20 steps' : (names.length ? 'Required workflow LoRA: ' + names.join(', ') : '');
-    base.classList.toggle('hidden', !noTurbo && !names.length);
   }
 
   function renderModelForm() {
@@ -464,7 +453,6 @@
       if (field) field.classList.toggle('hidden', (model.references || []).indexOf(role) === -1);
     });
 
-    syncGenerateBaseLoras();
     renderLoras();
     setLoraMode(generateState.loraMode);
   }
@@ -485,40 +473,79 @@
       });
   }
 
+  function generateLoraOrder() {
+    var model = currentModel();
+    return (model && Array.isArray(model.loras) ? model.loras : []).slice().sort(function (a, b) {
+      return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+
+  function generateLoraNeighbor(name, direction, replacingIndex) {
+    var entries = generateLoraOrder();
+    var index = entries.indexOf(name);
+    var folder = loraFolder(name);
+    var selected = selectedLoras(generateState.modelId);
+    if (index === -1) return '';
+    for (var next = index + direction; next >= 0 && next < entries.length; next += direction) {
+      if (loraFolder(entries[next]) !== folder) break;
+      if (!selected.some(function (item, i) { return i !== replacingIndex && item.name === entries[next]; })) return entries[next];
+    }
+    return '';
+  }
+
+  function replaceGenerateLora(index, name) {
+    var items = selectedLoras(generateState.modelId);
+    if (!items[index]) throw new Error('Selected LoRA no longer exists.');
+    if (items.some(function (item, i) { return i !== index && item.name.toLowerCase() === name.toLowerCase(); })) return false;
+    items[index].name = name;
+    renderLoras();
+    return true;
+  }
+
   function renderLoras() {
     var host = el('generate-lora-list');
-    if (!host) return;
-    var items = selectedLoras(String(generateState.modelId || ''));
-    host.innerHTML = items.length
-      ? items.map(function (item, index) {
-          return '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
-            '<span title="' + escapeHtml(item.name) + '">' + escapeHtml(item.name) + '</span>' +
-            '<button type="button" class="review-captions-btn" data-generate-lora-profile="' + index + '" title="Open LoRA metadata">ⓘ</button>' +
-            (function () {
-              var entry = generateState.loraProfileCache[item.name];
-              var enriched = entry && entry.profile && entry.profile.enrichment;
-              if (!enriched) return '';
-              var description = String(enriched.description || '').trim();
-              var terms = Array.isArray(enriched.trainedWords) ? enriched.trainedWords : [];
-              var groups = enriched.promptOptions || {};
-              var hasOptions = Object.keys(groups).some(function (key) {
-                return Array.isArray(groups[key]) && groups[key].length > 1;
-              });
-              return '<span title="' + escapeHtml(description) + '">' +
-                escapeHtml(description || 'Enriched model profile') + '</span>' +
-                (terms.length ? '<button type="button" class="review-captions-btn" data-generate-lora-insert-phrases="' +
-                  index + '" title="Insert model key phrases at the prompt cursor">Insert phrases</button>' : '') +
-                (hasOptions ? '<button type="button" class="review-captions-btn" data-generate-lora-insert-options="' +
-                  index + '" title="Insert model wildcard options at the prompt cursor">Insert options</button>' : '');
-            })() +
-            '<input type="number" min="-2" max="2" step="0.05" value="' + escapeHtml(String(item.strength)) + '" data-generate-lora-strength="' + index + '" aria-label="LoRA strength">' +
-            '<button type="button" class="review-captions-btn" data-generate-lora-remove="' + index + '">Remove</button>' +
-          '</div>';
-        }).join('')
-      : '<div class="generate-empty-inline">No added LoRAs.</div>';
+    if (!host) throw new Error('Generate LoRA list is missing.');
+    var items = selectedLoras(generateState.modelId);
+    el('generate-lora-count').textContent = '(' + items.length + ')';
+    host.innerHTML = items.length ? items.map(function (item, index) {
+      var prev = generateLoraNeighbor(item.name, -1, index);
+      var next = generateLoraNeighbor(item.name, 1, index);
+      var entry = generateState.loraProfileCache[item.name];
+      var enriched = entry && entry.profile && entry.profile.enrichment;
+      var description = enriched && String(enriched.description || '').trim() || '';
+      var terms = enriched && Array.isArray(enriched.trainedWords) ? enriched.trainedWords : [];
+      var groups = enriched && enriched.promptOptions || {};
+      var hasOptions = Object.keys(groups).some(function (key) {
+        return Array.isArray(groups[key]) && groups[key].length > 1;
+      });
+      return '<div class="generate-lora-item">' +
+        '<div class="generate-lora-row" data-generate-lora-index="' + index + '">' +
+          '<button type="button" class="generate-lora-name" data-generate-lora-replace="' + index +
+          '" title="Change LoRA: ' + escapeHtml(item.name) + '" aria-expanded="false">' + escapeHtml(item.name) + '</button>' +
+          '<div class="generate-lora-arrows">' +
+            '<button type="button" data-generate-lora-step="-1" data-generate-lora-for="' + index +
+              '" title="' + (prev ? 'Previous: ' + escapeHtml(prev) : 'No previous LoRA in folder') + '"' +
+              (prev ? '' : ' disabled') + ' aria-label="Previous LoRA">‹</button>' +
+            '<button type="button" data-generate-lora-step="1" data-generate-lora-for="' + index +
+              '" title="' + (next ? 'Next: ' + escapeHtml(next) : 'No next LoRA in folder') + '"' +
+              (next ? '' : ' disabled') + ' aria-label="Next LoRA">›</button>' +
+          '</div>' +
+          '<button type="button" class="generate-lora-icon" data-generate-lora-profile="' + index +
+            '" title="' + escapeHtml(description || 'Open LoRA metadata') + '" aria-label="Open LoRA metadata">ⓘ</button>' +
+          '<input type="number" min="-2" max="2" step="0.05" value="' + escapeHtml(String(item.strength)) +
+            '" data-generate-lora-strength="' + index + '" aria-label="LoRA strength" title="LoRA strength">' +
+          '<button type="button" class="generate-lora-icon generate-lora-remove" data-generate-lora-remove="' + index +
+            '" title="Remove LoRA" aria-label="Remove LoRA">×</button>' +
+        '</div>' +
+        ((terms.length || hasOptions) ?
+          '<div class="generate-lora-extras">' +
+          (terms.length ? '<button type="button" class="review-captions-btn" data-generate-lora-insert-phrases="' +
+            index + '" title="Insert model key phrases at the prompt cursor">Insert phrases</button>' : '') +
+          (hasOptions ? '<button type="button" class="review-captions-btn" data-generate-lora-insert-options="' +
+            index + '" title="Insert model wildcard options at the prompt cursor">Insert options</button>' : '') +
+          '</div>' : '') + '</div>';
+    }).join('') : '<div class="generate-empty-inline">No added LoRAs.</div>';
     items.forEach(function (item) { loadGenerateLoraProfile(item.name); });
-    var picker = el('generate-lora-picker');
-    if (picker && picker.getAttribute('aria-expanded') === 'true') renderGenerateLoraPickerMenu();
     renderSweep();
   }
 
@@ -548,7 +575,6 @@
         model.baseLoras = Array.isArray(fresh.baseLoras) ? fresh.baseLoras.slice() : [];
       });
 
-      syncGenerateBaseLoras();
       generateState.loraProfileCache = {};
       renderLoras();
     }).catch(function (err) {
@@ -559,267 +585,105 @@
     });
   }
 
+  var generateLoraReplaceIndex = -1;
+
   function generateLoraNamesMatching(query) {
-    var model = currentModel();
     var needle = String(query || '').trim().toLowerCase();
-    var selected = {};
-    selectedLoras(String(model && model.id || '')).forEach(function (item) {
-      selected[String(item.name || '').toLowerCase()] = true;
-    });
-    return (model && Array.isArray(model.loras) ? model.loras : []).filter(function (name) {
-      var key = String(name || '').toLowerCase();
-      return !selected[key] && (!needle || key.indexOf(needle) !== -1);
+    return generateLoraOrder().filter(function (name) {
+      return !needle || name.toLowerCase().indexOf(needle) !== -1;
     });
   }
 
   function setGenerateLoraPickerActive(index) {
-    var menu = el('generate-lora-picker-menu');
-    if (!menu) throw new Error('Generations LoRA picker menu is missing.');
-    var options = Array.prototype.slice.call(menu.querySelectorAll('[data-generate-lora-option]'));
-    if (!options.length) {
-      menu.dataset.activeIndex = '-1';
-      return;
-    }
-    var next = Math.max(0, Math.min(index, options.length - 1));
-    menu.dataset.activeIndex = String(next);
-    options.forEach(function (option, optionIndex) {
-      option.classList.toggle('active', optionIndex === next);
-    });
-    options[next].scrollIntoView({ block: 'nearest' });
-  }
-
-  function positionGenerateLoraPickerMenu() {
-    var picker = el('generate-lora-picker');
-    var menu = el('generate-lora-picker-menu');
-    if (!picker || !menu) throw new Error('Generations LoRA picker markup is missing.');
-    var pickerRect = picker.getBoundingClientRect();
-    var viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-    var below = Math.max(0, viewportHeight - pickerRect.bottom - 8);
-    var above = Math.max(0, pickerRect.top - 8);
-    var opensUp = below < 180 && above > below;
-    var available = opensUp ? above : below;
-    menu.classList.toggle('opens-up', opensUp);
-    menu.style.maxHeight = String(Math.max(40, Math.min(220, Math.floor(available - 4)))) + 'px';
+    var options = Array.prototype.slice.call(el('generate-lora-picker-options').querySelectorAll('[data-generate-lora-option]'));
+    var next = options.length ? Math.max(0, Math.min(index, options.length - 1)) : -1;
+    el('generate-lora-picker-menu').dataset.activeIndex = String(next);
+    options.forEach(function (option, i) { option.classList.toggle('active', i === next); });
+    if (next >= 0) options[next].scrollIntoView({ block: 'nearest' });
   }
 
   function renderGenerateLoraPickerMenu() {
-    var picker = el('generate-lora-picker');
-    var menu = el('generate-lora-picker-menu');
-    if (!picker || !menu) throw new Error('Generations LoRA picker markup is missing.');
-    var matches = generateLoraNamesMatching(picker.value);
-    menu.innerHTML = matches.length
-      ? matches.map(function (name) {
-          return '<button type="button" class="generate-lora-picker-option" data-generate-lora-option="' +
-            escapeHtml(name) + '" role="option">' + escapeHtml(name) + '</button>';
-        }).join('')
-      : '<div class="generate-lora-picker-empty">No matching LoRAs</div>';
+    var picker = el('generate-lora-picker'), menu = el('generate-lora-picker-menu');
+    var names = generateLoraNamesMatching(picker.value);
+    var selected = selectedLoras(generateState.modelId);
+    el('generate-lora-picker-options').innerHTML = names.length ? names.map(function (name) {
+      var picked = selected.some(function (item) { return item.name.toLowerCase() === name.toLowerCase(); });
+      return '<button type="button" class="generate-lora-picker-option" data-generate-lora-option="' + escapeHtml(name) +
+        '" role="option" aria-selected="' + picked + '" title="' + escapeHtml(name) + '">' +
+        '<span class="generate-lora-picker-option-label">' + escapeHtml(name) + '</span>' +
+        '<span class="generate-lora-picker-option-state">' + (picked ? '✓ Selected' : generateLoraReplaceIndex < 0 ? '+ Add' : 'Select') + '</span></button>';
+    }).join('') : '<div class="generate-lora-picker-empty">No matching LoRAs</div>';
     menu.classList.remove('hidden');
+    var rect = (menu.parentNode === el('generate-lora-picker-wrap') ? el('generate-lora-picker-trigger') : menu.parentNode).getBoundingClientRect();
+    var below = Math.max(0, window.innerHeight - rect.bottom - 8), above = Math.max(0, rect.top - 8);
+    var opensUp = below < 190 && above > below;
+    menu.classList.toggle('opens-up', opensUp);
+    menu.style.maxHeight = Math.max(80, Math.min(260, Math.floor((opensUp ? above : below) - 8))) + 'px';
     picker.setAttribute('aria-expanded', 'true');
-    positionGenerateLoraPickerMenu();
-    setGenerateLoraPickerActive(matches.length ? 0 : -1);
+    setGenerateLoraPickerActive(0);
   }
 
   function closeGenerateLoraPicker() {
-    var picker = el('generate-lora-picker');
-    var menu = el('generate-lora-picker-menu');
-    if (!picker || !menu) throw new Error('Generations LoRA picker markup is missing.');
+    var menu = el('generate-lora-picker-menu'), wrap = el('generate-lora-picker-wrap');
     menu.classList.add('hidden');
     menu.classList.remove('opens-up');
     menu.style.maxHeight = '';
     menu.dataset.activeIndex = '-1';
-    picker.setAttribute('aria-expanded', 'false');
+    el('generate-lora-picker').setAttribute('aria-expanded', 'false');
+    el('generate-lora-picker-trigger').setAttribute('aria-expanded', 'false');
+    var active = el('generate-lora-list').querySelector('[data-generate-lora-replace][aria-expanded="true"]');
+    if (active) active.setAttribute('aria-expanded', 'false');
+    wrap.appendChild(menu);
+    generateLoraReplaceIndex = -1;
+  }
+
+  function openGenerateLoraPicker(index) {
+    closeGenerateLoraPicker();
+    generateLoraReplaceIndex = index;
+    var menu = el('generate-lora-picker-menu');
+    if (index >= 0) {
+      var row = el('generate-lora-list').querySelector('[data-generate-lora-index="' + index + '"]');
+      if (!row) throw new Error('Selected LoRA row is missing.');
+      row.appendChild(menu);
+      row.querySelector('[data-generate-lora-replace]').setAttribute('aria-expanded', 'true');
+    } else {
+      el('generate-lora-picker-trigger').setAttribute('aria-expanded', 'true');
+    }
+    el('generate-lora-picker').value = '';
+    renderGenerateLoraPickerMenu();
+    el('generate-lora-picker').focus();
   }
 
   function chooseGenerateLora(name) {
-    var wanted = String(name || '').trim().toLowerCase();
-    var selectedName = generateLoraNamesMatching('').find(function (candidate) {
-      return String(candidate || '').toLowerCase() === wanted;
-    }) || '';
-    if (!selectedName) return;
-
-    selectedLoras(generateState.modelId).push({ name: selectedName, strength: 0.9 });
-    el('generate-lora-picker').value = '';
+    var wanted = String(name || '').toLowerCase();
+    var found = generateLoraNamesMatching('').find(function (candidate) { return candidate.toLowerCase() === wanted; });
+    if (!found) throw new Error('Selected LoRA is no longer available.');
+    var selected = selectedLoras(generateState.modelId);
+    var existing = selected.findIndex(function (item) { return item.name.toLowerCase() === wanted; });
+    var index = generateLoraReplaceIndex;
     closeGenerateLoraPicker();
-    renderLoras();
-    el('generate-lora-picker').focus();
+    if (existing >= 0) {
+      var existingRow = el('generate-lora-list').querySelector('[data-generate-lora-replace="' + existing + '"]');
+      if (existingRow) existingRow.focus();
+      return;
+    }
+    if (index >= 0) replaceGenerateLora(index, found);
+    else { selected.push({name: found, strength: 0.9}); renderLoras(); }
+    var button = el('generate-lora-list').querySelector('[data-generate-lora-replace="' + (index >= 0 ? index : selected.length - 1) + '"]');
+    if (button) button.focus();
   }
 
   function handleGenerateLoraPickerKeydown(event) {
     var menu = el('generate-lora-picker-menu');
-    if (!menu) throw new Error('Generations LoRA picker menu is missing.');
-    if (event.key === 'Escape') {
-      closeGenerateLoraPicker();
-      return;
-    }
-    if (menu.classList.contains('hidden')) {
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        renderGenerateLoraPickerMenu();
-      }
-      return;
-    }
-
-    var options = Array.prototype.slice.call(menu.querySelectorAll('[data-generate-lora-option]'));
-    var active = Number(menu.dataset.activeIndex || 0);
-    if (event.key === 'ArrowDown') {
+    if (event.key === 'Escape') { event.preventDefault(); closeGenerateLoraPicker(); return; }
+    var options = Array.prototype.slice.call(el('generate-lora-picker-options').querySelectorAll('[data-generate-lora-option]'));
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
-      setGenerateLoraPickerActive(Math.min(active + 1, options.length - 1));
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setGenerateLoraPickerActive(Math.max(active - 1, 0));
+      setGenerateLoraPickerActive(Number(menu.dataset.activeIndex || 0) + (event.key === 'ArrowDown' ? 1 : -1));
     } else if (event.key === 'Enter' && options.length) {
       event.preventDefault();
-      chooseGenerateLora(options[Math.max(0, active)].dataset.generateLoraOption);
+      chooseGenerateLora(options[Math.max(0, Number(menu.dataset.activeIndex || 0))].dataset.generateLoraOption);
     }
-  }
-
-  function collectSettings() {
-    var settings = {};
-    if (fieldVisible('aspectRatio')) settings.aspectRatio = el('generate-aspect').value;
-    if (fieldVisible('megapixels')) settings.megapixels = el('generate-megapixels').value;
-    if (fieldVisible('duration')) settings.duration = el('generate-duration').value;
-    if (fieldVisible('samplingMode')) settings.samplingMode = el('generate-sampling-mode').value;
-    if (fieldVisible('dimensions')) settings.dimensions = el('generate-dimensions').value;
-    if (fieldVisible('seed')) settings.seed = el('generate-seed').value;
-    return settings;
-  }
-
-  function restoreResultConfiguration(result) {
-    if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before restoring a generation configuration.');
-    if (!result) throw new Error('Generation result is required.');
-
-    var resultModelId = String(result.modelId || '');
-    var modelAvailable = generateState.models.some(function (model) {
-      return String(model.id) === resultModelId;
-    });
-    if (resultModelId && modelAvailable) {
-      generateState.modelId = resultModelId;
-      el('generate-model').value = resultModelId;
-      renderModelForm();
-    } else if (resultModelId && typeof window.reportConsoleWarning === 'function') {
-      window.reportConsoleWarning(
-        'Generate',
-        'Opened generation uses unavailable Base Model: ' + resultModelId + '. Preview opened without restoring model-specific settings.'
-      );
-    }
-
-    var prompt = el('generate-prompt');
-    prompt.value = String(result.sourcePrompt || result.resolvedPrompt || '');
-    prompt.dataset.modelId = resultModelId || String(generateState.modelId || '');
-    if (modelAvailable) {
-
-      var settings = result.settings && typeof result.settings === 'object' ? result.settings : {};
-      [
-        ['aspectRatio', 'generate-aspect'],
-        ['megapixels', 'generate-megapixels'],
-        ['duration', 'generate-duration'],
-        ['samplingMode', 'generate-sampling-mode'],
-        ['dimensions', 'generate-dimensions'],
-        ['seed', 'generate-seed']
-      ].forEach(function (entry) {
-        if (!Object.prototype.hasOwnProperty.call(settings, entry[0])) return;
-        var control = el(entry[1]);
-        if (control) control.value = entry[0] === 'samplingMode'
-          ? normalizeGenerateSamplingMode(settings[entry[0]]) : String(settings[entry[0]]);
-      });
-
-      syncGenerateBaseLoras();
-      generateState.lorasByModel[resultModelId] = Array.isArray(result.loras)
-        ? result.loras.map(function (item) {
-            var strength = Number(item.strength);
-            return {
-              name: String(item.name || ''),
-              strength: isFinite(strength) ? strength : 1
-            };
-          }).filter(function (item) { return item.name; })
-        : [];
-        renderLoras();
-    }
-
-    generateState.promptLibrary.activeId = '';
-    generateState.director.previousPrompt = null;
-    setDirectorStatus('');
-    renderDirector();
-  }
-
-  function uploadReference(file) {
-    var body = new FormData();
-    body.append('file', file);
-    return requestJson('/fs/generate/reference', { method: 'POST', body: body }).then(function (payload) {
-      return payload.reference.path;
-    });
-  }
-
-  function cleanupUploadedReferences(paths) {
-    var values = Array.isArray(paths) ? paths.filter(Boolean) : [];
-    if (!values.length) return Promise.resolve();
-    return postJson('/fs/generate/reference/cleanup', { paths: values }).catch(function (err) {
-      if (typeof window.reportConsoleError === 'function') {
-        window.reportConsoleError(
-          'Generate',
-          'Could not clean abandoned Generate reference uploads: ' +
-            String(err && err.message ? err.message : err)
-        );
-      }
-    });
-  }
-
-  function syncReferenceDropzone(role) {
-    var input = el('generate-reference-' + role);
-    var zone = document.querySelector('[data-generate-reference-dropzone="' + role + '"]');
-    var name = document.querySelector('[data-generate-reference-name="' + role + '"]');
-    var clear = document.querySelector('[data-generate-reference-clear="' + role + '"]');
-    if (!input || !zone || !name || !clear) throw new Error('Generate reference dropzone markup is missing for ' + role + '.');
-    var file = input.files && input.files[0];
-    zone.classList.toggle('has-file', !!file);
-    name.textContent = file ? file.name : 'No file selected';
-    clear.classList.toggle('hidden', !file);
-    clear.disabled = input.disabled;
-  }
-
-  function setReferenceInputFile(input, file) {
-    if (!file) return;
-    if (file.type && file.type.indexOf('image/') !== 0) {
-      window.alert('Reference files must be images.');
-      return;
-    }
-    var transfer = new DataTransfer();
-    transfer.items.add(file);
-    input.files = transfer.files;
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-
-  function bindReferenceDropzones() {
-    ['first_frame', 'last_frame'].forEach(function (role) {
-      var input = el('generate-reference-' + role);
-      var zone = document.querySelector('[data-generate-reference-dropzone="' + role + '"]');
-      var clear = document.querySelector('[data-generate-reference-clear="' + role + '"]');
-      if (!input || !zone || !clear) throw new Error('Generate reference dropzone markup is missing for ' + role + '.');
-
-      input.addEventListener('change', function () { syncReferenceDropzone(role); });
-      ['dragenter', 'dragover'].forEach(function (eventName) {
-        zone.addEventListener(eventName, function (event) {
-          event.preventDefault();
-          if (input.disabled) return;
-          zone.classList.add('is-dragover');
-          if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-        });
-      });
-      zone.addEventListener('dragleave', function (event) {
-        if (!event.relatedTarget || !zone.contains(event.relatedTarget)) zone.classList.remove('is-dragover');
-      });
-      zone.addEventListener('drop', function (event) {
-        event.preventDefault();
-        zone.classList.remove('is-dragover');
-        if (input.disabled) return;
-        setReferenceInputFile(input, event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
-      });
-      clear.addEventListener('click', function () {
-        input.value = '';
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-      });
-      syncReferenceDropzone(role);
-    });
   }
 
   function captureReferenceFiles(model) {
@@ -2565,7 +2429,6 @@
       if (result) renderActiveResult(result);
     });
 
-    el('generate-sampling-mode').addEventListener('change', syncGenerateBaseLoras);
     el('generate-model').addEventListener('change', function () {
       generateState.modelId = this.value;
       generateState.promptLibrary.activeId = '';
@@ -2594,8 +2457,10 @@
     });
     el('generate-lora-refresh').onclick = refreshLoraCatalog;
     var fixedLoraPicker = el('generate-lora-picker');
-    fixedLoraPicker.addEventListener('focus', renderGenerateLoraPickerMenu);
-    fixedLoraPicker.addEventListener('click', renderGenerateLoraPickerMenu);
+    el('generate-lora-picker-trigger').onclick = function () {
+      if (fixedLoraPicker.getAttribute('aria-expanded') === 'true' && generateLoraReplaceIndex < 0) closeGenerateLoraPicker();
+      else openGenerateLoraPicker(-1);
+    };
     fixedLoraPicker.addEventListener('input', renderGenerateLoraPickerMenu);
     fixedLoraPicker.addEventListener('keydown', handleGenerateLoraPickerKeydown);
     el('generate-lora-picker-menu').addEventListener('click', function (event) {
@@ -2603,8 +2468,9 @@
       if (option) chooseGenerateLora(option.dataset.generateLoraOption);
     });
     document.addEventListener('pointerdown', function (event) {
-      if (event.target.closest('.generate-lora-picker-wrap')) return;
-      if (fixedLoraPicker.getAttribute('aria-expanded') === 'true') closeGenerateLoraPicker();
+      if (el('generate-lora-picker-menu').classList.contains('hidden')) return;
+      if (event.target.closest('#generate-lora-picker-menu, #generate-lora-picker-trigger, [data-generate-lora-replace]')) return;
+      closeGenerateLoraPicker();
     });
     el('generate-lora-selected-tab').onclick = function () { setLoraMode('selected'); };
     el('generate-lora-sweep-tab').onclick = function () { setLoraMode('sweep'); };
@@ -2692,6 +2558,27 @@
       items[index].strength = Number(input.value);
       });
     el('generate-lora-list').addEventListener('click', function (event) {
+      var replaceButton = event.target.closest('[data-generate-lora-replace]');
+      if (replaceButton) {
+        var replaceIndex = Number(replaceButton.dataset.generateLoraReplace);
+        if (el('generate-lora-picker').getAttribute('aria-expanded') === 'true' && generateLoraReplaceIndex === replaceIndex) closeGenerateLoraPicker();
+        else openGenerateLoraPicker(replaceIndex);
+        return;
+      }
+      var stepButton = event.target.closest('[data-generate-lora-step]');
+      if (stepButton) {
+        var stepIndex = Number(stepButton.dataset.generateLoraFor);
+        var item = selectedLoras(generateState.modelId)[stepIndex];
+        if (!item) throw new Error('Selected LoRA no longer exists.');
+        var nextName = generateLoraNeighbor(item.name, Number(stepButton.dataset.generateLoraStep), stepIndex);
+        if (nextName) {
+          closeGenerateLoraPicker();
+          replaceGenerateLora(stepIndex, nextName);
+          var nextButton = el('generate-lora-list').querySelector('[data-generate-lora-for="' + stepIndex + '"][data-generate-lora-step="' + stepButton.dataset.generateLoraStep + '"]');
+          if (nextButton && !nextButton.disabled) nextButton.focus();
+        }
+        return;
+      }
       var metadata = event.target.closest('[data-generate-lora-profile]');
       if (metadata) {
         var item = selectedLoras(generateState.modelId)[Number(metadata.dataset.generateLoraProfile)];
@@ -2747,8 +2634,9 @@
       }
       var button = event.target.closest('[data-generate-lora-remove]');
       if (!button) return;
+      closeGenerateLoraPicker();
       selectedLoras(generateState.modelId).splice(Number(button.dataset.generateLoraRemove), 1);
-        renderLoras();
+      renderLoras();
     });
     window.addEventListener('webcap:inference-queue-snapshot', function (event) {
       var queue = event && event.detail && event.detail.queue;

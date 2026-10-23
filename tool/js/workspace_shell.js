@@ -974,7 +974,7 @@ function closeTestGenerationsSetGuide() {
 function showTestGenerationsSetGuide() {
   if (testGenerationsSetGuide) return;
   var target = document.getElementById('media-list-wrapper');
-  if (!target) throw new Error('Prep media list is unavailable for Test Generations Set selection.');
+  if (!target) throw new Error('Prep media list is unavailable for Evaluation Set selection.');
   var root = document.createElement('div');
   root.id = 'test-generations-set-guide';
   root.className = 'test-generations-set-guide';
@@ -983,7 +983,7 @@ function showTestGenerationsSetGuide() {
     '<div class="test-generations-set-guide-highlight" aria-hidden="true"></div>' +
     '<section class="test-generations-set-guide-note" role="status" aria-live="polite">' +
       '<strong>Please select a Set</strong>' +
-      '<p>Open a folder containing media to continue to Test Generations.</p>' +
+      '<p>Open a folder containing media to continue to Evaluation.</p>' +
       '<button type="button" class="review-captions-btn">Cancel</button>' +
     '</section>';
   document.body.appendChild(root);

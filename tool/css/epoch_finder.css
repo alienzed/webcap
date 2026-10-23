@@ -242,7 +242,9 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-finder-run-choice strong,.epoch-finder-run-choice small{display:block;overflow-wrap:anywhere}
 .epoch-finder-run-choice small{font-weight:400;opacity:.72;margin-top:3px}
 .epoch-finder-run-epochs{border-top:1px solid var(--border-color,#384653);padding-top:10px;margin-top:10px}
-.epoch-finder-run-epochs>strong{display:block;font-size:12px;margin-bottom:7px}
+.epoch-finder-run-epochs-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;margin-bottom:7px}
+.epoch-finder-run-epochs-heading>strong{font-size:12px;min-width:0;overflow-wrap:anywhere}
+.epoch-finder-run-epochs-heading>.epoch-finder-training-runs-link{width:auto;flex:0 0 auto;margin:0;padding:4px 8px;font-size:12px;min-height:26px;white-space:nowrap}
 
 /* Standalone training reference browser: retain existing gallery and sidebar geometry. */
 .test-references-screen .epoch-finder-reference-workspace{min-height:260px}

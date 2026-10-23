@@ -41,6 +41,47 @@
   var campaignSaveTimer = 0;
   var campaignDefaultsKey = '';
   var campaignDraftRevision = 0;
+  // Transient selections belong to each method; the engine and rendered evidence stay shared.
+  function emptyMethodWorkspace() {
+    return {activeCampaign:'',runEpochSelections:{},stagedSelection:new Set(),
+      sourceMode:'runs',selectedRound:0,selectionCampaign:''};
+  }
+  var methodWorkspaces={finder:emptyMethodWorkspace(),screening:emptyMethodWorkspace()};
+  function snapshotMethodWorkspace(method) {
+    var workspace=methodWorkspaces[method];
+    if(!workspace)return;
+    workspace.activeCampaign=activeCampaign;
+    workspace.sourceMode=sourceMode;
+    workspace.stagedSelection=new Set(stagedSelection);
+    workspace.runEpochSelections=Object.fromEntries(Object.entries(runEpochSelections).map(function(entry){
+      return [entry[0],new Set(entry[1])];
+    }));
+    if(method==='screening'){
+      workspace.selectedRound=manualSelectedRound;
+      workspace.selectionCampaign=manualSelectionCampaign;
+    }
+  }
+  function restoreMethodWorkspace(method, requestedCampaign) {
+    var workspace=methodWorkspaces[method];
+    if(!workspace)throw new Error('Unknown Evaluation method workspace: '+method);
+    activeCampaign=requestedCampaign||workspace.activeCampaign;
+    workspace.activeCampaign=activeCampaign;
+    campaignState=null;
+    sourceMode=method==='screening'?'runs':workspace.sourceMode;
+    stagedSelection=new Set(workspace.stagedSelection);
+    runEpochSelections=Object.fromEntries(Object.entries(workspace.runEpochSelections).map(function(entry){
+      return [entry[0],new Set(entry[1])];
+    }));
+    manualSelectionCampaign=method==='screening'&&!requestedCampaign?workspace.selectionCampaign:'';
+    manualSelectedRound=method==='screening'&&!requestedCampaign?workspace.selectedRound:0;
+    inspectedEpoch=null;inspectedFrame=0;lastFrameKey='';
+  }
+  function resetMethodWorkspaces() {
+    methodWorkspaces={finder:emptyMethodWorkspace(),screening:emptyMethodWorkspace()};
+    activeCampaign='';campaignState=null;
+    runEpochSelections={};stagedSelection=new Set();sourceMode='runs';
+    manualSelectionCampaign='';manualSelectedRound=0;
+  }
   window.epochFinderReceiveSetPrompt = function(folder, modelId, prompt) {
     if(currentFolder!==String(folder||'') ||
        String(window.getWorkingModelProfileId()||'')!==String(modelId||''))return;
@@ -50,7 +91,7 @@
     screeningGroups();
   };
   function campaignSaveDraft() {
-    if (!currentFolder || els('campaign-type').value!=='auto') return;
+    if (!currentFolder || mode!=='finder') return;
     var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||'');
     if(!modelId)return;
     var settings={concept:els('concept').value,rounds:els('rounds').value,
@@ -70,7 +111,7 @@
     },500);
   }
   function campaignApplyDefaults() {
-    if(!currentFolder||els('campaign-type').value!=='auto')return;
+    if(!currentFolder||mode!=='finder')return;
     var folder=currentFolder,modelId=String(window.getWorkingModelProfileId()||'');
     var revision=++campaignDraftRevision;
     campaignDefaultsKey=folder+'|'+modelId;
@@ -81,7 +122,7 @@
         return payload;
       });}).then(function(payload){
         if(folder!==currentFolder||modelId!==String(window.getWorkingModelProfileId()||'')||
-           activeCampaign||els('campaign-type').value!=='auto'||revision!==campaignDraftRevision)return;
+           activeCampaign||mode!=='finder'||revision!==campaignDraftRevision)return;
         var saved=payload.campaignSettings||{};
         var localPrompt=window.testGenerationsCurrentSetPrompt(folder,modelId);
         els('prompt').value=localPrompt!==null?localPrompt:
@@ -150,25 +191,16 @@
     // navigation, not a request to retain a stale destination.
     returnMode = options.returnTo && surfaceLabels[options.returnTo] && options.returnTo!==next
       ? options.returnTo : '';
-    var previousMode = mode;
-    mode = next;
-    var finder = next === 'finder' || next === 'screening';
-    if (finder && !options.restore && !options.keepCampaign && activeCampaign) {
-      // A history request may still be pending; resolve its method from the list,
-      // not only from a fully loaded campaignState.
-      var selected = campaigns.find(function(c){return c.id===activeCampaign;}) ||
-        (campaignState && campaignState.id===activeCampaign ? campaignState : null);
-      if (selected ? (selected.mode==='manual') !== (next==='screening') : previousMode!==next) {
-        activeCampaign = '';
-        campaignState = null;
-        manualSelectionCampaign = '';
-        screeningShowExcluded = false;
-        els('active').classList.add('hidden');
-        els('empty').classList.remove('hidden');
-      }
+    var previousMode=mode;
+    if(previousMode!==next){
+      listRequestVersion++; // Ignore results from the method that just lost focus.
+      snapshotMethodWorkspace(previousMode);
+      if(next==='finder'||next==='screening')
+        restoreMethodWorkspace(next,options.keepCampaign?options.campaignId:'');
     }
+    mode=next;
+    var finder=next==='finder'||next==='screening';
     if (finder) {
-      els('campaign-type').value = next === 'screening' ? 'manual' : 'auto';
       screeningModeUi();
       els('new-heading').textContent = next === 'screening' ? 'New screening' : 'New campaign';
       els('history-heading').textContent = next === 'screening' ? 'Screenings' : 'Campaigns';
@@ -1220,7 +1252,7 @@
   // Manual Screening reuses this Campaign's run picker, Test render cards and queue.
   function isManualCampaign() { return campaignState && campaignState.mode === 'manual' && !!activeCampaign; }
   function screeningModeUi() {
-    var manual = els('campaign-type').value === 'manual';
+    var manual = mode === 'screening';
     els('manual-form').classList.toggle('hidden', !manual);
     els('wizard-progress').classList.toggle('hidden', manual);
     els('wizard-actions').classList.toggle('hidden', manual);
@@ -1298,14 +1330,14 @@
     if (groups.length) choice.value=String(Math.min(Math.max(0,old),groups.length-1));
   }
   function screeningApplySettings(campaign) {
-    if(els('campaign-type').value!=='manual')return;
+    if(mode!=='screening')return;
     var plan=campaign && campaign.rounds[campaign.rounds.length-1];
     var context=currentFolder, selectedId=campaign&&campaign.id;
     els('manual-prompt').value=plan?plan.prompt:'';
     screeningGroups(plan?plan.groupIndex:0);
     screeningSettingsSource(campaign&&campaign.modelId).then(function(payload){
       if(context!==currentFolder || (selectedId && activeCampaign!==selectedId) ||
-          (!selectedId && activeCampaign) || els('campaign-type').value!=='manual')return;
+          (!selectedId && activeCampaign) || mode!=='screening')return;
       if(!plan){
         var localPrompt=window.testGenerationsCurrentSetPrompt(
           context,String(campaign&&campaign.modelId||window.getWorkingModelProfileId()||''));
@@ -1331,7 +1363,7 @@
     }).catch(error);
   }
   function screeningSaveDraft() {
-    if (!currentFolder || els('campaign-type').value!=='manual') return;
+    if (!currentFolder || mode!=='screening') return;
     var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||'');
     var settings={groupIndex:Number(els('manual-group').value||0)};
     [['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
@@ -2005,7 +2037,6 @@
     els('manual-launch').textContent='Queue Round '+(campaign.rounds.length+1)+' · '+selectedCampaignCount()+' epochs';
   }
   function screeningRender(campaign) {
-    els('campaign-type').value='manual';
     screeningModeUi();
     screeningRememberSelection(campaign);
     els('manual-review').classList.remove('hidden');
@@ -2077,7 +2108,6 @@
       screeningRender(campaign);
       return;
     }
-    els('campaign-type').value='auto';
     screeningModeUi();
     els('manual-review').classList.add('hidden');
     els('manual-history').classList.add('hidden');
@@ -2124,7 +2154,7 @@
       if (activeCampaign && campaigns.some(function (c) { return c.id === activeCampaign; })) return refreshStatus();
       activeCampaign = '';
       var draftKey=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
-      if(!followUpSource&&els('campaign-type').value==='auto'&&campaignDefaultsKey!==draftKey)campaignApplyDefaults();
+      if(!followUpSource&&mode==='finder'&&campaignDefaultsKey!==draftKey)campaignApplyDefaults();
       manualSelectionCampaign='';
       els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
     }).catch(error);
@@ -2249,11 +2279,14 @@
   window.epochFinderPrepare = applyFolder;
   window.epochFinderInspectCampaign = function (campaignId, sourceEpoch, sourceJobId) {
     var previous=mode;
-    activeCampaign = String(campaignId);
     inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = '';
     var knownCampaign = campaigns.find(function(c){return c.id===String(campaignId);});
     var destination = knownCampaign && knownCampaign.mode==='manual' ? 'screening' : 'finder';
-    showMode(destination,previous!==destination?{returnTo:previous,keepCampaign:true}:{keepCampaign:true});
+    var options=previous!==destination?{returnTo:previous,keepCampaign:true,campaignId:String(campaignId)}:
+      {keepCampaign:true,campaignId:String(campaignId)};
+    showMode(destination,options);
+    activeCampaign=String(campaignId);
+    methodWorkspaces[destination].activeCampaign=activeCampaign;
     return refreshStatus().then(function () {
       if (campaignState && campaignState.mode==='manual' && mode!=='screening') showMode('screening',{restore:true,returnTo:returnMode});
       if (campaignState && campaignState.mode!=='manual' && mode!=='finder') showMode('finder',{restore:true,returnTo:returnMode});
@@ -2430,7 +2463,7 @@
   els('reference-workspace').addEventListener('click', referenceClick);
   els('preview-close').onclick = function () { els('reference-preview').close(); };
   els('prompt').addEventListener('input', function(){
-    if(els('campaign-type').value!=='auto')return;
+    if(mode!=='finder')return;
     campaignDraftRevision++;
     try{
       window.testGenerationsSaveSharedSetPrompt(this.value);

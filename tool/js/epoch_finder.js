@@ -42,6 +42,7 @@
   var screeningSelectionFailure = null;
   var screeningExpandedExcluded = new Set();
   var screeningShowExcluded = false;
+  var screeningDraftContext = '';
   var screeningTestStatusCampaign = '';
   var screeningTestStatus = {};
   var screeningTestStatusVersion = 0;
@@ -79,10 +80,9 @@
     // navigation, not a request to retain a stale destination.
     returnMode = options.returnTo && surfaceLabels[options.returnTo] && options.returnTo!==next
       ? options.returnTo : '';
-    var previousMode = mode;
     mode = next;
     var finder = next === 'finder' || next === 'screening';
-    if (finder && (previousMode === 'finder' || previousMode === 'screening') && previousMode !== next &&
+    if (finder && !options.restore && !options.keepCampaign &&
         activeCampaign && campaignState && (campaignState.mode === 'manual') !== (next === 'screening')) {
       // Each method owns its history; switching tabs cannot reuse the other method's active record.
       activeCampaign = '';
@@ -98,6 +98,13 @@
       els('new-heading').textContent = next === 'screening' ? 'New screening' : 'New campaign';
       els('history-heading').textContent = next === 'screening' ? 'Screenings' : 'Campaigns';
       els('new').textContent = next === 'screening' ? '+ New Screening' : '+ New Campaign';
+      if (next === 'screening' && !activeCampaign) {
+        var draftKey = currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
+        if (screeningDraftContext !== draftKey) {
+          screeningDraftContext = draftKey;
+          screeningApplySettings(null);
+        }
+      }
     }
     var references = next === 'references';
     var analytics = next === 'analytics';
@@ -1980,7 +1987,7 @@
         stagedModel = modelAtRequest;
         var preselected = window.getTestGenerationSelectedCandidateFiles(currentFolder, modelAtRequest);
         stagedSelection = new Set(preselected);
-        sourceMode = preselected.length ? 'staged' : 'runs';
+        sourceMode = mode==='screening' ? 'runs' : preselected.length ? 'staged' : 'runs';
       }
       stagedSelection.forEach(function (file) { if (!stagedFiles.includes(file)) stagedSelection.delete(file); });
       if (response.warnings && response.warnings.length) {
@@ -2107,7 +2114,7 @@
     }
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { screeningDraftContext=''; screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
     if (mode === 'finder' || mode === 'screening') refresh();
@@ -2119,9 +2126,10 @@
     inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = '';
     var knownCampaign = campaigns.find(function(c){return c.id===String(campaignId);});
     var destination = knownCampaign && knownCampaign.mode==='manual' ? 'screening' : 'finder';
-    showMode(destination,previous!==destination?{returnTo:previous}:null);
+    showMode(destination,previous!==destination?{returnTo:previous,keepCampaign:true}:{keepCampaign:true});
     return refreshStatus().then(function () {
       if (campaignState && campaignState.mode==='manual' && mode!=='screening') showMode('screening',{restore:true});
+      if (campaignState && campaignState.mode!=='manual' && mode!=='finder') showMode('finder',{restore:true});
       if (sourceEpoch == null || !campaignState || campaignState.id !== String(campaignId)) return;
       var matched = Object.entries(campaignState.candidateMap || {}).find(function (entry) {
         return entry[1].epoch === Number(sourceEpoch) && (!sourceJobId || entry[1].jobId === sourceJobId);
@@ -2303,7 +2311,7 @@
       if (!hasRunOrigin(campaignState, inspectedEpoch)) return;
       var mapped=(campaignState.candidateMap||{})[String(inspectedEpoch)];
       window.runAnalyticsViewEpoch(mapped ? mapped.jobId : campaignState.jobId,
-        mapped ? mapped.epoch : inspectedEpoch,'finder');
+        mapped ? mapped.epoch : inspectedEpoch,mode==='screening'?'screening':'finder');
       return;
     }
     if (event.target.closest('[data-copy-epoch-to-test]')) {

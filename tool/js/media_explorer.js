@@ -878,9 +878,9 @@
         if (input.value) chip(technicalNames[name] + ' ' + input.value, function () { input.value = ''; load(true); });
       });
     }
-    el('media-explorer-clear-filters').classList.toggle('hidden', !hasFilters() && el('media-explorer-sort').value === 'newest');
+    el('media-explorer-clear-filters').classList.toggle('hidden', !hasFilters() && el('media-explorer-sort').value === 'newest' && !reverseSort);
     var activeSource = sourceButtons.find(function (button) { return button.classList.contains('active'); });
-    text(el('media-explorer-heading'), activeSource ? activeSource.textContent : 'All media');
+    text(el('media-explorer-heading'), activeSource ? activeSource.textContent : 'WebCap media');
     sourceButtons.forEach(function (button) { button.setAttribute('aria-pressed', String(button.classList.contains('active'))); });
   }
   function facets(data) {
@@ -1268,6 +1268,7 @@
   el('media-explorer-source-chooser').addEventListener('change', function () { sourceButtons[Number(this.value)].click(); });
   el('media-explorer-clear-filters').addEventListener('click', function () {
     el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
+    reverseSort = false; el('media-explorer-sort-reverse').setAttribute('aria-pressed', 'false');
     facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
     el('media-explorer-storyboard-type').value = '';
     if (isExternal()) {

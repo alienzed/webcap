@@ -117,7 +117,7 @@ def _requires_reference(role):
     return role == "primary"
 
 
-def _managed_set_checkpoint_sources(folder_path, require_saved_checkpoints=True):
+def _managed_set_checkpoint_sources(folder_path, require_saved_checkpoints=True, only_job_id=""):
     """Start with the Set's own action/output folders, not Training history.
 
     Manifest job IDs remain the external identity. Only associate a run with
@@ -135,6 +135,8 @@ def _managed_set_checkpoint_sources(folder_path, require_saved_checkpoints=True)
         stage = stages[0]
         jobs = (action.get("jobs") or {}).get(stage) or []
         if len(jobs) != 1 or not str(jobs[0].get("id") or "").strip():
+            continue
+        if only_job_id and str(jobs[0]["id"]) != str(only_job_id):
             continue
         output = action_root / "output"
         if not output.is_dir() or output.is_symlink():
@@ -174,7 +176,7 @@ def _managed_set_checkpoint_runs(folder_path, require_saved_checkpoints=True):
 def _set_saved_checkpoint_path(folder_path, job_id, epoch):
     """Use the Set's recorded run output for a uniquely owned saved epoch."""
     matches = [(run_dir, artifacts) for row, run_dir, artifacts, _action in
-               _managed_set_checkpoint_sources(folder_path)
+               _managed_set_checkpoint_sources(folder_path, only_job_id=job_id)
                if row["jobId"] == str(job_id)]
     if len(matches) > 1:
         raise RuntimeError("Multiple Set-managed runs use training job ID: " + str(job_id))

@@ -1422,7 +1422,9 @@ def test_evaluation_methods_filter_shared_campaign_history_without_migrating_it(
     js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
     assert "var surfaceLabels = {tests:'Prompt Tests',screening:'Manual Screening'" in js
     assert "(c.mode === 'manual') === (mode === 'screening')" in js
-    assert "showMode(destination,previous!==destination?{returnTo:previous,keepCampaign:true}:{keepCampaign:true});" in js
+    assert "showMode(destination,options);" in js
+    assert "campaignId:String(campaignId)" in js
+    assert "methodWorkspaces[destination].activeCampaign=activeCampaign;" in js
 
 
 def test_evaluation_campaign_history_lists_each_saved_mode_after_refresh(tmp_path, monkeypatch):

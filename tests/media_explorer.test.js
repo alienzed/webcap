@@ -524,3 +524,39 @@ test('External Move to Trash only targets the selected clicked item', async () =
   await f.settle(req, []);
   assert.equal(f.errors.length, 0);
 });
+
+
+test('shared technical filters reach generated media and recent folders require successful browsing', async () => {
+  const f = fixture();
+  f.window.openMediaExplorerActivity();
+  await f.settle(f.pending[0], []);
+  f.nodes['media-explorer-min-mp'].value = '1.5';
+  f.nodes['media-explorer-min-mp'].emit('change');
+  const generated = new URL(f.pending.at(-1).url, 'http://localhost');
+  assert.equal(generated.searchParams.get('min_mp'), '1.5');
+  assert.equal(generated.searchParams.get('direction'), 'desc');
+  await f.settle(f.pending.at(-1), []);
+
+  f.buttons.find(button => button.dataset.mediaSource === 'external').click();
+  f.nodes['media-explorer-external-path'].value = '/tmp/photos';
+  f.nodes['media-explorer-open-path'].click();
+  const browse = f.pending.at(-1);
+  assert.match(browse.url, /\/fs\/media_explorer\/external\?/);
+  assert.equal(f.pending.filter(entry =>
+    entry.url === '/fs/media_explorer/external/folders' && entry.options?.method === 'POST').length, 0);
+  await f.settle(browse, []);
+  const saves = f.pending.filter(entry =>
+    entry.url === '/fs/media_explorer/external/folders' && entry.options?.method === 'POST');
+  assert.equal(saves.length, 1);
+  assert.equal(JSON.parse(saves[0].options.body).path, '/tmp/photos');
+});
+
+test('shared technical filters remain part of Media Explorer deep links', async () => {
+  const f = fixture('#/media?source=generate&min-mp=0.8&sort=megapixels');
+  f.window.openMediaExplorerActivity();
+  assert.equal(f.nodes['media-explorer-min-mp'].value, '0.8');
+  const params = new URLSearchParams();
+  f.window.appendMediaExplorerRouteParams(params);
+  assert.equal(params.get('min-mp'), '0.8');
+  assert.equal(params.get('sort'), 'megapixels');
+});

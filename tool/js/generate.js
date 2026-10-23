@@ -2591,7 +2591,12 @@
     return refreshCapabilities().then(function () {
       return Promise.all([refreshDirector(), refreshTrackedGenerateJobs(), refreshResults()]);
     }).then(function () {
-      if (!target.storageId || !generateState.open || navigationVersion !== generateState.navigationVersion) return;
+      if (!generateState.open || navigationVersion !== generateState.navigationVersion) return;
+      if (!target.storageId && !targetJobId && generateState.activeResultKey) {
+        var selected = generateState.results.find(function (item) { return resultKey(item) === generateState.activeResultKey; });
+        if (selected) selectGenerationResult(selected);
+      }
+      if (!target.storageId) return;
       return requestJson('/fs/generate/result?storageId=' + encodeURIComponent(target.storageId)).then(function (payload) {
         if (!generateState.open || navigationVersion !== generateState.navigationVersion) return;
         selectGenerationResult(payload.result);

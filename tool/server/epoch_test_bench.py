@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .folder_state_store import read_folder_state, set_media_rating, set_test_vision_assessment, set_test_workspace_prompt, set_test_manual_settings
+from .folder_state_store import read_folder_state, set_media_rating, set_test_vision_assessment, set_test_workspace_prompt, set_test_manual_settings, set_test_campaign_settings
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path
 from .training_runner import candidate_run_snapshot_from_provenance, candidate_selected_epoch_from_provenance
@@ -1335,9 +1335,11 @@ def prepare(folder_path, model_id=None):
     model = get_test_model(model_id)
     template = model.load_template()
     prompt_state = workspace_prompt(folder_path, model.PROFILE_ID)
-    manual_settings = read_folder_state(_set_prompt_path(folder_path)).get("test_manual_screening_by_model") or {}
-    if not isinstance(manual_settings, dict):
-        raise ValueError("Set Manual Screening settings are invalid.")
+    set_state = read_folder_state(_set_prompt_path(folder_path))
+    manual_settings = set_state.get("test_manual_screening_by_model") or {}
+    campaign_settings = set_state.get("test_campaign_by_model") or {}
+    if not isinstance(manual_settings, dict) or not isinstance(campaign_settings, dict):
+        raise ValueError("Set Test workspace form settings are invalid.")
     try:
         loras = _staged_loras_for_set(folder_path, model)
     except ValueError:
@@ -1376,6 +1378,7 @@ def prepare(folder_path, model_id=None):
         "workspacePromptPresent": bool(prompt_state["present"]),
         "workspacePrompt": str(prompt_state["prompt"]),
         "manualSettings": dict(manual_settings.get(model.PROFILE_ID) or {}),
+        "campaignSettings": dict(campaign_settings.get(model.PROFILE_ID) or {}),
         "defaultPrompt": model.default_prompt(template),
         "defaults": defaults,
         "defaultStrength": float(defaults.get("strength", 1)),
@@ -1407,6 +1410,11 @@ def handle_request(folder_path, mode, selection_criteria=None):
     if operation == "test_save_manual_settings":
         criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
         return {"operation": operation, "settings": set_test_manual_settings(
+            _set_prompt_path(folder_path), get_test_model(criteria.get("modelId")).PROFILE_ID,
+            criteria.get("settings"))}
+    if operation == "test_save_campaign_settings":
+        criteria = selection_criteria if isinstance(selection_criteria, dict) else {}
+        return {"operation": operation, "settings": set_test_campaign_settings(
             _set_prompt_path(folder_path), get_test_model(criteria.get("modelId")).PROFILE_ID,
             criteria.get("settings"))}
     if operation == "test_status":

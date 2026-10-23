@@ -24,6 +24,7 @@ from .training_runner import (
     candidate_run_folder_path,
 )
 from .training_candidates import saved_artifacts_for_run
+from .training_action import managed_actions_for_folder
 from .training_history import host_path_for_training_path
 from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
 
@@ -116,21 +117,81 @@ def _requires_reference(role):
     return role == "primary"
 
 
-def _runs(folder_path, require_saved_checkpoints=True):
+def _managed_set_checkpoint_runs(folder_path, require_saved_checkpoints=True):
+    """Start with the Set's own action/output folders, not Training history.
+
+    Manifest job IDs remain the external identity. Only associate a run with
+    an unindexed job when the action has one job and one eligible output.
+    More complex runs continue through the indexed compatibility path.
+    """
     folder = _folder_key(folder_path)
     result = []
-    # Queue and history are distinct views: paused/resumable jobs leave History.
+    for action_root, action in managed_actions_for_folder(folder_path):
+        if str(action.get("folder") or "").replace("\\", "/").strip("/") != folder:
+            continue
+        stages = list(action.get("requestedStages") or [])
+        if len(stages) != 1:
+            continue
+        stage = stages[0]
+        jobs = (action.get("jobs") or {}).get(stage) or []
+        if len(jobs) != 1 or not str(jobs[0].get("id") or "").strip():
+            continue
+        output = action_root / "output"
+        if not output.is_dir() or output.is_symlink():
+            continue
+        candidates = []
+        for run_dir in output.iterdir():
+            if not run_dir.is_dir() or run_dir.is_symlink():
+                continue
+            artifacts = saved_artifacts_for_run(run_dir)
+            epochs = [item["epoch"] for item in artifacts if item.get("status") == "available"]
+            if epochs or not require_saved_checkpoints:
+                candidates.append((run_dir, epochs))
+        if len(candidates) != 1:
+            continue  # Multiple outputs cannot be attributed to one job ID.
+        model = get_test_model_for_staging_key(stage)
+        job = jobs[0]
+        sequence = str(action_root.name).split("-", 1)[0]
+        result.append({
+            "folder": folder, "jobId": str(job["id"]),
+            "runName": str(action.get("runName") or ""), "runSequence": sequence,
+            "setName": Path(folder).name, "createdAt": job.get("createdAt") or action.get("createdAt") or 0,
+            "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
+            "runSummary": {}, "currentEpoch": None, "plannedEpochs": None,
+            "epochs": candidates[0][1],
+        })
+    return result
+
+
+def _runs(folder_path, require_saved_checkpoints=True):
+    folder = _folder_key(folder_path)
+    result = _managed_set_checkpoint_runs(folder_path, require_saved_checkpoints)
+    # Queue/history enrich known identities and cover historical non-managed runs.
     # The existing run snapshot resolver already supports either owner.
     queue, code = passive_status_snapshot()
     if code != 200 or not queue.get("ok"):
+        if result:
+            return result  # Set-owned checkpoint discovery does not depend on Training queue.
         raise RuntimeError(str(queue.get("error") or "Training queue unavailable."))
-    seen = set()
+    seen = {row["jobId"] for row in result}
+    indexed = {row["jobId"]: row for row in result}
     jobs = list(queue.get("jobs") or []) + list(all_history_payload(folder=folder).get("jobs") or [])
     for job in jobs:
         if str(job.get("folder") or "").strip().replace("\\", "/").strip("/") != folder:
             continue
         job_id = str(job.get("id") or "")
-        if not job_id or job_id in seen:
+        if not job_id:
+            continue
+        if job_id in indexed:
+            known = indexed[job_id]
+            known["runName"] = str(job.get("runName") or known["runName"])
+            known["runSummary"] = job.get("runSummary") or known["runSummary"]
+            known["createdAt"] = job.get("createdAt") or known["createdAt"]
+            progress = job.get("progress") or {}
+            known["currentEpoch"] = progress.get("epoch", known["currentEpoch"])
+            known["plannedEpochs"] = progress.get("epochs", known["plannedEpochs"])
+            continue
+        if job_id in seen:
             continue
         seen.add(job_id)
         try:

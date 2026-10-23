@@ -664,6 +664,71 @@ def enqueue(lane_name, payload, metadata=None, job_id=None, initial_status="queu
         return _public_job(job)
 
 
+
+def enqueue_many(lane_name, entries, initial_status="queued"):
+    """Persist an ordered batch of jobs in one atomic queue-state update."""
+    initial_status = str(initial_status or "queued").strip()
+    if initial_status not in PENDING_STATUSES:
+        raise ValueError("Execution queue initial status must be queued or backlog.")
+    entries = list(entries)
+    if not entries:
+        return []
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name)
+        existing_ids = {
+            job["id"]
+            for other_lane in state["lanes"].values()
+            for job in other_lane.get("jobs", [])
+        }
+        added = []
+        for entry in entries:
+            while True:
+                job_id = secrets.token_hex(12)
+                if job_id not in existing_ids:
+                    break
+            existing_ids.add(job_id)
+            job = {
+                "id": job_id,
+                "lane": str(lane_name),
+                "status": initial_status,
+                "queuePosition": 0,
+                "createdAt": now,
+                "updatedAt": now,
+                "startedAt": None,
+                "finishedAt": None,
+                "error": "",
+                "metadata": copy.deepcopy(entry.get("metadata") if isinstance(entry.get("metadata"), dict) else {}),
+                "details": {},
+                "result": {},
+                "requestedAction": "",
+                "payload": copy.deepcopy(entry.get("payload") if isinstance(entry.get("payload"), dict) else {}),
+            }
+            lane["jobs"].append(job)
+            added.append(job)
+        _prune_terminal(lane)
+        _refresh_positions(lane)
+        _write_state(state)
+        return [_public_job(job) for job in added]
+
+
+def jobs_by_id(job_ids):
+    """Read persisted jobs once and return public snapshots for the requested IDs."""
+    wanted = {str(job_id or "").strip() for job_id in job_ids}
+    wanted.discard("")
+    if not wanted:
+        return {}
+    with _lock:
+        state = _read_state()
+        found = {}
+        for lane in state["lanes"].values():
+            for job in lane.get("jobs", []):
+                if job["id"] in wanted:
+                    found[job["id"]] = _public_job(job)
+        return found
+
+
 def get_job(job_id, include_payload=False):
     with _lock:
         state = _read_state()
@@ -1178,6 +1243,39 @@ def promote_all_backlog(lane_name):
         _refresh_positions(lane)
         _write_state(state)
         return [_public_job(job) for job in backlog]
+
+
+
+def promote_backlog_many(lane_name, job_ids):
+    """Promote only the named backlog jobs, preserving existing FIFO order."""
+    ids = [str(job_id or "").strip() for job_id in job_ids]
+    if not ids:
+        return []
+    if any(not job_id for job_id in ids) or len(ids) != len(set(ids)):
+        raise ValueError("Backlog promotion requires distinct job IDs.")
+    wanted = set(ids)
+    now = time.time()
+    with _lock:
+        state = _read_state()
+        lane = _lane(state, lane_name)
+        jobs = lane["jobs"]
+        selected = [job for job in jobs if job["id"] in wanted]
+        if len(selected) != len(ids):
+            raise FileNotFoundError("Backlog job does not exist in the requested lane.")
+        if any(job["status"] != "backlog" for job in selected):
+            raise ValueError("Only backlogged execution jobs can be added to the queue.")
+        remaining = [job for job in jobs if job["id"] not in wanted]
+        insert_at = 0
+        for index, item in enumerate(remaining):
+            if item.get("status") in ACTIVE_STATUSES or item.get("status") == "queued":
+                insert_at = index + 1
+        for job in selected:
+            job["status"] = "queued"
+            job["updatedAt"] = now
+        lane["jobs"] = remaining[:insert_at] + selected + remaining[insert_at:]
+        _refresh_positions(lane)
+        _write_state(state)
+        return [_public_job(job) for job in selected]
 
 
 def promote_backlog(job_id):

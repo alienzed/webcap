@@ -192,12 +192,16 @@
   var recentFolderRequest = 0;
   function showRecentFolders(folders) {
     var select = el('media-explorer-saved-folders');
+    var input = el('media-explorer-external-path');
+    // Offer the last folder as a starting path. Restoring a path never starts discovery.
+    if (!externalPath && !input.value.trim() && folders.length) input.value = folders[0];
     select.replaceChildren();
     var empty = document.createElement('option'); empty.value = ''; empty.textContent = 'Recent folders…'; select.appendChild(empty);
     folders.forEach(function (path) {
       var option = document.createElement('option'); option.value = path; option.textContent = path; select.appendChild(option);
     });
-    select.value = folders.includes(externalPath) ? externalPath : '';
+    select.value = folders.includes(externalPath) ? externalPath :
+      (folders.includes(input.value.trim()) ? input.value.trim() : '');
     el('media-explorer-forget-folder').disabled = !select.value;
   }
   function requestRecentFolders() {
@@ -820,6 +824,8 @@
     el('media-explorer-view-full-size').disabled = !items.length;
   }
   var facetIds = ['kind', 'model', 'folder', 'rating', 'date'];
+  var technicalNames = {'min-side':'Short side ≥', 'min-mp':'MP ≥',
+    'min-duration':'Duration ≥', 'max-duration':'Duration ≤'};
   function hasFilters() {
     if (isExternal()) return el('media-explorer-search').value.trim() ||
       el('media-explorer-kind').value || el('media-explorer-date').value ||
@@ -860,7 +866,7 @@
       if (el('media-explorer-date').value) chip('Date ' + el('media-explorer-date').value + ' days', function () { el('media-explorer-date').value = ''; load(true); });
       ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (name) {
         var input = el('media-explorer-' + name);
-        if (input.value) chip(input.closest('label').textContent.trim() + ' ' + input.value, function () { input.value = ''; load(true); });
+        if (input.value) chip(technicalNames[name] + ' ' + input.value, function () { input.value = ''; load(true); });
       });
     } else {
       facetIds.slice(1).forEach(function (id) {
@@ -869,7 +875,7 @@
       });
       ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (name) {
         var input = el('media-explorer-' + name);
-        if (input.value) chip(name + ' ' + input.value, function () { input.value = ''; load(true); });
+        if (input.value) chip(technicalNames[name] + ' ' + input.value, function () { input.value = ''; load(true); });
       });
     }
     el('media-explorer-clear-filters').classList.toggle('hidden', !hasFilters() && el('media-explorer-sort').value === 'newest');
@@ -893,19 +899,26 @@
     options = options || {};
     if (!visible) return;
     syncExternalControls();
-    if (isExternal() && !externalPath) {
-      items = []; total = 0; active = -1; selected.clear();
-      selectItem(-1); renderExternalFolders();
-      el('media-explorer-grid').replaceChildren();
-      text(el('media-explorer-count'), 'No folder selected');
-      el('media-explorer-view-full-size').disabled = true;
-      text(el('media-explorer-status'), 'Enter a folder path and select Browse.');
-      return;
-    }
     clearTimeout(debounce);
     window.syncShellLocationRoute();
     syncStoryboardType();
     filterControls();
+    if (isExternal() && !externalPath) {
+      // Reset the pending owner response too: its result must not repopulate this view.
+      serial++;
+      if (activeRequest) activeRequest.abort();
+      activeRequest = null; loading = false; needsLoad = true;
+      items = []; total = 0; offset = 0; active = -1; selected.clear();
+      el('media-explorer-grid').replaceChildren();
+      renderSideList(); selectItem(-1); renderExternalFolders();
+      el('media-explorer-scope').classList.add('hidden');
+      el('media-explorer-view-full-size').disabled = true;
+      text(el('media-explorer-count'), 'No folder selected');
+      text(el('media-explorer-status'), 'Choose a recent folder or enter a path and select Browse.');
+      el('media-explorer-status').dataset.state = '';
+      emptyState();
+      return;
+    }
     if (reset) {
       serial++; loading = false; needsLoad = true;
     }
@@ -1034,6 +1047,8 @@
         ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (id) {
           el('media-explorer-' + id).value = params.get(id) || '';
         });
+        reverseSort = params.get('direction') === 'asc';
+        el('media-explorer-sort-reverse').setAttribute('aria-pressed', String(reverseSort));
         sourceButtons.forEach(function (button, index) {
           var match = source ? button.dataset.mediaSource === source : button.dataset.mediaRole === role;
           button.classList.toggle('active', match);
@@ -1045,6 +1060,8 @@
       source = target.source; role = ''; artifact = target.id; owner = ''; full = true; needsLoad = true;
       el('media-explorer-search').value = ''; el('media-explorer-sort').value = 'newest';
       facetIds.forEach(function (id) { el('media-explorer-' + id).value = ''; });
+      ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (id) { el('media-explorer-' + id).value = ''; });
+      reverseSort = false; el('media-explorer-sort-reverse').setAttribute('aria-pressed', 'false');
       sourceButtons.forEach(function (button, index) {
         var match = button.dataset.mediaSource === source;
         button.classList.toggle('active', match);
@@ -1081,9 +1098,6 @@
       role = button.dataset.mediaRole;
       artifact = ''; owner = '';
       source = '';
-      if (el('media-explorer-sort').value === 'rating' && source === 'external') {
-        el('media-explorer-sort').value = 'newest';
-      }
       stopExternalTimers(); externalJobRunning = false;
 
       syncExternalControls();
@@ -1101,7 +1115,7 @@
       if (isExternal()) {
         requestRecentFolders();
         explorerMode = 'list'; externalDirectory = ''; externalFolders = [];
-        facetIds.slice(1).forEach(function (id) { el('media-explorer-' + id).value = ''; });
+        ['model', 'folder', 'rating'].forEach(function (id) { el('media-explorer-' + id).value = ''; });
         if (el('media-explorer-sort').value === 'rating') el('media-explorer-sort').value = 'newest';
       }
       setExplorerMode(explorerMode);
@@ -1267,7 +1281,10 @@
     }
   });
   el('media-explorer-empty-action').addEventListener('click', function () {
-    if (isExternal()) load(true, {refreshFilesystem:true});
+    if (isExternal()) {
+      if (!externalPath) el('media-explorer-external-path').focus();
+      else load(true, {refreshFilesystem:true});
+    }
     else if (el('media-explorer-status').dataset.state === 'error' && el('media-explorer-status').textContent) load(true);
     else if (!full) { full = true; load(true); }
     else if (hasFilters()) el('media-explorer-clear-filters').click();
@@ -1359,5 +1376,6 @@
     facetIds.slice(1).forEach(function (id) { if (el('media-explorer-' + id).value) params.set(id === 'folder' ? 'mediaSet' : id, el('media-explorer-' + id).value); });
     ['min-side', 'min-mp', 'min-duration', 'max-duration'].forEach(function (id) { if (el('media-explorer-' + id).value) params.set(id, el('media-explorer-' + id).value); });
     if (el('media-explorer-sort').value !== 'newest') params.set('sort', el('media-explorer-sort').value);
+    if (reverseSort) params.set('direction', 'asc');
   };
 })();

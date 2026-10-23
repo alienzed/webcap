@@ -966,12 +966,22 @@
     var ranking = campaign.scores || [];
     // Live and completed rankings share one cumulative score definition.
     var round = Math.min(campaign.round, campaign.rounds.length);
+    var scoredByEpoch=new Map(),rankedByEpoch=new Map();
+    (campaign.units||[]).forEach(function(unit){
+      if(!unit.assessment)return;
+      if(!scoredByEpoch.has(unit.epoch))scoredByEpoch.set(unit.epoch,[]);
+      scoredByEpoch.get(unit.epoch).push(unit);
+      if(unit.round<=round){
+        if(!rankedByEpoch.has(unit.epoch))rankedByEpoch.set(unit.epoch,[]);
+        rankedByEpoch.get(unit.epoch).push(unit);
+      }
+    });
     var plan = campaign.rounds.find(function (r) { return r.number === round; });
     if (plan && campaign.phase !== 'Complete') {
       ranking = campaign.rounds[0].epochs.map(function (epoch) {
-        var comparison = campaign.units.filter(function (u) {
-          return u.round <= round && u.epoch === epoch && u.assessment;
-        }).flatMap(function (unit) { return unit.assessment.comparison || []; });
+        var comparison = (rankedByEpoch.get(epoch)||[]).flatMap(function (unit) {
+          return unit.assessment.comparison || [];
+        });
         var matches = comparison.reduce(function (n, g) {
           return n + (g.result === 'match' ? Number(g.weight == null ? 1 : g.weight) : 0);
         }, 0);
@@ -1017,7 +1027,7 @@
     if (sort === 'epoch') ranking.sort(function (a,b) { return a.epoch-b.epoch; });
     if (sort === 'count') ranking.sort(function (a,b) { return (b.count || 0)-(a.count || 0) || (b.score || 0)-(a.score || 0); });
     els('ranking').innerHTML = ranking.length ? ranking.map(function (entry, index) {
-      var observed = (campaign.units || []).filter(function (u) { return u.epoch === entry.epoch && u.assessment; });
+      var observed = scoredByEpoch.get(entry.epoch)||[];
       var extra = (campaign.referenceEvaluation || {});
       var evidence = (extra.rvn ? ' · RVN ' + observed.filter(function (u) { return u.referenceComplete; }).length + '/' + observed.length : '') +
         (extra.dino ? ' · DINO ' + observed.filter(function (u) { return u.dinoComplete; }).length + '/' + observed.length : '');
@@ -1031,8 +1041,13 @@
   function campaignSummary(campaign) {
     // Read-only: use the same cumulative weighted VL comparisons as the leaderboard.
     var epochs = (campaign.rounds[0] || {epochs: []}).epochs;
+    var unitsByEpoch=new Map();
+    (campaign.units||[]).forEach(function(unit){
+      if(!unitsByEpoch.has(unit.epoch))unitsByEpoch.set(unit.epoch,[]);
+      unitsByEpoch.get(unit.epoch).push(unit);
+    });
     var rows = epochs.map(function (epoch) {
-      var units = (campaign.units || []).filter(function (u) { return u.epoch === epoch; });
+      var units = unitsByEpoch.get(epoch)||[];
       var comparisons = units.filter(function (u) { return !!u.assessment; })
         .flatMap(function (u) { return u.assessment.comparison || []; });
       var matches = comparisons.reduce(function (n, g) {
@@ -1085,7 +1100,8 @@
     var units=campaign.units.filter(function(u){
       return (inspectedEpoch==null||u.epoch===inspectedEpoch)&&!!u.frame&&!u.framePruned;
     });
-    var key=campaign.id+':'+inspectedEpoch+':'+units.map(function(u){
+    var shown=inspectedEpoch==null?units.slice(-40).reverse():units.slice().sort(function(a,b){return a.round-b.round||a.case-b.case;});
+    var key=campaign.id+':'+inspectedEpoch+':'+shown.map(function(u){
       return [u.frame,JSON.stringify(u.assessment||null),JSON.stringify(u.referenceAssessments||[]),
         JSON.stringify(u.dinoAssessments||[]),u.error||''].join(':');
     }).join('|');
@@ -1107,7 +1123,6 @@
       reset.textContent='Show all epochs';heading.appendChild(reset);
     }
     host.appendChild(heading);
-    var shown=inspectedEpoch==null?units.slice(-40).reverse():units.slice().sort(function(a,b){return a.round-b.round||a.case-b.case;});
     var keep=new Set();
     shown.forEach(function(unit){
       var identity=unit.epoch+':'+unit.round+':'+unit.case;

@@ -4,6 +4,11 @@ on:
     paths:
       - 'tool/server/h3_probe.py'
       - 'tool/server/training_profiles.py'
+      - 'tool/server/training_config_files.py'
+      - 'tool/server/training_bundle.py'
+      - 'tool/js/training_review.js'
+      - 'tool/tool.html'
+      - 'tests/test_training_stabilization.py'
       - 'tests/test_h3_probe.py'
       - '.github/workflows/h3-calibration-regression.yml'
   workflow_dispatch:
@@ -22,3 +27,7 @@ jobs:
       - run: python -m compileall -q tool/server/h3_probe.py tool/server/training_profiles.py
       - name: H3 calibration preparation and probe regression
         run: python -m pytest -q tests/test_h3_probe.py tests/test_training_profiles.py
+      - name: Focused H3 LoRA targeting and run capture
+        run: |
+          node --check tool/js/training_review.js
+          python -m pytest -q tests/test_training_stabilization.py -k 'h3_focused'

@@ -703,12 +703,10 @@
 .generate-settings-choices #generate-field-aspectRatio { width: 170px; }
 .generate-settings-choices #generate-field-samplingMode { width: 190px; }
 .generate-settings-choices #generate-field-dimensions { width: 170px; }
-.generate-settings-numbers #generate-field-megapixels { width: 66px; }
-.generate-settings-numbers #generate-field-duration { width: 70px; }
-.generate-settings-numbers #generate-field-seed { width: 94px; }
-.generate-settings-numbers input[type="number"] { padding: 9px 8px; appearance: textfield; -moz-appearance: textfield; }
-.generate-settings-numbers input[type="number"]::-webkit-inner-spin-button,
-.generate-settings-numbers input[type="number"]::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.generate-settings-numbers #generate-field-megapixels { width: 86px; }
+.generate-settings-numbers #generate-field-duration { width: 90px; }
+.generate-settings-numbers #generate-field-seed { width: 116px; }
+.generate-settings-numbers input[type="number"] { padding: 9px 7px; }
 
 .generate-run-row {
   display: grid;
@@ -915,7 +913,7 @@
 .generate-lora-picker-option-state { flex: 0 0 auto; color: var(--muted); }
 .generate-lora-picker-empty { color: var(--muted); }
 .generate-lora-list { display: grid; gap: 7px; }
-.generate-lora-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 56px 29px 66px 29px; gap: 6px; align-items: center; min-width: 0; min-height: 49px; padding: 7px 8px; border: 1px solid var(--border-soft); border-radius: 7px; background: var(--panel-soft); }
+.generate-lora-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 56px 29px 78px 29px; gap: 6px; align-items: center; min-width: 0; min-height: 49px; padding: 7px 8px; border: 1px solid var(--border-soft); border-radius: 7px; background: var(--panel-soft); }
 .generate-lora-row:has(.generate-lora-picker-menu:not(.hidden)) { z-index: 10; }
 .generate-lora-name { width: 100%; min-width: 0; border: 1px solid transparent; border-radius: 5px; padding: 6px 2px; color: var(--text); background: transparent; text-align: left; font: inherit; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .generate-lora-name:hover { color: var(--accent); }
@@ -924,16 +922,15 @@
 .generate-lora-arrows button + button { border-left: 1px solid var(--border); }
 .generate-lora-arrows button:hover:not(:disabled), .generate-lora-icon:hover { background: var(--hover); }
 .generate-lora-arrows button:disabled { opacity: .35; cursor: default; }
-.generate-lora-row input[data-generate-lora-strength] { width: 66px; min-width: 0; padding: 6px; font-size: 14px; appearance: textfield; -moz-appearance: textfield; }
-.generate-lora-row input[data-generate-lora-strength]::-webkit-inner-spin-button, .generate-lora-row input[data-generate-lora-strength]::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.generate-lora-row input[data-generate-lora-strength] { width: 78px; min-width: 0; padding: 6px; font-size: 14px; }
 .generate-lora-remove { font-size: 20px; }
 .generate-lora-extras { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 2px 4px; }
 .generate-lora-extras .review-captions-btn { width: auto; min-height: 31px; font-size: 14px; }
 @container (max-width: 450px) {
   .generate-settings-choices #generate-field-samplingMode { width: 175px; }
-  .generate-lora-row { grid-template-columns: minmax(0, 1fr) 52px 27px 62px 27px; gap: 5px; }
+  .generate-lora-row { grid-template-columns: minmax(0, 1fr) 52px 27px 74px 27px; gap: 5px; }
   .generate-lora-arrows button { width: 26px; }
-  .generate-lora-row input[data-generate-lora-strength] { width: 62px; }
+  .generate-lora-row input[data-generate-lora-strength] { width: 74px; }
 }
 
 .generate-references {

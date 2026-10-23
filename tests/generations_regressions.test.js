@@ -244,6 +244,35 @@ function timingTests() {
   api.close(); assert.equal(env.timers.size, 0);
 }
 
+function generationNumberInputTests() {
+  const markup = fs.readFileSync(path.join(__dirname, '..', 'tool', 'tool.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'tool', 'css', 'generate.css'), 'utf8');
+
+  ['generate-megapixels', 'generate-duration', 'generate-seed'].forEach(id => {
+    assert.match(markup, new RegExp('id="' + id + '"[^>]*type="number"'), id + ' must remain a numeric input');
+  });
+
+  const settingRule = '.generate-settings-numbers input[type="number"] {';
+  const strengthRule = '.generate-lora-row input[data-generate-lora-strength] {';
+  assert.ok(css.includes(settingRule), 'Numeric settings need their scoped styling');
+  assert.ok(css.includes(strengthRule), 'LoRA strength needs its scoped styling');
+  assert.ok(!css.split(settingRule)[1].split('}')[0].includes('appearance: textfield'),
+    'Do not hide native number input controls');
+  assert.ok(!css.includes('.generate-settings-numbers input[type="number"]::-webkit-inner-spin-button'),
+    'Do not hide native setting spinners');
+  assert.ok(!css.split(strengthRule)[1].split('}')[0].includes('appearance: textfield'),
+    'Do not hide native LoRA strength controls');
+  assert.ok(!css.includes('.generate-lora-row input[data-generate-lora-strength]::-webkit-inner-spin-button'),
+    'Do not hide native LoRA strength spinners');
+
+  ['megapixels', 'duration', 'seed'].forEach(name => {
+    const selector = '.generate-settings-numbers #generate-field-' + name + ' { width: ';
+    assert.ok(css.includes(selector), name + ' must have a compact width');
+    const width = Number(css.split(selector)[1].split('px;')[0]);
+    assert.ok(width > 0 && width <= 120, name + ' should stay compact');
+  });
+}
+
 async function generationLibraryBindingTests() {
   // Exercise the actual bindUi startup path: a removed helper can otherwise
   // prevent both Library buttons and all later controls from being wired.
@@ -282,4 +311,4 @@ async function generationLibraryBindingTests() {
   assert.equal(env.document.getElementById('generate-create-view').classList.contains('hidden'), false);
 }
 
-(async () => { await sweepTests(); await generationLibraryBindingTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); generationCancelQueuedOwnershipTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });
+(async () => { await sweepTests(); generationNumberInputTests(); await generationLibraryBindingTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); generationCancelQueuedOwnershipTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });

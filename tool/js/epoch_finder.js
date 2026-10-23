@@ -1275,6 +1275,9 @@
           criteria:{modelId:modelId,settings:settings}})})
       .then(function(response){return response.json().then(function(payload){
         if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Manual Screening settings.');
+        if(folder===currentFolder && modelId===String(window.getWorkingModelProfileId()||'')){
+          screeningSettingsKey=''; screeningSettingsRequest=null;
+        }
       });}).catch(error);
     },500);
   }
@@ -1287,6 +1290,9 @@
         criteria:{modelId:modelId,prompt:prompt}})})
     .then(function(response){return response.json().then(function(payload){
       if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Set wildcard template.');
+      if(folder===currentFolder && modelId===String(window.getWorkingModelProfileId()||'')){
+        screeningSettingsKey=''; screeningSettingsRequest=null;
+      }
     });}).catch(error);
   }
   function screeningCriteria() {
@@ -2167,7 +2173,7 @@
     }
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { campaignDefaultsKey='';screeningSettingsKey='';screeningSettingsRequest=null;screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
     if (mode === 'finder') refresh();
@@ -2361,13 +2367,13 @@
   });
   ['concept','rounds','cases','retention','enable-rvn','enable-dino'].forEach(function(id){
     els(id).addEventListener('input',function(){campaignDraftRevision++;});
-    els(id).addEventListener('change',campaignSaveDraft);
+    if(!['rounds','cases','retention'].includes(id))els(id).addEventListener('change',campaignSaveDraft);
   });
   els('round-plan').addEventListener('change',campaignSaveDraft);
   els('round-plan').addEventListener('input',campaignSaveDraft);
-  els('rounds').onchange = roundPlan;
-  els('cases').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
-  els('retention').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
+  els('rounds').onchange = function () { roundPlan(); campaignSaveDraft(); };
+  els('cases').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); campaignSaveDraft(); };
+  els('retention').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); campaignSaveDraft(); };
   ['rank-filter','rank-sort'].forEach(function (id) { els(id).onchange = function () { if (campaignState) ranking(campaignState); }; });
   els('ranking').onclick = function (event) {
     var row = event.target.closest('[data-inspect-epoch]');

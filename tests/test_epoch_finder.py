@@ -4,6 +4,61 @@ import pytest
 from tool.server import epoch_finder, epoch_test_bench
 
 
+def test_manual_screening_test_status_reuses_checkpoint_provenance_across_runs(tmp_path, monkeypatch):
+    """Test membership is independent of Keep selection and displayed round."""
+    from pathlib import Path
+
+    campaign = {
+        "id": "abcdef123456", "mode": "manual", "jobId": "run-a", "modelId": "h3",
+        "kept": [2], "rounds": [{"epochs": [1, 2, 3]}, {"epochs": [2]}],
+        "candidateMap": {
+            "2": {"jobId": "run-b", "epoch": 9},
+            "3": {"sourceType": "staged", "fileName": "existing.safetensors"},
+        },
+    }
+    monkeypatch.setattr(epoch_finder, "_load", lambda *_: campaign)
+    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot",
+                        lambda folder, job: (str(tmp_path), {"id": job}))
+    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda *_: tmp_path)
+    monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
+                        lambda *args: [
+                            {"epoch": 1, "status": "available", "fileName": "one.safetensors"},
+                            {"epoch": 9, "status": "available", "fileName": "nine.safetensors"},
+                        ])
+    monkeypatch.setattr(epoch_finder, "get_test_model", lambda *_: object())
+    monkeypatch.setattr(epoch_finder.test_bench, "_staged_loras_for_set",
+                        lambda *_: [Path("existing.safetensors")])
+    checked = []
+    def annotate(run, analysis):
+        checked.append(run["id"])
+        for artifact in analysis["savedArtifacts"]:
+            artifact["inTestFolder"] = run["id"] == "run-a" and artifact["epoch"] == 1
+        analysis["testFolderStatus"] = {"state": "available"}
+    monkeypatch.setattr(epoch_finder, "_annotate_candidate_test_folder_status", annotate)
+
+    response = epoch_finder.command(tmp_path, "screening_test_status",
+                                    {"campaignId": "abcdef123456"})
+    assert response["inTest"] == {"1": True, "2": False, "3": True}
+    assert checked == ["run-a", "run-b"]
+    assert campaign["kept"] == [2]  # Copy status never changes selection.
+
+
+def test_manual_screening_unknown_test_destination_fails_explicitly(tmp_path, monkeypatch):
+    campaign = {"id": "abcdef123456", "mode": "manual", "jobId": "run-a",
+                "rounds": [{"epochs": [1]}], "candidateMap": {}}
+    monkeypatch.setattr(epoch_finder, "_load", lambda *_: campaign)
+    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot",
+                        lambda *_: (str(tmp_path), {}))
+    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda *_: tmp_path)
+    monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
+                        lambda *_: [{"epoch": 1, "status": "available"}])
+    def unavailable(_run, analysis):
+        analysis["testFolderStatus"] = {"state": "unknown", "error": "offline"}
+    monkeypatch.setattr(epoch_finder, "_annotate_candidate_test_folder_status", unavailable)
+    with pytest.raises(RuntimeError, match="Could not verify Test staging"):
+        epoch_finder.screening_test_status(tmp_path, "abcdef123456")
+
+
 def test_round_plans_share_frozen_seeds_and_start_with_every_saved_epoch():
     plans = epoch_finder._create_plan([5, 10, 15], "a {red|blue} coat", 3, 2, 50, {"megapixels": 0.4})
     assert len(plans) == 3

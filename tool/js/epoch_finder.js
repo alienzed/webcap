@@ -41,6 +41,10 @@
   var screeningSelectionRevision = 0;
   var screeningSelectionFailure = null;
   var screeningExpandedExcluded = new Set();
+  var screeningTestStatusCampaign = '';
+  var screeningTestStatus = {};
+  var screeningTestStatusVersion = 0;
+  var screeningCopyPending = new Set();
   var screeningRatingPending = new Set();
   var screeningWildcardError = null;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
@@ -1483,6 +1487,64 @@
     });
   }
 
+  function refreshScreeningTestStatus(campaign, force) {
+    if (!campaign || campaign.mode !== 'manual') return Promise.resolve();
+    var folder=currentFolder, id=campaign.id, identity=folder+':'+id;
+    if (!force && screeningTestStatusCampaign===identity) return Promise.resolve();
+    if (screeningTestStatusCampaign!==identity) screeningTestStatus={};
+    screeningTestStatusCampaign=identity;
+    var version=++screeningTestStatusVersion;
+    return api('screening_test_status',{campaignId:id},folder).then(function(response){
+      if (version!==screeningTestStatusVersion || currentFolder!==folder ||
+          !campaignState || campaignState.id!==id) return;
+      screeningTestStatus=response.inTest||{};
+      els('manual-matrix').dataset.signature='';
+      screeningMatrix(campaignState);
+    }).catch(function(exc){
+      if (version===screeningTestStatusVersion && currentFolder===folder &&
+          campaignState && campaignState.id===id) error(exc);
+      throw exc;
+    });
+  }
+
+  function screeningCopyToTest(campaign, epoch) {
+    var folder=currentFolder, id=campaign.id, candidate=String(epoch);
+    var origin=(campaign.candidateMap||{})[candidate];
+    if (stagedOrigin(campaign,epoch) || screeningTestStatus[candidate]===true) return Promise.resolve();
+    var sourceJobId=origin?origin.jobId:campaign.jobId;
+    var sourceEpoch=origin?origin.epoch:epoch;
+    if (!sourceJobId || !Number.isInteger(Number(sourceEpoch))) {
+      var missing=new Error('Missing saved checkpoint identity for '+candidateLabel(campaign,epoch));
+      error(missing);return Promise.reject(missing);
+    }
+    var key=folder+':'+id+':'+candidate;
+    if (screeningCopyPending.has(key)) return Promise.resolve();
+    screeningCopyPending.add(key);
+    els('manual-matrix').dataset.signature='';
+    screeningMatrix(campaign);
+    return fetch('/fs/training_candidates/copy_to_test',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:folder,jobId:sourceJobId,epoch:sourceEpoch})
+    }).then(function(response){return response.json().then(function(data){
+      if (!response.ok || !data.ok) throw new Error(data.error||'Could not copy checkpoint.');
+      return data;
+    });}).then(function(){
+      if (currentFolder!==folder || !campaignState || campaignState.id!==id) return;
+      return refreshScreeningTestStatus(campaignState,true).then(function(){
+        if (screeningTestStatus[candidate]!==true)
+          throw new Error('Copied checkpoint could not be confirmed in Test Generations.');
+      });
+    }).catch(function(exc){
+      error(exc);
+    }).finally(function(){
+      screeningCopyPending.delete(key);
+      if (currentFolder===folder && campaignState && campaignState.id===id){
+        els('manual-matrix').dataset.signature='';
+        screeningMatrix(campaignState);
+      }
+    });
+  }
+
   function screeningMatrix(campaign) {
     if (campaign.mode!=='manual') return;
     if (!campaign.rounds.some(function (plan) {
@@ -1566,7 +1628,9 @@
     var desired=[];
     rows.forEach(function (epoch) {
       var collapsed=!kept.has(epoch)&&!screeningExpandedExcluded.has(campaign.id+':'+plan.number+':'+epoch);
-      var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,
+      var inTest=screeningTestStatus[String(epoch)]===true;
+      var copying=screeningCopyPending.has(currentFolder+':'+campaign.id+':'+String(epoch));
+      var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,inTest,copying,
         units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;}).map(function(u){
           return [u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
         })]);
@@ -1586,10 +1650,10 @@
         return;
       }
       var row=previous||document.createElement('section');
-      row.className='epoch-screening-row'+(collapsed?' is-collapsed':'');
+      row.className='epoch-screening-row'+(collapsed?' is-collapsed':'')+(inTest?' is-in-test':'');
       row.dataset.screeningEpoch=String(epoch);
       row.dataset.signature=rowSignature;
-      var headSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed]);
+      var headSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,inTest,copying]);
       var head=row.querySelector('.epoch-screening-row-head');
       if (!head || head.dataset.signature!==headSignature) {
       if (head) head.remove();
@@ -1621,7 +1685,16 @@
       var source=campaign.candidateMap[String(epoch)]||{};
       title.textContent=source.sourceType==='staged'?
         String(source.fileName||'Candidate '+epoch):'Epoch '+(source.epoch||epoch);
-      title.title=candidateLabel(campaign,epoch);
+      title.title=candidateLabel(campaign,epoch)+
+        (inTest?' · In Test Generations':stagedOrigin(campaign,epoch)?'':
+          ' · Double-click to copy to Test Generations');
+      if (!stagedOrigin(campaign,epoch)) {
+        title.classList.add('epoch-screening-epoch-name');
+        title.addEventListener('dblclick',function(event){
+          event.preventDefault();
+          screeningCopyToTest(campaign,epoch);
+        });
+      }
       head.appendChild(title);
       var bulkStars=document.createElement('div');
       bulkStars.className='epoch-screening-bulk-stars';
@@ -1662,31 +1735,10 @@
       if (!stagedOrigin(campaign,epoch)) {
         var copy=document.createElement('button');
         copy.type='button';copy.className='review-captions-btn epoch-screening-copy-btn';
-        copy.textContent='Copy to Test';
-        copy.title='Copy this saved checkpoint into Test Generations';
-        copy.addEventListener('click',function () {
-          var origin=(campaign.candidateMap||{})[String(epoch)];
-          var folder=currentFolder, sourceJobId=origin?origin.jobId:campaign.jobId;
-          var sourceEpoch=origin?origin.epoch:epoch;
-          if (!sourceJobId || !Number.isInteger(Number(sourceEpoch))) {
-            error(new Error('Missing saved checkpoint identity for '+candidateLabel(campaign,epoch)));
-            return;
-          }
-          copy.disabled=true;copy.textContent='Copying…';
-          fetch('/fs/training_candidates/copy_to_test',{
-            method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({folder:folder,jobId:sourceJobId,epoch:sourceEpoch})
-          }).then(function (response) { return response.json().then(function (data) {
-            if (!response.ok || !data.ok) throw new Error(data.error||'Could not copy checkpoint.');
-            return data;
-          }); }).then(function () {
-            copy.textContent='Copied to Test';
-            copy.title='Checkpoint copied to Test Generations';
-          }).catch(function (exc) {
-            copy.disabled=false;copy.textContent='Copy to Test';
-            error(exc);
-          });
-        });
+        copy.textContent=inTest?'In Test ✓':copying?'Copying…':'Copy to Test';
+        copy.title=inTest?'Confirmed in Test Generations':'Copy this saved checkpoint into Test Generations';
+        copy.disabled=inTest||copying;
+        copy.addEventListener('click',function () { screeningCopyToTest(campaign,epoch); });
         actions.appendChild(copy);
       }
       var vl=document.createElement('button');vl.type='button';vl.className='review-captions-btn epoch-screening-ask-btn';vl.textContent='Ask VL';
@@ -1810,6 +1862,7 @@
 
   function render(campaign) {
     campaignState = campaign;
+    if (campaign.mode==='manual') refreshScreeningTestStatus(campaign,false).catch(function(){});
     function median(values) {
       if (!values.length) return null;
       var sorted = values.slice().sort(function (a,b) { return a-b; });
@@ -2020,7 +2073,7 @@
     }
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
     if (mode === 'finder') refresh();
@@ -2054,7 +2107,10 @@
       showMode(destination,{restore:true});
     });
   });
-  els('refresh').onclick = refresh;
+  els('refresh').onclick = function(){
+    screeningTestStatusCampaign='';
+    refresh();
+  };
   els('new').onclick = function () { followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); screeningApplySettings(null); };
   els('start').onclick = start;
   els('campaign-type').onchange=function () {

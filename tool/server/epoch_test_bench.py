@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .folder_state_store import read_folder_state, set_media_rating, set_test_vision_assessment
+from .folder_state_store import read_folder_state, set_media_rating, set_test_vision_assessment, set_test_workspace_prompt
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path
 from .training_runner import candidate_run_snapshot_from_provenance, candidate_selected_epoch_from_provenance
@@ -442,10 +442,26 @@ def _read_workspace_state(folder_path):
     return payload
 
 
+def _set_prompt_path(folder_path):
+    return _owning_set_directory(folder_path) / ".webcap_state.json"
+
+
+def _migrate_workspace_prompts(folder_path):
+    """Preserve legacy authored prompts before Test workspace cleanup."""
+    saved = read_folder_state(_set_prompt_path(folder_path)).get("test_workspace_prompts", {})
+    if not isinstance(saved, dict):
+        raise ValueError("Set Test workspace prompt state is invalid.")
+    legacy = _read_workspace_state(folder_path)["promptByModel"]
+    for model_id, prompt in legacy.items():
+        if model_id not in saved:
+            set_test_workspace_prompt(_set_prompt_path(folder_path), model_id, prompt)
+            saved[model_id] = prompt
+    return saved
+
+
 def workspace_prompt(folder_path, model_id=None):
     model = get_test_model(model_id)
-    state = _read_workspace_state(folder_path)
-    prompts = state["promptByModel"]
+    prompts = _migrate_workspace_prompts(folder_path)
     return {
         "modelId": model.PROFILE_ID,
         "present": model.PROFILE_ID in prompts,
@@ -457,10 +473,10 @@ def save_workspace_prompt(folder_path, model_id, prompt):
     model = get_test_model(model_id)
     with _workspace_lock:
         state = _read_workspace_state(folder_path)
-        state["promptByModel"][model.PROFILE_ID] = str(prompt if prompt is not None else "")
-        root = _workspace_root(folder_path)
-        root.mkdir(parents=True, exist_ok=True)
-        _atomic_write_json(_workspace_state_path(folder_path), state)
+        # Migration must precede the authoritative Set write.
+        _migrate_workspace_prompts(folder_path)
+        value = set_test_workspace_prompt(_set_prompt_path(folder_path), model.PROFILE_ID, prompt)
+        state["promptByModel"][model.PROFILE_ID] = value
     return {
         "modelId": model.PROFILE_ID,
         "prompt": state["promptByModel"][model.PROFILE_ID],
@@ -3440,7 +3456,10 @@ def clear_archived_run_sessions(folder_path, sessions):
 
 
 def clear_sessions(folder_path):
-    sessions = _all_owned_session_directories(folder_path)
+    sessions = [
+        session for session in _all_owned_session_directories(folder_path)
+        if not (_read_status(session) or {}).get("campaignStaging")
+    ]
     active = sorted(
         session.name
         for session in sessions
@@ -3455,15 +3474,9 @@ def clear_sessions(folder_path):
         _cancel_test_auto_vl_jobs(session)
         shutil.rmtree(session)
 
-    workspace = _workspace_root(folder_path)
-    workspace_removed = False
-    if workspace.exists():
-        if workspace.is_symlink() or not workspace.is_dir():
-            raise RuntimeError("Test Generations Set workspace is invalid.")
-        shutil.rmtree(workspace)
-        workspace_removed = True
-
-    if sessions or workspace_removed:
+    # Campaigns and Set-authored drafts share the workspace root, not the Test
+    # history lifecycle. Leave them intact when clearing Test sessions.
+    if sessions:
         _invalidate_recent_session_caches()
     return len(sessions)
 

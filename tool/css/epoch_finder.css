@@ -910,6 +910,15 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 }
 .epoch-screening-row-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; padding: 6px 2px; font-size: 16px; }
 .epoch-screening-row-head strong { font-size: 18px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.epoch-screening-epoch-name { cursor: pointer; }
+.epoch-screening-epoch-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+.epoch-screening-row.is-in-test .epoch-screening-row-head {
+  border-left: 3px solid #40b987; padding-left: 7px;
+  background: color-mix(in srgb, #40b987 7%, transparent);
+  border-radius: 5px;
+}
+.epoch-screening-row.is-in-test .epoch-screening-row-head strong { color: #40b987; }
+.epoch-screening-row .epoch-screening-copy-btn:disabled { opacity: .8; }
 .epoch-screening-rating-summary { white-space: nowrap; color: var(--text-muted,#b7c4d1); font-size: 14px; }
 .epoch-screening-row-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; }
 .epoch-screening-keep-toggle { flex: 0 0 30px; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--border-color,var(--border)); border-radius: 6px; background: transparent; color: var(--text-muted,#b7c4d1); cursor: pointer; font-size: 19px; }

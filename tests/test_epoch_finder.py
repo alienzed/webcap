@@ -59,6 +59,24 @@ def test_manual_screening_unknown_test_destination_fails_explicitly(tmp_path, mo
         epoch_finder.screening_test_status(tmp_path, "abcdef123456")
 
 
+def test_epoch_picker_run_header_reuses_training_candidates_navigation():
+    """The per-run link opens its exact source without changing the epoch selection."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    assert 'class="epoch-finder-run-epochs-heading"' in js
+    assert 'data-epoch-training-run' in js
+    handler = js[js.index("if (event.target.closest('[data-epoch-training-run]')) {"):
+                 js.index("var choice = event.target.closest('[data-epoch-choice]');")]
+    assert "openTrainingCandidates({id:String(run.jobId),folder:folder}" in handler
+    assert "refreshScreeningTestStatus(campaignState,true)" in handler
+    assert "return;" in handler
+    assert "runEpochSelections" not in handler
+    assert ".epoch-finder-run-epochs-heading{display:flex" in css
+    assert "justify-content:space-between" in css
+
+
 def test_round_plans_share_frozen_seeds_and_start_with_every_saved_epoch():
     plans = epoch_finder._create_plan([5, 10, 15], "a {red|blue} coat", 3, 2, 50, {"megapixels": 0.4})
     assert len(plans) == 3
@@ -1357,3 +1375,29 @@ def test_running_screening_round_keeps_space_and_stable_dom_during_polling():
     assert "button.classList.toggle('active'" in rounds
     assert "host.insertBefore(entry" in rounds
     assert "existing.forEach(function(node){node.remove();});" in rounds
+
+
+def test_evaluation_screening_picker_shrinks_but_historical_rounds_remain_visible():
+    """Deselect is a reversible next-round choice, never deletion of recorded evidence."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    server = (root / "tool/server/epoch_finder.py").read_text(encoding="utf-8")
+    assert 'id="epoch-finder-screening-show-excluded"' in html
+    assert "var visibleEpochs=screening&&!screeningShowExcluded?choice.epochs:run.epochs;" in js
+    assert "visibleEpochs.forEach(function(epoch,index){" in js
+    assert "if(timeline.children[index]!==tick)timeline.insertBefore(tick" in js
+    assert "screeningShowExcluded=!screeningShowExcluded;" in js
+    assert "screeningSaveSelection();" in js
+    assert "var rows=plan.epochs.filter(function (epoch) {" in js
+    assert "plan = _screening_plan(prompt, index, settings, len(campaign[\"rounds\"]) + 1, campaign[\"kept\"])" in server
+
+
+def test_evaluation_methods_filter_shared_campaign_history_without_migrating_it():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    assert "var surfaceLabels = {tests:'Prompt Tests',screening:'Manual Screening'" in js
+    assert "(c.mode === 'manual') === (mode === 'screening')" in js
+    assert "showMode(destination,previous!==destination?{returnTo:previous,keepCampaign:true}:{keepCampaign:true});" in js

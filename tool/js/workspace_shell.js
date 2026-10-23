@@ -872,7 +872,7 @@ function syncApplicationShellContext() {
     else if (storageOpen) workspaceTitle.textContent = 'Storage';
     else if (generateOpen) workspaceTitle.textContent = 'Generate';
     else if (storyboardOpen) workspaceTitle.textContent = 'Storyboard';
-    else if (testOpen) workspaceTitle.textContent = 'Test Generations';
+    else if (testOpen) workspaceTitle.textContent = 'Evaluation';
     else if (surface === 'training') workspaceTitle.textContent = 'Training';
     else if (surface === 'reviewOutput') workspaceTitle.textContent = 'Quality Assurance';
     else if (surface === 'grid') workspaceTitle.textContent = 'Grid';
@@ -894,7 +894,7 @@ function syncApplicationShellContext() {
   if (modelControl) modelControl.classList.toggle('hidden', !modelRelevant);
   if (modelSelect && !modelSelect.disabled) {
     modelSelect.title = navigation.activity === 'test'
-      ? 'Select the Base Model for Test Generations. Active and queued tests keep their captured model.'
+      ? 'Select the Base Model for Evaluation. Active and queued tests keep their captured model.'
       : '';
   }
 
@@ -974,7 +974,7 @@ function closeTestGenerationsSetGuide() {
 function showTestGenerationsSetGuide() {
   if (testGenerationsSetGuide) return;
   var target = document.getElementById('media-list-wrapper');
-  if (!target) throw new Error('Prep media list is unavailable for Test Generations Set selection.');
+  if (!target) throw new Error('Prep media list is unavailable for Evaluation Set selection.');
   var root = document.createElement('div');
   root.id = 'test-generations-set-guide';
   root.className = 'test-generations-set-guide';
@@ -983,7 +983,7 @@ function showTestGenerationsSetGuide() {
     '<div class="test-generations-set-guide-highlight" aria-hidden="true"></div>' +
     '<section class="test-generations-set-guide-note" role="status" aria-live="polite">' +
       '<strong>Please select a Set</strong>' +
-      '<p>Open a folder containing media to continue to Test Generations.</p>' +
+      '<p>Open a folder containing media to continue to Evaluation.</p>' +
       '<button type="button" class="review-captions-btn">Cancel</button>' +
     '</section>';
   document.body.appendChild(root);

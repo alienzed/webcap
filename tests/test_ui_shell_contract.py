@@ -94,7 +94,7 @@ def test_shell_header_uses_workspace_first_clickable_breadcrumb_without_parallel
     assert "navigateToDirStackIndex(index);" in shell
     assert "if (index === lastIndex)" in shell
     assert "if (deriveShellNavigationState().activity !== 'prep') openPrepActivity();" in shell
-    assert "? 'Test Generations'" in shell
+    assert "else if (testOpen) workspaceTitle.textContent = 'Evaluation';" in shell
     assert "? 'Focus' : 'Prep'" in shell
     assert ".app-header-breadcrumb-item:hover" in css
     assert "background: transparent;" in css
@@ -286,7 +286,7 @@ def test_test_workspace_uses_shell_identity_and_prep_exit():
     shell = (ROOT / "tool" / "js" / "workspace_shell.js").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "test_generations.js").read_text(encoding="utf-8")
 
-    assert "testOpen ? 'Test Generations'" in shell
+    assert "else if (testOpen) workspaceTitle.textContent = 'Evaluation';" in shell
     assert "workspaceContextText = 'Generations'" not in shell
     assert "window.closeTestBenchActivity()" in shell
 

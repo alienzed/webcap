@@ -2101,9 +2101,9 @@
     if (active) {
       var completed = Number(active.completed || 0);
       var total = Number(active.total || 0);
-      activityButton.title = 'Test Generations · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total + ' · Right-click for Test Sets';
+      activityButton.title = 'Evaluation · ' + String(active.status || 'running') + ' · ' + completed + ' / ' + total + ' · Right-click for Test Sets';
     } else {
-      activityButton.title = 'Test Generations · Right-click for recent Test Sets';
+      activityButton.title = 'Evaluation · Right-click for recent Test Sets';
     }
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
@@ -2228,7 +2228,7 @@
     var supported = isTestModelSupported();
     button.classList.toggle('hidden', !hasFolder);
     button.disabled = hasFolder && (!testModelsLoaded || !supported);
-    button.textContent = !testModelsLoaded ? 'Loading Test Bench…' : (supported ? 'Open Test Bench' : 'Testing unavailable');
+    button.textContent = !testModelsLoaded ? 'Loading Evaluation…' : (supported ? 'Open Evaluation' : 'Testing unavailable');
     button.title = supported
       ? 'Compare staged training candidates with frozen generation settings.'
       : 'Test Generations is not available for the selected Base Model.';
@@ -4716,7 +4716,6 @@
     window.epochFinderPrepare(launchFolder);
     // Default to the same real Regular form in Build; exact Activity routes
     // continue to the proven native session/campaign review destinations.
-    window.testGenerationsUnifiedNativeRoute();
     window.epochFinderShowMode('tests');
     if (pendingActivityCampaign) {
       window.epochFinderInspectCampaign(pendingActivityCampaign); pendingActivityCampaign = '';

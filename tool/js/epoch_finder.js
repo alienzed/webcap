@@ -44,7 +44,7 @@
   // Transient selections belong to each method; the engine and rendered evidence stay shared.
   function emptyMethodWorkspace() {
     return {activeCampaign:'',runEpochSelections:{},stagedSelection:new Set(),
-      sourceMode:'runs',selectedRound:0,selectionCampaign:''};
+      sourceMode:'runs',selectedRound:0,selectionCampaign:'',referenceSelections:{}};
   }
   var methodWorkspaces={finder:emptyMethodWorkspace(),screening:emptyMethodWorkspace()};
   function snapshotMethodWorkspace(method) {
@@ -53,6 +53,7 @@
     workspace.activeCampaign=activeCampaign;
     workspace.sourceMode=sourceMode;
     workspace.stagedSelection=new Set(stagedSelection);
+    if(method==='finder')workspace.referenceSelections=Object.assign({},referenceSelections);
     workspace.runEpochSelections=Object.fromEntries(Object.entries(runEpochSelections).map(function(entry){
       return [entry[0],new Set(entry[1])];
     }));
@@ -69,6 +70,8 @@
     campaignState=null;
     sourceMode=method==='screening'?'runs':workspace.sourceMode;
     stagedSelection=new Set(workspace.stagedSelection);
+    if(method==='finder')referenceSelections=Object.assign({},workspace.referenceSelections);
+    referenceGeneration++; // Invalidate pending reference requests from the other method.
     runEpochSelections=Object.fromEntries(Object.entries(workspace.runEpochSelections).map(function(entry){
       return [entry[0],new Set(entry[1])];
     }));
@@ -78,6 +81,7 @@
   }
   function resetMethodWorkspaces() {
     methodWorkspaces={finder:emptyMethodWorkspace(),screening:emptyMethodWorkspace()};
+    referenceGeneration++;
     activeCampaign='';campaignState=null;
     runEpochSelections={};stagedSelection=new Set();sourceMode='runs';
     manualSelectionCampaign='';manualSelectedRound=0;

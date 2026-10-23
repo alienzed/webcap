@@ -2055,7 +2055,7 @@
       if (activeCampaign && campaigns.some(function (c) { return c.id === activeCampaign; })) return refreshStatus();
       activeCampaign = '';
       var draftKey=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
-      if(els('campaign-type').value==='auto'&&campaignDefaultsKey!==draftKey)campaignApplyDefaults();
+      if(!followUpSource&&els('campaign-type').value==='auto'&&campaignDefaultsKey!==draftKey)campaignApplyDefaults();
       manualSelectionCampaign='';
       els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
     }).catch(error);

@@ -117,7 +117,7 @@ def _requires_reference(role):
     return role == "primary"
 
 
-def _managed_set_checkpoint_runs(folder_path, require_saved_checkpoints=True):
+def _managed_set_checkpoint_sources(folder_path, require_saved_checkpoints=True):
     """Start with the Set's own action/output folders, not Training history.
 
     Manifest job IDs remain the external identity. Only associate a run with
@@ -146,7 +146,7 @@ def _managed_set_checkpoint_runs(folder_path, require_saved_checkpoints=True):
             artifacts = saved_artifacts_for_run(run_dir)
             epochs = [item["epoch"] for item in artifacts if item.get("status") == "available"]
             if epochs or not require_saved_checkpoints:
-                candidates.append((run_dir, epochs))
+                candidates.append((run_dir, artifacts, epochs))
         if len(candidates) != 1:
             continue  # Multiple outputs cannot be attributed to one job ID.
         try:
@@ -155,15 +155,37 @@ def _managed_set_checkpoint_runs(folder_path, require_saved_checkpoints=True):
             continue  # A Set can also contain unrelated Training-only model stages.
         job = jobs[0]
         sequence = str(action_root.name).split("-", 1)[0]
-        result.append({
+        result.append(({
             "folder": folder, "jobId": str(job["id"]),
             "runName": str(action.get("runName") or ""), "runSequence": sequence,
             "setName": Path(folder).name, "createdAt": job.get("createdAt") or action.get("createdAt") or 0,
             "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
             "runSummary": {}, "currentEpoch": None, "plannedEpochs": None,
-            "epochs": candidates[0][1],
-        })
+            "epochs": candidates[0][2],
+        }, candidates[0][0], candidates[0][1], action))
     return result
+
+
+def _managed_set_checkpoint_runs(folder_path, require_saved_checkpoints=True):
+    return [row for row, _run_dir, _artifacts, _action in
+            _managed_set_checkpoint_sources(folder_path, require_saved_checkpoints)]
+
+
+def _set_saved_checkpoint_path(folder_path, job_id, epoch):
+    """Use the Set's recorded run output for a uniquely owned saved epoch."""
+    matches = [(run_dir, artifacts) for row, run_dir, artifacts, _action in
+               _managed_set_checkpoint_sources(folder_path)
+               if row["jobId"] == str(job_id)]
+    if len(matches) > 1:
+        raise RuntimeError("Multiple Set-managed runs use training job ID: " + str(job_id))
+    if not matches:
+        return None  # Legacy or multi-job Training run: use its recorded resolver.
+    run_dir, artifacts = matches[0]
+    item = next((item for item in artifacts if item["epoch"] == epoch and
+                 item.get("status") == "available"), None)
+    if item is None:
+        raise FileNotFoundError("Saved epoch " + str(epoch) + " is unavailable in this Set.")
+    return run_dir / item["fileName"]
 
 
 def _runs(folder_path, require_saved_checkpoints=True):
@@ -905,10 +927,11 @@ def _stage_epoch(folder_path, campaign, epoch):
         source = test_bench._selected_lora_files_for_set(
             folder_path, model, selected_files=[origin["fileName"]])[0]
     else:
-        source = _candidate_safetensors_path(
-            _folder_key(folder_path),
-            origin["jobId"] if origin else campaign["jobId"],
-            origin["epoch"] if origin else epoch)
+        job_id = origin["jobId"] if origin else campaign["jobId"]
+        saved_epoch = origin["epoch"] if origin else epoch
+        source = _set_saved_checkpoint_path(folder_path, job_id, saved_epoch)
+        if source is None:
+            source = _candidate_safetensors_path(_folder_key(folder_path), job_id, saved_epoch)
     target = directory / ("epoch" + str(epoch) + ".safetensors")
     if target.exists():
         if target.is_symlink() or target.stat().st_size != source.stat().st_size:
@@ -1664,12 +1687,25 @@ def screening_test_status(folder_path, campaign_id):
         files = {path.name for path in test_bench._staged_loras_for_set(folder_path, model)}
         result.update({key: bool(name and name in files) for key, name in staged.items()})
 
+    managed_sources = {row["jobId"]: (row, run_dir, artifacts, action)
+                       for row, run_dir, artifacts, action in
+                       _managed_set_checkpoint_sources(folder_path)}
     for job_id, mapped in identities.items():
-        _raw_path, run = _candidate_run_snapshot(folder_path, job_id)
-        run_dir = candidate_run_folder_path(folder_path, job_id)
-        wall = run.get("resumeCheckpointWallTime")
-        resumed = run.get("resumeBranchStartedAt")
-        artifacts = saved_artifacts_for_run(run_dir, wall, resumed) if wall is not None and resumed is not None else saved_artifacts_for_run(run_dir)
+        if job_id in managed_sources:
+            row, run_dir, artifacts, action = managed_sources[job_id]
+            run = {
+                "id": job_id, "folder": row["folder"], "stages": row["stage"],
+                "runName": row["runName"], "sequence": row["runSequence"],
+                "candidateRevision": int(action.get("candidateRevision") or 1),
+            }
+        else:
+            _raw_path, run = _candidate_run_snapshot(folder_path, job_id)
+            run_dir = candidate_run_folder_path(folder_path, job_id)
+            wall = run.get("resumeCheckpointWallTime")
+            resumed = run.get("resumeBranchStartedAt")
+            artifacts = (saved_artifacts_for_run(run_dir, wall, resumed)
+                         if wall is not None and resumed is not None
+                         else saved_artifacts_for_run(run_dir))
         analysis = {"savedArtifacts": artifacts}
         _annotate_candidate_test_folder_status(run, analysis)
         folder_status = analysis.get("testFolderStatus") or {}

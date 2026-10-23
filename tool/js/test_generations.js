@@ -1925,6 +1925,8 @@
       dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || ''),
       defaultStrength: defaultCandidateStrength,
       sweepWeights: sweepWeights,
+      repeat: Number(el('test-generations-inline-count').value || 1),
+      autoVl: !!el('test-generations-inline-auto-vl').checked,
       candidateStrengths: candidateStrengths && typeof candidateStrengths === 'object'
         ? Object.assign({}, candidateStrengths)
         : {},
@@ -4565,6 +4567,12 @@
       dimensions.value = selectedDimensions;
     }
     if (seed) seed.value = String(defaults.seed || '');
+    var repeat = Number(savedSettings.repeat);
+    if (Number.isInteger(repeat) && repeat >= 1 && repeat <= 20)
+      el('test-generations-inline-count').value = String(repeat);
+    if (typeof savedSettings.autoVl === 'boolean')
+      el('test-generations-inline-auto-vl').checked = savedSettings.autoVl;
+    el('test-generations-inline-count').dispatchEvent(new Event('input'));
     if (prompt) {
       prompt.value = payload.workspacePromptPresent === true
         ? String(payload.workspacePrompt || '')
@@ -4991,7 +4999,10 @@
     }
     ['test-generations-inline-count','test-generations-inline-auto-vl'].forEach(function(id){
       el(id).addEventListener('input',syncInlineLaunch);
-      el(id).addEventListener('change',syncInlineLaunch);
+      el(id).addEventListener('change',function(){
+        syncInlineLaunch();
+        saveTestBenchState();
+      });
     });
     syncInlineLaunch();
     el('test-generations-run-btn').onclick = startRun;

@@ -37,7 +37,8 @@
   var showSessionError = false;
   var missingWorkingModelContextReported = false;
   var reportedFailureKeys = new Set();
-  var debouncedWorkspacePromptSave = debounceCreate(500);
+  var debouncedWorkspacePromptSaves = Object.create(null);
+  var pendingWorkspacePromptWrites = Object.create(null);
   var debouncedTestBenchStateSave = debounceCreate(500);
   var wildcardDirector = {
     models: [],
@@ -1864,18 +1865,51 @@
     return String(window.getWorkingModelProfileId() || '');
   }
 
+  // The Set template is shared by Tests and both Campaign forms, never by their results.
+  window.testGenerationsReceiveSetPrompt = function(folder, modelId, prompt) {
+    if (String(owningSetFolder(launchFolder || (state && state.folder) || '')) !== String(folder || '') ||
+        currentTestModelId() !== String(modelId || '')) return;
+    var target = el('test-generations-prompt');
+    if (!target) return;
+    target.value = String(prompt == null ? '' : prompt);
+    if (wildcardIntent && wildcardIntent.prompt !== target.value) wildcardIntent = null;
+  };
   function saveTestWorkspacePrompt(prompt) {
     var modelId = currentTestModelId();
     var folder = String(owningSetFolder(launchFolder || (state && state.folder) || ''));
     if (!modelId || !folder) return;
     var value = String(prompt == null ? '' : prompt);
-    debouncedWorkspacePromptSave(function () {
-      requestForFolder(folder, 'test_save_workspace_prompt', {
-        modelId: modelId,
-        prompt: value
-      }).catch(showError);
+    window.testGenerationsReceiveSetPrompt(folder, modelId, value);
+    window.epochFinderReceiveSetPrompt(folder, modelId, value);
+    // A new Set/model must not cancel an authored prompt still awaiting its save.
+    var scope=folder+'|'+modelId;
+    if(!debouncedWorkspacePromptSaves[scope])
+      debouncedWorkspacePromptSaves[scope]=debounceCreate(500);
+    debouncedWorkspacePromptSaves[scope](function () {
+      // Keep the latest authored value from being overwritten by a slower prior save.
+      var previous=pendingWorkspacePromptWrites[scope] || Promise.resolve();
+      var save=previous.catch(function(){}).then(function(){
+        return requestForFolder(folder, 'test_save_workspace_prompt', {
+          modelId: modelId,
+          prompt: value
+        });
+      });
+      pendingWorkspacePromptWrites[scope]=save;
+      save.catch(showError).finally(function(){
+        if(pendingWorkspacePromptWrites[scope]===save)
+          delete pendingWorkspacePromptWrites[scope];
+      });
     });
   }
+
+  // One shared debounced writer for Tests and both Campaign form editors.
+  window.testGenerationsSaveSharedSetPrompt = saveTestWorkspacePrompt;
+  window.testGenerationsCurrentSetPrompt = function(folder,modelId) {
+    if(prepared===null || preparedContext!==String(folder||'')+'|'+String(modelId||''))return null;
+    var node=el('test-generations-prompt');
+    return node ? node.value : null;
+  };
+
 
   function savedTestModelState() {
     var modelId = currentTestModelId();
@@ -1911,6 +1945,8 @@
       dimensions: String(el('test-generations-dimensions') && el('test-generations-dimensions').value || ''),
       defaultStrength: defaultCandidateStrength,
       sweepWeights: sweepWeights,
+      repeat: Number(el('test-generations-inline-count').value || 1),
+      autoVl: !!el('test-generations-inline-auto-vl').checked,
       candidateStrengths: candidateStrengths && typeof candidateStrengths === 'object'
         ? Object.assign({}, candidateStrengths)
         : {},
@@ -4526,8 +4562,9 @@
       if (field) field.classList.toggle('hidden', settings.indexOf(entry[0]) === -1);
     });
 
-    var selectedAspect = String(savedSettings.aspectRatio || defaults.aspectRatio || '');
     var options = Array.isArray(payload.aspectRatioOptions) ? payload.aspectRatioOptions.slice() : [];
+    var selectedAspect = String(savedSettings.aspectRatio ||
+      (options.indexOf('4:3') !== -1 ? '4:3' : defaults.aspectRatio || ''));
     if (selectedAspect && options.indexOf(selectedAspect) < 0) options.unshift(selectedAspect);
     if (aspect) {
       aspect.innerHTML = options.map(function (value) {
@@ -4535,8 +4572,8 @@
       }).join('');
       aspect.value = selectedAspect;
     }
-    if (megapixels) megapixels.value = String(savedSettings.megapixels || defaults.megapixels || '');
-    if (duration) duration.value = String(savedSettings.duration || defaults.duration || '');
+    if (megapixels) megapixels.value = String(savedSettings.megapixels || 0.2);
+    if (duration) duration.value = String(savedSettings.duration || 3);
     samplingMode.value = normalizeTestSamplingMode(savedSettings.samplingMode || defaults.samplingMode);
     if (dimensions) {
       var dimensionOptions = payload.settingOptions && Array.isArray(payload.settingOptions.dimensions)
@@ -4550,6 +4587,12 @@
       dimensions.value = selectedDimensions;
     }
     if (seed) seed.value = String(defaults.seed || '');
+    var repeat = Number(savedSettings.repeat);
+    if (Number.isInteger(repeat) && repeat >= 1 && repeat <= 20)
+      el('test-generations-inline-count').value = String(repeat);
+    if (typeof savedSettings.autoVl === 'boolean')
+      el('test-generations-inline-auto-vl').checked = savedSettings.autoVl;
+    el('test-generations-inline-count').dispatchEvent(new Event('input'));
     if (prompt) {
       prompt.value = payload.workspacePromptPresent === true
         ? String(payload.workspacePrompt || '')
@@ -4975,7 +5018,10 @@
     }
     ['test-generations-inline-count','test-generations-inline-auto-vl'].forEach(function(id){
       el(id).addEventListener('input',syncInlineLaunch);
-      el(id).addEventListener('change',syncInlineLaunch);
+      el(id).addEventListener('change',function(){
+        syncInlineLaunch();
+        saveTestBenchState();
+      });
     });
     syncInlineLaunch();
     el('test-generations-run-btn').onclick = startRun;

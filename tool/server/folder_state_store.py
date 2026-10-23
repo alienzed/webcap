@@ -175,6 +175,99 @@ def reject_wholesale_state_map_clear(previous_state, next_state):
             )
 
 
+def set_test_workspace_prompt(state_path, model_id, prompt):
+    """Save user-authored Test/Campaign prompt with Set lifecycle, not session lifecycle."""
+    model_key = str(model_id or "").strip()
+    if not model_key:
+        raise ValueError("Test workspace prompt requires a model ID.")
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        prompts = state.get("test_workspace_prompts")
+        if prompts is None:
+            prompts = {}
+        if not isinstance(prompts, dict):
+            raise FolderStateReadError("Set Test workspace prompt state is invalid.")
+        prompts = dict(prompts)
+        prompts[model_key] = str(prompt if prompt is not None else "")
+        state["test_workspace_prompts"] = prompts
+        write_folder_state_atomic(path, state)
+    return prompts[model_key]
+
+
+def set_test_manual_settings(state_path, model_id, settings):
+    """Patch one model's editable Manual Screening draft without replacing Set state."""
+    model_key = str(model_id or "").strip()
+    if not model_key or not isinstance(settings, dict):
+        raise ValueError("Manual Screening defaults require a model and settings.")
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        all_settings = state.get("test_manual_screening_by_model") or {}
+        if not isinstance(all_settings, dict):
+            raise FolderStateReadError("Manual Screening Set settings are invalid.")
+        all_settings = dict(all_settings)
+        all_settings[model_key] = dict(settings)
+        state["test_manual_screening_by_model"] = all_settings
+        write_folder_state_atomic(path, state)
+    return all_settings[model_key]
+
+
+def set_test_campaign_settings(state_path, model_id, settings):
+    """Patch one model's editable Campaign wizard defaults in its owning Set."""
+    model_key = str(model_id or "").strip()
+    if not model_key or not isinstance(settings, dict):
+        raise ValueError("Campaign defaults require a model and settings.")
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        all_settings = state.get("test_campaign_by_model") or {}
+        if not isinstance(all_settings, dict):
+            raise FolderStateReadError("Campaign Set settings are invalid.")
+        all_settings = dict(all_settings)
+        all_settings[model_key] = dict(settings)
+        state["test_campaign_by_model"] = all_settings
+        write_folder_state_atomic(path, state)
+    return all_settings[model_key]
+
+
+def migrate_test_workspace_prompts(state_path, legacy_prompts):
+    """Copy only missing legacy keys, atomically; never restore an older draft."""
+    if not isinstance(legacy_prompts, dict):
+        raise ValueError("Legacy Test prompts must be a model-keyed object.")
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        saved = state.get("test_workspace_prompts") or {}
+        if not isinstance(saved, dict):
+            raise FolderStateReadError("Set Test workspace prompt state is invalid.")
+        result = dict(saved)
+        changed = False
+        for model_id, value in legacy_prompts.items():
+            key = str(model_id)
+            if key not in result:
+                result[key] = str(value)
+                changed = True
+        if changed:
+            state["test_workspace_prompts"] = result
+            write_folder_state_atomic(path, state)
+        return result
+
+
+def write_folder_state_with_owned_drafts(state_path, snapshot):
+    """Serialize folder snapshots with independently autosaved Set form drafts."""
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        previous = read_folder_state(path)
+        next_state = dict(snapshot)
+        for field in ("test_workspace_prompts", "test_manual_screening_by_model",
+                      "test_campaign_by_model"):
+            if field in previous:
+                next_state[field] = previous[field]
+        reject_wholesale_state_map_clear(previous, next_state)
+        write_folder_state_atomic(path, next_state)
+
+
 def folder_state_exists(state_path):
     path = Path(state_path)
     try:

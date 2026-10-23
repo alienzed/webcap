@@ -692,20 +692,23 @@ def _execute_claimed(job_id, gpu_reserved):
                 _revision_progress[job_id] = {
                     "phase": "Applying Scenes", "completed": total, "total": total,
                 }
-            with _mutation_lock:
-                check_stopped()
-                current = load_story(story_id)
-                if str(current.get("updatedAt") or "") != source_revision:
-                    raise RuntimeError("Story inputs changed during individual Scene development; the staged result was not applied.")
-                if current.get("sceneOrder") and not replace_existing:
-                    raise RuntimeError("Story now has Scenes; the staged result was not applied.")
-                if generation_queue(story_id).get("jobs"):
-                    raise RuntimeError("Story has pending Take generation; the staged result was not applied.")
-                updated = apply_developed_plan(story_id, {"scenes": authored}, model_id=model_id)
-            return execution_finish_job_transient(job_id, status="completed", result={
-                "storyId": story_id, "sceneCount": len(updated.get("sceneOrder") or []),
-                "model": model_id,
-            })
+            # Serialize the final mutation and queue completion with Stop,
+            # as for individual Director responses.
+            with _enqueue_lock:
+                with _mutation_lock:
+                    check_stopped()
+                    current = load_story(story_id)
+                    if str(current.get("updatedAt") or "") != source_revision:
+                        raise RuntimeError("Story inputs changed during individual Scene development; the staged result was not applied.")
+                    if current.get("sceneOrder") and not replace_existing:
+                        raise RuntimeError("Story now has Scenes; the staged result was not applied.")
+                    if generation_queue(story_id).get("jobs"):
+                        raise RuntimeError("Story has pending Take generation; the staged result was not applied.")
+                    updated = apply_developed_plan(story_id, {"scenes": authored}, model_id=model_id)
+                    return execution_finish_job_transient(job_id, status="completed", result={
+                        "storyId": story_id, "sceneCount": len(updated.get("sceneOrder") or []),
+                        "model": model_id,
+                    })
         except InterruptedError as exc:
             return execution_finish_job_transient(job_id, status="stopped", error=str(exc))
         except Exception as exc:

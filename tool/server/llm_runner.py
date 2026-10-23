@@ -636,6 +636,86 @@ def _execute_claimed(job_id, gpu_reserved):
             "storyId": context["storyId"], "sceneCount": scene_count,
         })
 
+    if client == "storyboard" and context.get("operation") == "develop_scenes_sequence":
+        from .storyboard_store import load_story, apply_developed_plan, _mutation_lock
+        from .storyboard_llm_contract import build_request
+        from .storyboard_generation import generation_queue
+        story_id = str(context["storyId"])
+        source_revision = str(context.get("sourceUpdatedAt") or "")
+        replace_existing = context.get("replaceExisting") is True
+        authored = []
+
+        def check_stopped():
+            if execution_get_job(job_id).get("status") == "stopping":
+                raise InterruptedError("Develop Scenes stopped; existing Scenes were left unchanged.")
+
+        try:
+            check_stopped()
+            story = load_story(story_id)
+            if str(story.get("updatedAt") or "") != source_revision:
+                raise RuntimeError("Story inputs changed before individual Scene development started.")
+            outline_contract = build_request(story, "", "develop_story_outline")
+            outline_result = run_contract(
+                model_id, outline_contract, gpu_reserved=bool(gpu_reserved),
+                thinking=context.get("thinking") is True,
+            )
+            check_stopped()
+            outline_data = _client_result(
+                "storyboard", {"storyId": story_id, "operation": "develop_story_outline"},
+                outline_result, job_id=job_id, frozen_contract=outline_contract,
+            )
+            outline = outline_data["outline"]
+            total = len(outline["scenes"])
+            for index in range(total):
+                check_stopped()
+                with _revision_progress_lock:
+                    _revision_progress[job_id] = {
+                        "phase": "Developing Scenes", "completed": len(authored), "total": total,
+                    }
+                scene_contract = build_request(
+                    story, "", "develop_story_scene", development={
+                        "outline": outline, "sceneIndex": index,
+                        "previousScene": authored[-1] if authored else None,
+                    },
+                )
+                scene_result = run_contract(
+                    model_id, scene_contract, gpu_reserved=bool(gpu_reserved),
+                    thinking=context.get("thinking") is True,
+                )
+                check_stopped()
+                scene_data = _client_result(
+                    "storyboard", {"storyId": story_id, "operation": "develop_story_scene"},
+                    scene_result, job_id=job_id, frozen_contract=scene_contract,
+                )
+                authored.append(scene_data["scene"])
+            with _revision_progress_lock:
+                _revision_progress[job_id] = {
+                    "phase": "Applying Scenes", "completed": total, "total": total,
+                }
+            with _mutation_lock:
+                check_stopped()
+                current = load_story(story_id)
+                if str(current.get("updatedAt") or "") != source_revision:
+                    raise RuntimeError("Story inputs changed during individual Scene development; the staged result was not applied.")
+                if current.get("sceneOrder") and not replace_existing:
+                    raise RuntimeError("Story now has Scenes; the staged result was not applied.")
+                if generation_queue(story_id).get("jobs"):
+                    raise RuntimeError("Story has pending Take generation; the staged result was not applied.")
+                updated = apply_developed_plan(story_id, {"scenes": authored}, model_id=model_id)
+            return execution_finish_job_transient(job_id, status="completed", result={
+                "storyId": story_id, "sceneCount": len(updated.get("sceneOrder") or []),
+                "model": model_id,
+            })
+        except InterruptedError as exc:
+            return execution_finish_job_transient(job_id, status="stopped", error=str(exc))
+        except Exception as exc:
+            raise RuntimeError("Develop Scenes failed after " + str(len(authored)) +
+                               " of " + str(len(outline["scenes"]) if "outline" in locals() else 0) +
+                               " Scenes; existing Scenes were left unchanged: " + str(exc)) from exc
+        finally:
+            with _revision_progress_lock:
+                _revision_progress.pop(job_id, None)
+
     if client == "storyboard" and context.get("operation") == "check_coherence_sequence":
         from .storyboard_store import load_story
         from .storyboard_llm_contract import build_request
@@ -994,7 +1074,7 @@ def _storyboard_target(context, operation):
         return None
     if operation in {"interpret_atmosphere", "expand_concept", "define_invariants"}:
         return {"kind": "concept", "storyId": story_id, "sceneId": ""}
-    if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "insert_scene", "extend_story"}:
+    if operation in {"develop_story", "develop_story_outline", "develop_story_scene", "develop_scenes_sequence", "insert_scene", "extend_story"}:
         return {"kind": "scenes", "storyId": story_id, "sceneId": ""}
     if operation == "first_cut_sequence":
         return {"kind": "first-cut", "storyId": story_id, "sceneId": ""}

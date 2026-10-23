@@ -1512,12 +1512,20 @@ def test_selected_session_restores_new_automatic_vl_evidence():
     assert "def complete_test_auto_vl(context, answer, elapsed_ms):" in backend
 
 
-def test_compact_test_launch_omits_redundant_summary():
+def test_compact_test_launch_is_one_row_with_a_prominent_action():
     html = (ROOT / 'tool/tool.html').read_text(encoding='utf-8')
     script = (ROOT / 'tool/js/test_generations.js').read_text(encoding='utf-8')
     css = (ROOT / 'tool/css/styles.css').read_text(encoding='utf-8')
     assert 'test-generations-inline-launch-summary' not in html + script + css
-    assert '.test-generations-launch-options .test-generations-actions {margin-left:auto;flex:0 0 auto;}' in css
+    launch = html.split('class="test-generations-launch-options"', 1)[1].split('</div>', 2)[0]
+    assert 'id="test-generations-inline-count"' in launch
+    assert 'id="test-generations-inline-auto-vl"' in launch
+    assert 'aria-label="Automatically assess generated results with VL"' in launch
+    assert '> VL QA</label>' in launch
+    assert 'id="test-generations-run-btn"' in launch
+    assert 'grid-template-columns:max-content max-content minmax(100px,1fr)' in css
+    assert '.test-generations-launch-options #test-generations-run-btn {' in css
+    assert 'background:var(--accent);' in css
 
 
 def test_candidates_header_count_is_next_to_candidate_label():

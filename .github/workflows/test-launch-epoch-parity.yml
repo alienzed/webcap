@@ -30,6 +30,8 @@ on:
       - 'tool/server/execution_queue.py'
       - 'tests/test_inference_runner.py'
       - 'tests/test_execution_queue.py'
+      - 'tests/test_test_bulk_queue.py'
+      - 'docs/test_generations_100_candidate_scaling_plan.md'
       - 'tool/css/workspace_shell.css'
       - 'tests/inference_error_passthrough.test.cjs'
       - 'tests/test_inference_error_passthrough.py'

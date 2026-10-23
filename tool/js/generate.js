@@ -1032,9 +1032,12 @@
     }
     if (result && result.seed !== undefined && result.seed !== null) summary.push('Seed ' + result.seed);
     var loraNames = (Array.isArray(result && result.loras) ? result.loras : []).map(function (item) {
-      return String(item && item.name || '').replace(/\\/g, '/').split('/').pop().replace(/\.safetensors$/i, '');
+      var name = String(item && item.name || '').replace(/\\/g, '/').split('/').pop().replace(/\.safetensors$/i, '');
+      if (!name || !item || item.strength === null || item.strength === undefined) return name;
+      var strength = Number(item.strength);
+      return name + ':' + (Number.isFinite(strength) && Number.isInteger(strength) ? strength.toFixed(1) : String(item.strength));
     }).filter(Boolean);
-    if (loraNames.length) summary.push((loraNames.length === 1 ? 'LoRA ' : 'LoRAs ') + loraNames.join(', '));
+    if (loraNames.length) summary.push((loraNames.length === 1 ? 'LoRA: ' : 'LoRAs: ') + loraNames.join(', '));
     var elapsed = formatGenerationElapsedMs(result && result.elapsedMs);
     if (elapsed) summary.push(elapsed);
     return summary.join(' · ');

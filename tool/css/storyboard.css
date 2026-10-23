@@ -2662,6 +2662,8 @@ html[data-theme="dark"] .storyboard-prompt-take-status {
 }
 
 .storyboard-story-overview-surface {
+  /* Override the authoring grid's older align-items:start: a scroll pane must stretch to its row. */
+  align-self: stretch;
   min-height: 0;
   align-content: start;
   overflow-y: auto;

@@ -1035,6 +1035,27 @@ def test_storyboard_story_context_is_a_collapsible_middle_column():
     assert ".storyboard-scene-workspace" in css
 
 
+def test_storyboard_overview_stretches_to_scroll_in_its_desktop_grid_row():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-story-overview" class="storyboard-story-fields storyboard-story-overview-surface"' in html
+    # The historical grid rule aligns children to start; that makes the overview
+    # expand beyond its row without a usable internal scroll bar.
+    authoring = css.split(".storyboard-story-authoring {", 1)[1].split("}", 1)[0]
+    assert "align-items: start;" in authoring
+    layout = css.split("/* Storyboard three-column flow:", 1)[1].split(".storyboard-story-overview-surface {", 1)[0]
+    assert "grid-template-rows: minmax(0, 1fr) auto auto;" in layout
+    overview = css.split(".storyboard-story-overview-surface {", 1)[1].split("}", 1)[0]
+    assert "align-self: stretch;" in overview
+    assert "min-height: 0;" in overview
+    assert "overflow-y: auto;" in overview
+    # The stacked layout still deliberately scrolls at editor level.
+    stacked = css.split("@media (max-width: 1180px) {", 1)[1]
+    assert "overflow: auto;" in stacked
+    assert ".storyboard-story-overview-surface {\n    overflow: visible;" in stacked
+
+
 def test_storyboard_scene_focus_mode_scrolls_naturally_and_has_peer_sequence_view():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

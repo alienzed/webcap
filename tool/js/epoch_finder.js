@@ -446,24 +446,39 @@
       var region=existing.get(run.jobId);
       var visibleEpochs=screening&&!screeningShowExcluded?choice.epochs:run.epochs;
       var epochsSignature=JSON.stringify(visibleEpochs);
-      if(!region||region.dataset.epochsSignature!==epochsSignature){
-        if(region)region.remove();
+      if(!region){
         region=document.createElement('section');
         region.className='epoch-finder-run-epochs';
         region.dataset.epochRun=run.jobId;
-        region.dataset.epochsSignature=epochsSignature;
         region.innerHTML='<div class="epoch-finder-run-epochs-heading"><strong></strong>'+
           '<button type="button" class="review-captions-btn epoch-finder-training-runs-link" data-epoch-training-run'+
           ' title="Open this run in Training Candidates">Training Runs</button></div>'+
-          '<div class="epoch-finder-epoch-timeline">'+
-          visibleEpochs.map(function(epoch){
-            return '<button type="button" class="epoch-finder-epoch-tick" data-epoch-choice="'+
-              epoch+'" aria-pressed="false"> '+epoch+'</button>';
-          }).join('')+'</div><div class="epoch-finder-epoch-tools">'+
+          '<div class="epoch-finder-epoch-timeline"></div><div class="epoch-finder-epoch-tools">'+
           '<button type="button" data-epoch-action="all">All</button>'+
           '<button type="button" data-epoch-action="every5">Every 5</button>'+
           '<button type="button" data-epoch-action="last10">Last 10</button>'+
           '<button type="button" data-epoch-action="none">Clear</button></div>';
+      }
+      if(region.dataset.epochsSignature!==epochsSignature){
+        var timeline=region.querySelector('.epoch-finder-epoch-timeline');
+        var previousTicks=new Map(Array.from(timeline.querySelectorAll('[data-epoch-choice]')).map(function(tick){
+          return [tick.dataset.epochChoice,tick];
+        }));
+        visibleEpochs.forEach(function(epoch,index){
+          var key=String(epoch),tick=previousTicks.get(key);
+          if(!tick){
+            tick=document.createElement('button');
+            tick.type='button';
+            tick.className='epoch-finder-epoch-tick';
+            tick.dataset.epochChoice=key;
+            tick.setAttribute('aria-pressed','false');
+            tick.textContent=' '+key;
+          }
+          if(timeline.children[index]!==tick)timeline.insertBefore(tick,timeline.children[index]||null);
+          previousTicks.delete(key);
+        });
+        previousTicks.forEach(function(tick){tick.remove();});
+        region.dataset.epochsSignature=epochsSignature;
       }
       region.querySelector('strong').textContent=runIdentity(run)+' · '+
         choice.epochs.length+'/'+run.epochs.length+' selected';

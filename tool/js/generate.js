@@ -464,7 +464,7 @@
     requestJson('/fs/generate/lora/profile?name=' + encodeURIComponent(name))
       .then(function (payload) {
         cache[name] = {profile: payload.modelProfile || null};
-        if (generateState.open) renderLoras();
+        if (generateState.open && el('generate-lora-picker-menu').classList.contains('hidden')) renderLoras();
       }).catch(function (err) {
         cache[name] = {error: String(err.message || err)};
         if (typeof window.reportConsoleWarning === 'function') {
@@ -550,6 +550,7 @@
   }
 
   function refreshLoraCatalog() {
+    closeGenerateLoraPicker();
     var button = el('generate-lora-refresh');
     if (!button) throw new Error('Generations LoRA refresh control is missing.');
     var originalLabel = button.textContent;

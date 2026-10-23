@@ -644,7 +644,7 @@ function changeQueuedTrainingEpochs(jobId) {
   var point = job.resumePoint || {};
   var minimum = Math.max(0, Number(point.epoch) || 0);
   var entry = window.prompt('Total epochs for this queued run (1–999)' +
-    (minimum ? '\\nMust exceed saved epoch ' + minimum + '.' : '') + ':', String(current || 70));
+    (minimum ? '\nMust exceed saved epoch ' + minimum + '.' : '') + ':', String(current || 70));
   if (entry === null) return;
   var value = String(entry).trim();
   if (!/^[1-9][0-9]{0,2}$/.test(value) || Number(value) <= minimum) {

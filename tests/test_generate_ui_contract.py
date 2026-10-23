@@ -411,7 +411,9 @@ def test_generate_preview_uses_saved_per_result_loras():
     assert '"loras": request.get("loras") if isinstance(request.get("loras"), list) else []' in store
     assert "Array.isArray(result && result.loras)" in script
     assert ".split('/').pop().replace(/\\.safetensors$/i, '')" in script
-    assert "summary.push((loraNames.length === 1 ? 'LoRA ' : 'LoRAs ') + loraNames.join(', '))" in script
+    assert "item.strength === null || item.strength === undefined" in script
+    assert "Number.isInteger(strength) ? strength.toFixed(1) : String(item.strength)" in script
+    assert "summary.push((loraNames.length === 1 ? 'LoRA: ' : 'LoRAs: ') + loraNames.join(', '))" in script
     assert "summary.textContent = [String(result.modelId || 'Generated'), resultSummary(result)]" in script
 
 

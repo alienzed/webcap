@@ -2550,6 +2550,14 @@
     listRequestVersion++;
     activeCampaign = ''; inspectedEpoch = null; campaignState = null;
     els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
+    if (mode === 'screening') {
+      screeningDraftContext=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
+      screeningSettingsKey='';screeningSettingsRequest=null;
+      screeningApplySettings(null);
+    } else if (mode === 'finder') {
+      campaignDefaultsKey='';
+      campaignApplyDefaults();
+    }
     if (mode === 'finder' || mode === 'screening') refresh();
   });
   timer = setInterval(function () {

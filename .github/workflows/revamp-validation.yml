@@ -1,4 +1,4 @@
-name: Test Generations parity validation
+name: Evaluation parity validation
 on:
   pull_request:
     paths:
@@ -54,16 +54,18 @@ jobs:
           python-version: '3.11'
       - name: JavaScript syntax
         run: |
-          node --check tool/js/test_generations_unified.js
-          node --check tool/js/test_generations_perspective.js
           node --check tool/js/epoch_finder.js
           node --check tool/js/test_generations.js
+          node --check tool/js/run_analytics.js
+          node --check tool/js/workspace_shell.js
           node --check tool/js/set_vl_clone.js
           node --check tool/js/media_context_actions.js
       - name: Install DOM test dependency
         run: npm install --no-save --no-package-lock jsdom
-      - name: Browser DOM lifecycle smoke
-        run: node --test tests/test_generations_unified_dom.test.cjs
+      - name: Evaluation DOM ownership and navigation smoke
+        run: |
+          node --test tests/test_generations_unified_dom.test.cjs
+          node --test tests/test_test_surface_context_navigation.test.cjs
       - name: Inference and Training drag-to-reorder
         run: |
           node --check tool/js/job_queues.js
@@ -85,7 +87,7 @@ jobs:
           python -m pytest -q tests/test_execution_queue.py -k reorders_mixed_inference_client_jobs
           python -m pytest -q tests/test_training_stabilization.py -k training_queue_reorder_position_preserves_nonqueued_slots
           python -m pytest -q tests/test_storyboard_store.py -k concept_restore_keeps_initial_prompt_as_fixed_baseline
-      - name: Unified gallery and no-feature-loss contracts
+      - name: Native Evaluation and no-feature-loss contracts
         run: python -m pytest -q tests/test_test_generations_unified_gallery.py tests/test_test_generations_unified_workspace.py tests/test_test_generations_revamp_parity.py tests/test_test_generations_perspective.py
       - name: Current native Test and Repeat contracts (must pass)
         run: |

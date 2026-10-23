@@ -37,6 +37,8 @@
   var screeningReportedVlErrors = new Set();
   var screeningSettingsKey = '';
   var screeningSettingsRequest = null;
+  var screeningSaveTimer = 0;
+  var screeningPromptTimer = 0;
   var screeningSelectionQueue = Promise.resolve();
   var screeningSelectionRevision = 0;
   var screeningSelectionFailure = null;
@@ -1117,7 +1119,7 @@
       return payload;
     });}).then(function(payload){
       if(screeningSettingsKey!==key) return payload;
-      var available=new Set(payload.settings||[]), defaults=payload.defaults||{};
+      var available=new Set(payload.settings||[]), defaults=Object.assign({},payload.defaults||{},payload.manualSettings||{});
       var fields=[['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
         ['sampling','samplingMode'],['dimensions','dimensions']];
       fields.forEach(function(pair){
@@ -1180,7 +1182,7 @@
         var prompt=payload.workspacePromptPresent?payload.workspacePrompt:payload.defaultPrompt;
         if(!els('manual-prompt').value.trim()){
           els('manual-prompt').value=String(prompt||'');
-          screeningGroups(0);
+          screeningGroups((payload.manualSettings||{}).groupIndex||0);
         }
         return;
       }
@@ -1196,6 +1198,36 @@
         target.value=String(value);
       });
     }).catch(error);
+  }
+  function screeningSaveDraft() {
+    if (!currentFolder || els('campaign-type').value!=='manual') return;
+    var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||'');
+    var settings={groupIndex:Number(els('manual-group').value||0)};
+    [['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
+      ['sampling','samplingMode'],['dimensions','dimensions']].forEach(function(pair){
+        settings[pair[1]]=els('manual-'+pair[0]).value;
+      });
+    if(screeningSaveTimer)clearTimeout(screeningSaveTimer);
+    screeningSaveTimer=setTimeout(function(){
+      screeningSaveTimer=0;
+      fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:folder,operation:'test_save_manual_settings',
+          criteria:{modelId:modelId,settings:settings}})})
+      .then(function(response){return response.json().then(function(payload){
+        if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Manual Screening settings.');
+      });}).catch(error);
+    },500);
+  }
+  function screeningSavePrompt() {
+    var folder=currentFolder,modelId=String(window.getWorkingModelProfileId()||'');
+    var prompt=els('manual-prompt').value;
+    if(!folder||!modelId)return;
+    fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:folder,operation:'test_save_workspace_prompt',
+        criteria:{modelId:modelId,prompt:prompt}})})
+    .then(function(response){return response.json().then(function(payload){
+      if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Set wildcard template.');
+    });}).catch(error);
   }
   function screeningCriteria() {
     var settings={};
@@ -2118,7 +2150,15 @@
     els('active').classList.add('hidden');els('empty').classList.remove('hidden');
     showStep(1);screeningModeUi();screeningApplySettings(null);
   };
-  els('manual-prompt').addEventListener('input',function(){screeningGroups();});
+  els('manual-prompt').addEventListener('input',function(){
+    screeningGroups();
+    if(screeningPromptTimer)clearTimeout(screeningPromptTimer);
+    screeningPromptTimer=setTimeout(function(){screeningPromptTimer=0;screeningSavePrompt();},500);
+  });
+  ['manual-mp','manual-duration','manual-aspect','manual-sampling',
+    'manual-dimensions','manual-group'].forEach(function(id){
+    els(id).addEventListener('change',screeningSaveDraft);
+  });
   els('manual-launch').onclick=screeningLaunch;
   els('manual-sort').onchange=function(){if (isManualCampaign()) screeningMatrix(campaignState);};
   els('manual-vl-round').onclick=function(){if (isManualCampaign()) screeningAskVision(campaignState,{});};

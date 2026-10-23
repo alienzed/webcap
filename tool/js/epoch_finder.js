@@ -2136,9 +2136,11 @@
     if (!activeCampaign) return Promise.resolve();
     var requestedId=activeCampaign,requestedFolder=currentFolder,requestedMode=mode;
     var requestedModel=String(window.getWorkingModelProfileId()||'');
+    var requestVersion=listRequestVersion;
     return api('status', { campaignId: requestedId }).then(function (response) {
       if(activeCampaign===requestedId&&currentFolder===requestedFolder&&mode===requestedMode&&
-         requestedModel===String(window.getWorkingModelProfileId()||'')&&response.campaign)
+         requestedModel===String(window.getWorkingModelProfileId()||'')&&
+         requestVersion===listRequestVersion&&response.campaign)
         render(response.campaign);
     });
   }
@@ -2168,7 +2170,7 @@
         return c.id===activeCampaign&&c.modelId===modelAtRequest&&
           ((c.mode==='manual')===(mode==='screening'));
       }))return refreshStatus();
-      activeCampaign='';
+      activeCampaign='';campaignState=null;
       methodWorkspaces[mode].activeCampaign='';
       var draftKey=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
       if(!followUpSource&&mode==='finder'&&campaignDefaultsKey!==draftKey)campaignApplyDefaults();
@@ -2594,7 +2596,8 @@
     if (window.confirm(message)) {
       clearError();
       api('delete', { campaignId: activeCampaign }).then(function () {
-        activeCampaign='';methodWorkspaces[mode].activeCampaign='';
+        activeCampaign='';campaignState=null;
+        methodWorkspaces[mode].activeCampaign='';
         inspectedEpoch=null;lastFrameKey='';refresh();
       }).catch(error);
     }
@@ -2611,6 +2614,8 @@
   window.addEventListener('webcap:working-model-changed', function () {
     listRequestVersion++;
     resetMethodWorkspaces();
+    followUpSource='';referenceSelections={};referenceItems=[];
+    referenceDraftChoices={};referencePlanSignature='';referenceIndex=0;
     inspectedEpoch=null;
     els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
     if (mode === 'screening') {

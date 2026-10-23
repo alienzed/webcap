@@ -149,7 +149,10 @@ def _managed_set_checkpoint_runs(folder_path, require_saved_checkpoints=True):
                 candidates.append((run_dir, epochs))
         if len(candidates) != 1:
             continue  # Multiple outputs cannot be attributed to one job ID.
-        model = get_test_model_for_staging_key(stage)
+        try:
+            model = get_test_model_for_staging_key(stage)
+        except ValueError:
+            continue  # A Set can also contain unrelated Training-only model stages.
         job = jobs[0]
         sequence = str(action_root.name).split("-", 1)[0]
         result.append({

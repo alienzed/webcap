@@ -213,6 +213,24 @@ def set_test_manual_settings(state_path, model_id, settings):
     return all_settings[model_key]
 
 
+def set_test_campaign_settings(state_path, model_id, settings):
+    """Patch one model's editable Campaign wizard defaults in its owning Set."""
+    model_key = str(model_id or "").strip()
+    if not model_key or not isinstance(settings, dict):
+        raise ValueError("Campaign defaults require a model and settings.")
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        all_settings = state.get("test_campaign_by_model") or {}
+        if not isinstance(all_settings, dict):
+            raise FolderStateReadError("Campaign Set settings are invalid.")
+        all_settings = dict(all_settings)
+        all_settings[model_key] = dict(settings)
+        state["test_campaign_by_model"] = all_settings
+        write_folder_state_atomic(path, state)
+    return all_settings[model_key]
+
+
 def folder_state_exists(state_path):
     path = Path(state_path)
     try:

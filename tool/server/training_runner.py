@@ -20,7 +20,7 @@ from .training_config_files import h3_premerged_image_model_path, rewrite_toml_a
 from .training_review import prepare_training_review, resolve_saved_initializer
 from .dataset_config import repeat_targets
 from .training_history import discover_runs, validate_resumable_run_for_path, resume_point_for_path, resume_point_from_directory, host_path_for_training_path, output_root_for_folder, read_history, record_job, clear_history_job, resolve_managed_resume, run_summary_from_capture
-from .training_action import actions_root, allocate_action, action_id_for_root, action_paths, fingerprint_files, read_action, update_action
+from .training_action import actions_root, allocate_action, action_id_for_root, action_paths, fingerprint_files, read_action, update_action, managed_actions_for_folder
 from .training_preflight import (
     build_launch_preflight as _build_launch_preflight,
     gpu_snapshot as _gpu_snapshot,
@@ -47,7 +47,7 @@ from .training_runtime import (
     uses_native_wsl_shell as _uses_native_wsl_shell,
     wsl_executable as _wsl_executable,
 )
-from .training_candidates import ALGORITHMS as _candidate_algorithms, analyze_run_directory as _analyze_run_directory
+from .training_candidates import ALGORITHMS as _candidate_algorithms, analyze_run_directory as _analyze_run_directory, saved_artifacts_for_run as _saved_artifacts_for_run
 from .training_run_manifest import clear_selected_epoch as _clear_selected_epoch, select_epoch as _select_epoch, selected_epoch as _selected_epoch
 from .execution_queue import reserve_resource as reserve_execution_resource, release_resource as release_execution_resource, resource_owner as execution_resource_owner
 
@@ -691,6 +691,51 @@ def _candidate_staged_run_snapshot_for_job(folder, job_id):
     }
 
 
+def _candidate_managed_run_snapshot_for_job(folder, job_id):
+    """Recover the original job ID only from an unambiguous Set-owned action.
+
+    Saved epochs do not depend on queue/Recent Runs retention. Never guess
+    which output belongs to a job when an action has multiple jobs or outputs.
+    """
+    folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
+    wanted = str(job_id or "").strip()
+    folder_path = app_config.safe_join_fs_root(folder_text)
+    matches = []
+    for action_root, action in managed_actions_for_folder(folder_path):
+        if str(action.get("folder") or "").strip().replace("\\", "/").strip("/") != folder_text:
+            continue
+        stages = list(action.get("requestedStages") or [])
+        if len(stages) != 1:
+            continue
+        stage = stages[0]
+        jobs = (action.get("jobs") or {}).get(stage) or []
+        if len(jobs) != 1 or str(jobs[0].get("id") or "").strip() != wanted:
+            continue
+        output = action_root / "output"
+        if not output.is_dir() or output.is_symlink():
+            continue
+        paths = []
+        for child in output.iterdir():
+            if (child.is_dir() and not child.is_symlink() and
+                    any(item.get("status") == "available" for item in _saved_artifacts_for_run(child))):
+                paths.append(child)
+        if len(paths) != 1:
+            continue
+        sequence = action_root.name.split("-", 1)[0]
+        matches.append((str(paths[0]), {
+            "id": wanted, "folder": folder_text,
+            "runName": str(action.get("runName") or ""),
+            "sequence": sequence, "actionId": str(action.get("actionId") or ""),
+            "stage": stage, "stages": stage,
+            "status": "unknown", "currentEpoch": None, "plannedEpochs": None,
+            "candidateRevision": int(action.get("candidateRevision") or 1),
+            "runSummary": {},
+        }))
+    if len(matches) > 1:
+        raise RuntimeError("Multiple managed Training actions claim the same job ID: " + wanted)
+    return matches[0] if matches else None
+
+
 def _candidate_run_snapshot(folder, job_id):
     """Copy recorded candidate-run metadata while holding the runner lock briefly."""
     folder_text = str(folder or "").strip().replace("\\", "/").strip("/")
@@ -706,6 +751,9 @@ def _candidate_run_snapshot(folder, job_id):
         if not job:
             job = _find_history_job(folder_text, wanted)
         if not job:
+            recovered = _candidate_managed_run_snapshot_for_job(folder_text, wanted)
+            if recovered is not None:
+                return recovered
             recovered = _candidate_staged_run_snapshot_for_job(folder_text, wanted)
             if recovered is not None:
                 return recovered

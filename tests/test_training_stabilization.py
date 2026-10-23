@@ -2294,6 +2294,7 @@ def test_update_queued_epochs_preserves_capture_and_updates_effective_job(tmp_pa
     assert status == 200 and response["ok"]
     effective = Path(job["snapshot"]["h3"])
     assert effective != source and effective.is_file()
+    assert effective.name == source.name
     assert job["bundleArtifacts"]["h3Config"] == str(effective)
     assert tomllib.loads(effective.read_text(encoding="utf-8"))["epochs"] == 30
     assert tomllib.loads(source.read_text(encoding="utf-8"))["epochs"] == 70

@@ -51,6 +51,7 @@ def sequence_runtime(monkeypatch):
     execution_queue.clear_transient_receipts()
     monkeypatch.setattr(llm_runner, "_startup_reconciled", True)
     monkeypatch.setattr(llm_runner, "_ensure_monitor_started", lambda: None)
+    monkeypatch.setattr(storyboard_llm_runtime, "uses_local_gpu", lambda _model: False)
 
     story = {"id": "story-1", "updatedAt": "rev-1", "sceneOrder": []}
     monkeypatch.setattr(storyboard_store, "load_story", lambda _id: copy.deepcopy(story))

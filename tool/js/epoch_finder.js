@@ -7,7 +7,7 @@
   var timer = null;
   var mode = 'tests';
   var returnMode = '';
-  var surfaceLabels = {tests:'Tests',finder:'Campaigns',references:'References',analytics:'Insights'};
+  var surfaceLabels = {tests:'Prompt Tests',screening:'Manual Screening',finder:'Campaigns',references:'References',analytics:'Insights'};
   var lastFrameKey = '';
   var wizardStep = 1;
   var dimensions = [];
@@ -79,7 +79,14 @@
     returnMode = options.returnTo && surfaceLabels[options.returnTo] && options.returnTo!==next
       ? options.returnTo : '';
     mode = next;
-    var finder = next === 'finder';
+    var finder = next === 'finder' || next === 'screening';
+    if (finder) {
+      els('campaign-type').value = next === 'screening' ? 'manual' : 'auto';
+      screeningModeUi();
+      els('new-heading').textContent = next === 'screening' ? 'New screening' : 'New campaign';
+      els('history-heading').textContent = next === 'screening' ? 'Screenings' : 'Campaigns';
+      els('new').textContent = next === 'screening' ? '+ New Screening' : '+ New Campaign';
+    }
     var references = next === 'references';
     var analytics = next === 'analytics';
     document.querySelectorAll('#test-workspace-main-tabs [data-test-workspace-mode]').forEach(function (button) {
@@ -91,8 +98,8 @@
     document.getElementById('test-generations-body').classList.toggle('hidden', finder || references || analytics);
     document.getElementById('test-references-screen').classList.toggle('hidden', !references);
     document.getElementById('run-analytics-screen').classList.toggle('hidden', !analytics);
-    ['tests','finder'].forEach(function (target) {
-      var control=document.getElementById('test-workspace-return-'+target);
+    ['tests','finder','screening'].forEach(function (target) {
+      var control=document.getElementById('test-workspace-return-'+(target==='screening'?'finder':target));
       control.classList.toggle('hidden',next!==target||!returnMode);
       if(returnMode)control.querySelector('[data-test-workspace-back]').textContent=
         '← Back to '+surfaceLabels[returnMode];
@@ -743,9 +750,9 @@
   }
 
   function list() {
-    els('count').textContent = String(campaigns.length);
+    els('count').textContent = String(campaigns.filter(function(c){return c.modelId===String(window.getWorkingModelProfileId()||'') && (c.mode==='manual')===(mode==='screening');}).length);
     var model = String(window.getWorkingModelProfileId() || '');
-    var visible = campaigns.filter(function (c) { return c.modelId === model; });
+    var visible = campaigns.filter(function (c) { return c.modelId === model && (c.mode === 'manual') === (mode === 'screening'); });
     els('campaigns').innerHTML = visible.length ? visible.map(function (c) {
       return '<button type="button" class="epoch-finder-campaign ' +
         (c.id === activeCampaign ? 'active' : '') + '" data-id="' + escape(c.id) + '">' +
@@ -1575,6 +1582,8 @@
         values.reduce(function (sum,u) {return sum+u.rating;},0)/values.length:null};
     });
     var sort=els('manual-sort').value;
+    // Historical rounds retain their actual candidates; each future plan already
+    // captures the reduced kept set from the previous round.
     // Reveal an epoch when its first render (or visible failure) is available.
     // Unfinished cells in that epoch remain as "Awaiting render" placeholders.
     var rows=plan.epochs.filter(function (epoch) {
@@ -1901,6 +1910,8 @@
     els('resume').classList.toggle('hidden', !(['paused', 'interrupted', 'failed'].includes(campaign.status) ||
       (campaign.mode==='manual'&&campaign.status==='stopped')));
     var manual=campaign.mode==='manual';
+    if (manual && mode==='finder') showMode('screening',{restore:true});
+    if (!manual && mode==='screening') showMode('finder',{restore:true});
     var canDeleteAll=manual && ['complete','stopped','failed','interrupted'].includes(campaign.status) &&
       campaign.rounds.every(function(plan){
         return ['complete','stopped','cancelled','deleted'].includes(plan.status);
@@ -1934,12 +1945,12 @@
     });
   }
   function refresh() {
-    if (!currentFolder || mode !== 'finder') return;
+    if (!currentFolder || (mode !== 'finder' && mode !== 'screening')) return;
     var folderAtRequest = currentFolder, modelAtRequest = String(window.getWorkingModelProfileId() || '');
     var requestVersion = ++listRequestVersion;
     api('list', {modelId: modelAtRequest}).then(function (response) {
       if (requestVersion !== listRequestVersion || folderAtRequest !== currentFolder ||
-          modelAtRequest !== String(window.getWorkingModelProfileId() || '') || mode !== 'finder') return;
+          modelAtRequest !== String(window.getWorkingModelProfileId() || '') || (mode !== 'finder' && mode !== 'screening')) return;
       runs = response.runs || [];
       stagedFiles = response.stagedFiles || [];
       if (stagedModel !== modelAtRequest) {
@@ -2076,15 +2087,17 @@
     if (changed) { screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
-    if (mode === 'finder') refresh();
+    if (mode === 'finder' || mode === 'screening') refresh();
   }
   window.epochFinderPrepare = applyFolder;
   window.epochFinderInspectCampaign = function (campaignId, sourceEpoch, sourceJobId) {
     var previous=mode;
     activeCampaign = String(campaignId);
     inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = '';
-    showMode('finder',previous!=='finder'?{returnTo:previous}:null);
+    var destination = (campaigns.find(function(c){return c.id===String(campaignId);})||{}).mode==='manual' ? 'screening' : 'finder';
+    showMode(destination,previous!==destination?{returnTo:previous}:null);
     return refreshStatus().then(function () {
+      if (campaignState && campaignState.mode==='manual' && mode!=='screening') showMode('screening',{restore:true});
       if (sourceEpoch == null || !campaignState || campaignState.id !== String(campaignId)) return;
       var matched = Object.entries(campaignState.candidateMap || {}).find(function (entry) {
         return entry[1].epoch === Number(sourceEpoch) && (!sourceJobId || entry[1].jobId === sourceJobId);
@@ -2111,7 +2124,7 @@
     screeningTestStatusCampaign='';
     refresh();
   };
-  els('new').onclick = function () { followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); screeningApplySettings(null); };
+  els('new').onclick = function () { els('campaign-type').value=mode==='screening'?'manual':'auto'; followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); screeningApplySettings(null); };
   els('start').onclick = start;
   els('campaign-type').onchange=function () {
     activeCampaign='';campaignState=null;manualSelectionCampaign='';
@@ -2345,10 +2358,10 @@
     listRequestVersion++;
     activeCampaign = ''; inspectedEpoch = null; campaignState = null;
     els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
-    if (mode === 'finder') refresh();
+    if (mode === 'finder' || mode === 'screening') refresh();
   });
   timer = setInterval(function () {
-    if (mode === 'finder' && activeCampaign && campaignState &&
+    if ((mode === 'finder' || mode === 'screening') && activeCampaign && campaignState &&
         (['queued', 'running'].includes(campaignState.status) || manualVisionPending) &&
         !els('screen').classList.contains('hidden')) refreshStatus().catch(error);
   }, 2500);

@@ -1534,9 +1534,11 @@
     var signature=JSON.stringify([campaign.id,plan.number,plan.settings,plan.prompt,
       plan.groupIndex,plan.columnLabels,plan.casePrompts,plan.seeds]);
     if (host.dataset.signature===signature) return;
+    if (host.dataset.round!==String(plan.number)) host.open=false;
+    host.dataset.round=String(plan.number);
     host.dataset.signature=signature;
     host.replaceChildren();
-    var heading=document.createElement('strong');
+    var heading=document.createElement('summary');
     heading.textContent='Round '+plan.number+' · Submitted prompts and settings';
     host.appendChild(heading);
     var settings=document.createElement('p');

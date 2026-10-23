@@ -937,7 +937,9 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-screening-case-labels { margin-bottom:8px; padding:6px 2px 8px; border-bottom:1px solid var(--border-color,var(--border)); }
 .epoch-screening-case-labels > strong { font-size:16px; min-width:0; padding:4px 6px; overflow-wrap:anywhere; }
 .epoch-screening-run-info { padding:12px; margin-bottom:12px; border:1px solid var(--border-color,var(--border)); border-radius:8px; }
-.epoch-screening-run-info > strong { display:block; font-size:18px; margin-bottom:6px; }
+.epoch-screening-run-info > summary { cursor:pointer; font-size:18px; font-weight:650; }
+.epoch-screening-run-info > summary:focus-visible { outline:2px solid var(--accent-color,#e5ad4f); outline-offset:3px; }
+.epoch-screening-run-info[open] > summary { margin-bottom:6px; }
 .epoch-screening-run-info > p { margin:4px 0 10px; font-size:14px; color:var(--text-muted,#b7c4d1); overflow-wrap:anywhere; }
 .epoch-screening-run-info details { font-size:14px; min-width:0; }
 .epoch-screening-run-info summary { cursor:pointer; font-weight:600; }

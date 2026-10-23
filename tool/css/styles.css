@@ -7286,10 +7286,6 @@ html[data-theme="dark"] iframe {
 .test-generations-vl-model-line { color:var(--muted); font-size:12px; margin-bottom:10px; overflow-wrap:anywhere; }
 
 /* Focused Test launch evolution: native forms and separate Finder wizard remain owners. */
-.test-generations-launch-options {display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:8px 0 10px;}
-.test-generations-launch-options label {display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;}
-.test-generations-launch-options input[type=number] {width:64px;min-width:64px;padding:6px 7px;}
-.test-generations-launch-options input[type=checkbox] {width:auto;margin:0;}
 .test-generations-form-title {display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 #test-generations-campaign-mode {width:auto;min-width:0;font-size:11px;padding:5px 8px;}
 .epoch-finder-intro-actions {display:flex;gap:8px;align-items:center;}
@@ -7312,10 +7308,60 @@ html[data-theme="dark"] iframe {
 .test-generations-form-title {gap:12px;}
 .test-generations-form-title > strong {font-size:15px;letter-spacing:-.015em;}
 #test-generations-campaign-mode {font-size:12px;padding:6px 10px;}
-.test-generations-launch-options {gap:12px 18px;padding:12px 14px;margin:10px 0 8px;border:1px solid var(--border);border-radius:10px;background:var(--panel-soft);}
-.test-generations-launch-options label {font-size:12px;gap:9px;}
-.test-generations-launch-options input[type=number] {width:66px;min-width:66px;}
-.test-generations-launch-options .test-generations-actions {margin-left:auto;flex:0 0 auto;}
+/* Prompt Tests: compact launch controls with a clear primary action. */
+.test-generations-launch-options {
+  display:grid;
+  grid-template-columns:max-content max-content minmax(100px,1fr);
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  margin:10px 0 8px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--panel-soft);
+}
+.test-generations-launch-options label {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin:0;
+  font-size:12px;
+  font-weight:600;
+  white-space:nowrap;
+}
+.test-generations-launch-options input[type=number] {
+  box-sizing:border-box;
+  width:54px;
+  min-width:54px;
+  padding:6px;
+}
+.test-generations-launch-options input[type=checkbox] {width:auto;margin:0;}
+.test-generations-launch-options .test-generations-actions {
+  width:100%;
+  min-width:0;
+  margin:0;
+}
+.test-generations-launch-options #test-generations-run-btn {
+  width:100%;
+  min-width:100px;
+  min-height:40px;
+  padding:9px 12px;
+  border:1px solid var(--accent-dark);
+  border-radius:7px;
+  background:var(--accent);
+  color:#1f2937;
+  font-size:13px;
+  font-weight:750;
+}
+.test-generations-launch-options #test-generations-run-btn:hover:not(:disabled),
+.test-generations-launch-options #test-generations-run-btn:focus-visible {
+  background:var(--accent-dark);
+  color:#fff;
+}
+@media(max-width:360px) {
+  .test-generations-launch-options {grid-template-columns:1fr 1fr;}
+  .test-generations-launch-options .test-generations-actions {grid-column:1/-1;}
+}
 .run-analytics-epoch-media-dialog {padding:0;overflow:auto;}
 .run-analytics-epoch-media-head {position:sticky;top:0;z-index:1;background:var(--panel);padding:17px 22px 14px;margin:0 0 16px;align-items:flex-start;}
 .run-analytics-epoch-media-head h3 {font-size:19px;line-height:1.3;}

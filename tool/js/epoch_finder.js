@@ -194,9 +194,12 @@
     var previousMode=mode;
     if(previousMode!==next){
       listRequestVersion++; // Ignore results from the method that just lost focus.
-      snapshotMethodWorkspace(previousMode);
-      if(next==='finder'||next==='screening')
+      if(!options.methodRedirect)snapshotMethodWorkspace(previousMode);
+      if(next==='finder'||next==='screening'){
         restoreMethodWorkspace(next,options.keepCampaign?options.campaignId:'');
+        els('active').classList.add('hidden');
+        els('empty').classList.remove('hidden');
+      }
     }
     mode=next;
     var finder=next==='finder'||next==='screening';
@@ -2096,8 +2099,11 @@
     els('resume').classList.toggle('hidden', !(['paused', 'interrupted', 'failed'].includes(campaign.status) ||
       (campaign.mode==='manual'&&campaign.status==='stopped')));
     var manual=campaign.mode==='manual';
-    if (manual && mode==='finder') showMode('screening',{restore:true,returnTo:returnMode});
-    if (!manual && mode==='screening') showMode('finder',{restore:true,returnTo:returnMode});
+    if (manual && mode==='finder') showMode('screening',
+      {restore:true,returnTo:returnMode,keepCampaign:true,campaignId:campaign.id,methodRedirect:true});
+    if (!manual && mode==='screening') showMode('finder',
+      {restore:true,returnTo:returnMode,keepCampaign:true,campaignId:campaign.id,methodRedirect:true});
+    campaignState=campaign;
     var canDeleteAll=manual && ['complete','stopped','failed','interrupted'].includes(campaign.status) &&
       campaign.rounds.every(function(plan){
         return ['complete','stopped','cancelled','deleted'].includes(plan.status);
@@ -2124,9 +2130,12 @@
   }
   function refreshStatus() {
     if (!activeCampaign) return Promise.resolve();
-    var requestedId = activeCampaign, requestedFolder = currentFolder;
+    var requestedId=activeCampaign,requestedFolder=currentFolder,requestedMode=mode;
+    var requestedModel=String(window.getWorkingModelProfileId()||'');
     return api('status', { campaignId: requestedId }).then(function (response) {
-      if (activeCampaign === requestedId && currentFolder === requestedFolder && response.campaign) render(response.campaign);
+      if(activeCampaign===requestedId&&currentFolder===requestedFolder&&mode===requestedMode&&
+         requestedModel===String(window.getWorkingModelProfileId()||'')&&response.campaign)
+        render(response.campaign);
     });
   }
   function refresh() {
@@ -2151,8 +2160,12 @@
       campaigns = response.campaigns || [];
       timingProfiles = response.timings || {};
       setup(); list();
-      if (activeCampaign && campaigns.some(function (c) { return c.id === activeCampaign; })) return refreshStatus();
-      activeCampaign = '';
+      if(activeCampaign&&campaigns.some(function(c){
+        return c.id===activeCampaign&&c.modelId===modelAtRequest&&
+          ((c.mode==='manual')===(mode==='screening'));
+      }))return refreshStatus();
+      activeCampaign='';
+      methodWorkspaces[mode].activeCampaign='';
       var draftKey=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
       if(!followUpSource&&mode==='finder'&&campaignDefaultsKey!==draftKey)campaignApplyDefaults();
       manualSelectionCampaign='';
@@ -2271,7 +2284,7 @@
     }
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { campaignDefaultsKey='';screeningSettingsKey='';screeningSettingsRequest=null;screeningDraftContext=''; screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { campaignDefaultsKey='';screeningSettingsKey='';screeningSettingsRequest=null;screeningDraftContext=''; screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; resetMethodWorkspaces(); runs = []; campaigns = []; stagedFiles = []; stagedModel = ''; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
     if (mode === 'finder' || mode === 'screening') refresh();
@@ -2316,13 +2329,17 @@
     screeningTestStatusCampaign='';
     refresh();
   };
-  els('new').onclick = function () { screeningShowExcluded=false; els('campaign-type').value=mode==='screening'?'manual':'auto'; followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); if(els('campaign-type').value==='manual')screeningApplySettings(null);else campaignApplyDefaults(); };
-  els('start').onclick = start;
-  els('campaign-type').onchange=function () {
-    activeCampaign='';campaignState=null;manualSelectionCampaign='';
+  els('new').onclick = function () {
+    screeningShowExcluded=false;followUpSource='';
+    activeCampaign='';methodWorkspaces[mode].activeCampaign='';
+    campaignState=null;manualSelectionCampaign='';runEpochSelections={};
+    inspectedEpoch=null;inspectedFrame=0;lastFrameKey='';
     els('active').classList.add('hidden');els('empty').classList.remove('hidden');
-    showStep(1);screeningModeUi();if(els('campaign-type').value==='manual')screeningApplySettings(null);else campaignApplyDefaults();
+    list();showStep(1);screeningModeUi();
+    if(mode==='screening')screeningApplySettings(null);
+    else campaignApplyDefaults();
   };
+  els('start').onclick=start;
   els('manual-prompt').addEventListener('input',function(){screeningGroups();try{screeningSavePrompt();}catch(exc){error(exc);}});
   els('manual-launch').onclick=screeningLaunch;
   els('screening-show-excluded').onclick=function(){
@@ -2573,17 +2590,24 @@
     if (window.confirm(message)) {
       clearError();
       api('delete', { campaignId: activeCampaign }).then(function () {
-        activeCampaign = ''; inspectedEpoch = null; lastFrameKey = ''; refresh();
+        activeCampaign='';methodWorkspaces[mode].activeCampaign='';
+        inspectedEpoch=null;lastFrameKey='';refresh();
       }).catch(error);
     }
   };
   els('campaigns').onclick = function (event) {
     var button = event.target.closest('[data-id]');
-    if (button) { activeCampaign = button.dataset.id; manualSelectionCampaign=''; screeningShowExcluded=false; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; list(); refreshStatus().catch(error); }
+    if(button){
+      activeCampaign=button.dataset.id;methodWorkspaces[mode].activeCampaign=activeCampaign;
+      manualSelectionCampaign='';screeningShowExcluded=false;
+      inspectedEpoch=null;inspectedFrame=0;lastFrameKey='';
+      list();refreshStatus().catch(error);
+    }
   };
   window.addEventListener('webcap:working-model-changed', function () {
     listRequestVersion++;
-    activeCampaign = ''; inspectedEpoch = null; campaignState = null;
+    resetMethodWorkspaces();
+    inspectedEpoch=null;
     els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
     if (mode === 'screening') {
       screeningDraftContext=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');

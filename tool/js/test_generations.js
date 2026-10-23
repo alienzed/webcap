@@ -4526,7 +4526,7 @@
       if (field) field.classList.toggle('hidden', settings.indexOf(entry[0]) === -1);
     });
 
-    var selectedAspect = String(savedSettings.aspectRatio || defaults.aspectRatio || '');
+    var selectedAspect = String(savedSettings.aspectRatio || '4:3');
     var options = Array.isArray(payload.aspectRatioOptions) ? payload.aspectRatioOptions.slice() : [];
     if (selectedAspect && options.indexOf(selectedAspect) < 0) options.unshift(selectedAspect);
     if (aspect) {
@@ -4535,8 +4535,8 @@
       }).join('');
       aspect.value = selectedAspect;
     }
-    if (megapixels) megapixels.value = String(savedSettings.megapixels || defaults.megapixels || '');
-    if (duration) duration.value = String(savedSettings.duration || defaults.duration || '');
+    if (megapixels) megapixels.value = String(savedSettings.megapixels || 0.2);
+    if (duration) duration.value = String(savedSettings.duration || 3);
     samplingMode.value = normalizeTestSamplingMode(savedSettings.samplingMode || defaults.samplingMode);
     if (dimensions) {
       var dimensionOptions = payload.settingOptions && Array.isArray(payload.settingOptions.dimensions)

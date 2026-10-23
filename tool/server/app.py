@@ -220,6 +220,9 @@ def folder_state_save():
             state["stats"] = {"requiredPhrase": "", "phrases": "", "tokenRules": ""}
         if "primer" not in state:
             state["primer"] = {"template": "", "defaults": "", "mappings": ""}
+        # Dedicated atomic prompt writes must survive older whole-form snapshots.
+        if "test_workspace_prompts" in existing_state:
+            state["test_workspace_prompts"] = existing_state["test_workspace_prompts"]
         reject_wholesale_state_map_clear(existing_state, state)
         # print("[folder_state_save] State to be written:", state)
         write_folder_state_atomic(state_path, state)

@@ -1166,6 +1166,10 @@
       }
     }
     if (result && result.seed !== undefined && result.seed !== null) summary.push('Seed ' + result.seed);
+    var loraNames = (Array.isArray(result && result.loras) ? result.loras : []).map(function (item) {
+      return String(item && item.name || '').replace(/\\/g, '/').split('/').pop().replace(/\.safetensors$/i, '');
+    }).filter(Boolean);
+    if (loraNames.length) summary.push((loraNames.length === 1 ? 'LoRA ' : 'LoRAs ') + loraNames.join(', '));
     var elapsed = formatGenerationElapsedMs(result && result.elapsedMs);
     if (elapsed) summary.push(elapsed);
     return summary.join(' · ');

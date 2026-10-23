@@ -404,6 +404,17 @@ def test_generate_displays_live_and_persisted_generation_elapsed_time():
     assert '"elapsedMs": int(elapsed_ms or 0)' in store
 
 
+def test_generate_preview_uses_saved_per_result_loras():
+    script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")
+    store = (ROOT / "tool" / "server" / "generate_store.py").read_text(encoding="utf-8")
+
+    assert '"loras": request.get("loras") if isinstance(request.get("loras"), list) else []' in store
+    assert "Array.isArray(result && result.loras)" in script
+    assert ".split('/').pop().replace(/\\.safetensors$/i, '')" in script
+    assert "summary.push((loraNames.length === 1 ? 'LoRA ' : 'LoRAs ') + loraNames.join(', '))" in script
+    assert "summary.textContent = [String(result.modelId || 'Generated'), resultSummary(result)]" in script
+
+
 def test_generate_prompt_library_is_local_file_backed_mvp():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     script = (ROOT / "tool" / "js" / "generate.js").read_text(encoding="utf-8")

@@ -39,6 +39,8 @@
     inspectedResult: null,
     navigationVersion: 0,
     activePendingJobId: '',
+    pendingJobsById: {},
+    freshDraft: false,
     takesCollapsed: false,
     takesVisibleCount: TAKE_BATCH_SIZE,
     open: false
@@ -701,54 +703,73 @@
   function restoreResultConfiguration(result) {
     if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before restoring a generation configuration.');
     if (!result) throw new Error('Generation result is required.');
-
+  
     var resultModelId = String(result.modelId || '');
-    var modelAvailable = generateState.models.some(function (model) {
-      return String(model.id) === resultModelId;
-    });
-    if (resultModelId && modelAvailable) {
+    var model = generateState.models.find(function (item) { return String(item.id) === resultModelId; });
+    if (model) {
       generateState.modelId = resultModelId;
       el('generate-model').value = resultModelId;
       renderModelForm();
-    } else if (resultModelId && typeof window.reportConsoleWarning === 'function') {
-      window.reportConsoleWarning(
-        'Generate',
-        'Opened generation uses unavailable Base Model: ' + resultModelId + '. Preview opened without restoring model-specific settings.'
-      );
+    } else if (resultModelId) {
+      var unavailable = 'Saved Take uses unavailable Base Model: ' + resultModelId + '. Its settings cannot be restored.';
+      if (typeof window.reportConsoleWarning === 'function') window.reportConsoleWarning('Generate', unavailable);
+      setStatus(unavailable, 'error');
     }
-
+  
     var prompt = el('generate-prompt');
     prompt.value = String(result.sourcePrompt || result.resolvedPrompt || '');
     prompt.dataset.modelId = resultModelId || String(generateState.modelId || '');
-    if (modelAvailable) {
-
+    if (model) {
       var settings = result.settings && typeof result.settings === 'object' ? result.settings : {};
-      [
+      var fields = [
         ['aspectRatio', 'generate-aspect'],
         ['megapixels', 'generate-megapixels'],
         ['duration', 'generate-duration'],
         ['samplingMode', 'generate-sampling-mode'],
         ['dimensions', 'generate-dimensions'],
         ['seed', 'generate-seed']
-      ].forEach(function (entry) {
-        if (!Object.prototype.hasOwnProperty.call(settings, entry[0])) return;
+      ];
+      var missing = [];
+      fields.forEach(function (entry) {
+        if (!fieldVisible(entry[0])) return;
         var control = el(entry[1]);
-        if (control) control.value = entry[0] === 'samplingMode'
-          ? normalizeGenerateSamplingMode(settings[entry[0]]) : String(settings[entry[0]]);
+        if (!control) throw new Error('Generation setting control is missing: ' + entry[1]);
+        var value = Object.prototype.hasOwnProperty.call(settings, entry[0]) ? settings[entry[0]]
+          : (entry[0] === 'seed' ? result.seed : undefined);
+        if (value === undefined || value === null || value === '') {
+          missing.push(entry[0]);
+          return;
+        }
+        control.value = entry[0] === 'samplingMode' ? normalizeGenerateSamplingMode(value) : String(value);
       });
-
+      if (missing.length && typeof window.reportConsoleWarning === 'function') {
+        window.reportConsoleWarning('Generate', 'Saved Take has no values for: ' + missing.join(', ') + '. Model defaults remain in those fields.');
+      }
+  
+      if (!Array.isArray(result.loras) && typeof window.reportConsoleWarning === 'function') {
+        window.reportConsoleWarning('Generate', 'Saved Take has no LoRA metadata; cannot verify its applied LoRAs.');
+      }
       generateState.lorasByModel[resultModelId] = Array.isArray(result.loras)
         ? result.loras.map(function (item) {
             var strength = Number(item.strength);
-            return {
-              name: String(item.name || ''),
-              strength: isFinite(strength) ? strength : 1
-            };
+            return { name: String(item.name || ''), strength: isFinite(strength) ? strength : 1 };
           }).filter(function (item) { return item.name; })
         : [];
-        renderLoras();
+      setLoraMode('selected');
+      renderLoras();
     }
-
+  
+    // Browser file inputs cannot be prepopulated. Never reuse files left from a different Take.
+    ['first_frame', 'last_frame'].forEach(function (role) {
+      el('generate-reference-' + role).value = '';
+      syncReferenceDropzone(role);
+    });
+    if (result.references && Object.keys(result.references).length) {
+      var message = 'This Take used saved reference images. Select those images again before generating.';
+      if (typeof window.reportConsoleWarning === 'function') window.reportConsoleWarning('Generate', message);
+      setStatus(message);
+    }
+  
     generateState.promptLibrary.activeId = '';
     generateState.director.previousPrompt = null;
     setDirectorStatus('');
@@ -1091,7 +1112,7 @@
       }).then(function (payload) {
         queued += 1;
         trackGenerateJob(payload.job && payload.job.jobId);
-        syncGenerationPreviewCard(payload.job, true);
+        syncGenerationPreviewCard(payload.job, queued === 1);
         setSweepSubmissionStatus(submission, 'Queued Sweep · ' + queued + ' / ' + submission.items.length);
       });
     });
@@ -1270,24 +1291,25 @@
     generateState.activeResultKey = key;
     generateState.inspectedResult = result;
     generateState.activePendingJobId = '';
+    generateState.freshDraft = false;
     summary.textContent = [String(result.modelId || 'Generated'), resultSummary(result)].filter(Boolean).join(' · ');
-
+  
+    syncActiveTakeState();
     if (String(host.dataset.resultKey || '') === key) return;
     host.innerHTML = '';
     host.dataset.resultKey = key;
     host.removeAttribute('data-generation-job-id');
-
+  
     var media = document.createElement('div');
     media.className = 'generate-stage-media';
     media.appendChild(resultMediaElement(result, true));
-
+  
     var caption = document.createElement('div');
     caption.className = 'generate-stage-caption';
     caption.appendChild(buildPromptViewer(result, 'generate-prompt-viewer'));
-
+  
     host.appendChild(media);
     host.appendChild(caption);
-    syncActiveTakeState();
   }
 
   function renderPendingStage(job) {
@@ -1298,7 +1320,9 @@
     if (!jobId) throw new Error('Generate inference job is missing its job ID.');
     generateState.activePendingJobId = jobId;
     generateState.activeResultKey = '';
+    generateState.freshDraft = false;
     summary.textContent = [String(job.modelId || 'Generate'), generationPreviewStatus(job)].filter(Boolean).join(' · ');
+    syncActiveTakeState();
 
     if (String(host.dataset.generationJobId || '') !== jobId) {
       host.innerHTML = '';
@@ -1328,22 +1352,30 @@
     var host = el('generate-takes');
     if (!host) throw new Error('Generations Takes markup is missing.');
     host.querySelectorAll('[data-generate-take-key]').forEach(function (card) {
-      card.classList.toggle('active', String(card.dataset.generateTakeKey || '') === String(generateState.activeResultKey || ''));
+      var open = card.querySelector('.generate-take-card');
+      if (open) open.classList.toggle('active', String(card.dataset.generateTakeKey || '') === String(generateState.activeResultKey || ''));
+    });
+    host.querySelectorAll('.generate-take-card.is-pending[data-generation-job-id]').forEach(function (card) {
+      card.classList.toggle('active', String(card.dataset.generationJobId || '') === String(generateState.activePendingJobId || ''));
     });
   }
 
   function buildTakeCard(result) {
     var key = resultKey(result);
+    var entry = document.createElement('div');
+    entry.className = 'generate-take-entry';
+    entry.dataset.generateTakeKey = key;
+  
     var card = document.createElement('button');
     card.type = 'button';
     card.className = 'generate-take-card';
-    card.dataset.generateTakeKey = key;
+    card.dataset.generateTakeSelect = key;
     card.title = String(result.resolvedPrompt || result.sourcePrompt || '');
-
+  
     var media = document.createElement('span');
     media.className = 'generate-take-media';
     media.appendChild(resultMediaElement(result, false));
-
+  
     var copy = document.createElement('span');
     copy.className = 'generate-take-copy';
     var model = document.createElement('strong');
@@ -1352,10 +1384,19 @@
     details.textContent = resultSummary(result);
     copy.appendChild(model);
     copy.appendChild(details);
-
     card.appendChild(media);
     card.appendChild(copy);
-    return card;
+    entry.appendChild(card);
+  
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'generate-take-delete';
+    remove.dataset.generateDeleteStorageId = String(result.storageId || '');
+    remove.textContent = '×';
+    remove.title = 'Permanently delete this Take';
+    remove.setAttribute('aria-label', remove.title);
+    entry.appendChild(remove);
+    return entry;
   }
 
   function renderTakes(results) {
@@ -1370,7 +1411,7 @@
     items.forEach(function (result) {
       desired[resultKey(result)] = result;
     });
-    host.querySelectorAll('.generate-take-card[data-generate-take-key]').forEach(function (card) {
+    host.querySelectorAll('.generate-take-entry[data-generate-take-key]').forEach(function (card) {
       if (!desired[String(card.dataset.generateTakeKey || '')]) card.remove();
     });
 
@@ -1380,7 +1421,7 @@
       var key = resultKey(result);
       if (!key) return;
       var card = Array.prototype.find.call(
-        host.querySelectorAll('.generate-take-card[data-generate-take-key]'),
+        host.querySelectorAll('.generate-take-entry[data-generate-take-key]'),
         function (candidate) { return String(candidate.dataset.generateTakeKey || '') === key; }
       );
       if (!card) card = buildTakeCard(result);
@@ -1403,11 +1444,7 @@
       loadMore.remove();
     }
 
-    if (!generateState.activeResultKey && !generateState.activePendingJobId && items.length) {
-      renderActiveResult(items[0]);
-    } else {
-      syncActiveTakeState();
-    }
+    syncActiveTakeState();
   }
 
   function generationPreviewStatus(job) {
@@ -1425,11 +1462,13 @@
     return null;
   }
 
-  function removeGenerationPreviewCard(jobId) {
+  function removeGenerationPreviewCard(jobId, completed) {
     var card = generationPreviewCard(jobId);
     if (card) card.remove();
-    if (String(generateState.activePendingJobId || '') === String(jobId || '')) {
+    delete generateState.pendingJobsById[String(jobId || '')];
+    if (String(generateState.activePendingJobId || '') === String(jobId || '') && !completed) {
       generateState.activePendingJobId = '';
+      generateState.activeResultKey = '';
       renderStageEmpty();
     }
   }
@@ -1439,27 +1478,29 @@
     var jobId = String(job && job.jobId || '');
     if (!host) throw new Error('Generations Takes markup is missing.');
     if (!jobId) throw new Error('Generate inference job is missing its job ID.');
-
+  
     var status = String(job.status || '');
     if (['backlog', 'queued', 'starting', 'running', 'stopping'].indexOf(status) === -1) {
-      removeGenerationPreviewCard(jobId);
+      if (status === 'completed' && generateState.activePendingJobId === jobId) renderPendingStage(job);
+      removeGenerationPreviewCard(jobId, status === 'completed');
       return;
     }
-
+    generateState.pendingJobsById[jobId] = job;
+  
     var card = generationPreviewCard(jobId);
     if (!card) {
       card = document.createElement('button');
       card.type = 'button';
       card.className = 'generate-take-card is-pending';
       card.dataset.generationJobId = jobId;
-
+  
       var mediaHost = document.createElement('span');
       mediaHost.className = 'generate-take-media generate-result-pending-media';
       var indicator = document.createElement('span');
       indicator.className = 'generate-result-pending-indicator';
       indicator.setAttribute('aria-hidden', 'true');
       mediaHost.appendChild(indicator);
-
+  
       var copy = document.createElement('span');
       copy.className = 'generate-take-copy';
       var model = document.createElement('strong');
@@ -1468,29 +1509,21 @@
       details.dataset.generationPreviewStatus = '1';
       copy.appendChild(model);
       copy.appendChild(details);
-
+  
       card.appendChild(mediaHost);
       card.appendChild(copy);
       host.insertBefore(card, host.firstChild);
     }
-
-    var statusText = generationPreviewStatus(job);
+  
     var statusNode = card.querySelector('[data-generation-preview-status]');
     var modelNode = card.querySelector('[data-generation-preview-model]');
-    if (statusNode) statusNode.textContent = statusText;
+    if (statusNode) statusNode.textContent = generationPreviewStatus(job);
     if (modelNode) modelNode.textContent = String(job.modelId || 'Generate');
-
-    var executing = ['starting', 'running', 'stopping'].indexOf(status) !== -1;
-    if (
-      executing ||
-      (focusStage && !generateState.activePendingJobId) ||
-      String(generateState.activePendingJobId || '') === jobId ||
-      (!generateState.activePendingJobId && !generateState.activeResultKey)
-    ) {
-      renderPendingStage(job);
-    }
+  
+    // Only submitting a new job may auto-select it. Polling must never steal the preview.
+    if (focusStage || generateState.activePendingJobId === jobId) renderPendingStage(job);
+    else syncActiveTakeState();
   }
-
 
   function refreshTrackedGenerateJobs(queue) {
     adoptGenerateJobsFromQueue(queue);
@@ -1670,60 +1703,93 @@
     var items = Array.isArray(results) ? results : [];
     generateState.results = items;
     librarySummary.textContent = items.length ? String(items.length) + ' generated item' + (items.length === 1 ? '' : 's') : 'No generated media yet';
-
+  
     var desired = {};
     items.forEach(function (result) { desired[resultKey(result)] = result; });
     host.querySelectorAll('.generate-result-card[data-result-key]').forEach(function (card) {
       if (!desired[String(card.dataset.resultKey || '')]) card.remove();
     });
-
+  
     var existingKeys = {};
     host.querySelectorAll('.generate-result-card[data-result-key]').forEach(function (card) {
       existingKeys[String(card.dataset.resultKey || '')] = true;
     });
-
     var empty = host.querySelector('.generate-results-empty');
     if (items.length && empty) empty.remove();
-
+  
     items.slice().reverse().forEach(function (result) {
       var key = resultKey(result);
       if (!key || existingKeys[key]) return;
       host.insertBefore(buildResultCard(result), host.firstChild);
       existingKeys[key] = true;
     });
-
     if (!items.length && !host.querySelector('.generate-result-card') && !host.querySelector('.generate-results-empty')) {
       empty = document.createElement('div');
       empty.className = 'generate-results-empty';
       empty.textContent = 'Generated media will appear here.';
       host.appendChild(empty);
     }
-
+  
     renderTakes(items);
     if (generateState.activePendingJobId) {
-      var completed = items.find(function (result) {
-        return String(result.jobId || '') === String(generateState.activePendingJobId || '');
-      });
-      if (completed) renderActiveResult(completed);
+      var completed = items.find(function (result) { return String(result.jobId || '') === generateState.activePendingJobId; });
+      if (completed) selectGenerationResult(completed);
     } else if (generateState.activeResultKey) {
-      var selected = items.find(function (result) {
-        return resultKey(result) === generateState.activeResultKey;
-      });
+      var selected = items.find(function (result) { return resultKey(result) === generateState.activeResultKey; });
       if (selected) renderActiveResult(selected);
       else if (generateState.inspectedResult && resultKey(generateState.inspectedResult) === generateState.activeResultKey) {
         renderActiveResult(generateState.inspectedResult);
+      } else if (items.length) {
+        selectGenerationResult(items[0]);
+      } else {
+        startNewGeneration();
       }
-      else {
-        generateState.activeResultKey = '';
-        if (items.length) renderActiveResult(items[0]);
-        else renderStageEmpty();
-      }
-    } else if (items.length) {
-      renderActiveResult(items[0]);
+    } else if (items.length && !generateState.freshDraft) {
+      selectGenerationResult(items[0]);
     } else {
       renderStageEmpty();
     }
     syncPromptAssistantDependencies();
+  }
+
+  function selectGenerationResult(result) {
+    restoreResultConfiguration(result);
+    renderActiveResult(result);
+  }
+
+  function startNewGeneration() {
+    if (generateState.director.busy) throw new Error('Wait for Prompt Assistant to finish before starting a new generation.');
+    closeGenerateLoraPicker();
+    resetGeneratePromptScratch();
+    var model = currentModel() || generateState.models[0];
+    if (model) {
+      generateState.modelId = String(model.id);
+      el('generate-model').value = generateState.modelId;
+      renderModelForm();
+    }
+    generateState.activePendingJobId = '';
+    generateState.activeResultKey = '';
+    generateState.inspectedResult = null;
+    generateState.freshDraft = true;
+    renderStageEmpty();
+    syncActiveTakeState();
+    setGenerateViewMode('create');
+  }
+
+  function deleteGenerationResult(storageId, button) {
+    if (!storageId) throw new Error('Generation result is missing its storage identity.');
+    if (!window.confirm('Permanently delete this generation and all of its artifacts?')) return;
+    button.disabled = true;
+    return postJson('/fs/generate/result/delete', { storageId: storageId }).then(function () {
+      if (generateState.inspectedResult && String(generateState.inspectedResult.storageId || '') === storageId) {
+        generateState.inspectedResult = null;
+        generateState.activeResultKey = '';
+      }
+      return refreshResults();
+    }).catch(function (err) {
+      button.disabled = false;
+      reportError(err, 'Delete failed');
+    });
   }
 
   function refreshResults() {
@@ -2522,16 +2588,13 @@
     syncCancelQueuedButton();
     if (typeof window.syncApplicationShellContext === 'function') window.syncApplicationShellContext();
     if (typeof window.syncShellLocationRoute === 'function') window.syncShellLocationRoute();
-    return Promise.all([
-      refreshCapabilities(),
-      refreshDirector(),
-      refreshTrackedGenerateJobs(),
-      refreshResults()
-    ]).then(function () {
+    return refreshCapabilities().then(function () {
+      return Promise.all([refreshDirector(), refreshTrackedGenerateJobs(), refreshResults()]);
+    }).then(function () {
       if (!target.storageId || !generateState.open || navigationVersion !== generateState.navigationVersion) return;
       return requestJson('/fs/generate/result?storageId=' + encodeURIComponent(target.storageId)).then(function (payload) {
         if (!generateState.open || navigationVersion !== generateState.navigationVersion) return;
-        renderActiveResult(payload.result);
+        selectGenerationResult(payload.result);
         setGenerateViewMode('create');
       });
     }).catch(reportError);
@@ -2558,6 +2621,9 @@
     el('generate-create-mode-btn').onclick = function () {
       setGenerateViewMode('create');
     };
+    el('generate-new-btn').onclick = function () {
+      try { startNewGeneration(); } catch (err) { reportError(err, 'New generation blocked'); }
+    };
     el('generate-library-mode-btn').onclick = function () {
       setGenerateViewMode('library');
     };
@@ -2568,17 +2634,41 @@
       setTakesCollapsed(!generateState.takesCollapsed);
     };
     el('generate-takes').addEventListener('click', function (event) {
+      var deleteButton = event.target.closest('[data-generate-delete-storage-id]');
+      if (deleteButton) {
+        deleteGenerationResult(String(deleteButton.dataset.generateDeleteStorageId || '').trim(), deleteButton);
+        return;
+      }
+      var pending = event.target.closest('.generate-take-card.is-pending[data-generation-job-id]');
+      if (pending) {
+        var pendingJob = generateState.pendingJobsById[String(pending.dataset.generationJobId || '')];
+        if (!pendingJob) throw new Error('Pending generation request is missing.');
+        try {
+          var configuration = pendingJob.generationConfiguration;
+          if (!configuration) throw new Error('Pending generation is missing its saved configuration.');
+          restoreResultConfiguration({
+            modelId: pendingJob.modelId,
+            sourcePrompt: configuration.sourcePrompt,
+            settings: configuration.settings,
+            loras: configuration.loras,
+            references: configuration.references
+          });
+          renderPendingStage(pendingJob);
+        } catch (err) { reportError(err, 'Configuration restore blocked'); }
+        return;
+      }
       var loadMore = event.target.closest('[data-generate-takes-more]');
       if (loadMore) {
         generateState.takesVisibleCount += TAKE_BATCH_SIZE;
         renderTakes(generateState.results);
         return;
       }
-      var card = event.target.closest('[data-generate-take-key]');
+      var card = event.target.closest('[data-generate-take-select]');
       if (!card) return;
-      var key = String(card.dataset.generateTakeKey || '');
+      var key = String(card.dataset.generateTakeSelect || '');
       var result = generateState.results.find(function (item) { return resultKey(item) === key; });
-      if (result) renderActiveResult(result);
+      if (!result) throw new Error('Selected Take no longer exists.');
+      try { selectGenerationResult(result); } catch (err) { reportError(err, 'Configuration restore blocked'); }
     });
 
     el('generate-model').addEventListener('change', function () {
@@ -2840,20 +2930,7 @@
       var deleteButton = event.target.closest('[data-generate-delete-storage-id]');
       if (deleteButton) {
         var storageId = String(deleteButton.dataset.generateDeleteStorageId || '').trim();
-        if (!storageId) throw new Error('Generation result is missing its storage identity.');
-        if (!window.confirm('Permanently delete this generation and all of its artifacts?')) return;
-        deleteButton.disabled = true;
-        postJson('/fs/generate/result/delete', { storageId: storageId }).then(function () {
-          if (generateState.inspectedResult && generateState.inspectedResult.storageId === storageId) {
-            generateState.inspectedResult = null; generateState.activeResultKey = '';
-          }
-          var card = deleteButton.closest('.generate-result-card');
-          if (card) card.remove();
-          return refreshResults();
-        }).catch(function (err) {
-          deleteButton.disabled = false;
-          reportError(err, 'Delete failed');
-        });
+        deleteGenerationResult(storageId, deleteButton);
         return;
       }
 
@@ -2867,8 +2944,7 @@
       var result = generateState.results.find(function (item) { return resultKey(item) === key; });
       if (!result) return;
       try {
-        restoreResultConfiguration(result);
-        renderActiveResult(result);
+        selectGenerationResult(result);
         setGenerateViewMode('create');
       } catch (err) {
         reportError(err, 'Configuration restore blocked');

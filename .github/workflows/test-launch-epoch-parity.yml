@@ -30,6 +30,8 @@ on:
       - 'tool/server/execution_queue.py'
       - 'tests/test_inference_runner.py'
       - 'tests/test_execution_queue.py'
+      - 'tests/test_test_bulk_queue.py'
+      - 'docs/test_generations_100_candidate_scaling_plan.md'
       - 'tool/css/workspace_shell.css'
       - 'tests/inference_error_passthrough.test.cjs'
       - 'tests/test_inference_error_passthrough.py'
@@ -65,6 +67,9 @@ jobs:
           python -m compileall -q tool/server/inference_runner.py tool/server/execution_queue.py tool/server/inference_runtime.py
           python -m pytest -q tests/test_inference_runner.py -k "(backlog and not drains_foreground and not deferred_storyboard) or inference_runner_honors_stop_requested_during_start or inference_stop_remains_stopped_when_execution_raises"
           python -m pytest -q tests/test_execution_queue.py -k "backlog or shelves_active_work_back_to_clean_backlog or cancel_and_stop_transitions or stop_request_survives_late_running_transition"
+      - name: Current 100-candidate Test queue lifecycle regression
+        run: |
+          python -m pytest -q tests/test_test_bulk_queue.py tests/test_execution_queue.py -k "batch or 100_renditions or failed_bulk_promotion or session_lookup_preserves_transient_terminal_receipt"
       - name: Focused regression
         run: |
           python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py tests/test_training_references_browser.py tests/test_h3_sampling_modes.py tests/test_inference_models.py

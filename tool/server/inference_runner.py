@@ -10,6 +10,7 @@ from .execution_queue import (
     consume_terminal_job as execution_consume_terminal_job,
     claim_next as execution_claim_next,
     enqueue as execution_enqueue,
+    enqueue_many as execution_enqueue_many,
     discard_terminal_and_recent as execution_discard_terminal_and_recent,
     finish_job_transient as execution_finish_job_transient,
     get_job as execution_get_job,
@@ -770,6 +771,47 @@ def enqueue_test(request, context, label="", deferred=False):
     if not deferred:
         _start_worker_for_requested_inference()
     return _job_view(execution_get_job(job["id"]))
+
+
+
+def enqueue_test_many(request, contexts, labels=None, deferred=False):
+    """Create one durable queue batch for the Test Session's ordered candidates."""
+    _ensure_execution_reconciled()
+    contexts = list(contexts)
+    labels = list(labels or [])
+    if len(contexts) != len(labels):
+        raise ValueError("Each Test candidate must have a corresponding label.")
+    entries = []
+    for context, label in zip(contexts, labels):
+        folder = str(context.get("folder") or "").strip()
+        session_id = str(context.get("sessionId") or "").strip()
+        candidate_kind = str(context.get("candidateKind") or "").strip()
+        if not folder or not session_id or candidate_kind not in {"base", "lora"}:
+            raise ValueError("Test inference requires folder, session, and candidate context.")
+        metadata = {
+            "client": "test",
+            "label": str(label or "Test"),
+            "modelId": str(request.get("modelId") or ""),
+            "mediaKind": str(request.get("mediaKind") or ""),
+            "folder": folder,
+            "source": str(context.get("source") or ""),
+            "sessionId": session_id,
+            "candidateKind": candidate_kind,
+            "candidateFile": str(context.get("candidateFile") or ""),
+        }
+        if request.get("sweepWeights") and candidate_kind == "lora":
+            metadata["candidateStrength"] = float(context["candidateStrength"])
+        # enqueue_many freezes every payload once under the durable queue lock.
+        entries.append({
+            "payload": {"request": request, "clientContext": context},
+            "metadata": metadata,
+        })
+    jobs = execution_enqueue_many(
+        EXECUTION_LANE, entries, initial_status="backlog" if deferred else "queued"
+    )
+    if not deferred:
+        _start_worker_for_requested_inference()
+    return [{"jobId": job["id"]} for job in jobs]
 
 
 def snapshot(include_terminal=False):

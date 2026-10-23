@@ -287,7 +287,7 @@ def prepare_h3_probe(folder, file_name):
     source = folder_path / selected_name
     if not source.is_file() or source.suffix.lower() not in VIDEO_EXTS:
         raise ValueError("H3 envelope probe requires a selected video.")
-    config_name = config_for_stage(MINIMAX_H3_PROFILE_ID, "h3", "normal")["file"]
+    config_name = config_for_stage(MINIMAX_H3_PROFILE_ID, "h3")["file"]
     source_config = folder_path / config_name
     if not source_config.is_file():
         training_config_template_path(config_name)

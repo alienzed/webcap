@@ -83,7 +83,10 @@
         if(folder!==currentFolder||modelId!==String(window.getWorkingModelProfileId()||'')||
            activeCampaign||els('campaign-type').value!=='auto'||revision!==campaignDraftRevision)return;
         var saved=payload.campaignSettings||{};
-        els('prompt').value=payload.workspacePromptPresent?String(payload.workspacePrompt||''):String(payload.defaultPrompt||'');
+        var localPrompt=typeof window.testGenerationsCurrentSetPrompt==='function'
+          ?window.testGenerationsCurrentSetPrompt(folder,modelId):null;
+        els('prompt').value=localPrompt!==null?localPrompt:
+          (payload.workspacePromptPresent?String(payload.workspacePrompt||''):String(payload.defaultPrompt||''));
         els('concept').value=String(saved.concept||'');
         [['rounds','rounds'],['cases','cases'],['retention','retention']].forEach(function(pair){
           if(saved[pair[1]]!=null)els(pair[0]).value=String(saved[pair[1]]);
@@ -1246,7 +1249,10 @@
       if(context!==currentFolder || (selectedId && activeCampaign!==selectedId) ||
           (!selectedId && activeCampaign) || els('campaign-type').value!=='manual')return;
       if(!plan){
-        var prompt=payload.workspacePromptPresent?payload.workspacePrompt:payload.defaultPrompt;
+        var localPrompt=typeof window.testGenerationsCurrentSetPrompt==='function'
+          ?window.testGenerationsCurrentSetPrompt(context,String(campaign&&campaign.modelId||window.getWorkingModelProfileId()||'')):null;
+        var prompt=localPrompt!==null?localPrompt:
+          (payload.workspacePromptPresent?payload.workspacePrompt:payload.defaultPrompt);
         if(!els('manual-prompt').value.trim()){
           els('manual-prompt').value=String(prompt||'');
           screeningGroups((payload.manualSettings||{}).groupIndex||0);

@@ -3465,6 +3465,61 @@ def finish_schedule_response(job_id, epoch=None, cancel=False):
         return {"ok": True, "job": _public_job(job)}, 200
 
 
+def update_queued_epochs_response(job_id, epochs):
+    """Change a not-yet-running job's epoch target, never its immutable capture."""
+    value = str(epochs).strip()
+    if not re.fullmatch(r"[1-9][0-9]{0,2}", value):
+        return {"ok": False, "error": "Target epochs must be a whole number from 1 to 999."}, 400
+    target = int(value)
+    with _lock:
+        state = _read_state()
+        job = next((item for item in state.get("jobs", []) if item.get("id") == job_id), None)
+        if not job:
+            return {"ok": False, "error": "Training job not found."}, 404
+        if job.get("status") != "queued" or job.get("startedAt") and not job.get("resumeFromCheckpoint"):
+            return {"ok": False, "error": "Only queued training jobs can change their target epochs."}, 409
+        if job.get("resumeFromCheckpoint") and (job.get("resumePointError") or not job.get("resumePoint", {}).get("checkpointAvailable")):
+            return {"ok": False, "error": "Cannot change epochs until the saved resume point is available."}, 409
+        resume_epoch = int((job.get("resumePoint") or {}).get("epoch") or 0)
+        progress_epoch = int((job.get("progress") or {}).get("epoch") or 0)
+        minimum = max(resume_epoch, progress_epoch)
+        if target <= minimum:
+            return {"ok": False, "error": "Target epochs must exceed the last completed epoch (" + str(minimum) + ")."}, 400
+        stage = str(job.get("stages") or "")
+        source = Path(str((job.get("snapshot") or {}).get(stage) or ""))
+        if not source.is_file():
+            return {"ok": False, "error": "Queued job's captured training config is unavailable."}, 409
+        current = _read_config_epochs(source)
+        if target == current:
+            return {"ok": True, "job": _public_job(job)}, 200
+        # Make an effective, per-job copy; keep source capture and user TOML unchanged.
+        destination = _job_dir(job) / source.name
+        try:
+            modified = rewrite_toml_assignment(source.read_text(encoding="utf-8"), "epochs", str(target))
+            temp = destination.with_name(destination.name + "." + uuid.uuid4().hex + ".tmp")
+            try:
+                temp.write_text(modified, encoding="utf-8")
+                os.replace(temp, destination)
+            finally:
+                temp.unlink(missing_ok=True)
+        except (OSError, ValueError) as exc:
+            return {"ok": False, "error": "Could not update queued training config: " + str(exc)}, 409
+        job.setdefault("snapshot", {})[stage] = str(destination)
+        job.setdefault("bundleArtifacts", {})[stage + "Config"] = str(destination)
+        job.setdefault("trainingSettings", {})["epochs"] = target
+        job.setdefault("runSummary", {})["epochs"] = target
+        plan = (job.get("progressPlan") or {}).get(stage)
+        if isinstance(plan, dict) and int(plan.get("epochs") or 0) > 0:
+            old = int(plan["epochs"])
+            for key in ("estimatedSteps", "estimatedImageExposures", "estimatedVideoExposures", "sampleExposures"):
+                if plan.get(key) is not None:
+                    plan[key] = round(int(plan[key]) * target / old)
+            plan["epochs"] = target
+        job["updatedAt"] = time.time()
+        _persist_reconciled_state(state)
+        return {"ok": True, "job": _public_job(job)}, 200
+
+
 def reorder_response(job_id, direction, position=None):
     if position is None and direction not in ("up", "down"):
         return {"ok": False, "error": "Queue direction must be up or down."}, 400

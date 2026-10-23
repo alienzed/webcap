@@ -566,3 +566,21 @@ if (JSON.stringify(plan) !== original) throw Error('Summary mutated saved bucket
         ["node", "-e", harness, str(script_path)], capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_training_queue_has_direct_reorder_and_epoch_controls():
+    root = Path(__file__).parents[1]
+    script = (root / "tool" / "js" / "training_runner_ui.js").read_text(encoding="utf-8")
+    events = (root / "tool" / "js" / "training_workspace.js").read_text(encoding="utf-8")
+    styles = (root / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
+    assert 'data-training-queue-drag-handle' in script
+    assert 'data-training-queue-action="up"' in script
+    assert 'data-training-queue-action="down"' in script
+    assert 'data-training-edit-epochs' in script
+    assert "/fs/training_runner/queued_epochs" in script
+    assert "position: position" in script
+    assert "runnerQueue.addEventListener('dragstart'" in events
+    assert "runnerQueue.addEventListener('dragover'" in events
+    assert "runnerQueue.addEventListener('drop'" in events
+    assert "reorderManagedTraining(movingId, '', to)" in events
+    assert 'training-runner-queue-item[data-training-queue-drop]' in styles

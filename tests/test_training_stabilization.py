@@ -2269,3 +2269,85 @@ def test_training_queue_reorder_position_preserves_nonqueued_slots(monkeypatch):
     response, status = training_runner.reorder_response("second", "up")
     assert status == 200 and response["ok"]
     assert [job["id"] for job in jobs] == ["running", "second", "finished", "first", "third"]
+
+
+def test_update_queued_epochs_preserves_capture_and_updates_effective_job(tmp_path, monkeypatch):
+    source = tmp_path / "capture" / "config.h3.toml"
+    source.parent.mkdir()
+    source.write_text('epochs = 70\n[model]\ntype = "minimax_h3"\n', encoding="utf-8")
+    job_dir = tmp_path / "jobs" / "job-one"
+    job_dir.mkdir(parents=True)
+    job = {
+        "id": "job-one", "status": "queued", "stages": "h3",
+        "snapshot": {"h3": str(source)}, "bundleArtifacts": {"h3Config": str(source)},
+        "artifactDir": str(job_dir), "trainingSettings": {"epochs": "70"},
+        "runSummary": {"epochs": 70},
+        "progressPlan": {"h3": {"epochs": 70, "estimatedSteps": 1400, "estimatedImageExposures": 2800, "sampleExposures": 2800}},
+    }
+    state = {"jobs": [job]}
+    monkeypatch.setattr(training_runner, "_read_state", lambda: state)
+    writes = []
+    monkeypatch.setattr(training_runner, "_persist_reconciled_state", lambda value: writes.append(True))
+    monkeypatch.setattr(training_runner, "_public_job", lambda item: dict(item))
+
+    response, status = training_runner.update_queued_epochs_response("job-one", "30")
+    assert status == 200 and response["ok"]
+    effective = Path(job["snapshot"]["h3"])
+    assert effective != source and effective.is_file()
+    assert effective.name == source.name
+    assert job["bundleArtifacts"]["h3Config"] == str(effective)
+    assert tomllib.loads(effective.read_text(encoding="utf-8"))["epochs"] == 30
+    assert tomllib.loads(source.read_text(encoding="utf-8"))["epochs"] == 70
+    assert job["trainingSettings"]["epochs"] == 30
+    assert job["runSummary"]["epochs"] == 30
+    assert job["progressPlan"]["h3"]["epochs"] == 30
+    assert job["progressPlan"]["h3"]["estimatedSteps"] == 600
+    assert job["progressPlan"]["h3"]["sampleExposures"] == 1200
+    assert len(writes) == 1
+
+    response, status = training_runner.update_queued_epochs_response("job-one", "95")
+    assert status == 200 and response["ok"]
+    assert job["snapshot"]["h3"] == str(effective)
+    assert tomllib.loads(effective.read_text(encoding="utf-8"))["epochs"] == 95
+    assert tomllib.loads(source.read_text(encoding="utf-8"))["epochs"] == 70
+    assert job["progressPlan"]["h3"]["estimatedSteps"] == 1900
+
+    for invalid in ("0", "-1", "1.5", "1000", "", "nan", None):
+        response, status = training_runner.update_queued_epochs_response("job-one", invalid)
+        assert status == 400 and not response["ok"]
+    assert tomllib.loads(effective.read_text(encoding="utf-8"))["epochs"] == 95
+
+    job["status"] = "running"
+    response, status = training_runner.update_queued_epochs_response("job-one", "40")
+    assert status == 409 and not response["ok"]
+    assert tomllib.loads(effective.read_text(encoding="utf-8"))["epochs"] == 95
+
+
+def test_update_queued_resume_epochs_must_exceed_saved_progress(tmp_path, monkeypatch):
+    source = tmp_path / "config.h3.toml"
+    source.write_text("epochs = 80\n", encoding="utf-8")
+    job_dir = tmp_path / "job"
+    job_dir.mkdir()
+    job = {
+        "id": "resume", "status": "queued", "stages": "h3",
+        "resumeFromCheckpoint": "/checkpoint",
+        "resumePoint": {"checkpointAvailable": True, "epoch": 42},
+        "progress": {"epoch": 41},
+        "artifactDir": str(job_dir), "snapshot": {"h3": str(source)},
+        "bundleArtifacts": {"h3Config": str(source)}, "trainingSettings": {"epochs": 80},
+    }
+    monkeypatch.setattr(training_runner, "_read_state", lambda: {"jobs": [job]})
+    monkeypatch.setattr(training_runner, "_persist_reconciled_state", lambda _value: None)
+    monkeypatch.setattr(training_runner, "_public_job", lambda item: dict(item))
+
+    for invalid in ("40", "42"):
+        payload, status = training_runner.update_queued_epochs_response("resume", invalid)
+        assert status == 400 and "last completed epoch" in payload["error"]
+    payload, status = training_runner.update_queued_epochs_response("resume", "43")
+    assert status == 200 and payload["ok"]
+    assert tomllib.loads(Path(job["snapshot"]["h3"]).read_text(encoding="utf-8"))["epochs"] == 43
+    job["resumePointError"] = "checkpoint unavailable"
+    payload, status = training_runner.update_queued_epochs_response("resume", "60")
+    assert status == 409 and "saved resume point" in payload["error"]
+
+

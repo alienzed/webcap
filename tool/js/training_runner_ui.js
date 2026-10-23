@@ -627,14 +627,43 @@ function cancelQueuedTrainingJob(jobId) {
   });
 }
 
-function reorderManagedTraining(jobId, direction) {
-  trainingRunnerRequest('/fs/training_runner/reorder', {
+function reorderManagedTraining(jobId, direction, position) {
+  return trainingRunnerRequest('/fs/training_runner/reorder', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jobId: jobId, direction: direction })
+    body: JSON.stringify(position == null ? { jobId: jobId, direction: direction } : { jobId: jobId, position: position })
   }).then(function (payload) {
     trainingWorkspaceState.runnerJobs = Array.isArray(payload.jobs) ? payload.jobs : trainingWorkspaceState.runnerJobs;
     renderTrainingRunner();
   }).catch(function (err) { setStatus('Could not reorder queue: ' + String(err.message || err)); });
+}
+
+function changeQueuedTrainingEpochs(jobId) {
+  var job = getTrainingRunnerJobById(jobId);
+  if (!job || job.status !== 'queued') return;
+  var current = trainingPlannedEpochCount(job);
+  var point = job.resumePoint || {};
+  var minimum = Math.max(0, Number(point.epoch) || 0);
+  var entry = window.prompt('Total epochs for this queued run (1–999)' +
+    (minimum ? '\nMust exceed saved epoch ' + minimum + '.' : '') + ':', String(current || 70));
+  if (entry === null) return;
+  var value = String(entry).trim();
+  if (!/^[1-9][0-9]{0,2}$/.test(value) || Number(value) <= minimum) {
+    setStatus('Target epochs must be a whole number from ' + Math.max(1, minimum + 1) + ' to 999.');
+    return;
+  }
+  trainingRunnerRequest('/fs/training_runner/queued_epochs', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: jobId, epochs: value })
+  }).then(function (payload) {
+    var updated = payload.job;
+    trainingWorkspaceState.runnerJobs = (trainingWorkspaceState.runnerJobs || []).map(function (item) {
+      return item.id === jobId ? updated : item;
+    });
+    renderTrainingRunner();
+    setStatus('Queued run target updated to ' + value + ' epochs.');
+  }).catch(function (err) {
+    setStatus('Could not change queued epochs: ' + String(err.message || err));
+  });
 }
 
 function resumeManagedTrainingQueue() {
@@ -810,7 +839,7 @@ function buildTrainingQueueHtml(queuedJobs) {
         ? '<span class="training-runner-status training-runner-status--' + escapeHtml(status) + '">' + escapeHtml(trainingRunnerStatusLabel(status)) + '</span>'
         : '';
       return '<div class="training-runner-queue-item' + (selected ? ' active' : '') + '" data-training-queue-job="' + escapeHtml(queuedJob.id) + '">' +
-        '<div class="training-runner-queue-spine" aria-hidden="true"><span>' + (index + 1) + '</span></div>' +
+        '<div class="training-runner-queue-spine"><span>' + (index + 1) + '</span><span class="training-runner-queue-drag-handle" draggable="true" data-training-queue-drag-handle title="Drag to reorder queued jobs" aria-label="Drag to reorder queued jobs">⠿</span></div>' +
         '<div class="training-runner-queue-copy">' +
           '<div class="training-runner-queue-main">' + exceptionalStatus + '<strong>' + escapeHtml(stage) + '</strong>' +
           (imageModelLabel ? '<span class="training-runner-queue-workload">· ' + trainingH3ImageModelIconHtml() + escapeHtml(imageModelLabel) + '</span>' : '') + workload + '</div>' +
@@ -818,14 +847,15 @@ function buildTrainingQueueHtml(queuedJobs) {
           buildQueuedResumePointHtml(queuedJob) + output + captured + sourceUnavailable + error +
         '</div>' +
         '<div class="training-runner-queue-controls">' +
+          '<button type="button" class="training-runner-queue-control training-runner-queue-arrow" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move earlier" aria-label="Move earlier"' + (index === 0 ? ' disabled' : '') + '>↑</button>' +
+          '<button type="button" class="training-runner-queue-control training-runner-queue-arrow" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '" title="Move later" aria-label="Move later"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>↓</button>' +
+          '<button type="button" class="training-runner-queue-control training-runner-queue-epochs" data-training-edit-epochs="' + escapeHtml(queuedJob.id) + '" title="Change total epochs before this run starts" aria-label="Change target epochs">' + escapeHtml(String(plannedEpochs || '?')) + ' epochs ✎</button>' +
           (String(queuedJob.outputRunPath || queuedJob.resumeFromCheckpoint || '').trim() ? '<button type="button" class="training-runner-queue-control" data-training-candidates="' + escapeHtml(queuedJob.id) + '" title="Analyze LoRA candidates" aria-label="Analyze LoRA candidates">&#128200;</button>' : '') +
           '<button type="button" class="training-runner-queue-control" data-training-job-output="' + escapeHtml(queuedJob.id) + '" title="Open run output folder" aria-label="Open run output folder">&#128193;</button>' +
           '<details class="training-runner-queue-more">' +
             '<summary class="training-runner-queue-control" title="More queue actions" aria-label="More queue actions">&#8943;</summary>' +
             '<div class="training-runner-queue-menu">' +
               (queuedJob.actionPath ? '<button type="button" data-training-job-action="' + escapeHtml(queuedJob.id) + '">Open action folder</button>' : '') +
-              '<button type="button" data-training-queue-action="up" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === 0 ? ' disabled' : '') + '>Move earlier</button>' +
-              '<button type="button" data-training-queue-action="down" data-training-job-id="' + escapeHtml(queuedJob.id) + '"' + (index === queuedJobs.length - 1 ? ' disabled' : '') + '>Move later</button>' +
               (String(queuedJob.resumeFromCheckpoint || '').trim() ? '<button type="button" data-training-queue-action="finish" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Finish</button>' : '') +
               '<button type="button" class="training-runner-queue-cancel" data-training-queue-action="cancel" data-training-job-id="' + escapeHtml(queuedJob.id) + '">Remove from queue</button>' +
             '</div>' +

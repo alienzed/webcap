@@ -716,6 +716,11 @@ function wireTrainingWorkspace() {
       openTrainingJobAction(actionId);
       return;
     }
+    var editEpochs = event.target.closest('[data-training-edit-epochs]');
+    if (editEpochs) {
+      changeQueuedTrainingEpochs(editEpochs.getAttribute('data-training-edit-epochs'));
+      return;
+    }
     var action = event.target.getAttribute('data-training-queue-action');
     var jobId = event.target.getAttribute('data-training-job-id');
     if (action && jobId) {
@@ -735,6 +740,49 @@ function wireTrainingWorkspace() {
       renderTrainingRunner();
     }
   };
+  var draggedTrainingJobId = '';
+  var trainingQueueMoving = false;
+  function clearTrainingQueueDrag() {
+    draggedTrainingJobId = '';
+    runnerQueue.querySelectorAll('[data-training-queue-drop], [data-training-queue-dragging]').forEach(function (row) {
+      row.removeAttribute('data-training-queue-drop');
+      row.removeAttribute('data-training-queue-dragging');
+    });
+  }
+  runnerQueue.addEventListener('dragstart', function (event) {
+    var handle = event.target.closest('[data-training-queue-drag-handle]');
+    var row = handle && handle.closest('[data-training-queue-job]');
+    if (!row || trainingQueueMoving) { event.preventDefault(); return; }
+    draggedTrainingJobId = row.getAttribute('data-training-queue-job');
+    row.dataset.trainingQueueDragging = 'true';
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', draggedTrainingJobId);
+  });
+  runnerQueue.addEventListener('dragover', function (event) {
+    if (!draggedTrainingJobId) return;
+    var row = event.target.closest('[data-training-queue-job]');
+    if (!row) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    runnerQueue.querySelectorAll('[data-training-queue-drop]').forEach(function (item) {
+      item.removeAttribute('data-training-queue-drop');
+    });
+    row.dataset.trainingQueueDrop = 'target';
+  });
+  runnerQueue.addEventListener('drop', function (event) {
+    if (!draggedTrainingJobId) return;
+    event.preventDefault();
+    var rows = Array.prototype.slice.call(runnerQueue.querySelectorAll('[data-training-queue-job]'));
+    var from = rows.findIndex(function (row) { return row.getAttribute('data-training-queue-job') === draggedTrainingJobId; });
+    var target = event.target.closest('[data-training-queue-job]');
+    var to = rows.indexOf(target);
+    var movingId = draggedTrainingJobId;
+    clearTrainingQueueDrag();
+    if (trainingQueueMoving || from < 0 || to < 0 || from === to) return;
+    trainingQueueMoving = true;
+    reorderManagedTraining(movingId, '', to).finally(function () { trainingQueueMoving = false; });
+  });
+  runnerQueue.addEventListener('dragend', clearTrainingQueueDrag);
   historyList.onclick = function (event) {
     var detailsButton = event.target.closest('[data-training-history-details]');
     if (detailsButton) {

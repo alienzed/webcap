@@ -972,6 +972,24 @@
   grid-area: spine;
 }
 
+.app.shell-revamp.workspace-surface-training .training-runner-queue-drag-handle {
+  display: block;
+  cursor: grab;
+  color: var(--muted);
+  font-size: 17px;
+  text-align: center;
+  user-select: none;
+  touch-action: none;
+  border: 0;
+  border-radius: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-drag-handle:active { cursor: grabbing; }
+.app.shell-revamp.workspace-surface-training .training-runner-queue-item[data-training-queue-dragging] { opacity: .55; }
+.app.shell-revamp.workspace-surface-training .training-runner-queue-item[data-training-queue-drop] { outline: 2px solid var(--accent); outline-offset: -2px; }
+
 .app.shell-revamp.workspace-surface-training .training-runner-queue-copy {
   grid-area: copy;
 }
@@ -1029,6 +1047,19 @@
   align-items: center;
   margin-top: 0;
 }
+
+.app.shell-revamp.workspace-surface-training .training-runner-queue-arrow {
+  min-width: 27px;
+  font-size: 17px;
+}
+.app.shell-revamp.workspace-surface-training .training-runner-queue-epochs {
+  width: auto;
+  min-width: 85px;
+  padding: 3px 6px;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.app.shell-revamp.workspace-surface-training .training-runner-queue-control:disabled { opacity: .35; cursor: default; }
 
 .app.shell-revamp.workspace-surface-training .training-runner-queue-more {
   position: relative;

@@ -464,7 +464,7 @@ def test_discover_queued_resume_run_with_saved_epochs(tmp_path, monkeypatch):
                         lambda folder, job_id: (None, {"runName": "Waiting H3", "stages": "h3"}))
     monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key",
                         lambda stage: SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY=stage))
-    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda *args: tmp_path)
+    monkeypatch.setattr(epoch_finder, "host_path_for_training_path", lambda path: tmp_path)
     monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
                         lambda path: [{"epoch": 60, "status": "available"},
                                       {"epoch": 65, "status": "missing"}])
@@ -485,14 +485,18 @@ def test_discover_history_run_and_queue_only_once(tmp_path, monkeypatch):
                         lambda: ({"ok": True, "jobs": [{"id": "same", "folder": "set/a"}]}, 200))
     monkeypatch.setattr(epoch_finder, "all_history_payload",
                         lambda folder: {"jobs": [{"id": "same", "folder": "set/a"}]})
-    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot",
-                        lambda folder, job_id: (None, {"runName": "H3", "stages": "h3"}))
+    snapshots = []
+    def one_lookup(folder, job_id):
+        snapshots.append((folder, job_id))
+        return (None, {"runName": "H3", "stages": "h3"})
+    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot", one_lookup)
     monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key",
                         lambda stage: SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY=stage))
-    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda *args: tmp_path)
+    monkeypatch.setattr(epoch_finder, "host_path_for_training_path", lambda path: tmp_path)
     monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
                         lambda path: [{"epoch": 60, "status": "available"}])
     assert len(epoch_finder._runs(tmp_path)) == 1
+    assert snapshots == [("set/a", "same")]  # Queue/history share one run resolution.
 
 
 def test_wizard_primary_wildcard_allows_descriptive_concatenated_tag_phrases():

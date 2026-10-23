@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import config as app_config
-from .folder_state_store import read_folder_state, set_media_rating, set_test_vision_assessment, set_test_workspace_prompt, set_test_manual_settings, set_test_campaign_settings
+from .folder_state_store import read_folder_state, set_media_rating, set_test_vision_assessment, set_test_workspace_prompt, migrate_test_workspace_prompts, set_test_manual_settings, set_test_campaign_settings
 from .test_models import get_test_model, get_test_model_for_staging_key, supported_models as registered_test_models, supported_profile_ids
 from .training_test_paths import browse_test_source, test_copy_path
 from .training_runner import candidate_run_snapshot_from_provenance, candidate_selected_epoch_from_provenance
@@ -448,15 +448,8 @@ def _set_prompt_path(folder_path):
 
 def _migrate_workspace_prompts(folder_path):
     """Preserve legacy authored prompts before Test workspace cleanup."""
-    saved = read_folder_state(_set_prompt_path(folder_path)).get("test_workspace_prompts", {})
-    if not isinstance(saved, dict):
-        raise ValueError("Set Test workspace prompt state is invalid.")
-    legacy = _read_workspace_state(folder_path)["promptByModel"]
-    for model_id, prompt in legacy.items():
-        if model_id not in saved:
-            set_test_workspace_prompt(_set_prompt_path(folder_path), model_id, prompt)
-            saved[model_id] = prompt
-    return saved
+    return migrate_test_workspace_prompts(
+        _set_prompt_path(folder_path), _read_workspace_state(folder_path)["promptByModel"])
 
 
 def workspace_prompt(folder_path, model_id=None):

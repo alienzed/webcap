@@ -441,6 +441,11 @@ def test_run_setup_uses_compact_parameter_rail_and_resume_canvas():
     styles = (root / "tool" / "css" / "workbench.css").read_text(encoding="utf-8")
 
     assert 'training-run-parameter-rail' in html
+    assert 'id="training-run-h3-image-shift-input"' in html
+    assert 'id="training-run-h3-image-shift-option"' in html
+    assert "bindDraft(imageShiftInput, 'h3ImageShift')" in script
+    assert "imageShiftOption.classList.toggle('hidden', stage !== 'h3')" in script
+    assert 'if (stage === \'h3\') trainingWorkspaceState.runConfigDraft.h3ImageShift = draft.h3ImageShift;' in script
     assert 'training-run-main' in html
     assert 'training-run-primary-row' in html
     assert '<span>Custom checkpoint directory</span>' in html

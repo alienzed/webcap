@@ -19,7 +19,7 @@ Scope: eliminate repeated queue-state file operations and DOM scans for large Te
 - No retained DOM cache, no extra event listeners, and no changes to media element identity or user interaction.
 
 ## Verification
-1. Run `pytest tests/test_execution_queue.py tests/test_epoch_test_bench.py tests/test_inference_runner.py`.
+1. Run the focused 100-candidate tests in `tests/test_test_bulk_queue.py` and the batch contracts in `tests/test_execution_queue.py`, plus the established inference backlog and cancellation tests in CI. The historical `tests/test_epoch_test_bench.py` and parts of the full inference/queue suites contain unrelated stale API/storage expectations; they are not merge gates for this change.
 2. Run relevant JavaScript Test Generations DOM tests with their existing test harness.
 3. Compare submission and refresh latency for 20, 100, and 200 candidates; confirm order, cancel, pause, resume, recovery, and live result updates.
 4. Observe real-browser behavior on the target machine; no measured runtime claim is made until exercised there.

@@ -1386,7 +1386,8 @@ def test_evaluation_screening_picker_shrinks_but_historical_rounds_remain_visibl
     server = (root / "tool/server/epoch_finder.py").read_text(encoding="utf-8")
     assert 'id="epoch-finder-screening-show-excluded"' in html
     assert "var visibleEpochs=screening&&!screeningShowExcluded?choice.epochs:run.epochs;" in js
-    assert "visibleEpochs.map(function(epoch){" in js
+    assert "visibleEpochs.forEach(function(epoch,index){" in js
+    assert "if(timeline.children[index]!==tick)timeline.insertBefore(tick" in js
     assert "screeningShowExcluded=!screeningShowExcluded;" in js
     assert "screeningSaveSelection();" in js
     assert "var rows=plan.epochs.filter(function (epoch) {" in js

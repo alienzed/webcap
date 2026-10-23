@@ -143,6 +143,7 @@ function trainingRunTemplateSettings(payload) {
     adapterRank: settings.adapterRank == null ? '' : String(settings.adapterRank),
     epochs: settings.epochs == null ? (stageReview.epochs == null ? '' : String(stageReview.epochs)) : String(settings.epochs),
     adapterDropout: settings.adapterDropout == null || settings.adapterDropout === '' ? '0' : String(settings.adapterDropout),
+    h3ImageShift: stage === 'h3' ? String(settings.h3ImageShift == null ? 1 : settings.h3ImageShift) : undefined,
     h3ImageTrainingAdapter: false,
     h3FocusedBlocks: false
   };
@@ -162,6 +163,12 @@ function validateTrainingRunSettings(settings) {
   var dropout = Number(dropoutText);
   if (!dropoutText || !Number.isFinite(dropout) || dropout < 0 || dropout > 0.2 || (dropout > 0 && dropout < 0.01)) {
     return 'Dropout must be 0, or between 0.01 and 0.2.';
+  }
+  if (String(trainingWorkspaceState.runStages || '') === 'h3') {
+    var shiftText = String(data.h3ImageShift == null ? '' : data.h3ImageShift).trim();
+    if (!shiftText || !Number.isFinite(Number(shiftText)) || Number(shiftText) <= 0) {
+      return 'H3 image shift must be a positive number.';
+    }
   }
   return '';
 }
@@ -192,6 +199,8 @@ function renderTrainingRunParameters(payload) {
   var rankSelect = document.getElementById('training-run-rank-select');
   var epochsInput = document.getElementById('training-run-epochs-input');
   var dropoutInput = document.getElementById('training-run-dropout-input');
+  var imageShiftOption = document.getElementById('training-run-h3-image-shift-option');
+  var imageShiftInput = document.getElementById('training-run-h3-image-shift-input');
   var resetButton = document.getElementById('training-run-parameters-reset');
   var presetSelect = document.getElementById('training-run-preset-select');
   var h3AdapterOption = document.getElementById('training-run-h3-adapter-option');
@@ -218,6 +227,8 @@ function renderTrainingRunParameters(payload) {
   rankSelect.value = String(draft.adapterRank == null ? '' : draft.adapterRank);
   epochsInput.value = String(draft.epochs == null ? '' : draft.epochs);
   dropoutInput.value = String(draft.adapterDropout == null ? '' : draft.adapterDropout);
+  imageShiftOption.classList.toggle('hidden', stage !== 'h3');
+  imageShiftInput.value = stage === 'h3' ? String(draft.h3ImageShift == null ? '' : draft.h3ImageShift) : '';
   h3AdapterOption.classList.toggle('hidden', stage !== 'h3');
   h3AdapterCheckbox.checked = !!draft.h3ImageTrainingAdapter;
   h3AdapterCheckbox.onchange = function () {
@@ -246,6 +257,7 @@ function renderTrainingRunParameters(payload) {
   bindDraft(rankSelect, 'adapterRank');
   bindDraft(epochsInput, 'epochs');
   bindDraft(dropoutInput, 'adapterDropout');
+  bindDraft(imageShiftInput, 'h3ImageShift');
 
   presetSelect.onchange = function () {
     if (presetSelect.value === 'custom') {
@@ -271,6 +283,7 @@ function renderTrainingRunParameters(payload) {
     }
     trainingWorkspaceState.runConfigDraft.h3ImageTrainingAdapter = !!draft.h3ImageTrainingAdapter;
     trainingWorkspaceState.runConfigDraft.h3FocusedBlocks = !!draft.h3FocusedBlocks;
+    if (stage === 'h3') trainingWorkspaceState.runConfigDraft.h3ImageShift = draft.h3ImageShift;
     trainingWorkspaceState.runConfigDirty = true;
     trainingWorkspaceState.runConfigStage = stage;
     trainingWorkspaceState.runConfigTemplateSignature = signature;

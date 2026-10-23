@@ -3493,7 +3493,7 @@ def update_queued_epochs_response(job_id, epochs):
         if target == current:
             return {"ok": True, "job": _public_job(job)}, 200
         # Make an effective, per-job copy; keep source capture and user TOML unchanged.
-        destination = _job_dir(job) / ("config." + stage + ".queued.toml")
+        destination = _job_dir(job) / source.name
         try:
             modified = rewrite_toml_assignment(source.read_text(encoding="utf-8"), "epochs", str(target))
             temp = destination.with_name(destination.name + "." + uuid.uuid4().hex + ".tmp")

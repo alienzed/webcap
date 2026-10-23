@@ -1943,8 +1943,8 @@
     els('resume').classList.toggle('hidden', !(['paused', 'interrupted', 'failed'].includes(campaign.status) ||
       (campaign.mode==='manual'&&campaign.status==='stopped')));
     var manual=campaign.mode==='manual';
-    if (manual && mode==='finder') showMode('screening',{restore:true});
-    if (!manual && mode==='screening') showMode('finder',{restore:true});
+    if (manual && mode==='finder') showMode('screening',{restore:true,returnTo:returnMode});
+    if (!manual && mode==='screening') showMode('finder',{restore:true,returnTo:returnMode});
     var canDeleteAll=manual && ['complete','stopped','failed','interrupted'].includes(campaign.status) &&
       campaign.rounds.every(function(plan){
         return ['complete','stopped','cancelled','deleted'].includes(plan.status);
@@ -2131,8 +2131,8 @@
     var destination = knownCampaign && knownCampaign.mode==='manual' ? 'screening' : 'finder';
     showMode(destination,previous!==destination?{returnTo:previous,keepCampaign:true}:{keepCampaign:true});
     return refreshStatus().then(function () {
-      if (campaignState && campaignState.mode==='manual' && mode!=='screening') showMode('screening',{restore:true});
-      if (campaignState && campaignState.mode!=='manual' && mode!=='finder') showMode('finder',{restore:true});
+      if (campaignState && campaignState.mode==='manual' && mode!=='screening') showMode('screening',{restore:true,returnTo:returnMode});
+      if (campaignState && campaignState.mode!=='manual' && mode!=='finder') showMode('finder',{restore:true,returnTo:returnMode});
       if (sourceEpoch == null || !campaignState || campaignState.id !== String(campaignId)) return;
       var matched = Object.entries(campaignState.candidateMap || {}).find(function (entry) {
         return entry[1].epoch === Number(sourceEpoch) && (!sourceJobId || entry[1].jobId === sourceJobId);

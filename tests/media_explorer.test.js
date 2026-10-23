@@ -576,6 +576,7 @@ test('saved external folders populate the chooser without launching discovery', 
   assert.equal(f.nodes['media-explorer-saved-folders'].value, '/tmp/recent');
   assert.equal(f.pending.filter(request => request.url.startsWith('/fs/media_explorer/external?')).length, 0);
   assert.equal(f.nodes['media-explorer-status'].textContent.includes('Choose a recent folder'), true);
+  assert.equal(f.nodes['media-explorer-empty-title'].textContent, 'Choose an external folder');
   assert.equal(f.nodes['media-explorer-heading'].textContent, 'External folders');
   const params = new URLSearchParams();
   f.window.appendMediaExplorerRouteParams(params);

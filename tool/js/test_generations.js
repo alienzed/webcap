@@ -4540,8 +4540,9 @@
       if (field) field.classList.toggle('hidden', settings.indexOf(entry[0]) === -1);
     });
 
-    var selectedAspect = String(savedSettings.aspectRatio || '4:3');
     var options = Array.isArray(payload.aspectRatioOptions) ? payload.aspectRatioOptions.slice() : [];
+    var selectedAspect = String(savedSettings.aspectRatio ||
+      (options.indexOf('4:3') !== -1 ? '4:3' : defaults.aspectRatio || ''));
     if (selectedAspect && options.indexOf(selectedAspect) < 0) options.unshift(selectedAspect);
     if (aspect) {
       aspect.innerHTML = options.map(function (value) {

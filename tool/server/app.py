@@ -221,7 +221,7 @@ def folder_state_save():
         if "primer" not in state:
             state["primer"] = {"template": "", "defaults": "", "mappings": ""}
         # Dedicated atomic prompt writes must survive older whole-form snapshots.
-        for owned_key in ("test_workspace_prompts", "test_manual_screening_by_model"):
+        for owned_key in ("test_workspace_prompts", "test_manual_screening_by_model", "test_campaign_by_model"):
             if owned_key in existing_state:
                 state[owned_key] = existing_state[owned_key]
         reject_wholesale_state_map_clear(existing_state, state)

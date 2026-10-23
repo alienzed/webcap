@@ -59,9 +59,10 @@ function fixture(hash = '#/media') {
       const option = new Element('option'); option.value = value; option.textContent = label; nodes[id].appendChild(option);
     }
   }
-  const buttons = [...html.matchAll(/class="media-explorer-source(?: active)?" data-media-(role|source)="([^"]*)"/g)].map(([,kind,value]) => {
+  const buttons = [...html.matchAll(/class="media-explorer-source(?: active)?" data-media-(role|source)="([^"]*)"[^>]*>([^<]*)<\/button>/g)].map(([,kind,value,title]) => {
     const button = new Element('button'); button.dataset[kind === 'role' ? 'mediaRole' : 'mediaSource'] = value;
     button.setAttribute('data-media-' + kind, value);
+    button.textContent = title;
     button.className = 'media-explorer-source'; return button;
   });
   const modeButtons = ['list', 'single', 'grid'].map(mode => {

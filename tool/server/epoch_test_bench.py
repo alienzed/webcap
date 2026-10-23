@@ -21,6 +21,8 @@ from .execution_queue import (
     cancel_queued as execution_cancel_queued,
     consume_terminal_job as execution_consume_terminal_job,
     promote_backlog as execution_promote_backlog,
+    promote_backlog_many as execution_promote_backlog_many,
+    jobs_by_id as execution_jobs_by_id,
     discard_terminal_and_recent as execution_discard_terminal_and_recent,
     get_job as execution_get_job,
     lane_snapshot as execution_lane_snapshot,
@@ -2349,18 +2351,17 @@ def _session_job_records(status, missing_job_ids=None):
     )
 
     jobs = []
+    known_jobs = execution_jobs_by_id(job_ids)
     for raw_job_id in job_ids:
         job_id = str(raw_job_id or "").strip()
         if not job_id:
             continue
+        if job_id in known_jobs:
+            jobs.append(known_jobs[job_id])
+            continue
         try:
-            jobs.append(execution_get_job(job_id))
+            jobs.append(execution_transient_receipt(job_id))
         except FileNotFoundError:
-            try:
-                jobs.append(execution_transient_receipt(job_id))
-                continue
-            except FileNotFoundError:
-                pass
             if job_id not in terminal_job_ids and missing_job_ids is not None:
                 missing_job_ids.append(job_id)
     return jobs
@@ -2799,7 +2800,7 @@ def execute_inference(job_id, request, context):
 
 
 def _enqueue_frozen_test_request(folder_path, request, loras, include_base, legacy_job_id="", auto_vl_model=""):
-    from .inference_runner import enqueue_test
+    from .inference_runner import enqueue_test_many
 
     model = get_test_model(request.get("modelId"))
     session_directory = _new_session_directory(folder_path, model=model)
@@ -2884,6 +2885,8 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
 
     queued_ids = []
     try:
+        contexts = []
+        labels = []
         for index, candidate in enumerate(candidates, start=1):
             label_root = str(request.get("name") or "").strip() or session_directory.name
             label = label_root + " · " + candidate["label"]
@@ -2898,8 +2901,11 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
                 "candidateStrength": candidate.get("strength"),
                 "campaignStaging": str(request.get("campaignStaging") or ""),
             }
-            job = enqueue_test(request, context, label=label, deferred=True)
-            queued_ids.append(job["jobId"])
+            contexts.append(context)
+            labels.append(label)
+        queued_ids = [
+            job["jobId"] for job in enqueue_test_many(request, contexts, labels=labels, deferred=True)
+        ]
 
         with _status_lock:
             current_status = _read_status(session_directory) or {}
@@ -2908,8 +2914,7 @@ def _enqueue_frozen_test_request(folder_path, request, loras, include_base, lega
             _atomic_write_json(_status_path(session_directory), current_status)
 
         if not legacy_job_id:
-            for job_id in queued_ids:
-                execution_promote_backlog(job_id)
+            execution_promote_backlog_many("inference", queued_ids)
             from .inference_runner import start_observer
             start_observer()
     except Exception as exc:

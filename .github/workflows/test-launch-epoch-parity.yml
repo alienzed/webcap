@@ -65,9 +65,9 @@ jobs:
           python -m compileall -q tool/server/inference_runner.py tool/server/execution_queue.py tool/server/inference_runtime.py
           python -m pytest -q tests/test_inference_runner.py -k "(backlog and not drains_foreground and not deferred_storyboard) or inference_runner_honors_stop_requested_during_start or inference_stop_remains_stopped_when_execution_raises"
           python -m pytest -q tests/test_execution_queue.py -k "backlog or shelves_active_work_back_to_clean_backlog or cancel_and_stop_transitions or stop_request_survives_late_running_transition"
-      - name: Full Test queue and lifecycle regression
+      - name: Test queue and current batch lifecycle regression
         run: |
-          python -m pytest -q tests/test_execution_queue.py tests/test_inference_runner.py tests/test_epoch_test_bench.py
+          python -m pytest -q tests/test_execution_queue.py tests/test_inference_runner.py tests/test_test_bulk_queue.py
       - name: Focused regression
         run: |
           python -m pytest -q tests/test_test_generations_focused_unification.py tests/test_test_repeat.py tests/test_training_references_browser.py tests/test_h3_sampling_modes.py tests/test_inference_models.py

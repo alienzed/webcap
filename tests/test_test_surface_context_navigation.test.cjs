@@ -57,7 +57,8 @@ function harness(){
     screeningDraftContext:'my-set|h3',listRequestVersion:0,
     runEpochSelections:{},stagedSelection:new Set(),sourceMode:'runs',
     manualSelectedRound:0,referenceSelections:{},referenceGeneration:0,
-    inspectedEpoch:null,inspectedFrame:0,lastFrameKey:'',Set};
+    inspectedEpoch:null,inspectedFrame:0,lastFrameKey:'',wizardStep:1,
+    showStep:()=>{stats.referenceRestores=(stats.referenceRestores||0)+1;},Set};
   vm.runInNewContext("var mode='tests';var returnMode='';var surfaceLabels={tests:'Prompt Tests',screening:'Manual Screening',finder:'Campaigns',references:'References',analytics:'Insights'};"+methodHelpers+modeController,ctx);
   return {window:win,node,tabs,stats,ctx};
 }
@@ -114,6 +115,14 @@ test('Manual Screening and Campaigns retain independent history and picker state
   assert.equal(h.ctx.manualSelectedRound,3);
   assert.equal(h.ctx.manualSelectionCampaign,'screening-two');
   assert.doesNotMatch(html,/id="epoch-finder-campaign-type"/);
+});
+
+test('returning to Campaign references restarts an interrupted reference lookup',()=>{
+  const h=harness();
+  h.window.epochFinderShowMode('screening');
+  h.ctx.wizardStep=4;
+  h.window.epochFinderShowMode('finder');
+  assert.equal(h.stats.referenceRestores,1);
 });
 
 test('native Test deep-link and explicit tab reset preserve contextual returns',()=>{

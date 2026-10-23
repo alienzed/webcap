@@ -1864,11 +1864,22 @@
     return String(window.getWorkingModelProfileId() || '');
   }
 
+  // The Set template is shared by Tests and both Campaign forms, never by their results.
+  window.testGenerationsReceiveSetPrompt = function(folder, modelId, prompt) {
+    if (String(owningSetFolder(launchFolder || '')) !== String(folder || '') ||
+        currentTestModelId() !== String(modelId || '')) return;
+    var target = el('test-generations-prompt');
+    if (!target) return;
+    target.value = String(prompt == null ? '' : prompt);
+    if (wildcardIntent && wildcardIntent.prompt !== target.value) wildcardIntent = null;
+  };
   function saveTestWorkspacePrompt(prompt) {
     var modelId = currentTestModelId();
     var folder = String(owningSetFolder(launchFolder || (state && state.folder) || ''));
     if (!modelId || !folder) return;
     var value = String(prompt == null ? '' : prompt);
+    if (typeof window.epochFinderReceiveSetPrompt === 'function')
+      window.epochFinderReceiveSetPrompt(folder, modelId, value);
     debouncedWorkspacePromptSave(function () {
       requestForFolder(folder, 'test_save_workspace_prompt', {
         modelId: modelId,

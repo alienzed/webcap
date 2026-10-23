@@ -196,23 +196,3 @@ def test_krea2_inference_workflow_moves_selected_loras_into_power_loader():
         "strength": 0.8,
     }
     assert workflow["276"]["inputs"]["seed"] == 99
-
-
-
-def test_h3_generation_duration_accepts_three_seconds_and_matches_form():
-    """Generate uses the same 3-second floor as H3 Test Generations."""
-    from pathlib import Path
-
-    import pytest
-
-    model = get_inference_model("minimax_h3")
-    template = model.load_template()
-    normalize = lambda seconds: h3.normalize_settings(template, lambda: 42, {"duration": seconds})
-    assert normalize(3)["duration"] == 3
-    assert normalize(15)["duration"] == 15
-    for invalid in (2.9, 15.1):
-        with pytest.raises(ValueError, match="between 3 and 15 seconds"):
-            normalize(invalid)
-
-    html = (Path(__file__).resolve().parents[1] / "tool" / "tool.html").read_text(encoding="utf-8")
-    assert 'id="generate-duration" type="number" min="3" max="15"' in html

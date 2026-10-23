@@ -7,7 +7,7 @@
   var timer = null;
   var mode = 'tests';
   var returnMode = '';
-  var surfaceLabels = {tests:'Tests',finder:'Campaigns',references:'References',analytics:'Insights'};
+  var surfaceLabels = {tests:'Prompt Tests',screening:'Manual Screening',finder:'Campaigns',references:'References',analytics:'Insights'};
   var lastFrameKey = '';
   var wizardStep = 1;
   var dimensions = [];
@@ -41,6 +41,8 @@
   var screeningSelectionRevision = 0;
   var screeningSelectionFailure = null;
   var screeningExpandedExcluded = new Set();
+  var screeningShowExcluded = false;
+  var screeningDraftContext = '';
   var screeningTestStatusCampaign = '';
   var screeningTestStatus = {};
   var screeningTestStatusVersion = 0;
@@ -78,8 +80,37 @@
     // navigation, not a request to retain a stale destination.
     returnMode = options.returnTo && surfaceLabels[options.returnTo] && options.returnTo!==next
       ? options.returnTo : '';
+    var previousMode = mode;
     mode = next;
-    var finder = next === 'finder';
+    var finder = next === 'finder' || next === 'screening';
+    if (finder && !options.restore && !options.keepCampaign && activeCampaign) {
+      // A history request may still be pending; resolve its method from the list,
+      // not only from a fully loaded campaignState.
+      var selected = campaigns.find(function(c){return c.id===activeCampaign;}) ||
+        (campaignState && campaignState.id===activeCampaign ? campaignState : null);
+      if (selected ? (selected.mode==='manual') !== (next==='screening') : previousMode!==next) {
+        activeCampaign = '';
+        campaignState = null;
+        manualSelectionCampaign = '';
+        screeningShowExcluded = false;
+        els('active').classList.add('hidden');
+        els('empty').classList.remove('hidden');
+      }
+    }
+    if (finder) {
+      els('campaign-type').value = next === 'screening' ? 'manual' : 'auto';
+      screeningModeUi();
+      els('new-heading').textContent = next === 'screening' ? 'New screening' : 'New campaign';
+      els('history-heading').textContent = next === 'screening' ? 'Screenings' : 'Campaigns';
+      els('new').textContent = next === 'screening' ? '+ New Screening' : '+ New Campaign';
+      if (next === 'screening' && !activeCampaign) {
+        var draftKey = currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
+        if (screeningDraftContext !== draftKey) {
+          screeningDraftContext = draftKey;
+          screeningApplySettings(null);
+        }
+      }
+    }
     var references = next === 'references';
     var analytics = next === 'analytics';
     document.querySelectorAll('#test-workspace-main-tabs [data-test-workspace-mode]').forEach(function (button) {
@@ -93,7 +124,7 @@
     document.getElementById('run-analytics-screen').classList.toggle('hidden', !analytics);
     ['tests','finder'].forEach(function (target) {
       var control=document.getElementById('test-workspace-return-'+target);
-      control.classList.toggle('hidden',next!==target||!returnMode);
+      control.classList.toggle('hidden',(target==='finder'?!finder:next!=='tests')||!returnMode);
       if(returnMode)control.querySelector('[data-test-workspace-back]').textContent=
         '← Back to '+surfaceLabels[returnMode];
     });
@@ -400,6 +431,15 @@
   function drawEpochPicker() {
     drawRuns();
     var host=els('epoch-picker'),selected=selectedRunEntries();
+    var screening=isManualCampaign();
+    var excluded=screening ? selected.reduce(function(total,choice){
+      var run=runs.find(function(item){return item.jobId===choice.jobId;});
+      return total+(run?run.epochs.length-choice.epochs.length:0);
+    },0) : 0;
+    var reveal=els('screening-show-excluded');
+    reveal.classList.toggle('hidden',!screening||!excluded);
+    reveal.textContent=screeningShowExcluded?'Show selected epochs only':'Show '+excluded+' excluded epochs';
+    reveal.setAttribute('aria-pressed',String(screeningShowExcluded));
     if(sourceMode==='staged'){host.classList.add('hidden');return;}
     host.classList.toggle('hidden',!selected.length);
     var existing=new Map(Array.from(host.querySelectorAll('[data-epoch-run]')).map(function(node){
@@ -409,25 +449,41 @@
       var run=runs.find(function(item){return item.jobId===choice.jobId;});
       if(!run)throw new Error('Selected training run disappeared.');
       var region=existing.get(run.jobId);
-      var epochsSignature=JSON.stringify(run.epochs);
-      if(!region||region.dataset.epochsSignature!==epochsSignature){
-        if(region)region.remove();
+      var visibleEpochs=screening&&!screeningShowExcluded?choice.epochs:run.epochs;
+      var epochsSignature=JSON.stringify(visibleEpochs);
+      if(!region){
         region=document.createElement('section');
         region.className='epoch-finder-run-epochs';
         region.dataset.epochRun=run.jobId;
-        region.dataset.epochsSignature=epochsSignature;
         region.innerHTML='<div class="epoch-finder-run-epochs-heading"><strong></strong>'+
           '<button type="button" class="review-captions-btn epoch-finder-training-runs-link" data-epoch-training-run'+
           ' title="Open this run in Training Candidates">Training Runs</button></div>'+
-          '<div class="epoch-finder-epoch-timeline">'+
-          run.epochs.map(function(epoch){
-            return '<button type="button" class="epoch-finder-epoch-tick" data-epoch-choice="'+
-              epoch+'" aria-pressed="false"> '+epoch+'</button>';
-          }).join('')+'</div><div class="epoch-finder-epoch-tools">'+
+          '<div class="epoch-finder-epoch-timeline"></div><div class="epoch-finder-epoch-tools">'+
           '<button type="button" data-epoch-action="all">All</button>'+
           '<button type="button" data-epoch-action="every5">Every 5</button>'+
           '<button type="button" data-epoch-action="last10">Last 10</button>'+
           '<button type="button" data-epoch-action="none">Clear</button></div>';
+      }
+      if(region.dataset.epochsSignature!==epochsSignature){
+        var timeline=region.querySelector('.epoch-finder-epoch-timeline');
+        var previousTicks=new Map(Array.from(timeline.querySelectorAll('[data-epoch-choice]')).map(function(tick){
+          return [tick.dataset.epochChoice,tick];
+        }));
+        visibleEpochs.forEach(function(epoch,index){
+          var key=String(epoch),tick=previousTicks.get(key);
+          if(!tick){
+            tick=document.createElement('button');
+            tick.type='button';
+            tick.className='epoch-finder-epoch-tick';
+            tick.dataset.epochChoice=key;
+            tick.setAttribute('aria-pressed','false');
+            tick.textContent=' '+key;
+          }
+          if(timeline.children[index]!==tick)timeline.insertBefore(tick,timeline.children[index]||null);
+          previousTicks.delete(key);
+        });
+        previousTicks.forEach(function(tick){tick.remove();});
+        region.dataset.epochsSignature=epochsSignature;
       }
       region.querySelector('strong').textContent=runIdentity(run)+' · '+
         choice.epochs.length+'/'+run.epochs.length+' selected';
@@ -746,15 +802,15 @@
   }
 
   function list() {
-    els('count').textContent = String(campaigns.length);
     var model = String(window.getWorkingModelProfileId() || '');
-    var visible = campaigns.filter(function (c) { return c.modelId === model; });
+    var visible = campaigns.filter(function (c) { return c.modelId === model && (c.mode === 'manual') === (mode === 'screening'); });
+    els('count').textContent = String(visible.length);
     els('campaigns').innerHTML = visible.length ? visible.map(function (c) {
       return '<button type="button" class="epoch-finder-campaign ' +
         (c.id === activeCampaign ? 'active' : '') + '" data-id="' + escape(c.id) + '">' +
         '<strong>' + escape(c.name || c.id) + '</strong><small>' + escape(c.modelId || '') + ' · Round ' + escape(c.round) +
         ' · ' + escape(c.phase || c.status) + '</small></button>';
-    }).join('') : '<span class="epoch-finder-muted">No campaigns for this model.</span>';
+    }).join('') : '<span class="epoch-finder-muted">No '+(mode==='screening'?'screenings':'campaigns')+' for this model.</span>';
   }
   function progress(campaign) {
     var plan = campaign.rounds.find(function (r) { return r.number === campaign.round; }) || campaign.rounds[campaign.rounds.length - 1];
@@ -1218,6 +1274,7 @@
   function screeningRememberSelection(campaign) {
     if (manualSelectionCampaign === campaign.id) return;
     manualSelectionCampaign=campaign.id;
+    screeningShowExcluded=false;
     manualSelectedRound=campaign.rounds.length;
     manualMatrixSignature='';
     runEpochSelections={};
@@ -1578,6 +1635,8 @@
         values.reduce(function (sum,u) {return sum+u.rating;},0)/values.length:null};
     });
     var sort=els('manual-sort').value;
+    // Historical rounds retain their actual candidates; each future plan already
+    // captures the reduced kept set from the previous round.
     // Reveal an epoch when its first render (or visible failure) is available.
     // Unfinished cells in that epoch remain as "Awaiting render" placeholders.
     var rows=plan.epochs.filter(function (epoch) {
@@ -1904,6 +1963,8 @@
     els('resume').classList.toggle('hidden', !(['paused', 'interrupted', 'failed'].includes(campaign.status) ||
       (campaign.mode==='manual'&&campaign.status==='stopped')));
     var manual=campaign.mode==='manual';
+    if (manual && mode==='finder') showMode('screening',{restore:true,returnTo:returnMode});
+    if (!manual && mode==='screening') showMode('finder',{restore:true,returnTo:returnMode});
     var canDeleteAll=manual && ['complete','stopped','failed','interrupted'].includes(campaign.status) &&
       campaign.rounds.every(function(plan){
         return ['complete','stopped','cancelled','deleted'].includes(plan.status);
@@ -1937,19 +1998,19 @@
     });
   }
   function refresh() {
-    if (!currentFolder || mode !== 'finder') return;
+    if (!currentFolder || (mode !== 'finder' && mode !== 'screening')) return;
     var folderAtRequest = currentFolder, modelAtRequest = String(window.getWorkingModelProfileId() || '');
-    var requestVersion = ++listRequestVersion;
+    var modeAtRequest = mode, requestVersion = ++listRequestVersion;
     api('list', {modelId: modelAtRequest}).then(function (response) {
       if (requestVersion !== listRequestVersion || folderAtRequest !== currentFolder ||
-          modelAtRequest !== String(window.getWorkingModelProfileId() || '') || mode !== 'finder') return;
+          modelAtRequest !== String(window.getWorkingModelProfileId() || '') || mode !== modeAtRequest) return;
       runs = response.runs || [];
       stagedFiles = response.stagedFiles || [];
       if (stagedModel !== modelAtRequest) {
         stagedModel = modelAtRequest;
         var preselected = window.getTestGenerationSelectedCandidateFiles(currentFolder, modelAtRequest);
         stagedSelection = new Set(preselected);
-        sourceMode = preselected.length ? 'staged' : 'runs';
+        sourceMode = mode==='screening' ? 'runs' : preselected.length ? 'staged' : 'runs';
       }
       stagedSelection.forEach(function (file) { if (!stagedFiles.includes(file)) stagedSelection.delete(file); });
       if (response.warnings && response.warnings.length) {
@@ -2076,18 +2137,22 @@
     }
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { screeningDraftContext=''; screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; activeCampaign = ''; runs = []; campaigns = []; stagedFiles = []; stagedSelection = new Set(); stagedModel = ''; sourceMode = 'runs'; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); runEpochSelections = {}; referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
-    if (mode === 'finder') refresh();
+    if (mode === 'finder' || mode === 'screening') refresh();
   }
   window.epochFinderPrepare = applyFolder;
   window.epochFinderInspectCampaign = function (campaignId, sourceEpoch, sourceJobId) {
     var previous=mode;
     activeCampaign = String(campaignId);
     inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = '';
-    showMode('finder',previous!=='finder'?{returnTo:previous}:null);
+    var knownCampaign = campaigns.find(function(c){return c.id===String(campaignId);});
+    var destination = knownCampaign && knownCampaign.mode==='manual' ? 'screening' : 'finder';
+    showMode(destination,previous!==destination?{returnTo:previous,keepCampaign:true}:{keepCampaign:true});
     return refreshStatus().then(function () {
+      if (campaignState && campaignState.mode==='manual' && mode!=='screening') showMode('screening',{restore:true,returnTo:returnMode});
+      if (campaignState && campaignState.mode!=='manual' && mode!=='finder') showMode('finder',{restore:true,returnTo:returnMode});
       if (sourceEpoch == null || !campaignState || campaignState.id !== String(campaignId)) return;
       var matched = Object.entries(campaignState.candidateMap || {}).find(function (entry) {
         return entry[1].epoch === Number(sourceEpoch) && (!sourceJobId || entry[1].jobId === sourceJobId);
@@ -2114,7 +2179,7 @@
     screeningTestStatusCampaign='';
     refresh();
   };
-  els('new').onclick = function () { followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); screeningApplySettings(null); };
+  els('new').onclick = function () { screeningShowExcluded=false; els('campaign-type').value=mode==='screening'?'manual':'auto'; followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); screeningApplySettings(null); };
   els('start').onclick = start;
   els('campaign-type').onchange=function () {
     activeCampaign='';campaignState=null;manualSelectionCampaign='';
@@ -2123,6 +2188,10 @@
   };
   els('manual-prompt').addEventListener('input',function(){screeningGroups();});
   els('manual-launch').onclick=screeningLaunch;
+  els('screening-show-excluded').onclick=function(){
+    screeningShowExcluded=!screeningShowExcluded;
+    drawEpochPicker();
+  };
   els('manual-sort').onchange=function(){if (isManualCampaign()) screeningMatrix(campaignState);};
   els('manual-vl-round').onclick=function(){if (isManualCampaign()) screeningAskVision(campaignState,{});};
   els('manual-round-list').onclick=function(event){
@@ -2283,7 +2352,7 @@
       if (!hasRunOrigin(campaignState, inspectedEpoch)) return;
       var mapped=(campaignState.candidateMap||{})[String(inspectedEpoch)];
       window.runAnalyticsViewEpoch(mapped ? mapped.jobId : campaignState.jobId,
-        mapped ? mapped.epoch : inspectedEpoch,'finder');
+        mapped ? mapped.epoch : inspectedEpoch,mode==='screening'?'screening':'finder');
       return;
     }
     if (event.target.closest('[data-copy-epoch-to-test]')) {
@@ -2360,16 +2429,16 @@
   };
   els('campaigns').onclick = function (event) {
     var button = event.target.closest('[data-id]');
-    if (button) { activeCampaign = button.dataset.id; manualSelectionCampaign=''; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; list(); refreshStatus().catch(error); }
+    if (button) { activeCampaign = button.dataset.id; manualSelectionCampaign=''; screeningShowExcluded=false; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; list(); refreshStatus().catch(error); }
   };
   window.addEventListener('webcap:working-model-changed', function () {
     listRequestVersion++;
     activeCampaign = ''; inspectedEpoch = null; campaignState = null;
     els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
-    if (mode === 'finder') refresh();
+    if (mode === 'finder' || mode === 'screening') refresh();
   });
   timer = setInterval(function () {
-    if (mode === 'finder' && activeCampaign && campaignState &&
+    if ((mode === 'finder' || mode === 'screening') && activeCampaign && campaignState &&
         (['queued', 'running'].includes(campaignState.status) || manualVisionPending) &&
         !els('screen').classList.contains('hidden')) refreshStatus().catch(error);
   }, 2500);

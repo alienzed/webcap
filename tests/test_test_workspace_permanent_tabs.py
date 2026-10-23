@@ -4,16 +4,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_one_persistent_four_tab_control_outside_native_screens():
+def test_one_persistent_evaluation_navigation_outside_native_screens():
     html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
     start = html.index('<nav id="test-workspace-main-tabs"')
     first_screen = html.index('<section id="epoch-finder-screen"')
     assert html.index('<section id="test-generations-pane"') < start < first_screen
     tabs = html[start:html.index("</nav>", start)]
-    assert tabs.count('data-test-workspace-mode=') == 4
-    for mode in ("tests", "finder", "references", "analytics"):
+    assert tabs.count('data-test-workspace-mode=') == 5
+    for mode in ("tests", "screening", "finder", "analytics", "references"):
         assert f'data-test-workspace-mode="{mode}"' in tabs
-    assert tabs.index('data-test-workspace-mode="tests"') < tabs.index('data-test-workspace-mode="finder"') < tabs.index('data-test-workspace-mode="references"') < tabs.index('data-test-workspace-mode="analytics"')
+    assert tabs.index('data-test-workspace-mode="tests"') < tabs.index('data-test-workspace-mode="screening"') < tabs.index('data-test-workspace-mode="finder"') < tabs.index('data-test-workspace-mode="analytics"') < tabs.index('data-test-workspace-mode="references"')
 
 
 def test_original_left_and_right_owners_remain_intact():
@@ -29,7 +29,7 @@ def test_original_left_and_right_owners_remain_intact():
         assert marker in html, marker
 
 
-def test_existing_mode_controller_owns_tabs_and_legacy_shell_is_not_default():
+def test_existing_mode_controller_owns_evaluation_navigation():
     finder = (ROOT / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
     tests = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     css = (ROOT / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
@@ -42,15 +42,15 @@ def test_existing_mode_controller_owns_tabs_and_legacy_shell_is_not_default():
     assert "grid-template-columns:var(--test-workspace-sidebar-width) minmax(0,1fr)" in css
 
 
-def test_persistent_tabs_mask_scrolling_form_at_any_scroll_offset():
-    """A transparent tab strip lets labels and inputs bleed through while scrolling."""
+def test_evaluation_tabs_are_visible_without_overlaying_scrollable_surfaces():
+    """Tabs own normal document space; scrolling must not place forms underneath them."""
     import re
     css = (ROOT / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
     theme = (ROOT / "tool/css/styles.css").read_text(encoding="utf-8")
     nav = re.search(r"#test-workspace-main-tabs\s*\{([^}]*)\}", css)
     assert nav, "Permanent Test tabs have no style block"
-    assert "position:absolute" in nav.group(1)
-    assert "z-index:6" in nav.group(1)
+    assert "position:relative" in nav.group(1)
+    assert "overflow-x:auto" in nav.group(1)
     assert "background:var(--panel);" in nav.group(1)
     assert "--panel: #ffffff" in theme
     assert "--panel: #151b24" in theme

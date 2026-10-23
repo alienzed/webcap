@@ -980,6 +980,10 @@
   text-align: center;
   user-select: none;
   touch-action: none;
+  border: 0;
+  border-radius: 0;
+  width: 20px;
+  height: 20px;
 }
 
 .app.shell-revamp.workspace-surface-training .training-runner-queue-drag-handle:active { cursor: grabbing; }
@@ -1049,6 +1053,8 @@
   font-size: 17px;
 }
 .app.shell-revamp.workspace-surface-training .training-runner-queue-epochs {
+  width: auto;
+  min-width: 85px;
   padding: 3px 6px;
   white-space: nowrap;
   font-size: 13px;

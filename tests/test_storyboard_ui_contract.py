@@ -1035,6 +1035,22 @@ def test_storyboard_story_context_is_a_collapsible_middle_column():
     assert ".storyboard-scene-workspace" in css
 
 
+def test_storyboard_overview_scrolls_inside_bounded_desktop_column():
+    html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool" / "css" / "storyboard.css").read_text(encoding="utf-8")
+
+    assert 'id="storyboard-editor-content" class="storyboard-editor-scroll hidden"' in html
+    assert 'id="storyboard-story-overview" class="storyboard-story-fields storyboard-story-overview-surface"' in html
+    editor = css.split("/* Storyboard three-column flow:", 1)[1].split(".storyboard-editor-scroll.story-collapsed", 1)[0]
+    assert "grid-template-rows: minmax(0, 1fr);" in editor
+    overview = css.split(".storyboard-story-overview-surface {", 1)[1].split("}", 1)[0]
+    assert "min-height: 0;" in overview
+    assert "overflow-y: auto;" in overview
+    stacked = css.split("@media (max-width: 1180px) {", 1)[1].split("}", 1)[0]
+    assert "grid-template-rows: auto;" in stacked
+    assert "overflow: auto;" in stacked
+
+
 def test_storyboard_scene_focus_mode_scrolls_naturally_and_has_peer_sequence_view():
     html = (ROOT / "tool" / "tool.html").read_text(encoding="utf-8")
     storyboard = (ROOT / "tool" / "js" / "storyboard.js").read_text(encoding="utf-8")

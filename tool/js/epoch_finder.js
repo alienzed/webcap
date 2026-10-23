@@ -41,6 +41,8 @@
   var screeningPromptTimer = 0;
   var campaignSaveTimer = 0;
   var campaignPromptTimer = 0;
+  var campaignDefaultsKey = '';
+  var campaignDraftRevision = 0;
   function campaignSaveDraft() {
     if (!currentFolder || els('campaign-type').value!=='auto') return;
     var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||'');
@@ -49,6 +51,7 @@
       cases:els('cases').value,retention:els('retention').value,
       referenceRvn:els('enable-rvn').checked,referenceDino:els('enable-dino').checked};
     if(els('round-plan').querySelector('[data-epoch-round]'))settings.roundPlans=getRoundPlans();
+    campaignDraftRevision++;
     if(campaignSaveTimer)clearTimeout(campaignSaveTimer);
     campaignSaveTimer=setTimeout(function(){
       campaignSaveTimer=0;
@@ -63,6 +66,8 @@
   function campaignApplyDefaults() {
     if(!currentFolder||els('campaign-type').value!=='auto')return;
     var folder=currentFolder,modelId=String(window.getWorkingModelProfileId()||'');
+    var revision=++campaignDraftRevision;
+    campaignDefaultsKey=folder+'|'+modelId;
     fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({folder:folder,operation:'test_prepare',criteria:{modelId:modelId}})})
       .then(function(response){return response.json().then(function(payload){
@@ -70,7 +75,7 @@
         return payload;
       });}).then(function(payload){
         if(folder!==currentFolder||modelId!==String(window.getWorkingModelProfileId()||'')||
-           activeCampaign||els('campaign-type').value!=='auto')return;
+           activeCampaign||els('campaign-type').value!=='auto'||revision!==campaignDraftRevision)return;
         var saved=payload.campaignSettings||{};
         els('prompt').value=payload.workspacePromptPresent?String(payload.workspacePrompt||''):String(payload.defaultPrompt||'');
         els('concept').value=String(saved.concept||'');
@@ -1189,7 +1194,7 @@
         ['dimensions',(payload.settingOptions||{}).dimensions||[]]].forEach(function(pair){
         var target=els('manual-'+pair[0]);
         var field=pair[0]==='aspect'?'aspectRatio':'dimensions';
-        var selected=target.value, preferred=String(defaults[field]||'');
+        var preferred=String(defaults[field]||''), selected=freshControls?preferred:target.value;
         var values=pair[1].map(String);
         if(preferred && !values.includes(preferred))values.unshift(preferred);
         target.replaceChildren.apply(target,values.map(function(value){
@@ -1197,7 +1202,7 @@
         }));
         target.value=values.includes(selected)?selected:preferred;
       });
-      var sampling=els('manual-sampling'), prior=sampling.value;
+      var sampling=els('manual-sampling'), prior=freshControls?String(defaults.samplingMode||'turbo'):sampling.value;
       sampling.value=Array.from(sampling.options).some(function(o){return o.value===prior;})?prior:String(defaults.samplingMode||'turbo');
       (payload.warnings||[]).forEach(function(warning){if(warning)window.reportConsoleWarning('Manual Screening settings',warning);});
       return payload;
@@ -2044,6 +2049,8 @@
       setup(); list();
       if (activeCampaign && campaigns.some(function (c) { return c.id === activeCampaign; })) return refreshStatus();
       activeCampaign = '';
+      var draftKey=currentFolder+'|'+String(window.getWorkingModelProfileId()||'');
+      if(els('campaign-type').value==='auto'&&campaignDefaultsKey!==draftKey)campaignApplyDefaults();
       manualSelectionCampaign='';
       els('active').classList.add('hidden'); els('empty').classList.remove('hidden');
     }).catch(error);
@@ -2332,6 +2339,7 @@
   els('preview-close').onclick = function () { els('reference-preview').close(); };
   els('prompt').addEventListener('input', function(){
     if(els('campaign-type').value!=='auto')return;
+    campaignDraftRevision++;
     if(campaignPromptTimer)clearTimeout(campaignPromptTimer);
     var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||''),prompt=this.value;
     campaignPromptTimer=setTimeout(function(){
@@ -2352,6 +2360,7 @@
     if (mode === 'finder') roundPlan();
   });
   ['concept','rounds','cases','retention','enable-rvn','enable-dino'].forEach(function(id){
+    els(id).addEventListener('input',function(){campaignDraftRevision++;});
     els(id).addEventListener('change',campaignSaveDraft);
   });
   els('round-plan').addEventListener('change',campaignSaveDraft);

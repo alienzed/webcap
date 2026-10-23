@@ -1176,6 +1176,7 @@
                                     <div id="epoch-finder-staged-choices" class="epoch-finder-run-choices hidden" aria-label="Select staged Test LoRAs"></div>
                                     <label class="hidden">Training run (legacy)<select id="epoch-finder-run"><option value="">Loading saved runs…</option></select></label><div id="epoch-finder-run-choices" class="epoch-finder-run-choices" aria-label="Select training runs"></div>
                                     <p id="epoch-finder-run-detail" class="epoch-finder-muted"></p>
+                                    <button id="epoch-finder-screening-show-excluded" type="button" class="review-captions-btn hidden" aria-pressed="false">Show excluded epochs</button>
                                     <div id="epoch-finder-epoch-picker" class="epoch-finder-epoch-picker hidden"></div>
                                     </div>
                                     <div data-epoch-wizard-step="2" class="hidden">
@@ -1379,7 +1380,7 @@
                               </div>
                             </dialog>
                             <div id="run-analytics-lab" class="run-analytics-lab">
-                              <header class="run-lab-heading"><div><span class="run-lab-eyebrow">TEST GENERATIONS / INSIGHTS</span><h2>Insights</h2><p>Review what you have, find promising epochs, and choose the next useful action.</p></div><div class="run-lab-heading-actions"><button type="button" id="run-lab-ai" class="training-btn training-launch-btn">✦ AI Insights</button><button type="button" id="run-lab-refresh" class="review-captions-btn">Refresh evidence</button></div></header>
+                              <header class="run-lab-heading"><div><span class="run-lab-eyebrow">EVALUATION / INSIGHTS</span><h2>Insights</h2><p>Review what you have, find promising epochs, and choose the next useful action.</p></div><div class="run-lab-heading-actions"><button type="button" id="run-lab-ai" class="training-btn training-launch-btn">✦ AI Insights</button><button type="button" id="run-lab-refresh" class="review-captions-btn">Refresh evidence</button></div></header>
                               <p id="run-lab-status" role="status">Reading recorded testing evidence…</p>
                               <section class="run-lab-challenge"><div><span class="run-lab-eyebrow">NEXT CHALLENGE</span><h3 id="run-lab-challenge-title">Review five unrated renders</h3><p id="run-lab-challenge-description">Rate existing results before spending more GPU time.</p><div id="run-lab-challenge-actions"></div></div><div class="run-lab-steps"><strong>Rating progress</strong><p id="run-lab-mission-metrics" role="status">Reading saved ratings…</p><progress id="run-lab-mission-meter" max="100" value="0" aria-label="Linked Test rating coverage"></progress><small id="run-lab-mission-hint">Rate renders to strengthen your comparisons.</small></div></section>
                               <section class="run-lab-featured" aria-label="Leading epochs"><div id="run-lab-featured"></div></section>

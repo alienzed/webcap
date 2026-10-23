@@ -7,7 +7,7 @@ The runner's ownership and recovery rules are defined in [training_runner_contra
 ## Workflow
 
 1. Open **Training** from the permanent activity rail and select the **Base Model** in the application header. The model choice is remembered per set.
-2. Set the normal run parameters in **Run setup**: learning rate, rank, epochs, and dropout. These start from the current model template.
+2. Set the normal run parameters in **Run setup**: learning rate, rank, epochs, and dropout. These start from the current model template. H3 also offers an optional **Focused H3 blocks (20–49)** checkbox; it excludes H3 blocks 0–19 and the token refiner from LoRA training via PEFT `exclude_modules`, in the captured run config only.
 3. Review the generated bucket plan and use **Adjust buckets** when the managed dataset needs a different supported target.
 4. Use **Advanced configuration** for raw config/dataset TOML edits. Selecting the setup creates only missing files; **Reset** is the explicit way to restore one training config or regenerate one dataset TOML from the visible media.
 5. Filter or focus the media grid to the exact items to train.

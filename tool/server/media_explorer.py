@@ -17,12 +17,17 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".mkv", ".avi"}
 def _record_details(record):
     """Expose recorded facts, never run analysis or copy an owner's raw payload."""
     settings = record.get("settings") or {}
+    resolution = record.get("resolution") or settings.get("dimensions") or ""
+    if not _dimensions(resolution):
+        width = record.get("width") or settings.get("width")
+        height = record.get("height") or settings.get("height")
+        resolution = f"{width}x{height}" if _dimensions(f"{width}x{height}") else ""
     return {
         "prompt": str(record.get("resolvedPrompt") or record.get("prompt") or ""),
         "sourcePrompt": str(record.get("sourcePrompt") or ""),
         "seed": record.get("seed", settings.get("seed")),
-        "resolution": str(settings.get("dimensions") or ""),
-        "duration": record.get("durationSeconds", settings.get("duration")),
+        "resolution": str(resolution),
+        "duration": record.get("durationSeconds", record.get("duration", settings.get("duration"))),
         "aspectRatio": str(record.get("aspectRatio") or settings.get("aspectRatio") or ""),
         "workflow": str(record.get("workflowProfile") or record.get("workflowFile") or ""),
         "loras": [{"name": str(item.get("name") or ""), "strength": item.get("strength")}
@@ -444,7 +449,7 @@ def list_media(limit=60, offset=0, role="", kind="", search="", sort="newest", f
     elif sort == "name":
         results.sort(key=lambda item: (item["fileName"].casefold(), item["id"]))
     elif sort == "path":
-        results.sort(key=lambda item: (item.get("mediaPath") or "", item["id"]))
+        results.sort(key=lambda item: (str(item.get("mediaPath") or "").casefold(), item["id"]))
     elif sort == "type":
         results.sort(key=lambda item: (item["mediaKind"], item["id"]))
     elif sort == "size":

@@ -1423,3 +1423,43 @@ def test_evaluation_methods_filter_shared_campaign_history_without_migrating_it(
     assert "var surfaceLabels = {tests:'Prompt Tests',screening:'Manual Screening'" in js
     assert "(c.mode === 'manual') === (mode === 'screening')" in js
     assert "showMode(destination,previous!==destination?{returnTo:previous,keepCampaign:true}:{keepCampaign:true});" in js
+
+
+def test_evaluation_campaign_history_lists_each_saved_mode_after_refresh(tmp_path, monkeypatch):
+    """Manual Screening history must not reappear under regular Campaigns."""
+    import json
+
+    root = tmp_path / "epoch-finder"
+    for campaign_id, mode, started in (
+        ("aaaaaaaaaaaa", "manual", 3),
+        ("bbbbbbbbbbbb", "auto", 2),
+        ("cccccccccccc", None, 1),
+    ):
+        directory = root / campaign_id
+        directory.mkdir(parents=True)
+        record = {
+            "id": campaign_id, "folder": "sample/set",
+            "name": campaign_id, "modelId": "minimax_h3",
+            "status": "complete", "round": 2, "startedAt": started,
+            "rounds": [{"number": 1}, {"number": 2}],
+            "units": [],
+        }
+        if mode is not None:
+            record["mode"] = mode
+        (directory / "campaign.json").write_text(json.dumps(record), encoding="utf-8")
+
+    monkeypatch.setattr(epoch_finder, "_root", lambda _folder: root)
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _folder: "sample/set")
+    monkeypatch.setattr(epoch_finder, "_runs", lambda _folder: [])
+    monkeypatch.setattr(epoch_finder, "_timing_profiles", lambda _folder: {})
+
+    results = epoch_finder.command(tmp_path, "list", {"modelId": ""})["campaigns"]
+    assert [(entry["id"], entry["mode"], entry["round"]) for entry in results] == [
+        ("aaaaaaaaaaaa", "manual", 2),
+        ("bbbbbbbbbbbb", "auto", 2),
+        ("cccccccccccc", None, 2),
+    ]
+    assert [entry["id"] for entry in results if entry["mode"] == "manual"] == [
+        "aaaaaaaaaaaa"]
+    assert [entry["id"] for entry in results if entry["mode"] != "manual"] == [
+        "bbbbbbbbbbbb", "cccccccccccc"]

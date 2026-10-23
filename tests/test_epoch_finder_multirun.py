@@ -76,7 +76,7 @@ def test_legacy_staging_still_uses_original_epoch(tmp_path, monkeypatch):
     epoch_finder._clean_staging(tmp_path, campaign)
 
 
-def test_candidates_curve_lists_available_queue_and_history_runs_without_saved_epochs(monkeypatch):
+def test_candidates_curve_lists_available_queue_and_history_runs_without_saved_epochs(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "sets/subject")
@@ -96,7 +96,11 @@ def test_candidates_curve_lists_available_queue_and_history_runs_without_saved_e
     monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key", lambda _: SimpleNamespace(
         PROFILE_ID="minimax_h3", STAGING_KEY="h3",
     ))
-    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda _folder, job_id: "/training/" + job_id)
+    def recorded_run_directory(raw_path):
+        directory = tmp_path / raw_path.rsplit("/", 1)[-1]
+        directory.mkdir(exist_ok=True)
+        return directory
+    monkeypatch.setattr(epoch_finder, "host_path_for_training_path", recorded_run_directory)
     monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run", lambda _path: [])
 
     assert epoch_finder._runs("set-folder") == []

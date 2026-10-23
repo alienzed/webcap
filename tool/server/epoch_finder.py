@@ -185,7 +185,7 @@ def _set_saved_checkpoint_path(folder_path, job_id, epoch):
                  item.get("status") == "available"), None)
     if item is None:
         raise FileNotFoundError("Saved epoch " + str(epoch) + " is unavailable in this Set.")
-    return run_dir / item["fileName"]
+    return run_dir / ("epoch" + str(epoch)) / item["fileName"]
 
 
 def _runs(folder_path, require_saved_checkpoints=True):

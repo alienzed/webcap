@@ -83,8 +83,7 @@
         if(folder!==currentFolder||modelId!==String(window.getWorkingModelProfileId()||'')||
            activeCampaign||els('campaign-type').value!=='auto'||revision!==campaignDraftRevision)return;
         var saved=payload.campaignSettings||{};
-        var localPrompt=typeof window.testGenerationsCurrentSetPrompt==='function'
-          ?window.testGenerationsCurrentSetPrompt(folder,modelId):null;
+        var localPrompt=window.testGenerationsCurrentSetPrompt(folder,modelId);
         els('prompt').value=localPrompt!==null?localPrompt:
           (payload.workspacePromptPresent?String(payload.workspacePrompt||''):String(payload.defaultPrompt||''));
         els('concept').value=String(saved.concept||'');
@@ -1249,8 +1248,8 @@
       if(context!==currentFolder || (selectedId && activeCampaign!==selectedId) ||
           (!selectedId && activeCampaign) || els('campaign-type').value!=='manual')return;
       if(!plan){
-        var localPrompt=typeof window.testGenerationsCurrentSetPrompt==='function'
-          ?window.testGenerationsCurrentSetPrompt(context,String(campaign&&campaign.modelId||window.getWorkingModelProfileId()||'')):null;
+        var localPrompt=window.testGenerationsCurrentSetPrompt(
+          context,String(campaign&&campaign.modelId||window.getWorkingModelProfileId()||''));
         var prompt=localPrompt!==null?localPrompt:
           (payload.workspacePromptPresent?payload.workspacePrompt:payload.defaultPrompt);
         if(!els('manual-prompt').value.trim()){
@@ -1295,8 +1294,6 @@
     },500);
   }
   function screeningSavePrompt() {
-    if(typeof window.testGenerationsSaveSharedSetPrompt!=='function')
-      throw new Error('Shared Set wildcard template saver is unavailable.');
     window.testGenerationsSaveSharedSetPrompt(els('manual-prompt').value);
     screeningSettingsKey='';screeningSettingsRequest=null;
   }
@@ -2351,8 +2348,6 @@
     if(els('campaign-type').value!=='auto')return;
     campaignDraftRevision++;
     try{
-      if(typeof window.testGenerationsSaveSharedSetPrompt!=='function')
-        throw new Error('Shared Set wildcard template saver is unavailable.');
       window.testGenerationsSaveSharedSetPrompt(this.value);
     }catch(exc){error(exc);}
   });

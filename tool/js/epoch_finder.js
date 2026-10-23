@@ -1491,6 +1491,7 @@
     if (!campaign || campaign.mode !== 'manual') return Promise.resolve();
     var folder=currentFolder, id=campaign.id, identity=folder+':'+id;
     if (!force && screeningTestStatusCampaign===identity) return Promise.resolve();
+    if (screeningTestStatusCampaign!==identity) screeningTestStatus={};
     screeningTestStatusCampaign=identity;
     var version=++screeningTestStatusVersion;
     return api('screening_test_status',{campaignId:id},folder).then(function(response){

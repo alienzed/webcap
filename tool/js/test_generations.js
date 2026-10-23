@@ -38,6 +38,7 @@
   var missingWorkingModelContextReported = false;
   var reportedFailureKeys = new Set();
   var debouncedWorkspacePromptSaves = Object.create(null);
+  var pendingWorkspacePromptWrites = Object.create(null);
   var debouncedTestBenchStateSave = debounceCreate(500);
   var wildcardDirector = {
     models: [],
@@ -1866,7 +1867,7 @@
 
   // The Set template is shared by Tests and both Campaign forms, never by their results.
   window.testGenerationsReceiveSetPrompt = function(folder, modelId, prompt) {
-    if (String(owningSetFolder(launchFolder || '')) !== String(folder || '') ||
+    if (String(owningSetFolder(launchFolder || (state && state.folder) || '')) !== String(folder || '') ||
         currentTestModelId() !== String(modelId || '')) return;
     var target = el('test-generations-prompt');
     if (!target) return;
@@ -1878,17 +1879,26 @@
     var folder = String(owningSetFolder(launchFolder || (state && state.folder) || ''));
     if (!modelId || !folder) return;
     var value = String(prompt == null ? '' : prompt);
-    if (typeof window.epochFinderReceiveSetPrompt === 'function')
-      window.epochFinderReceiveSetPrompt(folder, modelId, value);
+    window.testGenerationsReceiveSetPrompt(folder, modelId, value);
+    window.epochFinderReceiveSetPrompt(folder, modelId, value);
     // A new Set/model must not cancel an authored prompt still awaiting its save.
     var scope=folder+'|'+modelId;
     if(!debouncedWorkspacePromptSaves[scope])
       debouncedWorkspacePromptSaves[scope]=debounceCreate(500);
     debouncedWorkspacePromptSaves[scope](function () {
-      requestForFolder(folder, 'test_save_workspace_prompt', {
-        modelId: modelId,
-        prompt: value
-      }).catch(showError);
+      // Keep the latest authored value from being overwritten by a slower prior save.
+      var previous=pendingWorkspacePromptWrites[scope] || Promise.resolve();
+      var save=previous.catch(function(){}).then(function(){
+        return requestForFolder(folder, 'test_save_workspace_prompt', {
+          modelId: modelId,
+          prompt: value
+        });
+      });
+      pendingWorkspacePromptWrites[scope]=save;
+      save.catch(showError).finally(function(){
+        if(pendingWorkspacePromptWrites[scope]===save)
+          delete pendingWorkspacePromptWrites[scope];
+      });
     });
   }
 

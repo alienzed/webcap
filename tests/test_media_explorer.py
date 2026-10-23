@@ -471,3 +471,17 @@ def test_common_technical_sort_and_filter_before_paging(monkeypatch):
         source="generate", sort="size", direction="asc")["items"]] == ["small", "unknown", "large"]
     with pytest.raises(ValueError, match="sort direction"):
         media_explorer.list_media(source="generate", direction="other")
+
+
+def test_recorded_dimensions_and_duration_are_normalized_without_probing_files():
+    dimensions = media_explorer._record_details({
+        "width": 1344, "height": 768, "durationSeconds": 5,
+    })
+    assert dimensions["resolution"] == "1344x768"
+    assert dimensions["duration"] == 5
+    assert media_explorer._metric(dimensions, "resolution") == 768
+    assert media_explorer._metric(dimensions, "megapixels") == 1344 * 768
+    assert media_explorer._metric(dimensions, "duration") == 5
+    unknown = media_explorer._record_details({"megapixels": 0.8})
+    assert unknown["resolution"] == ""
+    assert media_explorer._metric(unknown, "megapixels") == 0

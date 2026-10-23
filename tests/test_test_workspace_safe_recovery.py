@@ -1,17 +1,17 @@
+"""Evaluation opens with the native Prompt Tests form and keeps native review destinations."""
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 
-def test_regular_build_is_default_with_native_review_fallback():
+
+def test_evaluation_uses_existing_native_surfaces_and_warm_return():
     tests=(ROOT/"tool/js/test_generations.js").read_text(encoding="utf-8")
-    unified=(ROOT/"tool/js/test_generations_unified.js").read_text(encoding="utf-8")
+    finder=(ROOT/"tool/js/epoch_finder.js").read_text(encoding="utf-8")
     html=(ROOT/"tool/tool.html").read_text(encoding="utf-8")
     assert "window.epochFinderPrepare(launchFolder);" in tests
-    assert "window.testGenerationsUnifiedNativeRoute();" in tests
     assert "window.epochFinderShowMode('tests');" in tests
-    assert "window.testGenerationsUnifiedDestination=function(destination)" in unified
-    assert "window.testGenerationsUnifiedNativeRoute=function()" in unified
-    assert "exitToNative();" in unified
-    assert "window.testGenerationsUnifiedOpen=function()" in unified
+    assert "window.testGenerationsUnifiedNativeRoute();" not in tests
+    assert "window.epochFinderShowMode = showMode;" in finder
+    assert "if (warmReturn)" in tests
     for id in ("test-generations-body","epoch-finder-screen","test-references-screen",
-               "run-analytics-screen","test-unified-workspace","test-unified-legacy"):
+               "run-analytics-screen","epoch-finder-manual-matrix"):
         assert 'id="'+id+'"' in html

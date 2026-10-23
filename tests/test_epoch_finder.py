@@ -456,6 +456,7 @@ def test_discover_queued_resume_run_with_saved_epochs(tmp_path, monkeypatch):
     from types import SimpleNamespace
     job = {"id": "queued-1", "folder": "set/a"}
     monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder", lambda _: [])
     monkeypatch.setattr(epoch_finder, "passive_status_snapshot",
                         lambda: ({"ok": True, "jobs": [job]}, 200))
     monkeypatch.setattr(epoch_finder, "all_history_payload",
@@ -481,6 +482,7 @@ def test_discover_queued_resume_run_with_saved_epochs(tmp_path, monkeypatch):
 def test_discover_history_run_and_queue_only_once(tmp_path, monkeypatch):
     from types import SimpleNamespace
     monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder", lambda _: [])
     monkeypatch.setattr(epoch_finder, "passive_status_snapshot",
                         lambda: ({"ok": True, "jobs": [{"id": "same", "folder": "set/a"}]}, 200))
     monkeypatch.setattr(epoch_finder, "all_history_payload",
@@ -1469,3 +1471,53 @@ def test_evaluation_campaign_history_lists_each_saved_mode_after_refresh(tmp_pat
         "aaaaaaaaaaaa"]
     assert [entry["id"] for entry in results if entry["mode"] != "manual"] == [
         "bbbbbbbbbbbb", "cccccccccccc"]
+
+
+def test_set_managed_run_discovery_without_training_queue(tmp_path, monkeypatch):
+    """Saved LoRAs in a uniquely owned Set action must not depend on Training."""
+    from types import SimpleNamespace
+
+    action_root = tmp_path / "action-001"
+    output = action_root / "output" / "training-run"
+    epoch_dir = output / "epoch12"
+    epoch_dir.mkdir(parents=True)
+    (epoch_dir / "epoch12.safetensors").write_bytes(b"saved")
+    action = {
+        "actionId": "set/action-001", "folder": "set/a",
+        "requestedStages": ["h3"], "runName": "My H3",
+        "createdAt": 10, "jobs": {"h3": [{"id": "manifest-12", "createdAt": 11}]},
+    }
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder",
+                        lambda _: [(action_root, action)])
+    monkeypatch.setattr(epoch_finder, "passive_status_snapshot",
+                        lambda: ({"ok": False, "error": "Training unavailable"}, 503))
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key",
+                        lambda stage: SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY=stage))
+
+    runs = epoch_finder._runs(tmp_path)
+    assert [(run["jobId"], run["epochs"], run["runName"]) for run in runs] == [
+        ("manifest-12", [12], "My H3")
+    ]
+    # The resume-only discover_runs() would reject an epoch LoRA without "latest".
+    assert not (output / "latest").exists()
+
+
+def test_set_managed_discovery_never_guesses_ambiguous_job_id(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    action_root = tmp_path / "action"
+    for name in ("first", "second"):
+        epoch_dir = action_root / "output" / name / "epoch8"
+        epoch_dir.mkdir(parents=True)
+        (epoch_dir / "saved.safetensors").write_bytes(b"saved")
+    action = {
+        "folder": "set/a", "requestedStages": ["h3"],
+        "jobs": {"h3": [{"id": "job-1"}]}, "runName": "ambiguous",
+    }
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder",
+                        lambda _: [(action_root, action)])
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key",
+                        lambda stage: SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY=stage))
+    assert epoch_finder._managed_set_checkpoint_runs(tmp_path) == []

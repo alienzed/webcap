@@ -409,6 +409,28 @@
   min-height: 70px;
 }
 
+.generate-take-entry {
+  position: relative;
+  min-width: 0;
+}
+.generate-take-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.generate-take-delete:hover,
+.generate-take-delete:focus-visible {
+  color: var(--danger, #e55);
+  border-color: currentColor;
+}
 .generate-take-card {
   width: 100%;
   min-width: 0;

@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import threading
+from datetime import datetime, timedelta, timezone
 from collections import deque
 from pathlib import Path
 from . import config as app_config
@@ -237,6 +238,12 @@ def _query_items(snapshot, args, *, ignore_metadata=False):
     if query:
         items = [item for item in items
                  if all(term in item["relativePath"].casefold() for term in query)]
+    date = str(args.get("date") or "")
+    if date:
+        if date not in ("7", "30", "90"):
+            raise ValueError("Unknown media date filter.")
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=int(date))).timestamp() * 1000
+        items = [item for item in items if item["createdAt"] >= cutoff]
     if not ignore_metadata:
         min_side = int(args.get("min_side") or 0)
         min_mp = float(args.get("min_mp") or 0)

@@ -966,12 +966,22 @@
     var ranking = campaign.scores || [];
     // Live and completed rankings share one cumulative score definition.
     var round = Math.min(campaign.round, campaign.rounds.length);
+    var scoredByEpoch=new Map(),rankedByEpoch=new Map();
+    (campaign.units||[]).forEach(function(unit){
+      if(!unit.assessment)return;
+      if(!scoredByEpoch.has(unit.epoch))scoredByEpoch.set(unit.epoch,[]);
+      scoredByEpoch.get(unit.epoch).push(unit);
+      if(unit.round<=round){
+        if(!rankedByEpoch.has(unit.epoch))rankedByEpoch.set(unit.epoch,[]);
+        rankedByEpoch.get(unit.epoch).push(unit);
+      }
+    });
     var plan = campaign.rounds.find(function (r) { return r.number === round; });
     if (plan && campaign.phase !== 'Complete') {
       ranking = campaign.rounds[0].epochs.map(function (epoch) {
-        var comparison = campaign.units.filter(function (u) {
-          return u.round <= round && u.epoch === epoch && u.assessment;
-        }).flatMap(function (unit) { return unit.assessment.comparison || []; });
+        var comparison = (rankedByEpoch.get(epoch)||[]).flatMap(function (unit) {
+          return unit.assessment.comparison || [];
+        });
         var matches = comparison.reduce(function (n, g) {
           return n + (g.result === 'match' ? Number(g.weight == null ? 1 : g.weight) : 0);
         }, 0);
@@ -1017,7 +1027,7 @@
     if (sort === 'epoch') ranking.sort(function (a,b) { return a.epoch-b.epoch; });
     if (sort === 'count') ranking.sort(function (a,b) { return (b.count || 0)-(a.count || 0) || (b.score || 0)-(a.score || 0); });
     els('ranking').innerHTML = ranking.length ? ranking.map(function (entry, index) {
-      var observed = (campaign.units || []).filter(function (u) { return u.epoch === entry.epoch && u.assessment; });
+      var observed = scoredByEpoch.get(entry.epoch)||[];
       var extra = (campaign.referenceEvaluation || {});
       var evidence = (extra.rvn ? ' · RVN ' + observed.filter(function (u) { return u.referenceComplete; }).length + '/' + observed.length : '') +
         (extra.dino ? ' · DINO ' + observed.filter(function (u) { return u.dinoComplete; }).length + '/' + observed.length : '');
@@ -1031,8 +1041,13 @@
   function campaignSummary(campaign) {
     // Read-only: use the same cumulative weighted VL comparisons as the leaderboard.
     var epochs = (campaign.rounds[0] || {epochs: []}).epochs;
+    var unitsByEpoch=new Map();
+    (campaign.units||[]).forEach(function(unit){
+      if(!unitsByEpoch.has(unit.epoch))unitsByEpoch.set(unit.epoch,[]);
+      unitsByEpoch.get(unit.epoch).push(unit);
+    });
     var rows = epochs.map(function (epoch) {
-      var units = (campaign.units || []).filter(function (u) { return u.epoch === epoch; });
+      var units = unitsByEpoch.get(epoch)||[];
       var comparisons = units.filter(function (u) { return !!u.assessment; })
         .flatMap(function (u) { return u.assessment.comparison || []; });
       var matches = comparisons.reduce(function (n, g) {
@@ -1085,7 +1100,8 @@
     var units=campaign.units.filter(function(u){
       return (inspectedEpoch==null||u.epoch===inspectedEpoch)&&!!u.frame&&!u.framePruned;
     });
-    var key=campaign.id+':'+inspectedEpoch+':'+units.map(function(u){
+    var shown=inspectedEpoch==null?units.slice(-40).reverse():units.slice().sort(function(a,b){return a.round-b.round||a.case-b.case;});
+    var key=campaign.id+':'+inspectedEpoch+':'+shown.map(function(u){
       return [u.frame,JSON.stringify(u.assessment||null),JSON.stringify(u.referenceAssessments||[]),
         JSON.stringify(u.dinoAssessments||[]),u.error||''].join(':');
     }).join('|');
@@ -1107,7 +1123,6 @@
       reset.textContent='Show all epochs';heading.appendChild(reset);
     }
     host.appendChild(heading);
-    var shown=inspectedEpoch==null?units.slice(-40).reverse():units.slice().sort(function(a,b){return a.round-b.round||a.case-b.case;});
     var keep=new Set();
     shown.forEach(function(unit){
       var identity=unit.epoch+':'+unit.round+':'+unit.case;
@@ -1518,10 +1533,15 @@
     els('manual-history').classList.remove('hidden');
     var host=els('manual-round-list');
     var visibleRounds=campaign.rounds.filter(function(plan){return plan.status!=='deleted';});
+    var finishedByRound=new Map(),renderedByRound=new Map();
+    campaign.units.forEach(function(unit){
+      if(unit.frame||unit.error) finishedByRound.set(unit.round,(finishedByRound.get(unit.round)||0)+1);
+      if(unit.frame) renderedByRound.set(unit.round,(renderedByRound.get(unit.round)||0)+1);
+    });
     var signature=campaign.id+'|'+manualSelectedRound+'|'+campaign.status+'|'+campaign.round+'|'+
       visibleRounds.map(function(plan){
         return plan.number+':'+screeningRoundState(campaign,plan)+':'+
-          campaign.units.filter(function(u){return u.round===plan.number&&(u.frame||u.error);}).length;
+          (finishedByRound.get(plan.number)||0);
       }).join('|');
     if (host.dataset.signature===signature) return;
     host.dataset.signature=signature;
@@ -1532,7 +1552,7 @@
     }));
     visibleRounds.forEach(function(plan,index){
       var state=screeningRoundState(campaign,plan);
-      var completed=campaign.units.filter(function(u){return u.round===plan.number&&!!u.frame;}).length;
+      var completed=renderedByRound.get(plan.number)||0;
       var total=plan.epochs.length*plan.seeds.length;
       var action=state==='queued'?'cancel':state==='running'?'stop':
         (plan.number<campaign.round&&['complete','stopped','cancelled'].includes(state)?'delete':'');
@@ -1773,8 +1793,16 @@
       });
     }
     var units=campaign.units||[];
-    var byEpoch={};
-    units.forEach(function (u) { if (!byEpoch[u.epoch]) byEpoch[u.epoch]=[];byEpoch[u.epoch].push(u); });
+    var byEpoch={},roundUnits=[],roundUnitsByEpoch=new Map();
+    units.forEach(function (u) {
+      if (!byEpoch[u.epoch]) byEpoch[u.epoch]=[];
+      byEpoch[u.epoch].push(u);
+      if (u.round===plan.number) {
+        roundUnits.push(u);
+        if (!roundUnitsByEpoch.has(u.epoch)) roundUnitsByEpoch.set(u.epoch,[]);
+        roundUnitsByEpoch.get(u.epoch).push(u);
+      }
+    });
     var rated={};
     Object.keys(byEpoch).forEach(function (key) {
       var values=byEpoch[key].filter(function (u) {return Number(u.rating)>0;});
@@ -1787,9 +1815,7 @@
     // Reveal an epoch when its first render (or visible failure) is available.
     // Unfinished cells in that epoch remain as "Awaiting render" placeholders.
     var rows=plan.epochs.filter(function (epoch) {
-      return units.some(function (u) {
-        return u.round===plan.number && u.epoch===epoch && (u.frame || u.error);
-      });
+      return (roundUnitsByEpoch.get(epoch)||[]).some(function(u){return u.frame||u.error;});
     }).sort(function (a,b) {
       if (sort==='kept') return Number(kept.has(b))-Number(kept.has(a))||a-b;
       if (sort==='high'||sort==='low') {
@@ -1801,7 +1827,7 @@
       return (x&&x.epoch||a)-(y&&y.epoch||b)||a-b;
     });
     var signature=JSON.stringify([campaign.id,campaign.status,manualSelectedRound,rows,Array.from(kept),sort,
-      units.filter(function(u){return u.round===plan.number;}).map(function (u) {
+      roundUnits.map(function (u) {
         return [u.epoch,u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
       }),units.map(function(u){return [u.epoch,u.rating]})]);
     if (host.dataset.signature===signature) return;
@@ -1835,22 +1861,22 @@
       scroller.insertBefore(labels,scroller.firstChild);
     }
     var desired=[];
+    var existingRows=new Map(Array.from(scroller.querySelectorAll('[data-screening-epoch]')).map(function(row){
+      return [row.dataset.screeningEpoch,row];
+    }));
     rows.forEach(function (epoch) {
+      var epochUnits=roundUnitsByEpoch.get(epoch)||[];
       var collapsed=!kept.has(epoch)&&!screeningExpandedExcluded.has(campaign.id+':'+plan.number+':'+epoch);
       var inTest=screeningTestStatus[String(epoch)]===true;
       var copying=screeningCopyPending.has(currentFolder+':'+campaign.id+':'+String(epoch));
       var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,inTest,copying,
-        units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;}).map(function(u){
+        epochUnits.map(function(u){
           return [u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
         })]);
-      var previous=Array.from(scroller.querySelectorAll('[data-screening-epoch]')).find(function(element){
-        return element.dataset.screeningEpoch===String(epoch);
-      });
+      var previous=existingRows.get(String(epoch));
       if (previous && previous.dataset.signature===rowSignature) {
-        screeningUpdateAverage(previous,rated[epoch],units.filter(function(u){
-          return u.round===plan.number&&u.epoch===epoch;
-        }));
-        var existingUnits=units.filter(function(u){return u.round===plan.number&&u.epoch===epoch;});
+        screeningUpdateAverage(previous,rated[epoch],epochUnits);
+        var existingUnits=epochUnits;
         existingUnits.forEach(function(u){
           var card=previous.querySelector('.epoch-screening-cases').children[u.case];
           if (card) window.updateTestPreviewCardRating(card,u.rating||0);
@@ -1956,16 +1982,21 @@
       head.appendChild(actions);
       row.insertBefore(head,row.firstChild);
       }
-      screeningUpdateAverage(row,rated[epoch],units.filter(function(u){
-        return u.round===plan.number&&u.epoch===epoch;
-      }));
+      screeningUpdateAverage(row,rated[epoch],epochUnits);
       var cards=row.querySelector('.epoch-screening-cases');
       if (!cards) {
         cards=document.createElement('div');cards.className='epoch-screening-cases';
         row.appendChild(cards);
       }
+      if (collapsed) {
+        // Excluded epochs keep their row and ratings, not hidden preview/media nodes.
+        if (cards.children.length) cards.replaceChildren();
+        desired.push(row);
+        return;
+      }
+      var unitsByCase=new Map(epochUnits.map(function(u){return [u.case,u];}));
       for (var caseIndex=0;caseIndex<plan.seeds.length;caseIndex++) {
-        var unit=units.find(function(u){return u.round===plan.number&&u.epoch===epoch&&u.case===caseIndex;});
+        var unit=unitsByCase.get(caseIndex);
         (function(u,index) {
           var cardSignature=JSON.stringify([u&&u.frame,u&&u.framePruned,u&&u.error,
             u&&u.renderSeconds,u&&u.visionError,u&&u.assessment&&u.assessment.text]);
@@ -2036,7 +2067,7 @@
       desired.push(row);
     });
     var wanted=new Set(desired);
-    scroller.querySelectorAll('[data-screening-epoch]').forEach(function(node){
+    existingRows.forEach(function(node){
       if (!wanted.has(node)) node.remove();
     });
     desired.forEach(function(node,index){

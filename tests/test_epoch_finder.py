@@ -1285,7 +1285,7 @@ def test_manual_epoch_sweep_ux_preserves_rated_card_and_run_header():
     assert 'id="epoch-finder-manual-run-info"' in html
     assert "screeningRunInfo(campaign,plan)" in js
     assert "plan.casePrompts[index]" in js
-    assert "screeningUpdateAverage(previous,rated[epoch],units.filter(function(u){" in js
+    assert "screeningUpdateAverage(previous,rated[epoch],epochUnits)" in js
     assert "window.updateTestPreviewCardRating(oldCard" in js
     assert "window.updateTestPreviewCardRating(card,value)" in js
     assert "screeningSelectionFailure" in js

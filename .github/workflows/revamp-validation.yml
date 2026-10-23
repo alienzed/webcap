@@ -25,6 +25,8 @@ on:
       - 'tests/test_test_generations_ask_vl_navigation_contract.py'
       - 'tests/test_test_repeat.py'
       - 'tests/test_epoch_finder.py'
+      - 'tests/test_epoch_finder_scaling.py'
+      - 'tests/test_epoch_finder_scaling_dom.test.cjs'
       - 'tests/test_epoch_finder_multirun.py'
       - 'tests/test_run_analytics_next.py'
       - 'tool/js/epoch_info.js'
@@ -66,6 +68,7 @@ jobs:
         run: |
           node --test tests/test_generations_unified_dom.test.cjs
           node --test tests/test_test_surface_context_navigation.test.cjs
+          node --test tests/test_epoch_finder_scaling_dom.test.cjs
       - name: Inference and Training drag-to-reorder
         run: |
           node --check tool/js/job_queues.js
@@ -97,5 +100,5 @@ jobs:
           python -m pytest -q tests/test_training_reference_selections.py tests/test_training_references_browser.py tests/test_epoch_finder_multigroup_references.py
       - name: Native Test, VL, Finder and Analytics regressions
         run: |
-          python -m pytest -q tests/test_test_generations_ui_contract.py tests/test_test_generations_route.py tests/test_test_generations_ask_vl_navigation_contract.py tests/test_test_repeat.py tests/test_epoch_finder.py tests/test_epoch_finder_multirun.py tests/test_run_analytics_next.py
+          python -m pytest -q tests/test_test_generations_ui_contract.py tests/test_test_generations_route.py tests/test_test_generations_ask_vl_navigation_contract.py tests/test_test_repeat.py tests/test_epoch_finder.py tests/test_epoch_finder_scaling.py tests/test_epoch_finder_multirun.py tests/test_run_analytics_next.py
           node --test tests/test_insights_sidebar_navigation.test.cjs

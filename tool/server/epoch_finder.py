@@ -978,15 +978,21 @@ def _check_signal(folder_path, campaign, control):
     return True
 
 
-def _unit(campaign, round_number, epoch, case):
-    for existing in campaign["units"]:
-        if existing["round"] == round_number and existing["epoch"] == epoch and existing["case"] == case:
-            return existing
+def _unit(campaign, round_number, epoch, case, index=None):
+    key = (round_number, epoch, case)
+    if index is None:
+        for existing in campaign["units"]:
+            if (existing["round"], existing["epoch"], existing["case"]) == key:
+                return existing
+    elif key in index:
+        return index[key]
     value = {"round": round_number, "epoch": epoch, "case": case, "session": "",
              "frame": "", "question": "", "groups": [], "assessment": None,
              "error": "", "errorStage": "", "captured": False, "framePruned": False,
              "queuedAt": None, "captureWallSeconds": None}
     campaign["units"].append(value)
+    if index is not None:
+        index[key] = value
     return value
 
 
@@ -1340,27 +1346,28 @@ def _mark_unit_error(folder_path, campaign, unit, stage, exc):
 def _rank(campaign, round_number):
     """Rank *every* source epoch using durable evidence through this round."""
     initial = campaign["rounds"][0]["epochs"]
+    assessed_by_epoch = {}
+    for unit in campaign["units"]:
+        if unit["round"] <= round_number and unit.get("assessment"):
+            assessed_by_epoch.setdefault(unit["epoch"], []).append(unit)
+    active_epochs = set(campaign["rounds"][round_number - 1]["epochs"])
     by_epoch = {}
     for epoch in initial:
+        assessed = assessed_by_epoch.get(epoch, [])
         comparisons = [
-            group for unit in campaign["units"]
-            if unit["round"] <= round_number and unit["epoch"] == epoch
-            and unit.get("assessment")
+            group for unit in assessed
             for group in unit["assessment"].get("comparison", [])
         ]
         matches = sum(float(group.get("weight", 1)) for group in comparisons if group.get("result") == "match")
         mismatches = sum(float(group.get("weight", 1)) for group in comparisons if group.get("result") == "mismatch")
         total = matches + mismatches
-        rounds_tested = sorted({
-            unit["round"] for unit in campaign["units"]
-            if unit["round"] <= round_number and unit["epoch"] == epoch and unit.get("assessment")
-        })
+        rounds_tested = sorted({unit["round"] for unit in assessed})
         by_epoch[epoch] = {
             "epoch": epoch, "matches": matches, "mismatches": mismatches,
             "unclear": sum(group.get("result") == "unclear" for group in comparisons), "count": total,
             "score": matches / total if total else None,
             "roundsTested": rounds_tested,
-            "active": epoch in campaign["rounds"][round_number - 1]["epochs"],
+            "active": epoch in active_epochs,
         }
     rows = list(by_epoch.values())
     rows.sort(key=lambda item: (item["score"] is None, -(item["score"] or 0), item["epoch"]))
@@ -1413,15 +1420,19 @@ def _run(folder_path, campaign_id, control):
                 plan["status"] = "running"
             _update(folder_path, campaign, status="running", phase="Rendering",
                     detail="Round " + str(number) + " · " + str(len(epochs)) + " epochs")
+            # Round-local index: no persisted cache and no repeated full-unit scans.
+            unit_index = {
+                (item["round"], item["epoch"], item["case"]): item
+                for item in campaign["units"]
+            }
             for epoch in epochs:
                 if campaign.get("mode") == "manual" and control["stop_round"].is_set():
                     break
-                pending = [
-                    _unit(campaign, number, epoch, case)
-                    for case in range(len(plan["seeds"]))
-                    if not _unit(campaign, number, epoch, case)["frame"]
-                    and not _unit(campaign, number, epoch, case).get("error")
-                ]
+                pending = []
+                for case in range(len(plan["seeds"])):
+                    unit = _unit(campaign, number, epoch, case, index=unit_index)
+                    if not unit["frame"] and not unit.get("error"):
+                        pending.append(unit)
                 if pending:
                     if not _check_signal(folder_path, campaign, control):
                         return
@@ -1572,8 +1583,11 @@ def _run(folder_path, campaign_id, control):
 
 
 def _campaign_has_active_sessions(folder_path, campaign):
+    # Captured frames exist only after their Test sessions complete.
+    # Uncaptured sessions must still be checked for active provider work.
     return any(
-        unit.get("session") and _session_still_active(folder_path, unit["session"])
+        unit.get("session") and not unit.get("frame")
+        and _session_still_active(folder_path, unit["session"])
         for unit in campaign["units"]
     )
 

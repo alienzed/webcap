@@ -102,7 +102,7 @@
             });
           });
         }
-      }).catch(error);
+      }).catch(function(exc){campaignDefaultsKey='';error(exc);});
   }
 
   var screeningSelectionQueue = Promise.resolve();
@@ -1186,6 +1186,7 @@
     });}).then(function(payload){
       if(screeningSettingsKey!==key) return payload;
       var available=new Set(payload.settings||[]), defaults=Object.assign({},payload.defaults||{},payload.manualSettings||{});
+      var freshControls=els('manual-mp').dataset.screeningSettingsKey!==key;
       var fields=[['mp','megapixels'],['duration','duration'],['aspect','aspectRatio'],
         ['sampling','samplingMode'],['dimensions','dimensions']];
       fields.forEach(function(pair){

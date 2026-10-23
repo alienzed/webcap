@@ -698,3 +698,64 @@ def test_ephemeral_llm_cancellation_creates_recent_activity(queue_root):
     assert len(recent) == 1
     assert recent[0]["status"] == "cancelled"
     assert recent[0]["startedAt"] is None
+
+
+def test_batch_enqueue_and_promote_are_atomic_and_preserve_existing_fifo(queue_root, monkeypatch):
+    existing = execution_queue.enqueue("inference", {"n": 0})
+    original_write = execution_queue._write_state
+    writes = []
+    def record_write(state):
+        writes.append(True)
+        return original_write(state)
+    monkeypatch.setattr(execution_queue, "_write_state", record_write)
+
+    entries = [
+        {"payload": {"n": n}, "metadata": {"client": "test"}}
+        for n in range(1, 101)
+    ]
+    added = execution_queue.enqueue_many("inference", entries, initial_status="backlog")
+    assert len(added) == 100
+    assert len(writes) == 1
+    assert all(job["status"] == "backlog" for job in added)
+    assert all(job["queuePosition"] == 0 for job in added)
+    entries[0]["payload"]["n"] = 9000
+    assert execution_queue.get_job(added[0]["id"], include_payload=True)["payload"] == {"n": 1}
+
+    promoted = execution_queue.promote_backlog_many(
+        "inference", [job["id"] for job in added]
+    )
+    assert len(writes) == 2
+    assert [job["id"] for job in promoted] == [job["id"] for job in added]
+    snapshot = execution_queue.lane_snapshot("inference", include_terminal=False)
+    assert [job["id"] for job in snapshot["jobs"]] == [
+        existing["id"], *(job["id"] for job in added)
+    ]
+    assert [job["queuePosition"] for job in snapshot["jobs"]] == list(range(1, 102))
+    assert execution_queue.claim_next("inference")["id"] == existing["id"]
+
+
+def test_batch_promotion_rejects_missing_job_without_partial_mutation(queue_root):
+    first = execution_queue.enqueue(
+        "inference", {"n": 1}, initial_status="backlog"
+    )
+    with pytest.raises(FileNotFoundError):
+        execution_queue.promote_backlog_many("inference", [first["id"], "not-a-job"])
+    assert execution_queue.get_job(first["id"])["status"] == "backlog"
+
+
+def test_batch_snapshot_reads_state_once_and_preserves_requested_identity(queue_root, monkeypatch):
+    added = execution_queue.enqueue_many(
+        "inference",
+        [{"payload": {"n": i}} for i in range(100)],
+    )
+    original_read = execution_queue._read_state
+    reads = []
+    def tracked_read():
+        reads.append(True)
+        return original_read()
+    monkeypatch.setattr(execution_queue, "_read_state", tracked_read)
+    jobs = execution_queue.jobs_by_id([item["id"] for item in added] + ["missing"])
+    assert len(reads) == 1
+    assert len(jobs) == len(added)
+    assert "missing" not in jobs
+    assert all(job["status"] == "queued" for job in jobs.values())

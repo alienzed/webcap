@@ -5,6 +5,7 @@ from tool.server import epoch_finder, epoch_test_bench
 
 
 def test_manual_screening_test_status_reuses_checkpoint_provenance_across_runs(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_managed_set_checkpoint_sources", lambda *_: [])
     """Test membership is independent of Keep selection and displayed round."""
     from pathlib import Path
 
@@ -44,6 +45,7 @@ def test_manual_screening_test_status_reuses_checkpoint_provenance_across_runs(t
 
 
 def test_manual_screening_unknown_test_destination_fails_explicitly(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_managed_set_checkpoint_sources", lambda *_: [])
     campaign = {"id": "abcdef123456", "mode": "manual", "jobId": "run-a",
                 "rounds": [{"epochs": [1]}], "candidateMap": {}}
     monkeypatch.setattr(epoch_finder, "_load", lambda *_: campaign)
@@ -117,6 +119,7 @@ def test_ranking_counts_matches_mismatches_not_unclear():
 
 
 def test_temporary_checkpoint_copy_cleanup_preserves_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_set_saved_checkpoint_path", lambda *_: None)
     source = tmp_path / "source.safetensors"
     source.write_bytes(b"training epoch weights")
     stage = tmp_path / "staged"
@@ -456,6 +459,7 @@ def test_discover_queued_resume_run_with_saved_epochs(tmp_path, monkeypatch):
     from types import SimpleNamespace
     job = {"id": "queued-1", "folder": "set/a"}
     monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder", lambda _: [])
     monkeypatch.setattr(epoch_finder, "passive_status_snapshot",
                         lambda: ({"ok": True, "jobs": [job]}, 200))
     monkeypatch.setattr(epoch_finder, "all_history_payload",
@@ -481,6 +485,7 @@ def test_discover_queued_resume_run_with_saved_epochs(tmp_path, monkeypatch):
 def test_discover_history_run_and_queue_only_once(tmp_path, monkeypatch):
     from types import SimpleNamespace
     monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder", lambda _: [])
     monkeypatch.setattr(epoch_finder, "passive_status_snapshot",
                         lambda: ({"ok": True, "jobs": [{"id": "same", "folder": "set/a"}]}, 200))
     monkeypatch.setattr(epoch_finder, "all_history_payload",
@@ -1469,3 +1474,115 @@ def test_evaluation_campaign_history_lists_each_saved_mode_after_refresh(tmp_pat
         "aaaaaaaaaaaa"]
     assert [entry["id"] for entry in results if entry["mode"] != "manual"] == [
         "bbbbbbbbbbbb", "cccccccccccc"]
+
+
+def test_set_managed_run_discovery_without_training_queue(tmp_path, monkeypatch):
+    """Saved LoRAs in a uniquely owned Set action must not depend on Training."""
+    from types import SimpleNamespace
+
+    action_root = tmp_path / "action-001"
+    output = action_root / "output" / "training-run"
+    epoch_dir = output / "epoch12"
+    epoch_dir.mkdir(parents=True)
+    (epoch_dir / "epoch12.safetensors").write_bytes(b"saved")
+    action = {
+        "actionId": "set/action-001", "folder": "set/a",
+        "requestedStages": ["h3"], "runName": "My H3",
+        "createdAt": 10, "jobs": {"h3": [{"id": "manifest-12", "createdAt": 11}]},
+    }
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder",
+                        lambda _: [(action_root, action)])
+    monkeypatch.setattr(epoch_finder, "passive_status_snapshot",
+                        lambda: ({"ok": False, "error": "Training unavailable"}, 503))
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key",
+                        lambda stage: SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY=stage))
+
+    runs = epoch_finder._runs(tmp_path)
+    assert [(run["jobId"], run["epochs"], run["runName"]) for run in runs] == [
+        ("manifest-12", [12], "My H3")
+    ]
+    # The resume-only discover_runs() would reject an epoch LoRA without "latest".
+    assert not (output / "latest").exists()
+
+
+def test_set_managed_discovery_never_guesses_ambiguous_job_id(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    action_root = tmp_path / "action"
+    for name in ("first", "second"):
+        epoch_dir = action_root / "output" / name / "epoch8"
+        epoch_dir.mkdir(parents=True)
+        (epoch_dir / "saved.safetensors").write_bytes(b"saved")
+    action = {
+        "folder": "set/a", "requestedStages": ["h3"],
+        "jobs": {"h3": [{"id": "job-1"}]}, "runName": "ambiguous",
+    }
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder",
+                        lambda _: [(action_root, action)])
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key",
+                        lambda stage: SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY=stage))
+    assert epoch_finder._managed_set_checkpoint_runs(tmp_path) == []
+
+
+def test_set_owned_saved_epoch_stages_without_training_job_lookup(tmp_path, monkeypatch):
+    """Evaluation must consume a saved checkpoint even after its Training index is gone."""
+    from types import SimpleNamespace
+
+    action_root = tmp_path / "001-h3"
+    epoch_dir = action_root / "output" / "run" / "epoch12"
+    epoch_dir.mkdir(parents=True)
+    (epoch_dir / "model.safetensors").write_bytes(b"saved epoch")
+    action = {
+        "actionId": "set/001-h3", "folder": "set/a", "runName": "Set model",
+        "requestedStages": ["h3"], "jobs": {"h3": [{"id": "job-12"}]},
+    }
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder",
+                        lambda _: [(action_root, action)])
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key",
+                        lambda stage: SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY=stage))
+    monkeypatch.setattr(epoch_finder, "_staging",
+                        lambda folder, campaign: tmp_path / "staging")
+    monkeypatch.setattr(epoch_finder, "_candidate_safetensors_path",
+                        lambda *_: pytest.fail("Set-owned checkpoint should not use Training job lookup"))
+    campaign = {"id": "abcdef123456", "jobId": "job-12", "stage": "h3"}
+    target = epoch_finder._stage_epoch(tmp_path, campaign, 12)
+    assert target == "staging/epoch12.safetensors"
+    assert (tmp_path / "staging" / "epoch12.safetensors").read_bytes() == b"saved epoch"
+
+
+def test_set_owned_screening_test_status_needs_no_training_job(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    action_root = tmp_path / "002-h3"
+    epoch_dir = action_root / "output" / "run" / "epoch12"
+    epoch_dir.mkdir(parents=True)
+    (epoch_dir / "model.safetensors").write_bytes(b"saved")
+    action = {
+        "actionId": "set/002-h3", "folder": "set/a", "runName": "Set model",
+        "requestedStages": ["h3"], "jobs": {"h3": [{"id": "job-12"}]},
+    }
+    monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "set/a")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder",
+                        lambda _: [(action_root, action)])
+    monkeypatch.setattr(epoch_finder, "get_test_model_for_staging_key",
+                        lambda stage: SimpleNamespace(PROFILE_ID="minimax_h3", STAGING_KEY=stage))
+    campaign = {
+        "mode": "manual", "jobId": "job-12", "modelId": "minimax_h3",
+        "rounds": [{"epochs": [12]}], "candidateMap": {},
+    }
+    monkeypatch.setattr(epoch_finder, "_load", lambda *_: campaign)
+    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot",
+                        lambda *_: pytest.fail("Read-only Screening status should not resolve Training job"))
+    def annotated(run, analysis):
+        assert run["id"] == "job-12"
+        assert run["runName"] == "Set model"
+        for item in analysis["savedArtifacts"]:
+            item["inTestFolder"] = item["epoch"] == 12
+        analysis["testFolderStatus"] = {"state": "available"}
+    monkeypatch.setattr(epoch_finder, "_annotate_candidate_test_folder_status", annotated)
+    assert epoch_finder.screening_test_status(tmp_path, "abcdef123456") == {
+        "inTest": {"12": True}
+    }

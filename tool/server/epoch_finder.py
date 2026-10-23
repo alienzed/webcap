@@ -24,6 +24,7 @@ from .training_runner import (
     candidate_run_folder_path,
 )
 from .training_candidates import saved_artifacts_for_run
+from .training_action import managed_actions_for_folder
 from .training_history import host_path_for_training_path
 from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
 
@@ -116,21 +117,108 @@ def _requires_reference(role):
     return role == "primary"
 
 
-def _runs(folder_path, require_saved_checkpoints=True):
+def _managed_set_checkpoint_sources(folder_path, require_saved_checkpoints=True, only_job_id=""):
+    """Start with the Set's own action/output folders, not Training history.
+
+    Manifest job IDs remain the external identity. Only associate a run with
+    an unindexed job when the action has one job and one eligible output.
+    More complex runs continue through the indexed compatibility path.
+    """
     folder = _folder_key(folder_path)
     result = []
-    # Queue and history are distinct views: paused/resumable jobs leave History.
+    for action_root, action in managed_actions_for_folder(folder_path):
+        if str(action.get("folder") or "").replace("\\", "/").strip("/") != folder:
+            continue
+        stages = list(action.get("requestedStages") or [])
+        if len(stages) != 1:
+            continue
+        stage = stages[0]
+        jobs = (action.get("jobs") or {}).get(stage) or []
+        if len(jobs) != 1 or not str(jobs[0].get("id") or "").strip():
+            continue
+        if only_job_id and str(jobs[0]["id"]) != str(only_job_id):
+            continue
+        output = action_root / "output"
+        if not output.is_dir() or output.is_symlink():
+            continue
+        candidates = []
+        for run_dir in output.iterdir():
+            if not run_dir.is_dir() or run_dir.is_symlink():
+                continue
+            artifacts = saved_artifacts_for_run(run_dir)
+            epochs = [item["epoch"] for item in artifacts if item.get("status") == "available"]
+            if epochs or not require_saved_checkpoints:
+                candidates.append((run_dir, artifacts, epochs))
+        if len(candidates) != 1:
+            continue  # Multiple outputs cannot be attributed to one job ID.
+        try:
+            model = get_test_model_for_staging_key(stage)
+        except ValueError:
+            continue  # A Set can also contain unrelated Training-only model stages.
+        job = jobs[0]
+        sequence = str(action_root.name).split("-", 1)[0]
+        result.append(({
+            "folder": folder, "jobId": str(job["id"]),
+            "runName": str(action.get("runName") or ""), "runSequence": sequence,
+            "setName": Path(folder).name, "createdAt": job.get("createdAt") or action.get("createdAt") or 0,
+            "modelId": model.PROFILE_ID, "stage": model.STAGING_KEY,
+            "runSummary": {}, "currentEpoch": None, "plannedEpochs": None,
+            "epochs": candidates[0][2],
+        }, candidates[0][0], candidates[0][1], action))
+    return result
+
+
+def _managed_set_checkpoint_runs(folder_path, require_saved_checkpoints=True):
+    return [row for row, _run_dir, _artifacts, _action in
+            _managed_set_checkpoint_sources(folder_path, require_saved_checkpoints)]
+
+
+def _set_saved_checkpoint_path(folder_path, job_id, epoch):
+    """Use the Set's recorded run output for a uniquely owned saved epoch."""
+    matches = [(run_dir, artifacts) for row, run_dir, artifacts, _action in
+               _managed_set_checkpoint_sources(folder_path, only_job_id=job_id)
+               if row["jobId"] == str(job_id)]
+    if len(matches) > 1:
+        raise RuntimeError("Multiple Set-managed runs use training job ID: " + str(job_id))
+    if not matches:
+        return None  # Legacy or multi-job Training run: use its recorded resolver.
+    run_dir, artifacts = matches[0]
+    item = next((item for item in artifacts if item["epoch"] == epoch and
+                 item.get("status") == "available"), None)
+    if item is None:
+        raise FileNotFoundError("Saved epoch " + str(epoch) + " is unavailable in this Set.")
+    return run_dir / ("epoch" + str(epoch)) / item["fileName"]
+
+
+def _runs(folder_path, require_saved_checkpoints=True):
+    folder = _folder_key(folder_path)
+    result = _managed_set_checkpoint_runs(folder_path, require_saved_checkpoints)
+    # Queue/history enrich known identities and cover historical non-managed runs.
     # The existing run snapshot resolver already supports either owner.
     queue, code = passive_status_snapshot()
     if code != 200 or not queue.get("ok"):
+        if result:
+            return result  # Set-owned checkpoint discovery does not depend on Training queue.
         raise RuntimeError(str(queue.get("error") or "Training queue unavailable."))
-    seen = set()
+    seen = {row["jobId"] for row in result}
+    indexed = {row["jobId"]: row for row in result}
     jobs = list(queue.get("jobs") or []) + list(all_history_payload(folder=folder).get("jobs") or [])
     for job in jobs:
         if str(job.get("folder") or "").strip().replace("\\", "/").strip("/") != folder:
             continue
         job_id = str(job.get("id") or "")
-        if not job_id or job_id in seen:
+        if not job_id:
+            continue
+        if job_id in indexed:
+            known = indexed[job_id]
+            known["runName"] = str(job.get("runName") or known["runName"])
+            known["runSummary"] = job.get("runSummary") or known["runSummary"]
+            known["createdAt"] = job.get("createdAt") or known["createdAt"]
+            progress = job.get("progress") or {}
+            known["currentEpoch"] = progress.get("epoch", known["currentEpoch"])
+            known["plannedEpochs"] = progress.get("epochs", known["plannedEpochs"])
+            continue
+        if job_id in seen:
             continue
         seen.add(job_id)
         try:
@@ -841,10 +929,11 @@ def _stage_epoch(folder_path, campaign, epoch):
         source = test_bench._selected_lora_files_for_set(
             folder_path, model, selected_files=[origin["fileName"]])[0]
     else:
-        source = _candidate_safetensors_path(
-            _folder_key(folder_path),
-            origin["jobId"] if origin else campaign["jobId"],
-            origin["epoch"] if origin else epoch)
+        job_id = origin["jobId"] if origin else campaign["jobId"]
+        saved_epoch = origin["epoch"] if origin else epoch
+        source = _set_saved_checkpoint_path(folder_path, job_id, saved_epoch)
+        if source is None:
+            source = _candidate_safetensors_path(_folder_key(folder_path), job_id, saved_epoch)
     target = directory / ("epoch" + str(epoch) + ".safetensors")
     if target.exists():
         if target.is_symlink() or target.stat().st_size != source.stat().st_size:
@@ -1600,12 +1689,25 @@ def screening_test_status(folder_path, campaign_id):
         files = {path.name for path in test_bench._staged_loras_for_set(folder_path, model)}
         result.update({key: bool(name and name in files) for key, name in staged.items()})
 
+    managed_sources = {row["jobId"]: (row, run_dir, artifacts, action)
+                       for row, run_dir, artifacts, action in
+                       _managed_set_checkpoint_sources(folder_path)}
     for job_id, mapped in identities.items():
-        _raw_path, run = _candidate_run_snapshot(folder_path, job_id)
-        run_dir = candidate_run_folder_path(folder_path, job_id)
-        wall = run.get("resumeCheckpointWallTime")
-        resumed = run.get("resumeBranchStartedAt")
-        artifacts = saved_artifacts_for_run(run_dir, wall, resumed) if wall is not None and resumed is not None else saved_artifacts_for_run(run_dir)
+        if job_id in managed_sources:
+            row, run_dir, artifacts, action = managed_sources[job_id]
+            run = {
+                "id": job_id, "folder": row["folder"], "stages": row["stage"],
+                "runName": row["runName"], "sequence": row["runSequence"],
+                "candidateRevision": int(action.get("candidateRevision") or 1),
+            }
+        else:
+            _raw_path, run = _candidate_run_snapshot(folder_path, job_id)
+            run_dir = candidate_run_folder_path(folder_path, job_id)
+            wall = run.get("resumeCheckpointWallTime")
+            resumed = run.get("resumeBranchStartedAt")
+            artifacts = (saved_artifacts_for_run(run_dir, wall, resumed)
+                         if wall is not None and resumed is not None
+                         else saved_artifacts_for_run(run_dir))
         analysis = {"savedArtifacts": artifacts}
         _annotate_candidate_test_folder_status(run, analysis)
         folder_status = analysis.get("testFolderStatus") or {}

@@ -20,6 +20,7 @@ def test_rank_does_not_merge_same_epoch_in_different_runs():
 
 
 def test_multirun_staging_resolves_original_checkpoint(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_set_saved_checkpoint_path", lambda *_: None)
     source_a = tmp_path / "run_a.safetensors"
     source_b = tmp_path / "run_b.safetensors"
     source_a.write_bytes(b"first")
@@ -56,6 +57,7 @@ def test_multirun_staging_resolves_original_checkpoint(tmp_path, monkeypatch):
 
 
 def test_legacy_staging_still_uses_original_epoch(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_set_saved_checkpoint_path", lambda *_: None)
     source = tmp_path / "original.safetensors"
     source.write_bytes(b"legacy")
     stage = tmp_path / "test"
@@ -80,6 +82,7 @@ def test_candidates_curve_lists_available_queue_and_history_runs_without_saved_e
     from types import SimpleNamespace
 
     monkeypatch.setattr(epoch_finder, "_folder_key", lambda _: "sets/subject")
+    monkeypatch.setattr(epoch_finder, "managed_actions_for_folder", lambda _: [])
     monkeypatch.setattr(epoch_finder, "passive_status_snapshot", lambda: ({
         "ok": True, "jobs": [
             {"id": "run-live", "folder": "sets/subject", "stages": "h3", "runName": "Live"},

@@ -1119,6 +1119,28 @@ def test_stop_queuing_never_submits_new_render(monkeypatch):
     assert unit["cancelled"] is True
 
 
+def test_manual_round_submitted_settings_collapsed_by_default_and_stable_on_poll():
+    """Round disclosures start closed and retain their open state on same-round refresh."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "tool/tool.html").read_text(encoding="utf-8")
+    js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    assert '<details id="epoch-finder-manual-run-info" class="epoch-screening-run-info"></details>' in html
+    header = js.split("function screeningRunInfo(campaign, plan) {", 1)[1].split(
+        "function screeningUpdateAverage(", 1)[0]
+    assert "if (host.dataset.signature===signature) return;" in header
+    assert "if (host.dataset.round!==String(plan.number)) host.open=false;" in header
+    assert "host.dataset.round=String(plan.number);" in header
+    assert "var heading=document.createElement('summary');" in header
+    assert "' · Submitted prompts and settings'" in header
+    assert "host.appendChild(settings);" in header
+    assert "host.appendChild(prompt);" in header
+    assert "host.appendChild(columns);" in header
+    assert ".epoch-screening-run-info > summary" in css
+    assert ".epoch-screening-run-info[open] > summary" in css
+
+
 def test_review_header_uses_frozen_run_without_restoring_form():
     from pathlib import Path
     js = (Path(__file__).resolve().parents[1] / "tool/js/epoch_finder.js").read_text(encoding="utf-8")

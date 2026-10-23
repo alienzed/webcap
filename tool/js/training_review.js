@@ -181,7 +181,6 @@ function updateTrainingRunParameterState() {
   if (note) {
     var startPoint = String(trainingWorkspaceState.reviewStartingPoint || 'fresh');
     var noteParts = [];
-    if (trainingWorkspaceState.runConfigDirty) noteParts.push('Run-specific overrides');
     if (startPoint === 'resume') noteParts.push('LR forced on resume');
     note.textContent = noteParts.join(' · ');
     note.classList.toggle('hidden', !noteParts.length);

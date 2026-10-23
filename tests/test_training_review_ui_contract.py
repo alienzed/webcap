@@ -458,6 +458,7 @@ def test_run_setup_uses_compact_parameter_rail_and_resume_canvas():
 
     assert 'function formatTrainingRunLearningRate' in script
     assert "noteParts.push('LR forced on resume')" in script
+    assert "Run-specific overrides" not in script
     assert "note.classList.toggle('hidden', !noteParts.length)" in script
 
 

@@ -244,6 +244,27 @@ function timingTests() {
   api.close(); assert.equal(env.timers.size, 0);
 }
 
+function generationNumberInputTests() {
+  const markup = fs.readFileSync(path.join(__dirname, '..', 'tool', 'tool.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'tool', 'css', 'generate.css'), 'utf8');
+  ['generate-megapixels', 'generate-duration', 'generate-seed'].forEach(id => {
+    assert.match(markup, new RegExp('id="' + id + '"[^>]*type="number"'), id + ' must remain a numeric input');
+  });
+  assert.doesNotMatch(css, /\\.generate-settings-numbers input\\[type="number"\\][^}]*appearance\\s*:\\s*textfield/,
+    'Generation numeric settings must retain native number input controls');
+  assert.doesNotMatch(css, /\\.generate-settings-numbers input\\[type="number"\\]::-webkit-inner-spin-button/,
+    'Generation numeric settings must not suppress native spinner controls');
+  assert.doesNotMatch(css, /\\.generate-lora-row input\\[data-generate-lora-strength\\][^}]*appearance\\s*:\\s*textfield/,
+    'LoRA strength must retain native number input controls');
+  const fieldWidths = ['megapixels', 'duration', 'seed'].map(name => {
+    const match = css.match(new RegExp('\\\\.generate-settings-numbers #generate-field-' + name +
+      ' \\\\{ width: (\\\\d+)px; \\\\}'));
+    assert.ok(match, name + ' must have an explicit compact width');
+    return Number(match[1]);
+  });
+  assert.ok(fieldWidths.every(width => width <= 120), 'Numeric fields should remain compact');
+}
+
 async function generationLibraryBindingTests() {
   // Exercise the actual bindUi startup path: a removed helper can otherwise
   // prevent both Library buttons and all later controls from being wired.
@@ -282,4 +303,4 @@ async function generationLibraryBindingTests() {
   assert.equal(env.document.getElementById('generate-create-view').classList.contains('hidden'), false);
 }
 
-(async () => { await sweepTests(); await generationLibraryBindingTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); generationCancelQueuedOwnershipTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });
+(async () => { await sweepTests(); generationNumberInputTests(); await generationLibraryBindingTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); generationCancelQueuedOwnershipTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });

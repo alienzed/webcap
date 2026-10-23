@@ -2,21 +2,19 @@
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 
-def test_unified_workspace_integrates_with_existing_routes():
+def test_evaluation_surfaces_use_native_controllers_without_reparenting():
     html=(ROOT/"tool/tool.html").read_text(encoding="utf-8")
-    js=(ROOT/"tool/js/test_generations_unified.js").read_text(encoding="utf-8")
-    finder=(ROOT/"tool/server/epoch_finder.py").read_text(encoding="utf-8")
-    for marker in ('id="test-unified-gallery"','id="test-unified-inspector"',
-                   'id="test-unified-builder"','id="test-unified-experiments"',
-                   'id="test-unified-checkpoints"','id="test-unified-legacy"'):
-        assert marker in html
-    assert 'src="/static/js/test_generations_unified.js"' in html
-    assert "def workspace_gallery(folder_path" in finder
-    assert 'if operation == "workspace_gallery":' in finder
-    assert "operation:'workspace_gallery'" in js
-    assert "window.epochFinderInspectCampaign" in js
-    assert "window.openTestBenchAnalyticsSession" in js
-    assert "window.epochFinderShowMode" in js
+    finder=(ROOT/"tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    backend=(ROOT/"tool/server/epoch_finder.py").read_text(encoding="utf-8")
+    for mode in ("tests","screening","finder","analytics","references"):
+        assert f'data-test-workspace-mode="{mode}"' in html
+    assert 'id="test-unified-builder"' not in html
+    assert 'id="test-unified-gallery"' not in html
+    assert 'src="/static/js/test_generations_unified.js"' not in html
+    assert "window.epochFinderShowMode = showMode;" in finder
+    assert "def workspace_gallery(folder_path" in backend
+    assert 'if operation == "workspace_gallery":' in backend
+
 
 def test_results_are_read_only_and_provenance_scoped():
     finder=(ROOT/"tool/server/epoch_finder.py").read_text(encoding="utf-8")
@@ -37,9 +35,11 @@ def test_original_workflows_remain_available():
         assert marker in html
 
 
-def test_unified_builder_reclaims_inspector_column():
-    js=(ROOT/"tool/js/test_generations_unified.js").read_text(encoding="utf-8")
-    css=(ROOT/"tool/css/styles.css").read_text(encoding="utf-8")
-    assert "root.classList.toggle('test-unified-building',enabled)" in js
-    assert ".test-unified-workspace.test-unified-building {grid-template-columns:" in css
-    assert "minmax(0,1fr)" in css
+def test_insights_and_references_keep_their_own_live_dom():
+    html=(ROOT/"tool/tool.html").read_text(encoding="utf-8")
+    js=(ROOT/"tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    for element in ("test-generations-body","epoch-finder-screen",
+                    "test-references-screen","run-analytics-screen"):
+        assert f'id="{element}"' in html
+    assert "document.getElementById('test-references-screen').classList.toggle" in js
+    assert "document.getElementById('run-analytics-screen').classList.toggle" in js

@@ -39,6 +39,61 @@
   var screeningSettingsRequest = null;
   var screeningSaveTimer = 0;
   var screeningPromptTimer = 0;
+  var campaignSaveTimer = 0;
+  var campaignPromptTimer = 0;
+  function campaignSaveDraft() {
+    if (!currentFolder || els('campaign-type').value!=='auto') return;
+    var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||'');
+    if(!modelId)return;
+    var settings={concept:els('concept').value,rounds:els('rounds').value,
+      cases:els('cases').value,retention:els('retention').value,
+      referenceRvn:els('enable-rvn').checked,referenceDino:els('enable-dino').checked};
+    if(els('round-plan').querySelector('[data-epoch-round]'))settings.roundPlans=getRoundPlans();
+    if(campaignSaveTimer)clearTimeout(campaignSaveTimer);
+    campaignSaveTimer=setTimeout(function(){
+      campaignSaveTimer=0;
+      fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:folder,operation:'test_save_campaign_settings',
+          criteria:{modelId:modelId,settings:settings}})})
+        .then(function(response){return response.json().then(function(payload){
+          if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Campaign form defaults.');
+        });}).catch(error);
+    },500);
+  }
+  function campaignApplyDefaults() {
+    if(!currentFolder||els('campaign-type').value!=='auto')return;
+    var folder=currentFolder,modelId=String(window.getWorkingModelProfileId()||'');
+    fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({folder:folder,operation:'test_prepare',criteria:{modelId:modelId}})})
+      .then(function(response){return response.json().then(function(payload){
+        if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not load Campaign defaults.');
+        return payload;
+      });}).then(function(payload){
+        if(folder!==currentFolder||modelId!==String(window.getWorkingModelProfileId()||'')||
+           activeCampaign||els('campaign-type').value!=='auto')return;
+        var saved=payload.campaignSettings||{};
+        els('prompt').value=payload.workspacePromptPresent?String(payload.workspacePrompt||''):String(payload.defaultPrompt||'');
+        els('concept').value=String(saved.concept||'');
+        [['rounds','rounds'],['cases','cases'],['retention','retention']].forEach(function(pair){
+          if(saved[pair[1]]!=null)els(pair[0]).value=String(saved[pair[1]]);
+        });
+        if(typeof saved.referenceRvn==='boolean')els('enable-rvn').checked=saved.referenceRvn;
+        if(typeof saved.referenceDino==='boolean')els('enable-dino').checked=saved.referenceDino;
+        dimensions=[];
+        els('round-plan').innerHTML='';
+        roundPlan();
+        if(Array.isArray(saved.roundPlans)){
+          Array.from(els('round-plan').querySelectorAll('[data-epoch-round]')).forEach(function(row,i){
+            var plan=saved.roundPlans[i]||{};
+            [['case','cases'],['keep','keepPercent'],['mp','megapixels'],['dimensions','dimensions']].forEach(function(pair){
+              var input=row.querySelector('[data-'+pair[0]+']');
+              if(input&&plan[pair[1]]!=null)input.value=String(plan[pair[1]]);
+            });
+          });
+        }
+      }).catch(error);
+  }
+
   var screeningSelectionQueue = Promise.resolve();
   var screeningSelectionRevision = 0;
   var screeningSelectionFailure = null;
@@ -2143,12 +2198,12 @@
     screeningTestStatusCampaign='';
     refresh();
   };
-  els('new').onclick = function () { followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); screeningApplySettings(null); };
+  els('new').onclick = function () { followUpSource = ''; activeCampaign = ''; campaignState = null; manualSelectionCampaign=''; runEpochSelections={}; inspectedEpoch = null; inspectedFrame = 0; lastFrameKey = ''; els('active').classList.add('hidden'); els('empty').classList.remove('hidden'); list(); showStep(1); screeningModeUi(); if(els('campaign-type').value==='manual')screeningApplySettings(null);else campaignApplyDefaults(); };
   els('start').onclick = start;
   els('campaign-type').onchange=function () {
     activeCampaign='';campaignState=null;manualSelectionCampaign='';
     els('active').classList.add('hidden');els('empty').classList.remove('hidden');
-    showStep(1);screeningModeUi();screeningApplySettings(null);
+    showStep(1);screeningModeUi();if(els('campaign-type').value==='manual')screeningApplySettings(null);else campaignApplyDefaults();
   };
   els('manual-prompt').addEventListener('input',function(){
     screeningGroups();
@@ -2275,6 +2330,20 @@
   els('reference-options').addEventListener('click', referenceClick);
   els('reference-workspace').addEventListener('click', referenceClick);
   els('preview-close').onclick = function () { els('reference-preview').close(); };
+  els('prompt').addEventListener('input', function(){
+    if(els('campaign-type').value!=='auto')return;
+    if(campaignPromptTimer)clearTimeout(campaignPromptTimer);
+    var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||''),prompt=this.value;
+    campaignPromptTimer=setTimeout(function(){
+      campaignPromptTimer=0;
+      fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({folder:folder,operation:'test_save_workspace_prompt',
+          criteria:{modelId:modelId,prompt:prompt}})})
+      .then(function(response){return response.json().then(function(payload){
+        if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Set wildcard prompt.');
+      });}).catch(error);
+    },500);
+  });
   els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });
   showStep(1);
   screeningModeUi();
@@ -2282,6 +2351,11 @@
   if (testDuration) testDuration.addEventListener('input', function () {
     if (mode === 'finder') roundPlan();
   });
+  ['concept','rounds','cases','retention','enable-rvn','enable-dino'].forEach(function(id){
+    els(id).addEventListener('change',campaignSaveDraft);
+  });
+  els('round-plan').addEventListener('change',campaignSaveDraft);
+  els('round-plan').addEventListener('input',campaignSaveDraft);
   els('rounds').onchange = roundPlan;
   els('cases').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };
   els('retention').onchange = function () { els('round-plan').innerHTML = ''; roundPlan(); };

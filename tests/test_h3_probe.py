@@ -481,6 +481,13 @@ def test_prepare_route_captures_exact_video_and_returns_command(tmp_path, monkey
     source.with_suffix(".txt").write_text("probe caption", encoding="utf-8")
     (folder / "config.h3.toml").write_text(h3_config_text(), encoding="utf-8")
     monkeypatch.setattr(config_module, "FS_ROOT", fs_root)
+    # Calibration must use the two-argument Training profile contract.
+    original_config_for_stage = h3_probe_module.config_for_stage
+    config_calls = []
+    def tracked_config_for_stage(profile_id, stage):
+        config_calls.append((profile_id, stage))
+        return original_config_for_stage(profile_id, stage)
+    monkeypatch.setattr(h3_probe_module, "config_for_stage", tracked_config_for_stage)
     scoped = []
     def metadata(_folder, scoped_filenames=None):
         scoped.append(scoped_filenames)
@@ -507,6 +514,7 @@ def test_prepare_route_captures_exact_video_and_returns_command(tmp_path, monkey
     assert (seed_path.parent / seed["plan"]).is_file()
     assert "h3_shape_probe.py" in payload["command"]
     assert scoped == [["probe.mp4"]]
+    assert config_calls == [(h3_probe_module.MINIMAX_H3_PROFILE_ID, "h3")]
 
 
 def test_prepare_route_uses_canonical_config_when_set_has_none(tmp_path, monkeypatch):

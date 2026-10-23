@@ -38,9 +38,7 @@
   var screeningSettingsKey = '';
   var screeningSettingsRequest = null;
   var screeningSaveTimer = 0;
-  var screeningPromptTimer = 0;
   var campaignSaveTimer = 0;
-  var campaignPromptTimer = 0;
   var campaignDefaultsKey = '';
   var campaignDraftRevision = 0;
   window.epochFinderReceiveSetPrompt = function(folder, modelId, prompt) {
@@ -1290,20 +1288,10 @@
     },500);
   }
   function screeningSavePrompt() {
-    var folder=currentFolder,modelId=String(window.getWorkingModelProfileId()||'');
-    var prompt=els('manual-prompt').value;
-    if(!folder||!modelId)return;
-    if(typeof window.testGenerationsReceiveSetPrompt==='function')
-      window.testGenerationsReceiveSetPrompt(folder,modelId,prompt);
-    fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({folder:folder,operation:'test_save_workspace_prompt',
-        criteria:{modelId:modelId,prompt:prompt}})})
-    .then(function(response){return response.json().then(function(payload){
-      if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Set wildcard template.');
-      if(folder===currentFolder && modelId===String(window.getWorkingModelProfileId()||'')){
-        screeningSettingsKey=''; screeningSettingsRequest=null;
-      }
-    });}).catch(error);
+    if(typeof window.testGenerationsSaveSharedSetPrompt!=='function')
+      throw new Error('Shared Set wildcard template saver is unavailable.');
+    window.testGenerationsSaveSharedSetPrompt(els('manual-prompt').value);
+    screeningSettingsKey='';screeningSettingsRequest=null;
   }
   function screeningCriteria() {
     var settings={};
@@ -2230,10 +2218,7 @@
   };
   els('manual-prompt').addEventListener('input',function(){
     screeningGroups();
-    if(typeof window.testGenerationsReceiveSetPrompt==='function')
-      window.testGenerationsReceiveSetPrompt(currentFolder,String(window.getWorkingModelProfileId()||''),this.value);
-    if(screeningPromptTimer)clearTimeout(screeningPromptTimer);
-    screeningPromptTimer=setTimeout(function(){screeningPromptTimer=0;screeningSavePrompt();},500);
+    try{screeningSavePrompt();}catch(exc){error(exc);}
   });
   ['manual-mp','manual-duration','manual-aspect','manual-sampling',
     'manual-dimensions','manual-group'].forEach(function(id){
@@ -2358,19 +2343,11 @@
   els('prompt').addEventListener('input', function(){
     if(els('campaign-type').value!=='auto')return;
     campaignDraftRevision++;
-    if(typeof window.testGenerationsReceiveSetPrompt==='function')
-      window.testGenerationsReceiveSetPrompt(currentFolder,String(window.getWorkingModelProfileId()||''),this.value);
-    if(campaignPromptTimer)clearTimeout(campaignPromptTimer);
-    var folder=currentFolder, modelId=String(window.getWorkingModelProfileId()||''),prompt=this.value;
-    campaignPromptTimer=setTimeout(function(){
-      campaignPromptTimer=0;
-      fetch('/fs/test_generations',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({folder:folder,operation:'test_save_workspace_prompt',
-          criteria:{modelId:modelId,prompt:prompt}})})
-      .then(function(response){return response.json().then(function(payload){
-        if(!response.ok||payload.ok===false)throw new Error(payload.error||'Could not save Set wildcard prompt.');
-      });}).catch(error);
-    },500);
+    try{
+      if(typeof window.testGenerationsSaveSharedSetPrompt!=='function')
+        throw new Error('Shared Set wildcard template saver is unavailable.');
+      window.testGenerationsSaveSharedSetPrompt(this.value);
+    }catch(exc){error(exc);}
   });
   els('prompt').addEventListener('change', function () { try { updateDimensions(); } catch (exc) { error(exc); } });
   showStep(1);

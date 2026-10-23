@@ -218,7 +218,7 @@ def list_campaigns(folder_path, model_id=""):
                 continue
             campaigns.append({
                 key: campaign.get(key) for key in
-                ("id", "name", "status", "phase", "round", "startedAt", "detail", "modelId", "runName")
+                ("id", "name", "mode", "status", "phase", "round", "startedAt", "detail", "modelId", "runName")
             })
     campaigns.sort(key=lambda row: row.get("startedAt") or 0, reverse=True)
     # Existing campaign browsing also works while a non-Test model is selected.

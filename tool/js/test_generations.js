@@ -3785,18 +3785,24 @@
       host.dataset.resultScope = resultScope;
     }
 
+    var cards = new Map(Array.prototype.map.call(
+      host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
+      function (card) { return [String(card.dataset.resultKey || ''), card]; }
+    ));
+
     var validKeys = results.map(function (result, index) {
       var mediaFile = resultMediaFile(result);
       return mediaFile || (String(result.sourceLoRA || 'result') + ':' + index);
     }).concat(failures.map(function (failure, index) {
       return 'failure:' + String(failure.sourceLoRA || 'result') + ':' + index;
     }));
-    Array.prototype.forEach.call(
-      host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
-      function (card) {
-        if (validKeys.indexOf(String(card.dataset.resultKey || '')) === -1) card.remove();
+    var valid = new Set(validKeys);
+    cards.forEach(function (card, key) {
+      if (!valid.has(key)) {
+        card.remove();
+        cards.delete(key);
       }
-    );
+    });
 
     var empty = host.querySelector('.test-generations-empty');
     if ((results.length || failures.length || live) && empty) empty.remove();
@@ -3804,10 +3810,7 @@
     results.forEach(function (result, index) {
       var mediaFile = resultMediaFile(result);
       var resultKey = mediaFile || (String(result.sourceLoRA || 'result') + ':' + index);
-      var existing = Array.prototype.find.call(
-        host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
-        function (card) { return card.dataset.resultKey === resultKey; }
-      );
+      var existing = cards.get(resultKey);
       if (existing) {
         syncResultElapsed(existing, result, false);
         renderTestVlCard(existing, result, candidateScores);
@@ -3816,6 +3819,7 @@
 
       var card = sharedTestCard(result, status, 'test-generations-result-card', false);
       card.dataset.resultKey = resultKey;
+      cards.set(resultKey, card);
       renderTestVlCard(card, result, candidateScores);
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
@@ -3835,10 +3839,7 @@
           )
         );
       }
-      var existing = Array.prototype.find.call(
-        host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
-        function (card) { return card.dataset.resultKey === failureKey; }
-      );
+      var existing = cards.get(failureKey);
       if (existing) {
         syncResultElapsed(existing, failure, true);
         return;
@@ -3846,6 +3847,7 @@
 
       var card = sharedTestCard(failure, status, 'test-generations-result-card is-failed', false, true);
       card.dataset.resultKey = failureKey;
+      cards.set(failureKey, card);
 
       var pending = host.querySelector('.test-generations-result-card.is-pending');
       host.insertBefore(card, pending || null);

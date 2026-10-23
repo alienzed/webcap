@@ -1825,7 +1825,7 @@ def storyboard_director_route():
 
         story = storyboard_load_story(story_id)
         replace_existing = bool(data.get("replaceExisting"))
-        if operation in {"develop_story", "develop_story_outline"}:
+        if operation in {"develop_story", "develop_story_outline", "develop_scenes_sequence"}:
             if story.get("sceneOrder") and not replace_existing:
                 raise ValueError("Story already has Scenes. Confirm replacement before developing it again.")
             active_generation = storyboard_generation_queue(story_id)
@@ -1880,6 +1880,22 @@ def storyboard_director_route():
             "sceneNumber": scene_number,
             "sceneTitle": str(((story.get("scenes") or {}).get(scene_id) or {}).get("title") or ""),
         }
+
+        if operation == "develop_scenes_sequence":
+            if not model_id:
+                raise ValueError("Choose a Director model.")
+            job = enqueue_llm(
+                "storyboard", model_id, {"operation": operation},
+                context={
+                    "storyId": story_id, "operation": operation,
+                    **job_display_context,
+                    "sourceUpdatedAt": str(story.get("updatedAt") or ""),
+                    "replaceExisting": replace_existing,
+                    "thinking": data.get("thinking") is True,
+                },
+                label="Story: Develop Scenes one at a time",
+            )
+            return jsonify({"ok": True, "job": job}), 202
 
         if operation == "check_coherence_sequence":
             scene_ids = list(story.get("sceneOrder") or [])

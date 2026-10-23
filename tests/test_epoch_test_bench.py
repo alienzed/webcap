@@ -1890,18 +1890,12 @@ def test_stop_session_state_cannot_be_reverted_by_provider_start_publication(tmp
 
 def test_test_enqueue_failure_cleans_inert_children_and_incomplete_session(tmp_path, monkeypatch):
     _staged, candidates = _prepare_shared_test_enqueue(tmp_path, monkeypatch, candidate_count=1)
-    original_enqueue = inference_runner.enqueue_test
-    calls = {"count": 0}
+    def rejected_batch(request, contexts, labels=None, deferred=False):
+        raise RuntimeError("rendition batch enqueue failed")
 
-    def flaky_enqueue(request, context, label="", deferred=False):
-        calls["count"] += 1
-        if calls["count"] == 1:
-            return original_enqueue(request, context, label=label, deferred=deferred)
-        raise RuntimeError("second rendition enqueue failed")
+    monkeypatch.setattr(inference_runner, "enqueue_test_many", rejected_batch)
 
-    monkeypatch.setattr(inference_runner, "enqueue_test", flaky_enqueue)
-
-    with pytest.raises(RuntimeError, match="second rendition enqueue failed"):
+    with pytest.raises(RuntimeError, match="rendition batch enqueue failed"):
         bench.enqueue(
             tmp_path,
             "prompt",
@@ -2011,8 +2005,10 @@ def test_new_test_sessions_use_output_storage_and_freeze_candidate_provenance(tm
         "stage": model.STAGING_KEY,
     }), encoding="utf-8")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
-    monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="", deferred=False: {"jobId": "job-" + context["candidateKind"]})
-    monkeypatch.setattr(bench, "execution_promote_backlog", lambda job_id: {"id": job_id, "status": "queued"})
+    monkeypatch.setattr(inference_runner, "enqueue_test_many", lambda request, contexts, labels=None, deferred=False: [
+        {"jobId": "job-" + context["candidateKind"]} for context in contexts
+    ])
+    monkeypatch.setattr(bench, "execution_promote_backlog_many", lambda lane, ids: ids)
     monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
 
@@ -2052,8 +2048,10 @@ def test_new_test_sessions_freeze_candidate_strength_for_result_cards(tmp_path, 
     candidate = staged / "epoch10.safetensors"
     candidate.write_bytes(b"weights")
     monkeypatch.setattr(bench, "_test_directory", lambda _folder, _model, source=None: staged)
-    monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="", deferred=False: {"jobId": "job-" + context["candidateKind"]})
-    monkeypatch.setattr(bench, "execution_promote_backlog", lambda job_id: {"id": job_id, "status": "queued"})
+    monkeypatch.setattr(inference_runner, "enqueue_test_many", lambda request, contexts, labels=None, deferred=False: [
+        {"jobId": "job-" + context["candidateKind"]} for context in contexts
+    ])
+    monkeypatch.setattr(bench, "execution_promote_backlog_many", lambda lane, ids: ids)
     monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
 
@@ -2606,9 +2604,9 @@ def test_sweep_request_expands_multiple_loras_and_freezes_weights(tmp_path, monk
     assert selected == loras
     assert request["sweepWeights"] == [0.6, 0.8, 1.2]
     contexts = []
-    monkeypatch.setattr(inference_runner, "enqueue_test", lambda request, context, label="", deferred=False:
-                        contexts.append(context) or {"jobId": "job-" + str(len(contexts))})
-    monkeypatch.setattr(bench, "execution_promote_backlog", lambda job_id: None)
+    monkeypatch.setattr(inference_runner, "enqueue_test_many", lambda request, items, labels=None, deferred=False:
+                        [contexts.append(context) or {"jobId": "job-" + str(len(contexts))} for context in items])
+    monkeypatch.setattr(bench, "execution_promote_backlog_many", lambda lane, ids: ids)
     monkeypatch.setattr(inference_runner, "start_observer", lambda: None)
     monkeypatch.setattr(bench, "_sync_inference_session", lambda directory: bench._session_status(directory))
     set_folder = tmp_path / "sets" / "demo"

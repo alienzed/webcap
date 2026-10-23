@@ -231,6 +231,29 @@ def set_test_campaign_settings(state_path, model_id, settings):
     return all_settings[model_key]
 
 
+def migrate_test_workspace_prompts(state_path, legacy_prompts):
+    """Copy only missing legacy keys, atomically; never restore an older draft."""
+    if not isinstance(legacy_prompts, dict):
+        raise ValueError("Legacy Test prompts must be a model-keyed object.")
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        saved = state.get("test_workspace_prompts") or {}
+        if not isinstance(saved, dict):
+            raise FolderStateReadError("Set Test workspace prompt state is invalid.")
+        result = dict(saved)
+        changed = False
+        for model_id, value in legacy_prompts.items():
+            key = str(model_id)
+            if key not in result:
+                result[key] = str(value)
+                changed = True
+        if changed:
+            state["test_workspace_prompts"] = result
+            write_folder_state_atomic(path, state)
+        return result
+
+
 def write_folder_state_with_owned_drafts(state_path, snapshot):
     """Serialize folder snapshots with independently autosaved Set form drafts."""
     path = Path(state_path)

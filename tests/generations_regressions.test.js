@@ -243,4 +243,43 @@ function timingTests() {
   assert.equal(env.timers.size, 1);
   api.close(); assert.equal(env.timers.size, 0);
 }
-(async () => { await sweepTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); generationCancelQueuedOwnershipTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });
+
+async function generationLibraryBindingTests() {
+  // Exercise the actual bindUi startup path: a removed helper can otherwise
+  // prevent both Library buttons and all later controls from being wired.
+  const env = environment();
+  Element.prototype.addEventListener = function (type, callback) {
+    (this.listeners || (this.listeners = {}))[type] = callback;
+  };
+  Element.prototype.getAttribute = function (name) { return this.attributes[name] || null; };
+  Element.prototype.focus = function () { this.focused = true; };
+  env.document.querySelector = selector => env.document.getElementById(selector);
+  env.document.querySelectorAll = () => [];
+  env.document.addEventListener = () => {};
+  env.window.addEventListener = () => {};
+  env.createSessionPromptHistory = () => ({ bind() {} });
+  env.fetch = async () => ({ ok: true, json: async () => ({ ok: true, prompts: [] }) });
+  load('generate.js', env, `
+    resetGeneratePromptScratch = function () {};
+    window.api = { bind: bindUi };
+  `);
+
+  env.window.api.bind();
+  const promptButton = env.document.getElementById('generate-prompt-library-open');
+  const libraryButton = env.document.getElementById('generate-library-mode-btn');
+  assert.equal(typeof promptButton.onclick, 'function', 'Prompt Library must be wired');
+  assert.equal(typeof libraryButton.onclick, 'function', 'Generated-media Library must be wired');
+
+  promptButton.onclick();
+  assert.equal(env.document.getElementById('generate-prompt-editor').classList.contains('hidden'), true);
+  assert.equal(env.document.getElementById('generate-prompt-library').classList.contains('hidden'), false);
+  await new Promise(resolve => setImmediate(resolve));
+
+  libraryButton.onclick();
+  assert.equal(env.document.getElementById('generate-create-view').classList.contains('hidden'), true);
+  assert.equal(env.document.getElementById('generate-library-view').classList.contains('hidden'), false);
+  env.document.getElementById('generate-create-mode-btn').onclick();
+  assert.equal(env.document.getElementById('generate-create-view').classList.contains('hidden'), false);
+}
+
+(async () => { await sweepTests(); await generationLibraryBindingTests(); generateTakeIdentityTests(); generationPreviewExecutionFocusTests(); generationCancelQueuedOwnershipTests(); timingTests(); console.log('Generations regression tests passed.'); })().catch(err => { console.error(err); process.exitCode = 1; });

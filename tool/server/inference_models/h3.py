@@ -54,8 +54,8 @@ def normalize_settings(workflow, new_seed, values=None):
         raise ValueError("H3 resolution, duration, and seed must be numeric.") from exc
     if megapixels <= 0:
         raise ValueError("H3 resolution must be greater than zero megapixels.")
-    if duration < 4 or duration > 15:
-        raise ValueError("MiniMax H3 duration must be between 4 and 15 seconds.")
+    if duration < 3 or duration > 15:
+        raise ValueError("MiniMax H3 duration must be between 3 and 15 seconds.")
     return {
         "aspectRatio": aspect,
         "megapixels": megapixels,

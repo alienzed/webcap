@@ -1,4 +1,5 @@
 import json
+import re
 import tomllib
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,7 +11,7 @@ from tool.server import config as app_config
 from tool.server import app as app_module
 from tool.server import execution_queue, gpu_prep, h3_probe, inference_runtime, run_ops, storyboard_llm_runtime, training_archive, training_bundle, training_history, training_runner, training_review
 from tool.server.training_action import allocate_action, read_action, relocate_folder_actions
-from tool.server.training_config_files import apply_review_config_settings, reset_training_config_file
+from tool.server.training_config_files import H3_FOCUSED_EXCLUDE_MODULES, apply_h3_focused_blocks, apply_review_config_settings, reset_training_config_file
 from tool.server.training_profiles import MINIMAX_H3_PROFILE_ID, WAN21_PROFILE_ID, config_for_stage, resolved_profile
 from tool.server.training_setup import ensure_training_setup
 
@@ -1767,6 +1768,47 @@ def test_h3_adapter_unchecked_does_not_change_cfg(tmp_path, monkeypatch):
     assert parsed["model"]["cfg"] == 4
     assert "merge_adapters" not in parsed["model"]
     assert (folder / "config.h3.toml").read_text(encoding="utf-8") == source
+
+
+def test_h3_focused_blocks_match_only_early_main_and_refiner_modules():
+    from tool.server.training_config_files import read_training_config_template
+
+    source = read_training_config_template("config.h3.toml")
+    parsed = tomllib.loads(apply_h3_focused_blocks(source))
+    pattern = parsed["adapter"]["exclude_modules"]
+    assert pattern == H3_FOCUSED_EXCLUDE_MODULES
+    for prefix in ("", "diffusion_model.", "base_model.model.diffusion_model."):
+        for index in range(50):
+            name = f"{prefix}blocks.{index}.self_attn.q_proj"
+            assert bool(re.fullmatch(pattern, name)) is (index < 20), name
+        for index in range(2):
+            assert re.fullmatch(pattern, f"{prefix}token_refiner.blocks.{index}.ffn.linear1")
+        assert not re.fullmatch(pattern, f"{prefix}video_patch_proj")
+        assert not re.fullmatch(pattern, f"{prefix}blocks.20.self_attn.q_proj")
+    assert tomllib.loads(source)["adapter"].get("exclude_modules") is None
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_h3_focused_checkbox_changes_only_captured_config(tmp_path, monkeypatch, enabled):
+    _configure_root(monkeypatch, tmp_path)
+    _fake_runtime(monkeypatch)
+    folder = _set(tmp_path)
+    ensure_training_setup(folder, MINIMAX_H3_PROFILE_ID, selected_media=["one.png"])
+    original = (folder / "config.h3.toml").read_text(encoding="utf-8")
+    action, _ = allocate_action(folder, resolved_profile(MINIMAX_H3_PROFILE_ID), ("h3",))
+    bundle = training_bundle.materialize_training_bundle(
+        folder, action, MINIMAX_H3_PROFILE_ID, "h3", ["one.png"],
+        output_dirs={"h3": str(action / "output" / "minimax-h3")},
+        config_settings={"h3": {"h3FocusedBlocks": enabled}},
+    )
+    captured = tomllib.loads(Path(bundle["artifacts"]["h3Config"]).read_text(encoding="utf-8"))
+    assert captured["adapter"].get("exclude_modules") == (H3_FOCUSED_EXCLUDE_MODULES if enabled else None)
+    assert (folder / "config.h3.toml").read_text(encoding="utf-8") == original
+
+
+def test_h3_focused_blocks_reject_non_h3_config():
+    with pytest.raises(ValueError, match="MiniMax H3 LoRA"):
+        apply_h3_focused_blocks('[model]\ntype = "wan21"\n[adapter]\ntype = "lora"\n')
 
 
 def test_checkpoint_resume_forces_selected_learning_rate(tmp_path, monkeypatch):

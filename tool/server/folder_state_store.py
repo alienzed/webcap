@@ -175,6 +175,26 @@ def reject_wholesale_state_map_clear(previous_state, next_state):
             )
 
 
+def set_test_workspace_prompt(state_path, model_id, prompt):
+    """Save user-authored Test/Campaign prompt with Set lifecycle, not session lifecycle."""
+    model_key = str(model_id or "").strip()
+    if not model_key:
+        raise ValueError("Test workspace prompt requires a model ID.")
+    path = Path(state_path)
+    with _folder_state_mutation_lock:
+        state = read_folder_state(path)
+        prompts = state.get("test_workspace_prompts")
+        if prompts is None:
+            prompts = {}
+        if not isinstance(prompts, dict):
+            raise FolderStateReadError("Set Test workspace prompt state is invalid.")
+        prompts = dict(prompts)
+        prompts[model_key] = str(prompt if prompt is not None else "")
+        state["test_workspace_prompts"] = prompts
+        write_folder_state_atomic(path, state)
+    return prompts[model_key]
+
+
 def folder_state_exists(state_path):
     path = Path(state_path)
     try:

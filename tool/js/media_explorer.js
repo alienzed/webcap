@@ -842,14 +842,16 @@
       text(el('media-explorer-empty-description'), 'Your filters are kept. Try again, or open the Console for the full error.');
       text(el('media-explorer-empty-action'), 'Try again'); return;
     }
-    text(el('media-explorer-empty-title'), isExternal() && !complete && externalPath
-      ? 'Discovering files…' : filtered ? 'No matching media' :
-      (isExternal() ? 'Choose an external folder' : 'Generated media, in one place'));
+    text(el('media-explorer-empty-title'), isExternal() && !externalPath ? 'Choose an external folder' :
+      isExternal() && !complete ? 'Discovering files…' : filtered ? 'No matching media' :
+      (isExternal() ? 'No media in this folder' : 'Generated media, in one place'));
     text(el('media-explorer-empty-description'), isExternal()
-      ? (!complete && externalPath ? 'Files will appear as they are discovered. Browsing remains responsive.' :
-        'Browse another folder or adjust the filters. Technical metadata filters show verified matches only.')
+      ? (!externalPath ? 'Select a remembered folder or enter a path and choose Browse. No folder scans until you browse.' :
+        !complete ? 'Files will appear as they are discovered. Browsing remains responsive.' :
+        'Browse another folder or adjust the filters. Technical filters include items with known metadata only.')
       : (filtered ? 'Try a different source, search or filter.' : 'Generated outputs and saved references appear here. Scan full history for older generated media.'));
-    text(el('media-explorer-empty-action'), isExternal() ? 'Refresh' : (!full ? 'Scan full history' : filtered ? 'Clear filters' : 'Refresh library'));
+    text(el('media-explorer-empty-action'), isExternal() ? (!externalPath ? 'Choose folder' : 'Refresh') :
+      (!full ? 'Scan full history' : filtered ? 'Clear filters' : 'Refresh library'));
   }
   function filterControls() {
     var chips = el('media-explorer-filter-chips'); chips.replaceChildren();

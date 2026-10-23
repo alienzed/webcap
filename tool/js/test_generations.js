@@ -3664,7 +3664,7 @@
   }
 
   // Reorder keyed cards rather than recreating media elements on normal refresh.
-  function sortTestPreviewCards(status, indexedCards) {
+  function sortTestPreviewCards(status) {
     var host = el('test-generations-results');
     var results = status && Array.isArray(status.results) ? status.results : [];
     var failures = status && Array.isArray(status.failures) ? status.failures : [];
@@ -3673,13 +3673,13 @@
     }).concat(failures.map(function (failure, index) {
       return 'failure:' + String(failure.sourceLoRA || 'result') + ':' + index;
     }));
-    var byKey = indexedCards || new Map(Array.prototype.map.call(
-      host.querySelectorAll('.test-generations-result-card:not(.is-pending)'),
-      function (card) { return [String(card.dataset.resultKey || ''), card]; }
-    ));
+    var byKey = Object.create(null);
+    Array.prototype.forEach.call(host.querySelectorAll('.test-generations-result-card:not(.is-pending)'), function (card) {
+      byKey[card.dataset.resultKey] = card;
+    });
     var next = host.querySelector('.test-generations-result-card.is-pending');
     for (var index = keys.length - 1; index >= 0; index -= 1) {
-      var card = byKey.get(keys[index]);
+      var card = byKey[keys[index]];
       if (!card) throw new Error('Test preview card is missing during sorting: ' + keys[index]);
       if (card.nextSibling !== next) host.insertBefore(card, next);
       next = card;
@@ -3884,7 +3884,7 @@
     } else if (pending) {
       pending.remove();
     }
-    sortTestPreviewCards(status, cards);
+    sortTestPreviewCards(status);
     syncPendingElapsed(status);
     syncTestVlControls();
 

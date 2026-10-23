@@ -7,14 +7,16 @@ from tool.server.inference_models import h3 as inference_h3
 from tool.server.test_models import h3 as test_h3
 
 
-@pytest.mark.parametrize("mode,steps,turbo", [
-    ("turbo", 8, 1.0),
-    ("quality", 20, None),
+@pytest.mark.parametrize("mode,steps,turbo,sampler,scheduler", [
+    ("turbo", 8, 1.0, "euler", "beta"),
+    ("quality", 20, None, "res_multistep", "simple"),
 ])
-def test_inference_sampling_workflow_is_explicit(mode, steps, turbo):
+def test_inference_sampling_workflow_is_explicit(mode, steps, turbo, sampler, scheduler):
     model = get_inference_model("minimax_h3")
     workflow = model.load_template(mode)
     assert workflow["124"]["inputs"]["steps"] == steps
+    assert workflow["123"]["inputs"]["sampler_name"] == sampler
+    assert workflow["124"]["inputs"]["scheduler"] == scheduler
     power = workflow["138"]["inputs"]
     assert not any(isinstance(v, dict) and v.get("on") is True and
                    "turbo" in str(v.get("lora", "")).lower() for v in power.values())
@@ -29,14 +31,16 @@ def test_inference_sampling_workflow_is_explicit(mode, steps, turbo):
         assert len(inference_h3.base_loras(workflow)) == 1
 
 
-@pytest.mark.parametrize("mode,steps,turbo_on", [
-    ("turbo", 8, True),
-    ("quality", 20, False),
+@pytest.mark.parametrize("mode,steps,turbo_on,sampler,scheduler", [
+    ("turbo", 8, True, "euler", "beta"),
+    ("quality", 20, False, "res_multistep", "simple"),
 ])
-def test_test_sampling_workflow_keeps_candidate_separate(mode, steps, turbo_on):
+def test_test_sampling_workflow_keeps_candidate_separate(mode, steps, turbo_on, sampler, scheduler):
     model = get_test_model("minimax_h3")
     template = model.load_template(mode)
     assert template["124"]["inputs"]["steps"] == steps
+    assert template["123"]["inputs"]["sampler_name"] == sampler
+    assert template["124"]["inputs"]["scheduler"] == scheduler
     assert template["138"]["inputs"]["lora_1"]["on"] is turbo_on
     if turbo_on:
         assert template["138"]["inputs"]["lora_1"]["strength"] == 1
@@ -96,6 +100,8 @@ def test_actual_generate_graph_contains_correct_turbo(mode, steps, has_turbo):
     )
     evidence = submitted_sampling(graph, mode)
     assert evidence["steps"] == steps
+    assert evidence["sampler"] == ("euler" if mode == "turbo" else "res_multistep")
+    assert evidence["scheduler"] == ("beta" if mode == "turbo" else "simple")
     assert evidence["turboEnabled"] is has_turbo
     assert evidence["conditioningUsesLoraClip"] is True
     assert evidence["turboStrength"] == (1.0 if has_turbo else None)
@@ -117,6 +123,8 @@ def test_actual_test_graph_contains_candidate_separate_from_turbo(mode, steps, h
     )
     evidence = submitted_sampling(graph, mode)
     assert evidence["steps"] == steps
+    assert evidence["sampler"] == ("euler" if mode == "turbo" else "res_multistep")
+    assert evidence["scheduler"] == ("beta" if mode == "turbo" else "simple")
     assert evidence["turboEnabled"] is has_turbo
     assert evidence["conditioningUsesLoraClip"] is True
     assert evidence["turboStrength"] == (1.0 if has_turbo else None)
@@ -153,6 +161,23 @@ def test_submitted_graph_rejects_wrong_strength_double_turbo_and_steps():
     }
     with pytest.raises(ValueError, match="must not load a Turbo"):
         submitted_sampling(quality, "quality")
+
+
+@pytest.mark.parametrize("mode,wrong_sampler,wrong_scheduler", [
+    ("turbo", "res_multistep", "simple"),
+    ("quality", "euler", "beta"),
+])
+def test_submitted_graph_rejects_wrong_sampler_and_scheduler(mode, wrong_sampler, wrong_scheduler):
+    import copy
+    original = get_inference_model("minimax_h3").load_template(mode)
+    bad_sampler = copy.deepcopy(original)
+    bad_sampler["123"]["inputs"]["sampler_name"] = wrong_sampler
+    with pytest.raises(ValueError, match="requires sampler"):
+        submitted_sampling(bad_sampler, mode)
+    bad_scheduler = copy.deepcopy(original)
+    bad_scheduler["124"]["inputs"]["scheduler"] = wrong_scheduler
+    with pytest.raises(ValueError, match="requires scheduler"):
+        submitted_sampling(bad_scheduler, mode)
 
 
 def test_submitted_graph_rejects_conditioning_bypass_and_preserves_verified_legacy_wiring():

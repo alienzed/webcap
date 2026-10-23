@@ -24,6 +24,7 @@ from .training_runner import (
     candidate_run_folder_path,
 )
 from .training_candidates import saved_artifacts_for_run
+from .training_history import host_path_for_training_path
 from .video_frame_ops import VIDEO_EXTS, extract_boundary_frame_png
 
 
@@ -133,9 +134,14 @@ def _runs(folder_path, require_saved_checkpoints=True):
             continue
         seen.add(job_id)
         try:
-            _path, run = _candidate_run_snapshot(folder, job_id)
+            raw_run_path, run = _candidate_run_snapshot(folder, job_id)
             model = get_test_model_for_staging_key(str(run.get("stages") or ""))
-            run_dir = candidate_run_folder_path(folder, job_id)
+            # The snapshot already resolved the run. Calling
+            # candidate_run_folder_path() would read queue/history a second time,
+            # and repeat recovery probes for unindexed training jobs.
+            run_dir = host_path_for_training_path(raw_run_path)
+            if not run_dir.is_dir():
+                raise FileNotFoundError("Recorded training run directory is unavailable.")
             epochs = ([a["epoch"] for a in saved_artifacts_for_run(run_dir) if a.get("status") == "available"]
                       if require_saved_checkpoints else [])
         except (LookupError, FileNotFoundError, ValueError, RuntimeError, OSError):

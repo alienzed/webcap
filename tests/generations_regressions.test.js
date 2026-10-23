@@ -131,6 +131,7 @@ function generateTakeIdentityTests() {
   const env = environment();
   env.reportConsoleError = () => {};
   load('generate.js', env, `
+    restoreResultConfiguration = function () {};
     window.api = { state: generateState, renderResults: renderResults };
   `);
   const api = env.window.api;
@@ -176,9 +177,14 @@ function generationPreviewExecutionFocusTests() {
   api.syncPreview({ jobId: 'later-queued-job', modelId: 'h3', status: 'running' });
   assert.equal(
     api.state.activePendingJobId,
-    'later-queued-job',
-    'the preview must follow a tracked generation once it begins executing'
+    'running-job',
+    'running jobs must not steal user selection'
   );
+  api.state.activePendingJobId = '';
+  api.state.activeResultKey = 'selected-historical-result';
+  api.syncPreview({ jobId: 'later-queued-job', modelId: 'h3', status: 'running' });
+  assert.equal(api.state.activeResultKey, 'selected-historical-result', 'polling must not replace a selected completed Take');
+  assert.equal(api.state.activePendingJobId, '', 'polling must not change the selected kind');
 }
 
 function generationCancelQueuedOwnershipTests() {

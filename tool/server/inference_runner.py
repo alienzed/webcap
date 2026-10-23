@@ -193,6 +193,12 @@ def _job_view(job):
         "progress": copy.deepcopy(details.get("providerProgress") or {}),
         "result": copy.deepcopy(result),
         "error": str(job.get("error") or ""),
+        "generationConfiguration": {
+            "sourcePrompt": str((job.get("payload") or {}).get("request", {}).get("sourcePrompt") or ""),
+            "settings": copy.deepcopy((job.get("payload") or {}).get("request", {}).get("settings") or {}),
+            "loras": copy.deepcopy((job.get("payload") or {}).get("request", {}).get("loras") or []),
+            "references": copy.deepcopy((job.get("payload") or {}).get("request", {}).get("references") or {}),
+        } if metadata.get("client") == "generate" else None,
     }
 
 

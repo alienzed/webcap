@@ -1569,12 +1569,27 @@
         open.appendChild(document.createElement('strong'));
         open.appendChild(document.createElement('small'));
         entry.appendChild(open);
+        var track=document.createElement('div');
+        track.className='epoch-screening-round-progress';
+        track.setAttribute('role','progressbar');
+        track.setAttribute('aria-label','Round '+plan.number+' frames captured');
+        track.setAttribute('aria-valuemin','0');
+        track.appendChild(document.createElement('i'));
+        entry.appendChild(track);
       }
+      var selected=manualSelectedRound===plan.number;
+      entry.classList.toggle('active',selected);
+      entry.dataset.roundState=state;
       var button=entry.querySelector('[data-screening-round]');
-      button.classList.toggle('active',manualSelectedRound===plan.number);
+      button.classList.toggle('active',selected);
+      button.setAttribute('aria-pressed',selected?'true':'false');
       button.querySelector('strong').textContent='Round '+plan.number;
       var detail=plan.epochs.length+' epochs · '+completed+'/'+total+' renders · '+state;
       if (button.querySelector('small').textContent!==detail) button.querySelector('small').textContent=detail;
+      var track=entry.querySelector('.epoch-screening-round-progress');
+      track.setAttribute('aria-valuenow',String(completed));
+      track.setAttribute('aria-valuemax',String(total));
+      track.querySelector('i').style.width=(total?Math.min(100,completed/total*100):0)+'%';
       var control=entry.querySelector('[data-screening-round-action]');
       if (!action || !control || control.dataset.screeningRoundAction!==action) {
         if (control) control.remove();

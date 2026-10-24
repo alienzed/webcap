@@ -1741,30 +1741,40 @@ def status(folder_path, campaign_id):
 
 
 
-def screening_test_status(folder_path, campaign_id):
-    """Read-only Test staging status for Manual Screening's original run/epoch IDs.
+def checkpoint_test_status(folder_path, campaign_id="", run_ids=None):
+    """Read-only, provenance-aware Test membership for saved campaigns or run pickers.
 
-    Reuse Candidates Curve's provenance-aware status annotation; never store
-    transient Test state in the campaign or re-run TensorBoard analysis.
+    Campaign keys are its candidate IDs; picker keys are original run/epoch IDs.
+    Selection and campaign files are never modified.
     """
-    campaign = _load(folder_path, campaign_id)
-    if campaign.get("mode") != "manual":
-        raise ValueError("Test checkpoint status requires a Manual Screening campaign.")
-    candidates = campaign.get("candidateMap") or {}
-    epochs = sorted({epoch for plan in campaign.get("rounds") or []
-                     for epoch in plan.get("epochs") or []})
+    if not campaign_id and run_ids is None:
+        raise ValueError("A campaign or selected training runs are required.")
+    if run_ids is not None and (
+        not isinstance(run_ids, list) or
+        any(not isinstance(job_id, str) or not job_id for job_id in run_ids)
+    ):
+        raise ValueError("Training run IDs must be non-empty strings.")
+
     identities = {}
     staged = {}
-    for candidate in epochs:
-        origin = candidates.get(str(candidate)) or {}
-        if origin.get("sourceType") == "staged":
-            staged[str(candidate)] = str(origin.get("fileName") or "")
-            continue
-        job_id = str(origin.get("jobId") or campaign.get("jobId") or "")
-        epoch = origin.get("epoch", candidate)
-        if not job_id or type(epoch) is not int:
-            raise ValueError("Manual Screening candidate lacks saved training-run provenance.")
-        identities.setdefault(job_id, {})[str(candidate)] = epoch
+    if campaign_id:
+        campaign = _load(folder_path, campaign_id)
+        candidates = campaign.get("candidateMap") or {}
+        epochs = sorted({epoch for plan in campaign.get("rounds") or []
+                         for epoch in plan.get("epochs") or []})
+        for candidate in epochs:
+            origin = candidates.get(str(candidate)) or {}
+            if origin.get("sourceType") == "staged":
+                staged[str(candidate)] = str(origin.get("fileName") or "")
+                continue
+            job_id = str(origin.get("jobId") or campaign.get("jobId") or "")
+            epoch = origin.get("epoch", candidate)
+            if not job_id or type(epoch) is not int:
+                raise ValueError("Campaign candidate lacks saved training-run provenance.")
+            identities.setdefault(job_id, {})[str(candidate)] = epoch
+
+    for job_id in run_ids or []:
+        identities.setdefault(job_id, {})
 
     result = {}
     if staged:
@@ -1775,6 +1785,7 @@ def screening_test_status(folder_path, campaign_id):
     managed_sources = {row["jobId"]: (row, run_dir, artifacts, action)
                        for row, run_dir, artifacts, action in
                        _managed_set_checkpoint_sources(folder_path)}
+    by_run = {}
     for job_id, mapped in identities.items():
         if job_id in managed_sources:
             row, run_dir, artifacts, action = managed_sources[job_id]
@@ -1799,9 +1810,20 @@ def screening_test_status(folder_path, campaign_id):
                                str(folder_status.get("error") or "Unknown staging error"))
         copied = {item["epoch"]: item["inTestFolder"] for item in artifacts
                   if item.get("status") == "available"}
+        by_run[job_id] = {str(epoch): bool(in_test) for epoch, in_test in copied.items()}
         for candidate, epoch in mapped.items():
             result[candidate] = bool(copied.get(epoch, False))
-    return {"inTest": result}
+
+    response = {"inTest": result}
+    if run_ids is not None:
+        response["runs"] = {job_id: by_run[job_id] for job_id in run_ids}
+    return response
+
+
+def screening_test_status(folder_path, campaign_id):
+    """Compatibility wrapper for existing Manual Screening callers."""
+    return checkpoint_test_status(folder_path, campaign_id)
+
 
 
 def workspace_gallery(folder_path, model_id="", *, limit=48, offset=0, collection_id="", checkpoints=None, include_epoch_index=False, generated_only=False):
@@ -2049,6 +2071,9 @@ def command(folder_path, operation, criteria=None):
         return list_campaigns(folder_path, criteria.get("modelId"))
     if operation == "screening_test_status":
         return screening_test_status(folder_path, str(criteria.get("campaignId") or ""))
+    if operation == "checkpoint_test_status":
+        return checkpoint_test_status(folder_path, str(criteria.get("campaignId") or ""),
+                                      criteria.get("runIds"))
     if operation == "checkpoint_workspace":
         return checkpoint_workspace(folder_path, criteria.get("jobId"), criteria.get("epoch"),
                                     offset=criteria.get("offset", 0), limit=criteria.get("limit", 24))

@@ -1042,6 +1042,8 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
   /* Do not let the shared full-width button force the card's action outside. */
   width:auto;
   flex:none;
+  grid-column:2;
+  grid-row:1;
   align-self:center;
   justify-self:end;
   margin:0;

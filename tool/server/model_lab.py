@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import secrets
 import tempfile
@@ -1299,6 +1300,9 @@ def _runner(run_id):
                     if review_thread:
                         review_thread.join()
                 except Exception as exc:
+                    logging.getLogger(__name__).exception(
+                        "Deep Model Assessment quality review could not start for %s", model_ref
+                    )
                     with _lock:
                         saved = _read_raw(run_id)
                         saved.setdefault("qualityReviews", {})[model_ref] = {

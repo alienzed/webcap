@@ -1159,7 +1159,7 @@
                         <button type="button" class="test-workspace-pane-btn" data-test-workspace-mode="analytics" aria-pressed="false">Insights</button>
                         <button type="button" class="test-workspace-pane-btn test-workspace-reference-link" data-test-workspace-mode="references" aria-pressed="false" title="Manage training reference images for VL and DINO comparisons">References</button>
                     </nav>
-                    <section id="epoch-finder-screen" class="epoch-finder-screen hidden" aria-label="Epoch Finder">
+                    <section id="epoch-finder-screen" class="epoch-finder-screen hidden" aria-label="Manual Screening and Campaigns">
                         <div class="epoch-finder-layout">
                             <aside class="epoch-finder-sidebar">
                                 <section class="epoch-finder-panel">
@@ -1198,7 +1198,7 @@
                                     <div id="epoch-finder-round-plan" class="epoch-finder-round-plan" aria-label="Round plan"></div>
                                     <p id="epoch-finder-estimate" class="epoch-finder-muted"></p>
                                     <p class="epoch-finder-muted">Vision evaluates original frames, downscaling only above 0.45 MP. No upscaling.</p>
-                                    <p class="epoch-finder-muted">Model settings come from Test Generations. Vision uses the selected model in the global header.</p>
+                                    <p class="epoch-finder-muted">Sampling settings come from Prompt Tests. Vision uses the selected model in the global header.</p>
                                     </div>
                                     <div data-epoch-wizard-step="4" class="hidden">
                                         <section class="epoch-finder-reference-setup"><h4>Training references</h4><p class="epoch-finder-muted">Review suggested training images for Primary options with matching Set tags. Options without candidates are skipped for reference comparisons; original VL is unchanged.</p><div id="epoch-finder-reference-options"></div><p class="epoch-finder-muted">Images are shown in the right-hand gallery during this step.</p><div id="epoch-finder-reference-choices"></div><label><input type="checkbox" id="epoch-finder-enable-rvn" checked> Compare with training references</label><label><input type="checkbox" id="epoch-finder-enable-dino" checked> DINOv2 visual similarity</label></section>
@@ -1291,9 +1291,9 @@
                     </section>
                     <section id="test-references-screen" class="epoch-finder-screen test-references-screen hidden" aria-label="Training References">
                         <div class="epoch-finder-intro">
-                            <div><div class="epoch-finder-eyebrow">TEST GENERATIONS / REFERENCES</div>
+                            <div><div class="epoch-finder-eyebrow">EVALUATION / REFERENCES</div>
                                 <h2>Training references</h2>
-                                <p>Explore exact Set tags within a training run, inspect whole images, and choose examples for upcoming Epoch Finder campaigns.</p>
+                                <p>Explore exact Set tags within a training run, inspect whole images, and choose examples for upcoming Campaigns.</p>
                             </div>
                         </div>
                         <div class="epoch-finder-layout">

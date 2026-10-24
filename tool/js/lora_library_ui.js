@@ -333,17 +333,27 @@ function wireLoraLibrary() {
   loraEl('json-edit').addEventListener('change', function () {
     var enabled = loraEl('json-edit').checked;
     if (!enabled) {
-      try { var parsed = JSON.parse(loraEl('options').value || '{}'); if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('Expected an object.'); loraSetOptions(parsed); }
-      catch (e) { loraEl('json-edit').checked = true; loraReport(e); return; }
+      try {
+        var parsed = JSON.parse(loraEl('options').value || '{}');
+        if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object' ||
+            Object.values(parsed).some(function (values) { return !Array.isArray(values) || values.some(function (value) { return typeof value !== 'string'; }); }))
+          throw new Error('Prompt options must be named lists of phrases.');
+        loraSetOptions(parsed);
+      } catch (e) {
+        loraEl('json-edit').checked = true;
+        loraEl('save-state').textContent = String(e.message || e);
+        return;
+      }
     } else loraSyncJson();
     loraEl('options').readOnly = !enabled;
     loraEl('groups').classList.toggle('hidden', enabled);
     loraEl('add-group').disabled = enabled;
     loraUpdateDirty();
   });
-  loraEl('modal').addEventListener('focusin', function (event) {
-    if (!loraEl('modal').contains(event.target)) loraEl('search').focus();
-  });
+  document.addEventListener('focusin', function (event) {
+    if (!loraEl('modal').classList.contains('hidden') && !loraEl('modal').contains(event.target))
+      loraEl('search').focus();
+  }, true);
   document.getElementById('generate-lora-library-open').addEventListener('click', function () { openLoraLibrary(); });
 }
 wireLoraLibrary();

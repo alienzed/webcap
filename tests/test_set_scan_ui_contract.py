@@ -60,7 +60,7 @@ def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secon
     assert 'id="set-scan-quality-summary"' in html
     assert 'id="set-scan-force-mode"' not in html
     assert 'class="set-scan-sight-shell"' in html
-    assert "itemView.onclick = viewSelectedSightResponse;" in scan
+    assert "itemView.onclick = function () { openSightReviewForFile(el('set-scan-item-select').value); };" in scan
     assert "forceBtn.onclick = function () { runSetIntelligence('open'); };" in scan
     assert 'id="set-scan-details"' in html
     assert "<strong>Vision report</strong>" in html
@@ -68,7 +68,7 @@ def test_set_intelligence_keeps_actionable_coverage_visible_and_raw_report_secon
     assert "currentRawResponse" in scan
     assert "rawResponses" in scan
     assert "rawResponseIndex" in scan
-    assert "showRawResponse(fileName, 'Sight', result.text);" in scan
+    assert "showRawResponse(fileName, 'Sight', result.text, result.sight);" in scan
     assert "responseSelect.onchange = selectRawResponse;" in scan
     assert "rescanBtn.onclick = function () { runSetIntelligence(); };" in scan
     assert "'Resume ' + String(openMissing) + ' Sight'" in scan
@@ -104,7 +104,7 @@ def test_set_intelligence_uses_visible_training_scope_with_explicit_full_set_ove
     assert 'id="set-scan-entire-set" type="checkbox"' in html
     assert 'id="set-scan-scope-summary"' in html
     assert 'return entireSet.checked ? getCurrentSetMediaFileNames() : getVisibleMediaSelectionForTraining();' in scan
-    assert 'var files = getSetIntelligenceScopeFiles();' in scan
+    assert 'var files = setScanState.running ? setScanState.files.slice() : getSetIntelligenceScopeFiles();' in scan
     assert "if (!files.length) {\n      setCoverage(0, 0);" in scan
     assert 'entireSetToggle.onchange = openSetIntelligence;' in scan
     assert 'openVisionSchemaAssist();' in scan

@@ -36,6 +36,7 @@ on:
       - 'tests/test_epoch_finder.py'
       - 'tests/test_epoch_finder_scaling.py'
       - 'tests/test_epoch_finder_scaling_dom.test.cjs'
+      - 'tests/epoch_finder_compact_header.test.cjs'
       - 'tests/test_epoch_finder_multirun.py'
       - 'tests/test_run_analytics_next.py'
       - 'tool/js/epoch_info.js'
@@ -79,6 +80,7 @@ jobs:
           node --test tests/test_generations_unified_dom.test.cjs
           node --test tests/test_test_surface_context_navigation.test.cjs
           node --test tests/test_epoch_finder_scaling_dom.test.cjs
+          node --test tests/epoch_finder_compact_header.test.cjs
           node --test tests/qa_curation_ui.test.cjs
       - name: Inference and Training drag-to-reorder
         run: |

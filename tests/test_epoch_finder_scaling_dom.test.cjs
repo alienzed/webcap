@@ -36,7 +36,8 @@ function harness(count, initiallyKept) {
     document, window: dom.window, currentFolder: 'sets/demo', campaignState: campaign,
     manualSelectedRound: 1, manualSelectionCampaign: '', runEpochSelections: {},
     screeningTestStatus: {}, screeningCopyPending: new Set(),
-    screeningRatingPending: new Set(), screeningExpandedExcluded: new Set(),
+    screeningRatingPending: new Set(), screeningSkipPending: new Set(), screeningExpandedExcluded: new Set(),
+    screeningSkipEpoch: (_campaign, round, epoch) => {ctx.lastSkipped = {round, epoch};},
     screeningRoundList: () => {}, screeningRunInfo: () => {},
     screeningUpdateAverage: () => {}, stagedOrigin: () => true,
     candidateLabel: (_c, epoch) => 'Epoch ' + epoch,
@@ -96,4 +97,31 @@ test('selected epoch cards update in place when a new render arrives', () => {
   assert.equal(row1.querySelector('.epoch-screening-cases').children[0], firstCard);
   assert.equal(h.created, previousCreated + 1);
   assert.equal(h.document.querySelector('[data-screening-epoch="3"] .epoch-screening-cases').children.length, 0);
+});
+
+
+test('screening skip action appears only for incomplete live epochs and preserves mounted previews', () => {
+  const h = harness(2, 2);
+  const live = h.campaign.units.find(u => u.epoch === 1 && u.case === 1);
+  live.frame = '';
+  const pending = h.campaign.units.find(u => u.epoch === 1 && u.case === 2);
+  pending.frame = '';
+  h.ctx.runMatrix(h.campaign);
+  const row = h.document.querySelector('[data-screening-epoch="1"]');
+  const preserved = row.querySelector('.epoch-screening-cases').firstChild;
+  const skip = row.querySelector('.epoch-screening-skip-btn');
+  assert.ok(skip, 'active partially-rendered epoch offers Skip epoch');
+  assert.equal(skip.textContent, 'Skip epoch');
+  assert.equal(h.document.querySelector('[data-screening-epoch="2"] .epoch-screening-skip-btn'), null,
+    'finished epochs do not show Skip epoch');
+  skip.click();
+  assert.equal(h.ctx.lastSkipped.round, 1);
+  assert.equal(h.ctx.lastSkipped.epoch, 1);
+  h.campaign.rounds[0].skippedEpochs = [1];
+  h.host.dataset.signature = '';
+  h.ctx.runMatrix(h.campaign);
+  assert.ok(h.document.querySelector('[data-screening-epoch="1"] .epoch-screening-skip-state'));
+  assert.equal(h.document.querySelector('[data-screening-epoch="1"] .epoch-screening-skip-btn'), null);
+  assert.equal(h.document.querySelector('[data-screening-epoch="1"] .epoch-screening-cases').firstChild, preserved,
+    'captured frame DOM survives skip reconciliation');
 });

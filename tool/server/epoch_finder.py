@@ -80,6 +80,10 @@ def _save(folder_path, campaign, *, preserve_manual=True):
                 if len(latest.get("rounds", [])) > len(campaign.get("rounds", [])):
                     campaign["rounds"].extend(latest["rounds"][len(campaign["rounds"]):])
                 for index, saved_plan in enumerate(latest.get("rounds", [])):
+                    if saved_plan.get("skippedEpochs"):
+                        campaign["rounds"][index]["skippedEpochs"] = list(dict.fromkeys(
+                            (campaign["rounds"][index].get("skippedEpochs") or []) +
+                            saved_plan["skippedEpochs"]))
                     if saved_plan.get("status") == "deleted":
                         campaign["rounds"][index]["status"] = "deleted"
                     elif (saved_plan.get("status") in {"cancelled", "stopping"} and
@@ -854,6 +858,54 @@ def _screening_round_action(folder_path, campaign, number, action):
     return campaign
 
 
+def _screening_skip_epoch(folder_path, campaign, number, epoch):
+    """Cancel only unstarted renders of an active epoch, retaining every finished frame."""
+    if type(number) is not int or type(epoch) is not int:
+        raise ValueError("Choose a screening round and epoch.")
+    plan = next((item for item in campaign["rounds"] if item["number"] == number), None)
+    if not plan or epoch not in plan["epochs"]:
+        raise ValueError("Choose an epoch in this screening round.")
+    worker = _workers.get(campaign["id"])
+    if (campaign.get("status") != "running" or number != campaign["round"] or
+            plan.get("status") != "running" or not worker or not worker.is_alive()):
+        raise ValueError("Only an active screening round can skip an epoch.")
+    if epoch in plan.get("skippedEpochs", []):
+        raise ValueError("This epoch has already been skipped.")
+    cases = len(plan["seeds"])
+    units = [unit for unit in campaign["units"]
+             if unit["round"] == number and unit["epoch"] == epoch]
+    if not any(unit.get("frame") or unit.get("error") for unit in units):
+        raise ValueError("Wait for the first render before skipping this epoch.")
+    if all(any(unit["case"] == case and (
+            unit.get("frame") or unit.get("error") or unit.get("cancelled"))
+            for unit in units) for case in range(cases)):
+        raise ValueError("This epoch has already finished.")
+
+    # The render coordinator can be inside enqueue() at this moment. Signal it
+    # before touching queued Test sessions; never interfere with running work.
+    signal = _controls[campaign["id"]]["skipped_epochs"].setdefault(
+        (number, epoch), threading.Event())
+    signal.set()
+    plan.setdefault("skippedEpochs", []).append(epoch)
+    _save(folder_path, campaign, preserve_manual=False)
+    for unit in units:
+        if unit.get("frame") or unit.get("error") or unit.get("cancelled") or not unit.get("session"):
+            continue
+        session = test_bench.open_session(folder_path, unit["session"])
+        if session.get("status") != "queued":
+            continue
+        try:
+            test_bench.cancel_queued(folder_path, unit["session"])
+        except RuntimeError as exc:
+            if "Only a fully queued Test session can be cancelled here." in str(exc):
+                continue  # A queued Test render started during cancellation.
+            raise
+        unit["cancelled"] = True
+        unit["session"] = ""
+        _save(folder_path, campaign, preserve_manual=False)
+    return campaign
+
+
 def _screening_vision(folder_path, campaign, criteria):
     if campaign.get("status") not in {"running", "paused", "complete", "interrupted", "failed", "stopped"}:
         raise ValueError("Start rendering before requesting manual VL.")
@@ -1030,14 +1082,19 @@ def _compare(answer, groups):
     return comparison
 
 
-def _wait_for_session(folder_path, campaign, unit, stop_queuing=None):
+def _queue_stop_requested(stop_queuing=None, skip_queuing=None):
+    return bool((stop_queuing and stop_queuing.is_set()) or
+                (skip_queuing and skip_queuing.is_set()))
+
+
+def _wait_for_session(folder_path, campaign, unit, stop_queuing=None, skip_queuing=None):
     while True:
         if unit.get("cancelled"):
             return None
         try:
             session = test_bench.open_session(folder_path, unit["session"])
         except FileNotFoundError:
-            if stop_queuing is None or not stop_queuing.is_set():
+            if not _queue_stop_requested(stop_queuing, skip_queuing):
                 raise
             # A concurrent Stop Queuing may have removed this queued Test session.
             # Check the saved cancellation marker, never treat arbitrary missing
@@ -1051,7 +1108,7 @@ def _wait_for_session(folder_path, campaign, unit, stop_queuing=None):
                 unit["session"] = ""
             return None
         phase = str(session.get("status") or "")
-        if stop_queuing is not None and stop_queuing.is_set() and phase == "queued":
+        if _queue_stop_requested(stop_queuing, skip_queuing) and phase == "queued":
             try:
                 # The session owns a single queued Test request. Cancel only
                 # pending work; a request that just started may finish normally.
@@ -1074,10 +1131,11 @@ def _wait_for_session(folder_path, campaign, unit, stop_queuing=None):
         time.sleep(2)
 
 
-def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False, stop_queuing=None):
+def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False,
+                 stop_queuing=None, skip_queuing=None):
     if unit["frame"] or unit.get("cancelled"):
         return
-    if stop_queuing is not None and stop_queuing.is_set() and not unit["session"]:
+    if _queue_stop_requested(stop_queuing, skip_queuing) and not unit["session"]:
         unit["cancelled"] = True
         _save(folder_path, campaign)
         return
@@ -1097,7 +1155,8 @@ def _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=False, 
         _save(folder_path, campaign)
     if enqueue_only:
         return
-    status = _wait_for_session(folder_path, campaign, unit, stop_queuing=stop_queuing)
+    status = _wait_for_session(folder_path, campaign, unit,
+                               stop_queuing=stop_queuing, skip_queuing=skip_queuing)
     if status is None:
         return
     result = status["results"][0]
@@ -1428,6 +1487,14 @@ def _run(folder_path, campaign_id, control):
             for epoch in epochs:
                 if campaign.get("mode") == "manual" and control["stop_round"].is_set():
                     break
+                skip_signal = None
+                if campaign.get("mode") == "manual":
+                    skip_signal = control.setdefault("skipped_epochs", {}).setdefault(
+                        (number, epoch), threading.Event())
+                    if epoch in plan.get("skippedEpochs", []):
+                        skip_signal.set()
+                    if skip_signal.is_set():
+                        continue
                 pending = []
                 for case in range(len(plan["seeds"])):
                     unit = _unit(campaign, number, epoch, case, index=unit_index)
@@ -1443,7 +1510,8 @@ def _run(folder_path, campaign_id, control):
                     for unit in pending:
                         try:
                             _render_unit(folder_path, campaign, plan, unit, staged, enqueue_only=True,
-                                         stop_queuing=control["stop_round"] if campaign.get("mode") == "manual" else None)
+                                         stop_queuing=control["stop_round"] if campaign.get("mode") == "manual" else None,
+                                         skip_queuing=skip_signal)
                         except Exception as exc:
                             _mark_unit_error(folder_path, campaign, unit, "render", exc)
                     for unit in pending:
@@ -1454,7 +1522,8 @@ def _run(folder_path, campaign_id, control):
                             continue
                         try:
                             _render_unit(folder_path, campaign, plan, unit, staged,
-                                         stop_queuing=control["stop_round"] if campaign.get("mode") == "manual" else None)
+                                         stop_queuing=control["stop_round"] if campaign.get("mode") == "manual" else None,
+                                         skip_queuing=skip_signal)
                         except Exception as exc:
                             _mark_unit_error(folder_path, campaign, unit, "render", exc)
                 if not _campaign_has_active_sessions(folder_path, campaign):
@@ -1632,7 +1701,7 @@ def _resume_saved_work(folder_path, campaign):
 def _start_campaign_worker_locked(folder_path, campaign_id):
     """Caller holds _worker_lock; only one active Epoch Finder coordinator."""
     control = {"pause": threading.Event(), "stop": threading.Event(),
-               "stop_round": threading.Event()}
+               "stop_round": threading.Event(), "skipped_epochs": {}}
     thread = threading.Thread(
         target=_run, args=(folder_path, campaign_id, control), daemon=True,
         name="webcap-epoch-finder",
@@ -2026,7 +2095,8 @@ def command(folder_path, operation, criteria=None):
     if operation == "status":
         return {"campaign": status(folder_path, campaign_id)}
     if operation in {"screening_selection", "screening_next_round", "screening_round_action",
-                     "screening_rate", "screening_keep", "screening_vision"}:
+                     "screening_rate", "screening_keep", "screening_vision",
+                     "screening_skip_epoch"}:
         campaign = status(folder_path, campaign_id)
         if campaign.get("mode") != "manual":
             raise ValueError("This operation requires a Manual Screening campaign.")
@@ -2040,6 +2110,9 @@ def command(folder_path, operation, criteria=None):
             if operation == "screening_round_action":
                 return {"campaign": _screening_round_action(folder_path, campaign,
                     criteria.get("round"), criteria.get("action"))}
+            if operation == "screening_skip_epoch":
+                return {"campaign": _screening_skip_epoch(folder_path, campaign,
+                    criteria.get("round"), criteria.get("epoch"))}
             if operation == "screening_selection":
                 return {"campaign": _screening_selection(folder_path, campaign, criteria.get("runSelections"))}
             if operation == "screening_keep":

@@ -992,3 +992,16 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #test-generations-pane .test-workspace-return > .review-captions-btn {
   width:auto;min-height:36px;padding:7px 12px;font-size:16px;
 }
+
+/* Skip only the current epoch's remaining renders; retain the row and captured previews. */
+#epoch-finder-screen .epoch-screening-row-actions .epoch-screening-skip-btn {
+  width:auto; margin:0; padding:5px 10px; min-height:34px;
+  font-size:14px; font-weight:650; white-space:nowrap;
+  border-color:var(--border-color,#405064);
+}
+#epoch-finder-screen .epoch-screening-row-actions .epoch-screening-skip-btn:disabled {
+  opacity:.6; cursor:default;
+}
+.epoch-screening-row-actions .epoch-screening-skip-state {
+  color:var(--muted-text,#9ca9b8); font-size:14px; font-weight:600;
+}

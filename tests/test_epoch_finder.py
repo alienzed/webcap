@@ -998,7 +998,7 @@ def test_manual_rounds_use_one_worker_and_advance_after_submission(tmp_path, mon
     monkeypatch.setattr(workflow_gate, "wait_for_epoch", lambda *_: True)
     monkeypatch.setattr(workflow_gate, "release", lambda *_: None)
     submitted = []
-    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False, stop_queuing=None):
+    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False, stop_queuing=None, skip_queuing=None):
         if enqueue_only:
             return
         if plan["number"] == 1 and not submitted:
@@ -1062,7 +1062,7 @@ def test_stopping_one_manual_round_preserves_and_runs_queued_next(tmp_path, monk
     monkeypatch.setattr(workflow_gate, "release", lambda *_: None)
 
     requested = []
-    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False, stop_queuing=None):
+    def fake_render(folder_key, worker, plan, unit, _stage, enqueue_only=False, stop_queuing=None, skip_queuing=None):
         if enqueue_only:
             return
         if plan["number"] == 1 and not requested:
@@ -1586,3 +1586,105 @@ def test_set_owned_screening_test_status_needs_no_training_job(tmp_path, monkeyp
     assert epoch_finder.screening_test_status(tmp_path, "abcdef123456") == {
         "inTest": {"12": True}
     }
+
+
+def test_screening_skip_epoch_cancels_only_queued_units_and_keeps_completed(tmp_path, monkeypatch):
+    import threading
+
+    identity = "skip12345678"
+    units = [
+        {"round": 1, "epoch": 5, "case": 0, "frame": "r1-e5-c0.png", "session": ""},
+        {"round": 1, "epoch": 5, "case": 1, "frame": "", "session": "queued-five"},
+        {"round": 1, "epoch": 5, "case": 2, "frame": "", "session": "running-five"},
+        {"round": 1, "epoch": 5, "case": 3, "frame": "", "session": ""},
+        {"round": 1, "epoch": 6, "case": 0, "frame": "", "session": "queued-six"},
+    ]
+    campaign = {
+        "id": identity, "mode": "manual", "status": "running", "round": 1,
+        "kept": [5, 6],
+        "rounds": [{"number": 1, "status": "running", "epochs": [5, 6], "seeds": [1, 2, 3, 4]}],
+        "units": units,
+    }
+
+    class Worker:
+        def is_alive(self):
+            return True
+
+    signals = {"skipped_epochs": {}}
+    monkeypatch.setitem(epoch_finder._workers, identity, Worker())
+    monkeypatch.setitem(epoch_finder._controls, identity, signals)
+    monkeypatch.setattr(epoch_finder, "_save", lambda *_args, **_kwargs: None)
+    sessions = {"queued-five": {"status": "queued"},
+                "running-five": {"status": "running"},
+                "queued-six": {"status": "queued"}}
+    cancelled = []
+    monkeypatch.setattr(epoch_finder.test_bench, "open_session",
+                        lambda folder, session: sessions[session])
+    monkeypatch.setattr(epoch_finder.test_bench, "cancel_queued",
+                        lambda folder, session: cancelled.append(session))
+
+    result = epoch_finder._screening_skip_epoch(tmp_path, campaign, 1, 5)
+    assert result is campaign
+    assert campaign["rounds"][0]["skippedEpochs"] == [5]
+    assert signals["skipped_epochs"][(1, 5)].is_set()
+    assert cancelled == ["queued-five"]
+    assert units[0]["frame"] == "r1-e5-c0.png"
+    assert units[1]["cancelled"] and not units[1]["session"]
+    assert units[2]["session"] == "running-five" and not units[2].get("cancelled")
+    assert not units[3].get("cancelled")  # Enqueue-in-flight must be reconciled by worker.
+    assert units[4]["session"] == "queued-six"
+    assert campaign["kept"] == [5, 6]  # Skip is independent of Keep.
+    with pytest.raises(ValueError, match="already been skipped"):
+        epoch_finder._screening_skip_epoch(tmp_path, campaign, 1, 5)
+
+
+def test_screening_skip_epoch_worker_rejects_future_queue_and_cancels_late_submission(
+        tmp_path, monkeypatch):
+    import threading
+
+    skipped = threading.Event()
+    skipped.set()
+    planned = {"round": 1, "epoch": 5, "case": 3, "session": "", "frame": ""}
+    campaign = {"units": [planned]}
+    monkeypatch.setattr(epoch_finder, "_save", lambda *_args, **_kwargs: None)
+
+    def unexpected_enqueue(*_args, **_kwargs):
+        pytest.fail("No new inference may be enqueued for a skipped epoch")
+
+    monkeypatch.setattr(epoch_finder.test_bench, "enqueue", unexpected_enqueue)
+    epoch_finder._render_unit(tmp_path, campaign, {"settings": {}, "seeds": [0, 0, 0, 0]},
+                              planned, "test.safetensors", enqueue_only=True,
+                              skip_queuing=skipped)
+    assert planned["cancelled"] is True
+    assert planned["session"] == ""
+
+    late = {"round": 1, "epoch": 5, "case": 2, "session": "late", "frame": ""}
+    cancelled = []
+    monkeypatch.setattr(epoch_finder.test_bench, "open_session",
+                        lambda folder, session: {"status": "queued"})
+    monkeypatch.setattr(epoch_finder.test_bench, "cancel_queued",
+                        lambda folder, session: cancelled.append(session))
+    assert epoch_finder._wait_for_session(tmp_path, {"id": "unused"}, late,
+                                           skip_queuing=skipped) is None
+    assert cancelled == ["late"]
+    assert late["cancelled"] is True
+    assert late["session"] == ""
+
+
+def test_screening_skip_epoch_requires_active_incomplete_epoch(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    identity = "abc123skip"
+    campaign = {
+        "id": identity, "status": "running", "round": 1,
+        "rounds": [{"number": 1, "status": "running", "epochs": [5], "seeds": [1, 2]}],
+        "units": [{"round": 1, "epoch": 5, "case": 0, "frame": "done.png"},
+                  {"round": 1, "epoch": 5, "case": 1, "frame": "done-too.png"}],
+    }
+    monkeypatch.setitem(epoch_finder._workers, identity, SimpleNamespace(is_alive=lambda: True))
+    monkeypatch.setitem(epoch_finder._controls, identity, {"skipped_epochs": {}})
+    with pytest.raises(ValueError, match="already finished"):
+        epoch_finder._screening_skip_epoch(tmp_path, campaign, 1, 5)
+    campaign["rounds"][0]["status"] = "complete"
+    with pytest.raises(ValueError, match="active screening round"):
+        epoch_finder._screening_skip_epoch(tmp_path, campaign, 1, 5)

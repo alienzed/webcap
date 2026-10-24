@@ -2052,7 +2052,7 @@
             title:plan.columnLabels[index]||'Variation '+(index+1),
             media:url?{kind:'image',url:url,alt:'Epoch '+epoch+' · '+plan.columnLabels[index]}:null,
             placeholder:url?null:(u&&u.error?'Render failed':u&&u.cancelled?'Skipped':
-              skipped?'Skipping…':'Awaiting render'),
+              skipped?(u&&u.session?'Finishing active render…':'Skipped'):'Awaiting render'),
             failed:!!(u&&u.error),
             error:u&&u.error||'',
             rating:url?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,

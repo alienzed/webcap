@@ -77,6 +77,13 @@ def test_h3_plan_uses_headless_three_stage_cli_and_explicit_adapter():
     assert plan["pauseSentinel"] == "/output/runs/fizgig-test/.pause_requested"
 
 
+def test_explicit_h3_photo_blocks_are_passed_as_family_option():
+    train = shlex.split(plan_h3(DATASET, **ARGS, photo_blocks="20-49")["commands"]["train"])
+    assert train[train.index("--family_option") + 1] == "photo_blocks=20-49"
+    with pytest.raises(ValueError, match="block targeting"):
+        plan_h3(DATASET, **ARGS, photo_blocks="; rm -rf /")
+
+
 def test_no_adapter_means_no_frozen_adapter_in_training():
     train = shlex.split(plan_h3(DATASET, **ARGS)["commands"]["train"])
     assert "--training_adapter" not in train
@@ -90,6 +97,8 @@ def test_resume_requires_actual_fizgig_state_directory():
         plan_h3(DATASET, **ARGS, resume_state="/output/runs/fizgig-test/latest")
     with pytest.raises(ValueError, match="absolute"):
         plan_h3(DATASET, **ARGS, resume_state="../other-state")
+    with pytest.raises(ValueError, match="exact output run"):
+        plan_h3(DATASET, **ARGS, resume_state="/output/other/fizgig-test-000030-state")
 
 
 @pytest.mark.parametrize("broken", [

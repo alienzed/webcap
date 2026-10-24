@@ -612,6 +612,9 @@ function syncCaptionVisionUi() {
   var refreshSight = document.getElementById('editor-caption-refresh-sight');
   if (!refreshSight) throw new Error('Per-item Sight refresh control is missing.');
   refreshSight.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  var vlWorkspaceBtn = document.getElementById('editor-caption-vl-workspace');
+  if (!vlWorkspaceBtn) throw new Error('Caption Assist VL Workspace control is missing.');
+  vlWorkspaceBtn.classList.toggle('hidden', !candidateVisible || !mediaSupported);
   var refreshMode = document.getElementById('editor-caption-refresh-sight-mode');
   if (!refreshMode) throw new Error('Sight refresh mode control is missing.');
   refreshMode.classList.add('hidden');
@@ -1143,6 +1146,12 @@ function wireCaptionVisionUi() {
   if (!details) throw new Error('Caption Assist Details is missing.');
   details.addEventListener('toggle', function () {
     if (details.open) syncCaptionVisionUi();
+  });
+  var vlWorkspaceBtn = document.getElementById('editor-caption-vl-workspace');
+  if (!vlWorkspaceBtn) throw new Error('Caption Assist VL Workspace control is missing.');
+  vlWorkspaceBtn.addEventListener('click', function () {
+    if (!state.currentItem) throw new Error('Select an image to inspect with VL.');
+    openVlWorkspace(state.currentItem, 'sight');
   });
   var refreshSight = document.getElementById('editor-caption-refresh-sight');
   if (!refreshSight) throw new Error('Per-item Sight refresh control is missing.');

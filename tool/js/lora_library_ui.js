@@ -339,7 +339,17 @@ function wireLoraLibrary() {
   });
   loraEl('json-edit').addEventListener('change', function () {
     var enabled = loraEl('json-edit').checked;
-    if (!enabled) {
+    if (enabled) {
+      // Keep the structured draft authoritative until it is valid. Never hide
+      // a new unnamed group behind an older JSON snapshot.
+      loraEl('json-edit').checked = false;
+      try { loraEl('options').value = JSON.stringify(loraOptions(), null, 2); }
+      catch (error) {
+        loraEl('save-state').textContent = String(error.message || error);
+        return;
+      }
+      loraEl('json-edit').checked = true;
+    } else {
       try {
         var parsed = JSON.parse(loraEl('options').value || '{}');
         if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object' ||

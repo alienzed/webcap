@@ -223,6 +223,22 @@
       exportButton.disabled = !selectedCount();
       exportButton.textContent = 'Create Set · ' + selectedCount() + ' images';
     }
+    var byId = new Map(session.eligible.map(function (c) {return [c.id,c];}));
+    var counts = new Map(session.eligible.map(function (c) {return [c.id,0];}));
+    session.rows.forEach(function(row) {
+      if (!selected.has(row.fileName)) return;
+      row.ids.forEach(function(id) { counts.set(id,(counts.get(id)||0)+1); });
+    });
+    root.querySelectorAll('[data-curation-concept]').forEach(function(node) {
+      var id = node.getAttribute('data-curation-concept'), concept = byId.get(id);
+      if (!concept) throw new Error('QA curation concept meter is stale: ' + id);
+      var count = counts.get(id)||0;
+      var total = node.querySelector('[data-curation-concept-count]');
+      var meter = node.querySelector('progress');
+      total.textContent = count + '/' + concept.count;
+      meter.value = Math.round(100 * strength(count,concept.role) /
+        strength(concept.count,concept.role));
+    });
   }
 
   function showProposal(host) {
@@ -247,6 +263,25 @@
     host.appendChild(element('p', 'qa-curation-helper',
       'Coverage is measured against available annotated evidence, not predicted LoRA accuracy.'));
     host.appendChild(element('p', 'qa-curation-summary', session.summary));
+    var coreFeatures = session.eligible.filter(function (c) {return c.role==='core';})
+      .sort(function(a,b) {return b.count-a.count;}).slice(0,9);
+    var conceptGrid = element('div', 'qa-curation-concepts');
+    coreFeatures.forEach(function (feature) {
+      var cell = element('div','qa-curation-concept');
+      cell.setAttribute('data-curation-concept',feature.id);
+      var heading = element('div','qa-curation-concept-heading');
+      heading.appendChild(element('span','',feature.label));
+      var total = element('strong','','0/' + feature.count);
+      total.setAttribute('data-curation-concept-count','');
+      heading.appendChild(total);
+      cell.appendChild(heading);
+      var meter = element('progress','qa-curation-concept-progress');
+      meter.max=100;meter.value=0;
+      meter.setAttribute('aria-label',feature.label + ' evidence coverage');
+      cell.appendChild(meter);
+      conceptGrid.appendChild(cell);
+    });
+    host.appendChild(conceptGrid);
     if (session.ignored) host.appendChild(element('p', 'qa-curation-helper',
       session.ignored + ' uncommon or redundant labels fell outside the Director inventory; they were not scored.'));
     if (session.missingSight) host.appendChild(element('p', 'qa-curation-helper',
@@ -317,6 +352,18 @@
       foot.appendChild(input);
       foot.appendChild(element('span', 'qa-curation-filename', fileName));
       card.appendChild(foot);
+      var features = row.ids.map(function(id) {
+        return session.eligible.find(function(concept) { return concept.id === id; });
+      }).filter(Boolean);
+      var primary = features.find(function(feature) { return feature.role === 'core'; });
+      if (!primary) primary = features[0];
+      var chip = element('div', 'qa-curation-card-insight',
+        primary ? (primary.role === 'core' ? 'Core · ' : 'Variation · ') + primary.label
+          : 'No prioritized concept');
+      chip.title = features.map(function(feature) {
+        return feature.group + ': ' + feature.label;
+      }).join(' · ');
+      card.appendChild(chip);
       grid.appendChild(card);
     });
     host.appendChild(grid);

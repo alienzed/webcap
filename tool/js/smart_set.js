@@ -406,8 +406,9 @@ function buildCreateSetItemsFromCurrentResults() {
     });
 }
 
-function runCreateSetFromResultsFlow() {
-  var items = buildCreateSetItemsFromCurrentResults();
+function runCreateSetFromResultsFlow(explicitItems) {
+  // QA curates a temporary selection without changing Focus Set semantics.
+  var items = Array.isArray(explicitItems) ? explicitItems.slice() : buildCreateSetItemsFromCurrentResults();
   if (!items.length) {
     setStatus(isSuperSetActive() ? 'No SuperSet results to copy.' : 'No visible media items to copy.');
     return;

@@ -1292,8 +1292,12 @@ def _runner(run_id):
                 try:
                     start_review(run_id, model_ref, judge_ref)
                     with _lock:
-                        review_thread = _active["quality:" + run_id]["thread"]
-                    review_thread.join()
+                        active_review = _active.get("quality:" + run_id)
+                        review_thread = active_review["thread"] if active_review else None
+                    # A fast local judge may already have finished and released
+                    # its active slot before start_review returns.
+                    if review_thread:
+                        review_thread.join()
                 except Exception as exc:
                     with _lock:
                         saved = _read_raw(run_id)

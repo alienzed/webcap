@@ -14,6 +14,8 @@ function harness() {
     document, window: dom.window,
     state: { folder: 'sets/demo', focusSet: null },
     getDirectorModelPreference: () => 'director-test',
+    qaCurrentCurationSignature: () => 'same-scope',
+    isPreviewVideoFileName: name => name.endsWith('.mp4'),
     mediaGridMediaUrl: row => '/test/' + row.fileName,
     buildSourceMediaRelPath: name => 'sets/demo/' + name,
     runCreateSetFromResultsFlow: items => calls.copied.push(items),
@@ -101,6 +103,7 @@ test('unattended Director curation creates a real checklist without equal quotas
 
 test('scope changes fail visibly instead of using a stale curated selection', async () => {
   const h = harness();
+  h.ctx.qaCurrentCurationSignature = () => 'first-scope';
   h.ctx.window.startQaCuration(entries(), 'training', 'first-scope');
   await new Promise(resolve => setTimeout(resolve, 40));
   h.ctx.window.renderQaCuration(h.root, 'new-scope');

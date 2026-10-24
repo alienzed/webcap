@@ -10,6 +10,7 @@ on:
       - 'tool/js/caption_vision.js'
       - 'tool/js/media_context_actions.js'
       - 'tests/test_vl_workspace_unified.py'
+      - 'tests/vl_workspace_tabs.test.cjs'
       - 'tests/test_media_context_actions_contract.py'
       - 'tool/js/primer_settings.js'
       - 'tool/server/vision_schema_assist.py'
@@ -96,6 +97,7 @@ jobs:
           node --check tool/js/workspace_shell.js
           node --check tool/js/set_vl_clone.js
           node --check tool/js/media_context_actions.js
+          node --test tests/vl_workspace_tabs.test.cjs
           node --check tool/js/set_scan.js
           node --check tool/js/caption_vision.js
           node --check tool/js/media_context_actions.js

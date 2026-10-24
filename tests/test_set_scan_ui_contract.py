@@ -124,3 +124,21 @@ def test_prepare_set_sight_retry_and_unlimited_output_contract():
     assert "item.issue || !item.structured" in scan
     assert "operation == \"save_sight_attempt\"" in app
     assert '"maxTokens": 1800' not in app
+
+
+def test_sight_review_large_live_preview_and_explicit_source_switch():
+    html = _read("tool/tool.html")
+    scan = _read("tool/js/set_scan.js")
+    backend = _read("tool/server/vision_schema_assist.py")
+    media = _read("tool/server/media.py")
+    assert 'id="set-scan-preview-image"' in html
+    assert 'id="set-scan-preview-video"' in html
+    assert 'id="set-scan-preview-text"' in html
+    assert 'id="sight-review-model"' in html
+    assert 'id="sight-review-activate"' in html
+    assert "operation:'sight_review'" in scan
+    assert "operation:'activate_sight'" in scan
+    assert "model_collection=\"vision_sights\"" in backend
+    assert "model_collection=\"vision_sight_attempts\"" in backend
+    assert 'next_info["vision_sights"] = cached["vision_sights"]' in media
+    assert 'next_info["vision_sight_attempts"] = cached["vision_sight_attempts"]' in media

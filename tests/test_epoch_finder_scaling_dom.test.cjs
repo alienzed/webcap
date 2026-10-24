@@ -125,3 +125,42 @@ test('screening skip action appears only for incomplete live epochs and preserve
   assert.equal(h.document.querySelector('[data-screening-epoch="1"] .epoch-screening-cases').firstChild, preserved,
     'captured frame DOM survives skip reconciliation');
 });
+
+test('wildcard variation cards preserve full text and column alignment through screening polls', () => {
+  const h = harness(4, 2);
+  h.campaign.rounds[0].columnLabels = [
+    'chain-link teardrop', 'teardrop with ring connectors',
+    'multi-strap chain-link teardrop'
+  ];
+  h.ctx.runMatrix(h.campaign);
+
+  const labels = h.document.querySelector('.epoch-screening-case-labels');
+  assert.ok(labels.classList.contains('epoch-screening-cases'),
+    'headers use the same grid columns as preview media');
+  const cards = Array.from(labels.children);
+  assert.equal(cards.length, h.campaign.rounds[0].seeds.length);
+  assert.deepEqual(cards.map(card => card.querySelector('.epoch-screening-case-number').textContent),
+    ['Variation 1', 'Variation 2', 'Variation 3']);
+  assert.deepEqual(cards.map(card => card.querySelector('.epoch-screening-case-choice').textContent),
+    h.campaign.rounds[0].columnLabels);
+  assert.ok(cards.every(card => card.querySelector('strong').title === card.querySelector('strong').textContent));
+
+  h.ctx.runMatrix(h.campaign);
+  assert.equal(h.document.querySelector('.epoch-screening-case-labels'), labels,
+    'progress polling keeps sticky headers mounted');
+  assert.equal(labels.firstElementChild, cards[0]);
+
+  h.campaign.rounds[0].columnLabels[1] = 'teardrop with a different connector';
+  h.host.dataset.signature = '';
+  h.ctx.runMatrix(h.campaign);
+  assert.equal(h.document.querySelectorAll('.epoch-screening-case-label').length, 3);
+  assert.equal(h.document.querySelectorAll('.epoch-screening-case-choice')[1].textContent,
+    'teardrop with a different connector');
+});
+
+test('variation headers retain sticky positioning and legible choice typography', () => {
+  const css = fs.readFileSync('tool/css/epoch_finder.css', 'utf8');
+  assert.match(css, /\.epoch-screening-case-labels\s*\{[^}]*position:\s*sticky/);
+  assert.match(css, /\.epoch-screening-case-choice\s*\{[^}]*font-size:\s*18px/);
+  assert.match(css, /\.epoch-screening-case-choice\s*\{[^}]*overflow-wrap:\s*anywhere/);
+});

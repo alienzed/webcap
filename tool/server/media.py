@@ -544,7 +544,7 @@ def merge_technical_media_metadata(folder_path, results):
     return len(results)
 
 
-def set_media_metadata_analysis_block(folder_path, file_name, block_name, block):
+def set_media_metadata_analysis_block(folder_path, file_name, block_name, block, model_collection=None):
     folder_path = Path(folder_path)
     file_name = str(file_name or "").strip()
     block_name = str(block_name or "").strip()
@@ -574,6 +574,18 @@ def set_media_metadata_analysis_block(folder_path, file_name, block_name, block)
         stat = media_path.stat()
         info["mtime"] = int(stat.st_mtime)
         info["size"] = int(stat.st_size)
+        if model_collection:
+            # One current observation/attempt for each model, written atomically
+            # with the active compatibility block. Preserve a legacy active Sight.
+            model = str(block.get("model") or "").strip()
+            if not model:
+                raise ValueError("Per-model metadata requires a model identity.")
+            slots = dict(info.get(model_collection) or {})
+            previous = info.get(block_name)
+            if isinstance(previous, dict) and str(previous.get("model") or "").strip():
+                slots.setdefault(str(previous["model"]), dict(previous))
+            slots[model] = dict(block)
+            info[model_collection] = slots
         info[block_name] = dict(block)
         metadata[file_name] = info
         write_media_metadata_file(metadata_path, metadata)
@@ -689,8 +701,12 @@ def _update_media_metadata_locked(folder_path, include_face_focus=False, include
         next_info = probe_media_metadata(entry, face_detector, selection_pose_analyzers)
         if unchanged and isinstance(cached, dict) and isinstance(cached.get("vision_sight"), dict):
             next_info["vision_sight"] = cached["vision_sight"]
+        if unchanged and isinstance(cached, dict) and isinstance(cached.get("vision_sights"), dict):
+            next_info["vision_sights"] = cached["vision_sights"]
         if unchanged and isinstance(cached, dict) and isinstance(cached.get("vision_sight_attempt"), dict):
             next_info["vision_sight_attempt"] = cached["vision_sight_attempt"]
+        if unchanged and isinstance(cached, dict) and isinstance(cached.get("vision_sight_attempts"), dict):
+            next_info["vision_sight_attempts"] = cached["vision_sight_attempts"]
         metadata[entry.name] = next_info
         generated_count += 1
         if (include_face_focus and is_face_focus_image(entry)) or (include_selection_pose and is_selection_pose_image(entry)):

@@ -89,10 +89,15 @@ test('unattended Director curation creates a real checklist without equal quotas
 
   const chosenBefore = Number(h.root.querySelector('[data-curation-selected]').textContent);
   assert.ok(chosenBefore > 0 && chosenBefore < 95);
+  const coreMeters = () => Array.from(h.root.querySelectorAll('[data-curation-concept] progress'))
+    .map(el => Number(el.value));
+  const metersBefore = coreMeters();
   const initial = h.root.querySelector('.qa-curation-card input[type=checkbox]');
   initial.checked = false;
   initial.dispatchEvent(new h.ctx.window.Event('change', {bubbles: true}));
   assert.equal(Number(h.root.querySelector('[data-curation-selected]').textContent), chosenBefore - 1);
+  assert.ok(coreMeters().some((value,i) => value < metersBefore[i]),
+    'removing an image changes the relevant visual concept meter');
 
   h.root.querySelector('[data-curation-create]').click();
   assert.equal(h.calls.copied.length, 1);
@@ -109,4 +114,19 @@ test('scope changes fail visibly instead of using a stale curated selection', as
   h.ctx.window.renderQaCuration(h.root, 'new-scope');
   assert.match(h.root.textContent, /selection changed/);
   assert.equal(h.root.querySelector('[data-curation-create]'), null);
+});
+
+test('video candidates render metadata-only thumbnails and remain opt-in', async () => {
+  const h = harness(), rows = entries().slice(0, 8);
+  rows[0].fileName = 'clip.mp4';
+  h.ctx.window.startQaCuration(rows, 'construction', 'same-scope');
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.equal(h.calls.errors.length, 0, h.calls.errors.join('; '));
+  const allImages = Array.from(h.root.querySelectorAll('.qa-curation-controls button'))
+    .find(button => button.textContent === 'All images');
+  allImages.click();
+  const video = h.root.querySelector('video.qa-curation-thumb');
+  assert.ok(video);
+  assert.equal(video.preload, 'metadata');
+  assert.ok(video.muted);
 });

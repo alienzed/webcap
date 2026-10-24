@@ -82,7 +82,9 @@ alone proof of a complete save. Existing pause/restart GPU behavior is frozen.
   (174–208) likewise require epochN directories; read_loss_events (60–95)
   requires TensorBoard train/loss and train/epoch_loss.
 - Fizgig saves NAME-NNNNNN.safetensors and a separate
-  NAME-NNNNNN-state directory; its actual per-step loss source is
+  NAME-NNNNNN-state directory. The isolated adapter now validates
+  training_state.json plus required state files, without treating the
+  folder name as a complete checkpoint; its actual per-step loss source is
   output_dir/.fizgig_loss_NAME.jsonl, records {s: step, e: epoch, l: loss,
   lr?: rate}, buffered 20 records per flush.
   Source: Fizgig src/fizgig/training/step_log.py.
@@ -135,8 +137,9 @@ then real video/audio captures without flattening or dropping items.
 
 ### P1 — A real Fizgig H3 training default is unsafe for our experiments
 
-- In #693 tool/server/training_fizgig.py, plan_h3 only emits
-  photo_blocks if manually supplied; otherwise it sends no block selection.
+- #693 originally omitted photo_blocks unless manually supplied, silently
+  allowing all-block image training. The safe follow-up explicitly defaults
+  image mode to photo_blocks=20-49; all-block training remains opt-in.
 - Fizgig src/fizgig/families/train.py _run_train: empty --train_blocks
   leaves blocks unrestricted (all trainable targets). The actual Fizgig H3
   Default preset uses photo_blocks=20-49, clip_blocks=20-49,
@@ -156,7 +159,9 @@ commands/config and trainer version with the run for repeatability.
 ### P1 — Current candidate analysis requires real evidence, not invented parity
 
 - Fizgig logs epoch N/M, average loss, step and s/step and writes per-step
-  JSONL as described above. Adapter parsing can provide honest progress.
+  JSONL as described above. The isolated Fizgig adapter now implements a
+  native epoch-log reader and an on-demand JSONL reader. Neither is yet
+  wired to the shared runner.
 - DP's loss curve analysis uses two TensorBoard scalar feeds with a
   wall-time-based epoch assignment. Fizgig JSONL already has epoch per
   step, but not the same TensorBoard event wall-time semantics.
@@ -246,6 +251,21 @@ to add dataclasses, DI, Protocol classes or an interface registry.
   WebCap does not manufacture or rewrite another trainer's checkpoint.
 - Keep trainer ID, effective recipe, model identity and output provenance
   in existing job/history records. Do not create a second state store.
+
+## Low-risk forward progress after this audit
+
+The isolated follow-up branch adds **only**:
+- an explicit H3 image-block default (20–49), preserving opt-in all-block runs;
+- ordered latent/text/train command phases, while retaining the current map;
+- a Fizgig epoch-log parser and on-demand native JSONL loss parser;
+- inspection of real LoRA paths and committed resumable states, rejecting
+  incomplete committed states without claiming process-exit freshness;
+- unit tests for these behaviors and the unchanged Diffusion Pipe selector.
+
+It does **not** modify the Diffusion Pipe runtime, preflight, Queue/GPU,
+process supervisor, resume protocol, candidate evaluation, or UI. The four-
+operation shared contract remains a target; new Fizgig helpers are not
+proof that the shared runner has been migrated or end-to-end verified.
 
 ## What MUST NOT become an abstraction
 

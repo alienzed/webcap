@@ -1689,3 +1689,55 @@ def test_screening_skip_epoch_requires_active_incomplete_epoch(tmp_path, monkeyp
     campaign["rounds"][0]["status"] = "complete"
     with pytest.raises(ValueError, match="active screening round"):
         epoch_finder._screening_skip_epoch(tmp_path, campaign, 1, 5)
+
+
+def test_campaign_test_status_uses_original_run_epoch_identity(tmp_path, monkeypatch):
+    """Campaign IDs are not checkpoint epochs; multi-run provenance must survive."""
+    campaign = {
+        "id": "abcdef123456", "mode": "campaign", "jobId": "fallback",
+        "rounds": [{"epochs": [101, 102]}],
+        "candidateMap": {
+            "101": {"jobId": "run-a", "epoch": 7},
+            "102": {"jobId": "run-b", "epoch": 7},
+        },
+    }
+    monkeypatch.setattr(epoch_finder, "_load", lambda *_: campaign)
+    monkeypatch.setattr(epoch_finder, "_managed_set_checkpoint_sources", lambda *_: [])
+    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot",
+                        lambda folder, job: (str(tmp_path), {"id": job}))
+    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda *_: tmp_path)
+    monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
+                        lambda *_: [{"epoch": 7, "status": "available"}])
+    def annotate(run, analysis):
+        analysis["savedArtifacts"][0]["inTestFolder"] = run["id"] == "run-b"
+        analysis["testFolderStatus"] = {"state": "available"}
+    monkeypatch.setattr(epoch_finder, "_annotate_candidate_test_folder_status", annotate)
+    result = epoch_finder.checkpoint_test_status(tmp_path, "abcdef123456")
+    assert result == {"inTest": {"101": False, "102": True}}
+
+
+def test_checkpoint_picker_status_preserves_run_identity(tmp_path, monkeypatch):
+    monkeypatch.setattr(epoch_finder, "_managed_set_checkpoint_sources", lambda *_: [])
+    monkeypatch.setattr(epoch_finder, "_candidate_run_snapshot",
+                        lambda folder, job: (str(tmp_path), {"id": job}))
+    monkeypatch.setattr(epoch_finder, "candidate_run_folder_path", lambda *_: tmp_path)
+    monkeypatch.setattr(epoch_finder, "saved_artifacts_for_run",
+                        lambda *_: [{"epoch": 1, "status": "available"},
+                                    {"epoch": 2, "status": "available"}])
+    def annotate(run, analysis):
+        for artifact in analysis["savedArtifacts"]:
+            artifact["inTestFolder"] = run["id"] == "run-b" and artifact["epoch"] == 2
+        analysis["testFolderStatus"] = {"state": "available"}
+    monkeypatch.setattr(epoch_finder, "_annotate_candidate_test_folder_status", annotate)
+    assert epoch_finder.command(tmp_path, "checkpoint_test_status",
+                                {"runIds": ["run-a", "run-b"]}) == {
+        "inTest": {}, "runs": {
+            "run-a": {"1": False, "2": False},
+            "run-b": {"1": False, "2": True},
+        }
+    }
+
+
+def test_checkpoint_test_status_rejects_missing_identity(tmp_path):
+    with pytest.raises(ValueError, match="campaign or selected training runs"):
+        epoch_finder.checkpoint_test_status(tmp_path)

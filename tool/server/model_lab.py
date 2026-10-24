@@ -13,7 +13,7 @@ from .permissions import normalize_path_permissions
 
 
 RUN_VERSION = 1
-ASSESSMENT_PROTOCOL = "webcap-model-assessment-structured-v2"
+ASSESSMENT_PROTOCOL = "webcap-model-assessment-structured-v3"
 # Existing identical production probes can be reused; legacy prose never qualifies as JSON evidence.
 LEGACY_COMPATIBLE_KINDS = {"language_synthesis", "language_challenge", "vision_open", "vision_group_aware"}
 ROOT_NAME = "model-lab-runs"
@@ -213,9 +213,13 @@ def capability_run_summaries():
                 entry["outputTokenSamples"].append(round(float(tokens), 2))
             if kind == "director_thinking":
                 entry["supported"] = status == "completed" and bool(str(result.get("reasoning") or "").strip())
-            if kind.startswith("director_scene_plan_") and status == "completed":
-                entry["verifiedOutputTokens"] = max(entry.get("verifiedOutputTokens", 0),
-                    int(result.get("verifiedOutputTokens") or 0))
+            if kind.startswith("director_scene_plan_"):
+                scene_assessment = result.get("scenePlanAssessment")
+                if isinstance(scene_assessment, dict):
+                    entry["scenePlanAssessment"] = _copy(scene_assessment)
+                if status == "completed":
+                    entry["verifiedOutputTokens"] = max(entry.get("verifiedOutputTokens", 0),
+                        int(result.get("verifiedOutputTokens") or 0))
             entry["status"] = next((value for value in (
                 "failed", "running", "interrupted", "skipped", "completed"
             ) if entry["counts"].get(value)), status)
@@ -721,19 +725,34 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                     elif "<think>" in text.lower():
                         failure_kind = "leakage"
                     try:
-                        expected = int(kind.rsplit("_", 1)[-1]) // 256
+                        budget = int(kind.rsplit("_", 1)[-1])
+                        expected = max(2, budget // 256)
+                        assessment = {
+                            "requestedScenes": expected, "actualScenes": None,
+                            "validScenes": 0, "detailedScenes": 0,
+                            "countMatched": None, "stressTest": budget > 2048,
+                            "finishReason": str(result.get("finishReason") or ""),
+                        }
+                        result["scenePlanAssessment"] = assessment
                         plan = json.loads(str(result.get("text") or ""))
                         scenes = plan.get("scenes") if isinstance(plan, dict) else None
-                        if not isinstance(scenes, list) or len(scenes) != max(2, expected):
-                            raise ValueError("Wrong number of Storyboard Scenes.")
+                        if not isinstance(scenes, list) or not scenes:
+                            raise ValueError("Storyboard JSON must contain a nonempty Scenes array.")
+                        assessment["actualScenes"] = len(scenes)
+                        assessment["countMatched"] = len(scenes) == expected
                         for scene in scenes:
                             if not isinstance(scene, dict) or not all(
                                 isinstance(scene.get(field), str) and scene[field].strip()
                                 for field in ("title", "summary", "prompt")
-                            ) or not isinstance(scene.get("suggestedDurationSeconds"), (int, float)):
+                            ) or not isinstance(scene.get("suggestedDurationSeconds"), (int, float)) or isinstance(scene["suggestedDurationSeconds"], bool):
                                 raise ValueError("Storyboard Scene is incomplete.")
-                            if len(scene["prompt"].split()) < 80 or not 6 <= scene["suggestedDurationSeconds"] <= 15:
-                                raise ValueError("Storyboard Scene has insufficient prompt detail or invalid duration.")
+                            if not 6 <= scene["suggestedDurationSeconds"] <= 15:
+                                raise ValueError("Storyboard Scene has invalid duration.")
+                            assessment["validScenes"] += 1
+                            if len(scene["prompt"].split()) >= 80:
+                                assessment["detailedScenes"] += 1
+                        # Scene count and prompt length are observed adherence measures,
+                        # not reasons to discard otherwise valid structured output.
                         if len(scenes) >= 3 and any(
                             scenes[i]["prompt"].strip() == scenes[i + 1]["prompt"].strip()
                             == scenes[i + 2]["prompt"].strip()
@@ -769,7 +788,8 @@ def _probe_job(run, *, kind, role, model_ref, file_name="", enqueue):
                     except (ValueError, TypeError, KeyError) as exc:
                         if not failure_kind:
                             failure_kind = "contract"
-                        validation_error = "Storyboard structured-output validation failed: " + str(exc)
+                        validation_error = ("Storyboard output capacity exhausted: " if failure_kind == "capacity"
+                                            else "Storyboard structured-output validation failed: ") + str(exc)
                     if failure_kind in {"empty", "garbled", "leakage"} and not validation_error:
                         validation_error = "Storyboard output pathology: " + failure_kind
                 if required_result and not isinstance(result.get(required_result), dict):

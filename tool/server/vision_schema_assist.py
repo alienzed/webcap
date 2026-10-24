@@ -602,8 +602,8 @@ def activate_vision_sight(folder, media_name, model):
         raise ValueError("Choose the Vision model whose Sight should be used.")
     data = sight_review_for_media(folder, media_name)
     sight = data["models"].get(model)
-    if not isinstance(sight, dict) or not sight.get("description") or not isinstance(sight.get("inventory"), dict):
-        raise ValueError("That model has no structured Sight to activate.")
+    if not isinstance(sight, dict) or not str(sight.get("description") or "").strip():
+        raise ValueError("That model has no saved Sight description to activate.")
     folder_path = _resolve_folder(folder)
     return set_media_metadata_analysis_block(folder_path, media_name, "vision_sight", sight,
                                              model_collection="vision_sights")

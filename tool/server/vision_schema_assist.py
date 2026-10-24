@@ -592,7 +592,9 @@ def sight_review_for_media(folder, media_name):
         models.setdefault(str(active["model"]), active)
     if latest_attempt.get("model"):
         attempts.setdefault(str(latest_attempt["model"]), latest_attempt)
+    stat = (folder_path / media_name).stat()
     return {"file": media_name, "activeModel": str(active.get("model") or ""),
+            "mediaMtime": int(stat.st_mtime), "mediaSize": int(stat.st_size),
             "models": models, "attempts": attempts}
 
 

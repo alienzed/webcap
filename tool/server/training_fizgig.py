@@ -90,7 +90,7 @@ def plan_h3(
     captured_dataset_toml, *, dataset_path, cache_root, output_dir, output_name,
     python_path, dit_path, vae_path, text_encoder_path, rank, learning_rate,
     epochs, save_every_n_epochs, seed, adapter_path="", ema_decay=0.0,
-    resume_state="", blocks_to_swap=-1,
+    resume_state="", blocks_to_swap=-1, photo_blocks="",
 ):
     """Create cache→text→train commands; nothing is executed or downloaded.
 
@@ -124,6 +124,11 @@ def plan_h3(
     resume_state = _absolute(resume_state, "resume state") if resume_state else ""
     if resume_state and not _STATE_SUFFIX.fullmatch(PurePosixPath(resume_state).name):
         raise ValueError("Fizgig resume requires an explicit *-NNNNNN-state directory.")
+    if resume_state and (PurePosixPath(resume_state).parent != PurePosixPath(output_dir)
+                         or not PurePosixPath(resume_state).name.startswith(output_name + "-")):
+        raise ValueError("Fizgig resume state must belong to this exact output run.")
+    if photo_blocks and not re.fullmatch(r"\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*", str(photo_blocks)):
+        raise ValueError("Fizgig photo block targeting must be comma-separated block indices/ranges.")
     def cmd(parts):
         return " ".join(shlex.quote(str(item)) for item in parts)
     root = [python_path, "src/fizgig/families/cache.py", "--family", "minimax", "--dataset_config", dataset_path]
@@ -141,6 +146,8 @@ def plan_h3(
         "--precision", "auto", "--blocks_to_swap", blocks_to_swap,
         "--optimizer_type", "adamw", "--ema_decay", ema_decay,
     ]
+    if photo_blocks:
+        train += ["--family_option", "photo_blocks=" + str(photo_blocks)]
     if adapter_path:
         train += ["--training_adapter", adapter_path]
     if resume_state:

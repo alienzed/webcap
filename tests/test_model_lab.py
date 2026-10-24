@@ -530,3 +530,65 @@ def test_assessment_preview_route_is_read_only():
     assert response.status_code == 200
     assert response.get_json()["plan"] == {"missing": 4, "retry": 0, "total": 4}
     assert model_lab.list_runs() == []
+
+
+def test_deep_assessment_automatically_judges_each_director_after_probes(monkeypatch):
+    from tool.server import model_lab_quality
+    directors = [_director("local::first"), _director("local::second")]
+    run = model_lab._new_run_payload({
+        "depth": "deep", "directorModels": directors,
+        "judgeModelRef": "local::judge",
+    })
+    assert run["autoJudgeModelRef"] == "local::judge"
+    model_lab._write_run(run)
+    seen = []
+
+    monkeypatch.setattr(model_lab, "_run_director_model", lambda *_: None)
+    monkeypatch.setattr(model_lab, "_retry_failed_model", lambda *_: None)
+    monkeypatch.setattr(model_lab, "_active_stop_event", lambda *_: threading.Event())
+
+    class ReviewThread:
+        def __init__(self, job_id):
+            self.job_id = job_id
+
+        def join(self):
+            seen.append(("joined", self.job_id))
+            with model_lab._lock:
+                model_lab._active.pop("quality:" + run["id"], None)
+
+    def start_review(run_id, model_ref, judge_ref):
+        assert model_lab._active == {}, "Review must wait until probe worker releases admission."
+        assert judge_ref == "local::judge"
+        seen.append(("review", model_ref))
+        with model_lab._lock:
+            model_lab._active["quality:" + run_id] = {
+                "thread": ReviewThread(model_ref), "stopEvent": threading.Event(), "jobId": "",
+            }
+
+    monkeypatch.setattr(model_lab_quality, "start_review", start_review)
+    model_lab._runner(run["id"])
+    assert model_lab.get_run(run["id"])["status"] == "completed"
+    assert seen == [("review", "local::first"), ("joined", "local::first"),
+                    ("review", "local::second"), ("joined", "local::second")]
+
+
+def test_deep_judge_start_failure_is_recorded_without_losing_probe_results(monkeypatch):
+    from tool.server import model_lab_quality
+    run = model_lab._new_run_payload({
+        "depth": "deep", "directorModels": [_director()],
+        "judgeModelRef": "local::judge",
+    })
+    model_lab._write_run(run)
+    monkeypatch.setattr(model_lab, "_run_director_model", lambda *_: None)
+    monkeypatch.setattr(model_lab, "_retry_failed_model", lambda *_: None)
+    monkeypatch.setattr(model_lab, "_active_stop_event", lambda *_: threading.Event())
+
+    def denied(*_args):
+        raise RuntimeError("Judge runtime unavailable")
+
+    monkeypatch.setattr(model_lab_quality, "start_review", denied)
+    model_lab._runner(run["id"])
+    saved = model_lab.get_run(run["id"])
+    assert saved["status"] == "completed"
+    assert saved["qualityReviews"][_director()["modelRef"]]["status"] == "failed"
+    assert "Judge runtime unavailable" in saved["qualityReviews"][_director()["modelRef"]]["error"]

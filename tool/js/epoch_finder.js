@@ -161,6 +161,9 @@
   var screeningTestStatusCampaign = '';
   var screeningTestStatus = {};
   var screeningTestStatusVersion = 0;
+  var pickerTestStatus = {};
+  var pickerTestStatusKey = '';
+  var pickerTestStatusVersion = 0;
   var screeningCopyPending = new Set();
   var screeningRatingPending = new Set();
   var screeningSkipPending = new Set();
@@ -207,6 +210,11 @@
       }
     }
     mode=next;
+    if(previousMode!==next && (next==='finder'||next==='screening')) {
+      screeningTestStatusCampaign='';
+      screeningTestStatus={};
+      pickerTestStatusKey='';
+    }
     var finder=next==='finder'||next==='screening';
     if (finder) {
       screeningModeUi();
@@ -544,6 +552,23 @@
     els('run').value=selected.length?selected[0].jobId:'';
     els('run-detail').textContent=selected.length+' runs · '+chosenEpochs().length+' checkpoints selected';
   }
+  function refreshPickerTestStatus(force) {
+    if (!currentFolder || (mode!=='screening' && mode!=='finder')) return Promise.resolve();
+    var folder=currentFolder, model=String(window.getWorkingModelProfileId()||'');
+    var ids=selectedRunEntries().map(function(run){return run.jobId;});
+    var key=JSON.stringify([folder,model,ids]);
+    if (!force && pickerTestStatusKey===key) return Promise.resolve();
+    pickerTestStatusKey=key;
+    pickerTestStatus={};
+    var version=++pickerTestStatusVersion;
+    if (!ids.length) { drawEpochPicker(); return Promise.resolve(); }
+    return api('checkpoint_test_status',{runIds:ids},folder).then(function(response){
+      if(version!==pickerTestStatusVersion || folder!==currentFolder ||
+         model!==String(window.getWorkingModelProfileId()||''))return;
+      pickerTestStatus=response.runs||{};
+      drawEpochPicker();
+    }).catch(function(exc){if(version===pickerTestStatusVersion)error(exc);throw exc;});
+  }
   function drawEpochPicker() {
     drawRuns();
     var host=els('epoch-picker'),selected=selectedRunEntries();
@@ -606,6 +631,9 @@
       region.querySelectorAll('[data-epoch-choice]').forEach(function(tick){
         var chosen=runEpochSelections[run.jobId].has(Number(tick.dataset.epochChoice));
         tick.classList.toggle('is-selected',chosen);
+        var inTest=pickerTestStatus[run.jobId]&&pickerTestStatus[run.jobId][tick.dataset.epochChoice]===true;
+        tick.classList.toggle('is-in-test',!!inTest);
+        tick.title='Epoch '+tick.dataset.epochChoice+(inTest?' · In Test Generations':'');
         tick.setAttribute('aria-pressed',String(chosen));
       });
       var at=host.children[index];
@@ -613,6 +641,8 @@
       existing.delete(run.jobId);
     });
     existing.forEach(function(node){node.remove();});
+    if (pickerTestStatusKey!==JSON.stringify([currentFolder,String(window.getWorkingModelProfileId()||''),selected.map(function(item){return item.jobId;})]))
+      refreshPickerTestStatus(false).catch(function(){});
   }
 
   function reviewWizard() {
@@ -1032,7 +1062,7 @@
       var extra = (campaign.referenceEvaluation || {});
       var evidence = (extra.rvn ? ' · RVN ' + observed.filter(function (u) { return u.referenceComplete; }).length + '/' + observed.length : '') +
         (extra.dino ? ' · DINO ' + observed.filter(function (u) { return u.dinoComplete; }).length + '/' + observed.length : '');
-      return '<button type="button" class="epoch-finder-ranking-row" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch"><span class="rank">#' + (index + 1) +
+      return '<button type="button" class="epoch-finder-ranking-row' + (screeningTestStatus[String(entry.epoch)]===true?' is-in-test':'') + '" data-inspect-epoch="' + entry.epoch + '" title="Inspect all retained tests for this epoch' + (screeningTestStatus[String(entry.epoch)]===true?' · In Test Generations':'') + '"><span class="rank">#' + (index + 1) +
         '</span><span class="epoch">' + escape(candidateLabel(campaign, entry.epoch)) + (recommended.has(entry.epoch) && entry.score != null ? ' · recommended' : '') + (entry.active === false ? ' · sidelined' : '') +
         '</span><span class="epoch-finder-score-track"><i style="width:' +
         Math.round((entry.score || 0) * 100) + '%"></i></span><span class="percent">' +
@@ -1235,10 +1265,10 @@
         '<img loading="lazy" src="' + escape(href) + '" alt="Approved training reference: ' + escape(name) + '">' +
         '<small>' + escape(name) + '</small></a>';
     }).join('');
-    node.innerHTML = '<div class="epoch-finder-inspect-top"><strong>' + escape(candidateLabel(campaign, unit.epoch)) +
+    node.innerHTML = '<div class="epoch-finder-inspect-top' + (screeningTestStatus[String(unit.epoch)]===true?' is-in-test':'') + '"><strong>' + escape(candidateLabel(campaign, unit.epoch)) +
       ' · Round ' + unit.round + ' / Test ' + (unit.case+1) + '</strong><span>' +
       (inspectedFrame+1) + ' / ' + units.length + '</span></div>' +
-      (stagedOrigin(campaign, unit.epoch) ? '' :
+      (stagedOrigin(campaign, unit.epoch) || screeningTestStatus[String(unit.epoch)]===true ? '' :
         '<div class="epoch-finder-inspect-actions"><button type="button" data-copy-epoch-to-test>Copy ' +
         escape(candidateLabel(campaign, unit.epoch)) + ' to Test Generations</button></div>') +
       (hasRunOrigin(campaign, unit.epoch) ?
@@ -1738,18 +1768,19 @@
   }
 
   function refreshScreeningTestStatus(campaign, force) {
-    if (!campaign || campaign.mode !== 'manual') return Promise.resolve();
+    if (!campaign) return Promise.resolve();
     var folder=currentFolder, id=campaign.id, identity=folder+':'+id;
     if (!force && screeningTestStatusCampaign===identity) return Promise.resolve();
     if (screeningTestStatusCampaign!==identity) screeningTestStatus={};
     screeningTestStatusCampaign=identity;
     var version=++screeningTestStatusVersion;
-    return api('screening_test_status',{campaignId:id},folder).then(function(response){
+    return api('checkpoint_test_status',{campaignId:id},folder).then(function(response){
       if (version!==screeningTestStatusVersion || currentFolder!==folder ||
           !campaignState || campaignState.id!==id) return;
       screeningTestStatus=response.inTest||{};
       els('manual-matrix').dataset.signature='';
-      screeningMatrix(campaignState);
+      if(campaignState.mode==='manual')screeningMatrix(campaignState);
+      else { ranking(campaignState); inspectFrame(campaignState); }
     }).catch(function(exc){
       if (version===screeningTestStatusVersion && currentFolder===folder &&
           campaignState && campaignState.id===id) error(exc);
@@ -1780,6 +1811,7 @@
       return data;
     });}).then(function(){
       if (currentFolder!==folder || !campaignState || campaignState.id!==id) return;
+      pickerTestStatusKey='';
       return refreshScreeningTestStatus(campaignState,true).then(function(){
         if (screeningTestStatus[candidate]!==true)
           throw new Error('Copied checkpoint could not be confirmed in Test Generations.');
@@ -1866,6 +1898,7 @@
       return (x&&x.epoch||a)-(y&&y.epoch||b)||a-b;
     });
     var signature=JSON.stringify([campaign.id,campaign.status,manualSelectedRound,rows,Array.from(kept),sort,
+      screeningTestStatus,
       plan.skippedEpochs||[],Array.from(screeningSkipPending),
       roundUnits.map(function (u) {
         return [u.epoch,u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
@@ -2172,7 +2205,7 @@
 
   function render(campaign) {
     campaignState = campaign;
-    if (campaign.mode==='manual') refreshScreeningTestStatus(campaign,false).catch(function(){});
+    refreshScreeningTestStatus(campaign,false).catch(function(){});
     function median(values) {
       if (!values.length) return null;
       var sorted = values.slice().sort(function (a,b) { return a-b; });
@@ -2275,6 +2308,7 @@
       campaigns = response.campaigns || [];
       timingProfiles = response.timings || {};
       setup(); list();
+      refreshPickerTestStatus(false).catch(function(){});
       if(activeCampaign&&campaigns.some(function(c){
         return c.id===activeCampaign&&c.modelId===modelAtRequest&&
           ((c.mode==='manual')===(mode==='screening'));
@@ -2397,7 +2431,7 @@
         document.getElementById('test-workspace-return-'+target).classList.add('hidden');
       });
     }
-    if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
+    if (changed) { pickerTestStatusKey='';pickerTestStatus={};pickerTestStatusVersion++;listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
     if (changed) { campaignDefaultsKey='';screeningSettingsKey='';screeningSettingsRequest=null;screeningDraftContext=''; screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningSkipPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; resetMethodWorkspaces(); runs = []; campaigns = []; stagedFiles = []; stagedModel = ''; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
@@ -2441,7 +2475,7 @@
     });
   });
   els('refresh').onclick = function(){
-    screeningTestStatusCampaign='';
+    screeningTestStatusCampaign='';pickerTestStatusKey='';
     refresh();
   };
   els('new').onclick = function () {
@@ -2534,8 +2568,9 @@
         onClose:function(){
           if(currentFolder!==folder) return;
           refresh();
-          if(campaignState && campaignState.mode==='manual')
-            refreshScreeningTestStatus(campaignState,true).catch(function(){});
+          pickerTestStatusKey='';
+          refreshPickerTestStatus(true).catch(function(){});
+          if(campaignState) refreshScreeningTestStatus(campaignState,true).catch(function(){});
         }
       });
       return;
@@ -2651,7 +2686,10 @@
           if (!response.ok || !value.ok) throw new Error(value.error || 'Could not copy checkpoint.');
           return value;
         }); }).then(function () {
-          if (currentFolder === folder && campaignState?.id === campaignId) showMode('tests');
+          if (currentFolder === folder && campaignState?.id === campaignId) {
+          screeningTestStatusCampaign='';pickerTestStatusKey='';
+          showMode('tests');
+        }
         }).catch(function (exc) {
           button.disabled = false;
           button.textContent = 'Copy epoch ' + epoch + ' to Test Generations';

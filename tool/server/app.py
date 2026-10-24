@@ -1673,6 +1673,34 @@ def qa_review_route():
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
+@app.route("/fs/qa/curate", methods=["POST"])
+def qa_curate_route():
+    """Optional QA-only Director interpretation of aggregated Set concepts."""
+    data = request.get_json(silent=True) or {}
+    try:
+        files = data.get("files")
+        if not isinstance(files, list) or not files or len(files) > 5000:
+            raise ValueError("QA Curation requires a non-empty file selection.")
+        names = [str(value or "").strip() for value in files]
+        if len(names) != len(set(names)) or any(not name for name in names):
+            raise ValueError("QA Curation contains duplicate or empty filenames.")
+        available = set(list_media_files(str(data.get("folder") or "").strip()))
+        if any(name not in available for name in names):
+            raise ValueError("QA Curation selection includes media outside the current Set.")
+        from .qa_curation import build_curation_request
+        contract = build_curation_request(
+            data.get("concepts"), data.get("trainingFocus"), len(names)
+        )
+        job = enqueue_llm(
+            "qa", str(data.get("model") or "").strip(), contract,
+            context={}, label="QA · Curate Training Set"
+        )
+        return jsonify({"ok": True, "job": job}), 202
+    except Exception as exc:
+        app.logger.exception("QA CURATION FAILED: %s", exc)
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
 @app.route("/fs/qa/deep-scan", methods=["POST"])
 def qa_deep_scan_route():
     data = request.get_json(silent=True) or {}

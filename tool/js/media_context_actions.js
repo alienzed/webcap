@@ -486,42 +486,12 @@ function buildMediaContextMenuActions(mediaItem, key) {
   });
   if (isCaptionVisionSupportedMedia(fileName)) {
     actions.push({
-      label: 'Describe with VL',
+      label: 'VL Workspace...',
       run: function () {
-        var select = state.currentItem && state.currentItem.key === mediaItem.key
-          ? Promise.resolve()
-          : selectPathMedia(mediaItem);
-        return select.then(function () {
-          return runVisionImageCaption();
-        }).catch(function (err) {
-          reportConsoleError('Vision Caption', err);
-          setStatus('Vision Caption failed: ' + String(err && err.message ? err.message : err));
-        });
+        openVlWorkspace(mediaItem, 'sight');
       }
     });
   }
-  if (isCaptionVisionSupportedMedia(fileName)) {
-    actions.push({
-      label: 'Ask VL...',
-      run: function () {
-        var select = state.currentItem && state.currentItem.key === mediaItem.key
-          ? Promise.resolve()
-          : selectPathMedia(mediaItem);
-        return select.then(function () {
-          return openAskVisionQuestion();
-        }).catch(function (err) {
-          reportConsoleError('Ask VL', err);
-          setStatus('Ask VL failed: ' + String(err && err.message ? err.message : err));
-        });
-      }
-    });
-  }
-  actions.push({
-    label: 'View Saved Intelligence',
-    run: function () {
-      openSavedIntelligenceForMedia(mediaItem);
-    }
-  });
   actions.push({
     label: 'Copy Tags',
     run: function () {

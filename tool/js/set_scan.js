@@ -12,6 +12,8 @@
     currentVisionJobId: '',
     activityId: '',
     activityStartedAt: 0,
+    activityFinishedAt: 0,
+    sightStartedAt: 0,
     currentRawResponse: null,
     rawResponses: [],
     rawResponseIndex: -1,
@@ -80,6 +82,43 @@
 
   function itemsCountNeedingAttention(items) {
     return items.filter(function (item) { return !!item.issue || !item.structured; }).length;
+  }
+
+  var setSightTimingTimer = 0;
+
+  function formatSetSightDuration(seconds) {
+    var value = Math.max(0, Math.floor(Number(seconds) || 0));
+    if (value < 60) return value + 's';
+    var minutes = Math.floor(value / 60);
+    if (minutes < 60) return minutes + 'm ' + String(value % 60).padStart(2, '0') + 's';
+    return Math.floor(minutes / 60) + 'h ' + String(minutes % 60).padStart(2, '0') + 'm';
+  }
+
+  function estimatedSetSightRemainingSeconds() {
+    if (!setScanState.running || setScanState.stopRequested || setScanState.phase !== 'scanning-open' ||
+        !setScanState.sightStartedAt || setScanState.completed < 1 ||
+        setScanState.total <= setScanState.completed) return null;
+    // Only count scan time: Set preparation and model discovery have different costs.
+    var scanElapsed = Math.max(0, Date.now() / 1000 - setScanState.sightStartedAt);
+    return Math.ceil(scanElapsed / setScanState.completed * (setScanState.total - setScanState.completed));
+  }
+
+  function updateSetSightTiming() {
+    var timing = el('set-scan-timing');
+    if (!timing) throw new Error('Set Sight timing display is missing.');
+    if (!setScanState.activityStartedAt) {
+      timing.hidden = true;
+      return;
+    }
+    var now = setScanState.activityFinishedAt || Date.now() / 1000;
+    var label = 'Elapsed ' + formatSetSightDuration(now - setScanState.activityStartedAt);
+    var remaining = estimatedSetSightRemainingSeconds();
+    if (remaining !== null) label += ' · ETA ~' + formatSetSightDuration(remaining) + ' remaining';
+    else if (setScanState.running && !setScanState.stopRequested &&
+             setScanState.phase === 'scanning-open' && setScanState.total > 0 &&
+             setScanState.completed === 0) label += ' · ETA after first Sight check';
+    timing.textContent = label;
+    timing.hidden = false;
   }
 
   function renderSetIntelligence() {
@@ -190,6 +229,8 @@
     }
     if (setScanState.phase === 'complete') percent = 100;
     progressFill.style.width = String(percent) + '%';
+    progressFill.parentElement.setAttribute('aria-valuenow', String(percent));
+    updateSetSightTiming();
 
     if (!coverage.known) {
       setEvidenceCard(openCard, openBadge, openCount, openDetail, 'checking', 'Checking', '—', 'Looking for saved Sight…');
@@ -246,6 +287,9 @@
     if (!setScanState.running || !setScanState.activityId) return;
     var total = Number(setScanState.total || 0);
     var completed = Number(setScanState.completed || 0);
+    var remaining = estimatedSetSightRemainingSeconds();
+    var progressLabel = total > 0 ? completed + ' / ' + total + ' Sight checks attempted' : '';
+    if (remaining !== null) progressLabel += ' · ETA ~' + formatSetSightDuration(remaining) + ' remaining';
     window.publishActivityProgress({
       id: setScanState.activityId,
       kind: 'set-intelligence',
@@ -253,7 +297,7 @@
       status: setScanState.stopRequested ? 'stopping' : 'running',
       detail: String(message || ''),
       phase: String(title || 'Preparing Sight'),
-      progressLabel: total > 0 ? completed + ' / ' + total + ' Sight checks attempted' : '',
+      progressLabel: progressLabel,
       progress: total > 0 ? { completed: completed, total: total } : null,
       childJobId: setScanState.currentVisionJobId,
       startedAt: setScanState.activityStartedAt
@@ -264,7 +308,9 @@
     if (!setScanState.activityId) return;
     window.finishActivityProgress(setScanState.activityId, status);
     setScanState.activityId = '';
-    setScanState.activityStartedAt = 0;
+    setScanState.activityFinishedAt = Date.now() / 1000;
+    if (setSightTimingTimer) window.clearInterval(setSightTimingTimer);
+    setSightTimingTimer = 0;
   }
 
   function setSetIntelligenceStatus(title, message) {
@@ -540,6 +586,7 @@
       setScanState.total = pending.length;
       setScanState.completed = 0;
       setScanState.phase = 'scanning-open';
+      setScanState.sightStartedAt = pending.length ? Date.now() / 1000 : 0;
       if (!pending.length) {
         reportConsoleInfo('Set Intelligence', 'Sight: reusing existing evidence for ' + files.length + ' items.');
         setScanState.total = 1;
@@ -626,7 +673,10 @@
     setScanState.total = 0;
     setScanState.phase = 'preparing';
     setScanState.activityStartedAt = Date.now() / 1000;
+    setScanState.activityFinishedAt = 0;
+    setScanState.sightStartedAt = 0;
     setScanState.activityId = 'set-intelligence:' + String(Date.now());
+    setSightTimingTimer = window.setInterval(updateSetSightTiming, 1000);
     setSetIntelligenceStatus('Understanding Set', 'Preparing ' + String(files.length) + ' media item' + (files.length === 1 ? '' : 's') + '…');
     reportConsoleInfo('Set Intelligence', 'Scan started: ' + files.length + ' visible items; mode ' + (selectedMode || 'missing Sight') + '.');
 

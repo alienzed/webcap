@@ -219,7 +219,7 @@
       },
       "➕ Add Lora": "",
       "model": [
-        "161",
+        "127",
         0
       ],
       "clip": [
@@ -269,20 +269,6 @@
     "class_type": "ImpactWildcardProcessor",
     "_meta": {
       "title": "ImpactWildcardProcessor"
-    }
-  },
-  "161": {
-    "inputs": {
-      "sage_attention": "auto",
-      "allow_compile": false,
-      "model": [
-        "127",
-        0
-      ]
-    },
-    "class_type": "PathchSageAttentionKJ",
-    "_meta": {
-      "title": "Patch Sage Attention KJ"
     }
   },
   "162": {

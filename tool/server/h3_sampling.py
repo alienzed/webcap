@@ -65,14 +65,17 @@ def submitted_sampling(workflow, mode, *, allow_legacy_test_clip=False):
                 raise ValueError("H3 Turbo requires exactly one Turbo LoRA at strength 1.0.")
         elif turbo:
             raise ValueError("H3 Quality must not load a Turbo LoRA.")
-        # Protect the effective loader wiring, not merely the template's list of names.
-        expected_source = ["148", 0] if single is not None else ["161", 0]
+        # Quality bypasses Sage Attention; Turbo retains the patch before LoRA loading.
+        if mode == "quality" and "161" in workflow:
+            raise ValueError("H3 Quality must bypass Sage Attention.")
+        base_model_source = ["161", 0] if mode == "turbo" else ["127", 0]
+        expected_source = ["148", 0] if single is not None else base_model_source
         if power["model"] != expected_source:
             raise ValueError("H3 LoRA loader is not connected to the effective model.")
         if power["clip"] != (["148", 1] if single is not None else ["128", 0]):
             raise ValueError("H3 LoRA loader is not connected to the effective CLIP.")
         if single is not None and (
-            single["inputs"]["model"] != ["161", 0]
+            single["inputs"]["model"] != base_model_source
             or single["inputs"]["clip"] != ["128", 0]
         ):
             raise ValueError("H3 standard LoRA node does not receive the expected model and CLIP.")

@@ -135,7 +135,7 @@ def build_workflow(template, prompt, comfy_lora_name, settings=None, strength_mo
             lora_inputs["strength_clip"] = strength_clip
         else:
             power_inputs = workflow["138"]["inputs"]
-            power_inputs["model"] = ["161", 0]
+            power_inputs["model"] = workflow["148"]["inputs"]["model"]
             power_inputs["clip"] = ["128", 0]
             workflow.pop("148", None)
         workflow["115"]["inputs"]["aspect_ratio"] = selected["aspectRatio"]

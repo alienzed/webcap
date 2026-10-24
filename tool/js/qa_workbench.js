@@ -1821,7 +1821,7 @@
   }
 
   function qaSetView(view) {
-    qaWorkbenchState.view = ['overview', 'browse', 'report'].indexOf(view) !== -1 ? view : 'overview';
+    qaWorkbenchState.view = ['overview', 'browse', 'report', 'curate'].indexOf(view) !== -1 ? view : 'overview';
     renderQaWorkbench();
   }
 
@@ -1944,9 +1944,10 @@
         return item && qaFocusReviewHasAction(item.key, file, item.caption || '', finding);
       });
     });
+    heroActions.appendChild(qaCreateButton('Curate Training Set', 'qa-primary', 'qa-curate-start'));
     heroActions.appendChild(qaCreateButton(
       qaWorkbenchState.deepScanSessionActive ? 'Deep QA running' : 'Run Deep QA',
-      'qa-primary', 'qa-start'
+      '', 'qa-start'
     ));
     if (reviewReady && !qaWorkbenchState.deepScanSessionActive) {
       heroActions.appendChild(qaCreateButton('Review & Fix saved findings', '', 'qa-focus-review'));
@@ -3087,7 +3088,9 @@
     var currentItems = qaGetTrainingItems();
     // Prune/Duplicate utilities run only when explicitly opened; QA reads ready results.
     var data = qaRefreshComputedState(!!force);
-    if (qaWorkbenchState.view === 'browse') {
+    if (qaWorkbenchState.view === 'curate') {
+      renderQaCuration(root, qaBuildDeepScanSignature(data.items));
+    } else if (qaWorkbenchState.view === 'browse') {
       qaRenderBrowse(root, data.items);
     } else if (qaWorkbenchState.view === 'report') {
       qaRenderReport(root, data.items, data.health);
@@ -3203,6 +3206,17 @@
   }
 
   function qaHandleAction(action, value) {
+    if (action === 'qa-curate-start') {
+      try {
+        startQaCuration(qaBuildDeepScanItems(qaGetTrainingItems()),
+          qaWorkbenchState.trainingFocus, qaBuildDeepScanSignature(qaGetTrainingItems()));
+      } catch (err) {
+        window.reportConsoleError('QA Curation', err);
+        qaWorkbenchState.statusMessage = String(err.message || err);
+        renderQaWorkbench();
+      }
+      return;
+    }
     if (action === 'qa-start') {
       // Explicit user intent starts the existing progressive scan; review follows
       // saved and arriving findings without introducing a second QA engine.
@@ -3393,6 +3407,8 @@
     renderQaWorkbench(true);
   });
 
+  window.qaShowCuration = function () { qaWorkbenchState.view = 'curate'; renderQaWorkbench(); };
+  window.qaShowOverviewFromCuration = function () { qaWorkbenchState.view = 'overview'; renderQaWorkbench(); };
   window.renderQaWorkbench = renderQaWorkbench;
   window.refreshQaWorkbench = function () { renderQaWorkbench(true); };
   window.wireQaWorkbench = wireQaWorkbench;

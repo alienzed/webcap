@@ -9,7 +9,6 @@ def test_native_regular_and_campaign_launch_controls():
     js = (ROOT / "tool/js/test_generations.js").read_text(encoding="utf-8")
     finder = (ROOT / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
     for key in ("test-generations-inline-count", "test-generations-inline-auto-vl",
-                "epoch-finder-back-to-tests",
                 "test-generations-prompt", "test-generations-aspect",
                 "test-generations-megapixels", "test-generations-duration",
                 "test-generations-seed",
@@ -25,8 +24,11 @@ def test_native_regular_and_campaign_launch_controls():
     assert "function testRunCriteria()" in js
     assert "refreshSessions();" in js
     assert "def enqueue_repeated(folder_path, criteria):" in (ROOT / "tool/server/epoch_test_bench.py").read_text(encoding="utf-8")
-    assert "epoch-finder-back-to-tests" in finder
-    assert "showMode('tests')" in finder
+    assert 'id="test-workspace-main-tabs"' in html
+    assert 'id="test-workspace-return-finder"' in html
+    assert 'id="test-workspace-return-tests"' in html
+    assert "showMode(button.dataset.testWorkspaceMode" in finder
+    assert "epoch-finder-back-to-tests" not in finder
     assert "window.epochFinderShowMode = showMode" in finder
 
 

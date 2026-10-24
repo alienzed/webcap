@@ -255,7 +255,6 @@
   }
   window.epochFinderShowMode = showMode;
   window.epochFinderCurrentMode = function () { return mode; };
-  document.getElementById('epoch-finder-back-to-tests').onclick = function () { showMode('tests'); };
   function renderSecondsEstimate(modelId, durationSeconds, megapixels) {
     var key = [modelId, Number.isFinite(megapixels) ? String(megapixels) : String(document.getElementById('test-generations-dimensions')?.value || ''), String(durationSeconds)].join('|');
     var samples = timingProfiles[key] && timingProfiles[key].seconds;

@@ -84,3 +84,30 @@ def test_cross_surface_drill_down_has_contextual_return_without_new_shell():
     assert "window.epochFinderShowMode(\"tests\",origin!==\"tests\"?{returnTo:origin}:null);" in tests
     assert "function backToTestResults()" in inspector
     assert "back.onclick=window.epochInfoShowSession" in inspector
+
+
+def test_retired_navigation_is_gone_but_live_owners_remain():
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    finder = (ROOT / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    assert 'id="epoch-finder-back-to-tests"' not in html
+    assert "epoch-finder-back-to-tests" not in finder
+    assert "epoch-finder-back-to-tests" not in css
+    # The removed intro belonged to the shared Screening/Campaign view only.
+    campaign_markup = html.split('<section id="epoch-finder-screen"', 1)[1].split('<div class="epoch-finder-layout">', 1)[0]
+    assert 'epoch-finder-intro' not in campaign_markup
+    assert 'aria-label="Manual Screening and Campaigns"' in campaign_markup
+    assert 'id="epoch-finder-run"' in html  # Hidden compatibility selector is still live.
+    assert 'id="test-references-screen"' in html
+    assert '#test-generations-pane > #test-references-screen > .epoch-finder-intro' in css
+    assert 'id="test-workspace-return-tests"' in html
+    assert 'id="test-workspace-return-finder"' in html
+
+
+def test_evaluation_copy_and_css_match_current_navigation():
+    html = (ROOT / "tool/tool.html").read_text(encoding="utf-8")
+    css = (ROOT / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
+    assert "Sampling settings come from Prompt Tests." in html
+    assert "EVALUATION / REFERENCES" in html
+    assert ".test-workspace-pane-switcher" not in css
+    assert "#test-workspace-main-tabs" in css

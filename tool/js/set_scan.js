@@ -861,7 +861,6 @@
     el('vl-workspace-sight').classList.toggle('hidden', tab !== 'sight');
     el('saved-intelligence-status').classList.toggle('hidden', tab !== 'sight');
     el('vl-workspace-describe-run').classList.toggle('hidden', tab !== 'describe');
-    el('sight-review-activate').closest('.vl-workspace-pane').classList.toggle('hidden', tab !== 'sight');
     if (tab === 'ask') {
       openAskVisionQuestion(setScanState.reviewMediaItem);
     }
@@ -1030,8 +1029,11 @@
       el('vl-workspace-tab-' + name).onclick = function () { selectVlWorkspaceTab(name); };
     });
     el('vl-workspace-describe-run').onclick = function () {
+      var button = el('vl-workspace-describe-run');
+      if (button.disabled) return Promise.resolve(false);
+      button.disabled = true;
       return runVisionImageCaption(setScanState.reviewMediaItem).finally(function () {
-        el('vl-workspace-describe-run').disabled = false;
+        button.disabled = false;
       });
     };
     el('set-scan-preview-review').onclick = function () { openSightReviewForFile(setScanState.previewFileName); };

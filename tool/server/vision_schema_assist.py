@@ -711,11 +711,11 @@ def save_vision_vocabulary_sight(folder, media_name, model, existing_groups, sig
 
 
 def _evidence_key(category, label):
-    return category.casefold(), _clean(label).casefold()
+    return category.casefold(), _clean(label, 0).casefold()
 
 
 def _add_evidence(buckets, media, category, label, context):
-    label = _clean(label)
+    label = _clean(label, 0)
     if not label:
         return
     key = _evidence_key(category, label)

@@ -16,7 +16,8 @@ def test_caption_assist_only_requests_unified_sight():
     assert "save_vocabulary_sight" not in scan
     assert "context: false" in primer
     assert "context: false" in focus
-    assert "refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: false, silent: true })" in source("tool/js/qa_workbench.js")
+    assert "refreshSetIntelligenceItem(item, {" in source("tool/js/qa_workbench.js")
+    assert "open: 'missing', context: false, silent: true, allowOpenFailure: true" in source("tool/js/qa_workbench.js")
 
 
 def test_unfinished_candidates_round_trip_through_existing_set_state():

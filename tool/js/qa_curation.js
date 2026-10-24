@@ -78,9 +78,11 @@
     var approved = all.filter(function (feature) { return feature.source === 'tag'; });
     approved.slice(0, 72).forEach(append);
     approved.filter(function (feature) { return feature.files.size <= 3; })
+      .sort(function (a, b) { return a.files.size - b.files.size || a.key.localeCompare(b.key); })
       .slice(0, 28).forEach(append);
     all.slice(0, 80).forEach(append);
     all.filter(function (feature) { return feature.files.size <= 3; })
+      .sort(function (a, b) { return a.files.size - b.files.size || a.key.localeCompare(b.key); })
       .slice(0, 24).forEach(append);
     all.forEach(append);
     chosen.forEach(function (row, index) { row.id = 'c' + String(index + 1).padStart(3, '0'); });

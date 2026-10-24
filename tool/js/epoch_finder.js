@@ -1566,7 +1566,13 @@
         open.type='button';
         open.className='epoch-finder-campaign';
         open.dataset.screeningRound=String(plan.number);
-        open.appendChild(document.createElement('strong'));
+        var title=document.createElement('span');
+        title.className='epoch-screening-round-title';
+        title.appendChild(document.createElement('strong'));
+        var status=document.createElement('span');
+        status.className='epoch-screening-round-state';
+        title.appendChild(status);
+        open.appendChild(title);
         open.appendChild(document.createElement('small'));
         entry.appendChild(open);
         var track=document.createElement('div');
@@ -1584,7 +1590,8 @@
       button.classList.toggle('active',selected);
       button.setAttribute('aria-pressed',selected?'true':'false');
       button.querySelector('strong').textContent='Round '+plan.number;
-      var detail=plan.epochs.length+' epochs · '+completed+'/'+total+' renders · '+state;
+      button.querySelector('.epoch-screening-round-state').textContent=state;
+      var detail=plan.epochs.length+' epochs · '+completed+'/'+total+' renders';
       if (button.querySelector('small').textContent!==detail) button.querySelector('small').textContent=detail;
       var track=entry.querySelector('.epoch-screening-round-progress');
       track.setAttribute('aria-valuenow',String(completed));

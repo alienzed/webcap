@@ -1,10 +1,13 @@
 """Offline Fizgig adapter contracts: no model downloads or GPU required."""
 
+import json
 import shlex
 
 import pytest
 
-from tool.server.training_fizgig import dataset_from_capture, plan_h3, saved_artifacts
+from tool.server.training_fizgig import (
+    dataset_from_capture, inspect_h3, observe_h3, plan_h3, read_loss_points, saved_artifacts,
+)
 from tool.server.training_backend import DiffusionPipeBackend, FizgigBackend, backend_for_job
 
 
@@ -76,6 +79,8 @@ def test_h3_plan_uses_headless_three_stage_cli_and_explicit_adapter():
     assert "--resume" not in train
     assert "deepspeed" not in plan["commands"]["train"]
     assert plan["pauseSentinel"] == "/output/runs/fizgig-test/.pause_requested"
+    assert [step["name"] for step in plan["phases"]] == ["latents", "text", "train"]
+    assert [step["command"] for step in plan["phases"]] == [plan["commands"][name] for name in ("latents", "text", "train")]
 
 
 def test_explicit_h3_photo_blocks_are_passed_as_family_option():
@@ -143,3 +148,74 @@ def test_checkpoint_discovery_keeps_epoch_weights_and_state_separate():
     assert list(found["epochs"]) == [5, 30]
     assert list(found["states"]) == [30]
     assert found["states"][30].endswith("fizgig-test-000030-state")
+
+
+def test_h3_image_block_default_matches_fizgig_default_not_all_blocks():
+    planned = plan_h3(DATASET, **ARGS)
+    train = shlex.split(planned["commands"]["train"])
+    assert train[train.index("--family_option") + 1] == "photo_blocks=20-49"
+    assert planned["photoBlocks"] == "20-49"
+    all_blocks = shlex.split(plan_h3(DATASET, **ARGS, photo_blocks="")["commands"]["train"])
+    assert "--family_option" not in all_blocks
+
+
+def test_fizgig_epoch_log_maps_to_normalized_progress():
+    log = "[train] starting\n2026-10-24 INFO epoch 1/70  avr_loss=0.4  step=30  1.23s/step\n"
+    log += "2026-10-24 INFO epoch 2/70  avr_loss=0.35  step=60  1.18s/step\n"
+    assert observe_h3(log) == {
+        "phase": "train", "epoch": 2, "epochs": 70,
+        "step": 60, "loss": 0.35, "secondsPerStep": 1.18,
+    }
+    assert observe_h3("Caching latents...") == {}
+
+
+def test_fizgig_loss_reads_native_jsonl_only_when_requested(tmp_path):
+    path = tmp_path / ".fizgig_loss_run.jsonl"
+    path.write_text(
+        '{"s":10,"e":1,"l":0.15}\n'
+        '{"s":20,"e":1,"l":0.12,"lr":0.00008}\n'
+        '{"s":30,"e":2,"l":0.09}\n',
+        encoding="utf-8",
+    )
+    assert read_loss_points(tmp_path, "run") == [
+        {"step": 10, "epoch": 1, "loss": 0.15},
+        {"step": 20, "epoch": 1, "loss": 0.12, "lr": 0.00008},
+        {"step": 30, "epoch": 2, "loss": 0.09},
+    ]
+    (tmp_path / "run-000002.safetensors").write_bytes(b"weights")
+    inspected = inspect_h3(tmp_path, "run")
+    assert inspected["lossPoints"] is None
+    assert inspected["candidates"] == [{"epoch": 2, "path": str(tmp_path / "run-000002.safetensors")}]
+    assert inspected["resumePoints"] == []
+    assert inspected["lossPoints"] is None
+    assert inspect_h3(tmp_path, "run", include_loss=True)["lossPoints"][-1]["epoch"] == 2
+    path.write_text('{"s":2,"e":1}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="loss record"):
+        read_loss_points(tmp_path, "run")
+
+
+def test_fizgig_state_requires_commit_marker_and_actual_state_files(tmp_path):
+    (tmp_path / "run-000004.safetensors").write_bytes(b"checkpoint")
+    state = tmp_path / "run-000004-state"
+    state.mkdir()
+    for name in ("lora.safetensors", "optimizer.pt", "rng.pt"):
+        (state / name).write_bytes(b"saved")
+    # A half-written state never counts as a verified resume checkpoint.
+    assert inspect_h3(tmp_path, "run")["checkpointVerified"] is False
+    marker = state / "training_state.json"
+    marker.write_text(json.dumps({"epoch": 4, "global_step": 120}), encoding="utf-8")
+    found = inspect_h3(tmp_path, "run")
+    assert found["checkpointVerified"] is True
+    assert found["resumePoints"] == [{"id": str(state), "epoch": 4, "step": 120}]
+    assert found["candidates"] == [{"epoch": 4, "path": str(tmp_path / "run-000004.safetensors")}]
+    (state / "optimizer.pt").unlink()
+    with pytest.raises(ValueError, match="incomplete"):
+        inspect_h3(tmp_path, "run")
+
+
+def test_fizgig_invalid_or_inconsistent_state_marker_fails_loudly(tmp_path):
+    state = tmp_path / "run-000004-state"
+    state.mkdir()
+    (state / "training_state.json").write_text(json.dumps({"epoch": 5}), encoding="utf-8")
+    with pytest.raises(ValueError, match="does not match"):
+        inspect_h3(tmp_path, "run")

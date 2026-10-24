@@ -9,6 +9,10 @@
     files: [],
     scopeRequestToken: 0,
     visionModel: '',
+    previewFileName: '',
+    reviewFile: '',
+    reviewData: null,
+    reviewRequestToken: 0,
     currentVisionJobId: '',
     activityId: '',
     activityStartedAt: 0,
@@ -231,6 +235,32 @@
       output.textContent = setScanState.inspectionMissingFile
         ? 'No saved Sight response for ' + setScanState.inspectionMissingFile + '.' : '';
     }
+    var file = setScanState.previewFileName || itemSelect.value || '';
+    el('set-scan-preview-name').textContent = file || 'Select a media item';
+    el('set-scan-preview-review').disabled = !file;
+    updateSightPreviewMedia(el('set-scan-preview-image'), el('set-scan-preview-video'), setScanState.folder, file);
+    var observed = responses.slice().reverse().find(function (row) { return row.media === file; });
+    var saved = items.find(function (row) { return row.file === file; });
+    el('set-scan-preview-text').textContent = observed
+      ? String(observed.description || observed.text || 'No observation returned.')
+      : saved && saved.sight && saved.sight.description ? saved.sight.description
+        : setScanState.running ? 'Inspecting image…' : 'No saved Sight for the selected model.';
+  }
+
+  function updateSightPreviewMedia(image, video, folder, file) {
+    var url = file ? '/caption/media?folder=' + encodeURIComponent(folder) +
+      '&media=' + encodeURIComponent(file) : '';
+    var isVideo = /\.(mp4|webm|ogg|mov|mkv|avi|m4v)$/i.test(file || '');
+    var target = isVideo ? video : image;
+    var other = isVideo ? image : video;
+    target.hidden = !url;
+    other.hidden = true;
+    if (other.getAttribute('src')) {
+      if (other === video) video.pause();
+      other.removeAttribute('src');
+    }
+    if (url && target.getAttribute('src') !== url) target.src = url;
+    if (!url) target.removeAttribute('src');
   }
 
   function recordSetIntelligenceFailure(passLabel, fileName, error) {
@@ -277,11 +307,14 @@
     publishSetIntelligenceActivity(title, message);
   }
 
-  function showRawResponse(fileName, passLabel, text) {
+  function showRawResponse(fileName, passLabel, text, sight) {
     var response = {
+      media: String(fileName || ''),
       file: String(fileName || '') + ' · ' + String(passLabel || 'Vision'),
-      text: String(text || '')
+      text: String(text || ''),
+      description: sight && sight.description ? String(sight.description) : ''
     };
+    setScanState.previewFileName = String(fileName || '');
     setScanState.rawResponses.push(response);
     setScanState.rawResponseIndex = setScanState.rawResponses.length - 1;
     setScanState.currentRawResponse = response;
@@ -292,6 +325,7 @@
   function viewSelectedSightResponse() {
     var itemSelect = el('set-scan-item-select');
     var file = String(itemSelect.value || '');
+    setScanState.previewFileName = file;
     var index = setScanState.rawResponses.findIndex(function (row) { return row.file === file || row.file.indexOf(file + ' · ') === 0; });
     if (index < 0) {
       // Inspecting missing evidence never starts inference.
@@ -313,6 +347,7 @@
     setScanState.rawResponseIndex = index;
     setScanState.inspectionMissingFile = '';
     setScanState.currentRawResponse = setScanState.rawResponses[index];
+    setScanState.previewFileName = String(setScanState.currentRawResponse.media || '');
     renderSetIntelligence();
   }
 
@@ -337,15 +372,17 @@
       if (!item) return;
       var attempt = item.attempt;
       if ((!item.structured || item.issue) && attempt && attempt.text) {
-        responses.push({file: String(item.file || '') + ' · ' + (item.issue || 'Sight attempt'), text: attempt.text});
+        responses.push({media: String(item.file || ''), file: String(item.file || '') + ' · ' + (item.issue || 'Sight attempt'), text: attempt.text});
       } else if (item.structured && item.sight) {
-        responses.push({file: String(item.file || '') + ' · Sight', text: JSON.stringify(item.sight, null, 2)});
+        responses.push({media: String(item.file || ''), file: String(item.file || '') + ' · Sight', text: JSON.stringify(item.sight, null, 2), description: item.sight.description});
       }
     });
     setScanState.rawResponses = responses;
     setScanState.inspectionMissingFile = '';
     setScanState.rawResponseIndex = responses.length ? responses.length - 1 : -1;
     setScanState.currentRawResponse = responses.length ? responses[responses.length - 1] : null;
+    if (!setScanState.previewFileName || !items.some(function (item) { return item.file === setScanState.previewFileName; }))
+      setScanState.previewFileName = responses.length ? responses[responses.length - 1].media : '';
   }
 
   function requestCachedIntelligenceReport(folder, files, model) {
@@ -493,9 +530,11 @@
       String(index + 1) + ' of ' + String(pending.length) + ' · exploring visual details');
 
     var fileName = pending[index];
+    setScanState.previewFileName = fileName;
+    renderSetIntelligence();
     return requestSight(folder, model, fileName, function () { return setScanState.stopRequested; }, groups).then(function (result) {
       if (setScanState.stopRequested) return false;
-      showRawResponse(fileName, 'Sight', result.text);
+      showRawResponse(fileName, 'Sight', result.text, result.sight);
       var issue = result.warning || (result.sight ? '' : 'Unstructured Vision response');
       var save = result.sight ? saveSight(folder, model, fileName, result.sight) : Promise.resolve(null);
       return save.then(function () { return saveSightAttempt(folder, model, fileName, result, issue); })
@@ -612,6 +651,7 @@
 
     setScanState.folder = folder;
     setScanState.files = files.slice();
+    setScanState.previewFileName = files[0] || '';
     setScanState.visionModel = '';
     setScanState.running = true;
     setScanState.hasRun = true;
@@ -754,6 +794,7 @@
     setScanState.rawResponseIndex = -1;
     setScanState.currentRawResponse = null;
     setScanState.sightItems = [];
+    setScanState.previewFileName = files[0] || '';
     renderSetIntelligence();
     if (!files.length) {
       setCoverage(0, 0);

@@ -1,0 +1,70 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def read(path):
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+def test_single_vl_context_action_with_shared_media_entrypoint():
+    actions = read("tool/js/media_context_actions.js")
+    group = actions.split("label: 'Focus Caption'", 1)[1].split("label: 'Copy Tags'", 1)[0]
+    assert group.count("label: 'VL Workspace...'") == 1
+    assert "openVlWorkspace(mediaItem, 'sight');" in group
+    for old in ("label: 'Describe with VL'", "label: 'Ask VL...'", "label: 'View Saved Intelligence'"):
+        assert old not in group
+    scan = read("tool/js/set_scan.js")
+    assert "window.openVlWorkspace = openSavedIntelligenceForMedia;" in scan
+    assert "window.closeVlWorkspace = closeSavedIntelligence;" in scan
+    assert "function openSavedIntelligenceForMedia(mediaItem, initialTab)" in scan
+
+
+def test_single_modal_owns_existing_ask_and_describe_controls():
+    html = read("tool/tool.html")
+    start = html.index('id="saved-intelligence-modal"')
+    end = html.index('id="vision-schema-modal"', start)
+    workspace = html[start:end]
+    assert workspace.count('id="ask-vision-modal"') == 1
+    assert workspace.count('id="vision-image-caption-modal"') == 1
+    for part in ("sight", "ask", "describe"):
+        assert f'id="vl-workspace-tab-{part}"' in workspace
+    assert 'id="ask-vision-question"' in workspace
+    assert 'id="ask-vision-send"' in workspace
+    assert 'id="ask-vision-cancel"' in workspace
+    assert 'id="vision-image-caption-copy"' in workspace
+    assert 'id="vision-image-caption-use"' in workspace
+    assert 'id="vision-image-caption-cancel"' in workspace
+    assert 'id="vl-workspace-describe-run"' in workspace
+    assert html.count('id="ask-vision-modal"') == 1
+    assert html.count('id="vision-image-caption-modal"') == 1
+
+
+def test_qa_caption_assist_and_prepare_set_reuse_same_modal():
+    html = read("tool/tool.html")
+    vision = read("tool/js/caption_vision.js")
+    scan = read("tool/js/set_scan.js")
+    assert 'id="editor-caption-vl-workspace"' in html
+    assert "openVlWorkspace(state.currentItem, 'sight');" in vision
+    assert "openSightReviewForFile(el('set-scan-item-select').value)" in scan
+    assert "selectVlWorkspaceTab(initialTab || 'sight')" in scan
+    assert "function selectVlWorkspaceTab(tab)" in scan
+    assert "runVisionImageCaption(setScanState.reviewMediaItem)" in scan
+    assert "openAskVisionQuestion(setScanState.reviewMediaItem)" in scan
+
+
+def test_ask_and_describe_retain_own_job_lifecycle_with_explicit_media():
+    vision = read("tool/js/caption_vision.js")
+    assert "function openAskVisionQuestion(mediaOverride)" in vision
+    assert "var media = mediaOverride || (state && state.currentItem)" in vision
+    assert "var item = askVisionState.mediaItem" in vision
+    assert "folder: askVisionState.folder" in vision
+    assert "function runVisionImageCaption(mediaItemOverride)" in vision
+    assert "requestVisionImageCaptionDescription(mediaItem" in vision
+    assert "cancelAskVisionJob()" in vision
+    assert "cancelVisionImageCaptionRequest()" in vision
+    assert "copyVisionImageCaption()" in vision
+    assert "useVisionImageCaptionInEditor()" in vision
+    assert "closeVlWorkspace();" in vision
+    assert "runVisionImageCaption();" not in read("tool/js/media_context_actions.js")
+    assert "openAskVisionQuestion();" not in read("tool/js/media_context_actions.js")

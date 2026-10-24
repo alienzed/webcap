@@ -124,7 +124,8 @@ function persistCaptionAssistCandidate(candidate, defer) {
     text: String(candidate.text || ''),
     annotationsAtGeneration: String(candidate.annotationsAtGeneration || ''),
     sourceCaption: String(candidate.sourceCaption === undefined ? item.caption || '' : candidate.sourceCaption),
-    model: String(candidate.model || '')
+    model: String(candidate.model || ''),
+    sightFingerprint: String(candidate.sightFingerprint || '')
   };
   if (JSON.stringify(captionAssistSavedCandidatesByMedia[key]) === JSON.stringify(saved)) return;
   captionAssistSavedCandidatesByMedia[key] = saved;
@@ -154,6 +155,7 @@ function restoreCaptionAssistCandidate(mediaItem) {
     annotationsAtGeneration: saved.annotationsAtGeneration,
     sourceCaption: saved.sourceCaption,
     model: saved.model,
+    sightFingerprint: saved.sightFingerprint || '',
     missingGroups: getCaptionAssistMissingGroups(mediaItem.key),
     omittedAssignments: getCaptionAssistOmittedAssignments(mediaItem.key, saved.text, request.assignments, request.tags),
     omittedCorrections: getCaptionAssistOmittedCorrections(mediaItem.key, saved.text, request.assignments, request.tags)
@@ -161,7 +163,8 @@ function restoreCaptionAssistCandidate(mediaItem) {
   syncCaptionAssistCandidateUi();
   var changed = saved.annotationsAtGeneration !== JSON.stringify([request.assignments, request.tags]) ||
     saved.sourceCaption !== String(mediaItem.caption || '') ||
-    (saved.model && saved.model !== String(request.model || ''));
+    (saved.model && saved.model !== String(request.model || '')) ||
+    (saved.sightFingerprint && saved.sightFingerprint !== captionAssistSightFingerprint(request.openSight));
   setStatus(changed ? 'Saved caption candidate restored; inputs changed. Refresh Caption if needed.' : 'Saved caption candidate restored.');
   return true;
 }
@@ -1458,6 +1461,15 @@ function getCaptionAssistDraftForMediaItem(mediaItem) {
   return String(buildAutoPrimer(mediaItem.fileName, mediaKey) || '').trim();
 }
 
+function captionAssistSightFingerprint(sight) {
+  if (!sight || !sight.description) return '';
+  var source = JSON.stringify([sight.model || '', sight.description, sight.inventory || {}]);
+  var hash = 2166136261;
+  for (var i = 0; i < source.length; i += 1)
+    hash = Math.imul(hash ^ source.charCodeAt(i), 16777619);
+  return (hash >>> 0).toString(16);
+}
+
 function captionAssistRequestFingerprint(mediaItem, request) {
   return JSON.stringify({
     mediaKey: String(mediaItem && mediaItem.key || ''),
@@ -1589,6 +1601,7 @@ function requestCaptionAssistCandidate(mediaItem, request, options) {
         request.tags
       ),
       requestFingerprint: captionAssistRequestFingerprint(mediaItem, request),
+      sightFingerprint: captionAssistSightFingerprint(request.openSight),
       annotationsAtGeneration: JSON.stringify([request.assignments, request.tags])
     };
   });

@@ -373,7 +373,7 @@ function wireLoraLibrary() {
         loraEl('save-state').textContent = String(e.message || e);
         return;
       }
-    } else loraSyncJson();
+    }
     loraEl('options').readOnly = !enabled;
     loraEl('groups').classList.toggle('hidden', enabled);
     loraEl('add-group').disabled = enabled;

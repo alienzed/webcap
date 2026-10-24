@@ -28,6 +28,7 @@
         <link rel="stylesheet" href="/static/css/ai_validation.css">
         <link rel="stylesheet" href="/static/css/qa_workbench.css">
         <link rel="stylesheet" href="/static/css/modals.css">
+        <link rel="stylesheet" href="/static/css/lora_library.css">
         <link rel="stylesheet" href="/static/css/media_grid.css">
         <link rel="stylesheet" href="/static/css/crop_modal.css">
         <link rel="stylesheet" href="/static/css/remove_object.css">
@@ -1752,7 +1753,7 @@
                             </div>
                             </section>
                             <section class="generate-conditioning">
-                            <div class="generate-conditioning-heading"><strong title="LoRAs applied to every generation">Fixed LoRAs</strong><button id="generate-lora-refresh" type="button" class="review-captions-btn" title="Rescan available LoRAs from ComfyUI">↻ Refresh</button></div>
+                            <div class="generate-conditioning-heading"><strong title="LoRAs applied to every generation">Fixed LoRAs</strong><button id="generate-lora-library-open" type="button" class="review-captions-btn" title="Browse LoRA profiles">Library</button><button id="generate-lora-refresh" type="button" class="review-captions-btn" title="Rescan available LoRAs from ComfyUI">↻ Refresh</button></div>
                             <div id="generate-lora-selected-panel" class="generate-lora-mode-panel">
                                 <div class="generate-lora-selected-heading"><strong>Selected LoRAs <span id="generate-lora-count">(0)</span></strong></div>
                                 <div id="generate-lora-list" class="generate-lora-list"></div>
@@ -2672,6 +2673,55 @@
             </div>
         </div>
         <!-- VIDEO_CLIP_MODAL -->
+        <div id="lora-library-modal" class="lora-library-modal hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="lora-library-title">
+            <div class="lora-library-dialog">
+                <header class="lora-library-header">
+                    <div>
+                        <h2 id="lora-library-title">LoRA Library</h2>
+                        <p>Browse configured model roots and maintain Director-readable profiles.</p>
+                    </div>
+                    <button id="lora-library-close" type="button" aria-label="Close LoRA Library" title="Close">×</button>
+                </header>
+                <div class="lora-library-tools">
+                    <label class="lora-library-search"><span class="sr-only">Search LoRAs</span><input id="lora-library-search" type="search" placeholder="Search names, folders, descriptions, phrases…" autocomplete="off"></label>
+                    <label><span>Model</span><select id="lora-library-stage"><option value="">All models</option></select></label>
+                    <label><span>Folder</span><select id="lora-library-folder"><option value="">All folders</option></select></label>
+                    <label><span>Profile</span><select id="lora-library-filter"><option value="">All profiles</option><option value="ready">Profiled</option><option value="partial">Needs details</option><option value="missing">Unprofiled</option></select></label>
+                    <label><span>Sort</span><select id="lora-library-sort"><option value="folder">Folder / name</option><option value="name">Name</option><option value="profile">Profile status</option></select></label>
+                    <button id="lora-library-refresh" type="button" title="Scan configured LoRA roots">↻ Refresh</button>
+                </div>
+                <div id="lora-library-status" class="lora-library-status" role="status" aria-live="polite"></div>
+                <div class="lora-library-body">
+                    <aside class="lora-library-browser" aria-label="LoRA results"><div id="lora-library-list" class="lora-library-list"></div></aside>
+                    <section class="lora-library-detail" aria-label="Selected LoRA profile">
+                        <div id="lora-library-empty" class="lora-library-empty">Choose a LoRA to view or edit its profile.</div>
+                        <div id="lora-library-editor" class="hidden">
+                            <div class="lora-library-detail-heading">
+                                <div><h3 id="lora-library-profile-heading"></h3><div id="lora-library-profile-path" class="lora-library-path"></div></div>
+                                <button id="lora-library-editor-close" type="button" title="Deselect LoRA">Deselect</button>
+                            </div>
+                            <div id="lora-library-profile-state" class="lora-library-profile-state"></div>
+                            <div class="lora-library-fields">
+                                <label><span>Purpose / description</span><textarea id="lora-library-description" rows="3" placeholder="What does this LoRA learn?"></textarea></label>
+                                <label><span>Trained phrases (one per line)</span><textarea id="lora-library-words" rows="3" placeholder="Trigger words and learned phrases"></textarea></label>
+                                <div class="lora-library-options-heading"><strong>Prompt options</strong><button type="button" id="lora-library-add-group">+ Group</button></div>
+                                <div id="lora-library-groups" class="lora-library-groups"></div>
+                                <details id="lora-library-json-details" class="lora-library-advanced">
+                                    <summary>Advanced · raw prompt-options JSON</summary>
+                                    <label class="lora-library-json-toggle"><input type="checkbox" id="lora-library-json-edit"> Edit JSON directly (disables structured options)</label>
+                                    <textarea id="lora-library-options" rows="5" spellcheck="false" aria-label="Raw prompt options JSON" readonly></textarea>
+                                </details>
+                                <label><span>Guidance and limitations</span><textarea id="lora-library-guidance" rows="3" placeholder="When to use it, strengths and limitations"></textarea></label>
+                            </div>
+                            <footer class="lora-library-actions">
+                                <span id="lora-library-save-state" role="status" aria-live="polite"></span>
+                                <button id="lora-library-save" type="button" class="training-btn">Save profile</button>
+                            </footer>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
         <div id="app-settings-modal" class="app-settings-modal hidden" aria-hidden="true" data-escape-close-id="app-settings-close-btn">
             <div class="app-settings-dialog">
                 <div class="app-settings-header">
@@ -2764,20 +2814,9 @@
                         <section class="app-settings-section">
                             <div class="app-settings-section-header">
                                 <div class="app-settings-section-title">LoRA Library</div>
-                                <div class="app-settings-section-copy">Edit Director-readable profiles alongside models in configured Test LoRA roots. No ComfyUI required.</div>
+                                <div class="app-settings-section-copy">Browse and edit LoRA profiles from configured Test LoRA roots.</div>
                             </div>
-                            <button type="button" id="lora-library-refresh" class="review-captions-btn">Scan configured roots</button>
-                            <div id="lora-library-status" class="training-history-summary" aria-live="polite"></div>
-                            <div id="lora-library-list" class="training-config-list"></div>
-                            <div id="lora-library-editor" class="hidden">
-                                <h3 id="lora-library-profile-heading"></h3>
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Purpose / description</span><textarea id="lora-library-description" rows="3"></textarea></label>
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Trained phrases (one per line)</span><textarea id="lora-library-words" rows="3"></textarea></label>
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Prompt options (JSON object of named phrase lists)</span><textarea id="lora-library-options" rows="3" spellcheck="false"></textarea></label>
-                                <label class="app-settings-field app-settings-field-wide"><span class="app-settings-field-label">Guidance and limitations</span><textarea id="lora-library-guidance" rows="3"></textarea></label>
-                                <button type="button" id="lora-library-save" class="training-btn">Save LoRA profile</button>
-                                <button type="button" id="lora-library-editor-close" class="review-captions-btn">Close editor</button>
-                            </div>
+                            <button type="button" id="open-lora-library-settings" class="training-btn">Open LoRA Library</button>
                         </section>
                     </div>
 
@@ -3431,6 +3470,7 @@
         <script src="/static/js/balance_distribution_wheel.js"></script>
         <script src="/static/js/h3_calibration_results.js"></script>
         <script src="/static/js/app_settings.js"></script>
+        <script src="/static/js/lora_library_ui.js"></script>
         <script src="/static/js/diagnostics.js"></script>
         <script src="/static/js/model_lab.js"></script>
         <script src="/static/js/smart_set.js"></script>

@@ -342,8 +342,9 @@ function refreshUnifiedModelAssessment() {
     var head = document.createElement('thead');
     var header = document.createElement('tr');
     [{key: '', name: 'Select'}, {key: 'model', name: 'Model'},
+      {key: 'size', name: 'Size'}, {key: 'thinking', name: 'Thinking'},
       {key: 'directorSpeed', name: 'Director tok/s'}, {key: 'visionSpeed', name: 'Vision tok/s'},
-      {key: 'output', name: 'Valid output'},
+      {key: 'output', name: 'Valid output'}, {key: 'quality', name: 'Quality'},
       {key: 'result', name: 'Assessment'}].forEach(function (column) {
       var th = document.createElement('th');
       th.scope = 'col';
@@ -448,15 +449,21 @@ function refreshUnifiedModelAssessment() {
       row.assessmentSort.size = size > 0 ? size : null;
       var qualification = cell('Qualified for', '', 'qualification');
       qualification.className = 'model-assessment-qualifications';
-      var thinkingLabel = supportsDirector ? 'Not verified' : 'N/A';
+      var sizeCell = cell('Size', sizeLabel, 'size');
+      sizeCell.title = size > 0 ? 'Discovered model file size; not a measurement of VRAM usage.' : 'Model size unavailable.';
+      var thinkingLabel = supportsDirector ? 'No' : 'N/A';
+      var thinkingCell = cell('Thinking', supportsDirector ? 'No' : '—', 'thinking');
+      thinkingCell.title = supportsDirector ? 'No observed thinking support yet.' : 'Thinking applies to Director models.';
       var directorSpeed = cell('Director speed', '—', 'director-speed');
       var visionSpeed = cell('Vision speed', '—', 'vision-speed');
       var outputCell = cell('Output', '—', 'output');
       outputCell.title = 'Largest observed completion, potentially including reasoning tokens; not a verified limit.';
-      // Put headline metrics before assessment; secondary fields are details-only.
-      line.insertBefore(directorSpeed, qualification);
-      line.insertBefore(visionSpeed, qualification);
-      line.insertBefore(outputCell, qualification);
+      var qualityCell = cell('Quality', '—', 'quality');
+      qualityCell.title = 'Advisory LLM judgment, separate from technical qualification.';
+      // Keep decision metrics together; technical qualification remains separate.
+      [sizeCell, thinkingCell, directorSpeed, visionSpeed, outputCell, qualityCell].forEach(function (item) {
+        line.insertBefore(item, qualification);
+      });
       var qualityLabel = 'Not judged';
       var qualityReason = '';
       var evidence = capabilityRuns.filter(function (run) {
@@ -489,7 +496,9 @@ function refreshUnifiedModelAssessment() {
       var thinking = tests.director_thinking;
       if (supportsDirector) {
         var supported = thinking ? thinking.supported === true : !!(report && report.thinking);
-        thinkingLabel = supported ? 'Yes' : 'Not verified';
+        thinkingLabel = supported ? 'Yes' : 'No';
+        thinkingCell.textContent = thinkingLabel;
+        thinkingCell.title = supported ? 'Reasoning observed in saved assessment evidence.' : 'Thinking has not been demonstrated.';
         row.assessmentSort.thinking = supported ? 1 : 0;
       }
       var testedAt = evidence && evidence.startedAt || (report && report.finishedAt) || '';
@@ -504,14 +513,15 @@ function refreshUnifiedModelAssessment() {
       });
       var qualityReview = qualityRun && qualityRun.qualityReviews[ref];
       qualityLabel = diagnosticsAssessmentReviewLabel(qualityReview);
-      if (qualityReview && qualityReview.status === 'completed') {
-        qualityReason = (qualityReview.tasks || []).map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');
-        row.assessmentSort.quality = (qualityReview.tasks || []).reduce(function (total, item) { return total + item.score; }, 0) / Math.max(1, (qualityReview.tasks || []).length);
-        var qualityBadge = document.createElement('span');
-        qualityBadge.className = 'model-assessment-qualification model-assessment-' + (row.assessmentSort.quality >= 3 ? 'passed' : 'issues');
-        qualityBadge.textContent = 'Quality ' + row.assessmentSort.quality.toFixed(1) + '/5';
-        qualityBadge.title = 'Advisory LLM review, separate from technical qualification: ' + qualityReason;
-        qualification.appendChild(qualityBadge);
+      if (qualityReview && qualityReview.status === 'completed' && (qualityReview.tasks || []).length) {
+        qualityReason = qualityReview.tasks.map(function (task) { return task.task + ': ' + task.reason; }).join(' · ');
+        row.assessmentSort.quality = qualityReview.tasks.reduce(function (total, item) { return total + item.score; }, 0) / qualityReview.tasks.length;
+        qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5';
+        qualityCell.title = 'Advisory LLM review, separate from technical qualification: ' + qualityReason;
+      } else if (qualityReview) {
+        qualityCell.textContent = qualityReview.status === 'failed' ? 'Failed' :
+          qualityReview.status === 'running' ? 'Judging…' : '—';
+        if (qualityReview.error) qualityCell.title = qualityReview.error;
       }
 
       diagnosticsAssessmentApplyMeasurements(row, capabilityRuns);
@@ -520,7 +530,7 @@ function refreshUnifiedModelAssessment() {
       expanded.className = 'model-assessment-evidence';
       expanded.hidden = !diagnosticsAssessmentExpanded.has(key);
       var panel = document.createElement('td');
-      panel.colSpan = 6;
+      panel.colSpan = 9;
       var summary = document.createElement('div');
       summary.className = 'model-assessment-evidence-summary';
       var specs = document.createElement('div');

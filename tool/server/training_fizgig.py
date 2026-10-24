@@ -6,14 +6,19 @@ The shared runner must own queue, GPU, process identity and Console logging.
 """
 
 import json
+import math
 import re
 import shlex
 import tomllib
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 
 _STATE_SUFFIX = re.compile(r"^.+-\d{6}-state$")
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_EPOCH_PROGRESS = re.compile(
+    r"\bepoch\s+(\d+)/(\d+)\s+avr_loss=([0-9.eE+-]+)\s+"
+    r"step=(\d+)\s+([0-9.eE+-]+)s/step"
+)
 
 
 def _absolute(value, label):
@@ -90,7 +95,7 @@ def plan_h3(
     captured_dataset_toml, *, dataset_path, cache_root, output_dir, output_name,
     python_path, dit_path, vae_path, text_encoder_path, rank, learning_rate,
     epochs, save_every_n_epochs, seed, adapter_path="", ema_decay=0.0,
-    resume_state="", blocks_to_swap=-1, photo_blocks="",
+    resume_state="", blocks_to_swap=-1, photo_blocks="20-49",
 ):
     """Create cache→text→train commands; nothing is executed or downloaded.
 
@@ -146,6 +151,8 @@ def plan_h3(
         "--precision", "auto", "--blocks_to_swap", blocks_to_swap,
         "--optimizer_type", "adamw", "--ema_decay", ema_decay,
     ]
+    # H3 image training intentionally defaults to Fizgig's 20-49 identity block window.
+    # Passing an explicit empty string remains an opt-in all-block experiment.
     if photo_blocks:
         train += ["--family_option", "photo_blocks=" + str(photo_blocks)]
     if adapter_path:
@@ -156,12 +163,18 @@ def plan_h3(
         "datasetToml": cache["toml"],
         "directories": cache["directories"],
         "commands": {"latents": latents, "text": text, "train": cmd(train)},
+        "phases": [
+            {"name": "latents", "command": latents},
+            {"name": "text", "command": text},
+            {"name": "train", "command": cmd(train)},
+        ],
         "outputDir": output_dir,
         "outputName": output_name,
         "pauseSentinel": str(PurePosixPath(output_dir) / ".pause_requested"),
         "resumeState": resume_state,
         "adapterPath": adapter_path,
         "emaDecay": ema_decay,
+        "photoBlocks": photo_blocks,
     }
 
 
@@ -180,3 +193,96 @@ def saved_artifacts(output_dir, output_name, filenames):
         elif state:
             states[int(state.group(1))] = str(PurePosixPath(output_dir) / item)
     return {"epochs": dict(sorted(epochs.items())), "states": dict(sorted(states.items()))}
+
+
+def observe_h3(log_tail):
+    """Read Fizgig's actual epoch-completion log, without guessing progress."""
+    matches = list(_EPOCH_PROGRESS.finditer(str(log_tail or "")))
+    if not matches:
+        return {}
+    epoch, epochs, loss, step, seconds = matches[-1].groups()
+    values = float(loss), float(seconds)
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("Fizgig reported non-finite epoch loss or step time.")
+    return {
+        "phase": "train",
+        "epoch": int(epoch),
+        "epochs": int(epochs),
+        "step": int(step),
+        "loss": values[0],
+        "secondsPerStep": values[1],
+    }
+
+
+def read_loss_points(run_dir, output_name):
+    """Read on demand, never from the normal frequent status-poll path.
+
+    Fizgig StepLog writes records in batches of 20:
+    .fizgig_loss_NAME.jsonl: {"s": step, "e": epoch, "l": loss, "lr": optional}.
+    """
+    if not _SAFE_NAME.fullmatch(str(output_name or "")):
+        raise ValueError("Invalid Fizgig output name.")
+    path = Path(run_dir) / (".fizgig_loss_" + output_name + ".jsonl")
+    if not path.exists():
+        return []
+    result = []
+    with path.open(encoding="utf-8") as stream:
+        for line_number, raw in enumerate(stream, start=1):
+            if not raw.strip():
+                continue
+            try:
+                event = json.loads(raw)
+                step, epoch, loss = int(event["s"]), int(event["e"]), float(event["l"])
+                lr = event.get("lr")
+                if lr is not None:
+                    lr = float(lr)
+            except (TypeError, ValueError, KeyError, AttributeError) as exc:
+                raise ValueError(f"Invalid Fizgig loss record at line {line_number}: {path}") from exc
+            if step < 0 or epoch < 1 or not math.isfinite(loss) or (lr is not None and not math.isfinite(lr)):
+                raise ValueError(f"Invalid Fizgig loss values at line {line_number}: {path}")
+            result.append({"step": step, "epoch": epoch, "loss": loss, **({"lr": lr} if lr is not None else {})})
+    return result
+
+
+def inspect_h3(run_dir, output_name, *, include_loss=False):
+    """Inspect actual Fizgig outputs; a state folder name is not proof of a saved state.
+
+    The trainer writes training_state.json *last* as the state commit marker.
+    This does not check whether a checkpoint is fresh relative to a pause
+    request; the shared runner must compare evidence around process exit.
+    """
+    root = Path(run_dir)
+    if not root.is_dir():
+        raise FileNotFoundError("Fizgig output directory is unavailable: " + str(root))
+    artifacts = saved_artifacts(str(root), output_name, [p.name for p in root.iterdir()])
+    candidates = [
+        {"epoch": epoch, "path": path}
+        for epoch, path in artifacts["epochs"].items()
+        if Path(path).is_file()
+    ]
+    resume_points = []
+    for epoch, name in artifacts["states"].items():
+        state_dir = Path(name)
+        marker = state_dir / "training_state.json"
+        if not marker.is_file():
+            continue  # an uncommitted / interrupted state is not resumable
+        try:
+            payload = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ValueError("Unreadable Fizgig state commit marker: " + str(marker)) from exc
+        if not isinstance(payload, dict) or payload.get("epoch") != epoch:
+            raise ValueError("Fizgig state epoch does not match its checkpoint directory: " + str(marker))
+        missing = [
+            filename for filename in ("lora.safetensors", "optimizer.pt", "rng.pt")
+            if not (state_dir / filename).is_file()
+        ]
+        if missing:
+            raise ValueError("Committed Fizgig resume state is incomplete: " + str(state_dir)
+                             + " (missing " + ", ".join(missing) + ")")
+        resume_points.append({"id": str(state_dir), "epoch": epoch, "step": payload.get("global_step")})
+    return {
+        "candidates": candidates,
+        "resumePoints": resume_points,
+        "checkpointVerified": bool(resume_points),
+        "lossPoints": read_loss_points(root, output_name) if include_loss else None,
+    }

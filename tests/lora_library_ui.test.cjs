@@ -139,3 +139,22 @@ test('cancelled discard leaves the editor and filters unchanged',async t=>{
   assert.equal(h.el('profile-heading').textContent,'a');
   assert.equal(h.errors.length,0);
 });
+
+test('switching to raw JSON keeps unfinished structured group visible and editable', async t => {
+  const h=setup();t.after(h.close);
+  await h.open({stage:'h3',name:'People/a.safetensors'});
+  await h.click(h.el('add-group'));
+  const group=h.el('groups').lastElementChild;
+  h.el('json-edit').click();
+  assert.equal(h.el('json-edit').checked,false);
+  assert.equal(h.el('groups').classList.contains('hidden'),false);
+  assert.equal(h.el('save').disabled,true);
+  assert.match(h.el('save-state').textContent,/group name/i);
+  const name=group.querySelector('.lora-library-group-name');
+  name.value='Colour';name.dispatchEvent(new h.w.Event('input',{bubbles:true}));
+  h.el('json-edit').click();
+  assert.equal(h.el('json-edit').checked,true);
+  assert.equal(h.el('groups').classList.contains('hidden'),true);
+  assert.deepEqual(JSON.parse(h.el('options').value).Colour,[]);
+  assert.equal(h.errors.length,0);
+});

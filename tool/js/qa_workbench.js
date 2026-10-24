@@ -3414,6 +3414,9 @@
     renderQaWorkbench(true);
   });
 
+  window.qaCurrentCurationSignature = function () {
+    return qaBuildDeepScanSignature(qaGetTrainingItems());
+  };
   window.qaShowCuration = function () { qaWorkbenchState.view = 'curate'; renderQaWorkbench(); };
   window.qaShowOverviewFromCuration = function () { qaWorkbenchState.view = 'overview'; renderQaWorkbench(); };
   window.renderQaWorkbench = renderQaWorkbench;

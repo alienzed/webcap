@@ -130,3 +130,53 @@ test('video candidates render metadata-only thumbnails and remain opt-in', async
   assert.equal(video.preload, 'metadata');
   assert.ok(video.muted);
 });
+
+
+test('cancel while enqueue is in flight cancels the late queued Director job', async () => {
+  const h = harness();
+  let finishEnqueue;
+  const cancelled = [];
+  h.ctx.fetch = (url, opts) => {
+    if (url === '/fs/qa/curate') return new Promise(resolve => { finishEnqueue = resolve; });
+    if (url === '/fs/director/job') {
+      cancelled.push(JSON.parse(opts.body));
+      return Promise.resolve({ok: true, json: async () => ({ok: true})});
+    }
+    throw new Error('Unexpected Director call after stop: ' + url);
+  };
+  h.ctx.window.startQaCuration(entries().slice(0, 3), 'construction', 'same-scope');
+  assert.equal(typeof finishEnqueue, 'function');
+  h.ctx.window.stopQaCuration();
+  finishEnqueue({ok: true, json: async () => ({
+    ok: true, job: {jobId: 'late-queued-job', status: 'queued'}
+  })});
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.deepEqual(cancelled, [{operation: 'cancel_job', jobId: 'late-queued-job'}]);
+  assert.equal(h.calls.errors.length, 0);
+  assert.equal(h.root.querySelector('[data-curation-create]'), null);
+});
+
+test('rare approved construction survives 120-concept budget alongside frequent Sight details', () => {
+  const h = harness();
+  const rows = [
+    {fileName: 'a.png', caption: '', analysis: {}, groupedTags: []},
+    {fileName: 'b.png', caption: '', analysis: {}, groupedTags: []},
+    {fileName: 'rare.png', caption: '', analysis: {}, groupedTags: [
+      {group:'Construction',term:'exceptional one-off connector'}
+    ]},
+  ];
+  for (let i = 0; i < 100; i++) {
+    const tag = {group:'Construction',term:'common-'+String(i).padStart(3,'0')};
+    rows[0].groupedTags.push(tag);
+    rows[1].groupedTags.push(tag);
+  }
+  rows[0].analysis.visionSight = {inventory: {
+    details: Array.from({length: 12}, (_,i)=>'visual-'+i),
+    things: Array.from({length: 32}, (_,i)=>({name:'thing-'+i,
+      qualities: Array.from({length: 4}, (_,j)=>'detail-'+j)})),
+  }};
+  const inventory = h.ctx.window.qaCurationInventory(rows);
+  assert.equal(inventory.concepts.length, 120);
+  assert.ok(inventory.concepts.some(c => c.term === 'exceptional one-off connector'),
+    'single-example approved construction must remain visible to the Director');
+});

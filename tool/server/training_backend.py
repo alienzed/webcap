@@ -63,6 +63,18 @@ class FizgigBackend:
         return saved_artifacts(output_dir, output_name, filenames)
 
     @staticmethod
+    def observe(log_tail):
+        """Translate native Fizgig epoch output without changing DP polling."""
+        from .training_fizgig import observe_h3
+        return observe_h3(log_tail)
+
+    @staticmethod
+    def inspect(run_dir, output_name, *, include_loss=False):
+        """Inspect native Fizgig LoRAs, state commits and optional loss samples."""
+        from .training_fizgig import inspect_h3
+        return inspect_h3(run_dir, output_name, include_loss=include_loss)
+
+    @staticmethod
     def request_checkpoint_save(run_dir):
         """Fizgig watches this sentinel until its next epoch boundary."""
         (Path(run_dir) / ".pause_requested").touch(exist_ok=True)

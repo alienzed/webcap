@@ -1120,3 +1120,23 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .epoch-screening-row-actions .epoch-screening-skip-state {
   color:var(--muted-text,#9ca9b8); font-size:14px; font-weight:600;
 }
+
+/* Test membership is independent of orange checkpoint selection. */
+.epoch-finder-epoch-tick.is-in-test {
+  border-color:#40b987;
+  box-shadow:inset 0 0 0 1px #40b987;
+  color:#40b987;
+}
+.epoch-finder-epoch-tick.is-selected.is-in-test {
+  color:#101923;
+  box-shadow:inset 0 0 0 2px #40b987;
+}
+.epoch-finder-ranking-row.is-in-test {
+  border-left:3px solid #40b987;
+}
+.epoch-finder-ranking-row.is-in-test .epoch {
+  color:#40b987;
+}
+.epoch-finder-inspect-top.is-in-test strong {
+  color:#40b987;
+}

@@ -218,6 +218,15 @@ function wireLoraLibrary() {
     loraEl(id).addEventListener(id === 'search' ? 'input' : 'change', loraFilters);
   });
   loraEl('stage').addEventListener('change', function () { loraChoices(); loraFilters(); });
+  loraEl('list').addEventListener('keydown', function (event) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    var rows = Array.from(loraEl('list').querySelectorAll('.lora-library-item'));
+    var index = rows.indexOf(document.activeElement);
+    if (index === -1 || !rows.length) return;
+    event.preventDefault();
+    rows[Math.max(0, Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))].focus();
+  });
+
   loraEl('editor-close').addEventListener('click', function () { if (loraConfirmChanges()) loraDeselect(); });
   loraEl('save').addEventListener('click', loraSave);
   loraEl('add-group').addEventListener('click', function () { loraGroup('', []); loraSyncJson(); });

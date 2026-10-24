@@ -252,6 +252,18 @@ function loraSave() {
       promptOptions: saved.promptOptions || {},
       guidance: String(saved.guidance || '').trim()
     });
+    // Reflect normalization performed by the backend, unless the user
+    // continued editing while the save was in flight.
+    var unchanged = false;
+    try { unchanged = loraSnapshot() === snapshot; } catch (error) { /* Keep the newer draft. */ }
+    if (unchanged) {
+      loraEl('description').value = saved.description || '';
+      loraEl('words').value = (saved.trainedWords || []).join('\n');
+      loraEl('guidance').value = saved.guidance || '';
+      if (loraEl('json-edit').checked) {
+        loraEl('options').value = JSON.stringify(saved.promptOptions || {}, null, 2);
+      } else loraSetOptions(saved.promptOptions || {});
+    }
     loraEl('profile-state').textContent = loraLabel(loraStatus(current));
     loraFilters();
   }).catch(function (error) { saveError = error; loraReport(error); })

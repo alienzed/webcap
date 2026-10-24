@@ -11,6 +11,7 @@
     visionModel: '',
     previewFileName: '',
     reviewFile: '',
+    reviewMediaItem: null,
     reviewData: null,
     reviewRequestToken: 0,
     currentVisionJobId: '',
@@ -846,6 +847,36 @@
   function closeSavedIntelligence() {
     setScanState.reviewRequestToken += 1;
     el('saved-intelligence-modal').classList.add('hidden');
+    closeAskVisionQuestion();
+    closeVisionImageCaption();
+  }
+
+  function selectVlWorkspaceTab(tab) {
+    if (['sight', 'ask', 'describe'].indexOf(tab) < 0) throw new Error('Unknown VL Workspace tab: ' + tab);
+    var modal = el('saved-intelligence-modal');
+    modal.dataset.vlTab = tab;
+    ['sight', 'ask', 'describe'].forEach(function (name) {
+      el('vl-workspace-tab-' + name).setAttribute('aria-pressed', name === tab ? 'true' : 'false');
+    });
+    el('vl-workspace-sight').classList.toggle('hidden', tab !== 'sight');
+    el('saved-intelligence-status').classList.toggle('hidden', tab !== 'sight');
+    el('vl-workspace-describe-run').classList.toggle('hidden', tab !== 'describe');
+    if (tab === 'ask') {
+      openAskVisionQuestion(setScanState.reviewMediaItem);
+    }
+    if (tab === 'describe') {
+      var media = setScanState.reviewMediaItem;
+      if (visionImageCaptionState.mediaKey !== String(media.key || '')) {
+        closeVisionImageCaption();
+        visionImageCaptionState.mediaKey = String(media.key || '');
+        visionImageCaptionState.text = '';
+        visionImageCaptionState.model = getCaptionVisionModelId();
+      }
+      visionImageCaptionState.open = true;
+    }
+    syncAskVisionUi();
+    syncVisionImageCaptionModal();
+    el('vl-workspace-describe-run').disabled = !!visionImageCaptionState.pending;
   }
 
   function renderSightReview() {
@@ -880,12 +911,16 @@
     button.textContent = active ? 'Active Sight' : 'Use this Sight for Caption Assist and QA';
   }
 
-  function openSavedIntelligenceForMedia(mediaItem) {
+  function openSavedIntelligenceForMedia(mediaItem, initialTab) {
     if (!mediaItem || !mediaItem.fileName) throw new Error('Select a media item to review Sight.');
+    if (!isCaptionVisionSupportedMedia(mediaItem.fileName)) throw new Error('VL Workspace needs an image or video.');
     var folder = String(state.folder || '');
     var file = String(mediaItem.fileName);
     var modal = el('saved-intelligence-modal');
+    if (setScanState.reviewMediaItem && setScanState.reviewMediaItem.key !== mediaItem.key)
+      syncVisionImageCaptionSelection(mediaItem.key);
     setScanState.reviewFile = file;
+    setScanState.reviewMediaItem = mediaItem;
     setScanState.reviewData = null;
     var token = ++setScanState.reviewRequestToken;
     el('saved-intelligence-file').textContent = file;
@@ -895,6 +930,7 @@
     el('sight-review-activate').disabled = true;
     updateSightPreviewMedia(el('sight-review-image'), el('sight-review-video'), folder, file);
     modal.classList.remove('hidden');
+    selectVlWorkspaceTab(initialTab || 'sight');
     el('saved-intelligence-close-btn').focus();
     requestJson('/fs/vision_schema', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -989,6 +1025,17 @@
     rescanBtn.onclick = function () { runSetIntelligence(); };
     forceBtn.onclick = function () { runSetIntelligence('open'); };
     itemView.onclick = function () { openSightReviewForFile(el('set-scan-item-select').value); };
+    ['sight', 'ask', 'describe'].forEach(function (name) {
+      el('vl-workspace-tab-' + name).onclick = function () { selectVlWorkspaceTab(name); };
+    });
+    el('vl-workspace-describe-run').onclick = function () {
+      var button = el('vl-workspace-describe-run');
+      if (button.disabled) return Promise.resolve(false);
+      button.disabled = true;
+      return runVisionImageCaption(setScanState.reviewMediaItem).finally(function () {
+        button.disabled = false;
+      });
+    };
     el('set-scan-preview-review').onclick = function () { openSightReviewForFile(setScanState.previewFileName); };
     el('sight-review-model').onchange = renderSightReview;
     el('sight-review-activate').onclick = activateSightReviewModel;
@@ -1092,6 +1139,8 @@
   window.cancelItemSightRefresh = cancelItemSightRefresh;
   window.refreshSetIntelligenceItem = refreshSetIntelligenceItem;
   window.openSavedIntelligenceForMedia = openSavedIntelligenceForMedia;
+  window.openVlWorkspace = openSavedIntelligenceForMedia;
+  window.closeVlWorkspace = closeSavedIntelligence;
   window.openSetIntelligence = openSetIntelligence;
   window.stopSetIntelligence = stopSetIntelligence;
   window.isSetIntelligenceRunning = isSetIntelligenceRunning;

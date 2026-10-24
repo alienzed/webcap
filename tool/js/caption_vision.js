@@ -1,3 +1,9 @@
+function isVlWorkspaceTab(tab) {
+  var modal = document.getElementById('saved-intelligence-modal');
+  if (!modal) throw new Error('VL Workspace modal is missing.');
+  return !modal.classList.contains('hidden') && modal.dataset.vlTab === tab;
+}
+
 var captionVisionCapabilities = {
   loaded: false,
   promise: null,
@@ -606,6 +612,9 @@ function syncCaptionVisionUi() {
   var refreshSight = document.getElementById('editor-caption-refresh-sight');
   if (!refreshSight) throw new Error('Per-item Sight refresh control is missing.');
   refreshSight.classList.toggle('hidden', !candidateVisible || !mediaSupported);
+  var vlWorkspaceBtn = document.getElementById('editor-caption-vl-workspace');
+  if (!vlWorkspaceBtn) throw new Error('Caption Assist VL Workspace control is missing.');
+  vlWorkspaceBtn.classList.toggle('hidden', !candidateVisible || !mediaSupported);
   var refreshMode = document.getElementById('editor-caption-refresh-sight-mode');
   if (!refreshMode) throw new Error('Sight refresh mode control is missing.');
   refreshMode.classList.add('hidden');
@@ -683,7 +692,6 @@ function getVisionImageCaptionEls() {
     loading: document.getElementById('vision-image-caption-loading'),
     error: document.getElementById('vision-image-caption-error'),
     text: document.getElementById('vision-image-caption-text'),
-    closeBtn: document.getElementById('vision-image-caption-close'),
     copyBtn: document.getElementById('vision-image-caption-copy'),
     useBtn: document.getElementById('vision-image-caption-use'),
     cancelBtn: document.getElementById('vision-image-caption-cancel')
@@ -698,7 +706,7 @@ function syncVisionImageCaptionModal() {
   var els = getVisionImageCaptionEls();
   var open = !!visionImageCaptionState.open;
   var hasText = !!String(visionImageCaptionState.text || '').trim();
-  els.modal.classList.toggle('hidden', !open);
+  els.modal.classList.toggle('hidden', !open || !isVlWorkspaceTab('describe'));
   els.model.textContent = visionImageCaptionState.model ? ('Vision model · ' + visionImageCaptionState.model) : '';
   els.loading.classList.toggle('hidden', !open || !visionImageCaptionState.pending);
   els.error.classList.toggle('hidden', !open || !visionImageCaptionState.error);
@@ -827,8 +835,8 @@ function requestVisionCaptionExtras(mediaItem, captionText, options) {
     });
   });
 }
-function runVisionImageCaption() {
-  var mediaItem = state && state.currentItem;
+function runVisionImageCaption(mediaItemOverride) {
+  var mediaItem = mediaItemOverride || (state && state.currentItem);
   if (!mediaItem || !mediaItem.key || !mediaItem.fileName) {
     setStatus('Select media first.');
     return Promise.resolve(false);
@@ -917,9 +925,7 @@ function useVisionImageCaptionInEditor() {
     return false;
   }
   applyEditorTextAndTriggerInput(text);
-  visionImageCaptionState.open = false;
-  visionImageCaptionState.text = '';
-  syncVisionImageCaptionModal();
+  closeVlWorkspace();
   if (ui && ui.editorEl) ui.editorEl.focus();
   setStatus('Vision Caption moved into the editor.');
   return true;
@@ -927,10 +933,6 @@ function useVisionImageCaptionInEditor() {
 
 function wireVisionImageCaptionUi() {
   var els = getVisionImageCaptionEls();
-  if (!els.closeBtn.__visionImageCaptionBound) {
-    els.closeBtn.__visionImageCaptionBound = true;
-    els.closeBtn.addEventListener('click', closeVisionImageCaption);
-  }
   if (!els.cancelBtn.__visionImageCaptionBound) {
     els.cancelBtn.__visionImageCaptionBound = true;
     els.cancelBtn.addEventListener('click', function () {
@@ -949,33 +951,18 @@ function wireVisionImageCaptionUi() {
     els.useBtn.__visionImageCaptionBound = true;
     els.useBtn.addEventListener('click', useVisionImageCaptionInEditor);
   }
-  if (!els.modal.__visionImageCaptionBackdropBound) {
-    els.modal.__visionImageCaptionBackdropBound = true;
-    els.modal.addEventListener('click', function (event) {
-      if (event.target === els.modal) closeVisionImageCaption();
-    });
-  }
-  if (!document.__visionImageCaptionEscapeBound) {
-    document.__visionImageCaptionEscapeBound = true;
-    document.addEventListener('keydown', function (event) {
-      if (event.key !== 'Escape' || !visionImageCaptionState.open) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      closeVisionImageCaption();
-    }, true);
-  }
   syncVisionImageCaptionModal();
 }
 
 // Disposable, per-item freeform Vision experiment. Nothing is saved.
-var askVisionState = { open: false, key: '', folder: '', jobId: '', pending: false, token: 0, startedAt: 0 };
+var askVisionState = { open: false, key: '', folder: '', mediaItem: null, jobId: '', pending: false, token: 0, startedAt: 0 };
 function askVisionEl(id) {
   var node = document.getElementById('ask-vision-' + id);
   if (!node) throw new Error('Ask VL UI is missing ' + id);
   return node;
 }
 function syncAskVisionUi() {
-  askVisionEl('modal').classList.toggle('hidden', !askVisionState.open);
+  askVisionEl('modal').classList.toggle('hidden', !askVisionState.open || !isVlWorkspaceTab('ask'));
   askVisionEl('send').disabled = askVisionState.pending;
   askVisionEl('question').disabled = askVisionState.pending;
   askVisionEl('loading').classList.toggle('hidden', !askVisionState.pending);
@@ -999,8 +986,8 @@ function closeAskVisionQuestion() {
   askVisionState.open = false;
   syncAskVisionUi();
 }
-function openAskVisionQuestion() {
-  var media = state && state.currentItem;
+function openAskVisionQuestion(mediaOverride) {
+  var media = mediaOverride || (state && state.currentItem);
   if (!media || !isCaptionVisionSupportedMedia(media.fileName)) throw new Error('Ask VL requires an image or video.');
   var mediaKey = String(media.key);
   var folder = String(state.folder || '');
@@ -1016,6 +1003,7 @@ function openAskVisionQuestion() {
     askVisionEl('timing').textContent = '';
     askVisionEl('model').textContent = '';
   }
+  askVisionState.mediaItem = media;
   askVisionState.open = true;
   syncAskVisionUi();
   loadCaptionVisionCapabilities().then(function () {
@@ -1033,7 +1021,7 @@ function sendAskVisionQuestion() {
   if (askVisionState.pending || !askVisionState.open) return Promise.resolve(false);
   var question = askVisionEl('question').value.trim();
   if (!question) { askVisionEl('question').focus(); return Promise.resolve(false); }
-  var item = state.currentItem;
+  var item = askVisionState.mediaItem;
   if (!item || String(item.key) !== askVisionState.key || String(state.folder || '') !== askVisionState.folder) {
     throw new Error('Ask VL media selection changed.');
   }
@@ -1053,7 +1041,7 @@ function sendAskVisionQuestion() {
     return captionAssistRequestJson('/caption/vision-question', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: model, folder: state.folder, media: item.fileName, question: question })
+      body: JSON.stringify({ model: model, folder: askVisionState.folder, media: item.fileName, question: question })
     });
   }).then(function (payload) {
     if (!payload) return null;
@@ -1085,7 +1073,6 @@ function sendAskVisionQuestion() {
   });
 }
 function wireAskVisionUi() {
-  askVisionEl('close').addEventListener('click', closeAskVisionQuestion);
   askVisionEl('cancel').addEventListener('click', cancelAskVisionJob);
   askVisionEl('send').addEventListener('click', sendAskVisionQuestion);
   askVisionEl('copy').addEventListener('click', function () {
@@ -1099,15 +1086,6 @@ function wireAskVisionUi() {
       sendAskVisionQuestion();
     }
   });
-  askVisionEl('modal').addEventListener('click', function (event) {
-    if (event.target === askVisionEl('modal')) closeAskVisionQuestion();
-  });
-  document.addEventListener('keydown', function (event) {
-    if (event.key !== 'Escape' || !askVisionState.open) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    closeAskVisionQuestion();
-  }, true);
   syncAskVisionUi();
 }
 
@@ -1168,6 +1146,12 @@ function wireCaptionVisionUi() {
   if (!details) throw new Error('Caption Assist Details is missing.');
   details.addEventListener('toggle', function () {
     if (details.open) syncCaptionVisionUi();
+  });
+  var vlWorkspaceBtn = document.getElementById('editor-caption-vl-workspace');
+  if (!vlWorkspaceBtn) throw new Error('Caption Assist VL Workspace control is missing.');
+  vlWorkspaceBtn.addEventListener('click', function () {
+    if (!state.currentItem) throw new Error('Select an image to inspect with VL.');
+    openVlWorkspace(state.currentItem, 'sight');
   });
   var refreshSight = document.getElementById('editor-caption-refresh-sight');
   if (!refreshSight) throw new Error('Per-item Sight refresh control is missing.');

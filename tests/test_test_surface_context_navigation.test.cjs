@@ -31,7 +31,7 @@ function harness(){
     dataset:{testWorkspaceMode:mode},classList:makeClassList(),attributes:{},
     setAttribute(name,value){this.attributes[name]=value;}
   }));
-  const stats={finder:0,references:0,analytics:0,screening:0,draft:0};
+  const stats={finder:0,references:0,analytics:0,screening:0,draft:0,urlWrites:[]};
   function makeNode(id){
     return {id,classList:makeClassList(id.startsWith('test-workspace-return-')?['hidden']:[]),
       link:{textContent:''},querySelector(selector){
@@ -48,7 +48,8 @@ function harness(){
   const win={
     getWorkingModelProfileId(){return 'h3';},
     testReferencesOpen(){stats.references++;},
-    runAnalyticsOpen(){stats.analytics++;}
+    runAnalyticsOpen(){stats.analytics++;},
+    syncShellLocationRoute(options){stats.urlWrites.push(options||null);}
   };
   const ctx={window:win,document,els:id=>node('epoch-finder-'+id),
     refresh:()=>{stats.finder++;},screeningModeUi:()=>{stats.screening++;},

@@ -844,33 +844,118 @@
   }
 
   function closeSavedIntelligence() {
+    setScanState.reviewRequestToken += 1;
     el('saved-intelligence-modal').classList.add('hidden');
   }
 
-  function openSavedIntelligenceForMedia(mediaItem) {
-    if (!mediaItem || !mediaItem.fileName) throw new Error('Select a media item to view saved intelligence.');
-    var modal = el('saved-intelligence-modal');
-    var filename = el('saved-intelligence-file');
-    var status = el('saved-intelligence-status');
-    var output = el('saved-intelligence-output');
-    if (!modal || !filename || !status || !output) throw new Error('Saved Intelligence UI is incomplete.');
+  function renderSightReview() {
+    var data = setScanState.reviewData;
+    if (!data) return;
+    var model = el('sight-review-model').value;
+    var sight = (data.models || {})[model] || null;
+    var attempt = (data.attempts || {})[model] || null;
+    var active = !!model && model === data.activeModel;
+    el('saved-intelligence-status').textContent = data.activeModel
+      ? 'Active evidence: ' + data.activeModel : 'No active Sight selected.';
+    el('sight-review-description').textContent = sight && sight.description
+      ? sight.description : 'No structured Sight saved for this model.';
+    var issue = attempt && attempt.issue || '';
+    var finish = attempt && attempt.finishReason || '';
+    el('sight-review-issue').textContent = (active ? 'Currently used by Caption Assist and QA. ' : '') +
+      (issue ? 'Latest attempt: ' + issue : finish && /length|max_tokens/i.test(finish)
+        ? 'Latest attempt reached an output limit.' : 'Review the saved observation before using.');
+    el('saved-intelligence-output').textContent = JSON.stringify({
+      sight: sight ? {description:sight.description, inventory:sight.inventory} : null,
+      latestAttempt: attempt ? {
+        finishReason: attempt.finishReason || '', issue: attempt.issue || '', text: attempt.text || ''
+      } : null
+    }, null, 2);
+    var button = el('sight-review-activate');
+    button.disabled = !sight || active || setScanState.running;
+    button.textContent = active ? 'Active Sight' : 'Use this Sight for Caption Assist and QA';
+  }
 
-    filename.textContent = mediaItem.fileName;
-    var sight = mediaItem.metadata && mediaItem.metadata.vision_sight;
-    if (sight && typeof sight === 'object' && String(sight.description || '').trim()) {
-      status.textContent = 'Cached Sight' + (sight.model ? ' · ' + sight.model : '');
-      output.textContent = JSON.stringify({
-        description: String(sight.description || ''),
-        inventory: sight.inventory && typeof sight.inventory === 'object' ? sight.inventory : {}
-      }, null, 2);
-    } else {
-      status.textContent = 'No saved Sight';
-      output.textContent = isMediaMetadataLoading()
-        ? 'Metadata is still loading. Reopen this view when loading finishes.'
-        : 'No Sight has been saved for this item. Run Set Intelligence to collect it.';
-    }
+  function openSavedIntelligenceForMedia(mediaItem) {
+    if (!mediaItem || !mediaItem.fileName) throw new Error('Select a media item to review Sight.');
+    var folder = String(state.folder || '');
+    var file = String(mediaItem.fileName);
+    var modal = el('saved-intelligence-modal');
+    setScanState.reviewFile = file;
+    setScanState.reviewData = null;
+    var token = ++setScanState.reviewRequestToken;
+    el('saved-intelligence-file').textContent = file;
+    el('saved-intelligence-status').textContent = 'Loading saved VL observations…';
+    el('sight-review-description').textContent = '';
+    el('sight-review-issue').textContent = '';
+    el('sight-review-activate').disabled = true;
+    updateSightPreviewMedia(el('sight-review-image'), el('sight-review-video'), folder, file);
     modal.classList.remove('hidden');
     el('saved-intelligence-close-btn').focus();
+    requestJson('/fs/vision_schema', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({operation:'sight_review', folder:folder, media:file})
+    }).then(function (data) {
+      if (token !== setScanState.reviewRequestToken || String(state.folder || '') !== folder) return;
+      setScanState.reviewData = data;
+      var models = Object.keys(data.models || {});
+      Object.keys(data.attempts || {}).forEach(function (model) {
+        if (models.indexOf(model) < 0) models.push(model);
+      });
+      var select = el('sight-review-model');
+      select.replaceChildren();
+      models.forEach(function (model) {
+        var option = document.createElement('option');
+        option.value = model;
+        option.textContent = model + (model === data.activeModel ? ' · active' : '');
+        select.appendChild(option);
+      });
+      if (models.length) select.value = data.activeModel && models.indexOf(data.activeModel) >= 0
+        ? data.activeModel : models[0];
+      if (!models.length) {
+        el('saved-intelligence-status').textContent = 'No saved VL observations for this image.';
+        el('sight-review-description').textContent = 'Run Sight from Prepare Set to collect evidence.';
+        return;
+      }
+      renderSightReview();
+    }).catch(function (error) {
+      if (token !== setScanState.reviewRequestToken) return;
+      el('saved-intelligence-status').textContent = 'Could not load saved Sight: ' + error.message;
+      reportConsoleError('Sight Review', error);
+    });
+  }
+
+  function openSightReviewForFile(file) {
+    var item = (state.items || []).find(function (row) { return row && row.fileName === file; });
+    if (!item) throw new Error('Sight review could not find the media item: ' + file);
+    openSavedIntelligenceForMedia(item);
+  }
+
+  function activateSightReviewModel() {
+    var data = setScanState.reviewData;
+    var model = el('sight-review-model').value;
+    var folder = String(state.folder || '');
+    if (!data || !model || !data.models[model]) throw new Error('Choose saved Sight to activate.');
+    var token = setScanState.reviewRequestToken;
+    var button = el('sight-review-activate');
+    button.disabled = true;
+    requestJson('/fs/vision_schema', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({operation:'activate_sight',folder:folder,media:data.file,visionModel:model})
+    }).then(function (response) {
+      if (token !== setScanState.reviewRequestToken || String(state.folder || '') !== folder) return;
+      publishSetIntelligenceMetadata(folder, data.file, 'vision_sight', response.sight);
+      data.activeModel = model;
+      el('sight-review-model').querySelectorAll('option').forEach(function(option){
+        option.textContent = option.value + (option.value === model ? ' · active' : '');
+      });
+      renderSightReview();
+      window.setStatus('Sight from ' + model + ' is now active for ' + data.file + '.');
+    }).catch(function (error) {
+      if (token !== setScanState.reviewRequestToken) return;
+      button.disabled = false;
+      el('sight-review-issue').textContent = 'Could not activate Sight: ' + error.message;
+      reportConsoleError('Sight Review activate', error);
+    });
   }
 
   function bindSetIntelligence() {
@@ -898,7 +983,10 @@
     stopBtn.onclick = stopSetIntelligence;
     rescanBtn.onclick = function () { runSetIntelligence(); };
     forceBtn.onclick = function () { runSetIntelligence('open'); };
-    itemView.onclick = viewSelectedSightResponse;
+    itemView.onclick = function () { openSightReviewForFile(el('set-scan-item-select').value); };
+    el('set-scan-preview-review').onclick = function () { openSightReviewForFile(setScanState.previewFileName); };
+    el('sight-review-model').onchange = renderSightReview;
+    el('sight-review-activate').onclick = activateSightReviewModel;
     el('set-scan-item-retry').onclick = function () {
       var file = el('set-scan-item-select').value;
       if (file) runSetIntelligence('open', [file]);

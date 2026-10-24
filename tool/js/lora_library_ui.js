@@ -18,7 +18,9 @@ function loraProgress() {
   loraEl('progress-bar').value = count;
   loraEl('progress-remaining').textContent = !scoped.length ? 'No LoRAs discovered' :
     remaining ? remaining + ' still without a profile' : 'All discovered LoRAs have profiles';
-  loraEl('next').disabled = !remaining || loraBrowser.busy;
+  var onlyCurrent = remaining === 1 && !!loraBrowser.selected && !loraBrowser.selected.enriched &&
+    (!stage || loraBrowser.selected.stage === stage);
+  loraEl('next').disabled = !remaining || onlyCurrent || loraBrowser.busy;
   loraEl('next').textContent = remaining ? 'Next unprofiled →' : 'All profiled ✓';
 }
 function loraReport(error) {
@@ -131,6 +133,10 @@ function loraScan(target) {
       loraChoices(); loraFilters();
       var exact = loraBrowser.items.filter(function (item) { return (!target.stage || item.stage === target.stage) && (item.name.toLowerCase() === target.name.toLowerCase() || item.path.toLowerCase() === target.name.toLowerCase()); });
       if (exact.length !== 1) throw new Error(exact.length ? 'LoRA name is ambiguous across configured roots.' : 'LoRA is not present in configured model roots.');
+      if (loraBrowser.selected && loraKey(loraBrowser.selected) === loraKey(exact[0])) {
+        if (!loraConfirmChanges()) return;
+        loraDeselect(); // Reread the live sidecar rather than reuse stale editor fields.
+      }
       return loraSelect(exact[0]);
     }
     if (loraBrowser.selected) {
@@ -252,7 +258,8 @@ function loraSave() {
 }
 function loraClose() {
   if (loraBrowser.busy || !loraConfirmChanges()) return;
-  ++loraBrowser.profile; ++loraBrowser.scan;
+  ++loraBrowser.scan;
+  loraDeselect(); // Do not reopen with discarded edits or stale filesystem data.
   loraEl('modal').classList.add('hidden'); loraEl('modal').setAttribute('aria-hidden', 'true');
   if (loraBrowser.origin && loraBrowser.origin.isConnected) loraBrowser.origin.focus();
 }
@@ -266,7 +273,20 @@ function wireLoraLibrary() {
   loraEl('close').addEventListener('click', loraClose);
   loraEl('modal').addEventListener('mousedown', function (event) { if (event.target === loraEl('modal')) loraClose(); });
   document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && !loraEl('modal').classList.contains('hidden')) { event.stopImmediatePropagation(); event.preventDefault(); loraClose(); }
+    if (loraEl('modal').classList.contains('hidden')) return;
+    if (event.key === 'Escape') {
+      event.stopImmediatePropagation(); event.preventDefault(); loraClose(); return;
+    }
+    if (event.key !== 'Tab') return;
+    var focusable = Array.from(loraEl('modal').querySelectorAll(
+      'button:not(:disabled),input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),summary,[tabindex]:not([tabindex="-1"])'
+    )).filter(function (element) { return element.getClientRects().length > 0; });
+    if (!focusable.length) return;
+    if (event.shiftKey && document.activeElement === focusable[0]) {
+      event.preventDefault(); focusable[focusable.length - 1].focus();
+    } else if (!event.shiftKey && document.activeElement === focusable[focusable.length - 1]) {
+      event.preventDefault(); focusable[0].focus();
+    }
   }, true);
   loraEl('refresh').addEventListener('click', function () {
     if (loraBrowser.busy || !loraConfirmChanges()) return;
@@ -305,6 +325,7 @@ function wireLoraLibrary() {
     var current = loraBrowser.selected ? loraKey(loraBrowser.selected) : '';
     var after = remaining.find(function (item) { return loraKey(item).localeCompare(current) > 0; });
     var target = after || remaining[0];
+    if (loraBrowser.selected && loraKey(loraBrowser.selected) === loraKey(target)) return;
     loraEl('search').value = ''; loraEl('filter').value = ''; loraEl('folder').value = '';
     loraChoices(); loraFilters();
     loraSelect(target);
@@ -319,6 +340,9 @@ function wireLoraLibrary() {
     loraEl('groups').classList.toggle('hidden', enabled);
     loraEl('add-group').disabled = enabled;
     loraUpdateDirty();
+  });
+  loraEl('modal').addEventListener('focusin', function (event) {
+    if (!loraEl('modal').contains(event.target)) loraEl('search').focus();
   });
   document.getElementById('generate-lora-library-open').addEventListener('click', function () { openLoraLibrary(); });
 }

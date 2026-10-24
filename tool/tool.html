@@ -3090,7 +3090,7 @@
                                 <button id="diagnostics-assessment-run" type="button">Complete Missing Tests</button>
                                 <button id="diagnostics-assessment-stop" type="button" class="review-captions-btn hidden" hidden disabled>Stop Assessment</button>
                                 <button id="diagnostics-assessment-refresh" type="button" class="review-captions-btn">Refresh</button>
-                                <label class="model-assessment-deep" title="Additional Set samples and extended structured Storyboard JSON capacity tests (4K, 8K and 16K)"><input id="diagnostics-assessment-deep" type="checkbox"> Extended output tests <small>(4K/8K/16K)</small></label>
+                                <label class="model-assessment-deep" title="Extended Storyboard tests (4K/8K/16K), more Vision samples, and automatic LLM judging of completed Director outputs. Choose an LLM judge below."><input id="diagnostics-assessment-deep" type="checkbox"> Deep assessment <small>(4K/8K/16K + LLM judge)</small></label>
                                 <details class="model-assessment-tools">
                                     <summary>More</summary>
                                     <div class="model-assessment-toolbar">
@@ -3111,7 +3111,7 @@
                             <p id="diagnostics-assessment-transfer-status" class="app-settings-help" role="status"></p>
                             <div class="model-assessment-filters">
                                 <label>Runtime <select id="diagnostics-assessment-runtime" aria-label="Assessment runtime"><option value="local">Local</option><option value="remote">Remote</option><option value="all">All</option></select></label>
-                                <label class="model-assessment-judge" title="Select a judge, then expand a completed Director model and choose Assess with LLM. Scores are advisory.">LLM judge <select id="diagnostics-assessment-judge-model" aria-label="Choose LLM judge model"><option value="">Choose judge model…</option></select></label>
+                                <label class="model-assessment-judge" title="Deep assessment automatically judges saved Director output using this model. You can also manually reassess completed models. Scores are advisory.">LLM judge <select id="diagnostics-assessment-judge-model" aria-label="Choose LLM judge model"><option value="">Choose judge model…</option></select></label>
                                 <label class="model-assessment-search">Filter <input id="diagnostics-assessment-filter" type="search" placeholder="Model name, runtime or role"></label>
                             </div>
                             <div class="model-assessment-feedback">

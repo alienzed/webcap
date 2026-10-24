@@ -8,6 +8,10 @@ on:
       - 'tool/server/llm_runner.py'
       - 'tool/js/model_lab.js'
       - 'tool/js/diagnostics.js'
+      - 'tool/css/modals.css'
+      - 'tool/tool.html'
+      - 'tests/model_assessment_preview_ui.test.js'
+      - 'tests/model_assessment_speed_ui.test.cjs'
       - 'tool/js/progress_card.js'
       - 'tests/test_model_lab.py'
       - 'tests/model_assessment_preview_ui.test.js'
@@ -57,4 +61,5 @@ jobs:
           node --check tool/js/diagnostics.js
           node --check tool/js/progress_card.js
           node tests/test_model_lab_progress.js
+          node --test tests/model_assessment_preview_ui.test.js tests/model_assessment_speed_ui.test.cjs
           node --test tests/model_assessment_preview_ui.test.js

@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import secrets
 import tempfile
@@ -502,6 +503,7 @@ def _new_run_payload(config):
         "error": "",
         "attempts": [],
         "qualityReviews": {},
+        "autoJudgeModelRef": str(config.get("judgeModelRef") or "").strip() if depth == "deep" and director_models else "",
     }
     run["reused"], run["previousFailures"] = _reusable_evidence(run)
     return run
@@ -1281,6 +1283,35 @@ def _runner(run_id):
     finally:
         with _lock:
             _active.pop(run_id, None)
+        # Deep's explicitly chosen judge uses the existing one-at-a-time quality
+        # worker after assessment admission has been released. No second lane.
+        judge_ref = str(run.get("autoJudgeModelRef") or "")
+        if run.get("status") == "completed" and judge_ref:
+            from .model_lab_quality import start_review
+            for model in run.get("directorModels") or []:
+                model_ref = model["modelRef"]
+                try:
+                    start_review(run_id, model_ref, judge_ref)
+                    with _lock:
+                        active_review = _active.get("quality:" + run_id)
+                        review_thread = active_review["thread"] if active_review else None
+                    # A fast local judge may already have finished and released
+                    # its active slot before start_review returns.
+                    if review_thread:
+                        review_thread.join()
+                except Exception as exc:
+                    logging.getLogger(__name__).exception(
+                        "Deep Model Assessment quality review could not start for %s", model_ref
+                    )
+                    with _lock:
+                        saved = _read_raw(run_id)
+                        saved.setdefault("qualityReviews", {})[model_ref] = {
+                            "modelRef": model_ref, "judgeModelRef": judge_ref,
+                            "status": "failed", "error": str(exc),
+                            "finishedAt": _now_iso(), "tasks": [],
+                            "sourceRunId": run_id,
+                        }
+                        _write_run(saved)
 
 
 def _start_thread(run_id):

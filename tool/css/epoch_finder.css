@@ -982,16 +982,97 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
   font-size: 14px;
 }
 
-/* Manual rounds use the existing sidebar, with contextual Stop/Cancel controls. */
-.epoch-screening-round-item { display:flex; align-items:stretch; gap:6px; min-width:0; }
-.epoch-screening-round-item > .epoch-finder-campaign { flex:1 1 0; min-width:0; }
-.epoch-screening-round-item > .review-captions-btn {
-  /* The shared review button is width:100%; it must not consume the whole round row. */
+/* Manual rounds: single selectable card, contextual action and honest render progress. */
+.epoch-screening-round-item {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:7px 9px;
+  min-width:0;
+  padding:10px;
+  border:1px solid var(--border-color,#384653);
+  border-radius:9px;
+  background:var(--panel-bg,#1b2530);
+}
+.epoch-screening-round-item.active {
+  border-color:var(--accent-color,#79a9d7);
+  background:var(--background-secondary,#344251);
+}
+.epoch-screening-round-item > .epoch-finder-campaign,
+.epoch-screening-round-item > .epoch-finder-campaign.active {
+  display:block;
+  width:100%;
+  min-width:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.epoch-screening-round-item > .epoch-finder-campaign:focus-visible,
+.epoch-screening-round-item > [data-screening-round-action]:focus-visible {
+  outline:2px solid var(--accent-color,#79a9d7);
+  outline-offset:3px;
+}
+.epoch-screening-round-title {
+  display:flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  gap:3px 7px;
+  line-height:1.3;
+}
+.epoch-screening-round-title strong { font-size:16px; }
+.epoch-screening-round-state {
+  color:var(--text-muted,#aeb8c4);
+  font-size:13px;
+  font-weight:600;
+  text-transform:capitalize;
+}
+.epoch-screening-round-item[data-round-state="running"] .epoch-screening-round-state {
+  color:var(--accent-color,#79a9d7);
+}
+.epoch-screening-round-item > .epoch-finder-campaign small {
+  font-size:13px;
+  line-height:1.35;
+  opacity:.85;
+  margin-top:5px;
+  overflow-wrap:anywhere;
+}
+.epoch-screening-round-item > [data-screening-round-action] {
+  /* Do not let the shared full-width button force the card's action outside. */
   width:auto;
-  flex:0 0 auto;
+  flex:none;
+  grid-column:2;
+  grid-row:1;
   align-self:center;
+  justify-self:end;
+  margin:0;
+  min-height:34px;
+  padding:6px 9px;
   white-space:nowrap;
-  font-size:14px;
+  font-size:13px;
+}
+.epoch-screening-round-item > [data-screening-round-action="delete"] {
+  color:var(--danger-color,#f3a0a0);
+}
+.epoch-screening-round-progress {
+  grid-column:1 / -1;
+  height:5px;
+  min-width:0;
+  overflow:hidden;
+  border-radius:5px;
+  background:var(--background-secondary,#344251);
+}
+.epoch-screening-round-item.active .epoch-screening-round-progress {
+  background:var(--panel-bg,#1b2530);
+}
+.epoch-screening-round-progress i {
+  display:block;
+  height:100%;
+  width:0;
+  background:var(--accent-color,#79a9d7);
+  border-radius:5px;
+  transition:width .3s ease;
 }
 .epoch-screening-row.is-collapsed .epoch-screening-cases { display:none; }
 .epoch-screening-row-head .epoch-screening-expand-btn { width:auto; margin:0; min-height:30px; font-size:14px; padding:5px 9px; }

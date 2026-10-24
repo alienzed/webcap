@@ -1,3 +1,9 @@
+function isVlWorkspaceTab(tab) {
+  var modal = document.getElementById('saved-intelligence-modal');
+  if (!modal) throw new Error('VL Workspace modal is missing.');
+  return !modal.classList.contains('hidden') && modal.dataset.vlTab === tab;
+}
+
 var captionVisionCapabilities = {
   loaded: false,
   promise: null,

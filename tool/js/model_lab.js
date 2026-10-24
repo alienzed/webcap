@@ -51,7 +51,10 @@ function modelLabAttemptLabel(kind) {
     set_vocabulary_challenge: 'Set vocabulary challenge'
   };
   if (labels[kind]) return labels[kind];
-  if (String(kind || '').indexOf('director_scene_plan_') === 0) return 'Storyboard JSON · ' + kind.split('_').pop() + ' tokens';
+  if (String(kind || '').indexOf('director_scene_plan_') === 0) {
+    var budget = Number(kind.split('_').pop());
+    return budget > 2048 ? 'Storyboard stress · ' + budget + ' tokens (' + Math.floor(budget / 256) + ' requested scenes)' : 'Storyboard JSON · ' + budget + ' tokens';
+  }
   if (String(kind || '').indexOf('vision:') === 0) {
     return String(kind).endsWith('_challenge') ? 'Vision vocabulary challenge' : 'Vision vocabulary synthesis';
   }

@@ -1945,6 +1945,12 @@
       });
     });
     heroActions.appendChild(qaCreateButton('Curate Training Set', 'qa-primary', 'qa-curate-start'));
+    if (qaWorkbenchState.statusMessage) {
+      var qaNotice = document.createElement('div');
+      qaNotice.className = 'qa-deep-scan-note';
+      qaNotice.textContent = qaWorkbenchState.statusMessage;
+      heroActions.appendChild(qaNotice);
+    }
     heroActions.appendChild(qaCreateButton(
       qaWorkbenchState.deepScanSessionActive ? 'Deep QA running' : 'Run Deep QA',
       '', 'qa-start'
@@ -3213,6 +3219,7 @@
       } catch (err) {
         window.reportConsoleError('QA Curation', err);
         qaWorkbenchState.statusMessage = String(err.message || err);
+        setStatus('QA Curation: ' + qaWorkbenchState.statusMessage);
         renderQaWorkbench();
       }
       return;

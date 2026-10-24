@@ -650,133 +650,14 @@ function openHelpReadmeInPreview() {
   });
 }
 
-var loraLibrarySelected = null;
-
-function loraLibraryRequest(method, body) {
-  return fetch('/fs/lora_library', {
-    method: method, headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined
-  }).then(function (res) {
-    return res.json().then(function (data) {
-      if (!res.ok || data.ok === false) throw new Error(data.error || 'LoRA Library failed.');
-      return data;
-    });
-  });
-}
-
-function refreshLoraLibrary() {
-  var list = document.getElementById('lora-library-list');
-  var status = document.getElementById('lora-library-status');
-  status.textContent = 'Scanning configured LoRA roots…';
-  loraLibraryRequest('GET').then(function (data) {
-    var items = data.items || [];
-    var warnings = data.warnings || [];
-    status.textContent = items.length + ' discovered · ' +
-      items.filter(function (item) { return item.enriched; }).length + ' enriched' +
-      (warnings.length ? ' · ' + warnings.length + ' missing root' + (warnings.length === 1 ? '' : 's') : '');
-    if (warnings.length) {
-      status.textContent += '\nSkipped: ' + warnings.map(function (warning) {
-        return warning.stage.toUpperCase() + ' / ' + warning.path;
-      }).join('\n');
-      warnings.forEach(function (warning) {
-        window.reportConsoleWarning('LoRA Library', 'Skipped missing configured root (' +
-          warning.stage + '): ' + warning.path);
-      });
-    }
-    list.replaceChildren();
-    items.forEach(function (item) {
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'review-captions-btn';
-      button.style.margin = '4px';
-      button.textContent = item.stage.toUpperCase() + ' / ' + item.path +
-        (item.enriched ? ' · Profile' : ' · Add profile');
-      button.addEventListener('click', function () { openLoraLibraryProfile(item); });
-      list.appendChild(button);
-    });
-  }).catch(function (error) {
-    status.textContent = 'Could not scan LoRA roots: ' + error.message;
-    if (typeof window.reportConsoleError === 'function')
-      window.reportConsoleError('LoRA Library', error.message);
-  });
-}
-
-function openLoraLibraryProfile(item) {
-  loraLibraryRequest('POST', {stage: item.stage, path: item.path}).then(function (data) {
-    loraLibrarySelected = item;
-    var enrichment = (data.modelProfile || {}).enrichment || {};
-    document.getElementById('lora-library-profile-heading').textContent =
-      item.stage.toUpperCase() + ' / ' + item.path;
-    document.getElementById('lora-library-description').value = enrichment.description || '';
-    document.getElementById('lora-library-words').value = (enrichment.trainedWords || []).join('\n');
-    document.getElementById('lora-library-options').value = JSON.stringify(enrichment.promptOptions || {}, null, 2);
-    document.getElementById('lora-library-guidance').value = enrichment.guidance || '';
-    document.getElementById('lora-library-editor').classList.remove('hidden');
-  }).catch(function (error) {
-    document.getElementById('lora-library-status').textContent = error.message;
-  });
-}
-
 window.openLoraMetadataEditor = function (name, stage) {
-  name = String(name || '').replace(/\\\\/g, '/').trim();
-  if (!name) throw new Error('Select a LoRA before opening its metadata.');
-  openAppSettingsModal();
-  setAppSettingsTab('models', false);
-  return loraLibraryRequest('GET').then(function (data) {
-    var matches = (data.items || []).filter(function (item) {
-      return (!stage || item.stage === stage) &&
-        (item.name.toLowerCase() === name.toLowerCase() ||
-         item.path.toLowerCase() === name.toLowerCase());
-    });
-    if (matches.length !== 1) {
-      throw new Error(matches.length ? 'LoRA name is ambiguous across configured roots.' :
-        'LoRA is not present in the configured model roots.');
-    }
-    return openLoraLibraryProfile(matches[0]);
-  }).catch(function (error) {
-    document.getElementById('lora-library-status').textContent = String(error.message || error);
-    if (typeof window.reportConsoleError === 'function')
-      window.reportConsoleError('LoRA Metadata', String(error.message || error));
-  });
+  return openLoraLibrary({name: name, stage: stage});
 };
-
-function saveLoraLibraryProfile() {
-  if (!loraLibrarySelected) return;
-  var status = document.getElementById('lora-library-status');
-  var payload;
-  try {
-    payload = {
-      stage: loraLibrarySelected.stage, path: loraLibrarySelected.path,
-      enrichment: {
-        description: document.getElementById('lora-library-description').value.trim(),
-        trainedWords: document.getElementById('lora-library-words').value.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean),
-        promptOptions: JSON.parse(document.getElementById('lora-library-options').value || '{}'),
-        guidance: document.getElementById('lora-library-guidance').value.trim()
-      }
-    };
-  } catch (error) {
-    status.textContent = 'Invalid prompt options JSON: ' + error.message;
-    return;
-  }
-  loraLibraryRequest('POST', payload).then(function () {
-    status.textContent = 'Saved profile for ' + payload.path;
-    refreshLoraLibrary();
-  }).catch(function (error) {
-    status.textContent = 'Could not save profile: ' + error.message;
-    if (typeof window.reportConsoleError === 'function')
-      window.reportConsoleError('LoRA Library', error.message);
-  });
-}
 
 function wireAppSettingsUi() {
   document.getElementById('app-settings-llama-unload').addEventListener('click', function () { appSettingsLlamaAction('unload'); });
   document.getElementById('app-settings-llama-stop').addEventListener('click', function () { appSettingsLlamaAction('stop'); });
-  document.getElementById('lora-library-refresh').addEventListener('click', refreshLoraLibrary);
-  document.getElementById('lora-library-save').addEventListener('click', saveLoraLibraryProfile);
-  document.getElementById('lora-library-editor-close').addEventListener('click', function () {
-    loraLibrarySelected = null;
-    document.getElementById('lora-library-editor').classList.add('hidden');
-  });
+  document.getElementById('open-lora-library-settings').addEventListener('click', function () { openLoraLibrary(); });
   if (ui.shellSettingsBtn) ui.shellSettingsBtn.onclick = openAppSettingsModal;
   if (ui.themeToggleBtn) {
     ui.themeToggleBtn.onclick = function () {

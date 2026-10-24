@@ -3814,6 +3814,9 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-raw { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 11px; }
 .model-assessment-raw > summary { cursor: pointer; font-weight: 650; color: var(--text); font-size: 14px; }
 .model-assessment-raw > div { margin: 8px 0; font-size: 14px; overflow-wrap: anywhere; }
+.model-assessment-response { margin: 9px 0; padding: 5px 0 5px 12px; border-left: 2px solid var(--border); }
+.model-assessment-response > summary { cursor: pointer; font-size: 14px; }
+.model-assessment-response-text { max-height: 370px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; user-select: text; }
 
 /* Workflow qualifications: legible, named evidence states. */
 .model-assessment-judge { display: inline-flex; align-items: center; gap: 8px; margin: 8px 12px 8px 0; }

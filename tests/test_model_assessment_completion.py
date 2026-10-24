@@ -186,3 +186,60 @@ def test_new_model_pathology_warning_does_not_require_legacy_calibration():
     })
     assert signal["seriousWarning"] is True
     assert signal["pathologies"] == ["looping"]
+
+
+def test_scene_count_is_adherence_evidence_not_structured_failure(monkeypatch):
+    import json
+    run = model_lab._new_run_payload({"directorModels": [director()]})
+    scenes = [
+        {"title": f"Scene {i}", "summary": "Intent", "prompt": "Brief but usable motion in shot " + str(i) + ".",
+         "suggestedDurationSeconds": 8}
+        for i in range(3)
+    ]
+    monkeypatch.setattr(llm_runner, "job_status", lambda _job, consume=False: {
+        "status": "completed", "result": {
+            "text": json.dumps({"scenes": scenes}), "finishReason": "stop",
+            "usage": {"completion_tokens": 300},
+        },
+    })
+    attempt = model_lab._probe_job(
+        run, kind="director_scene_plan_4096", role="director",
+        model_ref=director()["modelRef"], enqueue=lambda: {"jobId": "job"},
+    )
+    assert attempt["status"] == "completed"
+    evidence = attempt["result"]["scenePlanAssessment"]
+    assert evidence == {
+        "requestedScenes": 16, "actualScenes": 3, "validScenes": 3,
+        "detailedScenes": 0, "countMatched": False,
+        "stressTest": True, "finishReason": "stop",
+    }
+    assert attempt["result"]["visibleOutputWords"] > 0
+
+
+@pytest.mark.parametrize("content,finish,failure_kind", [
+    ('{"scenes":[{"title":"Truncated', "length", "capacity"),
+    ('{"scenes":[{"title":"Broken', "stop", "contract"),
+    ('{"scenes":[]}', "stop", "contract"),
+    ('{"scenes":[{"title":"Scene","summary":"Valid","prompt":"Readable","suggestedDurationSeconds":40}]}',
+     "stop", "contract"),
+])
+def test_scene_structure_and_capacity_remain_explicit_failures(monkeypatch, content, finish, failure_kind):
+    run = model_lab._new_run_payload({"directorModels": [director()]})
+    monkeypatch.setattr(llm_runner, "job_status", lambda _job, consume=False: {
+        "status": "completed", "result": {
+            "text": content, "finishReason": finish,
+            "usage": {"completion_tokens": 4096},
+        },
+    })
+    attempt = model_lab._probe_job(
+        run, kind="director_scene_plan_4096", role="director",
+        model_ref=director()["modelRef"], enqueue=lambda: {"jobId": "job"},
+    )
+    assert attempt["status"] == "failed"
+    assert attempt["failureKind"] == failure_kind
+    assert attempt["result"]["text"] == content
+    assert attempt["result"]["scenePlanAssessment"]["requestedScenes"] == 16
+
+
+def test_scene_plan_protocol_bumped_after_assessment_semantics_change():
+    assert model_lab.ASSESSMENT_PROTOCOL == "webcap-model-assessment-structured-v3"

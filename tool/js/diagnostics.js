@@ -76,7 +76,7 @@ function diagnosticsAssessmentApplyMeasurements(row, runs) {
     var probes=(run.models||{})[ref]||{};
     Object.keys(probes).forEach(function(kind){
       if(kind.indexOf('director_scene_plan_')===0 &&
-         run.protocol==='webcap-model-assessment-structured-v2' &&
+         ['webcap-model-assessment-structured-v2', 'webcap-model-assessment-structured-v3'].includes(run.protocol) &&
          Number((probes[kind].counts||{}).completed||0)>0)
         output=Math.max(output,Number(probes[kind].verifiedOutputTokens||0));
     });
@@ -155,6 +155,42 @@ function diagnosticsAssessmentCounts(row, tests) {
   // Historical prose calibrations are not proof of structured Scene capacity.
   row.dataset.assessmentSanity = state;
 }
+
+function diagnosticsAssessmentInspectResponse(runId, modelRef, kind, host) {
+  host.textContent = 'Loading saved response…';
+  function findAttempt(run) {
+    var attempts = (run.attempts || []).filter(function (a) {
+      return a.modelRef === modelRef && a.kind === kind;
+    });
+    return attempts.filter(function (a) { return a.status === 'completed'; }).pop() ||
+      attempts[attempts.length - 1] || null;
+  }
+  modelLabRequest('/app/model-lab?run=' + encodeURIComponent(runId)).then(function (payload) {
+    var run = payload.run, attempt = findAttempt(run);
+    if (attempt) return attempt;
+    var key = kind + '|' + modelRef + '|';
+    var origin = (run.reused || {})[key];
+    if (!origin) throw new Error('The selected probe has no saved response in this run.');
+    return modelLabRequest('/app/model-lab?run=' + encodeURIComponent(origin.runId)).then(function (source) {
+      var saved = (source.run.attempts || []).find(function (a) { return a.id === origin.attemptId; });
+      if (!saved) throw new Error('Reused source probe is missing from its saved run.');
+      return saved;
+    });
+  }).then(function (attempt) {
+    var result = attempt.result || {};
+    host.textContent = 'Status: ' + attempt.status +
+      (attempt.error ? ' · ' + attempt.error : '') +
+      (result.finishReason ? ' · finish: ' + result.finishReason : '');
+    var content = document.createElement('pre');
+    content.className = 'model-assessment-response-text';
+    content.textContent = String(result.text || '(No response text was recorded.)');
+    host.appendChild(content);
+  }).catch(function (error) {
+    host.textContent = 'Could not inspect saved response: ' + error.message;
+    reportConsoleError('Model Assessment response', error);
+  });
+}
+
 function diagnosticsAssessmentSize(bytes) {
   var amount = Number(bytes || 0);
   return amount > 0 ? (amount / 1073741824).toFixed(1) + ' GiB' : '—';
@@ -482,7 +518,7 @@ function refreshUnifiedModelAssessment() {
         Object.keys(byKind).forEach(function (kind) {
           // Old Scene prompts did not use WebCap's real production contract.
           if (kind.indexOf('director_scene_plan_') === 0 &&
-              saved.protocol !== 'webcap-model-assessment-structured-v2') return;
+              !['webcap-model-assessment-structured-v2', 'webcap-model-assessment-structured-v3'].includes(saved.protocol)) return;
           var probe = byKind[kind];
           var passed = Number((probe.counts || {}).completed || 0) > 0;
           var selected = tests[kind];
@@ -555,22 +591,26 @@ function refreshUnifiedModelAssessment() {
       summary.appendChild(metrics);
       panel.appendChild(summary);
 
-      var familyStats = {writing:[0,0,0],thinking:[0,0,0],vocabulary:[0,0,0],vision:[0,0,0]};
+      var familyStats = {writing:[0,0,0],stress:[0,0,0],thinking:[0,0,0],vocabulary:[0,0,0],vision:[0,0,0]};
       var issueCounts = {};
       Object.keys(tests).forEach(function (probe) {
         var item = tests[probe], counts = item.counts || {};
         var family = probe === 'director_thinking' ? 'thinking' :
+          (probe.indexOf('director_scene_plan_') === 0 && Number(probe.split('_').pop()) > 2048) ? 'stress' :
           (probe.indexOf('director_scene_plan_') === 0 || probe.indexOf('director_writing') === 0) ? 'writing' :
           (probe === 'vision_open' || probe === 'vision_group_aware') ? 'vision' : 'vocabulary';
         familyStats[family][0] += Number(counts.completed || 0);
         familyStats[family][1] += Number(counts.failed || 0);
         familyStats[family][2] += Number(counts.skipped || 0) + Number(counts.interrupted || 0);
         if (!item.error || !Number(counts.failed || 0)) return;
-        var reason = /exceeds the available context size|context size.*exceed/i.test(item.error)
+        var reason = /capacity exhausted|truncated|token budget/i.test(item.error)
+          ? 'Output capacity reached' :
+          /exceeds the available context size|context size.*exceed/i.test(item.error)
           ? 'Context window exceeded' :
           /empty response|no answer text/i.test(item.error) ? 'Empty model response' :
           /invalid|schema|validation/i.test(item.error) ? 'Invalid structured response' :
           'Other probe failures';
+        if (family === 'stress') reason = 'Stress test · ' + reason;
         var group = issueCounts[reason] || (issueCounts[reason] = {count:0, sample:''});
         group.count += Number(counts.failed || 0);
         if (!group.sample) group.sample = item.error;
@@ -580,7 +620,7 @@ function refreshUnifiedModelAssessment() {
       var caption = document.createElement('strong');
       caption.textContent = 'Capabilities';
       section.appendChild(caption);
-      [['writing','Storyboard / writing'],['thinking','Thinking'],['vocabulary','Schema Assist'],['vision','Sight']].forEach(function (entry) {
+      [['writing','Storyboard JSON'],['stress','Long-form stress (not quality grade)'],['thinking','Thinking'],['vocabulary','Schema Assist'],['vision','Sight']].forEach(function (entry) {
         var amounts = familyStats[entry[0]];
         if (!amounts.some(Boolean)) return;
         var badge = document.createElement('span');
@@ -633,8 +673,34 @@ function refreshUnifiedModelAssessment() {
           (item._runId ? ' · Run ' + item._runId : '') +
           (item._imported ? ' · Imported' : '') +
           (item.error ? ' · ' + item.error : '');
+        var scenes = item.scenePlanAssessment;
+        if (scenes && scenes.actualScenes !== null && scenes.actualScenes !== undefined) {
+          detail.textContent += ' · ' + scenes.actualScenes + '/' + scenes.requestedScenes +
+            ' scenes · ' + scenes.validScenes + ' valid · ' + scenes.detailedScenes + ' detailed' +
+            (scenes.countMatched === false ? ' · scene count differs' : '') +
+            (scenes.finishReason ? ' · finish: ' + scenes.finishReason : '');
+        } else if (scenes && scenes.finishReason) {
+          detail.textContent += ' · finish: ' + scenes.finishReason;
+        }
         detail.title = probe;
         raw.appendChild(detail);
+        if (probe.indexOf('director_scene_plan_') === 0 && item._runId) {
+          var response = document.createElement('details');
+          response.className = 'model-assessment-response';
+          var responseTitle = document.createElement('summary');
+          responseTitle.textContent = 'Inspect saved ' + modelLabAttemptLabel(probe) + ' response';
+          response.appendChild(responseTitle);
+          var responseContent = document.createElement('div');
+          responseContent.textContent = 'Open to load the recorded response.';
+          response.appendChild(responseContent);
+          var fetched = false;
+          response.addEventListener('toggle', function () {
+            if (!response.open || fetched) return;
+            fetched = true;
+            diagnosticsAssessmentInspectResponse(item._runId, ref, probe, responseContent);
+          });
+          raw.appendChild(response);
+        }
       });
       if (qualityReview && Array.isArray(qualityReview.tasks)) {
         qualityReview.tasks.forEach(function (task) {

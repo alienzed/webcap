@@ -1,4 +1,3 @@
-.test-workspace-pane-switcher{display:flex;gap:4px;min-width:0;margin:0 0 12px;padding:3px;border:1px solid var(--border-color,#354154);border-radius:9px;background:var(--panel-bg,#19232e)}
 .test-workspace-pane-btn{flex:1;min-width:0;border:0;border-radius:6px;background:transparent;color:var(--text-muted,#aeb8c4);padding:7px 5px;cursor:pointer;font-size:12px;font-weight:650;white-space:nowrap}
 .test-workspace-pane-btn.active{color:var(--text-primary,#f4f7fb);background:var(--background-secondary,#344251);box-shadow:inset 0 -2px 0 var(--accent-color,#6ba4de)}
 .test-workspace-pane-btn:focus-visible{outline:2px solid var(--accent-color,#6ba4de);outline-offset:2px}
@@ -343,7 +342,6 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #run-analytics-screen .epoch-finder-error{font-size:12px}
 @media(max-width:1100px){#run-analytics-screen .epoch-finder-dashboard{grid-template-columns:1fr}
 #run-analytics-screen .epoch-finder-dashboard>.epoch-finder-panel{grid-column:1/-1!important}}
-@media(max-width:400px){.test-workspace-pane-switcher{flex-wrap:wrap}.test-workspace-pane-btn{flex:1 1 46%}}
 
 /* Analytics: results-only epoch navigation; independent of optional report selection. */
 #run-analytics-screen .run-analytics-result-run{padding:8px 0;border-bottom:1px solid var(--border-color,#384653)}
@@ -383,7 +381,7 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 #test-generations-pane > .epoch-finder-screen {
   padding:0;overflow:hidden;
 }
-#test-generations-pane > .epoch-finder-screen > .epoch-finder-intro {display:none;}
+#test-generations-pane > #test-references-screen > .epoch-finder-intro {display:none;}
 #test-generations-pane > .epoch-finder-screen > .epoch-finder-layout {
   display:grid;grid-template-columns:var(--test-workspace-sidebar-width) minmax(0,1fr);
   gap:0;height:100%;min-height:0;align-items:stretch;
@@ -398,7 +396,6 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 .test-workspace-campaign-tools {display:flex;gap:7px;flex-wrap:wrap;margin:8px 0;}
 
 /* The permanent tabs replace old mode shortcuts, without removing wired controls. */
-#test-generations-pane #epoch-finder-back-to-tests {display:none;}
 
 
 /* Shared checkpoint inspector: one owner rendered in either Test right pane. */

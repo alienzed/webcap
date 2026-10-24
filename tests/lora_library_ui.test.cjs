@@ -149,7 +149,7 @@ test('switching to raw JSON keeps unfinished structured group visible and editab
   assert.equal(h.el('json-edit').checked,false);
   assert.equal(h.el('groups').classList.contains('hidden'),false);
   assert.equal(h.el('save').disabled,true);
-  assert.match(h.el('save-state').textContent,/group name/i);
+  assert.match(h.el('save-state').textContent,/group needs a name/i);
   const name=group.querySelector('.lora-library-group-name');
   name.value='Colour';name.dispatchEvent(new h.w.Event('input',{bubbles:true}));
   h.el('json-edit').click();

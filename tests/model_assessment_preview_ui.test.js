@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 function view() {
   const nodes = new Map();
-  for (const id of ['diagnostics-assessment-selection', 'diagnostics-assessment-run', 'diagnostics-assessment-deep']) {
+  for (const id of ['diagnostics-assessment-selection', 'diagnostics-assessment-run', 'diagnostics-assessment-deep', 'diagnostics-assessment-judge-model']) {
     nodes.set(id, {textContent: '', disabled: false, checked: false});
   }
   const labels = [{dataset: {assessmentWork: 'local::director.gguf'}, hidden: true, textContent: '', title: ''}];
@@ -26,6 +26,7 @@ function view() {
     id: 'local::director.gguf', modelId: 'director.gguf', runtimeId: 'local',
     runtimeName: 'Local', label: 'Director'
   }];
+  nodes.get('diagnostics-assessment-judge-model').value = 'local::judge.gguf';
   ctx.diagnosticsAssessmentSelected.director.add('local::director.gguf');
   return {ctx, nodes, labels};
 }
@@ -99,4 +100,22 @@ test('server no-work response stays disabled after the start callback finishes',
   assert.equal(nodes.get('diagnostics-assessment-run').textContent, 'Already Complete');
   assert.equal(nodes.get('diagnostics-assessment-run').disabled, true);
   assert.match(nodes.get('diagnostics-assessment-selection').textContent, /0 tests needed/);
+});
+
+test('Deep schedules selected LLM judge while Quick does not', async () => {
+  const {ctx, nodes} = view();
+  const configs = [];
+  ctx.modelLabPost = async req => {
+    configs.push(req.config);
+    return {plan:{total:1,missing:1,retry:0},reused:0,models:{}};
+  };
+  ctx.diagnosticsRefreshSelectionPlan();
+  await Promise.resolve();
+  assert.equal(configs[0].judgeModelRef, '');
+  nodes.get('diagnostics-assessment-deep').checked = true;
+  ctx.diagnosticsRefreshSelectionPlan();
+  await Promise.resolve();
+  assert.equal(configs[1].judgeModelRef, 'local::judge.gguf');
+  nodes.get('diagnostics-assessment-judge-model').value = '';
+  assert.throws(() => ctx.diagnosticsAssessmentConfig(), /Choose an LLM judge/);
 });

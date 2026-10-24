@@ -144,7 +144,7 @@ function loraScan(target) {
       if (found) { loraBrowser.selected = found; loraFilters(); }
       else loraDeselect();
     }
-  }).catch(loraReport);
+  }).catch(function (error) { if (scan === loraBrowser.scan) loraReport(error); });
 }
 function loraSnapshot() {
   return JSON.stringify({description:loraEl('description').value.trim(),trainedWords:loraEl('words').value.split(/\r?\n/).map(function(s){return s.trim();}).filter(Boolean),promptOptions:loraOptions(),guidance:loraEl('guidance').value.trim()});
@@ -229,7 +229,7 @@ function loraSelect(item) {
     loraFilters();
     var chosenRow = Array.from(loraEl('list').children).find(function (row) { return row.dataset.key === loraKey(item); });
     if (chosenRow && chosenRow.scrollIntoView) chosenRow.scrollIntoView({block:'nearest'});
-  }).catch(loraReport);
+  }).catch(function (error) { if (load === loraBrowser.profile) loraReport(error); });
 }
 function loraSave() {
   if (!loraBrowser.selected || loraBrowser.busy) return;

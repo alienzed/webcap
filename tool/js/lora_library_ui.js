@@ -24,7 +24,9 @@ function loraRequest(method, body) {
   });
 }
 function loraConfirmChanges() {
-  if (!loraBrowser.selected || !loraBrowser.saved || loraSnapshot() === loraBrowser.saved) return true;
+  if (!loraBrowser.selected || !loraBrowser.saved) return true;
+  try { if (loraSnapshot() === loraBrowser.saved) return true; }
+  catch (error) { /* Invalid in-progress JSON is unsaved work too. */ }
   return window.confirm('Discard unsaved LoRA profile edits?');
 }
 function loraRow(item) {
@@ -63,6 +65,10 @@ function loraFilters() {
   filtered.forEach(function (item, index) {
     var key = loraKey(item), row = present.get(key);
     if (!row) row = loraRow(item);
+    var pill = row.querySelector('.lora-library-pill');
+    if (pill.dataset.state !== loraStatus(item)) {
+      pill.dataset.state = loraStatus(item); pill.textContent = loraLabel(loraStatus(item));
+    }
     row.classList.toggle('selected', !!loraBrowser.selected && key === loraKey(loraBrowser.selected));
     row.setAttribute('aria-pressed', row.classList.contains('selected') ? 'true' : 'false');
     if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);

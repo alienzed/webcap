@@ -28,7 +28,7 @@ def test_caption_assist_leaves_room_for_runtime_reasoning(monkeypatch):
     assert response.status_code == 202
     assert captured["client"] == "caption"
     assert "runtimeOverrides" not in captured["context"]
-    assert "Write one fluent caption" in captured["contract"]["messages"][0]["content"]
+    assert "You write concise, information-dense natural-language training captions" in captured["contract"]["messages"][0]["content"]
     payload = json.loads(captured["contract"]["messages"][1]["content"].split("\n\n", 1)[1])
     assert payload["captionTemplate"] == "{position, }{background}"
     assert payload["renderedPrimer"] == "standing, plain wall"

@@ -5,6 +5,7 @@ import shlex
 import pytest
 
 from tool.server.training_fizgig import dataset_from_capture, plan_h3, saved_artifacts
+from tool.server.training_backend import DiffusionPipeBackend, FizgigBackend, backend_for_job
 
 
 DATASET = '''
@@ -118,6 +119,19 @@ def test_training_paths_are_quoted_and_must_be_absolute():
     assert train[train.index("--output_dir") + 1] == changed["output_dir"]
     with pytest.raises(ValueError, match="absolute"):
         plan_h3(DATASET, **dict(ARGS, python_path="python")])
+
+
+def test_fizgig_checkpoint_request_does_not_touch_diffusion_pipe_sentinel(tmp_path):
+    FizgigBackend.request_checkpoint_save(tmp_path)
+    assert (tmp_path / ".pause_requested").is_file()
+    assert not (tmp_path / "save_quit").exists()
+    other = tmp_path / "dp"
+    other.mkdir()
+    DiffusionPipeBackend().request_checkpoint_save(other)
+    assert (other / "save_quit").is_file()
+    assert not (other / ".pause_requested").exists()
+    with pytest.raises(ValueError, match="Unsupported training backend: fizgig"):
+        backend_for_job({"trainerId": "fizgig"})
 
 
 def test_checkpoint_discovery_keeps_epoch_weights_and_state_separate():

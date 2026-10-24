@@ -67,8 +67,8 @@ def test_vl_workspace_and_edit_media_use_shared_flat_actions():
 def test_ask_vl_reopen_keeps_session_question_and_result_without_persistence():
     root = Path(__file__).parents[1]
     script = (root / "tool" / "js" / "caption_vision.js").read_text(encoding="utf-8")
-    close = script.split("function closeAskVisionQuestion()", 1)[1].split("function openAskVisionQuestion()", 1)[0]
-    reopen = script.split("function openAskVisionQuestion()", 1)[1].split("function sendAskVisionQuestion()", 1)[0]
+    close = script.split("function closeAskVisionQuestion()", 1)[1].split("function openAskVisionQuestion(", 1)[0]
+    reopen = script.split("function openAskVisionQuestion(", 1)[1].split("function sendAskVisionQuestion()", 1)[0]
     assert "cancelAskVisionJob()" not in close
     assert "askVisionState.open = false;" in close
     assert "askVisionState.key = ''" not in close

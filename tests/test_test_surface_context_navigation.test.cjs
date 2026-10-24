@@ -10,7 +10,7 @@ const testJs=fs.readFileSync(path.join(root,'tool/js/test_generations.js'),'utf8
 const inspector=fs.readFileSync(path.join(root,'tool/js/epoch_info.js'),'utf8');
 const html=fs.readFileSync(path.join(root,'tool/tool.html'),'utf8');
 const begin=finder.indexOf('  function showMode(next, options) {');
-const end=finder.indexOf("  document.getElementById('epoch-finder-back-to-tests')",begin);
+const end=finder.indexOf('  function renderSecondsEstimate(',begin);
 assert.ok(begin>0&&end>begin,'Evaluation surface navigator must exist');
 const modeController=finder.slice(begin,end);
 const helpersStart=finder.indexOf('  function emptyMethodWorkspace() {');

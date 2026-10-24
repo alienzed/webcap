@@ -163,6 +163,7 @@
   var screeningTestStatusVersion = 0;
   var screeningCopyPending = new Set();
   var screeningRatingPending = new Set();
+  var screeningSkipPending = new Set();
   var screeningWildcardError = null;
   var els = function (id) { return document.getElementById('epoch-finder-' + id); };
   function escape(value) {
@@ -1772,6 +1773,22 @@
     });
   }
 
+  function screeningSkipEpoch(campaign, round, epoch) {
+    var key=currentFolder+':'+campaign.id+':'+round+':'+epoch;
+    if(screeningSkipPending.has(key)) return;
+    screeningSkipPending.add(key);
+    els('manual-matrix').dataset.signature='';
+    screeningMatrix(campaign);
+    api('screening_skip_epoch',{campaignId:campaign.id,round:round,epoch:epoch})
+      .then(function(){return refreshStatus();}).catch(error).finally(function(){
+        screeningSkipPending.delete(key);
+        if(campaignState&&campaignState.id===campaign.id){
+          els('manual-matrix').dataset.signature='';
+          screeningMatrix(campaignState);
+        }
+      });
+  }
+
   function screeningMatrix(campaign) {
     if (campaign.mode!=='manual') return;
     if (!campaign.rounds.some(function (plan) {
@@ -1827,6 +1844,7 @@
       return (x&&x.epoch||a)-(y&&y.epoch||b)||a-b;
     });
     var signature=JSON.stringify([campaign.id,campaign.status,manualSelectedRound,rows,Array.from(kept),sort,
+      plan.skippedEpochs||[],Array.from(screeningSkipPending),
       roundUnits.map(function (u) {
         return [u.epoch,u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
       }),units.map(function(u){return [u.epoch,u.rating]})]);
@@ -1868,10 +1886,16 @@
       var epochUnits=roundUnitsByEpoch.get(epoch)||[];
       var collapsed=!kept.has(epoch)&&!screeningExpandedExcluded.has(campaign.id+':'+plan.number+':'+epoch);
       var inTest=screeningTestStatus[String(epoch)]===true;
+      var skipped=(plan.skippedEpochs||[]).includes(epoch);
+      var skipPending=screeningSkipPending.has(currentFolder+':'+campaign.id+':'+plan.number+':'+epoch);
+      var unfinished=epochUnits.filter(function(u){return u.frame||u.error||u.cancelled;}).length<plan.seeds.length;
+      var canSkip=plan.number===campaign.round&&campaign.status==='running'&&
+        plan.status==='running'&&!skipped&&unfinished;
       var copying=screeningCopyPending.has(currentFolder+':'+campaign.id+':'+String(epoch));
       var rowSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,inTest,copying,
+        skipped,skipPending,canSkip,
         epochUnits.map(function(u){
-          return [u.case,u.frame,u.error,u.rating,u.visionError,u.assessment&&u.assessment.text];
+          return [u.case,u.frame,u.error,u.cancelled,u.rating,u.visionError,u.assessment&&u.assessment.text];
         })]);
       var previous=existingRows.get(String(epoch));
       if (previous && previous.dataset.signature===rowSignature) {
@@ -1888,7 +1912,8 @@
       row.className='epoch-screening-row'+(collapsed?' is-collapsed':'')+(inTest?' is-in-test':'');
       row.dataset.screeningEpoch=String(epoch);
       row.dataset.signature=rowSignature;
-      var headSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,inTest,copying]);
+      var headSignature=JSON.stringify([campaign.status,kept.has(epoch),collapsed,inTest,copying,
+        skipped,skipPending,canSkip]);
       var head=row.querySelector('.epoch-screening-row-head');
       if (!head || head.dataset.signature!==headSignature) {
       if (head) head.remove();
@@ -1953,6 +1978,21 @@
       ratingStatus.className='epoch-screening-bulk-rating-status hidden';
       head.appendChild(ratingStatus);
       var actions=document.createElement('div');actions.className='epoch-screening-row-actions';
+      if(skipped){
+        var skippedLabel=document.createElement('span');
+        skippedLabel.className='epoch-screening-skip-state';
+        skippedLabel.textContent='Epoch skipped';
+        skippedLabel.title='Queued renders cancelled; any already running render may still finish. Keep selection is unchanged.';
+        actions.appendChild(skippedLabel);
+      }else if(canSkip){
+        var skipButton=document.createElement('button');
+        skipButton.type='button';skipButton.className='review-captions-btn epoch-screening-skip-btn';
+        skipButton.textContent=skipPending?'Skipping…':'Skip epoch';
+        skipButton.title='Cancel unstarted renders of this epoch, keep completed images, and continue. Already running renders finish. Keep selection is unchanged.';
+        skipButton.disabled=skipPending;
+        skipButton.addEventListener('click',function(){screeningSkipEpoch(campaign,plan.number,epoch);});
+        actions.appendChild(skipButton);
+      }
       if (!kept.has(epoch)) {
         var toggle=document.createElement('button');
         toggle.type='button';toggle.className='review-captions-btn epoch-screening-expand-btn';
@@ -2011,7 +2051,8 @@
             className:'test-generations-result-card',
             title:plan.columnLabels[index]||'Variation '+(index+1),
             media:url?{kind:'image',url:url,alt:'Epoch '+epoch+' · '+plan.columnLabels[index]}:null,
-            placeholder:url?null:(u&&u.error?'Render failed':'Awaiting render'),
+            placeholder:url?null:(u&&u.error?'Render failed':u&&u.cancelled?'Skipped':
+              skipped?'Skipping…':'Awaiting render'),
             failed:!!(u&&u.error),
             error:u&&u.error||'',
             rating:url?{value:u.rating||0,session:campaign.id,mediaFile:u.frame,
@@ -2327,7 +2368,7 @@
     }
     if (changed) { listRequestVersion++; crossEvidenceVersion++; crossEvidence = null; crossEvidenceKey = ''; }
     currentFolder = folder;
-    if (changed) { campaignDefaultsKey='';screeningSettingsKey='';screeningSettingsRequest=null;screeningDraftContext=''; screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; resetMethodWorkspaces(); runs = []; campaigns = []; stagedFiles = []; stagedModel = ''; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
+    if (changed) { campaignDefaultsKey='';screeningSettingsKey='';screeningSettingsRequest=null;screeningDraftContext=''; screeningShowExcluded=false; screeningTestStatusCampaign='';screeningTestStatus={};screeningTestStatusVersion++;screeningCopyPending.clear();screeningSkipPending.clear();screeningExpandedExcluded.clear(); manualSelectionCampaign=''; manualMatrixSignature=''; resetMethodWorkspaces(); runs = []; campaigns = []; stagedFiles = []; stagedModel = ''; lastFrameKey = ''; selectedRunId = ''; selectedEpochs = new Set(); referenceSelections = {}; referenceItems = []; referencePlanSignature = ''; referenceGeneration++; }
     window.testReferencesPrepare(folder);
     window.runAnalyticsPrepare(folder);
     if (mode === 'finder' || mode === 'screening') refresh();

@@ -54,3 +54,52 @@ def test_curation_rejects_duplicate_or_unknown_aggregate_ids():
         build_curation_request(entries, item_count=150)
     with pytest.raises(ValueError):
         build_curation_request(concepts(), item_count=0)
+
+
+def test_qa_curate_route_queues_only_compact_inventory_for_selected_set(tmp_path, monkeypatch):
+    from pathlib import Path
+    from tool.server import app as app_module
+    folder = tmp_path / "set"
+    folder.mkdir()
+    (folder / "one.jpg").write_bytes(b"one")
+    (folder / "two.jpg").write_bytes(b"two")
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", Path(tmp_path))
+    recorded = {}
+    def enqueue(client, model_id, contract, context=None, label=""):
+        recorded.update(client=client, model=model_id, contract=contract,
+                        context=context, label=label)
+        return {"jobId": "qa-curation-1", "status": "queued"}
+    monkeypatch.setattr(app_module, "enqueue_llm", enqueue)
+    result = app_module.app.test_client().post("/fs/qa/curate", json={
+        "folder": "set", "files": ["one.jpg", "two.jpg"],
+        "model": "local::model", "trainingFocus": "Detailed construction",
+        "concepts": [{"id": "c001", "group": "Shape", "term": "triangle",
+                       "count": 2, "example": "triangle construction"}],
+    })
+    assert result.status_code == 202
+    assert recorded["client"] == "qa"
+    assert recorded["label"] == "QA · Curate Training Set"
+    assert recorded["contract"]["operation"] == "qa_curate_set"
+    assert "Detailed construction" in recorded["contract"]["prompt"]
+    assert "one.jpg" not in recorded["contract"]["prompt"]
+    assert recorded["context"] == {}
+
+
+def test_qa_curate_route_rejects_unknown_and_duplicate_media(tmp_path, monkeypatch):
+    from pathlib import Path
+    from tool.server import app as app_module
+    folder = tmp_path / "set"
+    folder.mkdir()
+    (folder / "one.jpg").write_bytes(b"one")
+    monkeypatch.setattr(app_module.app_config, "FS_ROOT", Path(tmp_path))
+    client = app_module.app.test_client()
+    payload = {
+        "folder": "set", "files": ["outside.jpg"], "model": "local::model",
+        "concepts": [{"id": "c001", "group": "Shape", "term": "triangle", "count": 1}],
+    }
+    result = client.post("/fs/qa/curate", json=payload)
+    assert result.status_code == 400
+    assert "outside the current Set" in result.get_json()["error"]
+    result = client.post("/fs/qa/curate", json=dict(payload, files=["one.jpg", "one.jpg"]))
+    assert result.status_code == 400
+    assert "duplicate" in result.get_json()["error"]

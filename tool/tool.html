@@ -1245,9 +1245,10 @@
                                 <div id="epoch-finder-empty" class="epoch-finder-empty"><strong>Ready when you are.</strong><p>Choose selected Test LoRAs or saved Training epochs to run a campaign.</p></div>
                                 <div id="epoch-finder-active" class="hidden">
                                     <div class="epoch-finder-heading">
-                                        <div><div class="epoch-finder-eyebrow" id="epoch-finder-phase">READY</div>
-                                        <h3 id="epoch-finder-name">Campaign</h3>
-                                        <p id="epoch-finder-detail" class="epoch-finder-muted"></p></div>
+                                        <div class="epoch-finder-title">
+                                            <h3 id="epoch-finder-name">Campaign</h3>
+                                            <span class="epoch-finder-eyebrow" id="epoch-finder-phase">READY</span>
+                                        </div>
                                         <div class="epoch-finder-actions">
                                             <button id="epoch-finder-pause" type="button" class="review-captions-btn">Pause</button>
                                             <button id="epoch-finder-resume" type="button" class="review-captions-btn hidden">Resume</button>
@@ -1258,11 +1259,12 @@
                                     </div>
                                     <div id="epoch-finder-timeline" class="epoch-finder-timeline"></div>
                                     <div id="epoch-finder-metrics" class="epoch-finder-metrics">
-                                        <div><span>Frames captured</span><strong id="epoch-finder-render-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-render-bar"></i></div></div>
-                                        <div><span>VL evaluations</span><strong id="epoch-finder-vl-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-vl-bar"></i></div></div>
+                                        <p id="epoch-finder-detail" class="epoch-finder-muted" title=""></p>
+                                        <div class="epoch-finder-frames-metric"><span>Frames</span><strong id="epoch-finder-render-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-render-bar"></i></div></div>
+                                        <div class="epoch-finder-vl-metric"><span>VL</span><strong id="epoch-finder-vl-count">0 / 0</strong><div class="epoch-finder-track"><i id="epoch-finder-vl-bar"></i></div></div>
                                         <div id="epoch-finder-rvn-progress" class="hidden"><span>Reference Compare</span><strong id="epoch-finder-rvn-count">0 / 0</strong><small id="epoch-finder-reference-compare-error" class="epoch-finder-error hidden" role="alert"></small></div>
                                         <div id="epoch-finder-dino-progress" class="hidden"><span>DINOv2</span><strong id="epoch-finder-dino-count">0 / 0</strong></div>
-                                        <div><span>Current field</span><strong id="epoch-finder-field-count">—</strong></div>
+                                        <div class="epoch-finder-field-metric" title="Current field"><strong id="epoch-finder-field-count">—</strong></div>
                                     </div>
                                     <div class="epoch-finder-live-layout" id="epoch-finder-live-layout">
                                         <section class="epoch-finder-live-ranks">

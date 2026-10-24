@@ -192,7 +192,7 @@ def test_scene_count_is_adherence_evidence_not_structured_failure(monkeypatch):
     import json
     run = model_lab._new_run_payload({"directorModels": [director()]})
     scenes = [
-        {"title": f"Scene {i}", "summary": "Intent", "prompt": "Brief but usable motion.",
+        {"title": f"Scene {i}", "summary": "Intent", "prompt": "Brief but usable motion in shot " + str(i) + ".",
          "suggestedDurationSeconds": 8}
         for i in range(3)
     ]

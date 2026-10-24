@@ -1,6 +1,7 @@
 # Fizgig H3 backend — implementation track
 
-**State:** trainer-specific planning and capture conversion implemented on top of
+**State:** trainer-specific planning, image capture conversion, native read-only
+progress and checkpoint inspection implemented on top of
 [external trainer backend foundation](trainer_backend_foundation.md).
 **Not activated:** Diffusion Pipe remains the only runnable WebCap backend.
 No launcher, UI selector, system install, GPU scheduling, or existing Diffusion Pipe
@@ -14,8 +15,8 @@ dataset/config syntax, command sequence, progress interpretation, checkpoint
 save/stop/resume, candidate inventory, and compatibility checks.
 
 The initial Fizgig adapter lives in tool/server/training_fizgig.py. Its pure
-dataset_from_capture, plan_h3, and saved_artifacts functions cannot start
-training or change source media. plan_h3 returns a three-stage command plan
+dataset_from_capture, plan_h3, observe_h3, inspect_h3, and saved_artifacts
+functions cannot start training or change source media. plan_h3 returns a three-stage command plan
 and explicit .pause_requested path, not a Diffusion Pipe command. The H3
 training adapter path can be Ostris FL2VA, Circlestone, or empty (Off), and
 never gets put in the trained output by this adapter. Preserve the selected
@@ -31,6 +32,8 @@ trainer ID for every job and continuation; never infer from current settings.
 - Fizgig's aspect/area bucketing is not identical to Diffusion Pipe's
   hand-reviewed fixed buckets. Compare captured image memberships and effective
   resolutions in a representative run before activation.
+- Use explicit H3 image block targeting: photo_blocks=20-49 by default;
+  all-block training is an explicit override, not an accidental missing flag.
 - Use a separate, explicit Fizgig recipe (rank, LR, epochs, save cadence,
   optimizer, EMA, adapter, precision). Do **not** claim DP's
   adamw_optimi, dropout, image_shift, warmup or optimizer state are identical.
@@ -41,7 +44,10 @@ trainer ID for every job and continuation; never infer from current settings.
 - The text cache requires a supported MiniMax H3 encoder (NVFP4 or supported
   BF16), not the existing diffusion-pipe INT8-convrot file.
 - Save separate state dirs (NAME-NNNNNN-state) and LoRA weights
-  (NAME-NNNNNN.safetensors). Neither is DP's latest/global_stepN.
+  (NAME-NNNNNN.safetensors). Verify the training_state.json commit marker
+  (written last by Fizgig), optimizer, RNG and LoRA payload for resuming.
+  On-demand loss reads from .fizgig_loss_NAME.jsonl; epoch logs provide
+  native progress. Neither is DP's latest/global_stepN.
   Never treat a saved LoRA as resumable optimizer state.
 - Fizgig's documented pause request is output_dir/.pause_requested, at the
   **next epoch boundary**; DP's save_quit and fresh latest protocol must

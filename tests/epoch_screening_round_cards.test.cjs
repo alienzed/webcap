@@ -80,4 +80,5 @@ test('round actions stay inside selectable cards, not detached neighboring butto
   assert.match(css,/grid-template-columns:minmax\(0,1fr\) auto;/);
   assert.match(css,/\.epoch-screening-round-progress\s*\{\s*grid-column:1 \/ -1;/);
   assert.match(css,/\.epoch-screening-round-item > \[data-screening-round-action\]/);
+  assert.match(css,/grid-column:2;\s*grid-row:1;/,'round action must remain beside title, not below progress');
 });

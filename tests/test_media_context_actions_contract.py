@@ -42,7 +42,7 @@ def test_context_menu_places_focus_caption_after_focused_annotate():
 
 
 
-def test_ask_vl_and_edit_media_use_shared_flat_actions():
+def test_vl_workspace_and_edit_media_use_shared_flat_actions():
     root = Path(__file__).parents[1]
     actions = (root / "tool" / "js" / "media_context_actions.js").read_text(encoding="utf-8")
     ui = (root / "tool" / "js" / "ui.js").read_text(encoding="utf-8")
@@ -51,8 +51,8 @@ def test_ask_vl_and_edit_media_use_shared_flat_actions():
     modal = (root / "tool" / "tool.html").read_text(encoding="utf-8")
     runtime = (root / "tool" / "server" / "llm_runner.py").read_text(encoding="utf-8")
 
-    assert "label: 'Ask VL...'" in actions
-    assert "openAskVisionQuestion()" in actions
+    assert "label: 'VL Workspace...'" in actions
+    assert "openVlWorkspace(mediaItem, 'sight');" in actions
     assert "action.group = 'Edit Media'" in actions
     assert "action.group === 'Edit Media'" in ui
     assert "caption-context-menu-disclosure" in ui
@@ -60,6 +60,7 @@ def test_ask_vl_and_edit_media_use_shared_flat_actions():
     assert "findPreviewActionByLabel(actions, 'Reset')" in preview
     assert 'id="ask-vision-question"' in modal
     assert 'id="ask-vision-answer"' in modal
+    assert 'id="vl-workspace-tab-sight"' in modal
     assert '"vision_question"' in runtime
 
 

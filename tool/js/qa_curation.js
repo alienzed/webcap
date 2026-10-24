@@ -72,9 +72,16 @@
       seen.add(feature.key);
       chosen.push(feature);
     }
-    all.slice(0, 72).forEach(append);
-    all.filter(function (row) { return row.files.size <= 3; })
-      .slice(0, 32).forEach(append);
+    // Human-approved groups precede noisier Sight-derived observations.
+    // Reserve space for rare approved constructions before popular backgrounds
+    // or repeated visual descriptions exhaust the fixed Director budget.
+    var approved = all.filter(function (feature) { return feature.source === 'tag'; });
+    approved.slice(0, 72).forEach(append);
+    approved.filter(function (feature) { return feature.files.size <= 3; })
+      .slice(0, 28).forEach(append);
+    all.slice(0, 80).forEach(append);
+    all.filter(function (feature) { return feature.files.size <= 3; })
+      .slice(0, 24).forEach(append);
     all.forEach(append);
     chosen.forEach(function (row, index) { row.id = 'c' + String(index + 1).padStart(3, '0'); });
     var byKey = new Map(chosen.map(function (feature) { return [feature.key, feature.id]; }));
@@ -169,7 +176,7 @@
       gains.push(bestScore);
       chosen.ids.forEach(function (id) { counts.set(id, counts.get(id) + 1); });
     }
-    var selected = new Set(), levels = [], ratios = [];
+    var selected = new Set(), ratios = [];
     ordered.forEach(function (file) {
       selected.add(file);
       ratios.push(coverage(rows, concepts, selected).ratio);
@@ -501,9 +508,20 @@
       concepts: session.concepts,
       model: model
     }).then(function (result) {
-      if (token !== session.token) return null;
-      session.jobId = result.job.jobId;
-      return poll(session.jobId, token);
+      if (!result || !result.job || !result.job.jobId) {
+        throw new Error('QA Curation did not receive a Director job ID.');
+      }
+      var receivedId = String(result.job.jobId);
+      if (token !== session.token) {
+        // Stop may be clicked while enqueue is in flight. The newly created
+        // job still needs explicit cancellation even though our UI moved on.
+        return request('/fs/director/job', {operation: 'cancel_job', jobId: receivedId})
+          .catch(function (err) {
+            window.reportConsoleError('QA Curation · Cancel late Director job', err);
+          }).then(function () { return null; });
+      }
+      session.jobId = receivedId;
+      return poll(receivedId, token);
     }).then(function (job) {
       if (!job || token !== session.token) return;
       if (String(state.folder || '') !== session.folder ||

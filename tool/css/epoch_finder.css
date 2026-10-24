@@ -395,9 +395,6 @@ button.epoch-finder-ranking-row:hover,button.epoch-finder-ranking-row:focus-visi
 }
 .test-workspace-campaign-tools {display:flex;gap:7px;flex-wrap:wrap;margin:8px 0;}
 
-/* The permanent tabs replace old mode shortcuts, without removing wired controls. */
-
-
 /* Shared checkpoint inspector: one owner rendered in either Test right pane. */
 .epoch-info-workspace{min-width:0;padding:18px 20px 30px;overflow:auto}
 #test-generations-epoch-info{height:100%;box-sizing:border-box}

@@ -1489,7 +1489,7 @@ def _run(folder_path, campaign_id, control):
                     break
                 skip_signal = None
                 if campaign.get("mode") == "manual":
-                    skip_signal = control["skipped_epochs"].setdefault(
+                    skip_signal = control.setdefault("skipped_epochs", {}).setdefault(
                         (number, epoch), threading.Event())
                     if epoch in plan.get("skippedEpochs", []):
                         skip_signal.set()

@@ -37,7 +37,7 @@ def test_existing_mode_controller_owns_evaluation_navigation():
     assert "window.epochFinderShowMode = showMode;" in finder
     assert "window.epochFinderShowMode('tests');" in tests
     assert "var active = button.dataset.testWorkspaceMode === next;" in finder
-    assert "showMode(button.dataset.testWorkspaceMode);" in finder
+    assert "showMode(button.dataset.testWorkspaceMode, { pushHistory: true });" in finder
     assert "#test-generations-pane > .epoch-finder-screen > .epoch-finder-layout" in css
     assert "grid-template-columns:var(--test-workspace-sidebar-width) minmax(0,1fr)" in css
 

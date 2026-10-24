@@ -158,6 +158,7 @@ function parseShellLocationRoute() {
   var scope = params.get('scope') === 'global' ? 'global' : 'set';
   return {
     workspace: workspace, folder: folder, scope: scope,
+    evaluationMethod: workspace === 'test' ? String(params.get('method') || 'tests') : '',
     storyId: String(params.get('story') || ''),
     sceneId: String(params.get('scene') || '')
   };
@@ -176,7 +177,8 @@ function currentShellRouteWorkspace() {
   return 'prep';
 }
 
-function syncShellLocationRoute() {
+function syncShellLocationRoute(options) {
+  var opts = options || {};
   if (!window.history || typeof window.history.replaceState !== 'function') return;
   if (initialShellLocationRoute && !initialShellLocationRestored) return;
   var workspace = currentShellRouteWorkspace();
@@ -185,6 +187,10 @@ function syncShellLocationRoute() {
   if (folder && workspace !== 'storyboard' && workspace !== 'generate') params.set('folder', folder);
   if (workspace === 'training' && getTrainingWorkspaceEntryKind() === 'global') params.set('scope', 'global');
   if (workspace === 'media') window.appendMediaExplorerRouteParams(params);
+  if (workspace === 'test') {
+    var evaluationMethod = window.epochFinderCurrentMode();
+    if (evaluationMethod !== 'tests') params.set('method', evaluationMethod);
+  }
   if (workspace === 'storyboard') {
     var storyTarget = window.getStoryboardRouteTarget();
     if (storyTarget.storyId) params.set('story', storyTarget.storyId);
@@ -192,7 +198,9 @@ function syncShellLocationRoute() {
   }
   var nextHash = '#/' + workspace + (params.toString() ? '?' + params.toString() : '');
   if (window.location.hash === nextHash) return;
-  window.history.replaceState(null, '', window.location.pathname + window.location.search + nextHash);
+  var nextUrl = window.location.pathname + window.location.search + nextHash;
+  if (opts.push && workspace === 'test') window.history.pushState(null, '', nextUrl);
+  else window.history.replaceState(null, '', nextUrl);
 }
 
 function applyInitialShellLocationRoute() {
@@ -245,6 +253,7 @@ function restoreInitialShellLocationRoute() {
     window.openGenerateActivity();
   } else if (route.workspace === 'test') {
     openTestGenerationsFromShell();
+    if (currentShellRouteWorkspace() === 'test') window.epochFinderShowMode(route.evaluationMethod);
   } else if (route.workspace === 'media' && typeof window.openMediaExplorerActivity === 'function') {
     window.openMediaExplorerActivity();
   } else if (route.workspace === 'storage' && typeof window.openStorageActivity === 'function') {
@@ -1535,6 +1544,15 @@ function wireWorkspaceHeaderUi() {
     document.addEventListener('keydown', function (event) {
       if (!event || event.key !== 'F11' || event.defaultPrevented || event.repeat) return;
       toggleShellImmersive();
+    });
+  }
+  if (!window.__webcapEvaluationHistoryBound) {
+    window.__webcapEvaluationHistoryBound = true;
+    window.addEventListener('popstate', function () {
+      var route = parseShellLocationRoute();
+      // Method history is handled inside Evaluation; unrelated shell routes retain their existing behavior.
+      if (!route || route.workspace !== 'test' || currentShellRouteWorkspace() !== 'test') return;
+      window.epochFinderShowMode(route.evaluationMethod);
     });
   }
   if (!window.__webcapWorkingModelShellBound) {

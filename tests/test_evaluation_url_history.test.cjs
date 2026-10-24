@@ -80,6 +80,6 @@ test('All Evaluation tabs round-trip without changing folder or shell route',()=
     assert.equal(h.ctx.parseShellLocationRoute().folder,'dataset/one');
   }
   assert.match(shell,/window\.addEventListener\('popstate', function \(\)/);
-  assert.match(shell,/window\.epochFinderShowMode\(route\.evaluationMethod, \{ restore: true \}\)/);
+  assert.equal((shell.match(/window\.epochFinderShowMode\(route\.evaluationMethod\)/g)||[]).length,2);
   assert.match(shell,/window\.epochFinderShowMode\(route\.evaluationMethod\)/);
 });

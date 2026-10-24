@@ -452,7 +452,12 @@ def _cached_sight_block(folder_path, media_name, metadata, model):
     info = metadata.get(media_name)
     if not isinstance(info, dict):
         return None
-    sight = info.get("vision_sight")
+    sightings = info.get("vision_sights") if isinstance(info.get("vision_sights"), dict) else {}
+    sight = sightings.get(str(model or ""))
+    if sight is None:
+        legacy = info.get("vision_sight")
+        if isinstance(legacy, dict) and str(legacy.get("model") or "") == str(model or ""):
+            sight = legacy
     if not isinstance(sight, dict):
         return None
     stat = media_path.stat()
@@ -483,7 +488,11 @@ def vision_sight_status(folder, model, include_sight=False):
         sight = _cached_sight_block(folder_path, media_name, metadata, model)
         structured = _structured_sight_block(folder_path, media_name, metadata, model)
         info = metadata.get(media_name) if isinstance(metadata.get(media_name), dict) else {}
-        attempt = info.get("vision_sight_attempt") if isinstance(info.get("vision_sight_attempt"), dict) else {}
+        attempts = info.get("vision_sight_attempts") if isinstance(info.get("vision_sight_attempts"), dict) else {}
+        attempt = attempts.get(str(model or ""))
+        if attempt is None:
+            legacy_attempt = info.get("vision_sight_attempt")
+            attempt = legacy_attempt if isinstance(legacy_attempt, dict) and str(legacy_attempt.get("model") or "") == str(model or "") else {}
         stat = media_path.stat()
         attempt_current = (int(attempt.get("mtime") or -1) == int(stat.st_mtime)
                            and int(attempt.get("size") or -1) == int(stat.st_size))
@@ -492,6 +501,7 @@ def vision_sight_status(folder, model, include_sight=False):
             "cached": bool(sight),
             "structured": bool(structured),
             "issue": str(attempt.get("issue") or "") if attempt_current else "",
+            "finishReason": str(attempt.get("finishReason") or "") if attempt_current else "",
         }
         if include_sight and attempt_current:
             item["attempt"] = {"text": str(attempt.get("text") or ""), "issue": item["issue"]}
@@ -530,7 +540,7 @@ def save_vision_sight_attempt(folder, media_name, model, raw_text, finish_reason
         "mtime": int(stat.st_mtime),
         "size": int(stat.st_size),
         "updatedAt": time.time(),
-    })
+    }, model_collection="vision_sight_attempts")
 
 
 def save_vision_sight(folder, media_name, model, sight_payload):
@@ -562,7 +572,43 @@ def save_vision_sight(folder, media_name, model, sight_payload):
         media_name,
         "vision_sight",
         sight,
+        model_collection="vision_sights",
     )
+
+
+def sight_review_for_media(folder, media_name):
+    folder_path = _resolve_folder(folder)
+    media_name = _validate_media_name(media_name)
+    if not (folder_path / media_name).is_file():
+        raise FileNotFoundError("Media file not found")
+    info = _load_metadata(folder_path).get(media_name) or {}
+    if not isinstance(info, dict):
+        info = {}
+    models = dict(info.get("vision_sights") or {})
+    attempts = dict(info.get("vision_sight_attempts") or {})
+    active = info.get("vision_sight") if isinstance(info.get("vision_sight"), dict) else {}
+    latest_attempt = info.get("vision_sight_attempt") if isinstance(info.get("vision_sight_attempt"), dict) else {}
+    if active.get("model"):
+        models.setdefault(str(active["model"]), active)
+    if latest_attempt.get("model"):
+        attempts.setdefault(str(latest_attempt["model"]), latest_attempt)
+    stat = (folder_path / media_name).stat()
+    return {"file": media_name, "activeModel": str(active.get("model") or ""),
+            "mediaMtime": int(stat.st_mtime), "mediaSize": int(stat.st_size),
+            "models": models, "attempts": attempts}
+
+
+def activate_vision_sight(folder, media_name, model):
+    model = str(model or "").strip()
+    if not model:
+        raise ValueError("Choose the Vision model whose Sight should be used.")
+    data = sight_review_for_media(folder, media_name)
+    sight = data["models"].get(model)
+    if not isinstance(sight, dict) or not str(sight.get("description") or "").strip():
+        raise ValueError("That model has no saved Sight description to activate.")
+    folder_path = _resolve_folder(folder)
+    return set_media_metadata_analysis_block(folder_path, media_name, "vision_sight", sight,
+                                             model_collection="vision_sights")
 
 
 def _valid_vocabulary_sight_block(folder_path, media_name, metadata, model):
@@ -667,11 +713,11 @@ def save_vision_vocabulary_sight(folder, media_name, model, existing_groups, sig
 
 
 def _evidence_key(category, label):
-    return category.casefold(), _clean(label).casefold()
+    return category.casefold(), _clean(label, 0).casefold()
 
 
 def _add_evidence(buckets, media, category, label, context):
-    label = _clean(label)
+    label = _clean(label, 0)
     if not label:
         return
     key = _evidence_key(category, label)

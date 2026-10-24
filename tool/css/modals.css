@@ -3162,6 +3162,30 @@ html[data-theme="dark"] .app-settings-environment-check {
 .set-scan-content .set-scan-summary { padding: 12px 0 0; justify-content: flex-start; flex-wrap: wrap; }
 .set-scan-content .set-scan-summary strong { font-size: 14px; }
 .set-scan-content .set-scan-evidence-detail { margin-top: 5px; }
+
+.set-scan-live-inspection { display:grid; grid-template-columns:minmax(230px, 320px) minmax(0,1fr); gap:16px; padding:16px 20px; border-top:1px solid var(--border-soft); }
+.set-scan-live-media, .sight-review-preview { background:var(--bg, #101823); border-radius:9px; overflow:hidden; display:flex; justify-content:center; align-items:center; min-height:210px; }
+.set-scan-live-media { height:280px; }
+.set-scan-live-media img, .set-scan-live-media video, .sight-review-preview img, .sight-review-preview video { display:block; max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; }
+.set-scan-live-media [hidden], .sight-review-preview [hidden] { display:none; }
+.set-scan-live-summary { display:flex; flex-direction:column; align-items:flex-start; gap:10px; min-width:0; }
+.set-scan-live-eyebrow { font-size:14px; color:var(--muted); }
+.set-scan-live-summary > strong { font-size:18px; overflow-wrap:anywhere; }
+.set-scan-live-text { width:100%; min-height:70px; max-height:210px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.45; font-size:15px; }
+.set-scan-live-summary > button { margin-top:auto; }
+.saved-intelligence-dialog { width:min(1100px,calc(100vw - 36px)); }
+.sight-review-body { padding:12px 18px 22px; display:grid; grid-template-columns:minmax(250px, 43%) minmax(0,1fr); gap:20px; }
+.sight-review-preview { max-height:65vh; align-self:start; min-height:320px; }
+.sight-review-evidence { min-width:0; display:flex; flex-direction:column; gap:10px; font-size:16px; }
+.sight-review-evidence label { font-weight:650; }
+.sight-review-evidence select { width:100%; }
+.sight-review-description { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.5; max-height:35vh; overflow:auto; }
+.sight-review-issue { color:var(--muted); font-size:14px; }
+.sight-review-evidence details { border-top:1px solid var(--border); padding-top:10px; }
+.sight-review-evidence details summary { cursor:pointer; }
+.sight-review-evidence .set-scan-raw-output { max-height:250px; margin-top:8px; padding:10px; }
+.sight-review-evidence button { align-self:flex-start; margin-top:auto; }
+@media(max-width:760px) { .set-scan-live-inspection,.sight-review-body {grid-template-columns:1fr;} .set-scan-live-media {height:250px;} .sight-review-preview {min-height:240px;} }
 .set-scan-content .set-scan-run-actions { margin: 0; padding: 12px 18px; border-top: 1px solid var(--border-soft); flex-wrap: wrap; gap: 9px; }
 .set-scan-run-actions .set-scan-primary, .set-intelligence-next .set-scan-primary { background: var(--accent); color: var(--bg, #101823); border-color: var(--accent); }
 .set-scan-run-actions .set-scan-quiet { margin-left: auto; background: transparent; border-color: transparent; color: var(--muted); }

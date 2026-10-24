@@ -654,3 +654,79 @@ def test_director_assignment_receives_complete_saved_sight():
         records, [{"group": "Details", "terms": ["rare visual feature"]}]
     )
     assert long_description.strip() in request["prompt"]
+
+
+def test_sight_is_model_scoped_and_activation_is_explicit(tmp_path, monkeypatch):
+    import json
+    from tool.server import config as app_config
+    from tool.server import media as media_module
+
+    folder = tmp_path / "set"
+    folder.mkdir()
+    image = folder / "a.jpg"
+    image.write_bytes(b"image")
+    monkeypatch.setattr(app_config, "FS_ROOT", tmp_path)
+
+    first = _sight("Detailed first-model evidence.", details=["specific seam"])
+    second = _sight("Different second-model evidence.", details=["visible zipper"])
+    vision_schema_assist.save_vision_sight("set", "a.jpg", "vl-a", first)
+    # Legacy active-only records migrate when the next model is explicitly scanned.
+    assert vision_schema_assist.vision_sight_status("set", "vl-b")["structured"] == 0
+    vision_schema_assist.save_vision_sight("set", "a.jpg", "vl-b", second)
+    metadata = json.loads((folder / "media_metadata.json").read_text())
+    blocks = metadata["a.jpg"]
+    assert set(blocks["vision_sights"]) == {"vl-a", "vl-b"}
+    assert blocks["vision_sight"]["model"] == "vl-b"
+    assert vision_schema_assist.vision_sight_records("set", "vl-a")[0]["description"] == first["description"]
+    assert vision_schema_assist.vision_sight_records("set", "vl-b")[0]["description"] == second["description"]
+
+    # Model preference does not silently replace active downstream Sight.
+    review = vision_schema_assist.sight_review_for_media("set", "a.jpg")
+    assert review["activeModel"] == "vl-b"
+    assert review["models"]["vl-a"]["description"] == first["description"]
+    selected = vision_schema_assist.activate_vision_sight("set", "a.jpg", "vl-a")
+    assert selected["model"] == "vl-a"
+    assert vision_schema_assist.sight_review_for_media("set", "a.jpg")["activeModel"] == "vl-a"
+    updated = json.loads((folder / "media_metadata.json").read_text())["a.jpg"]
+    assert updated["vision_sights"]["vl-b"]["description"] == second["description"]
+    assert updated["vision_sight"]["description"] == first["description"]
+
+
+def test_sight_attempt_does_not_erase_other_models_or_good_observation(tmp_path, monkeypatch):
+    import json
+    from tool.server import config as app_config
+
+    folder = tmp_path / "set"
+    folder.mkdir()
+    (folder / "a.jpg").write_bytes(b"image")
+    monkeypatch.setattr(app_config, "FS_ROOT", tmp_path)
+    vision_schema_assist.save_vision_sight("set", "a.jpg", "vl-a", _sight("Useful detail."))
+    vision_schema_assist.save_vision_sight_attempt("set", "a.jpg", "vl-a", "{partial", "length", "Truncated")
+    vision_schema_assist.save_vision_sight_attempt("set", "a.jpg", "vl-b", "", "error", "Runtime error")
+    review = vision_schema_assist.sight_review_for_media("set", "a.jpg")
+    assert review["models"]["vl-a"]["description"] == "Useful detail."
+    assert review["attempts"]["vl-a"]["issue"] == "Truncated"
+    assert review["attempts"]["vl-b"]["issue"] == "Runtime error"
+    assert vision_schema_assist.vision_sight_status("set", "vl-a")["items"][0]["issue"] == "Truncated"
+    assert vision_schema_assist.vision_sight_status("set", "vl-b")["items"][0]["issue"] == "Runtime error"
+    assert vision_schema_assist.vision_sight_status("set", "vl-b")["structured"] == 0
+    assert set(json.loads((folder / "media_metadata.json").read_text())["a.jpg"]["vision_sight_attempts"]) == {"vl-a", "vl-b"}
+
+
+def test_sight_review_route_reads_without_mutating_and_activation_is_explicit(tmp_path, monkeypatch):
+    from tool.server import app as app_module, config as app_config
+    folder = tmp_path / "set"
+    folder.mkdir()
+    (folder / "a.jpg").write_bytes(b"image")
+    monkeypatch.setattr(app_config, "FS_ROOT", tmp_path)
+    vision_schema_assist.save_vision_sight("set", "a.jpg", "vl-a", _sight("A"))
+    vision_schema_assist.save_vision_sight("set", "a.jpg", "vl-b", _sight("B"))
+    client = app_module.app.test_client()
+    review = client.post("/fs/vision_schema", json={"operation": "sight_review", "folder": "set", "media": "a.jpg"})
+    assert review.status_code == 200
+    assert review.json["activeModel"] == "vl-b"
+    assert len(review.json["models"]) == 2
+    active = client.post("/fs/vision_schema", json={"operation": "activate_sight", "folder": "set",
+                                                     "media": "a.jpg", "visionModel": "vl-a"})
+    assert active.status_code == 200
+    assert active.json["sight"]["model"] == "vl-a"

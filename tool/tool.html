@@ -3209,6 +3209,18 @@
                                 <div id="set-scan-open-detail" class="set-scan-evidence-detail">Checking saved coverage…</div>
                             </section>
                         </div>
+                        <div class="set-scan-live-inspection" id="set-scan-live-inspection">
+                            <div class="set-scan-live-media">
+                                <img id="set-scan-preview-image" alt="Current Sight media" hidden>
+                                <video id="set-scan-preview-video" controls muted playsinline preload="metadata" hidden></video>
+                            </div>
+                            <div class="set-scan-live-summary">
+                                <span class="set-scan-live-eyebrow">Inspect Sight as it arrives</span>
+                                <strong id="set-scan-preview-name">Select a media item</strong>
+                                <div id="set-scan-preview-text" class="set-scan-live-text">Run Sight to inspect its visual observations.</div>
+                                <button id="set-scan-preview-review" type="button" class="review-captions-btn">Review saved VL outputs</button>
+                            </div>
+                        </div>
                         <div class="set-scan-run-actions">
                             <button id="set-scan-bad-retry" type="button" class="review-captions-btn set-scan-primary hidden">Retry flagged</button>
                             <button id="set-scan-rescan-btn" type="button" class="review-captions-btn hidden">Resume Set Intelligence</button>
@@ -3223,7 +3235,7 @@
                         </div>
                         <div class="set-scan-item-row">
                             <select id="set-scan-item-select" aria-label="Choose a media item"></select>
-                            <button id="set-scan-item-view" type="button" class="review-captions-btn">View response</button>
+                            <button id="set-scan-item-view" type="button" class="review-captions-btn">Review VL outputs</button>
                             <button id="set-scan-item-retry" type="button" class="review-captions-btn">Refresh item</button>
                         </div>
                         <span class="set-scan-item-help">Choose any item to inspect its saved Vision response or refresh its Sight.</span>
@@ -3260,14 +3272,30 @@
             <div class="set-scan-dialog saved-intelligence-dialog">
                 <div class="set-scan-header">
                     <div>
-                        <h2 id="saved-intelligence-title">Saved Intelligence</h2>
+                        <h2 id="saved-intelligence-title">VL Sight Review</h2>
                         <div id="saved-intelligence-file" class="set-scan-subtitle"></div>
                     </div>
                     <button id="saved-intelligence-close-btn" type="button" class="modal-close-btn" aria-label="Close Saved Intelligence">&times;</button>
                 </div>
                 <div id="saved-intelligence-status" class="set-scan-summary"></div>
-                <pre id="saved-intelligence-output" class="set-scan-raw-output"></pre>
-                <div class="set-scan-footer">Saved Sight only. Raw Director responses are not retained per item.</div>
+                <div class="sight-review-body">
+                    <div class="sight-review-preview">
+                        <img id="sight-review-image" alt="Sight review media" hidden>
+                        <video id="sight-review-video" muted controls playsinline preload="metadata" hidden></video>
+                    </div>
+                    <div class="sight-review-evidence">
+                        <label for="sight-review-model">Saved Vision model</label>
+                        <select id="sight-review-model" class="form-control"></select>
+                        <div id="sight-review-issue" class="sight-review-issue"></div>
+                        <div id="sight-review-description" class="sight-review-description"></div>
+                        <details>
+                            <summary>Full structured Sight and latest attempt</summary>
+                            <pre id="saved-intelligence-output" class="set-scan-raw-output"></pre>
+                        </details>
+                        <button id="sight-review-activate" type="button" class="review-captions-btn">Use this Sight for Caption Assist and QA</button>
+                    </div>
+                </div>
+                <div class="set-scan-footer">Choosing a saved Sight changes the evidence used by Caption Assist and QA, not captions or tags.</div>
             </div>
         </div>
         <div id="vision-schema-modal" class="vision-schema-modal hidden" role="dialog" aria-modal="true" aria-labelledby="vision-schema-title">

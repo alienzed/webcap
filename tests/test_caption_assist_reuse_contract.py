@@ -16,7 +16,8 @@ def test_caption_assist_only_requests_unified_sight():
     assert "save_vocabulary_sight" not in scan
     assert "context: false" in primer
     assert "context: false" in focus
-    assert "refreshSetIntelligenceItem(batchItems[0], { open: 'missing', context: false, silent: true })" in source("tool/js/qa_workbench.js")
+    assert "refreshSetIntelligenceItem(item, {" in source("tool/js/qa_workbench.js")
+    assert "open: 'missing', context: false, silent: true, allowOpenFailure: true" in source("tool/js/qa_workbench.js")
 
 
 def test_unfinished_candidates_round_trip_through_existing_set_state():
@@ -40,3 +41,11 @@ def test_refresh_and_regenerate_still_explicitly_invoke_director():
     assert "refreshCaptionAssistFromUi()" in regen
     assert "runCaptionAssistAfterSight()" in regen
     assert "if (captionAssistCandidate) persistCaptionAssistCandidate(captionAssistCandidate, false);" in focus
+
+
+def test_saved_candidate_reports_changed_visual_evidence_without_discarding_text():
+    primer = source("tool/js/primer_settings.js")
+    assert "function captionAssistSightFingerprint(sight)" in primer
+    assert "sightFingerprint: String(candidate.sightFingerprint || '')" in primer
+    assert "saved.sightFingerprint !== captionAssistSightFingerprint(request.openSight)" in primer
+    assert "'Saved caption candidate restored; inputs changed. Refresh Caption if needed.'" in primer

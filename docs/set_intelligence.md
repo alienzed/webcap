@@ -64,12 +64,23 @@ Supporting analyzers remain cheap evidence or filtering utilities, not competing
 
 **Set Tools → Set Intelligence** is the primary entry point below the media list.
 
+### Safe delivery phases (2026-10-24)
+
+1. **Model-scoped Sight:** Keep one saved result and latest attempt per Vision model per media item, in existing `media_metadata.json`. Legacy single-model evidence is recognized by its recorded model and migrates naturally on the next save. The selected scan model controls coverage, not other models' cached results.
+2. **Visual inspection:** Prepare Set's scan shows the actual current media at a useful size alongside its Sight response. VL Sight Review lets users compare saved models and see the latest raw response, errors and runtime truncation signals; inspection itself never launches inference.
+3. **Explicit downstream source:** The existing `vision_sight` block is the one active evidence source. A successful user-initiated new-model scan activates that model, and the review dialog's **Use this Sight** button can activate any saved one. Merely choosing a model in the UI does not silently rewrite evidence or annotations. Vocabulary discovery uses only the model specifically requested; Caption Assist/QA use the active block.
+4. **Conservative sparse-caption guidance:** For an untagged first-time image, an untouched auto-Primer is structure, not an authored draft. Caption Assist may compose from saved Sight with a targeted instruction; tagged or edited drafts keep exactly the established prompt path. Users approve any proposed caption and tags separately.
+
+Remaining optional improvements: direct editing of structured Sight (with clear provenance), richer per-operation source selectors, and standalone VL-generated training caption comparison. Neither is required for the existing safe paths.
+
+**Quality policy:** No automatic rejection of sparse but parseable Sight. Confirmed truncation and runtime errors are surfaced to the user; malformed responses do not overwrite previous structured Sight. A user can choose legacy sparse Sight explicitly even when it does not meet structured workflow coverage.
+
 By default, Set Intelligence uses the **current visible training selection**, respecting text filters, advanced filters, and Focus Sets. **Scan entire Set (ignore filters)** is an explicit override. The selected scope is snapshotted for the Vision scan, so changing filters does not expand an in-progress scan. Discover Vocabulary and Set-level Guided Tagging remain Set-wide and can reuse any cached Sight evidence, including from prior broader scans.
 
 The intelligence path is fundamentally model-driven:
 
 - the selected **Vision** model performs one broad **Sight** discovery pass per image, optionally guided by group names and aliases without assuming assigned terms or narrowing discovery;
-- each valid observation is saved in `vision_sight`, reused until the media changes, and replaced only by an explicit refresh;
+- each valid observation is saved once per Vision model in `vision_sights`, with `vision_sight` retaining the explicitly active working observation used by Caption Assist and QA; scanning a different model is an explicit refresh that activates its result;
 - the selected **Director** model interprets compact, workflow-specific evidence for Vocabulary Discovery, Guided Tagging, Caption Assist, and QA;
 - WebCap's deterministic metadata, Face Focus, MediaPipe pose, Scene Complexity, Prune, Duplicate, and other signals remain supporting evidence and constraints.
 

@@ -62,6 +62,11 @@ class FizgigBackend:
         from .training_fizgig import saved_artifacts
         return saved_artifacts(output_dir, output_name, filenames)
 
+    @staticmethod
+    def request_checkpoint_save(run_dir):
+        """Fizgig watches this sentinel until its next epoch boundary."""
+        (Path(run_dir) / ".pause_requested").touch(exist_ok=True)
+
 
 _DIFFUSION_PIPE = DiffusionPipeBackend()
 

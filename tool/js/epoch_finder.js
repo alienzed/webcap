@@ -213,7 +213,6 @@
     if(previousMode!==next && (next==='finder'||next==='screening')) {
       screeningTestStatusCampaign='';
       screeningTestStatus={};
-      screeningTestStatusVersion++;
       pickerTestStatusKey='';
     }
     var finder=next==='finder'||next==='screening';

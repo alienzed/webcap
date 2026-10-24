@@ -22,10 +22,13 @@ def test_inference_sampling_workflow_is_explicit(mode, steps, turbo, sampler, sc
                    "turbo" in str(v.get("lora", "")).lower() for v in power.values())
     if turbo is None:
         assert "148" not in workflow
-        assert power["model"] == ["161", 0]
+        assert "161" not in workflow
+        assert power["model"] == ["127", 0]
         assert power["clip"] == ["128", 0]
         assert inference_h3.base_loras(workflow) == []
     else:
+        assert workflow["161"]["inputs"]["sage_attention"] == "auto"
+        assert workflow["161"]["inputs"]["model"] == ["127", 0]
         assert workflow["148"]["inputs"]["strength_model"] == turbo
         assert power["model"] == ["148", 0]
         assert len(inference_h3.base_loras(workflow)) == 1
@@ -52,6 +55,8 @@ def test_test_sampling_workflow_keeps_candidate_separate(mode, steps, turbo_on, 
     )
     assert created["148"]["inputs"]["lora_name"] == "candidate.safetensors"
     assert created["148"]["inputs"]["strength_model"] == 0.8
+    assert created["148"]["inputs"]["model"] == (["161", 0] if mode == "turbo" else ["127", 0])
+    assert ("161" in created) is (mode == "turbo")
     assert created["131"]["inputs"]["clip"] == ["138", 1]
     assert created["138"]["inputs"]["lora_1"]["on"] is turbo_on
     assert template["148"]["inputs"]["lora_name"] != "candidate.safetensors"
@@ -61,7 +66,7 @@ def test_test_sampling_workflow_keeps_candidate_separate(mode, steps, turbo_on, 
                   "duration": 6, "seed": 123, "samplingMode": mode},
     )
     assert "148" not in without_candidate
-    assert without_candidate["138"]["inputs"]["model"] == ["161", 0]
+    assert without_candidate["138"]["inputs"]["model"] == (["161", 0] if mode == "turbo" else ["127", 0])
     assert without_candidate["131"]["inputs"]["clip"] == ["138", 1]
 
 
@@ -100,6 +105,7 @@ def test_actual_generate_graph_contains_correct_turbo(mode, steps, has_turbo):
     )
     evidence = submitted_sampling(graph, mode)
     assert evidence["steps"] == steps
+    assert ("161" in graph) is (mode == "turbo")
     assert evidence["sampler"] == ("euler" if mode == "turbo" else "res_multistep")
     assert evidence["scheduler"] == ("beta" if mode == "turbo" else "simple")
     assert evidence["turboEnabled"] is has_turbo
@@ -123,6 +129,7 @@ def test_actual_test_graph_contains_candidate_separate_from_turbo(mode, steps, h
     )
     evidence = submitted_sampling(graph, mode)
     assert evidence["steps"] == steps
+    assert ("161" in graph) is (mode == "turbo")
     assert evidence["sampler"] == ("euler" if mode == "turbo" else "res_multistep")
     assert evidence["scheduler"] == ("beta" if mode == "turbo" else "simple")
     assert evidence["turboEnabled"] is has_turbo
@@ -178,6 +185,15 @@ def test_submitted_graph_rejects_wrong_sampler_and_scheduler(mode, wrong_sampler
     bad_scheduler["124"]["inputs"]["scheduler"] = wrong_scheduler
     with pytest.raises(ValueError, match="requires scheduler"):
         submitted_sampling(bad_scheduler, mode)
+
+
+def test_quality_rejects_accidentally_reintroduced_sage_patch():
+    import copy
+    quality = get_inference_model("minimax_h3").load_template("quality")
+    bad = copy.deepcopy(quality)
+    bad["161"] = copy.deepcopy(get_inference_model("minimax_h3").load_template("turbo")["161"])
+    with pytest.raises(ValueError, match="must bypass Sage Attention"):
+        submitted_sampling(bad, "quality")
 
 
 def test_submitted_graph_rejects_conditioning_bypass_and_preserves_verified_legacy_wiring():

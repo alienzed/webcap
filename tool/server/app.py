@@ -746,6 +746,7 @@ def caption_assist_route():
             corrections=data.get("corrections"),
             open_sight=data.get("openSight"),
             context_sight=data.get("contextSight"),
+            sight_led=data.get("sightLed") is True,
         )
         job = enqueue_llm(
             "caption",

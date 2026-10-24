@@ -3773,6 +3773,20 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-evidence td { background: var(--surface-alt, rgba(128,128,128,.07)); text-align: left !important; padding: 12px 24px; }
 .model-assessment-evidence td > div { margin: 4px 0; overflow-wrap: anywhere; }
 .model-assessment-evidence button { width: auto; margin-top: 8px; }
+.model-assessment-table { min-width: 1250px; }
+.model-assessment-table td[data-assessment-director-speed],
+.model-assessment-table td[data-assessment-vision-speed] { min-width: 116px; white-space: nowrap; font-weight: 650; }
+.model-assessment-evidence-summary { display: grid; gap: 10px; }
+.model-assessment-evidence-specs { color: var(--muted); font-size: 14px; }
+.model-assessment-evidence-metrics { display: flex; flex-wrap: wrap; gap: 8px; }
+.model-assessment-evidence-metrics span { border: 1px solid var(--border); border-radius: 6px; padding: 8px 11px; font-weight: 650; }
+.model-assessment-capabilities, .model-assessment-attention { margin-top: 14px; display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.model-assessment-capabilities > strong, .model-assessment-attention > strong { flex-basis: 100%; }
+.model-assessment-capability { border: 1px solid var(--border); background: var(--surface, #161c24); border-radius: 6px; padding: 5px 8px; font-size: 14px; }
+.model-assessment-attention > div { padding: 6px 10px; border-left: 3px solid var(--danger, #dc746d); background: var(--surface, #161c24); font-size: 14px; }
+.model-assessment-raw { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 11px; }
+.model-assessment-raw > summary { cursor: pointer; font-weight: 650; color: var(--text); font-size: 14px; }
+.model-assessment-raw > div { margin: 8px 0; font-size: 14px; overflow-wrap: anywhere; }
 
 /* Workflow qualifications: legible, named evidence states. */
 .model-assessment-judge { display: inline-flex; align-items: center; gap: 8px; margin: 8px 12px 8px 0; }

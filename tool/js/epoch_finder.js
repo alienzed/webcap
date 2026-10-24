@@ -251,6 +251,7 @@
       if (references) window.testReferencesOpen();
       if (analytics) window.runAnalyticsOpen();
     }
+    window.syncShellLocationRoute(options.pushHistory ? { push: true } : null);
   }
   window.epochFinderShowMode = showMode;
   window.epochFinderCurrentMode = function () { return mode; };
@@ -2431,7 +2432,7 @@
     }).catch(error);
   };
   document.querySelectorAll('#test-workspace-main-tabs [data-test-workspace-mode]').forEach(function (button) {
-    button.addEventListener('click', function () { showMode(button.dataset.testWorkspaceMode); });
+    button.addEventListener('click', function () { showMode(button.dataset.testWorkspaceMode, { pushHistory: true }); });
   });
   document.querySelectorAll('[data-test-workspace-back]').forEach(function(button){
     button.addEventListener('click',function(){

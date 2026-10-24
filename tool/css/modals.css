@@ -3773,7 +3773,10 @@ html[data-theme="dark"] .app-settings-environment-check {
 .model-assessment-evidence td { background: var(--surface-alt, rgba(128,128,128,.07)); text-align: left !important; padding: 12px 24px; }
 .model-assessment-evidence td > div { margin: 4px 0; overflow-wrap: anywhere; }
 .model-assessment-evidence button { width: auto; margin-top: 8px; }
-.model-assessment-table { min-width: 1250px; }
+.model-assessment-table { min-width: 1430px; }
+.model-assessment-table td[data-assessment-size],
+.model-assessment-table td[data-assessment-thinking],
+.model-assessment-table td[data-assessment-quality] { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .model-assessment-table td[data-assessment-director-speed],
 .model-assessment-table td[data-assessment-vision-speed] { min-width: 116px; white-space: nowrap; font-weight: 650; }
 .model-assessment-evidence-summary { display: grid; gap: 10px; }

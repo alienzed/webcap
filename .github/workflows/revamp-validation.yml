@@ -17,6 +17,9 @@ on:
       - 'tests/qa_curation_ui.test.cjs'
       - 'tool/js/test_generations*.js'
       - 'tool/js/job_queues.js'
+      - 'tool/js/training_runner_ui.js'
+      - 'tool/css/workbench.css'
+      - 'tests/training_queue_epoch_icons.test.cjs'
       - 'tool/css/workspace_shell.css'
       - 'tests/job_queue_drag_reorder.test.cjs'
       - 'tool/js/epoch_finder.js'
@@ -93,6 +96,10 @@ jobs:
         run: |
           node --check tool/js/job_queues.js
           node --test tests/job_queue_drag_reorder.test.cjs
+      - name: Queued epoch editor icon contract
+        run: |
+          node --check tool/js/training_runner_ui.js
+          node --test tests/training_queue_epoch_icons.test.cjs
       - name: Python syntax
         run: python -m compileall -q tool/server/epoch_finder.py tool/server/epoch_test_bench.py tests/test_test_generations_unified_gallery.py
       - name: Prepare isolated config

@@ -97,7 +97,8 @@ function diagnosticsAssessmentRefreshLiveMetrics(run) {
     if(diagnosticsAssessmentRunId!==id || diagnosticsActiveTab!=='assessment')return;
     diagnosticsEl('diagnostics-assessment-results').querySelectorAll('tbody[data-assessment-model]')
       .forEach(function(row){diagnosticsAssessmentApplyMeasurements(row,payload.capabilityRuns||[]);});
-    diagnosticsAssessmentSortAndFilter();
+    // Keep the current reading position stable during live measurement updates.
+    // Sorting remains explicit when the user clicks a column.
   }).catch(function(error){reportConsoleError('Model Assessment measurements',error);})
     .finally(function(){diagnosticsAssessmentMetricsRequest=null;});
 }

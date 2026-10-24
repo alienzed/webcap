@@ -651,7 +651,7 @@ function openHelpReadmeInPreview() {
 }
 
 window.openLoraMetadataEditor = function (name, stage) {
-  openLoraLibrary({name: name, stage: stage});
+  return openLoraLibrary({name: name, stage: stage});
 };
 
 function wireAppSettingsUi() {

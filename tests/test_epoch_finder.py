@@ -1396,9 +1396,10 @@ def test_running_screening_round_keeps_space_and_stable_dom_during_polling():
     root = Path(__file__).resolve().parents[1]
     css = (root / "tool/css/epoch_finder.css").read_text(encoding="utf-8")
     js = (root / "tool/js/epoch_finder.js").read_text(encoding="utf-8")
-    action_css = css.split(".epoch-screening-round-item > .review-captions-btn {", 1)[1].split("}", 1)[0]
+    action_css = css.split(".epoch-screening-round-item > [data-screening-round-action] {", 1)[1].split("}", 1)[0]
     assert "width:auto;" in action_css
-    assert "flex:0 0 auto;" in action_css
+    assert "grid-column:2;" in action_css
+    assert "grid-row:1;" in action_css
     rounds = js.split("function screeningRoundList(campaign) {", 1)[1].split(
         "function screeningRunInfo(campaign, plan) {", 1)[0]
     assert "data-screening-round-item" in rounds

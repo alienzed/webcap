@@ -2134,6 +2134,7 @@
     els('phase').textContent = String(campaign.phase || campaign.status).toUpperCase();
     els('name').textContent = campaign.name || campaign.runName;
     els('detail').textContent = campaign.detail || '';
+    els('detail').title = campaign.detail || '';
     var running = campaign.status === 'running';
     els('pause').classList.toggle('hidden', !running);
     els('stop').classList.toggle('hidden', !running);

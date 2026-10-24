@@ -1482,7 +1482,7 @@ function buildCaptionAssistRequest(mediaItem) {
 
   var requiredPhraseEl = document.getElementById('stats-required-phrase');
   var primer = statsGetPrimerOptionsFromDom();
-  return {
+  var request = {
     model: getDirectorModelPreference('webcap.director.model'),
     assignments: assignments,
     tags: getUnscopedTagsForMediaKey(mediaKey),
@@ -1493,6 +1493,16 @@ function buildCaptionAssistRequest(mediaItem) {
     draft: getCaptionAssistDraftForMediaItem(mediaItem),
     openSight: mediaItem.metadata && mediaItem.metadata.vision_sight || null
   };
+  // Only first-time, untagged items with Sight: an unedited auto-Primer is
+  // structure guidance, NOT an authored draft to preserve. Mature paths stay unchanged.
+  var autoPrimer = String(buildAutoPrimer(mediaItem.fileName, mediaKey) || '').trim();
+  if (!assignments.length && !request.tags.length && !String(mediaItem.caption || '').trim() &&
+      request.openSight && String(request.openSight.description || '').trim() &&
+      (!request.draft.trim() || request.draft.trim() === autoPrimer)) {
+    request.draft = '';
+    request.sightLed = true;
+  }
+  return request;
 }
 
 function captionAssistRequestJson(url, options) {

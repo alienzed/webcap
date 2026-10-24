@@ -244,3 +244,26 @@ def test_semantic_group_alias_reaches_caption_and_template_assist_without_changi
     data = json.loads(template[1]["content"].split("\n\n", 1)[1])
     assert data["groupsInOrder"][0]["alias"] == "Bikini Bottom Back"
     assert data["availableKeys"] == ["bb_back"]
+
+
+def test_caption_assist_sight_led_only_adds_guidance_when_requested():
+    sight = {"model": "vl-a", "description": "A teal jacket with reinforced seams.",
+             "inventory": {"things": [{"name": "jacket", "qualities": ["reinforced seams"]}]}}
+    base = dict(open_sight=sight, draft="", rendered_primer="Subject, clothing, background.")
+    ordinary = caption_ops.build_caption_assist_messages(**base)
+    assert ordinary == caption_ops.build_caption_assist_messages(**base, sight_led=False)
+    sight_led = caption_ops.build_caption_assist_messages(**base, sight_led=True)
+    assert sight_led[0]["content"] == ordinary[0]["content"], "Mature system prompt must stay unchanged."
+    assert "Compose a substantive new training caption" in sight_led[1]["content"]
+    assert "Compose a substantive new training caption" not in ordinary[1]["content"]
+    assert "reinforced seams" in sight_led[1]["content"]
+
+
+def test_tagged_caption_assist_path_does_not_enable_sight_led():
+    primer = Path("tool/js/primer_settings.js").read_text(encoding="utf-8")
+    app = Path("tool/server/app.py").read_text(encoding="utf-8")
+    assert "if (!assignments.length && !request.tags.length" in primer
+    assert "!String(mediaItem.caption || '').trim()" in primer
+    assert "request.draft.trim() === autoPrimer" in primer
+    assert "request.sightLed = true;" in primer
+    assert 'sight_led=data.get("sightLed") is True' in app

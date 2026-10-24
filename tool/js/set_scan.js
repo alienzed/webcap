@@ -861,7 +861,12 @@
       ? sight.description : 'No structured Sight saved for this model.';
     var issue = attempt && attempt.issue || '';
     var finish = attempt && attempt.finishReason || '';
+    var stale = !!sight && (Number(sight.mtime) !== Number(data.mediaMtime) ||
+      Number(sight.size) !== Number(data.mediaSize));
+    var unstructured = !!sight && !sight.inventory;
     el('sight-review-issue').textContent = (active ? 'Currently used by Caption Assist and QA. ' : '') +
+      (stale ? 'Image has changed since this Sight was saved. ' : '') +
+      (unstructured ? 'Legacy prose Sight; some workflows require structured inventory. ' : '') +
       (issue ? 'Latest attempt: ' + issue : finish && /length|max_tokens/i.test(finish)
         ? 'Latest attempt reached an output limit.' : 'Review the saved observation before using.');
     el('saved-intelligence-output').textContent = JSON.stringify({

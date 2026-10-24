@@ -1552,7 +1552,7 @@ function wireWorkspaceHeaderUi() {
       var route = parseShellLocationRoute();
       // Method history is handled inside Evaluation; unrelated shell routes retain their existing behavior.
       if (!route || route.workspace !== 'test' || currentShellRouteWorkspace() !== 'test') return;
-      window.epochFinderShowMode(route.evaluationMethod, { restore: true });
+      window.epochFinderShowMode(route.evaluationMethod);
     });
   }
   if (!window.__webcapWorkingModelShellBound) {

@@ -155,6 +155,7 @@ def build_caption_assist_messages(
     corrections=None,
     open_sight=None,
     context_sight=None,
+    sight_led=False,
 ):
     grouped = []
     seen_grouped = set()
@@ -242,6 +243,14 @@ def build_caption_assist_messages(
             "as intact as practical. Every item in corrections is a verified selected fact that the current candidate "
             "omitted or mishandled; explicitly fix those items while preserving all other valid caption content. "
         )
+    sight_guidance = (
+        "This item has no user-selected tags or authored draft. Compose a substantive new training caption "
+        "from the specific, visually supported facts in openSight, treating captionTemplate and renderedPrimer "
+        "as optional style and ordering guidance, not content to copy or fill with empty placeholders. "
+        "Include distinctive subject, position, clothing, construction and scene details when actually observed. "
+        "Relate clear Sight facts to familiar annotation-group concepts where natural; do not assign tags or "
+        "invent missing group values. Preserve any requiredPhrase and the preferredCaptionSequence. "
+    ) if sight_led else ""
     user_prompt = (
         "Write the caption using these WebCap inputs. Cover every nonredundant tag in groupedAnnotations and otherTags; "
         "use group labels and optional semantic aliases to interpret selected values and express them naturally. Fresh Context Sight and "
@@ -250,6 +259,7 @@ def build_caption_assist_messages(
         "rather than omitting it. Do not invent details unsupported by selected annotations, the required phrase, "
         "the draft, or visual evidence. "
         + repair_instruction
+        + sight_guidance
         + ordering +
         "Do not use annotation group order or captionTemplate placeholder order as caption order.\n\n"
         + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

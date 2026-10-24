@@ -1753,7 +1753,7 @@
                             </div>
                             </section>
                             <section class="generate-conditioning">
-                            <div class="generate-conditioning-heading"><strong title="LoRAs applied to every generation">Fixed LoRAs</strong><button id="generate-lora-library-open" type="button" class="review-captions-btn" title="Browse LoRA profiles">Library</button><button id="generate-lora-refresh" type="button" class="review-captions-btn" title="Rescan available LoRAs from ComfyUI">↻ Refresh</button></div>
+                            <div class="generate-conditioning-heading"><strong title="LoRAs applied to every generation">Fixed LoRAs</strong><button id="generate-lora-library-open" type="button" class="review-captions-btn" title="View and edit LoRA profiles; does not change selected LoRAs">Profiles</button><button id="generate-lora-refresh" type="button" class="review-captions-btn" title="Rescan available LoRAs from ComfyUI">↻ Refresh</button></div>
                             <div id="generate-lora-selected-panel" class="generate-lora-mode-panel">
                                 <div class="generate-lora-selected-heading"><strong>Selected LoRAs <span id="generate-lora-count">(0)</span></strong></div>
                                 <div id="generate-lora-list" class="generate-lora-list"></div>
@@ -2678,7 +2678,7 @@
                 <header class="lora-library-header">
                     <div>
                         <h2 id="lora-library-title">LoRA Library</h2>
-                        <p>Browse configured model roots and maintain Director-readable profiles.</p>
+                        <p>Find a model, understand what it learns, and save a reusable profile.</p>
                     </div>
                     <button id="lora-library-close" type="button" aria-label="Close LoRA Library" title="Close">×</button>
                 </header>
@@ -2686,9 +2686,22 @@
                     <label class="lora-library-search"><span class="sr-only">Search LoRAs</span><input id="lora-library-search" type="search" placeholder="Search names, folders, descriptions, phrases…" autocomplete="off"></label>
                     <label><span>Model</span><select id="lora-library-stage"><option value="">All models</option></select></label>
                     <label><span>Folder</span><select id="lora-library-folder"><option value="">All folders</option></select></label>
-                    <label><span>Profile</span><select id="lora-library-filter"><option value="">All profiles</option><option value="ready">Profiled</option><option value="partial">Needs details</option><option value="missing">Unprofiled</option></select></label>
-                    <label><span>Sort</span><select id="lora-library-sort"><option value="folder">Folder / name</option><option value="name">Name</option><option value="profile">Profile status</option></select></label>
+                    <details class="lora-library-more-filters" id="lora-library-more-filters">
+                        <summary>More filters</summary>
+                        <div class="lora-library-extra-filters">
+                            <label><span>Profile</span><select id="lora-library-filter"><option value="">All profiles</option><option value="ready">Profile available</option><option value="missing">No profile</option></select></label>
+                            <label><span>Sort</span><select id="lora-library-sort"><option value="folder">Folder / name</option><option value="name">Name</option><option value="profile">Profile status</option></select></label>
+                        </div>
+                    </details>
                     <button id="lora-library-refresh" type="button" title="Scan configured LoRA roots">↻ Refresh</button>
+                </div>
+                <div class="lora-library-progress" aria-label="Saved LoRA profile coverage">
+                    <div class="lora-library-progress-details">
+                        <div><span id="lora-library-progress-label">Profile coverage</span> <strong id="lora-library-progress-count">0 / 0</strong></div>
+                        <span id="lora-library-progress-remaining">Choose a model to begin</span>
+                    </div>
+                    <progress id="lora-library-progress-bar" max="1" value="0" aria-label="Saved LoRA profiles"></progress>
+                    <button type="button" id="lora-library-next" class="lora-library-next" disabled>Next unprofiled →</button>
                 </div>
                 <div id="lora-library-status" class="lora-library-status" role="status" aria-live="polite"></div>
                 <div class="lora-library-body">

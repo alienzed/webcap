@@ -20,6 +20,8 @@ from .vision_schema_assist import (
     mine_vision_vocabulary,
     save_vision_sight,
     save_vision_sight_attempt,
+    sight_review_for_media,
+    activate_vision_sight,
     save_vision_vocabulary_sight,
     vision_sight_records,
     vision_sight_status,
@@ -992,6 +994,12 @@ def vision_schema_assist_route():
             return jsonify({"ok": True, "attempt": save_vision_sight_attempt(
                 folder, data.get("media", ""), vision_model,
                 data.get("text", ""), data.get("finishReason", ""), data.get("issue", ""),
+            )})
+        if operation == "sight_review":
+            return jsonify({"ok": True, **sight_review_for_media(folder, data.get("media", ""))})
+        if operation == "activate_sight":
+            return jsonify({"ok": True, "sight": activate_vision_sight(
+                folder, data.get("media", ""), vision_model,
             )})
         if operation == "save_sight":
             return jsonify({

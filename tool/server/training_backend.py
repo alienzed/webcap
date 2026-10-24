@@ -45,6 +45,29 @@ class DiffusionPipeBackend:
         (Path(run_dir) / "save_quit").touch(exist_ok=True)
 
 
+
+class FizgigBackend:
+    """Trainer-specific H3 preparation; activation waits for real runner/lifecycle."""
+
+    id = "fizgig"
+    label = "Fizgig"
+
+    @staticmethod
+    def plan_h3(*args, **kwargs):
+        from .training_fizgig import plan_h3
+        return plan_h3(*args, **kwargs)
+
+    @staticmethod
+    def saved_artifacts(output_dir, output_name, filenames):
+        from .training_fizgig import saved_artifacts
+        return saved_artifacts(output_dir, output_name, filenames)
+
+    @staticmethod
+    def request_checkpoint_save(run_dir):
+        """Fizgig watches this sentinel until its next epoch boundary."""
+        (Path(run_dir) / ".pause_requested").touch(exist_ok=True)
+
+
 _DIFFUSION_PIPE = DiffusionPipeBackend()
 
 

@@ -19,9 +19,16 @@ def test_unified_assessment_thinking_visible_without_legacy_report(monkeypatch):
 def test_assessment_table_is_compact_and_retains_thinking_as_context():
     source = Path("tool/js/diagnostics.js").read_text(encoding="utf-8")
     assert "{key: 'output', name: 'Valid output'}" in source
-    assert "panel.colSpan = 6" in source
+    assert "panel.colSpan = 9" in source
     assert "{key: 'directorSpeed', name: 'Director tok/s'}" in source
     assert "{key: 'visionSpeed', name: 'Vision tok/s'}" in source
+    assert "{key: 'size', name: 'Size'}" in source
+    assert "{key: 'thinking', name: 'Thinking'}" in source
+    assert "{key: 'quality', name: 'Quality'}" in source
+    assert "thinkingLabel = supported ? 'Yes' : 'No'" in source
+    assert "thinkingCell.textContent = thinkingLabel" in source
+    assert "qualityCell.textContent = row.assessmentSort.quality.toFixed(1) + '/5'" in source
+    assert "row.assessmentSort.quality = qualityReview.tasks.reduce" in source
     assert "tests.director_thinking" in source
     assert "' · Thinking: ' + thinkingLabel" in source
 

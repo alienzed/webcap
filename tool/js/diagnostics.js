@@ -65,6 +65,11 @@ function diagnosticsAssessmentApplyMeasurements(row, runs) {
         ' · independent of validation outcome'
       : (supported?'No measured throughput available for this role.':'Model does not have this role.');
     row.assessmentSort[item[0]+'Speed']=value&& !value.imported ? value.rate : null;
+    var detail = row.querySelector('[data-assessment-evidence-speed="' + item[0] + '"]');
+    if (detail) {
+      detail.textContent = (item[0] === 'director' ? 'Director ' : 'Vision ') + cell.textContent + ' tok/s';
+      detail.title = cell.title;
+    }
   });
   var output=0;
   (runs||[]).forEach(function(run){
@@ -494,7 +499,7 @@ function refreshUnifiedModelAssessment() {
       row.appendChild(line);
       diagnosticsAssessmentCounts(row, tests);
       var qualityRun = capabilityRuns.find(function (run) {
-        return ((run.qualityReviews || {})[ref] || {}).status === 'completed';
+        return !!(run.qualityReviews || {})[ref];
       });
       var qualityReview = qualityRun && qualityRun.qualityReviews[ref];
       qualityLabel = diagnosticsAssessmentReviewLabel(qualityReview);
@@ -526,6 +531,7 @@ function refreshUnifiedModelAssessment() {
       metrics.className = 'model-assessment-evidence-metrics';
       ['director','vision'].forEach(function (kind) {
         var metric = document.createElement('span');
+        metric.dataset.assessmentEvidenceSpeed = kind;
         metric.textContent = kind === 'director' ? 'Director ' + directorSpeed.textContent + ' tok/s' :
           'Vision ' + visionSpeed.textContent + ' tok/s';
         metric.title = (kind === 'director' ? directorSpeed : visionSpeed).title;
@@ -593,7 +599,7 @@ function refreshUnifiedModelAssessment() {
       var raw = document.createElement('details');
       raw.className = 'model-assessment-raw';
       var rawTitle = document.createElement('summary');
-      rawTitle.textContent = 'Full probe history · ' + Object.keys(tests).length + ' probe types';
+      rawTitle.textContent = 'Detailed probe evidence · ' + Object.keys(tests).length + ' probe types';
       raw.appendChild(rawTitle);
       var provenance = document.createElement('div');
       provenance.dataset.assessmentProvenance = '';

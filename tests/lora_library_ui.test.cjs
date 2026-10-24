@@ -117,3 +117,25 @@ test('closing restores focus and discarded editing does not reappear',async t=>{
   await h.open({stage:'h3',name:'People/a.safetensors'});
   assert.equal(h.el('description').value,'Portrait features');
 });
+
+test('retained result nodes resolve new catalogue objects after refresh',async t=>{
+  const h=setup();t.after(h.close);await h.open();
+  const row=Array.from(h.d.querySelectorAll('.lora-library-item')).find(r=>r.dataset.key==='h3/People/a.safetensors');
+  h.rows[0].enriched=false;h.rows[0].enrichment=null;h.saved.set('h3/People/a.safetensors',{});
+  await h.click(h.el('refresh'));
+  assert.equal(Array.from(h.d.querySelectorAll('.lora-library-item')).find(r=>r.dataset.key==='h3/People/a.safetensors'),row);
+  await h.click(row);
+  assert.equal(h.el('profile-state').textContent,'No profile');
+  assert.equal(h.errors.length,0);
+});
+test('cancelled discard leaves the editor and filters unchanged',async t=>{
+  const h=setup();t.after(h.close);await h.open({stage:'h3',name:'People/a.safetensors'});
+  h.el('description').value='Still editing';
+  h.el('description').dispatchEvent(new h.w.Event('input',{bubbles:true}));
+  h.w.confirm=message=>{h.confirmations.push(message);return false};
+  await h.click(h.el('refresh'));
+  assert.equal(h.el('description').value,'Still editing');
+  assert.equal(h.el('editor').classList.contains('hidden'),false);
+  assert.equal(h.el('profile-heading').textContent,'a');
+  assert.equal(h.errors.length,0);
+});

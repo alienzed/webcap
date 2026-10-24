@@ -1893,10 +1893,18 @@
       labels=document.createElement('div');
       labels.className='epoch-screening-cases epoch-screening-case-labels';
       labels.dataset.signature=labelSignature;
-      plan.columnLabels.forEach(function(name) {
+      plan.columnLabels.forEach(function(name,index) {
+        var card=document.createElement('div');
+        card.className='epoch-screening-case-label';
+        var number=document.createElement('span');
+        number.className='epoch-screening-case-number';
+        number.textContent='Variation '+(index+1);
         var heading=document.createElement('strong');
+        heading.className='epoch-screening-case-choice';
         heading.textContent=name;
-        labels.appendChild(heading);
+        heading.title=name;
+        card.append(number,heading);
+        labels.appendChild(card);
       });
       scroller.insertBefore(labels,scroller.firstChild);
     }

@@ -3,8 +3,9 @@
 WebCap owns capture, queue, process identity, logs, and history. The trainer owns
 its command, configuration format, resume/checkpoint format, and save/quit protocol.
 
-Only Diffusion Pipe is implemented. Do not silently launch it when another
-trainer is requested. Legacy jobs without trainerId belong to Diffusion Pipe.
+Only Diffusion Pipe is runnable through WebCap. Fizgig has isolated planning
+and inspection helpers but is not activated. Do not silently launch another
+trainer when requested. Legacy jobs without trainerId belong to Diffusion Pipe.
 """
 
 from pathlib import Path

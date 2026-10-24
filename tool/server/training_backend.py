@@ -45,6 +45,24 @@ class DiffusionPipeBackend:
         (Path(run_dir) / "save_quit").touch(exist_ok=True)
 
 
+
+class FizgigBackend:
+    """Trainer-specific H3 preparation; activation waits for real runner/lifecycle."""
+
+    id = "fizgig"
+    label = "Fizgig"
+
+    @staticmethod
+    def plan_h3(*args, **kwargs):
+        from .training_fizgig import plan_h3
+        return plan_h3(*args, **kwargs)
+
+    @staticmethod
+    def saved_artifacts(output_dir, output_name, filenames):
+        from .training_fizgig import saved_artifacts
+        return saved_artifacts(output_dir, output_name, filenames)
+
+
 _DIFFUSION_PIPE = DiffusionPipeBackend()
 
 

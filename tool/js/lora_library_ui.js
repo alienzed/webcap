@@ -165,7 +165,7 @@ function loraUpdateDirty() {
   var dirty = true, invalid = false;
   try { dirty = loraSnapshot() !== loraBrowser.saved; } catch (error) { invalid = true; }
   loraEl('save-state').textContent = invalid ? 'Finish the group name or correct JSON before saving' :
-    dirty ? 'Unsaved changes' : 'Saved';
+    dirty ? 'Unsaved changes' : (loraBrowser.selected.enriched ? 'Saved' : 'No changes yet');
   loraEl('save').disabled = !dirty || loraBrowser.busy || invalid;
 }
 function loraSyncJson() {
@@ -269,7 +269,7 @@ function loraClose() {
   if (loraBrowser.origin && loraBrowser.origin.isConnected) loraBrowser.origin.focus();
 }
 window.openLoraLibrary = function (target) {
-  loraBrowser.origin = document.activeElement;
+  if (loraEl('modal').classList.contains('hidden')) loraBrowser.origin = document.activeElement;
   loraEl('modal').classList.remove('hidden'); loraEl('modal').setAttribute('aria-hidden','false');
   loraEl('search').focus();
   return loraScan(target || null);

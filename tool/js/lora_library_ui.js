@@ -1,5 +1,5 @@
 // LoRA profile browser. The backend sidecars remain the sole source of truth.
-var loraBrowser = {items: [], selected: null, saved: '', busy: false, origin: null, target: null, scan: 0, profile: 0};
+var loraBrowser = {items: [], selected: null, saved: '', busy: false, origin: null, scan: 0, profile: 0};
 
 function loraEl(id) { return document.getElementById('lora-library-' + id); }
 function loraKey(item) { return item.stage + '/' + item.path; }
@@ -238,6 +238,7 @@ function loraSave() {
   var data = JSON.parse(snapshot), item = loraBrowser.selected;
   loraBrowser.busy = true; loraEl('save').disabled = true; loraEl('save-state').textContent = 'Saving…';
   loraProgress();
+  var saveError = null;
   return loraRequest('POST', {stage:item.stage,path:item.path,enrichment:data}).then(function (result) {
     var saved = (result.modelProfile || {}).enrichment || {};
     var current = loraBrowser.items.find(function (entry) { return loraKey(entry) === loraKey(item); });
@@ -253,8 +254,12 @@ function loraSave() {
     });
     loraEl('profile-state').textContent = loraLabel(loraStatus(current));
     loraFilters();
-  }).catch(function (error) { loraReport(error); loraEl('save-state').textContent = 'Save failed: ' + (error.message || error); })
-    .finally(function () { loraBrowser.busy = false; loraUpdateDirty(); loraProgress(); });
+  }).catch(function (error) { saveError = error; loraReport(error); })
+    .finally(function () {
+      loraBrowser.busy = false;
+      loraUpdateDirty(); loraProgress();
+      if (saveError) loraEl('save-state').textContent = 'Save failed: ' + (saveError.message || saveError);
+    });
 }
 function loraClose() {
   if (loraBrowser.busy || !loraConfirmChanges()) return;
@@ -318,7 +323,7 @@ function wireLoraLibrary() {
     loraEl(id).addEventListener('input', loraUpdateDirty);
   });
   loraEl('next').addEventListener('click', function () {
-    if (loraBrowser.busy || !loraConfirmChanges()) return;
+    if (loraBrowser.busy) return;
     var stage = loraEl('stage').value;
     var remaining = loraBrowser.items.filter(function (item) { return !item.enriched && (!stage || item.stage === stage); });
     if (!remaining.length) return;
@@ -326,6 +331,8 @@ function wireLoraLibrary() {
     var after = remaining.find(function (item) { return loraKey(item).localeCompare(current) > 0; });
     var target = after || remaining[0];
     if (loraBrowser.selected && loraKey(loraBrowser.selected) === loraKey(target)) return;
+    if (!loraConfirmChanges()) return;
+    loraDeselect(); // One discard confirmation; no stale editor during navigation.
     loraEl('search').value = ''; loraEl('filter').value = ''; loraEl('folder').value = '';
     loraChoices(); loraFilters();
     loraSelect(target);

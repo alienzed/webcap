@@ -167,6 +167,7 @@ def test_fizgig_epoch_log_maps_to_normalized_progress():
         "step": 60, "loss": 0.35, "secondsPerStep": 1.18,
     }
     assert observe_h3("Caching latents...") == {}
+    assert FizgigBackend.observe(log)["epoch"] == 2
 
 
 def test_fizgig_loss_reads_native_jsonl_only_when_requested(tmp_path):
@@ -185,6 +186,7 @@ def test_fizgig_loss_reads_native_jsonl_only_when_requested(tmp_path):
     (tmp_path / "run-000002.safetensors").write_bytes(b"weights")
     inspected = inspect_h3(tmp_path, "run")
     assert inspected["lossPoints"] is None
+    assert FizgigBackend.inspect(tmp_path, "run") == inspected
     assert inspected["candidates"] == [{"epoch": 2, "path": str(tmp_path / "run-000002.safetensors")}]
     assert inspected["resumePoints"] == []
     assert inspected["lossPoints"] is None

@@ -284,11 +284,21 @@
     images.slice(0, session.limit).forEach(function (fileName) {
       var row = byFile.get(fileName), checked = session.choices.has(fileName);
       var card = element('label', 'qa-curation-card' + (checked ? ' is-selected' : ''));
-      var image = element('img', 'qa-curation-thumb');
-      image.src = mediaGridMediaUrl({fileName: fileName, key: fileName});
-      image.loading = 'lazy';
-      image.alt = fileName;
-      card.appendChild(image);
+      var source = mediaGridMediaUrl({fileName: fileName, key: fileName});
+      if (isPreviewVideoFileName(fileName)) {
+        var video = element('video', 'qa-curation-thumb');
+        video.src = source;
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = 'metadata';
+        card.appendChild(video);
+      } else {
+        var image = element('img', 'qa-curation-thumb');
+        image.src = source;
+        image.loading = 'lazy';
+        image.alt = fileName;
+        card.appendChild(image);
+      }
       var foot = element('div', 'qa-curation-tile-foot');
       var input = element('input');
       input.type = 'checkbox';
@@ -318,7 +328,10 @@
     var create = button('Create Set · ' + selectedCount() + ' images', function () {
       var chosen = session.order.filter(function (file) { return session.choices.has(file); });
       if (!chosen.length) throw new Error('Select at least one image before creating a Set.');
-      if (String(state.folder || '') !== session.folder) throw new Error('QA curation folder changed; rerun analysis.');
+      if (String(state.folder || '') !== session.folder ||
+          qaCurrentCurationSignature() !== session.signature) {
+        throw new Error('QA Curation inputs changed; analyze the current selection again.');
+      }
       runCreateSetFromResultsFlow(chosen.map(function (file) {
         return {source_media_rel: buildSourceMediaRelPath(file)};
       }));
@@ -339,7 +352,8 @@
     }));
     header.appendChild(element('span', '', 'Training Set Curation'));
     host.appendChild(header);
-    if (session.signature !== signature || String(state.folder || '') !== session.folder) {
+    if (session.signature !== signature || qaCurrentCurationSignature() !== session.signature ||
+        String(state.folder || '') !== session.folder) {
       host.appendChild(element('p', 'qa-curation-status', 'The training selection changed. Return to QA and analyze it again.'));
       return;
     }
@@ -362,7 +376,7 @@
 
   function renderCurrent() {
     var host = document.getElementById('qa-workbench');
-    if (host) renderQaCuration(host, session.signature);
+    if (host) renderQaCuration(host, qaCurrentCurationSignature());
   }
 
   function request(url, payload) {
@@ -445,8 +459,9 @@
       return poll(session.jobId, token);
     }).then(function (job) {
       if (!job || token !== session.token) return;
-      if (String(state.folder || '') !== session.folder) {
-        throw new Error('QA Curation folder changed while Director was running.');
+      if (String(state.folder || '') !== session.folder ||
+          qaCurrentCurationSignature() !== session.signature) {
+        throw new Error('QA Curation inputs changed while Director was running.');
       }
       var result = job.result && job.result.analysis;
       if (!result || !Array.isArray(result.coreIds) || !Array.isArray(result.supportingIds))
